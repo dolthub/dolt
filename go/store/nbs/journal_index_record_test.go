@@ -40,7 +40,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 			err := writeIndexLookup(w, l)
 			require.NoError(t, err)
 		}
-		err := writeJournalIndexMeta(w, lookups[len(lookups)-1].a, int64(meta.batchStart), int64(meta.batchEnd), meta.checkSum)
+		err := writeJournalIndexMeta(w, meta.latestHash, int64(meta.batchStart), int64(meta.batchEnd), meta.checkSum)
 		require.NoError(t, err)
 		start = uint64(meta.batchEnd)
 	}
@@ -49,7 +49,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	lookupCnt := 0
 	metaCnt := 0
 
-	processIndexRecords2(context.Background(), bufio.NewReader(buf), 0, func(meta lookupMeta, lookups []lookup, checksum uint32) error {
+	processIndexRecords(context.Background(), bufio.NewReader(buf), 0, func(meta lookupMeta, lookups []lookup, checksum uint32) error {
 		require.Equal(t, meta.checkSum, checksum)
 		lookupCnt += len(lookups)
 		metaCnt += 1
@@ -70,7 +70,7 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 		checksum = crc32.Update(checksum, crcTable, h)
 		start = end
 		lookups = append(lookups, lookup{
-			a: hash.New(h),
+			a: toAddr16(hash.New(h)),
 			r: Range{Offset: off, Length: uint32(length)},
 		})
 		off += length
@@ -80,7 +80,7 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 		batchStart: int(start),
 		batchEnd:   int(end),
 		checkSum:   checksum,
-		latestHash: hash.Hash{},
+		latestHash: hash.New(hashes[len(hashes)-1]),
 	}
 }
 

@@ -217,7 +217,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		// process the indexed portion of the journal
 		eg.Go(func() error {
 			defer close(ch)
-			return processIndexRecords2(ectx, bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
+			return processIndexRecords(ectx, bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
 				if m.checkSum != batchChecksum {
 					return fmt.Errorf("invalid index checksum (%d != %d)", batchChecksum, m.checkSum)
 				}
@@ -379,10 +379,12 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	wr.unsyncd += uint64(recordLen)
 	_ = writeChunkRecord(buf, cc)
 	wr.ranges.put(cc.H, rng)
-	if err := writeIndexLookup(wr.indexWriter, lookup{a: cc.H, r: rng}); err != nil {
+
+	a := toAddr16(cc.H)
+	if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
 		return err
 	}
-	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, cc.H[:])
+	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -638,8 +640,8 @@ func (idx rangeIndex) put(h hash.Hash, rng Range) {
 	idx.novel.Put(h, rng)
 }
 
-func (idx rangeIndex) putCached(h hash.Hash, rng Range) {
-	idx.cached.Put(toAddr16(h), rng)
+func (idx rangeIndex) putCached(a addr16, rng Range) {
+	idx.cached.Put(a, rng)
 }
 
 func (idx rangeIndex) count() uint32 {
@@ -653,7 +655,7 @@ func (idx rangeIndex) novelCount() int {
 func (idx rangeIndex) novelLookups() (lookups []lookup) {
 	lookups = make([]lookup, 0, idx.novel.Count())
 	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
-		lookups = append(lookups, lookup{a: a, r: r})
+		lookups = append(lookups, lookup{a: toAddr16(a), r: r})
 		return
 	})
 	return

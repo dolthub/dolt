@@ -26,8 +26,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/cespare/xxhash/v2"
-
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -213,24 +211,11 @@ var uint64Pool = sync.Pool{
 	},
 }
 
-func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (err error) {
-	// new format for journal index will be...
-	// sequences of lookups ... |chunk address|chunk offset|chunklength|
-	// the lookups are all fixed size, (20) + (4) + (4)
-	// we also need to write metadata ... |journal start|journal end|last root hash|range checkSum|
-	// metadata is also fized size, (4) + (4) + (20) + (64)
-	// prefix each record with a byte for the type? (0000) (1111)
-
-	// read each record
-	// process the hashes/ranges into a batch
-	// build up a checksum of the addresses
-	// reach the metadata
-	// validate the checksum
-	// validate the root hash for the range
-	// if all valid flush batch to lookup map
-
+// processIndexRecords reads batches of chunk index lookups into the journal.
+// An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
+// indicates whether it is a |lookup| or |meta|.
+func processIndexRecords(ctx context.Context, rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (err error) {
 	var batchCrc uint32
-
 	var batch []lookup
 	for {
 		recTag, err := rd.ReadByte()
@@ -265,17 +250,13 @@ func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb fu
 	}
 }
 
+// readIndexMeta reads a sequence of |chunkAddress|journalOffset|chunkLength|
+// that is used to speed up |journal.ranges| initialization.
 func readIndexLookup(r *bufio.Reader) (lookup, error) {
-	// sequences of lookups ... |chunk address|chunk offset|chunklength|
-	// the lookups are all fixed size, (20) + (4) + (4)
-
-	//addrBuf := addressPool.Get().([]byte)
-	//defer addressPool.Put(addrBuf)
-	addr := hash.Hash{}
+	addr := addr16{}
 	if _, err := io.ReadFull(r, addr[:]); err != nil {
 		return lookup{}, err
 	}
-	//log.Println("deserialize", addr.String())
 
 	offsetBuf := uint64Pool.Get().([]byte)
 	defer uint64Pool.Put(offsetBuf)
@@ -294,10 +275,11 @@ func readIndexLookup(r *bufio.Reader) (lookup, error) {
 	return lookup{a: addr, r: Range{Offset: offset, Length: length}}, nil
 }
 
+// readIndexMeta reads a sequence of |journalStart|journalEnd|lastRootHash|checksum|
+// that is used to validate a range of lookups on read. A corrupted lookup in the
+// start-end range will cause the checksum/crc check to fail. The last root hash
+// is a duplicate sanity check.
 func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
-	// we also need to write metadata ... |journal start|journal end|last root hash|range checkSum|
-	// metadata is also fized size, (4) + (4) + (20) + (64)
-
 	startBuf := uint32Pool.Get().([]byte)
 	defer uint32Pool.Put(startBuf)
 	if _, err := io.ReadFull(r, startBuf); err != nil {
@@ -333,9 +315,6 @@ func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
 }
 
 func writeIndexLookup(w *bufio.Writer, l lookup) error {
-	// sequences of lookups ... |chunk address|chunk offset|chunklength|
-	// the lookups are all fixed size, (20) + (4) + (4)
-
 	w.WriteByte(indexRecChunk)
 
 	if _, err := w.Write(l.a[:]); err != nil {
@@ -391,62 +370,8 @@ func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, ch
 	return nil
 }
 
-// processIndexRecords reads a sequence of index records from |r| and passes them to the callback. While reading records
-// it makes some basic assertions that the sequence is well-formed and indexes a contiguous region for the journal file.
-func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func(o int64, r indexRec) error) (err error) {
-	var (
-		buf  []byte
-		off  int64
-		prev uint64
-	)
-
-	rdr := bufio.NewReader(r)
-	for off < sz {
-		// peek to read next record size
-		if buf, err = rdr.Peek(uint32Size); err != nil {
-			break
-		}
-
-		l := readUint32(buf)
-		if int64(l) > sz {
-			return fmt.Errorf("invalid record size %d for index file of size %d", l, sz)
-		}
-		if len(buf) < int(l) {
-			buf = make([]byte, l)
-		}
-		if _, err = io.ReadFull(rdr, buf); err != nil {
-			break
-		}
-
-		// we do not zero-fill the journal index and expect
-		// only complete records that will checksum
-		if !validateIndexRecord(buf) {
-			return fmt.Errorf("failed to checksum index record at %d", off)
-		}
-
-		var rec indexRec
-		if rec, err = readJournalIndexRecord(buf); err != nil {
-			return err
-		} else if rec.start != prev {
-			return fmt.Errorf("index records do not cover contiguous region (%d != %d)", rec.end, prev)
-		}
-
-		if err = cb(off, rec); err != nil {
-			return err
-		}
-		prev = rec.end
-		off += int64(len(buf))
-	}
-	if err == nil && off != sz {
-		err = fmt.Errorf("failed to process entire journal index (%d < %d)", off, sz)
-	} else if err == io.EOF {
-		err = nil
-	}
-	return
-}
-
 type lookup struct {
-	a hash.Hash
+	a addr16
 	r Range
 }
 
