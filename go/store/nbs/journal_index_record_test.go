@@ -66,8 +66,9 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 	var checksum uint32
 	hashes := genBytes(20, n)
 	for _, h := range hashes {
+		addr := toAddr16(hash.New(h))
 		length := (rand.Uint64() % 1024)
-		checksum = crc32.Update(checksum, crcTable, h)
+		checksum = crc32.Update(checksum, crcTable, addr[:])
 		start = end
 		lookups = append(lookups, lookup{
 			a: toAddr16(hash.New(h)),
