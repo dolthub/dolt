@@ -2449,7 +2449,7 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 }
 
 // createForeignKey creates a doltdb.ForeignKey from a sql.ForeignKeyConstraint
-func (t *AlterableDoltTable) createForeignKey(
+func (t *WritableDoltTable) createForeignKey(
 	ctx *sql.Context,
 	root *doltdb.RootValue,
 	tbl *doltdb.Table,
@@ -2633,7 +2633,13 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 }
 
 // UpdateForeignKey implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
+// This interface really belongs on AlterableDoltTable (which embeds WritableDoltTable), but it's here because we
+// actually have a WritableDoltTable at runtime in some cases when we want to update a foreign key. This happens in the
+// case when a foreign key is created without foreign key checks on, which causes its IsResolved flag to become enabled
+// the first time it is referenced in a statement with foreign keys enabled. This is kind of terrible, as means that 
+// an update statement (including a no-op write statement) has the side-effect of causing a schema change.
+// TODO: get rid of explicit IsResolved tracking
+func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -2877,7 +2883,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 // statements that take place in multiple steps (e.g. adding a foreign key may create an index, then add a constraint).
 // We can't update the session's working set until the statement boundary, so we have to do it here.
 // TODO: eliminate this pattern, store all table data and schema in the session rather than in these objects.
-func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
+func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
 	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
 	if err != nil {
 		return err
@@ -2891,7 +2897,7 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	} else {
 		updatedTable = updatedTableSql.(*AlterableDoltTable)
 	}
-	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
+	t.DoltTable = updatedTable.WritableDoltTable.DoltTable
 
 	// When we update this table we need to also clear any cached versions of the object, since they may now have
 	// incorrect schema information
