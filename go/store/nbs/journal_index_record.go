@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"hash/crc32"
 	"io"
 	"sort"
@@ -212,19 +211,6 @@ var uint64Pool = sync.Pool{
 	},
 }
 
-var addressPool = sync.Pool{
-	// New is called when a new instance is needed
-	New: func() interface{} {
-		return make([]byte, hash.ByteLen)
-	},
-}
-
-var digestPool = sync.Pool{
-	New: func() any {
-		return xxhash.New()
-	},
-}
-
 func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (err error) {
 	// new format for journal index will be...
 	// sequences of lookups ... |chunk address|chunk offset|chunklength|
@@ -241,8 +227,6 @@ func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb fu
 	// validate the root hash for the range
 	// if all valid flush batch to lookup map
 
-	//batchHash := digestPool.Get().(*xxhash.Digest)
-	//defer digestPool.Put(batchHash)
 	var batchCrc uint32
 
 	var batch []lookup
@@ -271,7 +255,7 @@ func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb fu
 			if err := cb(m, batch, batchCrc); err != nil {
 				return err
 			}
-			batch = batch[:0]
+			batch = nil
 			batchCrc = 0
 		default:
 			return fmt.Errorf("expected record to start with a chunk or metadata type tag")
@@ -376,7 +360,9 @@ func writeIndexLookup(w *bufio.Writer, l lookup) error {
 func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, checksum uint32) error {
 	// |journal start|journal end|last root hash|range checkSum|
 
-	w.WriteByte(indexRecMeta)
+	if err := w.WriteByte(indexRecMeta); err != nil {
+		return err
+	}
 
 	startBuf := make([]byte, ordinalSize)
 	binary.BigEndian.PutUint32(startBuf, uint32(start))

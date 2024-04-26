@@ -580,7 +580,6 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		_ = wr.indexWriter.Flush()
 		_ = wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {

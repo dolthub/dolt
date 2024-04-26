@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 	"encoding/base32"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -339,8 +338,6 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			epochs := append(test.epochs, test.novel)
 			for i, e := range epochs {
 				for _, cc := range e.records {
-					log.Println("write", cc.H.String())
-
 					assert.NoError(t, j.writeCompressedChunk(cc))
 					if rand.Int()%10 == 0 { // periodic commits
 						assert.NoError(t, j.commitRootHash(cc.H))
@@ -351,10 +348,12 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				if i == len(epochs)-1 {
 					break // don't index |test.novel|
 				}
-				j.indexWriter.Flush()
-				j.index.Sync()
 				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
+				_ = j.indexWriter.Flush()
+				_ = j.index.Sync()
 			}
+			err := j.Close()
+			require.NoError(t, err)
 
 			validateJournal := func(p string, expected []epoch) {
 				journal, ok, err := openJournalWriter(ctx, p)
@@ -363,19 +362,9 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				// bootstrap journal and validate chunk records
 				last, err := journal.bootstrapJournal(ctx, nil)
 				assert.NoError(t, err)
-				log.Println("journal counts", journal.ranges.count())
-				journal.ranges.cached.Iter(func(k addr16, v Range) (stop bool) {
-					log.Println("cached", encode(k[:]))
-					return
-				})
-				journal.ranges.novel.Iter(func(k hash.Hash, v Range) (stop bool) {
-					log.Println("novel", k.String())
-					return
-				})
 				for _, e := range expected {
 					var act CompressedChunk
 					for a, exp := range e.records {
-						log.Println("get", a.String())
 						act, err = journal.getCompressedChunk(a)
 						assert.NoError(t, err)
 						assert.Equal(t, exp, act)
