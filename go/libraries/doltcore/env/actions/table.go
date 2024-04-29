@@ -96,7 +96,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 				}
 			}
 
-			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
+			dest, err = dest.PutTable(ctx, doltdb.TableName{Name: td.ToName}, td.ToTable)
 			if err != nil {
 				return nil, err
 			}

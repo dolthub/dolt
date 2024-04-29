@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -78,7 +79,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	if len(tables) == 0 {
 		var err error
-		tables, err = root.GetTableNames(ctx)
+		tables, err = root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to get table names.").AddCause(err).Build(), usage)

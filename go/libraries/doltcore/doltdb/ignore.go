@@ -57,7 +57,7 @@ type IgnorePatterns []IgnorePattern
 func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, error) {
 	var ignorePatterns []IgnorePattern
 	workingSet := roots.Working
-	table, found, err := workingSet.GetTable(ctx, IgnoreTableName)
+	table, found, err := workingSet.GetTable(ctx, TableName{Name: IgnoreTableName})
 	if err != nil {
 		return nil, err
 	}

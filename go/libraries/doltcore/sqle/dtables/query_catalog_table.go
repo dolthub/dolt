@@ -119,13 +119,13 @@ var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor()
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-	_, ok, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
+	_, ok, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
 	if err != nil {
 		return nil, err
 	}
 
 	if !ok {
-		return root.CreateEmptyTable(ctx, doltdb.DoltQueryCatalogTableName, DoltQueryCatalogSchema)
+		return root.CreateEmptyTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName}, DoltQueryCatalogSchema)
 	}
 
 	return root, nil
@@ -158,7 +158,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		return SavedQuery{}, nil, err
 	}
 
-	tbl, _, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
 	if err != nil {
 		return SavedQuery{}, nil, err
 	}
@@ -174,7 +174,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		return SavedQuery{}, nil, err
 	}
 
-	root, err = root.PutTable(ctx, doltdb.DoltQueryCatalogTableName, newTable)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName}, newTable)
 
 	if err != nil {
 		return SavedQuery{}, nil, err
@@ -289,7 +289,7 @@ func newQueryCatalogEntryProlly(ctx context.Context, tbl *doltdb.Table, id, name
 }
 
 func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id string) (SavedQuery, error) {
-	tbl, ok, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
 
 	if err != nil {
 		return SavedQuery{}, err

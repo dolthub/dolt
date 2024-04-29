@@ -74,7 +74,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 		return nil, doltdb.Roots{}, err
 	}
 	// untracked tables exist in |working| but not in |staged|
-	staged, err := roots.Staged.GetTableNames(ctx)
+	staged, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
@@ -100,11 +100,11 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	}
 
 	for name := range untracked {
-		tbl, _, err := roots.Working.GetTable(ctx, name)
+		tbl, _, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
-		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
+		newWkRoot, err = newWkRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
 		}
@@ -112,21 +112,21 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 
 	// need to save the state of files that aren't tracked
 	untrackedTables := make(map[string]*doltdb.Table)
-	wTblNames, err := roots.Working.GetTableNames(ctx)
+	wTblNames, err := roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
 
 	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
+		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: tblName})
 
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
 	}
 
-	headTblNames, err := roots.Staged.GetTableNames(ctx)
+	headTblNames, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 	if err != nil {
 		return nil, doltdb.Roots{}, err
@@ -326,7 +326,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 
 	var err error
 	if len(tables) == 0 {
-		tables, err = roots.Working.GetTableNames(ctx)
+		tables, err = roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return doltdb.Roots{}, nil
 		}
@@ -334,7 +334,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 
 	for i := range tables {
 		name := tables[i]
-		_, _, err = roots.Working.GetTable(ctx, name)
+		_, _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -342,7 +342,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 	}
 
 	// untracked tables = working tables - staged tables
-	headTblNames, err := roots.Staged.GetTableNames(ctx)
+	headTblNames, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}

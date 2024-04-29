@@ -129,10 +129,10 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 				require.NoError(t, err)
 			}
 
-			onepk, ok, err := root.GetTable(context.Background(), "onepk")
+			onepk, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: "onepk"})
 			require.NoError(t, err)
 			require.True(t, ok)
-			twopk, ok, err := root.GetTable(context.Background(), "twopk")
+			twopk, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: "twopk"})
 			require.NoError(t, err)
 			require.True(t, ok)
 
@@ -299,10 +299,10 @@ UPDATE oneuni SET v1 = v1 + pk1;
 			}
 			require.NoError(t, err)
 
-			oneuni, ok, err := root.GetTable(context.Background(), "oneuni")
+			oneuni, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: "oneuni"})
 			require.NoError(t, err)
 			require.True(t, ok)
-			twouni, ok, err := root.GetTable(context.Background(), "twouni")
+			twouni, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: "twouni"})
 			require.NoError(t, err)
 			require.True(t, ok)
 
