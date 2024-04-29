@@ -438,7 +438,10 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *dolt
 				if err != nil {
 					return err
 				}
-				opts := state.WriteSession().GetOptions()
+				var opts editor.Options
+				if ws := state.WriteSession(); ws != nil {
+					opts = ws.GetOptions()
+				}
 				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName, sch)
 			}
 			if err != nil {

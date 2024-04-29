@@ -170,6 +170,9 @@ func (bs *branchState) SessionCache() *SessionCache {
 }
 
 func (bs branchState) EditOpts() editor.Options {
+	if bs.writeSession == nil {
+		return editor.Options{}
+	}
 	return bs.WriteSession().GetOptions()
 }
 
