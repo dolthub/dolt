@@ -125,7 +125,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 	return conv.ConvertKVTuplesToSqlRow(keyTup, valTup)
 }
 
-// ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.
+// ConvertKVTuplesToSqlRow returns a sql.Row generated from the key and value provided.
 func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.Row, error) {
 	tupItr := types.TupleItrPool.Get().(*types.TupleIterator)
 	defer types.TupleItrPool.Put(tupItr)
