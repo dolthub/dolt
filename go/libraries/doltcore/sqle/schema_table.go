@@ -90,7 +90,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	}
 
 	// Create new empty table
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		return nil, err
 	}
 
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}

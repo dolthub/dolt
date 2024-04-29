@@ -652,7 +652,7 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 }
 
 func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.Row, tableName string) {
-	tbl, ok, err := root.GetTable(context.Background(), tableName)
+	tbl, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	require.NoError(t, err)
 	require.True(t, ok)
 

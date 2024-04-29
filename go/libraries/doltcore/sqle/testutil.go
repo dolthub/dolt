@@ -439,7 +439,7 @@ func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	if err != nil {
 		return err
 	}

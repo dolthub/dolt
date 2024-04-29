@@ -185,7 +185,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, nil, nil)
 	require.NoError(t, err)
-	root, err = root.PutTable(ctx, tableName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)

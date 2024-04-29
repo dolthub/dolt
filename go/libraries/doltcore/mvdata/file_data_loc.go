@@ -133,7 +133,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 			if opts == nil {
 				return nil, false, errors.New("Unable to determine table name on JSON import")
 			}
-			tbl, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
+			tbl, exists, err := root.GetTable(context.TODO(), doltdb.TableName{Name: jsonOpts.TableName})
 			if !exists {
 				return nil, false, fmt.Errorf("The following table could not be found:\n%v", jsonOpts.TableName)
 			}
@@ -165,7 +165,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 			if opts == nil {
 				return nil, false, errors.New("Unable to determine table name on JSON import")
 			}
-			tbl, tableExists, tErr := root.GetTable(context.TODO(), parquetOpts.TableName)
+			tbl, tableExists, tErr := root.GetTable(context.TODO(), doltdb.TableName{Name: parquetOpts.TableName})
 			if !tableExists {
 				return nil, false, fmt.Errorf("The following table could not be found:\n%v", parquetOpts.TableName)
 			}

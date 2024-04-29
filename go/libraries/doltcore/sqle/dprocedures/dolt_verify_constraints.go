@@ -135,7 +135,7 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.Ro
 
 	tablesWithViolations := set.NewStrSet(nil)
 	for _, tableName := range tableSet.AsSlice() {
-		table, ok, err := mergeResults.Root.GetTable(ctx, tableName)
+		table, ok, err := mergeResults.Root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -175,7 +175,7 @@ func parseTablesToCheck(ctx *sql.Context, workingRoot *doltdb.RootValue, apr *ar
 
 	// If no tables were explicitly specified, then check all tables
 	if tableSet.Size() == 0 {
-		names, err := workingRoot.GetTableNames(ctx)
+		names, err := workingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return nil, err
 		}

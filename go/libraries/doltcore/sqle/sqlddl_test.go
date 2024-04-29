@@ -280,7 +280,7 @@ func TestCreateTable(t *testing.T) {
 
 			require.NotNil(t, updatedRoot)
 
-			table, ok, err := updatedRoot.GetTable(ctx, tt.expectedTable)
+			table, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: tt.expectedTable})
 			require.True(t, ok)
 			require.NoError(t, err)
 
@@ -532,7 +532,7 @@ func TestAddColumn(t *testing.T) {
 			}
 
 			assert.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			table, _, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: PeopleTableName})
 
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
@@ -543,7 +543,7 @@ func TestAddColumn(t *testing.T) {
 				return // todo: convert these to enginetests
 			}
 
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
 			require.True(t, ok)
 
@@ -653,7 +653,7 @@ func TestRenameColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			table, _, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: PeopleTableName})
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
 			require.NoError(t, err)
@@ -663,7 +663,7 @@ func TestRenameColumn(t *testing.T) {
 				return // todo: convert these to enginetests
 			}
 
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
 			require.True(t, ok)
 
@@ -773,7 +773,7 @@ func TestRenameTableStatements(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, has)
 
-			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
+			newTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: tt.newTableName})
 			require.NoError(t, err)
 			require.True(t, ok)
 
