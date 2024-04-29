@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 
+	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -26,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
 
 type rootValueStorage interface {
@@ -444,7 +445,7 @@ func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.Databas
 		serial.DatabaseSchemaAddName(b, nameOff)
 		offsets[i] = serial.DatabaseSchemaEnd(b)
 	}
-	
+
 	serial.RootValueStartSchemasVector(b, len(offsets))
 	for i := len(offsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(offsets[i])
@@ -463,8 +464,8 @@ func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool)
 	if schemaName == "" && encodedName[0] != 0 {
 		return encodedName, true
 	} else if schemaName != "" && encodedName[0] == 0 &&
-			len(encodedName) > len(schemaName)+2 &&
-			encodedName[1:len(schemaName)+1] == schemaName {
+		len(encodedName) > len(schemaName)+2 &&
+		encodedName[1:len(schemaName)+1] == schemaName {
 		return encodedName[len(schemaName)+2:], true
 	}
 	return "", false
