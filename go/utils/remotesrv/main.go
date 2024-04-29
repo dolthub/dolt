@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
+var result []byte
+
 func main() {
 	readOnlyParam := flag.Bool("read-only", false, "run a read-only server which does not allow writes")
 	repoModeParam := flag.Bool("repo-mode", false, "act as a remote for an existing dolt directory, instead of stand alone")
