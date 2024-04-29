@@ -228,7 +228,9 @@ func processIndexRecords(ctx context.Context, rd *bufio.Reader, sz int64, cb fun
 		switch recTag {
 		case indexRecChunk:
 			l, err := readIndexLookup(rd)
-			if err != nil {
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				return nil
+			} else if err != nil {
 				return err
 			}
 			batch = append(batch, l)
@@ -236,7 +238,9 @@ func processIndexRecords(ctx context.Context, rd *bufio.Reader, sz int64, cb fun
 
 		case indexRecMeta:
 			m, err := readIndexMeta(rd)
-			if err != nil {
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				return nil
+			} else if err != nil {
 				return err
 			}
 			if err := cb(m, batch, batchCrc); err != nil {
