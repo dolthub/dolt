@@ -286,18 +286,13 @@ func (f *keyFile) append(k val.Tuple) error {
 	defer PutKeySizeBuf(sizeBuf)
 	writeUint32(sizeBuf, v)
 
-	var err error
-	for n, retries := 0, 0; n < len(sizeBuf) && retries < maxRetries; retries++ {
-		if n, err = f.buf.Write(sizeBuf[n:]); err != nil {
-			return err
-		}
+	if _, err := f.buf.Write(sizeBuf[:]); err != nil {
+		return err
+	}
+	if _, err := f.buf.Write(k[:]); err != nil {
+		return err
 	}
 
-	for n, retries := 0, 0; n < len(k) && retries < maxRetries; retries++ {
-		if n, err = f.buf.Write(k[n:]); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -320,19 +315,14 @@ func writeUint32(buf []byte, u uint32) {
 func (r *keyFileReader) Next(ctx context.Context) (val.Tuple, error) {
 	keySizeBuf := GetKeySizeBuf()
 	defer PutKeySizeBuf(keySizeBuf)
-	var err error
-	for n, retries := 0, 0; n < len(keySizeBuf) && retries < maxRetries; retries++ {
-		if n, err = r.buf.Read(keySizeBuf[n:]); err != nil {
-			return nil, err
-		}
+	if _, err := io.ReadFull(r.buf, keySizeBuf); err != nil {
+		return nil, err
 	}
 
 	keySize := readUint32(keySizeBuf)
 	key := make([]byte, keySize)
-	for n, retries := 0, 0; n < len(key) && retries < maxRetries; retries++ {
-		if n, err = r.buf.Read(key[n:]); err != nil {
-			return nil, err
-		}
+	if _, err := io.ReadFull(r.buf, key); err != nil {
+		return nil, err
 	}
 
 	return key, nil
