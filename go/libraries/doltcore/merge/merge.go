@@ -257,7 +257,7 @@ func MergeRoots(
 		if mergedTable.table != nil {
 			tblToStats[tblName] = stats
 
-			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
+			mergedRoot, err = mergedRoot.PutTable(ctx, doltdb.TableName{Name: tblName}, mergedTable.table)
 			if err != nil {
 				return nil, err
 			}
@@ -367,7 +367,7 @@ func MergeRoots(
 func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *violationStash) (*doltdb.RootValue, error) {
 	updatedRoot := root
 	for name, stashed := range stash.Stash {
-		tbl, ok, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return nil, err
 		}
@@ -392,7 +392,7 @@ func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *viola
 		if err != nil {
 			return nil, err
 		}
-		updatedRoot, err = root.PutTable(ctx, name, tbl)
+		updatedRoot, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, err
 		}
@@ -413,7 +413,7 @@ func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 // populates tblToStats with violation statistics
 func getConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
 	for tblName, stats := range tblToStats {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return err
 		}

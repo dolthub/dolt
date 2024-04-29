@@ -228,7 +228,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		newSchema := doltdb.DocsSchema
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.DocTableName, newSchema)
+		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.TableName{Name: doltdb.DocTableName}, newSchema)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -259,7 +259,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, doltdb.DocTableName, dbName, dSess.SetRoot)
+        tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.DocTableName}, dbName, dSess.SetRoot)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return

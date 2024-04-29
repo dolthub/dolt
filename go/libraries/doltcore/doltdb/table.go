@@ -330,7 +330,7 @@ func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.No
 	if err != nil {
 		return nil, false, err
 	}
-	tbl, ok, err := rv.GetTable(ctx, tblName)
+	tbl, ok, err := rv.GetTable(ctx, TableName{Name: tblName})
 	if err != nil {
 		return nil, false, err
 	}

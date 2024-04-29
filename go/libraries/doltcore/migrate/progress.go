@@ -241,7 +241,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 		return err
 	}
 
-	root, err = root.PutTable(ctx, MigratedCommitsTable, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: MigratedCommitsTable}, tbl)
 	if err != nil {
 		return err
 	}

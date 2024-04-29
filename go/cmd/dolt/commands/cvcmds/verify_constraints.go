@@ -80,7 +80,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 	tableNames := apr.Args
 	if len(tableNames) == 0 {
-		tableNames, err = working.GetTableNames(ctx)
+		tableNames, err = working.GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to read table names.").AddCause(err).Build(), nil)
 		}
@@ -125,7 +125,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		}
 
 		for _, tableName := range tablesWithViolations.AsSortedSlice() {
-			tbl, ok, err := endRoot.GetTable(ctx, tableName)
+			tbl, ok, err := endRoot.GetTable(ctx, doltdb.TableName{Name: tableName})
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading table.").AddCause(err).Build(), nil)
 			}

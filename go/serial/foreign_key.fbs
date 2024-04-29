@@ -48,6 +48,10 @@ table ForeignKey {
   // unresolved details
   unresolved_child_columns:[string];
   unresolved_parent_columns:[string];
+  
+  // For tables in the non-default schema, these fields are set 
+  child_table_database_schema:[string];
+  parent_table_database_schema:[string];
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

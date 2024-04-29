@@ -580,7 +580,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 
 	wr, err := dEnv.WorkingRoot(ctx)
 	assert.NoError(t, err)
-	tbl, ok, err := wr.GetTable(ctx, "test")
+	tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
 	assert.True(t, ok)
 	require.NoError(t, err)
 	sch, err := tbl.GetSchema(ctx)
@@ -595,7 +595,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		ctx := context.Background()
 		wr, err := dEnv.WorkingRoot(ctx)
 		assert.NoError(t, err)
-		tbl, ok, err := wr.GetTable(ctx, "test")
+		tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
 		assert.True(t, ok)
 		require.NoError(t, err)
 		sch, err := tbl.GetSchema(ctx)

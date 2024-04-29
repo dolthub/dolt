@@ -325,7 +325,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		// diff against an empty table and rewrite everything
 		var parentSch schema.Schema
 
-		oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
+		oldParentTbl, ok, err := oldParent.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return true, err
 		}
@@ -343,7 +343,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			}
 		}
 
-		newParentTbl, ok, err := newParent.GetTable(ctx, name)
+		newParentTbl, ok, err := newParent.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return true, err
 		}
@@ -360,7 +360,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			return true, err
 		}
 
-		migrated, err = migrated.PutTable(ctx, name, mtbl)
+		migrated, err = migrated.PutTable(ctx, doltdb.TableName{Name: name}, mtbl)
 		if err != nil {
 			return true, err
 		}
@@ -375,12 +375,12 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 
 // renames also get returned here
 func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
-	prevNames, err := prev.GetTableNames(ctx)
+	prevNames, err := prev.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 	tblNameSet := set.NewStrSet(prevNames)
-	currNames, err := curr.GetTableNames(ctx)
+	currNames, err := curr.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

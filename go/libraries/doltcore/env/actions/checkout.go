@@ -46,7 +46,7 @@ func CheckoutTables(ctx context.Context, roots doltdb.Roots, tables []string) (d
 func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	var unknownTbls []string
 	for _, tblName := range tbls {
-		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
+		tbl, ok, err := roots.Staged.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -56,7 +56,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		if !ok {
-			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
+			tbl, ok, err = roots.Head.GetTable(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
@@ -72,7 +72,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 			}
 		}
 
-		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
+		roots.Working, err = roots.Working.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -258,7 +258,7 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*dol
 // in this case, we throw a conflict and error (as per Git).
 func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet, force bool) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
-	tblNames, err := newRoot.GetTableNames(ctx)
+	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 		}
 	}
 
-	tblNames, err = changedRoot.GetTableNames(ctx)
+	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +378,7 @@ func mergeForeignKeyChanges(
 	fksByTable := make(map[string][]doltdb.ForeignKey)
 
 	conflicts := set.NewEmptyStrSet()
-	tblNames, err := newRoot.GetTableNames(ctx)
+	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +412,7 @@ func mergeForeignKeyChanges(
 		}
 	}
 
-	tblNames, err = changedRoot.GetTableNames(ctx)
+	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,7 @@ func mergeForeignKeyChanges(
 // writeTableHashes writes new table hash values for the root given and returns it.
 // This is an inexpensive and convenient way of replacing all the tables at once.
 func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (*doltdb.RootValue, error) {
-	names, err := head.GetTableNames(ctx)
+	names, err := head.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

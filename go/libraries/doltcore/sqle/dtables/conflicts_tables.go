@@ -203,7 +203,7 @@ func (cd *conflictDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	updatedRoot, err := cd.ct.root.PutTable(ctx, cd.ct.tblName, updatedTbl)
+	updatedRoot, err := cd.ct.root.PutTable(ctx, doltdb.TableName{Name: cd.ct.tblName}, updatedTbl)
 
 	if err != nil {
 		return err

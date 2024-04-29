@@ -133,4 +133,6 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	// DoltDatabases returns all underlying DoltDBs for this database.
 	DoltDatabases() []*doltdb.DoltDB
+	// Schema returns the schema of the database.
+	Schema() string
 }

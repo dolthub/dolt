@@ -313,7 +313,7 @@ func TestMergeCommits(t *testing.T) {
 
 	ctx := sql.NewEmptyContext()
 
-	tbl, _, err := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(ctx)
 	assert.NoError(t, err)
@@ -367,7 +367,7 @@ func TestNomsMergeCommits(t *testing.T) {
 	}
 	assert.Equal(t, expectedStats, stats, "received stats is incorrect")
 
-	tbl, _, err := root.GetTable(context.Background(), tableName)
+	tbl, _, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
@@ -724,13 +724,13 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mRoot, err = mRoot.PutTable(context.Background(), tableName, ancTbl)
+	mRoot, err = mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, ancTbl)
 	require.NoError(t, err)
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, rootTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, rootTbl)
 	require.NoError(t, err)
 
-	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
+	mergeRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, mergeTbl)
 	require.NoError(t, err)
 
 	r, mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)
