@@ -161,18 +161,8 @@ func (aw *archiveWriter) writeIndex() error {
 
 	// Write out the stagedByteSpans
 	for _, bs := range aw.stagedBytes {
-		n := binary.PutUvarint(varIbuf, bs.offset)
+		n := binary.PutUvarint(varIbuf, bs.length)
 		written, err := aw.output.Write(varIbuf[:n])
-		if err != nil {
-			return err
-		}
-		if written != n {
-			return io.ErrShortWrite
-		}
-		aw.bytesWritten += uint64(written)
-
-		n = binary.PutUvarint(varIbuf, bs.length)
-		written, err = aw.output.Write(varIbuf[:n])
 		if err != nil {
 			return err
 		}

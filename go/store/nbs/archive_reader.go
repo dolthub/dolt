@@ -94,18 +94,15 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	byteSpans := make([]byteSpan, footer.byteSpanCount+1)
 	byteSpans = append(byteSpans, byteSpan{offset: 0, length: 0}) // Null byteSpan to simplify logic.
 
+	offset := uint64(0)
 	byteReader := sectionReaderByteReader{sectionReader: section}
 	for i := uint32(0); i < footer.byteSpanCount; i++ {
-		offset, err := binary.ReadUvarint(byteReader)
-		if err != nil {
-			return archiveReader{}, err
-		}
 		length, err := binary.ReadUvarint(byteReader)
 		if err != nil {
 			return archiveReader{}, err
 		}
-
 		byteSpans[i+1] = byteSpan{offset: offset, length: length}
+		offset += length
 	}
 
 	prefixes := make([]uint64, footer.chunkCount)

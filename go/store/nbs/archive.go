@@ -63,14 +63,9 @@ Index:
 
    ByteSpan Map:
        +------------------+------------------+-----+------------------+
-       | ByteSpanRecord 1 | ByteSpanRecord 2 | ... | ByteSpanRecord N |
+       | ByteSpanLength 1 | ByteSpanLength 2 | ... | ByteSpanLength N |
        +------------------+------------------+-----+------------------+
-       ByteSpanRecord:
-           +------------------+------------------+
-           | (uvarint) Offset | (uvarint) Length |
-           +------------------+------------------+
-           - Offset: The byte offset of the ByteSpan in the archive
-           - Length: The byte length of the ByteSpan (includes the CRC32)
+       - The Length of each ByteSpan is recorded as a varuint, and as we read them we will calculate the offset of each.
 
        The ByteSpan Map contains N ByteSpan Records. The index in the map is considered the ByteSpan's ID, and
        is used to reference the ByteSpan in the ChunkRefs. Note that the ByteSpan ID is 1-based, as 0 is reserved to indicate

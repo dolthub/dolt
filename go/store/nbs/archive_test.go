@@ -46,8 +46,8 @@ func TestArchiveSingleChunk(t *testing.T) {
 
 	err = aw.writeIndex()
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(24), aw.indexLen) // Verified manually. A single chunk allows for single byte varints, so
-	// ByteSpan -> 2 bytes, Prefix -> 8 bytes, ChunkRef -> 2 bytes, Suffix -> 12 bytes. Total 24 bytes.
+	assert.Equal(t, uint32(23), aw.indexLen) // Verified manually. A single chunk allows for single byte varints, so
+	// ByteSpan -> 1 bytes, Prefix -> 8 bytes, ChunkRef -> 2 bytes, Suffix -> 12 bytes. Total 24 bytes.
 
 	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
@@ -55,7 +55,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.writeFooter()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 10+24+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 24 index bytes + footer
+	assert.Equal(t, 10+23+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 23 index bytes + footer
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
