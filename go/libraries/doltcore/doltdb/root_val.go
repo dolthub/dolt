@@ -55,9 +55,9 @@ var DoltFeatureVersion FeatureVersion = 7 // last bumped when fixing bug related
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
 	vrw  types.ValueReadWriter
-	ns  tree.NodeStore
-	st  rootValueStorage
-	fkc *ForeignKeyCollection // cache the first load
+	ns   tree.NodeStore
+	st   rootValueStorage
+	fkc  *ForeignKeyCollection // cache the first load
 	hash hash.Hash             // cache first load
 }
 
