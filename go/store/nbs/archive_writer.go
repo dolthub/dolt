@@ -48,6 +48,7 @@ type archiveWriter struct {
 	bytesWritten     uint64
 	stagedBytes      stagedByteSpanSlice
 	stagedChunks     stagedChunkRefSlice
+	seenChunks       hash.HashSet
 	indexLen         uint32
 	metadataLen      uint32
 	dataCheckSum     sha512Sum
@@ -77,7 +78,7 @@ to complete the archive writing process.
 
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbs := NewSHA512HashingByteSink(bs)
-	return &archiveWriter{output: hbs}
+	return &archiveWriter{output: hbs, seenChunks: hash.HashSet{}}
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
@@ -108,6 +109,10 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	return uint32(len(aw.stagedBytes)), nil
 }
 
+func (aw *archiveWriter) chunkSeen(h hash.Hash) bool {
+	return aw.seenChunks.Has(h)
+}
+
 func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) error {
 	if aw.workflowStage != stageByteSpan {
 		return fmt.Errorf("Runtime error: stageChunk called out of order")
@@ -116,6 +121,10 @@ func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) err
 	if data == 0 || data > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidChunkRange
 	}
+	if aw.seenChunks.Has(hash) {
+		return ErrDuplicateChunkWritten
+	}
+	aw.seenChunks.Insert(hash)
 
 	if dictionary > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidDictionaryRange
