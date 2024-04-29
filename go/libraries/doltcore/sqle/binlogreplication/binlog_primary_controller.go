@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/vitess/go/mysql"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -34,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type binlogStreamer struct {
@@ -497,151 +495,15 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 	canBeNullMap := mysql.NewServerBitmap(len(columns))
 
 	for i, col := range columns {
-		typ := col.TypeInfo.ToSqlType()
 		metadata[i] = 0
+		typ := col.TypeInfo.ToSqlType()
 
-		switch typ.Type() {
-		case query.Type_CHAR, query.Type_BINARY:
-			types[i] = mysql.TypeString
-			sTyp := typ.(sql.StringType)
-			maxFieldLengthInBytes := uint16(sTyp.MaxByteLength())
-			upperBits := (maxFieldLengthInBytes >> 8) << 12
-			lowerBits := maxFieldLengthInBytes & 0xFF
-			// This is one of the less obvious parts of the MySQL serialization protocol... Several types use
-			// mysql.TypeString as their serialization type in binlog events (i.e. SET, ENUM, CHAR), so the first
-			// metadata byte for this serialization type indicates what field type is using this serialization type
-			// (i.e. SET, ENUM, or CHAR), and the second metadata byte indicates the number of bytes needed to serialize
-			// a type value. However, for CHAR, that second byte isn't enough, since it can only represent up to 255
-			// bytes. For sizes larger than that, we need to find two more bits. MySQL does this by reusing the third
-			// and fourth bits from the first metadata byte. By XOR'ing them against the known mysql.TypeString value
-			// in that byte, MySQL is able to reuse those two bits and extend the second metadata byte enough to
-			// account for the max size of CHAR fields (255 chars).
-			metadata[i] = ((mysql.TypeString << 8) ^ upperBits) | lowerBits
-
-		case query.Type_VARCHAR, query.Type_VARBINARY:
-			types[i] = mysql.TypeVarchar
-			sTyp := typ.(sql.StringType)
-			maxFieldLengthInBytes := sTyp.MaxByteLength()
-			metadata[i] = uint16(maxFieldLengthInBytes)
-
-		case query.Type_YEAR:
-			types[i] = mysql.TypeYear
-		case query.Type_DATE:
-			types[i] = mysql.TypeNewDate
-		case query.Type_DATETIME:
-			// TypeDateTime2 means use the new DateTime format, which was introduced after MySQL 5.6.4,
-			// has a more efficient binary representation, and supports fractional seconds.
-			types[i] = mysql.TypeDateTime2
-			dtType := typ.(sql.DatetimeType)
-			metadata[i] = uint16(dtType.Precision())
-		case query.Type_TIMESTAMP:
-			// TypeTimestamp2 means use the new Timestamp format, which was introduced after MySQL 5.6.4,
-			// has a more efficient binary representation, and supports fractional seconds.
-			types[i] = mysql.TypeTimestamp2
-			dtType := typ.(sql.DatetimeType)
-			metadata[i] = uint16(dtType.Precision())
-		case query.Type_TIME:
-			// TypeTime2 is the newer serialization format for TIME values
-			types[i] = mysql.TypeTime2
-			// NOTE: Dolt currently always uses a TIME precision of 6
-			metadata[i] = uint16(6)
-
-		case query.Type_INT8: // TINYINT
-			types[i] = mysql.TypeTiny
-		case query.Type_INT16: // SMALLINT
-			types[i] = mysql.TypeShort
-		case query.Type_INT24: // MEDIUMINT
-			types[i] = mysql.TypeInt24
-		case query.Type_INT32: // INT
-			types[i] = mysql.TypeLong
-		case query.Type_INT64: // BIGINT
-			types[i] = mysql.TypeLongLong
-
-		case query.Type_UINT8: // TINYINT UNSIGNED
-			types[i] = mysql.TypeTiny
-		case query.Type_UINT16: // SMALLINT UNSIGNED
-			types[i] = mysql.TypeShort
-		case query.Type_UINT24: // MEDIUMINT UNSIGNED
-			types[i] = mysql.TypeInt24
-		case query.Type_UINT32: // INT UNSIGNED
-			types[i] = mysql.TypeLong
-		case query.Type_UINT64: // BIGINT UNSIGNED
-			types[i] = mysql.TypeLongLong
-
-		case query.Type_FLOAT32: // FLOAT
-			types[i] = mysql.TypeFloat
-			metadata[i] = uint16(4)
-		case query.Type_FLOAT64: // DOUBLE
-			types[i] = mysql.TypeDouble
-			metadata[i] = uint16(8)
-
-		case query.Type_BIT: // BIT
-			types[i] = mysql.TypeBit
-			bitType := typ.(gmstypes.BitType)
-			// bitmap length is in metadata, as:
-			// upper 8 bits: bytes length
-			// lower 8 bits: bit length
-			numBytes := bitType.NumberOfBits() / 8
-			numBits := bitType.NumberOfBits() % 8
-			metadata[i] = uint16(numBytes)<<8 | uint16(numBits)
-
-		case query.Type_ENUM: // ENUM
-			types[i] = mysql.TypeString
-			enumType := typ.(gmstypes.EnumType)
-			numElements := enumType.NumberOfElements()
-			if numElements <= 0xFF {
-				metadata[i] = mysql.TypeEnum<<8 | 1
-			} else {
-				metadata[i] = mysql.TypeEnum<<8 | 2
-			}
-
-		case query.Type_SET: // SET
-			types[i] = mysql.TypeString
-			setType := typ.(gmstypes.SetType)
-			numElements := setType.NumberOfElements()
-			numBytes := (numElements + 7) / 8
-			metadata[i] = mysql.TypeSet<<8 | numBytes
-
-		case query.Type_DECIMAL: // DECIMAL
-			types[i] = mysql.TypeNewDecimal
-			decimalType := typ.(sql.DecimalType)
-			metadata[i] = (uint16(decimalType.Precision()) << 8) | uint16(decimalType.Scale())
-
-		case query.Type_BLOB, // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
-			query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
-			types[i] = mysql.TypeBlob
-			blobType := typ.(sql.StringType)
-			if blobType.MaxByteLength() > 0xFFFFFF {
-				metadata[i] = uint16(4)
-			} else if blobType.MaxByteLength() > 0xFFFF {
-				metadata[i] = uint16(3)
-			} else if blobType.MaxByteLength() > 0xFF {
-				metadata[i] = uint16(2)
-			} else {
-				metadata[i] = uint16(1)
-			}
-
-		case query.Type_GEOMETRY: // GEOMETRY
-			types[i] = mysql.TypeGeometry
-			metadata[i] = uint16(4)
-
-		case query.Type_JSON: // JSON
-			types[i] = mysql.TypeJSON
-			jsonType := typ.(gmstypes.JsonType)
-			maxByteLength := jsonType.MaxTextResponseByteLength(ctx)
-			if maxByteLength > 0xFFFFFF {
-				metadata[i] = uint16(4)
-			} else if maxByteLength > 0xFFFF {
-				metadata[i] = uint16(3)
-			} else if maxByteLength > 0xFF {
-				metadata[i] = uint16(2)
-			} else {
-				metadata[i] = uint16(1)
-			}
-
-		default:
-			return nil, fmt.Errorf("unsupported type for binlog replication: %v \n", typ.String())
+		serializer, ok := typeSerializersMap[typ.Type()]
+		if !ok {
+			return nil, fmt.Errorf(
+				"unsupported type for binlog replication: %v \n", typ.String())
 		}
+		types[i], metadata[i] = serializer.metadata(ctx, typ)
 
 		if col.IsNullable() {
 			canBeNullMap.Set(i, true)
