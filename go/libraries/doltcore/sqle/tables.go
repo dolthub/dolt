@@ -1740,7 +1740,7 @@ func fullTextRewriteEditor(
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
 	// session with the rewritten table.
 	if ws := dbState.WriteSession(); ws == nil {
-		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
+		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
 	}
 
 	opts := dbState.WriteSession().GetOptions()

@@ -1138,7 +1138,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 			for _, branchState := range dbState.heads {
 				if ws := branchState.WriteSession(); ws != nil {
 					opts := ws.GetOptions()
-					opts.ForeignKeyChecksDisabled = true
+					opts.ForeignKeyChecksDisabled = false
 					ws.SetOptions(opts)
 				}
 			}
