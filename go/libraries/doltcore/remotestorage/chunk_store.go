@@ -607,7 +607,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 		return fetcherHashSetToGetDlLocsReqsThread(ctx, hashesCh, nil, reqsCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
 	eg.Go(func() error {
-		return fetcherRPCDownloadLocsThread(ctx, reqsCh, resCh, dcs.csClient)
+		return fetcherRPCDownloadLocsThread(ctx, reqsCh, resCh, dcs.csClient, func (s string) { dcs.repoToken.Store(s) })
 	})
 
 	select {
