@@ -45,7 +45,12 @@ type Chan[T any] struct {
 	ack      chan struct{}
 	reset    chan struct{}
 	closed   chan struct{}
+	front    chan frontReq[T]
 	outputCh chan chan T
+}
+
+type frontReq[T any] struct {
+	resCh chan T
 }
 
 func NewChan[T any](src chan T) *Chan[T] {
@@ -56,6 +61,7 @@ func NewChan[T any](src chan T) *Chan[T] {
 		ack:      make(chan struct{}),
 		reset:    make(chan struct{}),
 		closed:   make(chan struct{}),
+		front:    make(chan frontReq[T]),
 		output:   make(chan T),
 		outputCh: make(chan chan T),
 	}
@@ -72,6 +78,17 @@ func (c *Chan[T]) Recv() <-chan T {
 		return o
 	case <-c.closed:
 		return c.output
+	}
+}
+
+func (c *Chan[T]) Front() (T, bool) {
+	var res T
+	resCh := make(chan T)
+	select {
+	case c.front <- frontReq[T]{resCh: resCh}:
+		return <-resCh, true
+	case <-c.closed:
+		return res, false
 	}
 }
 
@@ -135,6 +152,8 @@ func (c *Chan[T]) thread() {
 		case <-c.ack:
 			c.buff.Pop()
 			outI -= 1
+		case req := <-c.front:
+			req.resCh <- c.buff.Front()
 		}
 	}
 }

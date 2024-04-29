@@ -78,7 +78,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherHashSetToGetDlLocsReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
 	eg.Go(func() error {
-		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, func (s string) { dcs.repoToken.Store(s) })
+		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, func(s string) { dcs.repoToken.Store(s) }, ret.resCh)
 	})
 	eg.Go(func() error {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
@@ -184,15 +184,15 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 // delivered in |reqCh|, and they will be delivered in order.
 //
 // This function handles backoff and retries for the underlying streaming RPC.
-func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string)) error {
+func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.CompressedChunk) error {
 	stream, err := reliable.MakeCall[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse](
 		ctx,
 		reliable.CallOptions[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse]{
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (reliable.ClientStream[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse], error) {
 				return client.StreamDownloadLocations(ctx, opts...)
 			},
-			ErrF: processGrpcErr,
-			BackOffF: grpcBackOff,
+			ErrF:               processGrpcErr,
+			BackOffF:           grpcBackOff,
 			ReadRequestTimeout: 15 * time.Second,
 			DeliverRespTimeout: 15 * time.Second,
 		},
@@ -218,8 +218,6 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 			}
 		}
 	})
-	// TODO: Need to structure the Recv() here, and resCh, or something, so that missing chunks can be accounted for here.
-	// Because the req/resp are 1-to-1, every missing chunk will be evident in the resp for the corresponding req.
 	eg.Go(func() error {
 		for {
 			resp, err := stream.Recv()
@@ -233,6 +231,23 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 			if resp.RepoToken != "" {
 				storeRepoToken(resp.RepoToken)
 			}
+
+			// Compute this before we pass resp.Locs along, since the next thread will own resp.Locs after we send it.
+			if missingChunkCh != nil {
+				req := stream.AssociatedReq()
+				missing, err := getMissingChunks(req, resp)
+				if err != nil {
+					return err
+				}
+				for h := range missing {
+					select {
+					case missingChunkCh <- nbs.CompressedChunk{H: h}:
+					case <-ctx.Done():
+						return context.Cause(ctx)
+					}
+				}
+			}
+
 			select {
 			case resCh <- resp.Locs:
 			case <-ctx.Done():
@@ -241,6 +256,36 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 		}
 	})
 	return eg.Wait()
+}
+
+func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.GetDownloadLocsResponse) (hash.HashSet, error) {
+	numRequested := len(req.ChunkHashes)
+	numResponded := 0
+	for _, loc := range resp.Locs {
+		hgr := loc.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
+		numResponded += len(hgr.Ranges)
+	}
+	if numResponded > numRequested {
+		return nil, errors.New("server responded with more chunks than we asked for in StreamDownloadLocations")
+	}
+	if numResponded == numRequested {
+		return nil, nil
+	}
+	requested := make(hash.HashSet, numRequested)
+	for _, ch := range req.ChunkHashes {
+		var h hash.Hash
+		copy(h[:], ch)
+		requested.Insert(h)
+	}
+	for _, loc := range resp.Locs {
+		hgr := loc.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
+		for _, rc := range hgr.Ranges {
+			var h hash.Hash
+			copy(h[:], rc.Hash)
+			requested.Remove(h)
+		}
+	}
+	return requested, nil
 }
 
 type fetchResp struct {
@@ -318,7 +363,7 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			for _, gr := range locs.ranges {
 				numRanges += len(gr.Ranges)
 			}
-	
+
 			fmt.Fprintf(color.Error, "%v reliable.grpc blockForDeliverResp; len(pending): %v, len(locs): %v, numGaps: %v, numSends: %d, lenSends: %d\n", time.Now(), len(pending), numRanges, numGaps, numSends, lenSends)
 		}
 
@@ -346,11 +391,11 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, 0, math.MaxUint64, client, stats, fetcher)
 		})
 	}
-//	for i := 0; i < largeFetches; i++ {
-//		eg.Go(func() error {
-//			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
-//		})
-//	}
+	//	for i := 0; i < largeFetches; i++ {
+	//		eg.Go(func() error {
+	//			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
+	//		})
+	//	}
 	err := eg.Wait()
 	if err != nil {
 		return err

@@ -30,6 +30,15 @@ type ClientStream[Req, Resp any] interface {
 	CloseSend() error
 }
 
+type ReqClientStream[Req, Resp any] interface {
+	ClientStream[Req, Resp]
+
+	// After a successful |Recv| call, calling |AssociatedReq| returns the
+	// request which was associated with the last returned response. This
+	// is only safe to do from the same goroutine which is calling |Recv|.
+	AssociatedReq() Req
+}
+
 type OpenStreamFunc[Req, Resp any] func(context.Context, ...grpc.CallOption) (ClientStream[Req, Resp], error)
 
 type CallOptions[Req, Resp any] struct {
@@ -42,13 +51,18 @@ type CallOptions[Req, Resp any] struct {
 	DeliverRespTimeout time.Duration
 }
 
-func MakeCall[Req, Resp any](ctx context.Context, opts CallOptions[Req, Resp]) (ClientStream[Req, Resp], error) {
+type reqResp[Req, Resp any] struct {
+	Req  Req
+	Resp Resp
+}
+
+func MakeCall[Req, Resp any](ctx context.Context, opts CallOptions[Req, Resp]) (ReqClientStream[Req, Resp], error) {
 	eg, ctx := errgroup.WithContext(ctx)
 	ret := &reliableCall[Req, Resp]{
 		eg:     eg,
 		ctx:    ctx,
 		reqCh:  make(chan Req),
-		respCh: make(chan Resp),
+		respCh: make(chan reqResp[Req, Resp]),
 		opts:   opts,
 	}
 	eg.Go(func() error {
@@ -62,9 +76,11 @@ type reliableCall[Req, Resp any] struct {
 	ctx context.Context
 
 	reqCh  chan Req
-	respCh chan Resp
+	respCh chan reqResp[Req, Resp]
 
 	opts CallOptions[Req, Resp]
+
+	associatedReq Req
 }
 
 func (c *reliableCall[Req, Resp]) thread() error {
@@ -74,9 +90,9 @@ func (c *reliableCall[Req, Resp]) thread() error {
 	defer requests.Close()
 
 	sm := &reliableCallStateMachine[Req, Resp]{
-		call: c,
+		call:     c,
 		requests: requests,
-		bo: bo,
+		bo:       bo,
 	}
 
 	return sm.run(c.ctx)
@@ -97,15 +113,20 @@ func (c *reliableCall[Req, Resp]) CloseSend() error {
 }
 
 func (c *reliableCall[Req, Resp]) Recv() (Resp, error) {
-	var r Resp
+	var r reqResp[Req, Resp]
 	var ok bool
 	select {
 	case r, ok = <-c.respCh:
 		if !ok {
-			return r, io.EOF
+			return r.Resp, io.EOF
 		}
-		return r, nil
+		c.associatedReq = r.Req
+		return r.Resp, nil
 	case <-c.ctx.Done():
-		return r, c.eg.Wait()
+		return r.Resp, c.eg.Wait()
 	}
+}
+
+func (c *reliableCall[Req, Resp]) AssociatedReq() Req {
+	return c.associatedReq
 }

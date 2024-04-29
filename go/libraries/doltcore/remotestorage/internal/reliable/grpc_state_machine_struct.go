@@ -62,7 +62,7 @@ func (s *reliableCallStateMachine[Req, Resp]) run(ctx context.Context) error {
 		}
 		curState = nextState
 	}
-	
+
 }
 
 func (s *reliableCallStateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, error) {
@@ -144,11 +144,15 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 			if !timeout.Stop() {
 				<-timeout.C
 			}
+			req, ok := s.requests.Front()
+			if !ok {
+				return errors.New("unexpected requests closed")
+			}
 			timeout.Reset(s.call.opts.DeliverRespTimeout)
 			select {
 			case <-sCtx.Done():
 				return context.Cause(sCtx)
-			case s.call.respCh <- resp:
+			case s.call.respCh <- reqResp[Req, Resp]{Req: req, Resp: resp}:
 				s.requests.Ack()
 			case <-timeout.C:
 				fmt.Fprintf(color.Error, "%v grpc.reliable deliver response timeout\n", time.Now())
@@ -178,8 +182,12 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 
 func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxStateFunc, error) {
 	fmt.Fprintf(color.Error, "%v grpc.reliable blockForDeliverResp\n", time.Now())
+	req, ok := s.requests.Front()
+	if !ok {
+		return nil, errors.New("unexpected requests closed")
+	}
 	select {
-	case s.call.respCh <- s.resp:
+	case s.call.respCh <- reqResp[Req, Resp]{Req: req, Resp: s.resp}:
 		s.requests.Ack()
 		s.requests.Reset()
 		return s.initial, nil
