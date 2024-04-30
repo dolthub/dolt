@@ -62,7 +62,7 @@ const (
 
 	DataFlag      = "data"
 	SchemaFlag    = "schema"
-	TableOnlyFlag = "table-only"
+	NameOnlyFlag  = "name-only"
 	StatFlag      = "stat"
 	SummaryFlag   = "summary"
 	whereParam    = "where"
@@ -176,7 +176,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
-	ap.SupportsFlag(TableOnlyFlag, "", "Only shows table names.")
+	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
 	return ap
 }
 
@@ -219,9 +219,9 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		}
 	}
 
-	if apr.Contains(TableOnlyFlag) {
+	if apr.Contains(NameOnlyFlag) {
 		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
-			return errhand.BuildDError("invalid Arguments: --table-only cannot be combined with --schema, --data, --stat, or --summary").Build()
+			return errhand.BuildDError("invalid Arguments: --name-only cannot be combined with --schema, --data, --stat, or --summary").Build()
 		}
 	}
 
@@ -247,7 +247,7 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 		displaySettings.diffParts = Stat
 	} else if apr.Contains(SummaryFlag) {
 		displaySettings.diffParts = Summary
-	} else if apr.Contains(TableOnlyFlag) {
+	} else if apr.Contains(NameOnlyFlag) {
 		displaySettings.diffParts = TableOnlyDiff
 	}
 

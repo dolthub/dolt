@@ -1738,26 +1738,26 @@ SQL
     [ "${lines[6]}" = "| t4         | added     | false       | true          |" ]
     [ "${lines[7]}" = "+------------+-----------+-------------+---------------+" ]
 
-    run dolt diff --table-only
+    run dolt diff --name-only
     [ $status -eq 0 ]
     [ "${lines[0]}" = "t1" ]
     [ "${lines[1]}" = "t2" ]
     [ "${lines[2]}" = "t3" ]
     [ "${lines[3]}" = "t4" ]
 
-    run dolt diff --table-only --schema
+    run dolt diff --name-only --schema
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 
-    run dolt diff --table-only --data
+    run dolt diff --name-only --data
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 
-    run dolt diff --table-only --stat
+    run dolt diff --name-only --stat
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 
-    run dolt diff --table-only --summary
+    run dolt diff --name-only --summary
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 }
