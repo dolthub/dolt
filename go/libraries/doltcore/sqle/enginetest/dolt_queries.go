@@ -2049,26 +2049,32 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Name: "primary key table: non-pk column type changes",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 varchar(20));",
-			"call dolt_add('.')",
+			"CALL DOLT_COMMIT('-Am', 'creating table t');",
+			"set @Commit1 = dolt_hashof('HEAD');",
+
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT('-Am', 'inserting two rows');",
+			"set @Commit2 = dolt_hashof('HEAD');",
+
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'empty commit');",
+			"set @Commit3 = dolt_hashof('HEAD');",
+
 			"alter table t modify column c2 int;",
-			"set @Commit2 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'changed type of c2');",
+			"CALL DOLT_COMMIT('-am', 'changed type of c2');",
+			"set @Commit4 = dolt_hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{6}},
 			},
 			// Can't represent the old schema in the current one, so it gets nil valued
 			{
-				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
 				Expected: []sql.Row{{1, nil}, {4, nil}},
 			},
 			{
-				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit4 order by pk;",
 				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
 			{
@@ -2081,7 +2087,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				//       we could consider using a different tuple descriptor based on the version of the row and
 				//       pull the data out and try to convert it to the new type.
 				Query:                 "select pk, c1, c2 from dolt_history_t where pk=4;",
-				Expected:              []sql.Row{{4, 5, 6}, {4, 5, nil}},
+				Expected:              []sql.Row{{4, 5, 6}, {4, 5, nil}, {4, 5, nil}},
 				ExpectedWarning:       1246,
 				ExpectedWarningsCount: 1,
 				ExpectedWarningMessageSubstring: "Unable to convert field c2 in historical rows because " +
