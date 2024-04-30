@@ -16,6 +16,7 @@ package docscmds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -131,7 +132,7 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 
 	_, iter, err = eng.Query(sctx, query)
 	if sql.ErrTableNotFound.Is(err) {
-		return "", fmt.Errorf("no dolt docs in this database")
+		return "", errors.New("no dolt docs in this database")
 	}
 	if err != nil {
 		return "", err

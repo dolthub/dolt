@@ -137,7 +137,7 @@ func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 
 	parts := strings.Split(data, ":")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid lock file format")
+		return nil, errors.New("invalid lock file format")
 	}
 
 	pid, err := strconv.Atoi(parts[0])

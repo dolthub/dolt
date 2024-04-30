@@ -16,8 +16,7 @@ package cli
 
 import (
 	"context"
-	"fmt"
-
+	"errors"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -41,7 +40,7 @@ type CliContext interface {
 // NewCliContext creates a new CliContext instance. Arguments must not be nil.
 func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
 	if args == nil || config == nil || latebind == nil {
-		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. args, config, and latebind must be non nil."))
+		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, and latebind must be non nil."))
 	}
 
 	return LateBindCliContext{globalArgs: args, config: config, bind: latebind}, nil

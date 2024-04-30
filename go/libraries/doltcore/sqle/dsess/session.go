@@ -994,9 +994,11 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
-	if err != nil {
-		return err
+	if writeSess := branchState.WriteSession(); writeSess != nil {
+		err = writeSess.SetWorkingSet(ctx, ws)
+		if err != nil {
+			return err
+		}
 	}
 
 	branchState.dirty = true
@@ -1124,17 +1126,21 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	if intVal == 0 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = true
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = true
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else if intVal == 1 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = false
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = false
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else {
