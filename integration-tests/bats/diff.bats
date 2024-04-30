@@ -1747,17 +1747,17 @@ SQL
 
     run dolt diff --table-only --schema
     [ $status -eq 1 ]
-    [[ $output =~ "invalid Arguments" ]]
+    [[ $output =~ "invalid Arguments" ]] || false
 
     run dolt diff --table-only --data
     [ $status -eq 1 ]
-    [[ $output =~ "invalid Arguments" ]]
+    [[ $output =~ "invalid Arguments" ]] || false
 
     run dolt diff --table-only --stat
     [ $status -eq 1 ]
-    [[ $output =~ "invalid Arguments" ]]
+    [[ $output =~ "invalid Arguments" ]] || false
 
     run dolt diff --table-only --summary
     [ $status -eq 1 ]
-    [[ $output =~ "invalid Arguments" ]]
+    [[ $output =~ "invalid Arguments" ]] || false
 }
