@@ -110,7 +110,7 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 	require.NoError(t, err)
 
 	// Create the dolt_procedures table with its original schema
-	err = db.createSqlTable(ctx, doltdb.ProceduresTableName, sql.NewPrimaryKeySchema(sql.Schema{
+	err = db.createSqlTable(ctx, doltdb.ProceduresTableName, "", sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: doltdb.ProceduresTableNameCol, Type: gmstypes.Text, Source: doltdb.ProceduresTableName, PrimaryKey: true},
 		{Name: doltdb.ProceduresTableCreateStmtCol, Type: gmstypes.Text, Source: doltdb.ProceduresTableName, PrimaryKey: false},
 		{Name: doltdb.ProceduresTableCreatedAtCol, Type: gmstypes.Timestamp, Source: doltdb.ProceduresTableName, PrimaryKey: false},

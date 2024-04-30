@@ -295,7 +295,7 @@ func TestLDNoms(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		names, err := root.GetTableNames(context.Background())
+		names, err := root.GetTableNames(context.Background(), DefaultSchemaName)
 		assert.NoError(t, err)
 		if len(names) != 0 {
 			t.Fatal("There should be no tables in empty db")
@@ -313,7 +313,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create test table with data")
 		}
 
-		root, err = root.PutTable(context.Background(), "test", tbl)
+		root, err = root.PutTable(context.Background(), TableName{Name: "test"}, tbl)
 		assert.NoError(t, err)
 
 		root, valHash, err = ddb.WriteRootValue(context.Background(), root)
@@ -350,7 +350,7 @@ func TestLDNoms(t *testing.T) {
 		root, err = commit.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
-		readTable, ok, err := root.GetTable(context.Background(), "test")
+		readTable, ok, err := root.GetTable(context.Background(), TableName{Name: "test"})
 		assert.NoError(t, err)
 
 		if !ok {

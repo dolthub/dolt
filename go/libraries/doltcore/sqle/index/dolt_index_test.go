@@ -1068,7 +1068,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
 			require.NoError(t, err)
 
-			dt, ok, err := root.GetTable(ctx, idx.Table())
+			dt, ok, err := root.GetTable(ctx, doltdb.TableName{Name: idx.Table()})
 			require.NoError(t, err)
 			require.True(t, ok)
 
@@ -1316,7 +1316,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
 
-	dt, ok, err := root.GetTable(ctx, idx.Table())
+	dt, ok, err := root.GetTable(ctx, doltdb.TableName{Name: idx.Table()})
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -1393,7 +1393,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 
 	dbname := "dolt"
 	for _, name := range []string{"onepk", "twopk", "types"} {
-		tbl, ok, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
 		require.NoError(t, err)
 		require.True(t, ok)
 

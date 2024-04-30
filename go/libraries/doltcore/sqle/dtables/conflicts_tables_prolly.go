@@ -403,7 +403,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 		if err != nil {
 			return err
 		}
-		baseTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		baseTbl, ok, err := rv.GetTable(ctx, doltdb.TableName{Name: itr.tblName})
 		if err != nil {
 			return err
 		}
@@ -428,7 +428,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 		if err != nil {
 			return err
 		}
-		theirTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		theirTbl, ok, err := rv.GetTable(ctx, doltdb.TableName{Name: itr.tblName})
 		if err != nil {
 			return err
 		}
@@ -653,7 +653,7 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	updatedRoot, err := cd.ct.root.PutTable(ctx, cd.ct.tblName, updatedTbl)
+	updatedRoot, err := cd.ct.root.PutTable(ctx, doltdb.TableName{Name: cd.ct.tblName}, updatedTbl)
 	if err != nil {
 		return err
 	}

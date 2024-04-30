@@ -103,7 +103,7 @@ func TestEndToEnd(t *testing.T) {
 			tbl, err := doltdb.NewTable(ctx, root.VRW(), root.NodeStore(), tt.sch, empty, indexes, nil)
 			require.NoError(t, err)
 
-			root, err = root.PutTable(ctx, tableName, tbl)
+			root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 			require.NoError(t, err)
 
 			var stringWr StringBuilderCloser

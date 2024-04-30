@@ -64,7 +64,7 @@ func (ms *MemoryStorage) NewViewWithFormat(nbf string) ChunkStore {
 	return v
 }
 
-// NewViewWithVersion vends a MemoryStoreView backed by this MemoryStorage. It's
+// NewViewWithDefaultFormat vends a MemoryStoreView backed by this MemoryStorage. It's
 // initialized with the currently "persisted" root. Uses the default format.
 func (ms *MemoryStorage) NewViewWithDefaultFormat() ChunkStore {
 	v := &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: constants.FormatDefaultString}
