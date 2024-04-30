@@ -1709,3 +1709,55 @@ SQL
     [[ "$output" =~ "CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -2*new.v1;" ]] || false
     [[ "$output" =~ "CREATE VIEW view1 AS SELECT v1 FROM mytable;" ]] || false
 }
+
+@test "diff: table-only option" {
+    dolt sql <<SQL
+create table t1 (i int);
+create table t2 (i int);
+create table t3 (i int);
+SQL
+
+    dolt add .
+    dolt commit -m "commit 1"
+
+    dolt sql <<SQL
+drop table t1;
+alter table t2 add column j int;
+insert into t3 values (1);
+create table t4 (i int);
+SQL
+
+    run dolt diff --summary
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = "+------------+-----------+-------------+---------------+" ]
+    [ "${lines[1]}" = "| Table name | Diff type | Data change | Schema change |" ]
+    [ "${lines[2]}" = "+------------+-----------+-------------+---------------+" ]
+    [ "${lines[3]}" = "| t1         | dropped   | false       | true          |" ]
+    [ "${lines[4]}" = "| t2         | modified  | false       | true          |" ]
+    [ "${lines[5]}" = "| t3         | modified  | true        | false         |" ]
+    [ "${lines[6]}" = "| t4         | added     | false       | true          |" ]
+    [ "${lines[7]}" = "+------------+-----------+-------------+---------------+" ]
+
+    run dolt diff --name-only
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = "t1" ]
+    [ "${lines[1]}" = "t2" ]
+    [ "${lines[2]}" = "t3" ]
+    [ "${lines[3]}" = "t4" ]
+
+    run dolt diff --name-only --schema
+    [ $status -eq 1 ]
+    [[ $output =~ "invalid Arguments" ]] || false
+
+    run dolt diff --name-only --data
+    [ $status -eq 1 ]
+    [[ $output =~ "invalid Arguments" ]] || false
+
+    run dolt diff --name-only --stat
+    [ $status -eq 1 ]
+    [[ $output =~ "invalid Arguments" ]] || false
+
+    run dolt diff --name-only --summary
+    [ $status -eq 1 ]
+    [[ $output =~ "invalid Arguments" ]] || false
+}

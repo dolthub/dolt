@@ -48,10 +48,11 @@ type diffOutput int
 type diffPart int
 
 const (
-	SchemaOnlyDiff diffPart = 1 // 0b0001
-	DataOnlyDiff   diffPart = 2 // 0b0010
-	Stat           diffPart = 4 // 0b0100
-	Summary        diffPart = 8 // 0b1000
+	SchemaOnlyDiff diffPart = 1  // 0b0000 0001
+	DataOnlyDiff   diffPart = 2  // 0b0000 0010
+	NameOnlyDiff   diffPart = 4  // 0b0000 0100
+	Stat           diffPart = 8  // 0b0000 1000
+	Summary        diffPart = 16 // 0b0001 0000
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -59,16 +60,17 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag    = "data"
-	SchemaFlag  = "schema"
-	StatFlag    = "stat"
-	SummaryFlag = "summary"
-	whereParam  = "where"
-	limitParam  = "limit"
-	SkinnyFlag  = "skinny"
-	MergeBase   = "merge-base"
-	DiffMode    = "diff-mode"
-	ReverseFlag = "reverse"
+	DataFlag     = "data"
+	SchemaFlag   = "schema"
+	NameOnlyFlag = "name-only"
+	StatFlag     = "stat"
+	SummaryFlag  = "summary"
+	whereParam   = "where"
+	limitParam   = "limit"
+	SkinnyFlag   = "skinny"
+	MergeBase    = "merge-base"
+	DiffMode     = "diff-mode"
+	ReverseFlag  = "reverse"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -174,6 +176,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
+	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
 	return ap
 }
 
@@ -216,6 +219,12 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		}
 	}
 
+	if apr.Contains(NameOnlyFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+			return errhand.BuildDError("invalid Arguments: --name-only cannot be combined with --schema, --data, --stat, or --summary").Build()
+		}
+	}
+
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
 	case "tabular", "sql", "json", "":
@@ -238,6 +247,8 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 		displaySettings.diffParts = Stat
 	} else if apr.Contains(SummaryFlag) {
 		displaySettings.diffParts = Summary
+	} else if apr.Contains(NameOnlyFlag) {
+		displaySettings.diffParts = NameOnlyDiff
 	}
 
 	displaySettings.skinny = apr.Contains(SkinnyFlag)
@@ -1034,9 +1045,11 @@ func diffUserTable(
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
 
-	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	if dArgs.diffParts&NameOnlyDiff == 0 {
+		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	var fromTableInfo, toTableInfo *diff.TableInfo
@@ -1053,6 +1066,11 @@ func diffUserTable(
 	tableName := fromTable
 	if tableName == "" {
 		tableName = toTable
+	}
+
+	if dArgs.diffParts&NameOnlyDiff != 0 {
+		cli.Println(tableName)
+		return errhand.VerboseErrorFromError(nil)
 	}
 
 	if dArgs.diffParts&Stat != 0 {
