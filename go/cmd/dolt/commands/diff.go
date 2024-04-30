@@ -50,7 +50,7 @@ type diffPart int
 const (
 	SchemaOnlyDiff diffPart = 1  // 0b0000 0001
 	DataOnlyDiff   diffPart = 2  // 0b0000 0010
-	TableOnlyDiff  diffPart = 4  // 0b0000 0100
+	NameOnlyDiff  diffPart = 4  // 0b0000 0100
 	Stat           diffPart = 8  // 0b0000 1000
 	Summary        diffPart = 16 // 0b0001 0000
 
@@ -248,7 +248,7 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 	} else if apr.Contains(SummaryFlag) {
 		displaySettings.diffParts = Summary
 	} else if apr.Contains(NameOnlyFlag) {
-		displaySettings.diffParts = TableOnlyDiff
+		displaySettings.diffParts = NameOnlyDiff
 	}
 
 	displaySettings.skinny = apr.Contains(SkinnyFlag)
@@ -1045,7 +1045,7 @@ func diffUserTable(
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
 
-	if dArgs.diffParts&TableOnlyDiff == 0 {
+	if dArgs.diffParts&NameOnlyDiff == 0 {
 		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
@@ -1068,7 +1068,7 @@ func diffUserTable(
 		tableName = toTable
 	}
 
-	if dArgs.diffParts&TableOnlyDiff != 0 {
+	if dArgs.diffParts&NameOnlyDiff != 0 {
 		cli.Println(tableName)
 		return errhand.VerboseErrorFromError(nil)
 	}
