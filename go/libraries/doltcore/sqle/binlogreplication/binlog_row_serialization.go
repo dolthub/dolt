@@ -100,9 +100,6 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 		col, descriptor, tuple, tupleIdx := iter.nextColumn()
 
 		typ := col.TypeInfo.ToSqlType()
-
-		// TODO: If the schema has changed in a commit... then this code won't work... ?
-
 		serializer, ok := typeSerializersMap[typ.Type()]
 		if !ok {
 			return nil, nullBitmap, fmt.Errorf(
