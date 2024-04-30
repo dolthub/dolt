@@ -414,7 +414,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 
 	if len(args) == 0 {
 		if useMergeBase {
-			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+			return nil, errors.New("Must supply at least one revision when using --merge-base flag")
 		}
 		// `dolt diff`
 		return nil, nil
@@ -422,7 +422,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 
 	if strings.Contains(args[0], "..") {
 		if useMergeBase {
-			return nil, fmt.Errorf("Cannot use `..` or `...` with --merge-base flag")
+			return nil, errors.New("Cannot use `..` or `...` with --merge-base flag")
 		}
 		err := dArgs.applyDotRevisions(queryist, sqlCtx, args)
 		if err != nil {
@@ -441,7 +441,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 	if err != nil {
 		// `dolt diff table`
 		if useMergeBase {
-			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+			return nil, errors.New("Must supply at least one revision when using --merge-base flag")
 		}
 		return args, nil
 	}
@@ -508,7 +508,7 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 		return "", err
 	}
 	if len(rows) != 1 {
-		return "", fmt.Errorf("unexpected number of rows returned from dolt_merge_base")
+		return "", errors.New("unexpected number of rows returned from dolt_merge_base")
 	}
 	ancestor := rows[0][0].(string)
 	return ancestor, nil
