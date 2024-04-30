@@ -71,6 +71,10 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	}
 }
 
+func printTableOnlyDiff(tableName string) {
+	cli.Println(tableName)
+}
+
 func printDiffStat(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) errhand.VerboseError {
 	acc := diff.DiffStatProgress{}
 	var count int64
