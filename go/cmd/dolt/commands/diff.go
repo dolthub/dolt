@@ -219,6 +219,12 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		}
 	}
 
+	if apr.Contains(TableOnlyFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+			return errhand.BuildDError("invalid Arguments: --table-only cannot be combined with --schema, --data, --stat, or --summary").Build()
+		}
+	}
+
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
 	case "tabular", "sql", "json", "":
