@@ -50,7 +50,7 @@ type diffPart int
 const (
 	SchemaOnlyDiff diffPart = 1  // 0b0000 0001
 	DataOnlyDiff   diffPart = 2  // 0b0000 0010
-	NameOnlyDiff  diffPart = 4  // 0b0000 0100
+	NameOnlyDiff   diffPart = 4  // 0b0000 0100
 	Stat           diffPart = 8  // 0b0000 1000
 	Summary        diffPart = 16 // 0b0001 0000
 
@@ -60,17 +60,17 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag      = "data"
-	SchemaFlag    = "schema"
-	NameOnlyFlag  = "name-only"
-	StatFlag      = "stat"
-	SummaryFlag   = "summary"
-	whereParam    = "where"
-	limitParam    = "limit"
-	SkinnyFlag    = "skinny"
-	MergeBase     = "merge-base"
-	DiffMode      = "diff-mode"
-	ReverseFlag   = "reverse"
+	DataFlag     = "data"
+	SchemaFlag   = "schema"
+	NameOnlyFlag = "name-only"
+	StatFlag     = "stat"
+	SummaryFlag  = "summary"
+	whereParam   = "where"
+	limitParam   = "limit"
+	SkinnyFlag   = "skinny"
+	MergeBase    = "merge-base"
+	DiffMode     = "diff-mode"
+	ReverseFlag  = "reverse"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
