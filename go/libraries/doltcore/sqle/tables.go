@@ -1690,6 +1690,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	}
 
+	if ws := dbState.WriteSession(); ws == nil {
+		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
+	}
+
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
@@ -1735,6 +1739,10 @@ func fullTextRewriteEditor(
 	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
 	// session with the rewritten table.
+	if ws := dbState.WriteSession(); ws == nil {
+		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
+	}
+
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
