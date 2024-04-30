@@ -34,7 +34,7 @@ import (
 var sharePool = pool.NewBuffPool()
 
 type prollyTableWriter struct {
-	tableName string
+	tableName doltdb.TableName
 	dbName    string
 
 	primary   indexWriter
@@ -166,7 +166,9 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	}
 
 	w.setAutoIncrement = true
-	w.aiTracker.Next(w.tableName, sqlRow)
+
+	// TODO: need schema name in ai tracker
+	w.aiTracker.Next(w.tableName.Name, sqlRow)
 	return nil
 }
 
@@ -203,7 +205,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(w.tableName, insertVal)
+	return w.aiTracker.Next(w.tableName.Name, insertVal)
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
@@ -214,14 +216,14 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	}
 
 	w.nextAutoIncrementValue = make(map[string]uint64)
-	w.nextAutoIncrementValue[w.tableName] = seq
+	w.nextAutoIncrementValue[w.tableName.Name] = seq
 
 	// The work above is persisted in flush
 	return w.flush(ctx)
 }
 
 func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tableName)
+	return w.aiTracker.AcquireTableLock(ctx, w.tableName.Name)
 }
 
 // Close implements Closer
@@ -270,7 +272,7 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 
 // GetIndexes implements sql.IndexAddressableTable.
 func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName)
+	indexes := ctx.GetIndexRegistry().IndexesByTable(w.dbName, w.tableName.Name)
 	ret := make([]sql.Index, len(indexes))
 	for i := range indexes {
 		ret[i] = indexes[i]
@@ -293,7 +295,7 @@ func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	sqlSch, err := sqlutil.FromDoltSchema("", w.tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", w.tableName.Name, sch)
 	if err != nil {
 		return err
 	}

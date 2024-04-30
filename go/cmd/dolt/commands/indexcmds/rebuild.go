@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -79,7 +80,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	tableName := apr.Arg(0)
 	indexName := apr.Arg(1)
 
-	table, ok, err := working.GetTable(ctx, tableName)
+	table, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 	}
@@ -107,7 +108,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set rebuilt index.").AddCause(err).Build(), nil)
 	}
-	working, err = working.PutTable(ctx, tableName, updatedTable)
+	working, err = working.PutTable(ctx, doltdb.TableName{Name: tableName}, updatedTable)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set the table for the rebuilt index.").AddCause(err).Build(), nil)
 	}

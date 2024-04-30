@@ -110,7 +110,7 @@ func (ste *sessionedTableEditor) Table(ctx *sql.Context) (*doltdb.Table, error) 
 	root := ws.WorkingRoot()
 
 	name := ste.tableEditor.Name()
-	tbl, ok, err := root.GetTable(ctx, name)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
 	if !ok {
 		return nil, fmt.Errorf("edit session failed to flush table %s", name)
 	}

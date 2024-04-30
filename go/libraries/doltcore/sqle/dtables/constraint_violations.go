@@ -193,7 +193,7 @@ func (cvd *constraintViolationsDeleter) Close(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	updatedRoot, err := cvd.cvt.root.PutTable(ctx, cvd.cvt.tblName, updatedTbl)
+	updatedRoot, err := cvd.cvt.root.PutTable(ctx, doltdb.TableName{Name: cvd.cvt.tblName}, updatedTbl)
 	if err != nil {
 		return err
 	}

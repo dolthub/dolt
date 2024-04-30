@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -63,7 +64,7 @@ func (t *HashOfTable) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	tbl, ok, err := roots.Working.GetTable(ctx, tableName)
+	tbl, ok, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: tableName})
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting table %s: %w", tableName, err)

@@ -102,7 +102,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	names, err := root.GetTableNames(context.Background())
+	names, err := root.GetTableNames(context.Background(), DefaultSchemaName)
 	assert.NoError(t, err)
 	if len(names) != 0 {
 		t.Fatal("There should be no tables in empty db")
@@ -116,7 +116,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Failed to create test table with data")
 	}
 
-	root, err = root.PutTable(context.Background(), "test", tbl)
+	root, err = root.PutTable(context.Background(), TableName{Name: "test"}, tbl)
 	assert.NoError(t, err)
 
 	r, valHash, err := ddb.WriteRootValue(context.Background(), root)
@@ -260,7 +260,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 				t.Fatal("Failed to create test table with data")
 			}
 
-			root, err = root.PutTable(context.Background(), "test", tbl)
+			root, err = root.PutTable(context.Background(), TableName{Name: "test"}, tbl)
 			assert.NoError(t, err)
 
 			r, valHash, err := ddb.WriteRootValue(context.Background(), root)

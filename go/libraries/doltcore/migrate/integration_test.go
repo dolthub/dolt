@@ -199,7 +199,7 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 	if err != nil {
 		return nil, err
 	}
-	root, err := ws.WorkingRoot().CreateEmptyTable(ctx, "test", sch)
+	root, err := ws.WorkingRoot().CreateEmptyTable(ctx, doltdb.TableName{Name: "test"}, sch)
 	if err != nil {
 		return nil, err
 	}

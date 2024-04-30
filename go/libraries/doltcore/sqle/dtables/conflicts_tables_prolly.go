@@ -403,7 +403,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 		if err != nil {
 			return err
 		}
-		baseTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		baseTbl, ok, err := rv.GetTable(ctx, doltdb.TableName{Name: itr.tblName})
 		if err != nil {
 			return err
 		}
@@ -428,7 +428,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, t
 		if err != nil {
 			return err
 		}
-		theirTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		theirTbl, ok, err := rv.GetTable(ctx, doltdb.TableName{Name: itr.tblName})
 		if err != nil {
 			return err
 		}
@@ -463,23 +463,15 @@ type prollyConflictOurTableUpdater struct {
 }
 
 func newProllyConflictOurTableUpdater(ourUpdater sql.RowUpdater, versionMappings *versionMappings, baseSch, ourSch, theirSch schema.Schema) *prollyConflictOurTableUpdater {
-	// The schema columns need to be all equal in order for us to reliably build the PKs
-	schemaOK := schema.ColCollsAreEqual(baseSch.GetAllCols(), ourSch.GetAllCols()) &&
-		schema.ColCollsAreEqual(ourSch.GetAllCols(), theirSch.GetAllCols())
-
 	return &prollyConflictOurTableUpdater{
 		srcUpdater:      ourUpdater,
 		versionMappings: versionMappings,
 		pkOrdinals:      ourSch.GetPkOrdinals(),
-		schemaOK:        schemaOK,
 	}
 }
 
 // Update implements sql.RowUpdater. It translates updates on the conflict table to the source table.
 func (cu *prollyConflictOurTableUpdater) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	if !cu.schemaOK {
-		return fmt.Errorf("the source table cannot be automatically updated through the conflict table since the base, our, and their schemas are not equal")
-	}
 
 	// Apply updates to columns prefixed with our_
 	// Updates to other columns are no-ops.
@@ -490,26 +482,6 @@ func (cu *prollyConflictOurTableUpdater) Update(ctx *sql.Context, oldRow sql.Row
 	}
 	for i, j := range cu.versionMappings.ourMapping {
 		ourNewRow[i] = newRow[j]
-	}
-
-	// Are we keyed?
-	if len(cu.pkOrdinals) > 0 {
-		// If so, set the PKs for the old row from either the base, ours, or theirs versions.
-		// This is necessary to allow updates to the conflict table to insert rows against the source table.
-		firstPkOrd := cu.pkOrdinals[0]
-
-		var mapping val.OrdinalMapping
-		if oldRow[cu.versionMappings.ourMapping[firstPkOrd]] != nil {
-			mapping = cu.versionMappings.ourMapping
-		} else if oldRow[cu.versionMappings.theirMapping[firstPkOrd]] != nil {
-			mapping = cu.versionMappings.theirMapping
-		} else {
-			mapping = cu.versionMappings.baseMapping
-		}
-
-		for _, ord := range cu.pkOrdinals {
-			ourOldRow[ord] = oldRow[mapping[ord]]
-		}
 	}
 
 	return cu.srcUpdater.Update(ctx, ourOldRow, ourNewRow)
@@ -681,7 +653,7 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	updatedRoot, err := cd.ct.root.PutTable(ctx, cd.ct.tblName, updatedTbl)
+	updatedRoot, err := cd.ct.root.PutTable(ctx, doltdb.TableName{Name: cd.ct.tblName}, updatedTbl)
 	if err != nil {
 		return err
 	}
