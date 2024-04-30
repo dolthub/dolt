@@ -18,9 +18,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/goccy/go-json"
 

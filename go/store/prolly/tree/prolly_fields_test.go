@@ -17,11 +17,11 @@ package tree
 import (
 	"context"
 	"encoding/json"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
