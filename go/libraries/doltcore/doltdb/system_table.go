@@ -84,7 +84,7 @@ func IsNonAlterableSystemTable(name string) bool {
 
 // GetNonSystemTableNames gets non-system table names
 func GetNonSystemTableNames(ctx context.Context, root *RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func GetSystemTableNames(ctx context.Context, root *RootValue) ([]string, error)
 
 // GetPersistedSystemTables returns table names of all persisted system tables.
 func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, e
 func GetGeneratedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
 	s := set.NewStrSet(generatedSystemTables)
 
-	tn, err := root.GetTableNames(ctx)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

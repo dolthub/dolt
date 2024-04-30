@@ -319,7 +319,7 @@ func (d *prollyCVDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	updatedRoot, err := d.cvt.root.PutTable(ctx, d.cvt.tblName, updatedTbl)
+	updatedRoot, err := d.cvt.root.PutTable(ctx, doltdb.TableName{Name: d.cvt.tblName}, updatedTbl)
 	if err != nil {
 		return err
 	}

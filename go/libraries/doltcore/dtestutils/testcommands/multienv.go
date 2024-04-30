@@ -410,7 +410,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) err
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
 
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	if err != nil {
 		return err
 	}

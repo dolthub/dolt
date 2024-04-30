@@ -227,7 +227,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.ForeignKey) error {
 	f.currFk = fk
 
-	tbl, ok, err := f.rootValue.GetTable(ctx, fk.TableName)
+	tbl, ok, err := f.rootValue.GetTable(ctx, doltdb.TableName{Name: fk.TableName})
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.Forei
 
 	f.currTbl = tbl
 
-	refTbl, ok, err := f.rootValue.GetTable(ctx, fk.ReferencedTableName)
+	refTbl, ok, err := f.rootValue.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})
 	if err != nil {
 		return err
 	}
@@ -296,7 +296,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
+		f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
 		if err != nil {
 			return err
 		}
@@ -311,7 +311,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
+	f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
 	if err != nil {
 		return err
 	}

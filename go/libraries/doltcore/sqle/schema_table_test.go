@@ -42,7 +42,7 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
@@ -99,7 +99,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 	require.NoError(t, err)
 
 	// original schema of dolt_schemas table with the ID column
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},

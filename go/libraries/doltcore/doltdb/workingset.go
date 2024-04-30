@@ -159,7 +159,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 	for _, name := range m.unmergableTables {
 		var sc SchemaConflict
 		var hasToTable bool
-		if sc.toTbl, hasToTable, err = to.GetTable(ctx, name); err != nil {
+		if sc.toTbl, hasToTable, err = to.GetTable(ctx, TableName{Name: name}); err != nil {
 			return err
 		}
 		if hasToTable {
@@ -170,7 +170,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 
 		var hasFromTable bool
 		// todo: handle schema conflicts for renamed tables
-		if sc.fromTbl, hasFromTable, err = from.GetTable(ctx, name); err != nil {
+		if sc.fromTbl, hasFromTable, err = from.GetTable(ctx, TableName{Name: name}); err != nil {
 			return err
 		}
 		if hasFromTable {

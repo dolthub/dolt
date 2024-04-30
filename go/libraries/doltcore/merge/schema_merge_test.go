@@ -73,7 +73,7 @@ type namedSchema struct {
 	create string
 }
 
-// TestMergeSchemas are schema merge integration tests from 2023
+// TestSchemaMerge are schema merge integration tests from 2023
 func TestSchemaMerge(t *testing.T) {
 	t.Run("column add/drop tests", func(t *testing.T) {
 		testSchemaMerge(t, columnAddDropTests)
@@ -1415,7 +1415,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 						for name, _ := range exp {
 							_, ok := act[name]
 							assert.True(t, ok)
-							actTbl, _, err := result.Root.GetTable(ctx, name)
+							actTbl, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
 							require.NoError(t, err)
 							hasConflict, err := actTbl.HasConflicts(ctx)
 							require.NoError(t, err)
@@ -1423,7 +1423,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 						}
 						if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
 							for name, _ := range exp {
-								table, _, err := result.Root.GetTable(ctx, name)
+								table, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
 								require.NoError(t, err)
 								t.Logf("table %s:", name)
 								t.Log(table.DebugString(ctx, m.NodeStore()))
@@ -1435,7 +1435,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							a, ok := act[name]
 							assert.True(t, ok)
 
-							actTbl, _, err := result.Root.GetTable(ctx, name)
+							actTbl, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
 							require.NoError(t, err)
 							hasConflict, err := actTbl.HasConflicts(ctx)
 							require.NoError(t, err)
@@ -1470,7 +1470,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 								}
 							} else {
 								if addr != a {
-									expTbl, _, err := m.GetTable(ctx, name)
+									expTbl, _, err := m.GetTable(ctx, doltdb.TableName{Name: name})
 									require.NoError(t, err)
 									expRowDataHash, err := expTbl.GetRowDataHash(ctx)
 									require.NoError(t, err)
@@ -1626,7 +1626,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	dt, err := doltdb.NewEmptyTable(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), tbl.ns.sch)
 	require.NoError(t, err)
-	root, err := ws.WorkingRoot().PutTable(ctx, tbl.ns.name, dt)
+	root, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: tbl.ns.name}, dt)
 	require.NoError(t, err)
 	ws = ws.WithWorkingRoot(root)
 
@@ -1634,7 +1634,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
-	wr, err := sess.GetTableWriter(sql.NewContext(ctx), tbl.ns.name, "test", noop)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop)
 	require.NoError(t, err)
 
 	sctx := sql.NewEmptyContext()

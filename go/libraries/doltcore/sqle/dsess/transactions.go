@@ -652,7 +652,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 
 			violations := make([]string, len(badTbls))
 			for i, name := range badTbls {
-				tbl, _, err := workingRoot.GetTable(ctx, name)
+				tbl, _, err := workingRoot.GetTable(ctx, doltdb.TableName{Name: name})
 				if err != nil {
 					return err
 				}

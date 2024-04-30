@@ -66,6 +66,14 @@ type DoltDatabaseProvider struct {
 	isStandby    *bool
 }
 
+var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
+
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
 }
@@ -79,14 +87,6 @@ func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql
 	cp.tableFunctions = funcs
 	return &cp, nil
 }
-
-var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
