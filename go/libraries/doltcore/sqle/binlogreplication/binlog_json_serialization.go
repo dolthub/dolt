@@ -146,7 +146,9 @@ func encodeJsonObject(jsonObject map[string]any, largeEncoding bool) (typeId byt
 	var keysBuffer []byte
 	nextKeysOffset := calculateInitialObjectKeysOffset(len(jsonObject), largeEncoding)
 
-	// Sort the keys so that we can process the keys and values in a consistent order
+	// Sort the keys so that we can process the keys and values in a consistent order. MySQL seems to sort
+	// json keys internally first by length, then alphabetically, but correct replication doesn't seem to
+	// rely on matching that behavior.
 	sortedKeys := make([]string, 0, len(jsonObject))
 	for key := range jsonObject {
 		sortedKeys = append(sortedKeys, key)

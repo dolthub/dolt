@@ -277,9 +277,9 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 		scale := decimalType.Scale()         // number of fractional digits
 		numFullDigits := precision - scale
 		numFullDigitUint32s := numFullDigits / 9
-		numFractionalDigitUint32s := decimalType.Scale() / 9
+		numFractionalDigitUint32s := scale / 9
 		numLeftoverFullDigits := numFullDigits - numFullDigitUint32s*9
-		numLeftoverFractionalDigits := decimalType.Scale() - numFractionalDigitUint32s*9
+		numLeftoverFractionalDigits := scale - numFractionalDigitUint32s*9
 
 		length := numFullDigitUint32s*4 + digitsToBytes[numLeftoverFullDigits] +
 			numFractionalDigitUint32s*4 + digitsToBytes[numLeftoverFractionalDigits]
