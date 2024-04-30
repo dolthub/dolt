@@ -76,11 +76,9 @@ func encodeJsonDoc(jsonDoc gmstypes.JSONDocument) (buffer []byte, err error) {
 // - Value Entries: 1 per value; 1 byte for type ID, variable sized offset (or inlined literal value)
 // - Values: 1 per value; encoded value bytes
 func encodeJsonArray(jsonArray []any, largeEncoding bool) (typeId byte, encodedArray []byte, err error) {
-	if !largeEncoding {
-		if len(jsonArray) > int(maxOffsetSize) {
-			return 0, nil, fmt.Errorf(
-				"too many elements in JSON array (%d) to serialize in small array encoding", len(jsonArray))
-		}
+	if !largeEncoding && len(jsonArray) > int(maxOffsetSize) {
+		return 0, nil, fmt.Errorf(
+			"too many elements in JSON array (%d) to serialize in small array encoding", len(jsonArray))
 	}
 
 	var valueEntriesBuffer []byte
