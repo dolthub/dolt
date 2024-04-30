@@ -53,14 +53,18 @@ type footer struct {
 	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 }
 
+// dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
+// read individual spans for each chunk.
 func (f footer) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
+// indexSpan returns the span of the index section of the archive.
 func (f footer) indexSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
 }
 
+// matadataSpan returns the span of the metadata section of the archive.
 func (f footer) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
