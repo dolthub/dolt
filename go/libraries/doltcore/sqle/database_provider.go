@@ -459,7 +459,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
-type DropDatabaseHook func(ctx context.Context, name string)
+type DropDatabaseHook func(ctx *sql.Context, name string)
 
 // ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
