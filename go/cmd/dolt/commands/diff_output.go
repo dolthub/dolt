@@ -26,8 +26,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+		"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -50,6 +49,8 @@ type diffWriter interface {
 	WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error
 	// WriteViewDiff is called to write a view diff
 	WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error
+	// WriteTableDiffStats is called to write the diff stats for the table given
+	WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error
 	// RowWriter returns a row writer for the table delta provided, which will have Close() called on it when rows are
 	// done being written.
 	RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error)
@@ -69,87 +70,6 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	default:
 		panic(fmt.Sprintf("unexpected diff output: %v", diffOutput))
 	}
-}
-
-func printDiffStat(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) errhand.VerboseError {
-	acc := diff.DiffStatProgress{}
-	var count int64
-	var pos int
-	eP := cli.NewEphemeralPrinter()
-	for _, diffStat := range diffStats {
-		acc.Adds += diffStat.RowsAdded
-		acc.Removes += diffStat.RowsDeleted
-		acc.Changes += diffStat.RowsModified
-		acc.CellChanges += diffStat.CellsModified
-		acc.NewRowSize += diffStat.NewRowCount
-		acc.OldRowSize += diffStat.OldRowCount
-		acc.NewCellSize += diffStat.NewCellCount
-		acc.OldCellSize += diffStat.OldCellCount
-
-		if count%10000 == 0 {
-			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldRowSize, acc.NewRowSize, acc.Adds, acc.Removes, acc.Changes)
-			eP.Display()
-		}
-
-		count++
-	}
-
-	pos = cli.DeleteAndPrint(pos, "")
-
-	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
-		cli.Println("No data changes. See schema changes by using -s or --schema.")
-		return nil
-	}
-
-	if areTablesKeyless {
-		printKeylessStat(acc)
-	} else {
-		printStat(acc, oldColLen, newColLen)
-	}
-
-	return nil
-}
-
-func printStat(acc diff.DiffStatProgress, oldColLen, newColLen int) {
-	numCellInserts, numCellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
-	rowsUnmodified := uint64(acc.OldRowSize - acc.Changes - acc.Removes)
-	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
-	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
-	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
-	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
-	cellInsertions := pluralize("Cell Added", "Cells Added", numCellInserts)
-	cellDeletions := pluralize("Cell Deleted", "Cells Deleted", numCellDeletes)
-	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
-
-	oldValues := pluralize("Row Entry", "Row Entries", acc.OldRowSize)
-	newValues := pluralize("Row Entry", "Row Entries", acc.NewRowSize)
-
-	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldRowSize) * float64(oldColLen))
-
-	safePercent := func(num, dom uint64) float64 {
-		// returns +Inf for x/0 where x > 0
-		if num == 0 {
-			return float64(0)
-		}
-		return float64(100*num) / (float64(dom))
-	}
-
-	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldRowSize))
-	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldRowSize))
-	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldRowSize))
-	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldRowSize))
-	cli.Printf("%s (%.2f%%)\n", cellInsertions, safePercent(numCellInserts, acc.OldCellSize))
-	cli.Printf("%s (%.2f%%)\n", cellDeletions, safePercent(numCellDeletes, acc.OldCellSize))
-	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
-	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
-}
-
-func printKeylessStat(acc diff.DiffStatProgress) {
-	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
-	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
-
-	cli.Printf("%s\n", insertions)
-	cli.Printf("%s\n", deletions)
 }
 
 func pluralize(singular, plural string, n uint64) string {
@@ -218,6 +138,86 @@ func (t tabularDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn,
 	diffString := textdiff.LineDiff(oldDefn, newDefn)
 	cli.Println(diffString)
 	return nil
+}
+
+func (t tabularDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+	acc := diff.DiffStatProgress{}
+	eP := cli.NewEphemeralPrinter()
+	var pos int
+	for i, diffStat := range diffStats {
+		acc.Adds        += diffStat.RowsAdded
+		acc.Removes     += diffStat.RowsDeleted
+		acc.Changes     += diffStat.RowsModified
+		acc.CellChanges += diffStat.CellsModified
+		acc.NewRowSize  += diffStat.NewRowCount
+		acc.OldRowSize  += diffStat.OldRowCount
+		acc.NewCellSize += diffStat.NewCellCount
+		acc.OldCellSize += diffStat.OldCellCount
+
+		if i != 0 && i % 10000 == 0 {
+			msg := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldRowSize, acc.NewRowSize, acc.Adds, acc.Removes, acc.Changes)
+			eP.Printf(msg)
+			eP.Display()
+			pos += len(msg)
+		}
+	}
+
+	cli.DeleteAndPrint(pos, "")
+
+	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
+		cli.Println("No data changes. See schema changes by using -s or --schema.")
+		return nil
+	}
+
+	if areTablesKeyless {
+		t.printKeylessStat(acc)
+	} else {
+		t.printStat(acc, oldColLen, newColLen)
+	}
+
+	return nil
+}
+
+func (t tabularDiffWriter) printStat(acc diff.DiffStatProgress, oldColLen, newColLen int) {
+	numCellInserts, numCellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
+	rowsUnmodified := uint64(acc.OldRowSize - acc.Changes - acc.Removes)
+	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
+	cellInsertions := pluralize("Cell Added", "Cells Added", numCellInserts)
+	cellDeletions := pluralize("Cell Deleted", "Cells Deleted", numCellDeletes)
+	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
+
+	oldValues := pluralize("Row Entry", "Row Entries", acc.OldRowSize)
+	newValues := pluralize("Row Entry", "Row Entries", acc.NewRowSize)
+
+	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldRowSize) * float64(oldColLen))
+
+	safePercent := func(num, dom uint64) float64 {
+		// returns +Inf for x/0 where x > 0
+		if num == 0 {
+			return float64(0)
+		}
+		return float64(100*num) / (float64(dom))
+	}
+
+	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldRowSize))
+	cli.Printf("%s (%.2f%%)\n", cellInsertions, safePercent(numCellInserts, acc.OldCellSize))
+	cli.Printf("%s (%.2f%%)\n", cellDeletions, safePercent(numCellDeletes, acc.OldCellSize))
+	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
+	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
+}
+
+func(t tabularDiffWriter) printKeylessStat(acc diff.DiffStatProgress) {
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+
+	cli.Printf("%s\n", insertions)
+	cli.Printf("%s\n", deletions)
 }
 
 func (t tabularDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
@@ -295,6 +295,10 @@ func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, new
 	return nil
 }
 
+func (s sqlDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+	return nil
+}
+
 func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
 	var targetSch schema.Schema
 	if toTableInfo != nil {
@@ -325,7 +329,10 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 	}, nil
 }
 
-const tablesHeader = `"tables":[`
+
+// TODO: this should be pretty printed
+const jsonDiffHeader = "\n\t\"tables\":["
+const jsonDiffContinuer = "},"
 const jsonDiffTableHeader = `{"name":"%s","schema_diff":`
 const jsonDiffDataDiffHeader = `],"data_diff":[`
 const jsonDataDiffFooter = `}]`
@@ -345,12 +352,12 @@ func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, is
 	}
 
 	if j.tablesWritten == 0 {
-		err := iohelp.WriteAll(j.wr, []byte(tablesHeader))
+		err := iohelp.WriteAll(j.wr, []byte(jsonDiffHeader))
 		if err != nil {
 			return err
 		}
 	} else {
-		err := iohelp.WriteAll(j.wr, []byte(`},`))
+		err := iohelp.WriteAll(j.wr, []byte(jsonDiffContinuer))
 		if err != nil {
 			return err
 		}
@@ -579,6 +586,26 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 	}
 
 	j.viewsWritten++
+	return nil
+}
+
+func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
+	acc := diff.DiffStatProgress{}
+	for _, diffStat := range diffStats {
+		acc.Adds        += diffStat.RowsAdded
+		acc.Removes     += diffStat.RowsDeleted
+		acc.Changes     += diffStat.RowsModified
+		acc.CellChanges += diffStat.CellsModified
+		acc.NewRowSize  += diffStat.NewRowCount
+		acc.OldRowSize  += diffStat.OldRowCount
+		acc.NewCellSize += diffStat.NewCellCount
+		acc.OldCellSize += diffStat.OldCellCount
+	}
+	if (acc.Adds+acc.Removes+acc.Changes) == 0 && (acc.OldCellSize-acc.NewCellSize) == 0 {
+		cli.Println("No data changes. See schema changes by using -s or --schema.")
+		return nil
+	}
+
 	return nil
 }
 

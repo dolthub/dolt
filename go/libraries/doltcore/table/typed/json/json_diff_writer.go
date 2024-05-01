@@ -152,6 +152,7 @@ type SchemaDiffWriter struct {
 
 var _ diff.SchemaDiffWriter = (*SchemaDiffWriter)(nil)
 
+// TODO: this header should be "schema_diff: ["
 const jsonSchemaHeader = `[`
 const jsonSchemaFooter = `]`
 

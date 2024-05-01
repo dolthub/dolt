@@ -1091,7 +1091,13 @@ func diffUserTable(
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
+		// TODO: diffStats needs to take into account the diff writer format
+		err = dw.WriteTableDiffStats(diffStats, fromColLen, toColLen, areTablesKeyless)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
+		//return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
