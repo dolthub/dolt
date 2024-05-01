@@ -180,7 +180,7 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	f.fileSize = fileSize
 
 	// Verify File Signature
-	if f.fileSignature != archiveFileSignature {
+	if f.fileSignature != string(archiveFileSignature) {
 		err = ErrInvalidFileSignature
 		return
 	}
