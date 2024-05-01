@@ -2,25 +2,42 @@ package ranges
 
 import (
 	"container/heap"
+	"math/rand/v2"
 
 	"github.com/google/btree"
 )
 
-type interned string
 
+// GetRange represents a way to get the contents for a Chunk from a given Url
+// with an HTTP Range request. The chunk with hash |Hash| can be fetched using
+// the |Url| with a Range request starting at |Offset| and reading |Length|
+// bytes.
+//
+// A |GetRange| struct is a member of a |Region| in the |RegionHeap|.
 type GetRange struct {
-	Url    interned
+	Url    string
 	Hash   []byte
 	Offset uint64
 	Length uint32
 	Region *Region
 }
 
+// A |Region| represents a continuous range of bytes within in a Url.
+// |ranges.Tree| maintains |Region| instances that cover every |GetRange|
+// within the tree. As entries are inserted into the Tree, their Regions can
+// coallesce with Regions which come before or after them in the same Url,
+// based on the |coallesceLimit|.
+//
+// |Region|s are maintained in a |RegionHeap| so that the |Tree| can quickly
+// return a large download to get started on when a download worker is
+// available.
 type Region struct {
+	Url          string
 	StartOffset  uint64
 	EndOffset    uint64
 	MatchedBytes uint64
 	HeapIndex    int
+	Score        int
 }
 
 type RegionHeap []*Region
@@ -29,10 +46,27 @@ func (rh RegionHeap) Len() int {
 	return len(rh)
 }
 
+const (
+	HeapStrategy_smallest = iota
+	HeapStrategy_largest
+	HeapStrategy_random
+)
+
+var strategy = HeapStrategy_largest
+
 func (rh RegionHeap) Less(i, j int) bool {
 	leni := rh[i].EndOffset - rh[i].StartOffset
 	lenj := rh[j].EndOffset - rh[j].StartOffset
-	return leni > lenj
+	if strategy == HeapStrategy_largest {
+		// This makes us track the largest region...
+		return leni > lenj
+	} else if strategy == HeapStrategy_smallest {
+		// This makes us track the smallest...
+		return leni < lenj
+	} else {
+		// This makes us track a random order...
+		return rh[i].Score < rh[j].Score
+	}
 }
 
 func (rh RegionHeap) Swap(i, j int) {
@@ -79,15 +113,23 @@ func NewTree(coallesceLimit int) *Tree {
 	}
 }
 
-func (t *Tree) intern(s string) interned {
-	i := interned(s)
-	t.t.AscendGreaterOrEqual(&GetRange{Url: i}, func(gr *GetRange) bool {
-		if gr.Url == i {
-			i = gr.Url
+// |intern| will deduplicate strings that are stored in the |ranges.Tree|, so
+// that all equal values share the same heap memory. The context is that URLs
+// stored in the |Tree| can be very long, since they can be pre-signed S3 URLs,
+// for example. And in general a Tree will have a large number of |GetRange|
+// entries, that contain the same |Url|.
+func (t *Tree) intern(s string) string {
+	t.t.AscendGreaterOrEqual(&GetRange{Url: s}, func(gr *GetRange) bool {
+		if gr.Url == s {
+			s = gr.Url
 		}
 		return false
 	})
-	return i
+	return s
+}
+
+func (t *Tree) Len() int {
+	return t.t.Len()
 }
 
 func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
@@ -161,61 +203,38 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 		return false
 	})
 
+	// We didn't coallesce with any existing Regions. Insert a new Region
+	// covering just this GetRange.
 	if ins.Region == nil {
 		ins.Region = &Region{
+			Url:          ins.Url,
 			StartOffset:  ins.Offset,
 			EndOffset:    ins.Offset + uint64(ins.Length),
 			MatchedBytes: uint64(ins.Length),
+			Score:        rand.Int(),
 		}
 		heap.Push(t.regions, ins.Region)
 	}
 }
 
-// Get Interface needs to take regions[0], our largest region, and return a
-// getter based on it. Maybe slice it up if we don't want too large of a
-// download... Remove all the corresponding entries from tree.t. Pop it from Heap.
+// Returns the biggest possible download we can get started on. Removes its Region from the tree.
+func (t *Tree) DeleteMaxRegion() []*GetRange {
+	if t.regions.Len() == 0 {
+		return nil
+	}
+	region := heap.Pop(t.regions).(*Region)
+	start := &GetRange{Url: region.Url, Offset: region.StartOffset}
+	end := &GetRange{Url: region.Url, Offset: region.EndOffset}
+	iter := t.t.Clone()
+	var ret []*GetRange
+	iter.AscendRange(start, end, func(gr *GetRange) bool {
+		ret = append(ret, gr)
+		t.t.Delete(gr)
+		return true
+	})
+	return ret
+}
 
-//
-// func NewTree[K any](less btree.LessFunc[K]) *Tree[K] {
-// 	return &Tree[K]{
-// 		t: btree.NewG[keyRange[K]](64, keyRangeLess(less)),
-// 	}
-// }
-//
-// type KeyRange[K any] struct {
-// 	Begin K
-// 	End   K
-// }
-//
-// func keyRangeLess[K any](less btree.LessFunc[K]) func(a, b keyRange[K]) bool {
-// 	return func(a, b keyRange[K]) bool {
-// 		return less(a.begin, b.begin)
-// 	}
-// }
-//
-// // To insert a given *GetRange, we check the entry directly below where it would be inserted.
-// //
-// // * If it is within the colleasce range of that entry, we append the ranges onto the end of the existing entry.
-// //
-// // * Otherwise, we insert a new entry.
-// //
-// // After inserting or modifying an existing entry with the GetRange, we check the
-// // entry directly after the inserted or modified range. If the end of the
-// // inserted/modified range coallesces with the next entry, we delete the next
-// // entry and we append its ranges onto the just inserted/modified entry.
-// //
-// // A (max)heap of the (byte range) sizes of the current ranges is kept, separate
-// // of the sorted entries themselves. If we modify an existing entry, we heap.Fix
-// // it. If we insert a new entry, we heap.Push it. When we merge an entry with the
-// // entry which comes after it, we heap.Remove() the old entry and we heap.Fix the
-// // updated entry.
-// //
-// // Ranges are allowed to grow arbitrarily large. When we pick the max range to
-// // download, we might want to limit the size of the actual download. If we do
-// // that, we take the current max range and we cut off the number of bytes we're
-// // willing to download from the end. We remove those ranges from the end of the
-// // entry in the tree and we heap.Fix the entry's heap entry.
-//
-// // TODO: Take goodput vs byte range length into account. If we transit 16KB to download 8KB, is that better than downloading 12KB of known chunks?
-//
-// // TODO: Count and account for gaps we download without knowing the address and then we end up downloading them again...
+// TODO: Take goodput vs byte range length into account. If we transit 16KB to download 8KB, is that better than downloading 12KB of known chunks?
+
+// TODO: Count and account for gaps we download without knowing the address and then we end up downloading them again...

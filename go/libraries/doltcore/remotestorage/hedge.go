@@ -19,6 +19,9 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+	"github.com/fatih/color"
+
 	"golang.org/x/sync/semaphore"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
@@ -68,16 +71,19 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 		n := len(cancels) + 1
 		finalize := func() {}
 		if n-1 > MaxHedgesPerRequest {
+			fmt.Fprintf(color.Error, color.RedString("not hedging because MaxHedgesPerRequest exceeded\n"))
 			return
 		}
 		if n > 1 {
 			if !h.sema.TryAcquire(1) {
+				fmt.Fprintf(color.Error, color.RedString("not hedging because too many outstanding hedges on semaphore\n"))
 				// Too many outstanding hedges. Do nothing.
 				return
 			}
 			finalize = func() {
 				h.sema.Release(1)
 			}
+			fmt.Fprintf(color.Error, color.CyanString("started new hedge\n"))
 		}
 		ctx, cancel := context.WithCancel(ctx)
 		cancels = append(cancels, cancel)
@@ -87,7 +93,13 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 			v, e := w.Run(ctx, n)
 			select {
 			case ch <- res{v, e, n, time.Since(start)}:
+				if n > 1 {
+					fmt.Fprintf(color.Error, color.GreenString("hedge succeeded\n"))
+				}
 			case <-ctx.Done():
+				if n > 1 {
+					fmt.Fprintf(color.Error, color.RedString("hedge failed\n"))
+				}
 			}
 		}()
 	}

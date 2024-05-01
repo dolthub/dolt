@@ -30,6 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -406,6 +408,7 @@ func (gr *GetRange) SplitAtGaps(maxGapBytes uint64) []*GetRange {
 				break
 			}
 			if gr.GapBetween(i, j) > MaxFetchSize {
+				fmt.Fprintf(color.Error, color.RedString("choose smaller group because MaxFetchSize exceeded...\n"))
 				break
 			}
 			j++
@@ -1226,6 +1229,10 @@ func rangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher 
 
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
+
+		if retryCnt > 0 {
+			fmt.Fprintf(color.Error, color.RedString("retrying request of size %v from offset %d\n", length, currOffset))
+		}
 
 		stats.RecordDownloadAttemptStart(hedgeN, retryCnt, currOffset-offset, length)
 		start := time.Now()

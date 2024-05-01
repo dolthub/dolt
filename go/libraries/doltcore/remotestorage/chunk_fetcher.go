@@ -29,6 +29,7 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/ranges"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
@@ -84,7 +85,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), dcs.concurrency.ConcurrentSmallFetches, dcs.concurrency.ConcurrentLargeFetches)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), 16 /*dcs.concurrency.ConcurrentSmallFetches*/, dcs.concurrency.ConcurrentLargeFetches)
 	})
 
 	return ret
@@ -299,82 +300,131 @@ type fetchReq struct {
 	maxSz  uint64
 }
 
+type downloads struct {
+	ranges    *ranges.Tree
+	refreshes map[string]*locationRefresh
+}
+
+func newDownloads() downloads {
+	return downloads{
+		ranges:    ranges.NewTree(chunkAggDistance),
+		refreshes: make(map[string]*locationRefresh),
+	}
+}
+
+func (d downloads) Add(resp *remotesapi.DownloadLoc) {
+        gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
+        path := gr.ResourcePath()
+        if v, ok := d.refreshes[path]; ok {
+		v.Add(resp)
+        } else {
+                refresh := new(locationRefresh)
+                refresh.Add(resp)
+                d.refreshes[path] = refresh
+        }
+	for _, r := range gr.Ranges {
+		d.ranges.Insert(gr.Url, r.Hash, r.Offset, r.Length)
+	}
+}
+
+func toGetRange(rs []*ranges.GetRange) *GetRange {
+	ret := new(GetRange)
+	for _, r := range rs {
+		ret.Url = r.Url
+		ret.Ranges = append(ret.Ranges, &remotesapi.RangeChunk{
+			Hash: r.Hash,
+			Offset: r.Offset,
+			Length: r.Length,
+		})
+	}
+	return ret
+}
+
 // Reads off |locCh| and assembles DownloadLocs into download ranges.
 func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
-	locs := newDlLocations()
+	downloads := newDownloads()
 	pending := make([]fetchReq, 0)
 	for {
-		numGaps := 0
-		numSends := 0
-		lenSends := 0
-		sent := true
-		for sent {
-			sent = false
-			for j := range pending {
-				for path, gr := range locs.ranges {
-					split := gr.SplitAtGaps(chunkAggDistance)
-					numGaps += len(split)
-					var i int
-					for i = 0; i < len(split); i++ {
-						l := split[i].RangeLen()
-						if l >= pending[j].minSz && l < pending[j].maxSz {
-							refresh := locs.refreshes[path]
-							select {
-							case pending[j].respCh <- fetchResp{
-								get: split[i],
-								refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
-									return refresh.GetURL(ctx, err, client)
-								},
-							}:
-							case <-ctx.Done():
-								return context.Cause(ctx)
-							}
-							pending[j].respCh = nil
-							sent = true
-							numSends += 1
-							lenSends += int(l)
-							break
-						}
-					}
-					if i != len(split) {
-						newranges := make([]*remotesapi.RangeChunk, 0, len(gr.Ranges)-len(split[i].Ranges))
-						for j := 0; j < len(split); j++ {
-							if j == i {
-								continue
-							}
-							newranges = append(newranges, split[j].Ranges...)
-						}
-						gr.Ranges = newranges
-						break
-					}
-				}
+
+		for j := range pending {
+			max := downloads.ranges.DeleteMaxRegion()
+			if len(max) == 0 {
+				break
 			}
-			newpending := make([]fetchReq, 0)
-			for i := range pending {
-				if pending[i].respCh != nil {
-					newpending = append(newpending, pending[i])
-				}
+			gr := toGetRange(max)
+			path := gr.ResourcePath()
+			refresh := downloads.refreshes[path]
+
+			resp := fetchResp{
+				get: gr,
+				refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
+					return refresh.GetURL(ctx, err, client)
+				},
 			}
-			pending = newpending
+
+			select {
+			case pending[j].respCh <- resp:
+				fmt.Fprintf(color.Error, "started download of size %d\n", gr.RangeLen())
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+
+			pending[j].respCh = nil
 		}
 
-		if numSends > 0 || len(pending) > 0 {
-			numRanges := 0
-			for _, gr := range locs.ranges {
-				numRanges += len(gr.Ranges)
+		newpending := make([]fetchReq, 0)
+		for i := range pending {
+			if pending[i].respCh != nil {
+				newpending = append(newpending, pending[i])
 			}
+		}
+		pending = newpending
 
-			fmt.Fprintf(color.Error, "%v reliable.grpc blockForDeliverResp; len(pending): %v, len(locs): %v, numGaps: %v, numSends: %d, lenSends: %d\n", time.Now(), len(pending), numRanges, numGaps, numSends, lenSends)
+		if locCh == nil && downloads.ranges.Len() == 0 {
+			close(doneCh)
+			return nil
 		}
 
 		select {
 		case req, ok := <-locCh:
 			if !ok {
-				close(doneCh)
-				return nil
+				locCh = nil
+			} else {
+				for _, loc := range req {
+					downloads.Add(loc)
+				}
 			}
-			for _, loc := range req {
-				locs.Add(loc)
+		case req, ok := <-locCh:
+			if !ok {
+				locCh = nil
+			} else {
+				for _, loc := range req {
+					downloads.Add(loc)
+				}
+			}
+		case req, ok := <-locCh:
+			if !ok {
+				locCh = nil
+			} else {
+				for _, loc := range req {
+					downloads.Add(loc)
+				}
+			}
+		case req, ok := <-locCh:
+			if !ok {
+				locCh = nil
+			} else {
+				for _, loc := range req {
+					downloads.Add(loc)
+				}
+			}
+		case req, ok := <-locCh:
+			if !ok {
+				locCh = nil
+			} else {
+				for _, loc := range req {
+					downloads.Add(loc)
+				}
 			}
 		case req := <-fetchReqCh:
 			pending = append(pending, req)
