@@ -79,7 +79,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherHashSetToGetDlLocsReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
 	eg.Go(func() error {
-		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, func(s string) { dcs.repoToken.Store(s) }, ret.resCh)
+		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient, func(s string) { dcs.repoToken.Store(s) }, ret.resCh, dcs.host)
 	})
 	eg.Go(func() error {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
@@ -185,7 +185,7 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 // delivered in |reqCh|, and they will be delivered in order.
 //
 // This function handles backoff and retries for the underlying streaming RPC.
-func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.CompressedChunk) error {
+func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.CompressedChunk, host string) error {
 	stream, err := reliable.MakeCall[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse](
 		ctx,
 		reliable.CallOptions[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse]{
@@ -212,7 +212,7 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 				}
 				err := stream.Send(req)
 				if err != nil {
-					return err
+					return NewRpcError(err, "StreamDownloadLocations", host, req)
 				}
 			case <-ctx.Done():
 				return context.Cause(ctx)
@@ -227,7 +227,7 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 				return nil
 			}
 			if err != nil {
-				return err
+				return NewRpcError(err, "StreamDownloadLocations", host, stream.AssociatedReq())
 			}
 			if resp.RepoToken != "" {
 				storeRepoToken(resp.RepoToken)
@@ -267,9 +267,10 @@ func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.G
 		numResponded += len(hgr.Ranges)
 	}
 	if numResponded > numRequested {
-		return nil, errors.New("server responded with more chunks than we asked for in StreamDownloadLocations")
+		return nil, errors.New("possible internal error: server responded with more chunks than we asked for in StreamDownloadLocations")
 	}
 	if numResponded == numRequested {
+		// XXX: We assume it's the same chunks and that the server is well behaved.
 		return nil, nil
 	}
 	requested := make(hash.HashSet, numRequested)
