@@ -1381,22 +1381,28 @@ type ReplicationStatusController struct {
 	NotifyWaitFailed []func()
 }
 
-// RootUpdateListener allows callbacks on a registered listener when a working root is updated on a database and
-// other sessions have visibility to the changes.
-type RootUpdateListener interface {
+// DatabaseUpdateListener allows callbacks on a registered listener when a database is created, dropped, or when
+// the working root is updated new changes are visible to other sessions.
+type DatabaseUpdateListener interface {
 	// WorkingRootUpdated is called when a branch working root is updated on a database and other sessions are
 	// given visibility to the changes. |ctx| provides the current session information, |databaseName| indicates
 	// the database being updated, and |before| and |after| are the previous and new RootValues for the working root.
 	// If callers encounter any errors while processing a root update notification, they can return an error, which
 	// will be logged.
 	WorkingRootUpdated(ctx *sql.Context, databaseName string, before *RootValue, after *RootValue) error
+
+	// DatabaseCreated is called when a new database,  named |databaseName|, has been created.
+	DatabaseCreated(ctx *sql.Context, databaseName string) error
+
+	// DatabaseDropped is called with the database named |databaseName| has been dropped.
+	DatabaseDropped(ctx *sql.Context, databaseName string) error
 }
 
-var RootUpdateListeners = make([]RootUpdateListener, 0)
+var DatabaseUpdateListeners = make([]DatabaseUpdateListener, 0)
 
-// RegisterRootUpdateListener registers |listener| to receive callbacks when a working set's working root is updated.
-func RegisterRootUpdateListener(listener RootUpdateListener) {
-	RootUpdateListeners = append(RootUpdateListeners, listener)
+// RegisterDatabaseUpdateListener registers |listener| to receive callbacks when databases are updated.
+func RegisterDatabaseUpdateListener(listener DatabaseUpdateListener) {
+	DatabaseUpdateListeners = append(DatabaseUpdateListeners, listener)
 }
 
 // UpdateWorkingSet updates the working set with the ref given to the root value given
@@ -1481,10 +1487,8 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 // encountered. If any listeners are registered for working root updates, then they will be notified as well.
 func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
 	var prevWorkingSet *WorkingSet
-	replicate := false
 	// TODO: support making the binlog branch configurable
 	if workingSet.Name == "heads/main" {
-		replicate = true
 		if wsDs.HasHead() {
 			prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
 			if err != nil {
@@ -1498,16 +1502,15 @@ func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workin
 		return nil, err
 	}
 
-	if replicate {
-		var prevWorkingRoot *RootValue
-		if prevWorkingSet != nil {
-			prevWorkingRoot = prevWorkingSet.workingRoot
-		}
-		for _, listener := range RootUpdateListeners {
+	if prevWorkingSet != nil {
+		for _, listener := range DatabaseUpdateListeners {
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {
-				err := listener.WorkingRootUpdated(sqlCtx, sqlCtx.GetCurrentDatabase(),
-					prevWorkingSet.workingRoot, workingSet.WorkingRoot())
+				err := listener.WorkingRootUpdated(sqlCtx,
+					//ddb.databaseName,
+					sqlCtx.GetCurrentDatabase(),
+					prevWorkingSet.workingRoot,
+					workingSet.WorkingRoot())
 				if err != nil {
 					logrus.Errorf("error notifying working root listener of update: %s", err.Error())
 				}

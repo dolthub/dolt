@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
@@ -143,6 +144,8 @@ func NewSqlEngine(
 	sqlEngine := &SqlEngine{}
 
 	// Create the engine
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,

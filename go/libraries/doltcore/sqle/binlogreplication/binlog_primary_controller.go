@@ -35,6 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+const replicationBranch = "main"
+
 type binlogStreamer struct {
 	quitChan  chan struct{}
 	eventChan chan []mysql.BinlogEvent
@@ -59,9 +61,63 @@ type binlogStreamerManager struct {
 	binlogFormat mysql.BinlogFormat
 }
 
-var _ doltdb.RootUpdateListener = (*binlogStreamerManager)(nil)
+var _ doltdb.DatabaseUpdateListener = (*binlogStreamerManager)(nil)
 
-// WorkingRootUpdated implements the RootUpdateListener interface. When a transaction is committed, this function
+// DatabaseCreated implements the doltdb.DatabaseUpdateListener interface
+func (m *binlogStreamerManager) DatabaseCreated(ctx *sql.Context, databaseName string) error {
+	var binlogEvents []mysql.BinlogEvent
+	binlogEvent, err := m.createGtidEvent(ctx)
+	if err != nil {
+		return err
+	}
+	binlogEvents = append(binlogEvents, binlogEvent)
+
+	createDatabaseStatement := fmt.Sprintf("create database `%s`;", databaseName)
+	binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+		Database: databaseName,
+		Charset:  nil, // TODO:
+		SQL:      createDatabaseStatement,
+		Options:  0,
+		SqlMode:  0, // TODO:
+	})
+	binlogEvents = append(binlogEvents, binlogEvent)
+	m.binlogStream.LogPosition += binlogEvent.Length()
+
+	for _, streamer := range m.streamers {
+		streamer.eventChan <- binlogEvents
+	}
+
+	return nil
+}
+
+// DatabaseDropped implements the doltdb.DatabaseUpdateListener interface.
+func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName string) error {
+	var binlogEvents []mysql.BinlogEvent
+	binlogEvent, err := m.createGtidEvent(ctx)
+	if err != nil {
+		return err
+	}
+	binlogEvents = append(binlogEvents, binlogEvent)
+
+	dropDatabaseStatement := fmt.Sprintf("drop database `%s`;", databaseName)
+	binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+		Database: databaseName,
+		Charset:  nil, // TODO:
+		SQL:      dropDatabaseStatement,
+		Options:  0,
+		SqlMode:  0, // TODO:
+	})
+	binlogEvents = append(binlogEvents, binlogEvent)
+	m.binlogStream.LogPosition += binlogEvent.Length()
+
+	for _, streamer := range m.streamers {
+		streamer.eventChan <- binlogEvents
+	}
+
+	return nil
+}
+
+// WorkingRootUpdated implements the DatabaseUpdateListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
 // For a data update, the following events are generated
@@ -90,11 +146,10 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 	}
 
 	// Process schema changes first
-	schemaChangeEvents, hasDataChanges, err := m.createSchemaChangeQueryEvents(ctx, databaseName, tableDeltas, after)
+	binlogEvents, hasDataChanges, err := m.createSchemaChangeQueryEvents(ctx, databaseName, tableDeltas, after)
 	if err != nil {
 		return err
 	}
-	binlogEvents = append(binlogEvents, schemaChangeEvents...)
 
 	// Process data changes...
 	if hasDataChanges {
@@ -550,7 +605,7 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 		binlogStream: binlogStream,
 	}
 
-	doltdb.RegisterRootUpdateListener(manager)
+	doltdb.RegisterDatabaseUpdateListener(manager)
 
 	go func() {
 		for {
