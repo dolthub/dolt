@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bufio"
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
@@ -70,23 +71,6 @@ func (f footer) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-// Our mix of using binary.ReadUvarint and binary.Read paints us in a bit of a corner here. To work around this
-// we wrap the section reader with the ByteReader interface. There may be a better way to do this.
-type sectionReaderByteReader struct {
-	sectionReader *io.SectionReader
-}
-
-// ReadByte - see op.SectionReader.ReadByte. This may prove to be a bottleneck. We use this to read varints, which
-// by definition we don't know the length of in advance.
-func (r sectionReaderByteReader) ReadByte() (byte, error) {
-	buf := []byte{0}
-	_, err := r.sectionReader.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-	return buf[0], nil
-}
-
 func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {
 	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
@@ -94,13 +78,14 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	}
 
 	indexSpan := footer.indexSpan()
-	section := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
+	secRdr := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
+	byteReader := bufio.NewReader(secRdr)
 
 	byteSpans := make([]byteSpan, footer.byteSpanCount+1)
 	byteSpans = append(byteSpans, byteSpan{offset: 0, length: 0}) // Null byteSpan to simplify logic.
 
 	offset := uint64(0)
-	byteReader := sectionReaderByteReader{sectionReader: section}
+
 	for i := uint32(0); i < footer.byteSpanCount; i++ {
 		length, err := binary.ReadUvarint(byteReader)
 		if err != nil {
@@ -113,7 +98,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	prefixes := make([]uint64, footer.chunkCount)
 	for i := uint32(0); i < footer.chunkCount; i++ {
 		val := uint64(0)
-		err := binary.Read(section, binary.BigEndian, &val)
+		err := binary.Read(byteReader, binary.BigEndian, &val)
 		if err != nil {
 			return archiveReader{}, err
 		}
@@ -135,7 +120,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 
 	suffixes := make([]suffix, footer.chunkCount)
 	for i := uint32(0); i < footer.chunkCount; i++ {
-		n, err := section.Read(suffixes[i][:])
+		n, err := io.ReadFull(byteReader, suffixes[i][:])
 		if err != nil {
 			return archiveReader{}, err
 		}
