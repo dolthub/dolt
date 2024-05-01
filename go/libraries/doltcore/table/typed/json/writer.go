@@ -183,7 +183,7 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 		return nil, err
 	}
 
-	jsonRowData, err := marshalToJson(colValMap)
+	jsonRowData, err := types.MarshallJsonValue(colValMap)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling row to json: %w", err)
 	}
@@ -231,7 +231,7 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 		colValMap[col.Name] = val
 	}
 
-	return marshalToJson(colValMap)
+	return types.MarshallJsonValue(colValMap)
 }
 
 func (j *RowWriter) Flush() error {
@@ -260,15 +260,4 @@ func (j *RowWriter) Close(ctx context.Context) error {
 	}
 
 	return errors.New("already closed")
-}
-
-func marshalToJson(valMap interface{}) ([]byte, error) {
-	var jsonBytes []byte
-	var err error
-
-	jsonBytes, err = json.Marshal(valMap)
-	if err != nil {
-		return nil, err
-	}
-	return jsonBytes, nil
 }
