@@ -134,12 +134,13 @@ func NewSqlEngine(
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	config.ClusterController.RegisterStoredProcedures(pro)
-	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	if config.ClusterController != nil {
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, cluster.NewInitDatabaseHook(config.ClusterController, bThreads))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.ClusterController.DropDatabaseHook())
+		config.ClusterController.SetDropDatabase(pro.DropDatabase)
+	}
 
 	sqlEngine := &SqlEngine{}
-
-	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
-	config.ClusterController.SetDropDatabase(pro.DropDatabase)
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
