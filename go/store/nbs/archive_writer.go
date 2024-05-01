@@ -138,7 +138,7 @@ func (scrs stagedChunkRefSlice) Len() int {
 	return len(scrs)
 }
 func (scrs stagedChunkRefSlice) Less(i, j int) bool {
-	return scrs[i].hash.Prefix() < scrs[j].hash.Prefix()
+	return bytes.Compare(scrs[i].hash[:], scrs[j].hash[:]) == -1
 }
 func (scrs stagedChunkRefSlice) Swap(i, j int) {
 	scrs[i], scrs[j] = scrs[j], scrs[i]
