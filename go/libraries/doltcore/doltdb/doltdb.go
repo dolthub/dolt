@@ -1481,15 +1481,15 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 // encountered. If any listeners are registered for working root updates, then they will be notified as well.
 func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
 	var prevWorkingSet *WorkingSet
+	replicate := false
 	// TODO: support making the binlog branch configurable
 	if workingSet.Name == "heads/main" {
+		replicate = true
 		if wsDs.HasHead() {
 			prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			// TODO: Handle create database events here
 		}
 	}
 
@@ -1498,7 +1498,11 @@ func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workin
 		return nil, err
 	}
 
-	if prevWorkingSet != nil {
+	if replicate {
+		var prevWorkingRoot *RootValue
+		if prevWorkingSet != nil {
+			prevWorkingRoot = prevWorkingSet.workingRoot
+		}
 		for _, listener := range RootUpdateListeners {
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {

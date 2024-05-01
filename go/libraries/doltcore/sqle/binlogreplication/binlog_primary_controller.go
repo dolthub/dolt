@@ -83,33 +83,27 @@ var _ doltdb.RootUpdateListener = (*binlogStreamerManager)(nil)
 // to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
 // that log to stream events back to the connected replicas.
 func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
+	var binlogEvents []mysql.BinlogEvent
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
 		return err
 	}
 
 	// Process schema changes first
-	binlogEvents, hasDataChanges, err := m.createSchemaChangeQueryEvents(ctx, databaseName, tableDeltas, after)
+	schemaChangeEvents, hasDataChanges, err := m.createSchemaChangeQueryEvents(ctx, databaseName, tableDeltas, after)
 	if err != nil {
 		return err
 	}
+	binlogEvents = append(binlogEvents, schemaChangeEvents...)
 
 	// Process data changes...
 	if hasDataChanges {
 		// GTID
-		serverUuid, err := getServerUuid(ctx)
+		binlogEvent, err := m.createGtidEvent(ctx)
 		if err != nil {
 			return err
 		}
-		sid, err := mysql.ParseSID(serverUuid)
-		if err != nil {
-			return err
-		}
-		gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
-		binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
 		binlogEvents = append(binlogEvents, binlogEvent)
-		m.binlogStream.LogPosition += binlogEvent.Length()
-		gtidSequence++
 
 		// Send a Query BEGIN event to start the new transaction
 		binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
@@ -183,19 +177,11 @@ func (m *binlogStreamerManager) createSchemaChangeQueryEvents(
 		for _, schemaPatchStatement := range schemaPatchStatements {
 			// Schema changes in MySQL are always in an implicit transaction, so before each one, we
 			// send a new GTID event for the next transaction start
-			serverUuid, err := getServerUuid(ctx)
+			binlogEvent, err := m.createGtidEvent(ctx)
 			if err != nil {
 				return nil, false, err
 			}
-			sid, err := mysql.ParseSID(serverUuid)
-			if err != nil {
-				return nil, false, err
-			}
-			gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
-			binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
 			events = append(events, binlogEvent)
-			m.binlogStream.LogPosition += binlogEvent.Length()
-			gtidSequence++
 
 			binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
 				Database: databaseName,
@@ -417,6 +403,25 @@ func (m *binlogStreamerManager) createRowEvents(ctx *sql.Context, tableDeltas []
 	}
 
 	return events, nil
+}
+
+// createGtidEvent creates a new GTID event for the current transaction and updates the stream's
+// current log position.
+func (m *binlogStreamerManager) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, error) {
+	serverUuid, err := getServerUuid(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sid, err := mysql.ParseSID(serverUuid)
+	if err != nil {
+		return nil, err
+	}
+	gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
+	binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
+	m.binlogStream.LogPosition += binlogEvent.Length()
+	gtidSequence++
+
+	return binlogEvent, nil
 }
 
 // extractRowCountAndDiffType uses |sch| and |diff| to determine how many changed rows this
