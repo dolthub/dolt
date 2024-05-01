@@ -127,7 +127,7 @@ Chunk Retrieval (phase 1 is similar to NBS):
   - If found, the given Chunk Id is the same index into the ChunkRef Map for the desired chunk.
 
   Phase two: Loading Chunk data
-  - Take the Chunk Id discovered in Phase one, and use it to grap that index from the ChunkRefs Map.
+  - Take the Chunk Id discovered in Phase one, and use it to grab that index from the ChunkRefs Map.
   - Retrieve the ByteSpan Id for the Chunk data. Verify integrity with CRC.
   - If Dictionary is 0:
     - Decompress the Chunk data using zstd (no dictionary)
