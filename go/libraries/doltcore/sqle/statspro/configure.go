@@ -54,7 +54,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		thresholdf64 = threshold.(float64)
 
 		p.pro.InitDatabaseHooks = append(p.pro.InitDatabaseHooks, NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
-		p.pro.DropDatabaseHooks = append(p.pro.DropDatabaseHooks, NewStatsDropDatabaseHook(p, ctxFactory))
+		p.pro.DropDatabaseHooks = append(p.pro.DropDatabaseHooks, NewStatsDropDatabaseHook(p))
 	}
 
 	eg, ctx := loadCtx.NewErrgroup()

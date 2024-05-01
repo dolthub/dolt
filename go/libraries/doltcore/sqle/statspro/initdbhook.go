@@ -51,18 +51,14 @@ func NewStatsInitDatabaseHook(
 	}
 }
 
-func NewStatsDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error)) sqle.DropDatabaseHook {
-	return func(ctx context.Context, name string) {
-		sqlCtx, err := ctxFactory(ctx)
-		if err != nil {
-			return
-		}
+func NewStatsDropDatabaseHook(statsProv *Provider) sqle.DropDatabaseHook {
+	return func(ctx *sql.Context, name string) {
 		statsProv.CancelRefreshThread(name)
-		statsProv.DropDbStats(sqlCtx, name, false)
+		statsProv.DropDbStats(ctx, name, false)
 
 		if db, ok := statsProv.getStatDb(name); ok {
 			if err := db.Close(); err != nil {
-				sqlCtx.GetLogger().Debugf("failed to close stats database: %s", err)
+				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
 			}
 		}
 	}
