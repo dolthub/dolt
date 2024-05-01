@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -374,5 +375,52 @@ func compareJSONNumber(a Float, b Value) (int, error) {
 	default:
 		// a is higher precedence
 		return 1, nil
+	}
+}
+
+// UnescapeHTMLCodepoints replaces escaped HTML characters in serialized JSON with their unescaped equivalents.
+// Due to an oversight, the representation of JSON in storage escapes these characters, and we unescape them
+// before displaying them to the user.
+func UnescapeHTMLCodepoints(path []byte) []byte {
+	nextToRead := path
+	nextToWrite := path
+
+	matches := 0
+	index := findNextEscapedUnicodeCodepoint(nextToRead)
+	for index != -1 {
+		newChar := byte(0)
+		if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'c'}) {
+			newChar = '<'
+		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '3', 'e'}) {
+			newChar = '>'
+		} else if slices.Equal(nextToRead[index+2:index+6], []byte{'0', '0', '2', '6'}) {
+			newChar = '&'
+		}
+		if newChar != 0 {
+			matches += 1
+			copy(nextToWrite, nextToRead[:index])
+			nextToWrite[index] = newChar
+			nextToWrite = nextToWrite[index+1:]
+		}
+		nextToRead = nextToRead[index+6:]
+		index = findNextEscapedUnicodeCodepoint(nextToRead)
+	}
+	copy(nextToWrite, nextToRead)
+	return path[:len(path)-5*matches]
+}
+
+func findNextEscapedUnicodeCodepoint(path []byte) int {
+	index := 0
+	for {
+		if index >= len(path) {
+			return -1
+		}
+		if path[index] == '\\' {
+			if path[index+1] == 'u' {
+				return index
+			}
+			index++
+		}
+		index++
 	}
 }

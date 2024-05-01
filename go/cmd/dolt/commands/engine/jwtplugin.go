@@ -15,6 +15,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -47,13 +48,13 @@ func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user stri
 
 func validateJWT(config []JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
-		return false, fmt.Errorf("ValidateJWT: JWKS server config not found")
+		return false, errors.New("ValidateJWT: JWKS server config not found")
 	}
 
 	expectedClaimsMap := parseUserIdentity(identity)
 	sub, ok := expectedClaimsMap["sub"]
 	if ok && sub != username {
-		return false, fmt.Errorf("ValidateJWT: Subjects do not match")
+		return false, errors.New("ValidateJWT: Subjects do not match")
 	}
 
 	jwksConfig, err := getMatchingJwksConfig(config, expectedClaimsMap["jwks"])
@@ -95,7 +96,7 @@ func getJWTProvider(expectedClaimsMap map[string]string, url string) (jwtauth.JW
 		case "jwks":
 			continue
 		default:
-			return pr, fmt.Errorf("ValidateJWT: Unexpected expected claim found in user identity")
+			return pr, errors.New("ValidateJWT: Unexpected expected claim found in user identity")
 		}
 	}
 	return pr, nil
@@ -121,7 +122,7 @@ func getMatchingJwksConfig(config []JwksConfig, name string) (*JwksConfig, error
 			return &item, nil
 		}
 	}
-	return nil, fmt.Errorf("ValidateJWT: Matching JWKS config not found")
+	return nil, errors.New("ValidateJWT: Matching JWKS config not found")
 }
 
 func parseUserIdentity(identity string) map[string]string {

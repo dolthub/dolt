@@ -20,11 +20,13 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/goccy/go-json"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const DefaultFixedChunkLength = 4000
@@ -272,17 +274,26 @@ func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
 	return &JSONDoc{ImmutableTree{Addr: addr, ns: ns}}
 }
 
-func (b *JSONDoc) ToJSONDocument(ctx context.Context) (types.JSONDocument, error) {
+func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sqltypes.JSONDocument, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
-		return types.JSONDocument{}, err
+		return sqltypes.JSONDocument{}, err
 	}
-	var doc types.JSONDocument
+	var doc sqltypes.JSONDocument
 	err = json.Unmarshal(buf, &doc.Val)
 	if err != nil {
-		return types.JSONDocument{}, err
+		return sqltypes.JSONDocument{}, err
 	}
 	return doc, err
+}
+
+func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return sqltypes.JSONDocument{}, err
+	}
+	buf = types.UnescapeHTMLCodepoints(buf)
+	return sqltypes.NewLazyJSONDocument(buf), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {

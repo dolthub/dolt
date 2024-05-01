@@ -20,13 +20,14 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // typeSerializer defines the serialization interface for serializing a value in Dolt's
@@ -276,9 +277,9 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 		scale := decimalType.Scale()         // number of fractional digits
 		numFullDigits := precision - scale
 		numFullDigitUint32s := numFullDigits / 9
-		numFractionalDigitUint32s := decimalType.Scale() / 9
+		numFractionalDigitUint32s := scale / 9
 		numLeftoverFullDigits := numFullDigits - numFullDigitUint32s*9
-		numLeftoverFractionalDigits := decimalType.Scale() - numFractionalDigitUint32s*9
+		numLeftoverFractionalDigits := scale - numFractionalDigitUint32s*9
 
 		length := numFullDigitUint32s*4 + digitsToBytes[numLeftoverFullDigits] +
 			numFractionalDigitUint32s*4 + digitsToBytes[numLeftoverFractionalDigits]
