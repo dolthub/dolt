@@ -138,7 +138,7 @@ Chunk Retrieval (phase 1 is similar to NBS):
 
 const (
 	archiveFormatVersion = 1
-	archiveFileSignature = "DOLTARC"
+	archiveFileSignature = []byte("DOLTARC")
 	archiveFileSigSize   = uint64(len(archiveFileSignature))
 	archiveCheckSumSize  = 64 * 3       // sha512 3 times.
 	archiveFooterSize    = uint32Size + // index length
