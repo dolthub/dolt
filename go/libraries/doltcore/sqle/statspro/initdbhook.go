@@ -25,11 +25,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func NewInitDatabaseHook(
+func NewStatsInitDatabaseHook(
 	statsProv *Provider,
 	ctxFactory func(ctx context.Context) (*sql.Context, error),
 	bThreads *sql.BackgroundThreads,
-	orig sqle.InitDatabaseHook,
 ) sqle.InitDatabaseHook {
 	return func(
 		ctx *sql.Context,
@@ -38,15 +37,6 @@ func NewInitDatabaseHook(
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
-		// We assume there is nothing on disk to read. Probably safe and also
-		// would deadlock with dbProvider if we tried from reading root/session.
-		if orig != nil {
-			err := orig(ctx, pro, name, denv, db)
-			if err != nil {
-				return err
-			}
-		}
-
 		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
 		if err != nil {
 			ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
@@ -61,21 +51,18 @@ func NewInitDatabaseHook(
 	}
 }
 
-func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), orig sqle.DropDatabaseHook) sqle.DropDatabaseHook {
-	return func(name string) {
-		if orig != nil {
-			orig(name)
-		}
-		ctx, err := ctxFactory(context.Background())
+func NewStatsDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error)) sqle.DropDatabaseHook {
+	return func(ctx context.Context, name string) {
+		sqlCtx, err := ctxFactory(ctx)
 		if err != nil {
 			return
 		}
 		statsProv.CancelRefreshThread(name)
-		statsProv.DropDbStats(ctx, name, false)
+		statsProv.DropDbStats(sqlCtx, name, false)
 
 		if db, ok := statsProv.getStatDb(name); ok {
 			if err := db.Close(); err != nil {
-				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
+				sqlCtx.GetLogger().Debugf("failed to close stats database: %s", err)
 			}
 		}
 	}
