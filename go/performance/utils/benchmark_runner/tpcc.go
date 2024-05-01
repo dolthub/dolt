@@ -17,11 +17,12 @@ package benchmark_runner
 import (
 	"context"
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type tpccTesterImpl struct {
