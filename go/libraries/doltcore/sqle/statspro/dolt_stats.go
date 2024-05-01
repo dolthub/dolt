@@ -136,15 +136,23 @@ func NewDoltStats() *DoltStats {
 	return &DoltStats{mu: &sync.Mutex{}, Active: make(map[hash.Hash]int), Statistic: &stats.Statistic{}}
 }
 
-func (s *DoltStats) ToInterface() interface{} {
-	ret := s.Statistic.ToInterface().(map[string]interface{})
+func (s *DoltStats) ToInterface() (interface{}, error) {
+	statVal, err := s.Statistic.ToInterface()
+	if err != nil {
+		return nil, err
+	}
+	ret := statVal.(map[string]interface{})
 
 	var hist sql.Histogram
 	for _, b := range s.Hist {
 		hist = append(hist, b)
 	}
-	ret["statistic"].(map[string]interface{})["buckets"] = hist.ToInterface()
-	return ret
+	histVal, err := hist.ToInterface()
+	if err != nil {
+		return nil, err
+	}
+	ret["statistic"].(map[string]interface{})["buckets"] = histVal
+	return ret, nil
 }
 
 func (s *DoltStats) WithHistogram(h sql.Histogram) (sql.Statistic, error) {

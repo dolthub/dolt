@@ -46,7 +46,10 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 		return noms, nil
 	}
 
-	sqlVal := val.ToInterface()
+	sqlVal, err := val.ToInterface()
+	if err != nil {
+		return NomsJSON{}, err
+	}
 
 	v, err := marshalJSON(ctx, vrw, sqlVal)
 	if err != nil {
@@ -133,17 +136,17 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 	return types.NewMap(ctx, vrw, vals...)
 }
 
-func (v NomsJSON) ToInterface() interface{} {
+func (v NomsJSON) ToInterface() (interface{}, error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	val, err := unmarshalJSON(context.Background(), nomsVal)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return val
+	return val, nil
 }
 
 // Unmarshall implements the sql.JSONValue interface.
