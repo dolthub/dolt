@@ -26,7 +26,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-		"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -145,16 +145,16 @@ func (t tabularDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldCo
 	eP := cli.NewEphemeralPrinter()
 	var pos int
 	for i, diffStat := range diffStats {
-		acc.Adds        += diffStat.RowsAdded
-		acc.Removes     += diffStat.RowsDeleted
-		acc.Changes     += diffStat.RowsModified
+		acc.Adds += diffStat.RowsAdded
+		acc.Removes += diffStat.RowsDeleted
+		acc.Changes += diffStat.RowsModified
 		acc.CellChanges += diffStat.CellsModified
-		acc.NewRowSize  += diffStat.NewRowCount
-		acc.OldRowSize  += diffStat.OldRowCount
+		acc.NewRowSize += diffStat.NewRowCount
+		acc.OldRowSize += diffStat.OldRowCount
 		acc.NewCellSize += diffStat.NewCellCount
 		acc.OldCellSize += diffStat.OldCellCount
 
-		if i != 0 && i % 10000 == 0 {
+		if i != 0 && i%10000 == 0 {
 			msg := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldRowSize, acc.NewRowSize, acc.Adds, acc.Removes, acc.Changes)
 			eP.Printf(msg)
 			eP.Display()
@@ -212,7 +212,7 @@ func (t tabularDiffWriter) printStat(acc diff.DiffStatProgress, oldColLen, newCo
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }
 
-func(t tabularDiffWriter) printKeylessStat(acc diff.DiffStatProgress) {
+func (t tabularDiffWriter) printKeylessStat(acc diff.DiffStatProgress) {
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
 	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
 
@@ -312,11 +312,11 @@ func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds
 }
 
 type jsonDiffWriter struct {
-	wr               io.WriteCloser
-	tablesWritten    int
-	triggersWritten  int
-	viewsWritten     int
-	eventsWritten    int
+	wr              io.WriteCloser
+	tablesWritten   int
+	triggersWritten int
+	viewsWritten    int
+	eventsWritten   int
 }
 
 var _ diffWriter = (*tabularDiffWriter)(nil)
@@ -594,12 +594,12 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
 	acc := diff.DiffStatProgress{}
 	for _, diffStat := range diffStats {
-		acc.Adds        += diffStat.RowsAdded
-		acc.Removes     += diffStat.RowsDeleted
-		acc.Changes     += diffStat.RowsModified
+		acc.Adds += diffStat.RowsAdded
+		acc.Removes += diffStat.RowsDeleted
+		acc.Changes += diffStat.RowsModified
 		acc.CellChanges += diffStat.CellsModified
-		acc.NewRowSize  += diffStat.NewRowCount
-		acc.OldRowSize  += diffStat.OldRowCount
+		acc.NewRowSize += diffStat.NewRowCount
+		acc.OldRowSize += diffStat.OldRowCount
 		acc.NewCellSize += diffStat.NewCellCount
 		acc.OldCellSize += diffStat.OldCellCount
 	}
