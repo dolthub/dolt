@@ -1171,7 +1171,7 @@ func updateFileReadProgressOutput() {
 
 func validateDBDDL(dbddl *sqlparser.DBDDL, query string) error {
 	action := strings.ToLower(dbddl.Action)
-	switch action  {
+	switch action {
 	case sqlparser.CreateStr, sqlparser.AlterStr:
 		return nil
 	case sqlparser.DropStr:
