@@ -754,8 +754,6 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	defer dw.Close(sqlCtx)
-
 	ignoredTablePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
@@ -810,6 +808,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		}
 	}
 
+	dw.Close(sqlCtx)
 	return nil
 }
 

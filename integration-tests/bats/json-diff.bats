@@ -478,3 +478,49 @@ EOF
    [ $status -eq 0 ]
    [[ $output =~ "$EXPECTED" ]] || false
 }
+
+@test "json-diff: stat" {
+    dolt sql -q "drop table test"
+
+    # no changes
+    dolt diff --stat -r json
+    run dolt diff --stat -r json
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    # table created
+    dolt sql -q "create table test (i int primary key, j int, k int)"
+    dolt diff --stat -r json
+    run dolt diff --stat -r json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"tables":[{"name":"test","stats":{}}]}' ]] || false
+
+    # adding rows
+    dolt sql -q "insert into test values (1, 2, 3)"
+    dolt sql -q "insert into test values (4, 5, 6)"
+    dolt sql -q "insert into test values (7, 8, 9)"
+
+    dolt diff --stat -r json
+    run dolt diff --stat -r json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"tables":[{"name":"test","stats":{"rows_added":3,"rows_deleted":0,"rows_modified":0,"rows_unmodified":0,"cells_added":9,"cells_deleted":0,"cells_modified":0}}]}' ]] || false
+
+    dolt commit -Am "added rows"
+
+    # modifying rows
+    dolt sql -q "update test set j = j * 10"
+    dolt sql -q "update test set k = k * 100"
+    dolt diff --stat -r json
+    run dolt diff --stat -r json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"tables":[{"name":"test","stats":{"rows_added":0,"rows_deleted":0,"rows_modified":3,"rows_unmodified":0,"cells_added":0,"cells_deleted":0,"cells_modified":6}}]}' ]] || false
+
+    dolt commit -Am "modified rows"
+
+    # deleting rows
+    dolt sql -q "delete from test where true"
+    dolt diff --stat -r json
+    run dolt diff --stat -r json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"tables":[{"name":"test","stats":{"rows_added":0,"rows_deleted":3,"rows_modified":0,"rows_unmodified":0,"cells_added":0,"cells_deleted":9,"cells_modified":0}}]}' ]] || false
+}

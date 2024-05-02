@@ -328,14 +328,12 @@ func newJsonDiffWriter(wr io.WriteCloser) (*jsonDiffWriter, error) {
 }
 
 const jsonDiffHeader = `"tables":[`
+const jsonDiffFooter = `]`
 const jsonDiffSep = `},`
 const jsonDiffTableHeader = `{"name":"%s",`
-const jsonDiffTableFooter = `}]`
+const jsonDiffTableFooter = `}`
 const jsonDiffDataDiffHeader = `"data_diff":[`
 const jsonDiffDataDiffFooter = `]`
-
-const jsonDiffStatsHeader = `"stats":{`
-const jsonDiffStatsFooter = `}`
 
 func (j *jsonDiffWriter) beginDocumentIfNecessary() error {
 	if j.tablesWritten == 0 && j.triggersWritten == 0 && j.viewsWritten == 0 {
@@ -354,6 +352,7 @@ func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, is
 	if j.tablesWritten == 0 {
 		err = iohelp.WriteAll(j.wr, []byte(jsonDiffHeader))
 	} else {
+		// close previous table object, and start new one
 		err = iohelp.WriteAll(j.wr, []byte(jsonDiffSep))
 	}
 	if err != nil {
@@ -434,6 +433,8 @@ func (j *jsonDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, t
 	return jsonRowDiffWriter, nil
 }
 
+const jsonDiffEventsHeader = `"events":[`
+
 func (j *jsonDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn, newDefn string) error {
 	err := j.beginDocumentIfNecessary()
 	if err != nil {
@@ -443,21 +444,19 @@ func (j *jsonDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn,
 	if j.eventsWritten == 0 {
 		// end the table if necessary
 		if j.tablesWritten > 0 {
-			_, err := j.wr.Write([]byte(jsonDiffTableFooter + ","))
+			// close off table object and tables array, and indicate start of views array
+			_, err = j.wr.Write([]byte(jsonDiffTableFooter + jsonDiffFooter + ","))
 			if err != nil {
 				return err
 			}
 		}
-
-		_, err := j.wr.Write([]byte(`"events":[`))
-		if err != nil {
-			return err
-		}
+		_, err = j.wr.Write([]byte(jsonDiffEventsHeader))
 	} else {
-		_, err := j.wr.Write([]byte(","))
-		if err != nil {
-			return err
-		}
+		_, err = j.wr.Write([]byte(","))
+	}
+
+	if err != nil {
+		return err
 	}
 
 	eventNameBytes, err := ejson.Marshal(eventName)
@@ -485,6 +484,8 @@ func (j *jsonDiffWriter) WriteEventDiff(ctx context.Context, eventName, oldDefn,
 	return nil
 }
 
+const jsonDiffTriggersHeader = `"triggers":[`
+
 func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldDefn, newDefn string) error {
 	err := j.beginDocumentIfNecessary()
 	if err != nil {
@@ -494,26 +495,21 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 	if j.triggersWritten == 0 {
 		// end the previous block if necessary
 		if j.tablesWritten > 0 && j.eventsWritten == 0 {
-			_, err := j.wr.Write([]byte(jsonDiffTableFooter + ","))
-			if err != nil {
-				return err
-			}
+			// close off table object and tables array, and indicate start of views array
+			_, err = j.wr.Write([]byte(jsonDiffTableFooter + jsonDiffFooter + ","))
 		} else if j.eventsWritten > 0 {
-			_, err := j.wr.Write([]byte("],"))
-			if err != nil {
-				return err
-			}
+			_, err = j.wr.Write([]byte("],"))
 		}
-
-		_, err := j.wr.Write([]byte(`"triggers":[`))
 		if err != nil {
 			return err
 		}
+		_, err = j.wr.Write([]byte(jsonDiffTriggersHeader))
 	} else {
-		_, err := j.wr.Write([]byte(","))
-		if err != nil {
-			return err
-		}
+		_, err = j.wr.Write([]byte(","))
+	}
+
+	if err != nil {
+		return err
 	}
 
 	triggerNameBytes, err := ejson.Marshal(triggerName)
@@ -541,6 +537,8 @@ func (j *jsonDiffWriter) WriteTriggerDiff(ctx context.Context, triggerName, oldD
 	return nil
 }
 
+const jsonDiffViewsHeader = `"views":[`
+
 func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, newDefn string) error {
 	err := j.beginDocumentIfNecessary()
 	if err != nil {
@@ -550,14 +548,15 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 	if j.viewsWritten == 0 {
 		// end the previous block if necessary
 		if j.tablesWritten > 0 && j.eventsWritten == 0 && j.triggersWritten == 0 {
-			_, err = j.wr.Write([]byte(jsonDiffDataDiffFooter + ","))
+			// close off table object and tables array, and indicate start of views array
+			_, err = j.wr.Write([]byte(jsonDiffTableFooter + jsonDiffFooter + ","))
 		} else if j.eventsWritten > 0 || j.triggersWritten > 0 {
 			_, err = j.wr.Write([]byte("],"))
 		}
 		if err != nil {
 			return err
 		}
-		_, err = j.wr.Write([]byte(`"views":[`))
+		_, err = j.wr.Write([]byte(jsonDiffViewsHeader))
 	} else {
 		_, err = j.wr.Write([]byte(","))
 	}
@@ -581,8 +580,8 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 		return err
 	}
 
-	_, err = j.wr.Write([]byte(fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`,
-		viewNameBytes, oldDefnBytes, newDefnBytes)))
+	viewStmt := fmt.Sprintf(`{"name":%s,"from_definition":%s,"to_definition":%s}`, viewNameBytes, oldDefnBytes, newDefnBytes)
+	_, err = j.wr.Write([]byte(viewStmt))
 	if err != nil {
 		return err
 	}
@@ -590,6 +589,9 @@ func (j *jsonDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, n
 	j.viewsWritten++
 	return nil
 }
+
+const jsonDiffStatsHeader = `"stats":{`
+const jsonDiffStatsFooter = `}`
 
 func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
 	acc := diff.DiffStatProgress{}
@@ -625,28 +627,23 @@ func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColL
 }
 
 func (j *jsonDiffWriter) Close(ctx context.Context) error {
-	if j.tablesWritten > 0 || j.triggersWritten > 0 || j.viewsWritten > 0 {
-		// We only need to close off the "tables" array if we didn't also write a view / trigger
-		// (which also closes that array)
-		if j.triggersWritten == 0 && j.viewsWritten == 0 {
+	if j.tablesWritten > 0 || j.triggersWritten > 0 || j.viewsWritten > 0 || j.eventsWritten > 0 {
+		// close off tables object
+		if j.triggersWritten == 0 && j.viewsWritten == 0 && j.eventsWritten == 0 {
 			_, err := j.wr.Write([]byte(jsonDiffTableFooter))
-			if err != nil {
-				return err
-			}
-		} else {
-			// if we did write a trigger or view, we need to close off that array
-			_, err := j.wr.Write([]byte("]"))
 			if err != nil {
 				return err
 			}
 		}
 
-		err := iohelp.WriteLine(j.wr, "}")
+		// close off last block
+		_, err := j.wr.Write([]byte(jsonDiffFooter))
 		if err != nil {
 			return err
 		}
-	} else {
-		err := iohelp.WriteLine(j.wr, "")
+
+		// end document
+		_, err = j.wr.Write([]byte("}"))
 		if err != nil {
 			return err
 		}
