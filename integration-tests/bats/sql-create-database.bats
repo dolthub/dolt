@@ -276,11 +276,11 @@ SQL
 @test "sql-create-database: sql drop database errors for info schema" {
     run dolt sql -q "DROP DATABASE information_schema"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "DROP DATABASE isn't supported for database information_schema" ]] || false
+    [[ "$output" =~ "unable to drop database: information_schema" ]] || false
 
     run dolt sql -q "DROP DATABASE INFORMATION_SCHEMA"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "DROP DATABASE isn't supported for database INFORMATION_SCHEMA" ]] || false
+    [[ "$output" =~ "unable to drop database: INFORMATION_SCHEMA" ]] || false
 }
 
 @test "sql-create-database: create new database via SCHEMA alias" {

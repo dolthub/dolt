@@ -1074,12 +1074,6 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 			return nil, nil, err
 		}
 		return nil, nil, nil
-	case *sqlparser.DBDDL:
-		err := validateDBDDL(s, query)
-		if err != nil {
-			return nil, nil, err
-		}
-		return qryist.Query(ctx, query)
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
@@ -1166,13 +1160,4 @@ func updateFileReadProgressOutput() {
 	fileReadProg.printed = fileReadProg.bytesRead
 	displayStr := fmt.Sprintf("Processed %.1f%% of the file", percent)
 	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
-}
-
-func validateDBDDL(dbddl *sqlparser.DBDDL, query string) error {
-	// Should not be able to drop information_schema database
-	if strings.ToLower(dbddl.Action) == sqlparser.DropStr &&
-		strings.EqualFold(dbddl.DBName, sql.InformationSchemaDatabaseName) {
-		return fmt.Errorf("DROP DATABASE isn't supported for database %s", dbddl.DBName)
-	}
-	return nil
 }
