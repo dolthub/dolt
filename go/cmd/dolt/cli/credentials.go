@@ -15,7 +15,7 @@
 package cli
 
 import (
-	"fmt"
+	"errors"
 	"os"
 
 	"golang.org/x/crypto/ssh/terminal"
@@ -87,5 +87,5 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 		return newParsedArgs, &UserPassword{Specified: false}, nil
 	}
 
-	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")
+	return nil, nil, errors.New("When a password is provided, a user must also be provided. Use the --user flag to provide a username")
 }

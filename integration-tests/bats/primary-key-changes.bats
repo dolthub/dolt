@@ -526,7 +526,7 @@ SQL
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk1)"
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: key column 'pk1' doesn't exist in table" ]] || false
+    [[ "$output" =~ "key column 'pk1' doesn't exist in table" ]] || false
 }
 
 @test "primary-key-changes: same primary key set in different order is detected and blocked on merge" {

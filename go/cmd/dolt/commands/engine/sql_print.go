@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -259,7 +260,7 @@ func calculateVerticalOffsets(sch sql.Schema) []int {
 }
 
 func (v *verticalRowWriter) WriteRow(ctx context.Context, r row.Row) error {
-	return fmt.Errorf("unimplemented")
+	return errors.New("unimplemented")
 }
 
 func (v *verticalRowWriter) Close(ctx context.Context) error {

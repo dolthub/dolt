@@ -778,7 +778,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
-		cont := func() bool {
+		func() {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -808,13 +808,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				dirty, _ = isDirty(sqlCtx, qryist)
 			}
 			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
-
-			return true
 		}()
-
-		if !cont {
-			return
-		}
 
 		shell.SetPrompt(nextPrompt)
 		shell.SetMultiPrompt(multiPrompt)

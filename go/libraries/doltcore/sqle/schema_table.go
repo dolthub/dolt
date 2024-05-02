@@ -90,7 +90,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	}
 
 	// Create new empty table
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		return nil, err
 	}
 
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, schemaTableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +300,9 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 
 		// Extract Created Time from JSON column
 		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(sql.JSONWrapper))
+		if err != nil {
+			return nil, err
+		}
 
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[nameIdx].(string),
@@ -327,9 +330,12 @@ func loadDefaultSqlMode() (string, error) {
 }
 
 func getCreatedTime(ctx *sql.Context, extraCol sql.JSONWrapper) (int64, error) {
-	doc := extraCol.ToInterface()
+	doc, err := extraCol.ToInterface()
+	if err != nil {
+		return 0, err
+	}
 
-	err := fmt.Errorf("value %v does not contain creation time", doc)
+	err = fmt.Errorf("value %v does not contain creation time", doc)
 
 	obj, ok := doc.(map[string]interface{})
 	if !ok {

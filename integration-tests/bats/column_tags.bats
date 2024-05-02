@@ -240,7 +240,7 @@ DELIM
     [[ "$output" =~ "ints_table,c5,12796" ]] || false
 }
 
-@test "column_tags: Round-tripping a column type through different NomsKinds restores original tag" {
+@test "column_tags: Round-tripping a column type through different NomsKinds preserves its tag" {
     dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
     run dolt schema tags
     [ $status -eq 0 ]
@@ -249,7 +249,7 @@ DELIM
     dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(100);"
     run dolt schema tags
     [ $status -eq 0 ]
-    [[ $output =~ "col1   | 16050" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
 
     dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 int;"
     run dolt schema tags
@@ -274,7 +274,7 @@ DELIM
     [[ $output =~ "col1   | 16050" ]] || false
 }
 
-@test "column_tags: Round-tripping a column type after some other column has been altered" {
+@test "column_tags: Round-tripping a column type after other column is altered preserves column tag" {
     dolt sql -q "CREATE TABLE t (pk INT PRIMARY KEY, col1 int);"
     run dolt schema tags
     [ $status -eq 0 ]
@@ -285,12 +285,12 @@ DELIM
     dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 VARCHAR(100);"
     run dolt schema tags
     [ $status -eq 0 ]
-    [[ $output =~ "col1   | 11127" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
 
     dolt sql -q "ALTER TABLE t MODIFY COLUMN col1 int;"
     run dolt schema tags
     [ $status -eq 0 ]
-    [[ $output =~ "col1   | 10186" ]] || false
+    [[ $output =~ "col1   | 10878" ]] || false
 }
 
 @test "column_tags: update-tag only available on __DOLT__" {

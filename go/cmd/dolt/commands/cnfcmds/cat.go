@@ -330,7 +330,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 	}
 
 	if len(rows) > 1 {
-		return ms, fmt.Errorf("error: multiple rows in dolt_merge_status")
+		return ms, errors.New("error: multiple rows in dolt_merge_status")
 	}
 
 	row := rows[0]
