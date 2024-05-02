@@ -73,7 +73,6 @@ delete from test where pk = 1;
 update test set c1 = 100 where pk = 4;
 SQL
 
-    dolt diff -r json
     run dolt diff -r json
 
     EXPECTED=$(cat <<'EOF'
@@ -100,7 +99,7 @@ EOF
     dolt diff -r json --data
     run dolt diff -r json --data
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":2,"c2":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"c3":"9","pk":7}}]}]}
+{"tables":[{"name":"test","data_diff":[{"from_row":{"c1":2,"c2":3,"pk":1},"to_row":{}},{"from_row":{"c1":5,"c2":6,"pk":4},"to_row":{"c1":100,"pk":4}},{"from_row":{},"to_row":{"c1":8,"c3":"9","pk":7}}]}]}
 EOF
 )
     
@@ -113,7 +112,7 @@ EOF
     dolt diff -r json --data
     run dolt diff -r json --data
     EXPECTED=$(cat <<'EOF'
-{"tables":[{"name":"test","schema_diff":[],"data_diff":[{"from_row":{"c1":100,"pk":4},"to_row":{"c1new":200,"pk":4}},{"from_row":{"c1":8,"c3":"9","pk":7},"to_row":{"c1new":16,"c3":"9","pk":7}}]}]}
+{"tables":[{"name":"test","data_diff":[{"from_row":{"c1":100,"pk":4},"to_row":{"c1new":200,"pk":4}},{"from_row":{"c1":8,"c3":"9","pk":7},"to_row":{"c1new":16,"c3":"9","pk":7}}]}]}
 EOF
 )
     [ "$status" -eq 0 ]
