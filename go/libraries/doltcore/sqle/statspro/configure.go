@@ -29,7 +29,7 @@ import (
 )
 
 func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
-	p.SetStarter(NewInitDatabaseHook(p, ctxFactory, bThreads, nil))
+	p.SetStarter(NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
 
 	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
 		return nil
@@ -53,8 +53,8 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		intervalSec = time.Second * time.Duration(interval64.(int64))
 		thresholdf64 = threshold.(float64)
 
-		p.pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, p.pro.InitDatabaseHook)
-		p.pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, p.pro.DropDatabaseHook)
+		p.pro.InitDatabaseHooks = append(p.pro.InitDatabaseHooks, NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
+		p.pro.DropDatabaseHooks = append(p.pro.DropDatabaseHooks, NewStatsDropDatabaseHook(p))
 	}
 
 	eg, ctx := loadCtx.NewErrgroup()
