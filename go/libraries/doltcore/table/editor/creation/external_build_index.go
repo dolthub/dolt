@@ -73,7 +73,8 @@ func BuildProllyIndexExternal(
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
 		return prefixDesc.Compare(t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
-
+	defer sorter.Close()
+	
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -100,13 +101,15 @@ func BuildProllyIndexExternal(
 	if err != nil {
 		return nil, err
 	}
+	defer sortedKeys.Close()
 
 	mut := secondary.Mutate()
 	it, err := sortedKeys.IterAll(ctx)
-	defer it.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer it.Close()
+
 	var lastKey val.Tuple
 	for {
 		key, err := it.Next(ctx)

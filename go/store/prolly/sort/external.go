@@ -21,16 +21,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"os"
 	"sort"
-	"sync"
-
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-	"github.com/dolthub/dolt/go/store/val"
 )
-
-const maxRetries = 2
 
 // tupleSorter inputs a series of unsorted tuples and outputs a sorted list
 // of tuples. Batches of tuples sorted in memory are written to disk, and
@@ -85,7 +81,17 @@ func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
 		return nil, err
 	}
 	allKeys := newKeyFile(newF, a.inProg.byteLim)
-	m, _ := newFileMerger(ctx, a.keyCmp, allKeys, iterables...)
+	defer func() {
+		if err != nil {
+			allKeys.Close()
+		}
+	}()
+
+	m, err := newFileMerger(ctx, a.keyCmp, allKeys, iterables...)
+	if err != nil {
+		return nil, err
+	}
+	defer m.Close()
 	if err := m.run(ctx); err != nil {
 		return nil, err
 	}
@@ -100,6 +106,13 @@ func (a *tupleSorter) Insert(ctx context.Context, k val.Tuple) (err error) {
 		a.inProg.insert(k)
 	}
 	return
+}
+func (a *tupleSorter) Close() {
+	for _, level := range a.files {
+		for _, f := range level {
+			f.Close()
+		}
+	}
 }
 
 func (a *tupleSorter) flushMem(ctx context.Context) error {
@@ -147,18 +160,24 @@ func (a *tupleSorter) shouldCompact() (int, bool) {
 }
 
 // compact halves the number of files, doubling their size
-func (a *tupleSorter) compact(ctx context.Context, level int) error {
-	fileLevel := a.files[level]
-
+func (a *tupleSorter) compact(ctx context.Context, level int) (err error) {
 	newF, err := a.newFile()
 	if err != nil {
 		return err
 	}
 	outF := newKeyFile(newF, a.batchSize)
+	func() {
+		if err != nil {
+			outF.Close()
+		}
+	}()
+
+	fileLevel := a.files[level]
 	m, err := newFileMerger(ctx, a.keyCmp, outF, fileLevel[:a.fileMax]...)
 	if err != nil {
 		return err
 	}
+	defer m.Close()
 	if err := m.run(ctx); err != nil {
 		return err
 	}
@@ -213,6 +232,10 @@ func (f *keyMem) IterAll(_ context.Context) (keyIter, error) {
 	return &keyMemIter{keys: f.keys}, nil
 }
 
+func (f *keyMem) Close() {
+	return
+}
+
 type keyMemIter struct {
 	keys []val.Tuple
 	i    int
@@ -259,32 +282,24 @@ func (f *keyFile) IterAll(ctx context.Context) (keyIter, error) {
 	if _, err := f.f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return &keyFileReader{buf: bufio.NewReader(f.f)}, nil
+	file := f.f
+	f.f = nil
+	return &keyFileReader{buf: bufio.NewReader(file), f: file}, nil
 }
 
-var keySizePool = sync.Pool{
-	// New is called when a new instance is needed
-	New: func() interface{} {
-		return make([]byte, keyLenSz)
-	},
-}
-
-// GetKeySizeBuf fetches a buffer from the pool
-func GetKeySizeBuf() []byte {
-	return keySizePool.Get().([]byte)
-}
-
-// PutKeySizeBuf returns a buffer to the pool
-func PutKeySizeBuf(b []byte) {
-	keySizePool.Put(b)
+func (f *keyFile) Close() {
+	if f != nil && f.f != nil {
+		f.f.Close()
+		os.Remove(f.f.Name())
+	}
+	return
 }
 
 // append writes |keySize|key| to the intermediate file
 func (f *keyFile) append(k val.Tuple) error {
 	v := uint32(len(k))
-	sizeBuf := GetKeySizeBuf()
-	defer PutKeySizeBuf(sizeBuf)
-	writeUint32(sizeBuf, v)
+	var sizeBuf [4]byte
+	writeUint32(sizeBuf[:], v)
 
 	if _, err := f.buf.Write(sizeBuf[:]); err != nil {
 		return err
@@ -298,6 +313,7 @@ func (f *keyFile) append(k val.Tuple) error {
 
 type keyFileReader struct {
 	buf *bufio.Reader
+	f   *os.File
 }
 
 const (
@@ -313,13 +329,12 @@ func writeUint32(buf []byte, u uint32) {
 }
 
 func (r *keyFileReader) Next(ctx context.Context) (val.Tuple, error) {
-	keySizeBuf := GetKeySizeBuf()
-	defer PutKeySizeBuf(keySizeBuf)
-	if _, err := io.ReadFull(r.buf, keySizeBuf); err != nil {
+	var keySizeBuf [4]byte
+	if _, err := io.ReadFull(r.buf, keySizeBuf[:]); err != nil {
 		return nil, err
 	}
 
-	keySize := readUint32(keySizeBuf)
+	keySize := readUint32(keySizeBuf[:])
 	key := make([]byte, keySize)
 	if _, err := io.ReadFull(r.buf, key); err != nil {
 		return nil, err
@@ -329,11 +344,15 @@ func (r *keyFileReader) Next(ctx context.Context) (val.Tuple, error) {
 }
 
 func (r *keyFileReader) Close() {
-	return
+	if r != nil && r.f != nil {
+		r.f.Close()
+		os.Remove(r.f.Name())
+	}
 }
 
 type keyIterable interface {
 	IterAll(context.Context) (keyIter, error)
+	Close()
 }
 
 type keyIter interface {
@@ -361,7 +380,7 @@ func (r *mergeFileReader) next(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func newMergeFileReader(ctx context.Context, iter keyIter, heapIdx int) (*mergeFileReader, error) {
+func newMergeFileReader(ctx context.Context, iter keyIter) (*mergeFileReader, error) {
 	root, err := iter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -414,15 +433,16 @@ func newFileMerger(ctx context.Context, keyCmp func(val.Tuple, val.Tuple) bool, 
 		}
 	}()
 
-	for i, f := range files {
+	for _, f := range files {
 		iter, err := f.IterAll(ctx)
 		if err != nil {
 			return nil, err
 		}
-		reader, err := newMergeFileReader(ctx, iter, i)
+		reader, err := newMergeFileReader(ctx, iter)
 		if err != nil {
 			iter.Close()
 			if !errors.Is(err, io.EOF) {
+				// empty file excluded from merge queue
 				return nil, err
 			}
 		} else {
@@ -436,7 +456,7 @@ func newFileMerger(ctx context.Context, keyCmp func(val.Tuple, val.Tuple) bool, 
 	return &fileMerger{
 		mq:  mq,
 		out: target,
-	}, err
+	}, nil
 }
 
 func (m *fileMerger) run(ctx context.Context) error {
@@ -453,6 +473,14 @@ func (m *fileMerger) run(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+		}
+	}
+}
+
+func (m *fileMerger) Close() {
+	if m != nil && m.mq != nil {
+		for _, f := range m.mq.files {
+			f.iter.Close()
 		}
 	}
 }

@@ -72,7 +72,7 @@ func TestFlush(t *testing.T) {
 		return b.String()
 	}
 
-	tmpProv := newProv()
+	tmpProv := newProv(t)
 	defer os.Remove(tmpProv.GetTempDir())
 	defer tmpProv.Clean()
 
@@ -165,7 +165,7 @@ func TestMerge(t *testing.T) {
 		return b.String()
 	}
 
-	tmpProv := newProv()
+	tmpProv := newProv(t)
 	defer os.Remove(tmpProv.GetTempDir())
 	defer tmpProv.Clean()
 
@@ -272,7 +272,7 @@ func TestCompact(t *testing.T) {
 		return b.String()
 	}
 
-	tmpProv := newProv()
+	tmpProv := newProv(t)
 	defer os.Remove(tmpProv.GetTempDir())
 	defer tmpProv.Clean()
 
@@ -410,7 +410,7 @@ func TestFileE2E(t *testing.T) {
 		},
 	}
 
-	tmpProv := newProv()
+	tmpProv := newProv(t)
 	defer os.Remove(tmpProv.GetTempDir())
 	defer tmpProv.Clean()
 
@@ -475,8 +475,8 @@ func ensureSorted(t *testing.T, keys []val.Tuple, cmp func(val.Tuple, val.Tuple)
 	}
 }
 
-func newProv() *tempfiles.TempFileProviderAt {
-	tmpDir := os.TempDir()
+func newProv(t *testing.T) *tempfiles.TempFileProviderAt {
+	tmpDir := t.TempDir()
 	return tempfiles.NewTempFileProviderAt(tmpDir)
 }
 
