@@ -1079,7 +1079,6 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		if err != nil {
 			return nil, nil, err
 		}
-		// TODO: close rowiter from qryist?
 		return qryist.Query(ctx, query)
 	case *sqlparser.Load:
 		if s.Local {
@@ -1170,17 +1169,10 @@ func updateFileReadProgressOutput() {
 }
 
 func validateDBDDL(dbddl *sqlparser.DBDDL, query string) error {
-	action := strings.ToLower(dbddl.Action)
-	switch action  {
-	case sqlparser.CreateStr, sqlparser.AlterStr:
-		return nil
-	case sqlparser.DropStr:
-		// Should not be able to drop information_schema database
-		if strings.EqualFold(dbddl.DBName, sql.InformationSchemaDatabaseName) {
-			return fmt.Errorf("DROP DATABASE isn't supported for database %s", dbddl.DBName)
-		}
-		return nil
-	default:
-		return fmt.Errorf("Unhandled DBDDL action %v in Query %v", action, query)
+	// Should not be able to drop information_schema database
+	if strings.ToLower(dbddl.Action) == sqlparser.DropStr &&
+		strings.EqualFold(dbddl.DBName, sql.InformationSchemaDatabaseName) {
+		return fmt.Errorf("DROP DATABASE isn't supported for database %s", dbddl.DBName)
 	}
+	return nil
 }
