@@ -808,7 +808,11 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		}
 	}
 
-	dw.Close(sqlCtx)
+	err = dw.Close(sqlCtx)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	return nil
 }
 

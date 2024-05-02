@@ -17,7 +17,8 @@ package commands
 import (
 	"context"
 	ejson "encoding/json"
-	"fmt"
+	"errors"
+"fmt"
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
@@ -296,7 +297,8 @@ func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, new
 }
 
 func (s sqlDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
-	return nil
+	// TODO: implement this
+	return errors.New("diff stats are not supported for sql output")
 }
 
 func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {

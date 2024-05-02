@@ -110,7 +110,7 @@ func (j *jsonRowDiffWriter) WriteRow(
 		j.inModified = !j.inModified
 	case diff.Added:
 	case diff.Removed:
-		err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(",\"%s\":{}", "to_row")))
+		err := iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`,"%s":{}`, "to_row")))
 		if err != nil {
 			return err
 		}

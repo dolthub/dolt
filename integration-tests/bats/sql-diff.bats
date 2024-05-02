@@ -864,3 +864,10 @@ EOF
 
     diff -w expected actual    
 }
+
+@test "sql-diff: stat" {
+    dolt diff --stat -r sql
+    run dolt diff --stat -r sql
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "diff stats are not supported for sql output" ]] || false
+}
