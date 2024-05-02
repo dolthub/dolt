@@ -398,12 +398,7 @@ func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.T
 		}
 	}
 
-	err = jsonSchDiffWriter.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return jsonSchDiffWriter.Close()
 }
 
 func (j *jsonDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {
