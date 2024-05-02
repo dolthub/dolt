@@ -425,8 +425,6 @@ func (tx *DoltTransaction) doCommit(
 					return nil, nil, err
 				}
 
-				// NOTE: First call of writeFn: This one happens for a new working set or when working set and staged are equal
-
 				var newCommit *doltdb.Commit
 				workingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, workingSet, existingWSHash, mergeOpts)
 				if err == datas.ErrOptimisticLockFailed {
@@ -451,8 +449,6 @@ func (tx *DoltTransaction) doCommit(
 			if err != nil {
 				return nil, nil, err
 			}
-
-			// NOTE: Second call of writeFn:
 
 			var newCommit *doltdb.Commit
 			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, mergedWorkingSet, existingWSHash, mergeOpts)
