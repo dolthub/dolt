@@ -234,7 +234,3 @@ func (t *Tree) DeleteMaxRegion() []*GetRange {
 	})
 	return ret
 }
-
-// TODO: Take goodput vs byte range length into account. If we transit 16KB to download 8KB, is that better than downloading 12KB of known chunks?
-
-// TODO: Count and account for gaps we download without knowing the address and then we end up downloading them again...

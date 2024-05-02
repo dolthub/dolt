@@ -138,16 +138,19 @@ func TestTree(t *testing.T) {
 	})
 	t.Run("SimpleGet", func(t *testing.T) {
 		assertTree := func(t *testing.T, tree *Tree) {
+			assert.Equal(t, 5, tree.Len())
 			ranges := tree.DeleteMaxRegion()
 			if assert.Len(t, ranges, 1) {
 				assert.Equal(t, byte(4), ranges[0].Hash[0])
 			}
+			assert.Equal(t, 4, tree.Len())
 			ranges = tree.DeleteMaxRegion()
 			if assert.Len(t, ranges, 4) {
 				for i := range ranges {
 					assert.Equal(t, byte(i), ranges[i].Hash[0])
 				}
 			}
+			assert.Equal(t, 0, tree.Len())
 			ranges = tree.DeleteMaxRegion()
 			assert.Len(t, ranges, 0)
 		}
