@@ -167,7 +167,30 @@ func (rcv *RootValue) SchemasLength() int {
 	return 0
 }
 
-const RootValueNumFields = 5
+func (rcv *RootValue) TryDoltgresRootObjs(obj *DoltgresRootObject, j int) (bool, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		if DoltgresRootObjectNumFields < obj.Table().NumFields() {
+			return false, flatbuffers.ErrTableHasUnknownFields
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (rcv *RootValue) DoltgresRootObjsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const RootValueNumFields = 6
 
 func RootValueStart(builder *flatbuffers.Builder) {
 	builder.StartObject(RootValueNumFields)
@@ -194,6 +217,12 @@ func RootValueAddSchemas(builder *flatbuffers.Builder, schemas flatbuffers.UOffs
 	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(schemas), 0)
 }
 func RootValueStartSchemasVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func RootValueAddDoltgresRootObjs(builder *flatbuffers.Builder, doltgresRootObjs flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(doltgresRootObjs), 0)
+}
+func RootValueStartDoltgresRootObjsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
@@ -249,5 +278,101 @@ func DatabaseSchemaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffse
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
 func DatabaseSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type DoltgresRootObject struct {
+	_tab flatbuffers.Table
+}
+
+func InitDoltgresRootObjectRoot(o *DoltgresRootObject, buf []byte, offset flatbuffers.UOffsetT) error {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	return o.Init(buf, n+offset)
+}
+
+func TryGetRootAsDoltgresRootObject(buf []byte, offset flatbuffers.UOffsetT) (*DoltgresRootObject, error) {
+	x := &DoltgresRootObject{}
+	return x, InitDoltgresRootObjectRoot(x, buf, offset)
+}
+
+func TryGetSizePrefixedRootAsDoltgresRootObject(buf []byte, offset flatbuffers.UOffsetT) (*DoltgresRootObject, error) {
+	x := &DoltgresRootObject{}
+	return x, InitDoltgresRootObjectRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func (rcv *DoltgresRootObject) Init(buf []byte, i flatbuffers.UOffsetT) error {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+	if DoltgresRootObjectNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func (rcv *DoltgresRootObject) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *DoltgresRootObject) Index() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *DoltgresRootObject) MutateIndex(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(4, n)
+}
+
+func (rcv *DoltgresRootObject) DataAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *DoltgresRootObject) DataAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *DoltgresRootObject) DataAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *DoltgresRootObject) MutateDataAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+const DoltgresRootObjectNumFields = 2
+
+func DoltgresRootObjectStart(builder *flatbuffers.Builder) {
+	builder.StartObject(DoltgresRootObjectNumFields)
+}
+func DoltgresRootObjectAddIndex(builder *flatbuffers.Builder, index uint32) {
+	builder.PrependUint32Slot(0, index, 0)
+}
+func DoltgresRootObjectAddDataAddr(builder *flatbuffers.Builder, dataAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(dataAddr), 0)
+}
+func DoltgresRootObjectStartDataAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func DoltgresRootObjectEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

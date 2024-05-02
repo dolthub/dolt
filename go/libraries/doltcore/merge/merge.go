@@ -304,6 +304,11 @@ func MergeRoots(
 		return nil, err
 	}
 
+	mergedRoot, err = doltdb.MergeDoltgresRootObjectRefs(ctx, mergedRoot, ourRoot, theirRoot, ancRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	h, err := merger.rightSrc.HashOf()
 	if err != nil {
 		return nil, err

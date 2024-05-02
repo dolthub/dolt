@@ -57,8 +57,9 @@ type RootValue struct {
 	vrw  types.ValueReadWriter
 	ns   tree.NodeStore
 	st   rootValueStorage
-	fkc  *ForeignKeyCollection // cache the first load
-	hash hash.Hash             // cache first load
+	fkc  *ForeignKeyCollection   // cache the first load
+	hash hash.Hash               // cache first load
+	dro  []DoltgresRootObjectRef // cache first load
 }
 
 func (root *RootValue) ResolveRootValue(ctx context.Context) (*RootValue, error) {
@@ -105,7 +106,7 @@ func newRootValue(vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value) (
 		}
 	}
 
-	return &RootValue{vrw, ns, storage, nil, hash.Hash{}}, nil
+	return &RootValue{vrw, ns, storage, nil, hash.Hash{}, nil}, nil
 }
 
 // LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
@@ -615,7 +616,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 }
 
 func (root *RootValue) withStorage(st rootValueStorage) *RootValue {
-	return &RootValue{root.vrw, root.ns, st, nil, hash.Hash{}}
+	return &RootValue{root.vrw, root.ns, st, nil, hash.Hash{}, nil}
 }
 
 func (root *RootValue) nomsValue() types.Value {
@@ -897,6 +898,77 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	}
 
 	return root.PutForeignKeyCollection(ctx, fkCollection)
+}
+
+// GetDoltgresRootObject returns the DoltgresRootObject at the given index. Default root objects are used for roots that
+// do not have serialized root objects.
+func (root *RootValue) GetDoltgresRootObject(ctx context.Context, index DoltgresRootObjectIndex) (DoltgresRootObject, error) {
+	if root.dro == nil {
+		dro, err := root.st.GetDoltgresRootObjects(ctx)
+		if err != nil {
+			return nil, err
+		}
+		root.dro = dro
+	}
+	if int(index) >= len(root.dro) {
+		return nil, fmt.Errorf("DoltgresRootObjectIndex %d is larger than the number of registered objects %d",
+			uint32(index), len(root.dro))
+	}
+	return root.dro[index].RootObject(ctx, root.vrw)
+}
+
+// GetDoltgresRootObjectRefs returns the stored DoltgresRootObjectRefs on the root. This is primarily used for merging.
+func (root *RootValue) GetDoltgresRootObjectRefs(ctx context.Context) ([]DoltgresRootObjectRef, error) {
+	if root.dro == nil {
+		dro, err := root.st.GetDoltgresRootObjects(ctx)
+		if err != nil {
+			return nil, err
+		}
+		root.dro = dro
+	}
+	return root.dro, nil
+}
+
+// PutDoltgresRootObjects returns a new RootValue with the given root objects. This also purges any cached root objects
+// from this root, as the workflow will reference the new root.
+func (root *RootValue) PutDoltgresRootObjects(ctx context.Context, rootObjs ...DoltgresRootObject) (*RootValue, error) {
+	var newDRO, originalDRO []DoltgresRootObjectRef
+	if root.dro == nil {
+		// If we've not loaded the objects for this root, then we'll leave them unloaded
+		var err error
+		newDRO, err = root.st.GetDoltgresRootObjects(ctx)
+		if err != nil {
+			return nil, err
+		}
+		originalDRO = newDRO
+	} else {
+		originalDRO = root.dro
+		newDRO = make([]DoltgresRootObjectRef, len(originalDRO))
+		copy(newDRO, originalDRO)
+	}
+
+	for _, rootObj := range rootObjs {
+		if rootObj == nil {
+			return nil, fmt.Errorf("cannot update a nil DoltgresRootObject")
+		}
+		if uint32(rootObj.Index()) >= GetDoltgresRootObjectCount() {
+			return nil, fmt.Errorf("DoltgresRootObjectIndex %d is larger than the number of registered objects %d",
+				uint32(rootObj.Index()), GetDoltgresRootObjectCount())
+		}
+
+		originalDRO[rootObj.Index()].loadedObj = rootObj
+		updatedRef, err := originalDRO[rootObj.Index()].UpdateDataAddress(ctx, root.vrw)
+		if err != nil {
+			return nil, err
+		}
+		newDRO[updatedRef.Index] = updatedRef
+	}
+
+	newStorage, err := root.st.SetDoltgresRootObjects(ctx, newDRO)
+	if err != nil {
+		return nil, err
+	}
+	return root.withStorage(newStorage), nil
 }
 
 // GetAllTagsForRoots gets all tags for |roots|.

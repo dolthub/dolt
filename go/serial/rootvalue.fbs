@@ -25,17 +25,23 @@ table RootValue {
   foreign_key_addr:[ubyte];
 
   collation:Collation;
-  
+
   // schemas records the schemas in this database, which may be empty for a database with a single default schema
   schemas:[DatabaseSchema];
+
+  doltgres_root_objs:[DoltgresRootObject];
 }
 
 table DatabaseSchema {
   name:string;
 }
 
+table DoltgresRootObject {
+  index:uint32;
+  data_addr:[ubyte];
+}
+
 // KEEP THIS IN SYNC WITH fileidentifiers.go
 file_identifier "RTVL";
 
 root_type RootValue;
-

@@ -37,11 +37,13 @@ type rootValueStorage interface {
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
 	GetCollation(ctx context.Context) (schema.Collation, error)
 	GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
+	GetDoltgresRootObjects(ctx context.Context) ([]DoltgresRootObjectRef, error)
 
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rootValueStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rootValueStorage, error)
 	SetCollation(ctx context.Context, collation schema.Collation) (rootValueStorage, error)
 	SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rootValueStorage, error)
+	SetDoltgresRootObjects(ctx context.Context, rootObjects []DoltgresRootObjectRef) (rootValueStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rootValueStorage, error)
 
@@ -127,6 +129,14 @@ func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, erro
 		return schema.Collation_Default, nil
 	}
 	return schema.Collation(v.(types.Uint)), nil
+}
+
+func (r nomsRvStorage) GetDoltgresRootObjects(ctx context.Context) ([]DoltgresRootObjectRef, error) {
+	return nil, fmt.Errorf("DoltgresRootObject is not supported in the old format")
+}
+
+func (r nomsRvStorage) SetDoltgresRootObjects(ctx context.Context, rootObjects []DoltgresRootObjectRef) (rootValueStorage, error) {
+	return nil, fmt.Errorf("DoltgresRootObject is not supported in the old format")
 }
 
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rootValueStorage, error) {
@@ -277,7 +287,11 @@ func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, e
 }
 
 func (r fbRvStorage) SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rootValueStorage, error) {
-	msg, err := r.serializeRootValue(r.srv.TablesBytes(), dbSchemas)
+	doltgresRootObjs, err := r.GetDoltgresRootObjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	msg, err := r.serializeRootValue(r.srv.TablesBytes(), dbSchemas, doltgresRootObjs)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +359,35 @@ func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error)
 	return schema.Collation(collation), nil
 }
 
+func (r fbRvStorage) GetDoltgresRootObjects(ctx context.Context) ([]DoltgresRootObjectRef, error) {
+	rootObjs := defaultDoltgresRootObjects()
+	serializedLength := r.srv.DoltgresRootObjsLength()
+	for i := 0; i < serializedLength; i++ {
+		rootObj := new(serial.DoltgresRootObject)
+		ok, err := r.srv.TryDoltgresRootObjs(rootObj, i)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		rootObjs[rootObj.Index()].DataAddr = hash.New(rootObj.DataAddrBytes())
+	}
+	return rootObjs, nil
+}
+
+func (r fbRvStorage) SetDoltgresRootObjects(ctx context.Context, rootObjects []DoltgresRootObjectRef) (rootValueStorage, error) {
+	dbSchemas, err := r.GetSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	msg, err := r.serializeRootValue(r.srv.TablesBytes(), dbSchemas, rootObjects)
+	if err != nil {
+		return nil, err
+	}
+	return fbRvStorage{msg}, nil
+}
+
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rootValueStorage, error) {
 	am, err := r.getAddressMap(vrw, ns)
 	if err != nil {
@@ -399,18 +442,23 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	if err != nil {
 		return nil, err
 	}
+	doltgresRootObjs, err := r.GetDoltgresRootObjects(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	msg, err := r.serializeRootValue(ambytes, dbSchemas)
+	msg, err := r.serializeRootValue(ambytes, dbSchemas, doltgresRootObjs)
 	if err != nil {
 		return nil, err
 	}
 	return fbRvStorage{msg}, nil
 }
 
-func (r fbRvStorage) serializeRootValue(addressMapBytes []byte, dbSchemas []schema.DatabaseSchema) (*serial.RootValue, error) {
+func (r fbRvStorage) serializeRootValue(addressMapBytes []byte, dbSchemas []schema.DatabaseSchema, doltgresRootObjs []DoltgresRootObjectRef) (*serial.RootValue, error) {
 	builder := flatbuffers.NewBuilder(80)
 	tablesoff := builder.CreateByteVector(addressMapBytes)
 	schemasOff := serializeDatabaseSchemas(builder, dbSchemas)
+	doltgresRootObjsOff := serializeDoltgresRootObjects(builder, doltgresRootObjs)
 
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	serial.RootValueStart(builder)
@@ -420,6 +468,9 @@ func (r fbRvStorage) serializeRootValue(addressMapBytes []byte, dbSchemas []sche
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 	if schemasOff > 0 {
 		serial.RootValueAddSchemas(builder, schemasOff)
+	}
+	if doltgresRootObjsOff > 0 {
+		serial.RootValueAddDoltgresRootObjs(builder, doltgresRootObjsOff)
 	}
 
 	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
@@ -447,6 +498,35 @@ func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.Databas
 	}
 
 	serial.RootValueStartSchemasVector(b, len(offsets))
+	for i := len(offsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offsets[i])
+	}
+	return b.EndVector(len(offsets))
+}
+
+func serializeDoltgresRootObjects(b *flatbuffers.Builder, doltgresRootObjects []DoltgresRootObjectRef) flatbuffers.UOffsetT {
+	// We'll only serialize root objects that have a non-empty hash
+	nonEmptyRootObjects := make([]DoltgresRootObjectRef, 0, len(doltgresRootObjects))
+	for i := range doltgresRootObjects {
+		if !doltgresRootObjects[i].DataAddr.IsEmpty() {
+			nonEmptyRootObjects = append(nonEmptyRootObjects, doltgresRootObjects[i])
+		}
+	}
+	// We skip serialization if there are no root objects to serialize
+	if len(nonEmptyRootObjects) == 0 {
+		return 0
+	}
+
+	offsets := make([]flatbuffers.UOffsetT, len(nonEmptyRootObjects))
+	for i := len(nonEmptyRootObjects) - 1; i >= 0; i-- {
+		dataAddr := b.CreateByteVector(nonEmptyRootObjects[i].DataAddr[:])
+		serial.DoltgresRootObjectStart(b)
+		serial.DoltgresRootObjectAddIndex(b, uint32(nonEmptyRootObjects[i].Index))
+		serial.DoltgresRootObjectAddDataAddr(b, dataAddr)
+		offsets[i] = serial.DoltgresRootObjectEnd(b)
+	}
+
+	serial.RootValueStartDoltgresRootObjsVector(b, len(offsets))
 	for i := len(offsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(offsets[i])
 	}
