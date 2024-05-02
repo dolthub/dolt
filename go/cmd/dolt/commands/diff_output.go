@@ -18,7 +18,7 @@ import (
 	"context"
 	ejson "encoding/json"
 	"errors"
-"fmt"
+	"fmt"
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
