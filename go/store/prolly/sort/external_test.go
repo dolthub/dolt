@@ -73,6 +73,7 @@ func TestFlush(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
+	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -164,6 +165,7 @@ func TestMerge(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
+	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -269,6 +271,7 @@ func TestCompact(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
+	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -301,6 +304,7 @@ func TestCompact(t *testing.T) {
 
 			t.Run("file compact", func(t *testing.T) {
 				s := NewTupleSorter(batchSize, tt.fileCnt, keyCmp, tmpProv)
+				defer s.Close()
 				s.files = append(s.files, keyFiles)
 				err := s.compact(ctx, 0)
 
@@ -405,6 +409,7 @@ func TestFileE2E(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
+	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -417,6 +422,7 @@ func TestFileE2E(t *testing.T) {
 			ctx := context.Background()
 			keys := testTuples(ns, tt.td, tt.rows)
 			s := NewTupleSorter(tt.batchSize, tt.fileMax, keyCmp, tmpProv)
+			defer s.Close()
 			expSize := 0
 			for _, k := range keys {
 				err := s.Insert(ctx, k)
@@ -429,6 +435,7 @@ func TestFileE2E(t *testing.T) {
 			var cnt, size int
 			iter, err := iterable.IterAll(ctx)
 			require.NoError(t, err)
+			defer iter.Close()
 			var lastKey val.Tuple
 			for {
 				k, err := iter.Next(ctx)
@@ -484,6 +491,7 @@ func drainIterCntSize(t *testing.T, ki keyIterable) (cnt int, size int) {
 	ctx := context.Background()
 	iter, err := ki.IterAll(ctx)
 	require.NoError(t, err)
+	defer iter.Close()
 	for {
 		k, err := iter.Next(ctx)
 		if err != nil {
