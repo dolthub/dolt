@@ -21,11 +21,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"os"
 	"sort"
+
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // tupleSorter inputs a series of unsorted tuples and outputs a sorted list

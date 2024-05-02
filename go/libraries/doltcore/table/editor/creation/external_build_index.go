@@ -74,7 +74,7 @@ func BuildProllyIndexExternal(
 		return prefixDesc.Compare(t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
-	
+
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {
