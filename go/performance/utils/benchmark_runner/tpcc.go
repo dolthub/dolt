@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -55,6 +56,9 @@ func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 }
 
 func (t *tpccTesterImpl) collectStats(ctx context.Context) error {
+	if !strings.Contains(t.serverConfig.GetServerExec(), "dolt") {
+		return nil
+	}
 	db, err := sqlx.Open("mysql", "root:@/sbt")
 	if err != nil {
 		return err
