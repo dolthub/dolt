@@ -540,136 +540,50 @@ func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client re
 	return r.URL, nil
 }
 
-type dlLocations struct {
-	ranges    map[string]*GetRange
-	refreshes map[string]*locationRefresh
-}
-
-func newDlLocations() dlLocations {
-	return dlLocations{
-		ranges:    make(map[string]*GetRange),
-		refreshes: make(map[string]*locationRefresh),
-	}
-}
-
-func (l *dlLocations) Add(resp *remotesapi.DownloadLoc) {
-	gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
-	path := gr.ResourcePath()
-	if v, ok := l.ranges[path]; ok {
-		v.Append(gr)
-		l.refreshes[path].Add(resp)
-	} else {
-		l.ranges[path] = gr
-		refresh := new(locationRefresh)
-		refresh.Add(resp)
-		l.refreshes[path] = refresh
-	}
-}
-
 type RepoRequest interface {
 	SetRepoId(*remotesapi.RepoId)
 	SetRepoToken(string)
 	SetRepoPath(string)
 }
 
-func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (dlLocations, error) {
-	ctx, span := tracer.Start(ctx, "remotestorage.getDLLocs", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
-	defer span.End()
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.CompressedChunk)) (err error) {
+	toSend := hash.NewHashSet(hashes...)
 
-	res := newDlLocations()
-
-	// channel for receiving results from go routines making grpc calls to get download locations for chunks
-	resCh := make(chan []*remotesapi.DownloadLoc)
-	reqsCh := make(chan *remotesapi.GetDownloadLocsRequest)
-	hashesCh := make(chan hash.HashSet)
-
-	set := make(hash.HashSet)
-	for _, h := range hashes {
-		set.Insert(h)
-	}
-
-	eg, ctx := errgroup.WithContext(ctx)
-
-	// go routine for receiving the results of the grpc calls and aggregating the results into resourceToUrlAndRanges
-	eg.Go(func() error {
-		for {
-			select {
-			case locs, ok := <-resCh:
-				if !ok {
-					return nil
-				}
-				for _, loc := range locs {
-					res.Add(loc)
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+	fetcher := dcs.ChunkFetcher(ctx)
+	defer func() {
+		cerr := fetcher.Close()
+		if err == nil {
+			err = cerr
 		}
-	})
-	eg.Go(func() error {
-		return fetcherHashSetToGetDlLocsReqsThread(ctx, hashesCh, nil, reqsCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
-	})
-	eg.Go(func() error {
-		return fetcherRPCDownloadLocsThread(ctx, reqsCh, resCh, dcs.csClient, func(s string) { dcs.repoToken.Store(s) }, nil, dcs.host)
-	})
-
-	select {
-	case hashesCh <- set:
-	case <-ctx.Done():
-	}
-	close(hashesCh)
-
-	if err := eg.Wait(); err != nil {
-		return dlLocations{}, err
-	}
-	return res, nil
-}
-
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.CompressedChunk)) error {
-	// get the locations where the chunks can be downloaded from
-	dlLocs, err := dcs.getDLLocs(ctx, hashes)
-	if err != nil {
-		return err
-	}
-
-	// channel to receive chunks on
-	chunkChan := make(chan nbs.CompressedChunk, 128)
-
-	toSend := make(map[hash.Hash]struct{}, len(hashes))
-	for _, h := range hashes {
-		toSend[h] = struct{}{}
-	}
+	}()
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	// start a go routine to receive the downloaded chunks on
+	eg.Go(func() error {
+		err := fetcher.Get(egCtx, toSend)
+		if err != nil {
+			return err
+		}
+		return fetcher.CloseSend()
+	})
 	eg.Go(func() error {
 		for {
-			select {
-			case chunk, ok := <-chunkChan:
-				if !ok {
-					return nil
-				}
-				if dcs.cache.PutChunk(chunk) {
+			cc, err := fetcher.Recv(egCtx)
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			// Don't forward on empty/not found chunks.
+			if len(cc.CompressedData) > 0 {
+				if dcs.cache.PutChunk(cc) {
 					return ErrCacheCapacityExceeded
 				}
-				h := chunk.Hash()
-
-				if _, send := toSend[h]; send {
-					found(egCtx, chunk)
-				}
-			case <-egCtx.Done():
-				return nil
+				found(egCtx, cc)
 			}
 		}
 	})
 
-	// download the chunks and close the channel after
-	eg.Go(func() error {
-		defer close(chunkChan)
-		return dcs.downloadChunks(egCtx, dlLocs, chunkChan)
-	})
-
-	// wait for all the results to finish processing
 	return eg.Wait()
 }
 
@@ -1116,71 +1030,6 @@ var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
 	ConcurrentSmallFetches: 64,
 	ConcurrentLargeFetches: 2,
 	LargeFetchSize:         2 * 1024 * 1024,
-}
-
-func logDownloadStats(span trace.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
-	chunkCount := 0
-	originalBytes := uint64(0)
-	for _, r := range originalGets {
-		chunkCount += r.NumChunks()
-		originalBytes += r.NumBytesInRanges()
-	}
-	downloadBytes := uint64(0)
-	for _, r := range computedGets {
-		downloadBytes += r.RangeLen()
-	}
-	span.SetAttributes(
-		attribute.Int("num_files", len(originalGets)),
-		attribute.Int("num_chunks", chunkCount),
-		attribute.Int("num_batches", len(computedGets)),
-		attribute.Int64("original_bytes", int64(originalBytes)),
-		attribute.Int64("download_bytes", int64(downloadBytes)),
-	)
-}
-
-// creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
-// to chunkChan
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocations, chunkChan chan nbs.CompressedChunk) error {
-	ctx, span := tracer.Start(ctx, "remotestorage.downloadChunks")
-	defer span.End()
-
-	resourceGets := dlLocs.ranges
-
-	gets := aggregateDownloads(chunkAggDistance, resourceGets)
-	logDownloadStats(span, resourceGets, gets)
-
-	sortRangesBySize(gets)
-
-	toUrl := func(ctx context.Context, lastError error, resourcePath string) (string, error) {
-		return dlLocs.refreshes[resourcePath].GetURL(ctx, lastError, dcs.csClient)
-	}
-
-	stats := StatsFactory()
-
-	eg, ctx := errgroup.WithContext(ctx)
-
-	// loop over all the gets that need to be downloaded and create a work function for each
-	work := make([]func() error, len(gets))
-	largeCutoff := -1
-	for i, get := range gets {
-		work[i] = get.GetDownloadFunc(ctx, stats, dcs.httpFetcher, chunkChan, toUrl)
-		if get.RangeLen() >= uint64(dcs.concurrency.LargeFetchSize) {
-			largeCutoff = i
-		}
-	}
-
-	// execute the work
-	eg.Go(func() error {
-		return concurrentExec(work[0:largeCutoff+1], dcs.concurrency.ConcurrentLargeFetches)
-	})
-	eg.Go(func() error {
-		return concurrentExec(work[largeCutoff+1:], dcs.concurrency.ConcurrentSmallFetches)
-	})
-
-	defer func() {
-		StatsFlusher(stats)
-	}()
-	return eg.Wait()
 }
 
 type urlFactoryFunc func(error) (string, error)

@@ -15,9 +15,7 @@
 package remotestorage
 
 import (
-	"errors"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 )
@@ -52,89 +50,5 @@ func TestBatchItr(t *testing.T) {
 
 			return false
 		})
-	}
-}
-
-func TestConcurrentExec(t *testing.T) {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	const maxConcurrency = 256
-	const numWorkItems = 5000
-	const numUnbufferedTests = 16
-	const numBufferedTests = 16
-	const numErrTests = 16
-
-	t.Run("Unbuffered", func(t *testing.T) {
-		for i := 0; i < numUnbufferedTests; i++ {
-			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-			concurrentTest(t, concurrency, numWorkItems, -1, make(chan int))
-		}
-	})
-
-	t.Run("Buffered", func(t *testing.T) {
-		for i := 0; i < numBufferedTests; i++ {
-			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-			chanBuffSize := rng.Int() % numWorkItems
-			concurrentTest(t, concurrency, numWorkItems, -1, make(chan int, chanBuffSize))
-		}
-	})
-
-	t.Run("Error", func(t *testing.T) {
-		for i := 0; i < numErrTests; i++ {
-			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-			chanBuffSize := rng.Int() % numWorkItems
-			firstErrIdx := rng.Int() % numWorkItems
-			concurrentTest(t, concurrency, numWorkItems, firstErrIdx, make(chan int, chanBuffSize))
-		}
-	})
-
-	t.Run("more concurrency than work", func(t *testing.T) {
-		concurrentTest(t, maxConcurrency*2, numWorkItems, -1, make(chan int))
-	})
-
-	t.Run("no work", func(t *testing.T) {
-		concurrentTest(t, maxConcurrency, 0, -1, make(chan int))
-	})
-
-}
-
-func concurrentTest(t *testing.T, concurrency, numWorkItems, firstErrIdx int, resultChan chan int) {
-	work := make([]func() error, numWorkItems)
-	shouldError := firstErrIdx > 0
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		count := 0
-		for z := range resultChan {
-			count++
-			if z != numWorkItems*2 {
-				t.Error("bad result value")
-			}
-		}
-
-		if count != numWorkItems {
-			t.Error("Didn't get all the results")
-		}
-	}()
-
-	for i := 0; i < numWorkItems; i++ {
-		x := i
-		y := numWorkItems*2 - i
-		work[i] = func() error {
-			if shouldError && i >= firstErrIdx {
-				return errors.New("an error")
-			}
-
-			resultChan <- x + y
-			return nil
-		}
-	}
-
-	err := concurrentExec(work, concurrency)
-
-	if err != nil != shouldError {
-		t.Error("unexpected error value")
 	}
 }
