@@ -159,8 +159,8 @@ func (a *tupleSorter) shouldCompact() (int, bool) {
 	return -1, false
 }
 
-// compact halves the number of files, doubling their size
-func (a *tupleSorter) compact(ctx context.Context, level int) (err error) {
+// compact merges the first `a.fileMax` files in `a.files[level]` into a single sorted file which is added to `a.files[level+1]`
+func (a *tupleSorter) compact(ctx context.Context, level int) error {
 	newF, err := a.newFile()
 	if err != nil {
 		return err
