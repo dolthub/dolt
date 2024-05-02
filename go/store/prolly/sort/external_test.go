@@ -73,8 +73,6 @@ func TestFlush(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
-	defer os.Remove(tmpProv.GetTempDir())
-	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -166,8 +164,6 @@ func TestMerge(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
-	defer os.Remove(tmpProv.GetTempDir())
-	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -273,8 +269,6 @@ func TestCompact(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
-	defer os.Remove(tmpProv.GetTempDir())
-	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
@@ -411,8 +405,6 @@ func TestFileE2E(t *testing.T) {
 	}
 
 	tmpProv := newProv(t)
-	defer os.Remove(tmpProv.GetTempDir())
-	defer tmpProv.Clean()
 
 	ns := tree.NewTestNodeStore()
 
