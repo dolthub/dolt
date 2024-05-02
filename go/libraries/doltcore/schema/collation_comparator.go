@@ -133,12 +133,12 @@ func compareCollatedStrings(collation sql.CollationID, left, right []byte) int {
 	}
 
 	li := i
-	for ; li >= 0 && !utf8.RuneStart(left[li]); li-- {
+	for ; li > 0 && !utf8.RuneStart(left[li]); li-- {
 	}
 	left = left[li:]
 
 	ri := i
-	for ; ri >= 0 && !utf8.RuneStart(right[ri]); ri-- {
+	for ; ri > 0 && !utf8.RuneStart(right[ri]); ri-- {
 	}
 	right = right[ri:]
 
