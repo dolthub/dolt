@@ -754,6 +754,8 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	defer dw.Close(sqlCtx)
+
 	ignoredTablePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
@@ -806,11 +808,6 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		if verr != nil {
 			return verr
 		}
-	}
-
-	err = dw.Close(sqlCtx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
@@ -1086,18 +1083,17 @@ func diffUserTable(
 			}
 		}
 
-		diffStats, err := getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
+		var diffStats []diffStatistics
+		diffStats, err = getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		// TODO: diffStats needs to take into account the diff writer format
 		err = dw.WriteTableDiffStats(diffStats, fromColLen, toColLen, areTablesKeyless)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		return nil
-		//return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -1165,14 +1161,14 @@ func diffDoltSchemasTable(
 		var newFragment string
 		if row[4] != nil {
 			oldFragment = row[4].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
 				oldFragment += ";"
 			}
 		}
 		if row[5] != nil {
 			newFragment = row[5].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
 				newFragment += ";"
 			}
