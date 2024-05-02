@@ -866,7 +866,7 @@ EOF
 }
 
 @test "sql-diff: stat" {
-    dolt diff --stat -r sql
+    dolt sql -q "create table t (i int primary key);"
     run dolt diff --stat -r sql
     [ "$status" -eq 1 ]
     [[ "$output" =~ "diff stats are not supported for sql output" ]] || false
