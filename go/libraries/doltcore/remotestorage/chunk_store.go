@@ -30,15 +30,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fatih/color"
-
 	"github.com/cenkalti/backoff/v4"
+	"github.com/fatih/color"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -363,10 +363,6 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
-const (
-	getLocsBatchSize = 256
-)
-
 type GetRange remotesapi.HttpGetRange
 
 func (gr *GetRange) ResourcePath() string {
@@ -465,31 +461,78 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 			}
 			return url, nil
 		}
-		var comprData []byte
-		var err error
 		rangeLen := gr.RangeLen()
 		if rangeLen > HedgeDownloadSizeLimit {
-			comprData, err = rangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
+			resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
+			defer resp.Close()
+			reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
+			for {
+				cc, err := reader.ReadChunk()
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				select {
+				case chunkChan <- cc:
+				case <-ctx.Done():
+					return context.Cause(ctx)
+				}
+			}
 		} else {
-			comprData, err = hedgedRangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
-		}
-		if err != nil {
-			return err
-		}
-		// Send the chunk for each range included in GetRange.
-		for i := 0; i < len(gr.Ranges); i++ {
-			s, e := gr.ChunkByteRange(i)
-			cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e])
+			comprData, err := hedgedRangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
 			if err != nil {
 				return err
 			}
-			select {
-			case chunkChan <- cmpChnk:
-			case <-ctx.Done():
-				return ctx.Err()
+			// Send the chunk for each range included in GetRange.
+			for i := 0; i < len(gr.Ranges); i++ {
+				s, e := gr.ChunkByteRange(i)
+				cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e])
+				if err != nil {
+					return err
+				}
+				select {
+				case chunkChan <- cmpChnk:
+				case <-ctx.Done():
+					return context.Cause(ctx)
+				}
 			}
+			return nil
 		}
-		return nil
+	}
+}
+
+type RangeChunkReader struct {
+	GetRange *GetRange
+	Reader   io.Reader
+	i        int
+	skip     int
+}
+
+func (r *RangeChunkReader) ReadChunk() (nbs.CompressedChunk, error) {
+	if r.skip > 0 {
+		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
+		if err != nil {
+			return nbs.CompressedChunk{}, err
+		}
+		r.skip = 0
+	}
+	if r.i >= len(r.GetRange.Ranges) {
+		return nbs.CompressedChunk{}, io.EOF
+	}
+	if r.i < len(r.GetRange.Ranges)-1 {
+		r.skip = int(r.GetRange.GapBetween(r.i, r.i+1))
+	}
+	l := r.GetRange.Ranges[r.i].Length
+	h := hash.New(r.GetRange.Ranges[r.i].Hash)
+	r.i += 1
+	buf := make([]byte, l)
+	_, err := io.ReadFull(r.Reader, buf)
+	if err != nil {
+		return nbs.CompressedChunk{}, err
+	} else {
+		return nbs.NewCompressedChunk(h, buf)
 	}
 }
 
@@ -1008,18 +1051,6 @@ func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesa
 	return processHttpResp(resp, err)
 }
 
-// aggregateDownloads looks for byte ranges that need to be downloaded, and tries to aggregate them into a smaller number
-// of larger downloads.  It does this by sorting the ranges of bytes that are needed, and then comparing how close together
-// neighboring ranges are.  If they are within the threshold the two ranges will be aggregated into a single request for
-// the entire range of data.
-func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) []*GetRange {
-	var res []*GetRange
-	for _, resourceGet := range resourceGets {
-		res = append(res, resourceGet.SplitAtGaps(aggDistance)...)
-	}
-	return res
-}
-
 const (
 	chunkAggDistance = 8 * 1024
 )
@@ -1032,12 +1063,18 @@ var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
 	LargeFetchSize:         2 * 1024 * 1024,
 }
 
-type urlFactoryFunc func(error) (string, error)
-
-func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
+func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF reliable.UrlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
 		Run: func(ctx context.Context, n int) (interface{}, error) {
-			return rangeDownloadWithRetries(ctx, stats, fetcher, offset, length, n, urlStrF)
+			resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, offset, length, n, urlStrF)
+			defer resp.Close()
+			body := make([]byte, int(length))
+			_, err := io.ReadFull(resp.Body, body)
+			if err != nil {
+				return nil, err
+			} else {
+				return body, nil
+			}
 		},
 		Size: length,
 	})
@@ -1045,90 +1082,6 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fe
 		return nil, err
 	}
 	return res.([]byte), nil
-}
-
-// rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
-// is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
-func rangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, hedgeN int, urlStrF urlFactoryFunc) ([]byte, error) {
-	// create the request
-
-	// parameters used for resuming downloads.
-	var allBufs [][]byte
-	currOffset := offset
-	currLength := length
-
-	var lastError error
-	var retryCnt int
-
-	//execute the request
-	op := func() (rerr error) {
-		defer func() {
-			lastError = rerr
-			retryCnt += 1
-		}()
-		urlStr, err := urlStrF(lastError)
-		if err != nil {
-			return err
-		}
-
-		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-		if err != nil {
-			return err
-		}
-
-		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
-		req.Header.Set("Range", rangeVal)
-
-		if retryCnt > 0 {
-			fmt.Fprintf(color.Error, color.RedString("retrying request of size %v from offset %d\n", length, currOffset))
-		}
-
-		stats.RecordDownloadAttemptStart(hedgeN, retryCnt, currOffset-offset, length)
-		start := time.Now()
-		resp, err := fetcher.Do(req.WithContext(ctx))
-		if err == nil {
-			defer func() {
-				_ = resp.Body.Close()
-			}()
-		}
-
-		respErr := processHttpResp(resp, err)
-		if respErr != nil {
-			return respErr
-		}
-		stats.RecordTimeToFirstByte(hedgeN, retryCnt, length, time.Since(start))
-
-		// read the results
-		comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
-
-		dataRead := len(comprData)
-		if dataRead > 0 {
-			allBufs = append(allBufs, comprData)
-			currLength -= uint64(dataRead)
-			currOffset += uint64(dataRead)
-		}
-		return err
-	}
-
-	dstart := time.Now()
-	err := backoff.Retry(op, downloadBackOff(ctx))
-	if err != nil {
-		return nil, err
-	}
-	stats.RecordDownloadComplete(hedgeN, retryCnt, length, time.Since(dstart))
-
-	return collapseBuffers(allBufs, length), nil
-}
-
-func collapseBuffers(bufs [][]byte, length uint64) []byte {
-	if len(bufs) == 1 {
-		return bufs[0]
-	}
-	res := make([]byte, 0, length)
-	for _, buf := range bufs {
-		res = append(res, buf...)
-	}
-	return res
 }
 
 func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {

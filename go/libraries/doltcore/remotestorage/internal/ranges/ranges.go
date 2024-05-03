@@ -7,7 +7,6 @@ import (
 	"github.com/google/btree"
 )
 
-
 // GetRange represents a way to get the contents for a Chunk from a given Url
 // with an HTTP Range request. The chunk with hash |Hash| can be fetched using
 // the |Url| with a Range request starting at |Offset| and reading |Length|
@@ -92,8 +91,8 @@ func (rh *RegionHeap) Pop() any {
 // A ranges.Tree is a tree data structure designed to support efficient
 // coallescing of non-overlapping ranges inserted into it.
 type Tree struct {
-	t *btree.BTreeG[*GetRange]
-	regions *RegionHeap
+	t              *btree.BTreeG[*GetRange]
+	regions        *RegionHeap
 	coallesceLimit int
 }
 
@@ -107,8 +106,8 @@ func GetRangeLess(a, b *GetRange) bool {
 
 func NewTree(coallesceLimit int) *Tree {
 	return &Tree{
-		t: btree.NewG[*GetRange](64, GetRangeLess),
-		regions: &RegionHeap{},
+		t:              btree.NewG[*GetRange](64, GetRangeLess),
+		regions:        &RegionHeap{},
 		coallesceLimit: coallesceLimit,
 	}
 }

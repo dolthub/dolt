@@ -17,13 +17,12 @@ package reliable
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
-	"fmt"
-	"github.com/fatih/color"
-
 	"github.com/cenkalti/backoff/v4"
+	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 )
 

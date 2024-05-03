@@ -16,15 +16,13 @@ package remotestorage
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
-	"fmt"
-	"github.com/fatih/color"
-
-	"golang.org/x/sync/semaphore"
-
 	"github.com/HdrHistogram/hdrhistogram-go"
+	"github.com/fatih/color"
+	"golang.org/x/sync/semaphore"
 )
 
 // Hedger can |Do| Work, potentially invoking Work |Run|'s more than once

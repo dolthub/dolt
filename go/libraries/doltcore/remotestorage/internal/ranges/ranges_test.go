@@ -134,7 +134,7 @@ func TestTree(t *testing.T) {
 		assert.Equal(t, 1, tree.regions.Len())
 		assert.Equal(t, 5, tree.t.Len())
 		e, _ := tree.t.Min()
-		assert.Equal(t, e.Region.MatchedBytes, uint64(5 * 1024))
+		assert.Equal(t, e.Region.MatchedBytes, uint64(5*1024))
 	})
 	t.Run("SimpleGet", func(t *testing.T) {
 		assertTree := func(t *testing.T, tree *Tree) {
@@ -161,11 +161,11 @@ func TestTree(t *testing.T) {
 			length uint32
 		}
 		entries := []entry{
-			{ "A", 0,    0,     1024 },
-			{ "A", 1, 1024,     1024 },
-			{ "A", 2, 2048,     1024 },
-			{ "A", 3, 3074,     1024 },
-			{ "B", 4,    0, 8 * 1024 },
+			{"A", 0, 0, 1024},
+			{"A", 1, 1024, 1024},
+			{"A", 2, 2048, 1024},
+			{"A", 3, 3074, 1024},
+			{"B", 4, 0, 8 * 1024},
 		}
 		t.Run("InsertAscending", func(t *testing.T) {
 			tree := NewTree(4 * 1024)
@@ -176,7 +176,7 @@ func TestTree(t *testing.T) {
 		})
 		t.Run("InsertDescending", func(t *testing.T) {
 			tree := NewTree(4 * 1024)
-			for i := len(entries)-1; i >= 0; i-- {
+			for i := len(entries) - 1; i >= 0; i-- {
 				e := entries[i]
 				tree.Insert(e.url, []byte{e.id}, e.offset, e.length)
 			}

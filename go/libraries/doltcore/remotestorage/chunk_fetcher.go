@@ -17,19 +17,18 @@ package remotestorage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"time"
 
-	"fmt"
 	"github.com/fatih/color"
-
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/ranges"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
@@ -56,6 +55,10 @@ type ChunkFetcher struct {
 	abortCh chan struct{}
 	stats   StatsRecorder
 }
+
+const (
+	getLocsBatchSize = 512
+)
 
 func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	eg, ctx := errgroup.WithContext(ctx)
@@ -314,15 +317,15 @@ func newDownloads() downloads {
 }
 
 func (d downloads) Add(resp *remotesapi.DownloadLoc) {
-        gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
-        path := gr.ResourcePath()
-        if v, ok := d.refreshes[path]; ok {
+	gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
+	path := gr.ResourcePath()
+	if v, ok := d.refreshes[path]; ok {
 		v.Add(resp)
-        } else {
-                refresh := new(locationRefresh)
-                refresh.Add(resp)
-                d.refreshes[path] = refresh
-        }
+	} else {
+		refresh := new(locationRefresh)
+		refresh.Add(resp)
+		d.refreshes[path] = refresh
+	}
 	for _, r := range gr.Ranges {
 		d.ranges.Insert(gr.Url, r.Hash, r.Offset, r.Length)
 	}
@@ -333,7 +336,7 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 	for _, r := range rs {
 		ret.Url = r.Url
 		ret.Ranges = append(ret.Ranges, &remotesapi.RangeChunk{
-			Hash: r.Hash,
+			Hash:   r.Hash,
 			Offset: r.Offset,
 			Length: r.Length,
 		})
