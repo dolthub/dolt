@@ -38,7 +38,6 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -57,25 +56,11 @@ var _ nbs.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 
-// We may need this to be configurable for users with really bad internet
-var downThroughputCheck = iohelp.MinThroughputCheckParams{
-	MinBytesPerSec: 1024,
-	CheckInterval:  1 * time.Second,
-	NumIntervals:   5,
-}
-
 const (
-	downRetryCount   = 5
 	uploadRetryCount = 5
 )
 
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
-
-func downloadBackOff(ctx context.Context) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, downRetryCount), ctx)
-}
 
 func uploadBackOff(ctx context.Context) backoff.BackOff {
 	ret := backoff.NewExponentialBackOff()
@@ -88,9 +73,7 @@ type HTTPFetcher interface {
 }
 
 type ConcurrencyParams struct {
-	ConcurrentSmallFetches int
-	ConcurrentLargeFetches int
-	LargeFetchSize         int
+	ConcurrentDownloads int
 }
 
 type DoltChunkStore struct {
@@ -410,7 +393,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -426,7 +409,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 			return url, nil
 		}
 		rangeLen := gr.RangeLen()
-		resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
+		resp := reliable.StreamingRangeDownload(ctx, stats, health, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
 		defer resp.Close()
 		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
 		for {
@@ -999,9 +982,7 @@ const (
 )
 
 var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
-	ConcurrentSmallFetches: 64,
-	ConcurrentLargeFetches: 2,
-	LargeFetchSize:         2 * 1024 * 1024,
+	ConcurrentDownloads: 32,
 }
 
 func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {

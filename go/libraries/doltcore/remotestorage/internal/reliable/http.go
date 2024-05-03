@@ -58,9 +58,14 @@ const (
 )
 
 type StatsRecorder interface {
-	RecordTimeToFirstByte(hedge, retry int, size uint64, d time.Duration)
-	RecordDownloadAttemptStart(hedge, retry int, offset, size uint64)
-	RecordDownloadComplete(hedge, retry int, size uint64, d time.Duration)
+	RecordTimeToFirstByte(retry int, size uint64, d time.Duration)
+	RecordDownloadAttemptStart(retry int, offset, size uint64)
+	RecordDownloadComplete(retry int, size uint64, d time.Duration)
+}
+
+type HealthRecorder interface {
+	RecordSuccess()
+	RecordFailure()
 }
 
 func downloadBackOff(ctx context.Context) backoff.BackOff {
@@ -94,7 +99,7 @@ var ErrHttpStatus = errors.New("http status")
 // |StreamingResponse.Read|.
 //
 // |StreamingResponse.Read| can (and often will) return short reads.
-func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, hedgeN int, urlStrF UrlFactoryFunc) StreamingResponse {
+func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, health HealthRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF UrlFactoryFunc) StreamingResponse {
 	rangeEnd := offset + length - 1
 	r, w := io.Pipe()
 
@@ -125,17 +130,21 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 			rangeHeaderVal := fmt.Sprintf("bytes=%d-%d", offset, rangeEnd)
 			req.Header.Set("Range", rangeHeaderVal)
 
-			stats.RecordDownloadAttemptStart(hedgeN, retry, offset-origOffset, length)
+			stats.RecordDownloadAttemptStart(retry, offset-origOffset, length)
 			start := time.Now()
 			resp, err := fetcher.Do(req.WithContext(ctx))
 			if err != nil {
+				fmt.Fprintf(color.Error, color.RedString("error from HTTP Do: %v\n", err))
+				health.RecordFailure()
 				return err
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode/100 != 2 {
+				health.RecordFailure()
+				fmt.Fprintf(color.Error, color.RedString("error from HTTP StatusCode: %v\n", resp.StatusCode))
 				return fmt.Errorf("%w: %d", ErrHttpStatus, resp.StatusCode)
 			}
-			stats.RecordTimeToFirstByte(hedgeN, retry, length, time.Since(start))
+			stats.RecordTimeToFirstByte(retry, length, time.Since(start))
 
 			reader := &AtomicCountingReader{r: resp.Body}
 			cleanup := EnforceThroughput(reader.Count, downThroughputCheck, func(err error) {
@@ -146,6 +155,7 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 			offset += uint64(n)
 			if err == nil {
 				// Success!
+				health.RecordSuccess()
 				return nil
 			} else if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrShortWrite) {
 				// Reader closed; bail.
@@ -156,6 +166,7 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 				}
 				// Let backoff decide when and if we retry.
 				fmt.Fprintf(color.Error, color.RedString("error from io.Copy: %v\n", err))
+				health.RecordFailure()
 				return err
 			}
 		}
@@ -165,7 +176,7 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 			fmt.Fprintf(color.Error, color.RedString("error from backoff.Retry: %v\n", err))
 			w.CloseWithError(err)
 		} else {
-			stats.RecordDownloadComplete(hedgeN, retry, length, time.Since(start))
+			stats.RecordDownloadComplete(retry, length, time.Since(start))
 			w.Close()
 		}
 	}()

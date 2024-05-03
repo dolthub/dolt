@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/fatih/color"
@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/pool"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/ranges"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -88,7 +89,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), 128 /*dcs.concurrency.ConcurrentSmallFetches*/, dcs.concurrency.ConcurrentLargeFetches)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, dcs.concurrency.ConcurrentDownloads)
 	})
 
 	return ret
@@ -306,9 +307,8 @@ type fetchResp struct {
 }
 
 type fetchReq struct {
-	respCh chan fetchResp
-	minSz  uint64
-	maxSz  uint64
+	respCh   chan fetchResp
+	cancelCh chan struct{}
 }
 
 type downloads struct {
@@ -355,19 +355,21 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
 	downloads := newDownloads()
 	pending := make([]fetchReq, 0)
+	var toSend *GetRange
 	for {
-
 		for j := range pending {
-			max := downloads.ranges.DeleteMaxRegion()
-			if len(max) == 0 {
-				break
+			if toSend == nil {
+				max := downloads.ranges.DeleteMaxRegion()
+				if len(max) == 0 {
+					break
+				}
+				toSend = toGetRange(max)
 			}
-			gr := toGetRange(max)
-			path := gr.ResourcePath()
+			path := toSend.ResourcePath()
 			refresh := downloads.refreshes[path]
 
 			resp := fetchResp{
-				get: gr,
+				get: toSend,
 				refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
 					return refresh.GetURL(ctx, err, client)
 				},
@@ -375,7 +377,8 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 
 			select {
 			case pending[j].respCh <- resp:
-				fmt.Fprintf(color.Error, "started download of size %d\n", gr.RangeLen())
+				toSend = nil
+			case <-pending[j].cancelCh:
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			}
@@ -413,27 +416,87 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, largeFetchSz uint64, smallFetches, largeFetches int) error {
-	// TODO: Get rid of hedging, just use the retrying range downloader + the streaming chunker.
-	// In exchange, use an adaptive concurrency policy. Try something like this:
-	// Start at a concurrency of 16. Every successfully completed request
-	// that does not retry increases concurrency by one. Every request that
-	// requires a retry decreases concurrency to 1/2 of its current value.
-	// Each time the concurrency decreases, the |epoch| of the tuning
-	// parameters changes. Failures only effect their own epoch, so at most
-	// one 1/2-en-ing before we have another batch of 1/2n requests which
-	// can require retries and 1/2 again.
-	eg, ctx := errgroup.WithContext(ctx)
-	for i := 0; i < smallFetches; i++ {
-		eg.Go(func() error {
-			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, 0, math.MaxUint64, client, stats, fetcher)
-		})
+type ConcurrencyControl struct {
+	MaxConcurrency int
+
+	failures atomic.Int64
+	successes atomic.Int64
+}
+
+func (cc *ConcurrencyControl) RecordSuccess() {
+	cc.successes.Add(1)
+}
+
+func (cc *ConcurrencyControl) RecordFailure() {
+	cc.failures.Add(1)
+}
+
+type SizeSetter interface {
+	SetSize(int)
+}
+
+func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss SizeSetter, sz int) error {
+	var justDecreased bool
+	next := 500 * time.Millisecond
+	var lastS int64
+	for {
+		select {
+		case <-time.After(next):
+			f := cc.failures.Load()
+			if f > 0 && !justDecreased {
+				sz = (sz+1)/2
+				ss.SetSize(sz)
+				justDecreased = true
+				next = 5 * time.Second
+				fmt.Fprintf(color.Error, color.RedString("concurrency at %d\n", sz))
+			} else {
+				next = 500 * time.Millisecond
+				s := cc.successes.Load()
+				if f == 0 && s > lastS && sz < cc.MaxConcurrency {
+					sz += 1
+					ss.SetSize(sz)
+					lastS = s
+				}
+				cc.failures.Store(0)
+				justDecreased = false
+				fmt.Fprintf(color.Error, "concurrency at %d\n", sz)
+			}
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return nil
+		}
 	}
-	//	for i := 0; i < largeFetches; i++ {
-	//		eg.Go(func() error {
-	//			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
-	//		})
-	//	}
+}
+
+const (
+	MaxConcurrenctDownloads = 256
+)
+
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, startingConcurrency int) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	cc := &ConcurrencyControl{
+		MaxConcurrency: MaxConcurrenctDownloads,
+	}
+	f := func(ctx context.Context, shutdownCh <-chan struct{}) error {
+		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher)
+	}
+	threads := pool.NewDynamic(f, startingConcurrency)
+	eg.Go(func() error {
+		return threads.Run()
+	})
+	eg.Go(func() error {
+		select {
+		case <-doneCh:
+			threads.Close()
+		case <-ctx.Done():
+			threads.Close()
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		return cc.Run(ctx, doneCh, threads, startingConcurrency)
+	})
 	err := eg.Wait()
 	if err != nil {
 		return err
@@ -442,22 +505,24 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, minSz, maxSz uint64, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher) error {
 	respCh := make(chan fetchResp)
+	cancelCh := make(chan struct{})
 	for {
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-doneCh:
 			return nil
-		case fetchReqCh <- fetchReq{respCh: respCh, minSz: minSz, maxSz: maxSz}:
+		case fetchReqCh <- fetchReq{respCh: respCh, cancelCh: cancelCh}:
 			select {
 			case <-doneCh:
+				close(cancelCh)
 				return nil
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			case fetchResp := <-respCh:
-				f := fetchResp.get.GetDownloadFunc(ctx, stats, fetcher, chunkCh, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, chunkCh, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)
 				})
 				err := f()
