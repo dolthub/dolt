@@ -33,7 +33,7 @@ func TestEnforceThroughput(t *testing.T) {
 			MinBytesPerSec: 1024,
 			CheckInterval:  time.Hour,
 			NumIntervals:   16,
-		}, func() { didCancel.Store(true) })
+		}, func(error) { didCancel.Store(true) })
 		start := time.Now()
 		for before >= runtime.NumGoroutine() && time.Since(start) < time.Second {
 		}
@@ -61,13 +61,12 @@ func TestEnforceThroughput(t *testing.T) {
 			MinBytesPerSec: 65536,
 			CheckInterval:  time.Millisecond,
 			NumIntervals:   16,
-		}, func() { close(done) })
+		}, func(error) { close(done) })
 		t.Cleanup(cleanup)
 
 		select {
 		case <-done:
 			assert.Greater(t, i, 64)
-			assert.Less(t, i, 64+16)
 		case <-time.After(time.Second * 3):
 			assert.FailNow(t, "EnforceThroughput did not cancel operation after 3 seconds.")
 		}

@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/fatih/color"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -48,16 +47,6 @@ import (
 )
 
 var ErrCacheCapacityExceeded = errors.New("too much data: the cache capacity has been reached")
-var DownloadHedger *Hedger
-
-func init() {
-	// TODO: This does not necessarily respond well to changes in network
-	// conditions during the program's runtime.
-	e := NewPercentileEstimator(0, 1*time.Hour, 95.0)
-	s := NewMinHedgeStrategy(1*time.Second,
-		NewExponentialHedgeStrategy(NewEstimateStrategy(e)))
-	DownloadHedger = NewHedger(8, s, e)
-}
 
 var ErrUploadFailed = errors.New("upload failed")
 
@@ -93,9 +82,6 @@ func uploadBackOff(ctx context.Context) backoff.BackOff {
 	ret.MaxInterval = 5 * time.Second
 	return backoff.WithContext(backoff.WithMaxRetries(ret, uploadRetryCount), ctx)
 }
-
-// Only hedge downloads of ranges < 1MB in length for now.
-const HedgeDownloadSizeLimit = 0 * 1024 * 1024
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -393,28 +379,6 @@ func (gr *GetRange) GapBetween(i, j int) uint64 {
 	return gr.ChunkStartOffset(j) - gr.ChunkEndOffset(i)
 }
 
-func (gr *GetRange) SplitAtGaps(maxGapBytes uint64) []*GetRange {
-	gr.Sort()
-	res := make([]*GetRange, 0)
-	i := 0
-	for i < len(gr.Ranges) {
-		j := i + 1
-		for j < len(gr.Ranges) {
-			if gr.GapBetween(j-1, j) > maxGapBytes {
-				break
-			}
-			if gr.GapBetween(i, j) > MaxFetchSize {
-				fmt.Fprintf(color.Error, color.RedString("choose smaller group because MaxFetchSize exceeded...\n"))
-				break
-			}
-			j++
-		}
-		res = append(res, &GetRange{Url: gr.Url, Ranges: gr.Ranges[i:j]})
-		i = j
-	}
-	return res
-}
-
 func (gr *GetRange) NumChunks() int {
 	return len(gr.Ranges)
 }
@@ -462,43 +426,22 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 			return url, nil
 		}
 		rangeLen := gr.RangeLen()
-		if rangeLen > HedgeDownloadSizeLimit {
-			resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
-			defer resp.Close()
-			reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
-			for {
-				cc, err := reader.ReadChunk()
-				if errors.Is(err, io.EOF) {
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-				select {
-				case chunkChan <- cc:
-				case <-ctx.Done():
-					return context.Cause(ctx)
-				}
+		resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, 1, urlF)
+		defer resp.Close()
+		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
+		for {
+			cc, err := reader.ReadChunk()
+			if errors.Is(err, io.EOF) {
+				return nil
 			}
-		} else {
-			comprData, err := hedgedRangeDownloadWithRetries(ctx, stats, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
 			if err != nil {
 				return err
 			}
-			// Send the chunk for each range included in GetRange.
-			for i := 0; i < len(gr.Ranges); i++ {
-				s, e := gr.ChunkByteRange(i)
-				cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e])
-				if err != nil {
-					return err
-				}
-				select {
-				case chunkChan <- cmpChnk:
-				case <-ctx.Done():
-					return context.Cause(ctx)
-				}
+			select {
+			case chunkChan <- cc:
+			case <-ctx.Done():
+				return context.Cause(ctx)
 			}
-			return nil
 		}
 	}
 }
@@ -1055,33 +998,10 @@ const (
 	chunkAggDistance = 8 * 1024
 )
 
-const MaxFetchSize = 128 * 1024 * 1024
-
 var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
 	ConcurrentSmallFetches: 64,
 	ConcurrentLargeFetches: 2,
 	LargeFetchSize:         2 * 1024 * 1024,
-}
-
-func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF reliable.UrlFactoryFunc) ([]byte, error) {
-	res, err := DownloadHedger.Do(ctx, Work{
-		Run: func(ctx context.Context, n int) (interface{}, error) {
-			resp := reliable.StreamingRangeDownload(ctx, stats, fetcher, offset, length, n, urlStrF)
-			defer resp.Close()
-			body := make([]byte, int(length))
-			_, err := io.ReadFull(resp.Body, body)
-			if err != nil {
-				return nil, err
-			} else {
-				return body, nil
-			}
-		},
-		Size: length,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return res.([]byte), nil
 }
 
 func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
