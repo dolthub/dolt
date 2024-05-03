@@ -256,7 +256,12 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	if dict == nil {
 		result, err = gozstd.Decompress(nil, data)
 	} else {
-		dDict, e2 := gozstd.NewDDict(dict)
+		dcmpDict, e2 := gozstd.Decompress(nil, dict)
+		if e2 != nil {
+			return nil, e2
+		}
+
+		dDict, e2 := gozstd.NewDDict(dcmpDict)
 		if e2 != nil {
 			return nil, e2
 		}

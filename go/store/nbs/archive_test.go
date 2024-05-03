@@ -214,7 +214,8 @@ func TestArchiveDictDecompression(t *testing.T) {
 
 	aw := newArchiveWriterWithSink(writer)
 
-	dictId, err := aw.writeByteSpan(dict)
+	cmpDict := gozstd.Compress(nil, dict)
+	dictId, err := aw.writeByteSpan(cmpDict)
 	for _, chk := range chks {
 		cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
 
@@ -487,12 +488,17 @@ func generateSimilarChunks(seed int64, count int) []*chunks.Chunk {
 }
 
 func generateRandomChunk(seed int64, len int) *chunks.Chunk {
+	c := chunks.NewChunk(generateRandomBytes(seed, len))
+	return &c
+}
+
+func generateRandomBytes(seed int64, len int) []byte {
 	r := rand.NewSource(seed)
 
 	data := make([]byte, len)
 	for i := range data {
 		data[i] = byte(r.Int63())
 	}
-	c := chunks.NewChunk(data)
-	return &c
+
+	return data
 }
