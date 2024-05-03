@@ -427,7 +427,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	}
 	//func() {
 	//	defer trace.StartRegion(ctx, "sync journal").End()
-	//	err = wr.journal.Sync()
+	err = wr.journal.Sync()
 	//}()
 	if err != nil {
 		return err
@@ -436,9 +436,11 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		go wr.flushIndexRecord(root, o)
+		if err := wr.flushIndexRecord(root, o); err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
