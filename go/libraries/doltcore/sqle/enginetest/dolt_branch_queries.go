@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
@@ -603,7 +602,7 @@ func TestIndexedAccess(t *testing.T, e enginetest.QueryEngine, harness enginetes
 }
 
 func analyzeQuery(ctx *sql.Context, e enginetest.QueryEngine, query string) (sql.Node, error) {
-	parsed, err := planbuilder.Parse(ctx, e.EngineAnalyzer().Catalog, query)
+	parsed, err := e.ParseAndBuildQuery(ctx, nil, query)
 	if err != nil {
 		return nil, err
 	}

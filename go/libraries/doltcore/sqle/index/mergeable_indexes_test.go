@@ -21,7 +21,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1564,7 +1563,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 }
 
 func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*noms.ReadRange, error) {
-	parsed, err := planbuilder.Parse(ctx, eng.Analyzer.Catalog, query)
+	parsed, err := eng.ParseAndBuildQuery(ctx, nil, query)
 	if err != nil {
 		return nil, err
 	}

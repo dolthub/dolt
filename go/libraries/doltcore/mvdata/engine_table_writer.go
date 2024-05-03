@@ -312,7 +312,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 
 	insert := fmt.Sprintf("insert into `%s` (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
-	parsed, err := planbuilder.Parse(s.sqlCtx, s.se.GetUnderlyingEngine().Analyzer.Catalog, insert)
+	parsed, err := s.se.GetUnderlyingEngine().ParseAndBuildQuery(s.sqlCtx, nil, insert)
 	if err != nil {
 		return nil, fmt.Errorf("error constructing import query '%s': %w", insert, err)
 	}

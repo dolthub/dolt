@@ -1309,7 +1309,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, db.getCatalog(ctx), tbl.(*WritableDoltTable), viewName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1320,7 +1320,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	return viewDef, found, nil
 }
 
-func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, cat *analyzer.Catalog, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
 	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
 	if err != nil {
 		return nil, sql.ViewDefinition{}, false, err
@@ -1330,8 +1330,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := sqlparser.ParseWithOptions(fragments[i].fragment,
-			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
+		cv, _, _, err := cat.GetParser().ParseWithOptions(fragments[i].fragment, ';', false, sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
@@ -1339,10 +1338,18 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 		createView, ok := cv.(*sqlparser.DDL)
 		if ok {
 			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr,
-				CreateViewStatement: fragments[i].fragment, SqlMode: fragment.sqlMode}
+			views[i] = sql.ViewDefinition{
+				Name:                fragments[i].name,
+				TextDefinition:      selectStr,
+				CreateViewStatement: fragments[i].fragment,
+				SqlMode:             fragment.sqlMode,
+			}
 		} else {
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
+			views[i] = sql.ViewDefinition{
+				Name:                fragments[i].name,
+				TextDefinition:      fragments[i].fragment,
+				CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment),
+			}
 		}
 
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
@@ -1364,7 +1371,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), "")
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, db.getCatalog(ctx), tbl.(*WritableDoltTable), "")
 	if err != nil {
 		return nil, err
 	}
@@ -1533,9 +1540,9 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	catalog := db.getCatalog(ctx)
-	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
-	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
+	b := planbuilder.New(ctx, db.getCatalog(ctx))
+	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
+	parsed, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), false)
 	if err != nil {
 		return nil, err
 	}

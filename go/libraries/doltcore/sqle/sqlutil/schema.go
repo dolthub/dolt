@@ -21,7 +21,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -30,7 +29,7 @@ import (
 // ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
 // is used to generate unique tags for the Schema
 func ParseCreateTableStatement(ctx *sql.Context, root *doltdb.RootValue, engine *sqle.Engine, query string) (string, schema.Schema, error) {
-	parsed, err := planbuilder.Parse(ctx, engine.Analyzer.Catalog, query)
+	parsed, err := engine.ParseAndBuildQuery(ctx, nil, query)
 	if err != nil {
 		return "", nil, err
 	}

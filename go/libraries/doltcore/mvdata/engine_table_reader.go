@@ -21,7 +21,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -66,7 +65,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	ret, err := planbuilder.Parse(sqlCtx, se.GetUnderlyingEngine().Analyzer.Catalog, fmt.Sprintf("show create table `%s`", tableName))
+	ret, err := se.GetUnderlyingEngine().ParseAndBuildQuery(sqlCtx, nil, fmt.Sprintf("show create table `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}
