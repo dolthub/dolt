@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/dolthub/gozstd"
+	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -79,7 +80,21 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 
 	indexSpan := footer.indexSpan()
 	secRdr := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
-	byteReader := bufio.NewReader(secRdr)
+	rawReader := bufio.NewReader(secRdr)
+
+	errChan := make(chan error, 1)
+
+	redr, wrtr := io.Pipe()
+	go func() {
+		defer wrtr.Close()
+		err := gozstd.StreamDecompress(wrtr, rawReader)
+		if err != nil {
+			errChan <- errors.Wrap(err, "Failed to decompress archive index")
+		}
+
+		close(errChan)
+	}()
+	byteReader := bufio.NewReader(redr)
 
 	byteSpans := make([]byteSpan, footer.byteSpanCount+1)
 	byteSpans = append(byteSpans, byteSpan{offset: 0, length: 0}) // Null byteSpan to simplify logic.
@@ -127,6 +142,11 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		if n != hash.SuffixLen {
 			return archiveReader{}, io.ErrUnexpectedEOF
 		}
+	}
+
+	err, _ = <-errChan
+	if err != nil {
+		return archiveReader{}, err
 	}
 
 	return archiveReader{

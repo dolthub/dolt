@@ -23,6 +23,8 @@ import (
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/gozstd"
+	"github.com/pkg/errors"
 )
 
 type stagedByteSpanSlice []byteSpan
@@ -157,6 +159,20 @@ func (aw *archiveWriter) finalizeByteSpans() error {
 	return nil
 }
 
+type streamCounter struct {
+	wrapped io.Writer
+	count   uint64
+}
+
+func (sc *streamCounter) Write(p []byte) (n int, err error) {
+	n, err = sc.wrapped.Write(p)
+	// n may be non-0, even if err is non-nil.
+	sc.count += uint64(n)
+	return
+}
+
+var _ io.Writer = &streamCounter{}
+
 // writeIndex writes the index to the archive. Expects the hasher to be reset before be called, and will reset it. It
 // sets the indexLen and indexCheckSum fields on the archiveWriter, and updates the bytesWritten field.
 func (aw *archiveWriter) writeIndex() error {
@@ -164,21 +180,31 @@ func (aw *archiveWriter) writeIndex() error {
 		return fmt.Errorf("Runtime error: writeIndex called out of order")
 	}
 
-	startingByteCount := aw.bytesWritten
+	redr, wrtr := io.Pipe()
+
+	outCount := &streamCounter{wrapped: aw.output}
+	errCh := make(chan error)
+
+	go func() {
+		err := gozstd.StreamCompressLevel(outCount, redr, 6)
+		if err != nil {
+			errCh <- errors.Wrap(err, "Failed to compress archive index")
+		}
+		close(errCh)
+	}()
 
 	varIbuf := make([]byte, binary.MaxVarintLen64)
 
 	// Write out the stagedByteSpans
 	for _, bs := range aw.stagedBytes {
 		n := binary.PutUvarint(varIbuf, bs.length)
-		written, err := aw.output.Write(varIbuf[:n])
+		written, err := wrtr.Write(varIbuf[:n])
 		if err != nil {
 			return err
 		}
 		if written != n {
 			return io.ErrShortWrite
 		}
-		aw.bytesWritten += uint64(written)
 	}
 
 	// sort stagedChunks by hash.Prefix(). Note this isn't a perfect sort for hashes, we are just grouping them by prefix
@@ -187,7 +213,7 @@ func (aw *archiveWriter) writeIndex() error {
 	// We lay down the sorted chunk list in it's three forms.
 	// Prefix Map
 	for _, scr := range aw.stagedChunks {
-		err := aw.writeUint64(scr.hash.Prefix())
+		err := binary.Write(wrtr, binary.BigEndian, scr.hash.Prefix())
 		if err != nil {
 			return err
 		}
@@ -195,38 +221,46 @@ func (aw *archiveWriter) writeIndex() error {
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {
 		n := binary.PutUvarint(varIbuf, uint64(scr.dictionary))
-		written, err := aw.output.Write(varIbuf[:n])
+		written, err := wrtr.Write(varIbuf[:n])
 		if err != nil {
 			return err
 		}
 		if written != n {
 			return io.ErrShortWrite
 		}
-		aw.bytesWritten += uint64(written)
 
 		n = binary.PutUvarint(varIbuf, uint64(scr.data))
-		written, err = aw.output.Write(varIbuf[:n])
+		written, err = wrtr.Write(varIbuf[:n])
 		if err != nil {
 			return err
 		}
 		if written != n {
 			return io.ErrShortWrite
 		}
-		aw.bytesWritten += uint64(written)
 	}
 	// Suffixes
 	for _, scr := range aw.stagedChunks {
-		n, err := aw.output.Write(scr.hash.Suffix())
+		n, err := wrtr.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
 		}
 		if n != hash.SuffixLen {
 			return io.ErrShortWrite
 		}
-		aw.bytesWritten += uint64(hash.SuffixLen)
 	}
 
-	aw.indexLen = uint32(aw.bytesWritten - startingByteCount)
+	err := wrtr.Close()
+	if err != nil {
+		return err
+	}
+
+	err, _ = <-errCh
+	if err != nil {
+		return err
+	}
+
+	aw.indexLen = uint32(outCount.count)
+	aw.bytesWritten += outCount.count
 	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
@@ -358,26 +392,6 @@ func (aw *archiveWriter) writeUint32(val uint32) error {
 	}
 
 	aw.bytesWritten += uint32Size
-	return nil
-}
-
-// Write a uint64 to the archive. Increments the bytesWritten field.
-func (aw *archiveWriter) writeUint64(val uint64) error {
-	bb := &bytes.Buffer{}
-	err := binary.Write(bb, binary.BigEndian, val)
-	if err != nil {
-		return err
-	}
-
-	n, err := aw.output.Write(bb.Bytes())
-	if err != nil {
-		return err
-	}
-	if n != uint64Size {
-		return io.ErrShortWrite
-	}
-
-	aw.bytesWritten += uint64Size
 	return nil
 }
 
