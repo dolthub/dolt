@@ -21,13 +21,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 	"hash/crc32"
 	"io"
 	"sort"
-	"sync"
-
-	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // indexRec is a record in a chunk journal index file. Index records
@@ -197,20 +195,6 @@ const (
 	indexRecMeta
 )
 
-var uint32Pool = sync.Pool{
-	// New is called when a new instance is needed
-	New: func() interface{} {
-		return make([]byte, uint32Size)
-	},
-}
-
-var uint64Pool = sync.Pool{
-	// New is called when a new instance is needed
-	New: func() interface{} {
-		return make([]byte, uint64Size)
-	},
-}
-
 // processIndexRecords reads batches of chunk index lookups into the journal.
 // An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
 // indicates whether it is a |lookup| or |meta|.
@@ -262,19 +246,17 @@ func readIndexLookup(r *bufio.Reader) (lookup, error) {
 		return lookup{}, err
 	}
 
-	offsetBuf := uint64Pool.Get().([]byte)
-	defer uint64Pool.Put(offsetBuf)
-	if _, err := io.ReadFull(r, offsetBuf); err != nil {
+	var offsetBuf [uint64Size]byte
+	if _, err := io.ReadFull(r, offsetBuf[:]); err != nil {
 		return lookup{}, err
 	}
-	offset := binary.BigEndian.Uint64(offsetBuf)
+	offset := binary.BigEndian.Uint64(offsetBuf[:])
 
-	lengthBuf := uint32Pool.Get().([]byte)
-	defer uint32Pool.Put(lengthBuf)
-	if _, err := io.ReadFull(r, lengthBuf); err != nil {
+	var lengthBuf [uint32Size]byte
+	if _, err := io.ReadFull(r, lengthBuf[:]); err != nil {
 		return lookup{}, err
 	}
-	length := binary.BigEndian.Uint32(lengthBuf)
+	length := binary.BigEndian.Uint32(lengthBuf[:])
 
 	return lookup{a: addr, r: Range{Offset: offset, Length: length}}, nil
 }
@@ -284,26 +266,23 @@ func readIndexLookup(r *bufio.Reader) (lookup, error) {
 // start-end range will cause the checksum/crc check to fail. The last root hash
 // is a duplicate sanity check.
 func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
-	startBuf := uint32Pool.Get().([]byte)
-	defer uint32Pool.Put(startBuf)
-	if _, err := io.ReadFull(r, startBuf); err != nil {
+	var startBuf [uint32Size]byte
+	if _, err := io.ReadFull(r, startBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
-	startOff := binary.BigEndian.Uint32(startBuf)
+	startOff := binary.BigEndian.Uint32(startBuf[:])
 
-	endBuf := uint32Pool.Get().([]byte)
-	defer uint32Pool.Put(endBuf)
-	if _, err := io.ReadFull(r, endBuf); err != nil {
+	var endBuf [uint32Size]byte
+	if _, err := io.ReadFull(r, endBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
-	endOff := binary.BigEndian.Uint32(endBuf)
+	endOff := binary.BigEndian.Uint32(endBuf[:])
 
-	checksumBuf := uint32Pool.Get().([]byte)
-	defer uint32Pool.Put(checksumBuf)
-	if _, err := io.ReadFull(r, checksumBuf); err != nil {
+	var checksumBuf [uint32Size]byte
+	if _, err := io.ReadFull(r, checksumBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
-	checksum := binary.BigEndian.Uint32(checksumBuf)
+	checksum := binary.BigEndian.Uint32(checksumBuf[:])
 
 	addr := hash.Hash{}
 	if _, err := io.ReadFull(r, addr[:]); err != nil {
@@ -325,17 +304,15 @@ func writeIndexLookup(w *bufio.Writer, l lookup) error {
 		return err
 	}
 
-	offsetBuf := uint64Pool.Get().([]byte)
-	defer uint64Pool.Put(offsetBuf)
-	binary.BigEndian.PutUint64(offsetBuf, l.r.Offset)
-	if _, err := w.Write(offsetBuf); err != nil {
+	var offsetBuf [uint64Size]byte
+	binary.BigEndian.PutUint64(offsetBuf[:], l.r.Offset)
+	if _, err := w.Write(offsetBuf[:]); err != nil {
 		return err
 	}
 
-	lengthBuf := uint32Pool.Get().([]byte)
-	defer uint32Pool.Put(lengthBuf)
-	binary.BigEndian.PutUint32(lengthBuf, l.r.Length)
-	if _, err := w.Write(lengthBuf); err != nil {
+	var lengthBuf [uint32Size]byte
+	binary.BigEndian.PutUint32(lengthBuf[:], l.r.Length)
+	if _, err := w.Write(lengthBuf[:]); err != nil {
 		return err
 	}
 

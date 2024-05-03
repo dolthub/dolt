@@ -425,11 +425,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	//func() {
-	//	defer trace.StartRegion(ctx, "sync journal").End()
-	err = wr.journal.Sync()
-	//}()
-	if err != nil {
+	if err = wr.journal.Sync(); err != nil {
 		return err
 	}
 
