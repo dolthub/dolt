@@ -100,9 +100,9 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	byteSpans = append(byteSpans, byteSpan{offset: 0, length: 0}) // Null byteSpan to simplify logic.
 
 	offset := uint64(0)
-
 	for i := uint32(0); i < footer.byteSpanCount; i++ {
-		length, err := binary.ReadUvarint(byteReader)
+		length := uint64(0)
+		err := binary.Read(byteReader, binary.BigEndian, &length)
 		if err != nil {
 			return archiveReader{}, err
 		}
