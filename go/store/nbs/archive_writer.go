@@ -212,11 +212,14 @@ func (aw *archiveWriter) writeIndex() error {
 
 	// We lay down the sorted chunk list in it's three forms.
 	// Prefix Map
+	lastPrefix := uint64(0)
 	for _, scr := range aw.stagedChunks {
-		err := binary.Write(wrtr, binary.BigEndian, scr.hash.Prefix())
+		delta := scr.hash.Prefix() - lastPrefix
+		err := binary.Write(wrtr, binary.BigEndian, delta)
 		if err != nil {
 			return err
 		}
+		lastPrefix += delta
 	}
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {

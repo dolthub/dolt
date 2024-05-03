@@ -110,14 +110,16 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		offset += length
 	}
 
+	lastPrefix := uint64(0)
 	prefixes := make([]uint64, footer.chunkCount)
 	for i := uint32(0); i < footer.chunkCount; i++ {
-		val := uint64(0)
-		err := binary.Read(byteReader, binary.BigEndian, &val)
+		delta := uint64(0)
+		err := binary.Read(byteReader, binary.BigEndian, &delta)
 		if err != nil {
 			return archiveReader{}, err
 		}
-		prefixes[i] = val
+		prefixes[i] = lastPrefix + delta
+		lastPrefix = prefixes[i]
 	}
 
 	chunks := make([]chunkRef, footer.chunkCount)
