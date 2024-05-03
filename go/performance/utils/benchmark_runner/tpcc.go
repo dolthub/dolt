@@ -59,7 +59,7 @@ func (t *tpccTesterImpl) collectStats(ctx context.Context) error {
 	if !strings.Contains(t.serverConfig.GetServerExec(), "dolt") {
 		return nil
 	}
-	db, err := sqlx.Open("mysql", "root:@/sbt")
+	db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/sbt", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
 	if err != nil {
 		return err
 	}
