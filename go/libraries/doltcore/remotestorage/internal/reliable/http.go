@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -136,10 +138,10 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 			stats.RecordTimeToFirstByte(hedgeN, retry, length, time.Since(start))
 
 			reader := &AtomicCountingReader{r: resp.Body}
-			cleanup := EnforceThroughput(reader.Count, downThroughputCheck, func() {
-				cCause(ErrThroughputTooLow)
+			cleanup := EnforceThroughput(reader.Count, downThroughputCheck, func(err error) {
+				cCause(err)
 			})
-			n, err := io.Copy(w, resp.Body)
+			n, err := io.Copy(w, reader)
 			cleanup()
 			offset += uint64(n)
 			if err == nil {
@@ -149,13 +151,18 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, fetcher HT
 				// Reader closed; bail.
 				return backoff.Permanent(err)
 			} else {
+				if cerr := context.Cause(ctx); errors.Is(err, context.Canceled) && cerr != nil {
+					err = cerr
+				}
 				// Let backoff decide when and if we retry.
+				fmt.Fprintf(color.Error, color.RedString("error from io.Copy: %v\n", err))
 				return err
 			}
 		}
 		start := time.Now()
 		err := backoff.Retry(op, downloadBackOff(ctx))
 		if err != nil {
+			fmt.Fprintf(color.Error, color.RedString("error from backoff.Retry: %v\n", err))
 			w.CloseWithError(err)
 		} else {
 			stats.RecordDownloadComplete(hedgeN, retry, length, time.Since(start))
@@ -188,7 +195,7 @@ func (r *AtomicCountingReader) Count() uint64 {
 // source. If the rate by which |cnt| is increasing drops below the configured
 // threshold for too long, it will call |cancel|.  EnforceThroughput should be
 // cleaned up by calling |cleanup| once whatever it is monitoring is finished.
-func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams, cancel func()) (cleanup func()) {
+func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams, cancel func(error)) (cleanup func()) {
 	done := make(chan struct{})
 	go func() {
 		n := params.NumIntervals
@@ -198,6 +205,7 @@ func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams
 			t time.Time
 		}
 		var points []point
+		var cntPerMilli uint64
 		tooSlow := func() bool {
 			if len(points) < n {
 				return false
@@ -206,7 +214,7 @@ func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams
 			points = points[:n]
 			dur := points[n-1].t.Sub(points[0].t)
 			cnt := points[n-1].c - points[0].c
-			cntPerMilli := cnt / uint64(dur/time.Millisecond)
+			cntPerMilli = cnt / uint64(dur/time.Millisecond)
 			if cntPerMilli < targetPerMilli {
 				return true
 			}
@@ -217,7 +225,9 @@ func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams
 			case <-time.After(params.CheckInterval):
 				points = append(points, point{cnt(), time.Now()})
 				if tooSlow() {
-					cancel()
+					cancel(fmt.Errorf("%w: needed %d bytes per milli, got %d; %d bytes at %v, %d bytes at %v",
+						ErrThroughputTooLow, targetPerMilli, cntPerMilli, points[0].c, points[0].t,
+						points[n-1].c, points[n-1].t))
 					return
 				}
 			case <-done:

@@ -88,7 +88,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
-		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), 16 /*dcs.concurrency.ConcurrentSmallFetches*/, dcs.concurrency.ConcurrentLargeFetches)
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), 128 /*dcs.concurrency.ConcurrentSmallFetches*/, dcs.concurrency.ConcurrentLargeFetches)
 	})
 
 	return ret
@@ -213,6 +213,13 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 				if !ok {
 					return stream.CloseSend()
 				}
+				// TODO: There is no timeout or deadline here.
+				// We could impose one with a cancelable
+				// context and some ticking here, or we could
+				// impose one in the sending thread,
+				// fetcherHashSetToGetDlLocsReqsThread, which
+				// could timeout if it can't deliver a download
+				// locs request here for a long time...
 				err := stream.Send(req)
 				if err != nil {
 					return NewRpcError(err, "StreamDownloadLocations", host, req)
@@ -398,38 +405,6 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 					downloads.Add(loc)
 				}
 			}
-		case req, ok := <-locCh:
-			if !ok {
-				locCh = nil
-			} else {
-				for _, loc := range req {
-					downloads.Add(loc)
-				}
-			}
-		case req, ok := <-locCh:
-			if !ok {
-				locCh = nil
-			} else {
-				for _, loc := range req {
-					downloads.Add(loc)
-				}
-			}
-		case req, ok := <-locCh:
-			if !ok {
-				locCh = nil
-			} else {
-				for _, loc := range req {
-					downloads.Add(loc)
-				}
-			}
-		case req, ok := <-locCh:
-			if !ok {
-				locCh = nil
-			} else {
-				for _, loc := range req {
-					downloads.Add(loc)
-				}
-			}
 		case req := <-fetchReqCh:
 			pending = append(pending, req)
 		case <-ctx.Done():
@@ -439,6 +414,15 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 }
 
 func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, largeFetchSz uint64, smallFetches, largeFetches int) error {
+	// TODO: Get rid of hedging, just use the retrying range downloader + the streaming chunker.
+	// In exchange, use an adaptive concurrency policy. Try something like this:
+	// Start at a concurrency of 16. Every successfully completed request
+	// that does not retry increases concurrency by one. Every request that
+	// requires a retry decreases concurrency to 1/2 of its current value.
+	// Each time the concurrency decreases, the |epoch| of the tuning
+	// parameters changes. Failures only effect their own epoch, so at most
+	// one 1/2-en-ing before we have another batch of 1/2n requests which
+	// can require retries and 1/2 again.
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < smallFetches; i++ {
 		eg.Go(func() error {

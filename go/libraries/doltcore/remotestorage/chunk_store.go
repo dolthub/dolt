@@ -94,8 +94,8 @@ func uploadBackOff(ctx context.Context) backoff.BackOff {
 	return backoff.WithContext(backoff.WithMaxRetries(ret, uploadRetryCount), ctx)
 }
 
-// Only hedge downloads of ranges < 4MB in length for now.
-const HedgeDownloadSizeLimit = 4 * 1024 * 1024
+// Only hedge downloads of ranges < 1MB in length for now.
+const HedgeDownloadSizeLimit = 0 * 1024 * 1024
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)

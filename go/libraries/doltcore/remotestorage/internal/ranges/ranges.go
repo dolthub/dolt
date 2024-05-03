@@ -51,7 +51,7 @@ const (
 	HeapStrategy_random
 )
 
-var strategy = HeapStrategy_largest
+var strategy = HeapStrategy_smallest
 
 func (rh RegionHeap) Less(i, j int) bool {
 	leni := rh[i].EndOffset - rh[i].StartOffset

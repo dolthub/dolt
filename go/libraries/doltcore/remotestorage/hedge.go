@@ -115,7 +115,7 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 		case <-h.after(nextTry):
 			try()
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, context.Cause(ctx)
 		}
 	}
 }
