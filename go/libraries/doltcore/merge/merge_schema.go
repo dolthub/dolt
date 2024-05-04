@@ -583,7 +583,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs == nil && anc != nil:
 				// Column doesn't exist on their side, but does exist in ancestor
 				// This means the column was deleted on theirs side
-				if !anc.Equals(*ours) {
+				if !anc.EqualsWithoutTag(*ours) {
 					// col altered on our branch and deleted on their branch
 					conflicts = append(conflicts, ColConflict{
 						Kind: NameCollision,
@@ -623,7 +623,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs != nil && anc != nil:
 				// Column exists on their side and in ancestor
 				// If ancs doesn't match theirs, the column was altered on both sides
-				if !anc.Equals(*theirs) {
+				if !anc.EqualsWithoutTag(*theirs) {
 					// col deleted on our branch and altered on their branch
 					conflicts = append(conflicts, ColConflict{
 						Kind:   NameCollision,
