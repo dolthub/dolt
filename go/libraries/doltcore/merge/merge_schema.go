@@ -1355,7 +1355,7 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 func ColumnsFromCheckDefinition(ctx *sql.Context, def *sql.CheckDefinition) ([]string, error) {
 	// Evaluate the CheckDefinition to get evaluated Expression
 	parseStr := fmt.Sprintf("select %s", def.CheckExpression)
-	parsed, _, _, err := ctx.Parser.Parse(ctx, parseStr, false)
+	parsed, err := ast.Parse(parseStr)
 	if err != nil {
 		return nil, err
 	}

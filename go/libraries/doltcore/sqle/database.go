@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -1330,28 +1329,19 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, _, _, err := ctx.Parser.ParseWithOptions(fragments[i].fragment, ';', false, sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
-		if err != nil {
-			return nil, sql.ViewDefinition{}, false, err
-		}
-
-		createView, ok := cv.(*sqlparser.DDL)
-		if ok {
-			selectStr := createView.SubStatementStr
-			if selectStr == "" {
-				selectStr = fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
-			}
-			views[i] = sql.ViewDefinition{
-				Name:                fragments[i].name,
-				TextDefinition:      selectStr,
-				CreateViewStatement: fragments[i].fragment,
-				SqlMode:             fragment.sqlMode,
-			}
-		} else {
+		if strings.HasPrefix(strings.ToLower(fragments[i].fragment), "select") {
+			// older versions
 			views[i] = sql.ViewDefinition{
 				Name:                fragments[i].name,
 				TextDefinition:      fragments[i].fragment,
 				CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment),
+			}
+		} else {
+			views[i] = sql.ViewDefinition{
+				Name: fragments[i].name,
+				// TODO: need to define TextDefinition
+				CreateViewStatement: fragments[i].fragment,
+				SqlMode:             fragment.sqlMode,
 			}
 		}
 
@@ -1543,7 +1533,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx))
+	b := planbuilder.New(ctx, db.getCatalog(ctx), nil)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), false)
 	if err != nil {

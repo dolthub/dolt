@@ -624,7 +624,9 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			continue
 		}
 
-		sqlStatement, _, _, err := ctx.Parser.Parse(ctx, query, false)
+		sqlMode := sql.LoadSqlMode(ctx)
+
+		sqlStatement, err := sqlparser.ParseWithOptions(query, sqlMode.ParserOptions())
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
@@ -1026,7 +1028,7 @@ func prepend(s string, ss []string) []string {
 // processQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
 func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Schema, sql.RowIter, error) {
-	sqlStatement, err := ctx.Parser.ParseSimple(query)
+	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
 		return nil, nil, nil
