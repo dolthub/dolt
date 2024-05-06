@@ -60,6 +60,9 @@ Index:
    +--------------+------------+-----------------+----------+
    | ByteSpan Map | Prefix Map | ChunkReferences | Suffixes |
    +--------------+------------+-----------------+----------+
+   - The Index is a concatenation of 4 sections, the first three of which are compressed as one stream. The Suffixes are
+     are not compressed because they won't compress well. For this reason there are two methods on the footer to get the
+     the two spans individually.
 
    ByteSpan Map:
        +------------------+------------------+-----+------------------+

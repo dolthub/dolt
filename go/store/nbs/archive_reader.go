@@ -63,12 +63,27 @@ func (f footer) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
-// indexSpan returns the span of the index section of the archive.
-func (f footer) indexSpan() byteSpan {
+// totalIndexSpan returns the span of the entire index section of the archive. This span is not directly useful as
+// the index is broken into a compressed section and an uncompressed section. Use indexCompressedSpan and indexSuffixSpan
+func (f footer) totalIndexSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
 }
 
-// matadataSpan returns the span of the metadata section of the archive.
+// indexCompressedSpan returns the span of the index section of the archive.
+func (f footer) indexCompressedSpan() byteSpan {
+	suffixLen := uint64(f.chunkCount * hash.SuffixLen)
+	totalIdx := f.totalIndexSpan()
+	return byteSpan{offset: totalIdx.offset, length: totalIdx.length - suffixLen}
+}
+
+func (f footer) indexSuffixSpan() byteSpan {
+	suffixLen := uint64(f.chunkCount * hash.SuffixLen)
+	totalIdx := f.totalIndexSpan()
+	compressedLen := totalIdx.length - suffixLen
+
+	return byteSpan{totalIdx.offset + compressedLen, suffixLen}
+}
+
 func (f footer) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
@@ -79,7 +94,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		return archiveReader{}, err
 	}
 
-	indexSpan := footer.indexSpan()
+	indexSpan := footer.indexCompressedSpan()
 	secRdr := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
 	rawReader := bufio.NewReader(secRdr)
 
@@ -141,20 +156,21 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		chunks[i] = chunkRef{dict: uint32(dict64), data: uint32(data64)}
 	}
 
-	suffixes := make([]suffix, footer.chunkCount)
-	for i := uint32(0); i < footer.chunkCount; i++ {
-		n, err := io.ReadFull(byteReader, suffixes[i][:])
-		if err != nil {
-			return archiveReader{}, err
-		}
-		if n != hash.SuffixLen {
-			return archiveReader{}, io.ErrUnexpectedEOF
-		}
-	}
-
+	// Wait for all compressed data to finish.
 	err, _ = <-errChan
 	if err != nil {
 		return archiveReader{}, err
+	}
+
+	suffixSpan := footer.indexSuffixSpan()
+	sufRdr := io.NewSectionReader(reader, int64(suffixSpan.offset), int64(suffixSpan.length))
+	sufReader := bufio.NewReader(sufRdr)
+	suffixes := make([]suffix, footer.chunkCount)
+	for i := uint32(0); i < footer.chunkCount; i++ {
+		_, err := io.ReadFull(sufReader, suffixes[i][:])
+		if err != nil {
+			return archiveReader{}, err
+		}
 	}
 
 	return archiveReader{
@@ -305,7 +321,7 @@ func (ai archiveReader) verifyDataCheckSum() error {
 
 // verifyIndexCheckSum verifies the checksum of the index section of the archive.
 func (ai archiveReader) verifyIndexCheckSum() error {
-	return verifyCheckSum(ai.reader, ai.footer.indexSpan(), ai.footer.indexCheckSum)
+	return verifyCheckSum(ai.reader, ai.footer.totalIndexSpan(), ai.footer.indexCheckSum)
 }
 
 // verifyMetaCheckSum verifies the checksum of the metadata section of the archive.

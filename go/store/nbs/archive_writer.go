@@ -226,26 +226,29 @@ func (aw *archiveWriter) writeIndex() error {
 			return err
 		}
 	}
-	// Suffixes
-	for _, scr := range aw.stagedChunks {
-		_, err := wrtr.Write(scr.hash.Suffix())
-		if err != nil {
-			return err
-		}
-	}
 
+	// Stop compressing data going to the output sink
 	err := wrtr.Close()
 	if err != nil {
 		return err
 	}
-
 	err, _ = <-errCh
 	if err != nil {
 		return err
 	}
+	indexSize := outCount.count
 
-	aw.indexLen = uint32(outCount.count)
-	aw.bytesWritten += outCount.count
+	// Suffixes (uncompresssed)
+	for _, scr := range aw.stagedChunks {
+		_, err := aw.output.Write(scr.hash.Suffix())
+		if err != nil {
+			return err
+		}
+		indexSize += hash.SuffixLen
+	}
+
+	aw.indexLen = uint32(indexSize)
+	aw.bytesWritten += indexSize
 	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata

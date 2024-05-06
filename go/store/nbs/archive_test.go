@@ -48,8 +48,8 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.writeIndex()
 	assert.NoError(t, err)
 	// The 'uncompressed' size of the index is 23 bytes. Compressing such small data is not worth it, but we do verify
-	// that the index is 35 bytes in this situation.
-	assert.Equal(t, uint32(37), aw.indexLen)
+	// that the index is 42 bytes in this situation.
+	assert.Equal(t, uint32(42), aw.indexLen)
 
 	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
@@ -57,7 +57,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.writeFooter()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 10+37+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 37 index bytes + footer
+	assert.Equal(t, 10+42+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 42 index bytes + footer
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
@@ -86,7 +86,7 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 	err := aw.stageChunk(h, 1, 2)
 	assert.NoError(t, err)
 
-	aw.finalizeByteSpans()
+	_ = aw.finalizeByteSpans()
 	_ = aw.writeIndex()
 	_ = aw.writeMetadata([]byte(""))
 	err = aw.writeFooter()
@@ -327,16 +327,16 @@ func TestArchiveCheckSumValidations(t *testing.T) {
 
 	err = rdr.verifyDataCheckSum()
 	assert.NoError(t, err)
-	err = rdr.verifyDataCheckSum()
+	err = rdr.verifyIndexCheckSum()
 	assert.NoError(t, err)
-	err = rdr.verifyDataCheckSum()
+	err = rdr.verifyMetaCheckSum()
 	assert.NoError(t, err)
 
 	theBytes[5] = theBytes[5] + 1
 	err = rdr.verifyDataCheckSum()
 	assert.ErrorContains(t, err, "checksum mismatch")
 
-	offset := rdr.footer.indexSpan().offset + 2
+	offset := rdr.footer.totalIndexSpan().offset + 2
 	theBytes[offset] = theBytes[offset] + 1
 	err = rdr.verifyIndexCheckSum()
 	assert.ErrorContains(t, err, "checksum mismatch")
