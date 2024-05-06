@@ -126,12 +126,11 @@ func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) err
 	if aw.seenChunks.Has(hash) {
 		return ErrDuplicateChunkWritten
 	}
-	aw.seenChunks.Insert(hash)
-
 	if dictionary > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidDictionaryRange
 	}
 
+	aw.seenChunks.Insert(hash)
 	aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{hash, dictionary, data})
 	return nil
 }
