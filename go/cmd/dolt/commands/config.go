@@ -233,7 +233,7 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 		case globalParamName:
 			panic("Should not have been able to get this far without a global config.")
 		case localParamName:
-			err := dEnv.Config.CreateLocalConfig(updates)
+			err := dEnv.Config.CreateLocalConfig(dEnv.FS, updates)
 			if err != nil {
 				cli.PrintErrln(color.RedString("Unable to create repo local config file"))
 				return 1

@@ -36,7 +36,7 @@ func initializeConfigs(dEnv *env.DoltEnv, element env.ConfigScope) {
 		globalCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 		globalCfg.SetStrings(map[string]string{"title": "senior dufus"})
 	case env.LocalConfig:
-		dEnv.Config.CreateLocalConfig(map[string]string{"title": "senior dufus"})
+		dEnv.Config.CreateLocalConfig(dEnv.FS, map[string]string{"title": "senior dufus"})
 	}
 }
 func TestConfigAdd(t *testing.T) {

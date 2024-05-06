@@ -457,7 +457,7 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 }
 
 func (dEnv *DoltEnv) configureRepo(doltDir string) error {
-	err := dEnv.Config.CreateLocalConfig(map[string]string{})
+	err := dEnv.Config.CreateLocalConfig(dEnv.FS, map[string]string{})
 
 	if err != nil {
 		return fmt.Errorf("failed creating file %s", getLocalConfigPath())

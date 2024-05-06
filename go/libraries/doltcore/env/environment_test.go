@@ -129,7 +129,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 	require.NoError(t, dEnv.CfgLoadErr)
 	// RSLoadErr will be set because the above method of creating the repo doesn't initialize a valid working or staged
 
-	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	err := dEnv.Config.CreateLocalConfig(dEnv.FS, map[string]string{"user.name": "bheni"})
 	require.NoError(t, err)
 
 	if !dEnv.HasLocalConfig() {
