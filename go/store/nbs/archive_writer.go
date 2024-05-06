@@ -22,9 +22,10 @@ import (
 	"io"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
 	"github.com/pkg/errors"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type stagedByteSpanSlice []byteSpan
