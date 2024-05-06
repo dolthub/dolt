@@ -16,8 +16,9 @@ package enginetest
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
