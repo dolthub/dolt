@@ -265,19 +265,13 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	return result, nil
 }
 
-func (ai archiveReader) readByteSpan(buff []byte, bs byteSpan) ([]byte, error) {
-	if len(buff) < int(bs.length) {
-		return nil, io.ErrShortBuffer
-	}
-
-	read, err := ai.reader.ReadAt(buff[:bs.length], int64(bs.offset))
+func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
+	buff := make([]byte, bs.length)
+	_, err := ai.reader.ReadAt(buff[:], int64(bs.offset))
 	if err != nil {
 		return nil, err
 	}
-	if uint64(read) != bs.length {
-		return nil, io.ErrUnexpectedEOF
-	}
-	return buff[:bs.length], nil
+	return buff, nil
 }
 
 // getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
@@ -293,16 +287,14 @@ func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 	chunkRef := ai.chunkRefs[idx]
 	if chunkRef.dict != 0 {
 		byteSpan := ai.byteSpans[chunkRef.dict]
-		dict = make([]byte, byteSpan.length)
-		dict, err = ai.readByteSpan(dict, byteSpan)
+		dict, err = ai.readByteSpan(byteSpan)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	byteSpan := ai.byteSpans[chunkRef.data]
-	data = make([]byte, byteSpan.length)
-	data, err = ai.readByteSpan(data, byteSpan)
+	data, err = ai.readByteSpan(byteSpan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -310,9 +302,7 @@ func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 }
 
 func (ai archiveReader) getMetadata() ([]byte, error) {
-	span := ai.footer.metadataSpan()
-	data := make([]byte, span.length)
-	return ai.readByteSpan(data, span)
+	return ai.readByteSpan(ai.footer.metadataSpan())
 }
 
 // verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
