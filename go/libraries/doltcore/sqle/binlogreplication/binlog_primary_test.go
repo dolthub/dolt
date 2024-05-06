@@ -42,7 +42,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"b1 bit(10), " +
 		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'), " +
 		"ch1 char(10), ch2 char(255)," +
-		"d1 decimal(14, 4), d2 decimal(14, 4), d3 decimal(14, 4)," +
+		"d1 decimal(14, 4), d2 decimal(14, 4), d3 decimal(14, 4), d4 decimal(10, 0), " +
 		"bl1 blob, " +
 		"tx1 text," +
 		"bin1 binary(10), vbin1 varbinary(20)," +
@@ -67,7 +67,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"b'0100000011', " +
 		"'green', 'pants,tie,belt'," +
 		"'purple', 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz'," +
-		"1234567890.1234, -1234567890.1234, 1234567890.0001," +
+		"1234567890.1234, -1234567890.1234, 1234567890.0001, 10.0," +
 		"0x010203," +
 		"'text text text'," +
 		"0x0102030405, 0x0102030405060708090a," +
@@ -104,7 +104,7 @@ func TestBinlogPrimary(t *testing.T) {
 			"\x01\x03",
 			"green", "pants,tie,belt",
 			"purple", "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz",
-			"1234567890.1234", "-1234567890.1234", "1234567890.0001",
+			"1234567890.1234", "-1234567890.1234", "1234567890.0001", "10",
 			"\x01\x02\x03",
 			"text text text",
 			"\x01\x02\x03\x04\x05\x00\x00\x00\x00\x00", "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a",
