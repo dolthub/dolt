@@ -220,31 +220,22 @@ func (aw *archiveWriter) writeIndex() error {
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {
 		n := binary.PutUvarint(varIbuf, uint64(scr.dictionary))
-		written, err := wrtr.Write(varIbuf[:n])
+		_, err := wrtr.Write(varIbuf[:n])
 		if err != nil {
 			return err
-		}
-		if written != n {
-			return io.ErrShortWrite
 		}
 
 		n = binary.PutUvarint(varIbuf, uint64(scr.data))
-		written, err = wrtr.Write(varIbuf[:n])
+		_, err = wrtr.Write(varIbuf[:n])
 		if err != nil {
 			return err
-		}
-		if written != n {
-			return io.ErrShortWrite
 		}
 	}
 	// Suffixes
 	for _, scr := range aw.stagedChunks {
-		n, err := wrtr.Write(scr.hash.Suffix())
+		_, err := wrtr.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
-		}
-		if n != hash.SuffixLen {
-			return io.ErrShortWrite
 		}
 	}
 
@@ -283,9 +274,6 @@ func (aw *archiveWriter) writeMetadata(data []byte) error {
 	written, err := aw.output.Write(data)
 	if err != nil {
 		return err
-	}
-	if written != len(data) {
-		return io.ErrShortWrite
 	}
 	aw.bytesWritten += uint64(written)
 	aw.metadataLen = uint32(written)
@@ -363,31 +351,20 @@ func (aw *archiveWriter) writeCheckSums() error {
 }
 
 func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
-	n, err := aw.output.Write(sha[:])
+	_, err := aw.output.Write(sha[:])
 	if err != nil {
 		return err
 	}
-	if n != sha512.Size {
-		return io.ErrShortWrite
-	}
+
 	aw.bytesWritten += sha512.Size
 	return nil
 }
 
 // Write a uint32 to the archive. Increments the bytesWritten field.
 func (aw *archiveWriter) writeUint32(val uint32) error {
-	bb := &bytes.Buffer{}
-	err := binary.Write(bb, binary.BigEndian, val)
+	err := binary.Write(aw.output, binary.BigEndian, val)
 	if err != nil {
 		return err
-	}
-
-	n, err := aw.output.Write(bb.Bytes())
-	if err != nil {
-		return err
-	}
-	if n != uint32Size {
-		return io.ErrShortWrite
 	}
 
 	aw.bytesWritten += uint32Size
