@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 type HTTPFetcher interface {
@@ -42,13 +40,6 @@ type StreamingResponse struct {
 func (r StreamingResponse) Close() error {
 	r.cancel()
 	return nil
-}
-
-// We may need this to be configurable for users with really bad internet
-var downThroughputCheck = iohelp.MinThroughputCheckParams{
-	MinBytesPerSec: 1024,
-	CheckInterval:  1 * time.Second,
-	NumIntervals:   5,
 }
 
 type StatsRecorder interface {
