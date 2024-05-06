@@ -598,8 +598,14 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	ddb := db.(Database).ddb
-	err := ddb.Close()
+	var database *doltdb.DoltDB
+	if ddb, ok := db.(Database); ok {
+		database = ddb.ddb
+	} else {
+		return fmt.Errorf("unable to drop database: %s", name)
+	}
+
+	err := database.Close()
 	if err != nil {
 		return err
 	}
