@@ -21,13 +21,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // typeSerializer defines the serialization interface for serializing a value in Dolt's
@@ -291,6 +292,8 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 				decimalValue.Exponent(), decimalValue.String())
 		}
 
+		// Load the value into a fully padded (to precision and scale) string format,
+		// so that we can process the digit groups for the binary encoding.
 		absStringVal := decimalValue.Abs().StringFixed(int32(scale))
 		stringIntegerVal := absStringVal
 		stringFractionalVal := ""

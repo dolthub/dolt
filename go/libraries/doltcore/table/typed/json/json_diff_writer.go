@@ -27,28 +27,28 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
-type JsonDiffWriter struct {
+type jsonRowDiffWriter struct {
 	rowWriter   *RowWriter
 	wr          io.WriteCloser
 	inModified  bool
 	rowsWritten int
 }
 
-var _ diff.SqlRowDiffWriter = (*JsonDiffWriter)(nil)
+var _ diff.SqlRowDiffWriter = (*jsonRowDiffWriter)(nil)
 
-func NewJsonDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*JsonDiffWriter, error) {
+func NewJSONRowDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*jsonRowDiffWriter, error) {
 	writer, err := NewJSONWriterWithHeader(iohelp.NopWrCloser(wr), outSch, "", "", "")
 	if err != nil {
 		return nil, err
 	}
 
-	return &JsonDiffWriter{
+	return &jsonRowDiffWriter{
 		rowWriter: writer,
 		wr:        wr,
 	}, nil
 }
 
-func (j *JsonDiffWriter) WriteRow(
+func (j *jsonRowDiffWriter) WriteRow(
 	ctx context.Context,
 	row sql.Row,
 	rowDiffType diff.ChangeType,
@@ -127,11 +127,11 @@ func (j *JsonDiffWriter) WriteRow(
 	return nil
 }
 
-func (j *JsonDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+func (j *jsonRowDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
 	return fmt.Errorf("json format is unable to output diffs for combined rows")
 }
 
-func (j *JsonDiffWriter) Close(ctx context.Context) error {
+func (j *jsonRowDiffWriter) Close(ctx context.Context) error {
 	err := iohelp.WriteAll(j.wr, []byte("]"))
 	if err != nil {
 		return err
@@ -152,8 +152,9 @@ type SchemaDiffWriter struct {
 
 var _ diff.SchemaDiffWriter = (*SchemaDiffWriter)(nil)
 
-const jsonSchemaHeader = `[`
-const jsonSchemaFooter = `]`
+const jsonSchemaHeader = `"schema_diff":[`
+const jsonSchemaFooter = `],`
+const jsonSchemaSep = `,`
 
 func NewSchemaDiffWriter(wr io.WriteCloser) (*SchemaDiffWriter, error) {
 	err := iohelp.WriteAll(wr, []byte(jsonSchemaHeader))
@@ -168,24 +169,35 @@ func NewSchemaDiffWriter(wr io.WriteCloser) (*SchemaDiffWriter, error) {
 
 func (j *SchemaDiffWriter) WriteSchemaDiff(schemaDiffStatement string) error {
 	if j.schemaStmtsWritten > 0 {
-		err := iohelp.WriteAll(j.wr, []byte(","))
+		err := iohelp.WriteAll(j.wr, []byte(jsonSchemaSep))
 		if err != nil {
 			return err
 		}
 	}
 
+	jsonSchemaDiffStmt := fmt.Sprintf("%s", jsonEscape(schemaDiffStatement))
+	err := iohelp.WriteAll(j.wr, []byte(jsonSchemaDiffStmt))
+	if err != nil {
+		return err
+	}
+
 	j.schemaStmtsWritten++
 
-	return iohelp.WriteAll(j.wr, []byte(fmt.Sprintf(`"%s"`, jsonEscape(schemaDiffStatement))))
+	return nil
 }
 
-func (j *SchemaDiffWriter) Close(ctx context.Context) error {
+func (j *SchemaDiffWriter) Close() error {
 	err := iohelp.WriteAll(j.wr, []byte(jsonSchemaFooter))
 	if err != nil {
 		return err
 	}
 
-	return j.wr.Close()
+	err = j.wr.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func jsonEscape(s string) string {
@@ -193,6 +205,5 @@ func jsonEscape(s string) string {
 	if err != nil {
 		panic(err)
 	}
-	// Trim the beginning and trailing " character
-	return string(b[1 : len(b)-1])
+	return string(b)
 }
