@@ -90,6 +90,7 @@ Index:
            +-------------------------------+--------------------------+
         - Dictionary: ID for a ByteSpan to be used as zstd dictionary. 0 refers to the empty ByteSpan, which indicates no dictionary.
         - Chunk: ID for the ByteSpan containing the Chunk data. Never 0.
+        - Dictionary and Chunk ByteSpans are constrained to be uint32, which is plenty. Varints can exceed this value, but we constrain them.
 
    Suffixes:
        +--------------------+--------------------+-----+----------------------+

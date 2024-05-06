@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/dolthub/gozstd"
 	"github.com/pkg/errors"
@@ -132,6 +133,11 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		if err != nil {
 			return archiveReader{}, err
 		}
+
+		if dict64 > math.MaxUint32 || data64 > math.MaxUint32 {
+			return archiveReader{}, errors.New("invalid chunk reference. Chunk references must be 32-bit unsigned integers.")
+		}
+
 		chunks[i] = chunkRef{dict: uint32(dict64), data: uint32(data64)}
 	}
 
