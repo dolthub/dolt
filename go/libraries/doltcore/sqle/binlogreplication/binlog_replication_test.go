@@ -768,7 +768,13 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	return mySqlPort, cmd.Process, nil
 }
 
+var cachedDoltDevBuildPath = ""
+
 func initializeDevDoltBuild(dir string, goDirPath string) string {
+	if cachedDoltDevBuildPath != "" {
+		return cachedDoltDevBuildPath
+	}
+
 	// If we're not in a CI environment, don't worry about building a dev build
 	if os.Getenv("CI") != "true" {
 		return ""
@@ -790,7 +796,9 @@ func initializeDevDoltBuild(dir string, goDirPath string) string {
 	if err != nil {
 		panic("unable to build dolt for binlog integration tests: " + err.Error() + "\nFull output: " + string(output) + "\n")
 	}
-	return fullpath
+	cachedDoltDevBuildPath = fullpath
+
+	return cachedDoltDevBuildPath
 }
 
 func startDoltSqlServer(dir string) (int, *os.Process, error) {
