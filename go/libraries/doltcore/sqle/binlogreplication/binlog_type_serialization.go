@@ -292,7 +292,7 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 				decimalValue.Exponent(), decimalValue.String())
 		}
 
-		// Load the value into a fully padded (to precision and scale) string format, 
+		// Load the value into a fully padded (to precision and scale) string format,
 		// so that we can process the digit groups for the binary encoding.
 		absStringVal := decimalValue.Abs().StringFixed(int32(scale))
 		stringIntegerVal := absStringVal
