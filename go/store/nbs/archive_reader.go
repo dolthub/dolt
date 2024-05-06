@@ -164,14 +164,9 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 
-	bytesRead := 0
 	buf := make([]byte, archiveFooterSize)
-	bytesRead, err = section.Read(buf)
+	_, err = io.ReadFull(section, buf)
 	if err != nil {
-		return
-	}
-	if bytesRead != int(archiveFooterSize) {
-		err = io.ErrUnexpectedEOF
 		return
 	}
 
