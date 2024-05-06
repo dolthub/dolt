@@ -85,7 +85,7 @@ func Serve(
 		controller = svcs.NewController()
 	}
 
-	ConfigureServices(serverConfig, controller, version, dEnv)
+	ConfigureServices(serverConfig, controller, version, dEnv, sql.NewMysqlParser())
 
 	go controller.Start(ctx)
 	err := controller.WaitForStart()
@@ -100,6 +100,7 @@ func ConfigureServices(
 	controller *svcs.Controller,
 	version string,
 	dEnv *env.DoltEnv,
+	parser sql.Parser,
 ) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
@@ -237,6 +238,7 @@ func ConfigureServices(
 				SystemVariables:         serverConfig.SystemVars(),
 				ClusterController:       clusterController,
 				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
+				Parser:                  parser,
 			}
 			return nil
 		},

@@ -1354,9 +1354,8 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 // ColumnsFromCheckDefinition retrieves the Column Names referenced by a CheckDefinition
 func ColumnsFromCheckDefinition(ctx *sql.Context, def *sql.CheckDefinition) ([]string, error) {
 	// Evaluate the CheckDefinition to get evaluated Expression
-	// TODO: need to use parser from the engine
 	parseStr := fmt.Sprintf("select %s", def.CheckExpression)
-	parsed, err := ast.Parse(parseStr)
+	parsed, _, _, err := ctx.Parser.Parse(ctx, parseStr, false)
 	if err != nil {
 		return nil, err
 	}

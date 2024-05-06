@@ -1309,7 +1309,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, db.getCatalog(ctx), tbl.(*WritableDoltTable), viewName)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1320,7 +1320,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	return viewDef, found, nil
 }
 
-func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, cat *analyzer.Catalog, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
 	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
 	if err != nil {
 		return nil, sql.ViewDefinition{}, false, err
@@ -1330,14 +1330,17 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, cat *analyzer.
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, _, _, err := cat.GetParser().ParseWithOptions(fragments[i].fragment, ';', false, sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
+		cv, _, _, err := ctx.Parser.ParseWithOptions(fragments[i].fragment, ';', false, sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
 
 		createView, ok := cv.(*sqlparser.DDL)
 		if ok {
-			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
+			selectStr := createView.SubStatementStr
+			if selectStr == "" {
+				selectStr = fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
+			}
 			views[i] = sql.ViewDefinition{
 				Name:                fragments[i].name,
 				TextDefinition:      selectStr,
@@ -1371,7 +1374,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, db.getCatalog(ctx), tbl.(*WritableDoltTable), "")
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), "")
 	if err != nil {
 		return nil, err
 	}

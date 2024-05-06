@@ -871,7 +871,7 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 		createStmt += ";"
 	}
 
-	sch, err = schemaFromCreateTableStmt(createStmt)
+	sch, err = schemaFromCreateTableStmt(sqlCtx, createStmt)
 	if err != nil {
 		return sch, createStmt, err
 	}
@@ -881,9 +881,8 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 
 // schemaFromCreateTableStmt returns a schema for the CREATE TABLE statement given
 // TODO: this is substantially incorrect, doesn't handle primary key ordering, probably other things too
-func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
-	// TODO: need to use parser from the engine
-	parsed, err := ast.Parse(createTableStmt)
+func schemaFromCreateTableStmt(ctx *sql.Context, createTableStmt string) (schema.Schema, error) {
+	parsed, _, _, err := ctx.Parser.Parse(ctx, createTableStmt, false)
 	if err != nil {
 		return nil, err
 	}
