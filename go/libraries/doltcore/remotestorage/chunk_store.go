@@ -85,8 +85,8 @@ type NetworkRequestParams struct {
 }
 
 var defaultRequestParams = NetworkRequestParams{
-	StartingConcurrentDownloads:    16,
-	MaximumConcurrentDownloads:     16,
+	StartingConcurrentDownloads:    64,
+	MaximumConcurrentDownloads:     64,
 	UploadRetryCount:               5,
 	DownloadRetryCount:             5,
 	ThroughputMinimumCheckInterval: time.Second,
@@ -428,12 +428,12 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 		}
 		rangeLen := gr.RangeLen()
 		resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
-			Fetcher:     fetcher,
-			Offset:      gr.ChunkStartOffset(0),
-			Length:      rangeLen,
-			UrlFact:     urlF,
-			Stats:       stats,
-			Health:      health,
+			Fetcher: fetcher,
+			Offset:  gr.ChunkStartOffset(0),
+			Length:  rangeLen,
+			UrlFact: urlF,
+			Stats:   stats,
+			Health:  health,
 			BackOffFact: func(ctx context.Context) backoff.BackOff {
 				return downloadBackOff(ctx, params.DownloadRetryCount)
 			},

@@ -23,8 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fatih/color"
-
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -145,14 +143,12 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			start := time.Now()
 			resp, err := req.Fetcher.Do(httpReq.WithContext(ctx))
 			if err != nil {
-				fmt.Fprintf(color.Error, color.RedString("error from HTTP Do: %v\n", err))
 				req.Health.RecordFailure()
 				return err
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode/100 != 2 {
 				req.Health.RecordFailure()
-				fmt.Fprintf(color.Error, color.RedString("error from HTTP StatusCode: %v\n", resp.StatusCode))
 				return fmt.Errorf("%w: %d", ErrHttpStatus, resp.StatusCode)
 			}
 			req.Stats.RecordTimeToFirstByte(retry, req.Length, time.Since(start))
@@ -176,7 +172,6 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 					err = cerr
 				}
 				// Let backoff decide when and if we retry.
-				fmt.Fprintf(color.Error, color.RedString("error from io.Copy: %v\n", err))
 				req.Health.RecordFailure()
 				return err
 			}
@@ -184,7 +179,6 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 		start := time.Now()
 		err := backoff.Retry(op, req.BackOffFact(ctx))
 		if err != nil {
-			fmt.Fprintf(color.Error, color.RedString("error from backoff.Retry: %v\n", err))
 			w.CloseWithError(err)
 		} else {
 			req.Stats.RecordDownloadComplete(retry, req.Length, time.Since(start))

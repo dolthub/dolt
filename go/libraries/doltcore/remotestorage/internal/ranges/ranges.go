@@ -1,3 +1,17 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ranges
 
 import (
@@ -216,7 +230,10 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 	}
 }
 
-// Returns the biggest possible download we can get started on. Removes its Region from the tree.
+// Returns all the |*GetRange| entries in the tree that are encompassed by the
+// current top entry in our |RegionHeap|. For |HeapStrategy_largest|, this will
+// be the largest possible download we can currently start, given our
+// |coallesceLimit|.
 func (t *Tree) DeleteMaxRegion() []*GetRange {
 	if t.regions.Len() == 0 {
 		return nil

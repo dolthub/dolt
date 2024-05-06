@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -65,7 +64,6 @@ func (s *reliableCallStateMachine[Req, Resp]) run(ctx context.Context) error {
 }
 
 func (s *reliableCallStateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, error) {
-	fmt.Fprintf(color.Error, "%v grpc.reliable initial\n", time.Now())
 	select {
 	case _, ok := <-s.requests.Recv():
 		if !ok {
@@ -95,7 +93,6 @@ func (s *reliableCallStateMachine[Req, Resp]) stateForError(err error) (CtxState
 }
 
 func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error) {
-	fmt.Fprintf(color.Error, "%v grpc.reliable open\n", time.Now())
 	eg, sCtx := errgroup.WithContext(ctx)
 	stream, err := s.call.opts.Open(sCtx, s.call.opts.GrpcOpts...)
 	if err != nil {
@@ -122,7 +119,6 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 			case <-sCtx.Done():
 				return context.Cause(sCtx)
 			case <-timeout.C:
-				fmt.Fprintf(color.Error, "%v grpc.reliable open new request timeout\n", time.Now())
 				nextState = s.initial
 				return stream.CloseSend()
 			}
@@ -134,7 +130,6 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 		for {
 			resp, err := stream.Recv()
 			if err == io.EOF {
-				fmt.Fprintf(color.Error, "%v grpc.reliable read io.EOF\n", time.Now())
 				return nil
 			}
 			if err != nil {
@@ -154,7 +149,6 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 			case s.call.respCh <- reqResp[Req, Resp]{Req: req, Resp: resp}:
 				s.requests.Ack()
 			case <-timeout.C:
-				fmt.Fprintf(color.Error, "%v grpc.reliable deliver response timeout\n", time.Now())
 				// We signal this next state with an error, since we need the
 				// (possibly-blocked-on-network-sending) Send thread to see
 				// failure by having its context canceled.
@@ -180,7 +174,6 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 }
 
 func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxStateFunc, error) {
-	fmt.Fprintf(color.Error, "%v grpc.reliable blockForDeliverResp\n", time.Now())
 	req, ok := s.requests.Front()
 	if !ok {
 		return nil, errors.New("unexpected requests closed")
@@ -196,7 +189,6 @@ func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Co
 }
 
 func (s *reliableCallStateMachine[Req, Resp]) backoff(ctx context.Context) (CtxStateFunc, error) {
-	fmt.Fprintf(color.Error, "%v grpc.reliable backoff %v\n", time.Now(), s.duration)
 	select {
 	case <-time.After(s.duration):
 		return s.initial, nil

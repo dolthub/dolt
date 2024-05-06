@@ -17,12 +17,10 @@ package remotestorage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync/atomic"
 	"time"
 
-	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -448,7 +446,6 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 				ss.SetSize(sz)
 				justDecreased = true
 				next = 5 * time.Second
-				fmt.Fprintf(color.Error, color.RedString("concurrency at %d\n", sz))
 			} else {
 				next = 500 * time.Millisecond
 				s := cc.successes.Load()
@@ -459,7 +456,6 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 				}
 				cc.failures.Store(0)
 				justDecreased = false
-				fmt.Fprintf(color.Error, "concurrency at %d\n", sz)
 			}
 		case <-done:
 			return nil
