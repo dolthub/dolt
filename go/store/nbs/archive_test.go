@@ -392,15 +392,15 @@ func TestProllyBinSearch(t *testing.T) {
 	}
 
 	idx := prollyBinSearch(pf, pf[0]-1)
-	assert.Equal(t, -1, idx)
+	assert.Equal(t, 0, idx)
 	idx = prollyBinSearch(pf, pf[9999]+1)
-	assert.Equal(t, -1, idx)
+	assert.Equal(t, 10000, idx)
 
 	// 23 is not a dupe, and neighbors don't match. stable due to seed.
 	idx = prollyBinSearch(pf, pf[23]+1)
-	assert.Equal(t, -1, idx)
+	assert.Equal(t, 24, idx)
 	idx = prollyBinSearch(pf, pf[23]-1)
-	assert.Equal(t, -1, idx)
+	assert.Equal(t, 23, idx)
 
 }
 
@@ -428,26 +428,6 @@ func TestInsertRanges(t *testing.T) {
 
 	err = aw.stageChunk(h, 2, 1)
 	assert.Equal(t, ErrInvalidDictionaryRange, err)
-}
-
-func TestPrefixSearch(t *testing.T) {
-	pf := []uint64{2, 3, 4, 4, 4, 5, 6, 7, 10, 10, 11, 12, 13}
-
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 1))
-	assert.Equal(t, []int{0}, findMatchingPrefixes(pf, 2))
-	assert.Equal(t, []int{2, 3, 4}, findMatchingPrefixes(pf, 4))
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 8))
-	assert.Equal(t, []int{8, 9}, findMatchingPrefixes(pf, 10))
-	assert.Equal(t, []int{12}, findMatchingPrefixes(pf, 13))
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 14))
-
-	pf = []uint64{}
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 42))
-
-	pf = []uint64{23, 23, 23}
-	assert.Equal(t, []int{0, 1, 2}, findMatchingPrefixes(pf, 23))
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 24)) // Don't run off the end is busted ways.
-	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 22))
 }
 
 func TestFooterVersionAndSignature(t *testing.T) {
