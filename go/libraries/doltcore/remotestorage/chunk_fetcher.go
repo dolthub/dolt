@@ -473,7 +473,7 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	f := func(ctx context.Context, shutdownCh <-chan struct{}) error {
 		return fetcherDownloadURLThread(ctx, fetchReqCh, shutdownCh, chunkCh, client, stats, cc, fetcher, params)
 	}
-	threads := pool.NewDynamic(f, params.StartingConcurrentDownloads)
+	threads := pool.NewDynamic(ctx, f, params.StartingConcurrentDownloads)
 	eg.Go(func() error {
 		return threads.Run()
 	})

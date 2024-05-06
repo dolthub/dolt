@@ -17,7 +17,6 @@ package reliable
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -63,6 +62,10 @@ func (s *reliableCallStateMachine[Req, Resp]) run(ctx context.Context) error {
 
 }
 
+// In |initial|, we wait for a first request to come in from the application.
+// Sometimes this will be an already queued request, and sometimes it will be a
+// new request which we want to drive and get a response for. When we get our
+// first request to send, we transition to |open|.
 func (s *reliableCallStateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, error) {
 	select {
 	case _, ok := <-s.requests.Recv():
@@ -92,72 +95,101 @@ func (s *reliableCallStateMachine[Req, Resp]) stateForError(err error) (CtxState
 	return s.backoff, nil
 }
 
+// This should be configurable.
+var rpcOneShotTimeout = 15 * time.Second
+
+// Open is the normal state of reading requests from the application, sending
+// them to the RPC, and reading thier responses from the RPC, and sending the
+// responses to the application.
 func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error) {
-	eg, sCtx := errgroup.WithContext(ctx)
-	stream, err := s.call.opts.Open(sCtx, s.call.opts.GrpcOpts...)
-	if err != nil {
-		return s.stateForError(err)
-	}
 	var nextState CtxStateFunc
-	// Handle requests
+	eg, sCtx := errgroup.WithContext(ctx)
+	tc := NewTimeoutController()
 	eg.Go(func() error {
-		timeout := time.NewTimer(s.call.opts.ReadRequestTimeout)
-		for {
-			if !timeout.Stop() {
-				<-timeout.C
-			}
-			timeout.Reset(s.call.opts.ReadRequestTimeout)
-			select {
-			case req, ok := <-s.requests.Recv():
-				if !ok {
+		return tc.Run()
+	})
+	eg.Go(func() error {
+		tc.SetTimeout(sCtx, rpcOneShotTimeout)
+		stream, err := s.call.opts.Open(sCtx, s.call.opts.GrpcOpts...)
+		if err != nil {
+			tc.Close()
+			return err
+		}
+		tc.SetTimeout(sCtx, 0)
+		// Handle requests
+		eg.Go(func() error {
+			defer tc.Close()
+			// If we don't get new requests to send from the application
+			// for a certain amount of time, then we can close the remote
+			// call and transition to a state where we wait for a new
+			// request before opening the connection again.
+			timeout := time.NewTimer(s.call.opts.ReadRequestTimeout)
+			for {
+				if !timeout.Stop() {
+					<-timeout.C
+				}
+				timeout.Reset(s.call.opts.ReadRequestTimeout)
+				select {
+				case req, ok := <-s.requests.Recv():
+					if !ok {
+						return stream.CloseSend()
+					}
+					tc.SetTimeout(sCtx, rpcOneShotTimeout)
+					err := stream.Send(req)
+					if err != nil {
+						return err
+					}
+					tc.SetTimeout(sCtx, 0)
+				case <-sCtx.Done():
+					return context.Cause(sCtx)
+				case <-timeout.C:
+					nextState = s.initial
 					return stream.CloseSend()
 				}
-				err := stream.Send(req)
+			}
+		})
+		// Handle responses
+		eg.Go(func() error {
+			timeout := time.NewTimer(s.call.opts.DeliverRespTimeout)
+			for {
+				resp, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
 				if err != nil {
 					return err
 				}
-			case <-sCtx.Done():
-				return context.Cause(sCtx)
-			case <-timeout.C:
-				nextState = s.initial
-				return stream.CloseSend()
+				if !timeout.Stop() {
+					<-timeout.C
+				}
+				req, ok := s.requests.Front()
+				if !ok {
+					return errors.New("unexpected requests closed")
+				}
+				// If we can't deliver our response to the application
+				// for a certain amount of time, then we want to shut
+				// down the streaming connection and wait until the
+				// application accepts this response. Then we will open
+				// the connection again and get more responses by
+				// sending our queued requests.
+				timeout.Reset(s.call.opts.DeliverRespTimeout)
+				select {
+				case <-sCtx.Done():
+					return context.Cause(sCtx)
+				case s.call.respCh <- reqResp[Req, Resp]{Req: req, Resp: resp}:
+					s.requests.Ack()
+				case <-timeout.C:
+					// We signal this next state with an error, since we need the
+					// (possibly-blocked-on-network-sending) Send thread to see
+					// failure by having its context canceled.
+					return ErrWantBlockForDeliverResp[Resp]{Resp: resp}
+				}
 			}
-		}
-	})
-	// Handle responses
-	eg.Go(func() error {
-		timeout := time.NewTimer(s.call.opts.DeliverRespTimeout)
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			if !timeout.Stop() {
-				<-timeout.C
-			}
-			req, ok := s.requests.Front()
-			if !ok {
-				return errors.New("unexpected requests closed")
-			}
-			timeout.Reset(s.call.opts.DeliverRespTimeout)
-			select {
-			case <-sCtx.Done():
-				return context.Cause(sCtx)
-			case s.call.respCh <- reqResp[Req, Resp]{Req: req, Resp: resp}:
-				s.requests.Ack()
-			case <-timeout.C:
-				// We signal this next state with an error, since we need the
-				// (possibly-blocked-on-network-sending) Send thread to see
-				// failure by having its context canceled.
-				return ErrWantBlockForDeliverResp[Resp]{Resp: resp}
-			}
-		}
+		})
+		return nil
 	})
 	var dre ErrWantBlockForDeliverResp[Resp]
-	err = eg.Wait()
+	err := eg.Wait()
 	if err == nil {
 		s.requests.Reset()
 		return nextState, nil
@@ -173,6 +205,9 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 	}
 }
 
+// We transition here if the application is slow to accept our responses. We
+// wait until they accept our response, and then we go back to |initial|, where
+// we will open a new RPC if we have requests to send.
 func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxStateFunc, error) {
 	req, ok := s.requests.Front()
 	if !ok {
@@ -188,6 +223,8 @@ func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Co
 	}
 }
 
+// We transition here if we see retriable errors from our RPC. We backoff a
+// certain amount of time and then transition to |initial|.
 func (s *reliableCallStateMachine[Req, Resp]) backoff(ctx context.Context) (CtxStateFunc, error) {
 	select {
 	case <-time.After(s.duration):

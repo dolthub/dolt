@@ -77,14 +77,14 @@ type Dynamic struct {
 	poolShutdownCh chan struct{}
 }
 
-func NewDynamic(f Func, size int) *Dynamic {
+func NewDynamic(ctx context.Context, f Func, size int) *Dynamic {
 	if size == 0 {
 		panic("cannot create pool of initial size 0")
 	}
 	if f == nil {
 		panic("cannot create pool with nil Func")
 	}
-	eg, ctx := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(ctx)
 	return &Dynamic{
 		ctx:  ctx,
 		eg:   eg,
@@ -123,7 +123,7 @@ func (d *Dynamic) Run() error {
 					return d.f(d.ctx, d.shutdownCh)
 				})
 			case <-d.ctx.Done():
-				return nil
+				return context.Cause(d.ctx)
 			case <-d.poolShutdownCh:
 				return nil
 			}

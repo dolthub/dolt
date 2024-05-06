@@ -520,7 +520,9 @@ func (r *locationRefresh) Add(resp *remotesapi.DownloadLoc) {
 	}
 }
 
+// TODO: These should be configurable in NetworkRequestParams or something.
 var refreshTableFileURLRetryDuration = 5 * time.Second
+var refreshTableFileURLTimeout = 15 * time.Second
 
 func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client remotesapi.ChunkStoreServiceClient) (string, error) {
 	r.mu.Lock()
@@ -530,7 +532,9 @@ func (r *locationRefresh) GetURL(ctx context.Context, lastError error, client re
 		wantsRefresh := now.After(r.RefreshAfter) || errors.Is(lastError, HttpError)
 		canRefresh := time.Since(r.lastRefresh) > refreshTableFileURLRetryDuration
 		if wantsRefresh && canRefresh {
+			ctx, cancel := context.WithTimeout(ctx, refreshTableFileURLTimeout)
 			resp, err := client.RefreshTableFileUrl(ctx, r.RefreshRequest)
+			cancel()
 			if err != nil {
 				return r.URL, err
 			}
