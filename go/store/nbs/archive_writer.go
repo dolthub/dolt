@@ -193,8 +193,6 @@ func (aw *archiveWriter) writeIndex() error {
 		close(errCh)
 	}()
 
-	varIbuf := make([]byte, binary.MaxVarintLen64)
-
 	// Write out the stagedByteSpans
 	for _, bs := range aw.stagedBytes {
 		err := binary.Write(wrtr, binary.BigEndian, bs.length) // uint64 currently.
@@ -219,14 +217,12 @@ func (aw *archiveWriter) writeIndex() error {
 	}
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {
-		n := binary.PutUvarint(varIbuf, uint64(scr.dictionary))
-		_, err := wrtr.Write(varIbuf[:n])
+		err := writeVarUint64(wrtr, uint64(scr.dictionary))
 		if err != nil {
 			return err
 		}
 
-		n = binary.PutUvarint(varIbuf, uint64(scr.data))
-		_, err = wrtr.Write(varIbuf[:n])
+		err = writeVarUint64(wrtr, uint64(scr.data))
 		if err != nil {
 			return err
 		}
@@ -369,6 +365,15 @@ func (aw *archiveWriter) writeUint32(val uint32) error {
 
 	aw.bytesWritten += uint32Size
 	return nil
+}
+
+// Write a uint64 to the archive as a varint. This is used during the index writing process, so we expect the io.Writer
+// to keep track of the written byte count.
+func writeVarUint64(w io.Writer, val uint64) error {
+	var buf [binary.MaxVarintLen64]byte
+	n := binary.PutUvarint(buf[:], val)
+	_, err := w.Write(buf[:n])
+	return err
 }
 
 func (aw *archiveWriter) flushToFile(path string) error {
