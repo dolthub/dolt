@@ -61,7 +61,9 @@ func (s StatusTable) String() string {
 }
 
 func (s StatusTable) Schema() sql.Schema {
+	// TODO: should every column be the primary key?
 	return []*sql.Column{
+		{Name: "database_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
@@ -95,9 +97,10 @@ type StatusItr struct {
 }
 
 type statusTableRow struct {
-	tableName string
-	isStaged  bool
-	status    string
+	databaseName string
+	tableName    string
+	isStaged     bool
+	status       string
 }
 
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
@@ -107,6 +110,8 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	dbName := ctx.GetCurrentDatabase()
 
 	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
@@ -120,9 +125,10 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			tableName: tblName,
-			isStaged:  true,
-			status:    statusString(td),
+			databaseName: dbName,
+			tableName:    tblName,
+			isStaged:     true,
+			status:       statusString(td),
 		})
 	}
 	for _, td := range unstagedTables {
@@ -131,9 +137,10 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			tableName: tblName,
-			isStaged:  false,
-			status:    statusString(td),
+			databaseName: dbName,
+			tableName:    tblName,
+			isStaged:     false,
+			status:       statusString(td),
 		})
 	}
 
@@ -141,6 +148,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		ms := st.workingSet.MergeState()
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
 			rows = append(rows, statusTableRow{
+				databaseName: dbName,
 				tableName: tbl,
 				isStaged:  false,
 				status:    "schema conflict",
@@ -149,6 +157,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 		for _, tbl := range ms.MergedTables() {
 			rows = append(rows, statusTableRow{
+				databaseName: dbName,
 				tableName: tbl,
 				isStaged:  true,
 				status:    mergedStatus,
@@ -162,8 +171,29 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 	for _, tbl := range cnfTables {
 		rows = append(rows, statusTableRow{
-			tableName: tbl,
-			status:    mergeConflictStatus,
+			databaseName: dbName,
+			tableName:    tbl,
+			status:       mergeConflictStatus,
+		})
+	}
+
+	headColl, err := roots.Head.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stagedColl, err := roots.Staged.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	workingColl, err := roots.Working.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if headColl != stagedColl || headColl != workingColl {
+		rows = append(rows, statusTableRow{
+			databaseName: ctx.GetCurrentDatabase(),
+			status:       "modified",
 		})
 	}
 
@@ -201,7 +231,7 @@ func (itr *StatusItr) Next(*sql.Context) (sql.Row, error) {
 	}
 	row := itr.rows[0]
 	itr.rows = itr.rows[1:]
-	return sql.NewRow(row.tableName, row.isStaged, row.status), nil
+	return sql.NewRow(row.databaseName, row.tableName, row.isStaged, row.status), nil
 }
 
 // Close closes the iterator.

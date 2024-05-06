@@ -453,6 +453,15 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
+
+
+		// TODO: this might be useful; delete if not
+		//ddb, _ := sess.Provider().Database(ctx, db.RevisionQualifiedName())
+		//collDb := ddb.(sql.CollatedDatabase)
+		//coll := collDb.GetCollation(ctx)
+		//print(coll)
+
+
 		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
