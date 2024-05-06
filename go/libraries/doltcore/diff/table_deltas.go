@@ -39,6 +39,8 @@ const (
 	RemovedTable
 )
 
+const DBPrefix = "__DATABASE__"
+
 type TableInfo struct {
 	Name       string
 	Sch        schema.Schema
@@ -180,6 +182,25 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	deltas, err = filterUnmodifiedTableDeltas(deltas)
 	if err != nil {
 		return nil, err
+	}
+
+	fromColl, err := fromRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	toColl, err := toRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if fromColl != toColl {
+		sqlCtx, ok := ctx.(*sql.Context)
+		if ok {
+			dbName := sqlCtx.GetCurrentDatabase()
+			deltas = append(deltas, TableDelta{
+				FromName: DBPrefix + dbName,
+				ToName:   DBPrefix + dbName,
+			})
+		}
 	}
 
 	// Make sure we always return the same order of deltas
@@ -346,6 +367,11 @@ func (td TableDelta) HasHashChanged() (bool, error) {
 // HasSchemaChanged returns true if the table schema has changed between the
 // fromRoot and toRoot.
 func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
+	// Database collation change is a schema change
+	if td.FromTable == nil && td.ToTable == nil {
+		return true, nil
+	}
+
 	if td.IsAdd() || td.IsDrop() {
 		return true, nil
 	}
@@ -368,6 +394,11 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
+	// Database collation change is not a data change
+	if td.FromTable == nil && td.ToTable == nil {
+		return false, nil
+	}
+
 	if td.IsAdd() {
 		isEmpty, err := isTableDataEmpty(ctx, td.ToTable)
 		if err != nil {

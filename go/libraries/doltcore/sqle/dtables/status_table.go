@@ -109,8 +109,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	dbName := ctx.GetCurrentDatabase()
-
 	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return nil, err
@@ -167,26 +165,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		rows = append(rows, statusTableRow{
 			tableName: tbl,
 			status:    mergeConflictStatus,
-		})
-	}
-
-	headColl, err := roots.Head.GetCollation(ctx)
-	if err != nil {
-		return nil, err
-	}
-	stagedColl, err := roots.Staged.GetCollation(ctx)
-	if err != nil {
-		return nil, err
-	}
-	workingColl, err := roots.Working.GetCollation(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if headColl != stagedColl || headColl != workingColl {
-		rows = append(rows, statusTableRow{
-			tableName: DBPrefix + dbName,
-			status:    "collation modified",
 		})
 	}
 
