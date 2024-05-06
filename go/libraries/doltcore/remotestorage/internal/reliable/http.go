@@ -99,16 +99,26 @@ type StreamingRangeRequest struct {
 //
 // |StreamingResponse.Read| can (and often will) return short reads.
 func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) StreamingResponse {
+	// This never changes, but the offset at which retrys are made is based
+	// on how much of the response has already been delivered.
 	rangeEnd := req.Offset + req.Length - 1
+
+	// |StreamingResponse| is getting the read side of this pipe to read
+	// the body and/or any terminal error encountered. The goroutine making
+	// the retried HTTP requests will be writing to |w|.
 	r, w := io.Pipe()
 
 	// This is the overall context for the opreation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
 	ctx, cancel := context.WithCancel(ctx)
 
+	// This naked go routine makes retried HTTP requests for the byte range, writing the HTTP response bodies to |w|.
 	go func() {
 		origOffset := req.Offset
+		// |offset| starts at |req.Offset| but may be updated if we
+		// make retries and have already delivered some bytes.
 		offset := req.Offset
 		var retry int
+		// |lastError| is used by UrlFact.
 		var lastError error
 		op := func() (rerr error) {
 			defer func() { retry += 1 }()
@@ -131,23 +141,22 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			rangeHeaderVal := fmt.Sprintf("bytes=%d-%d", offset, rangeEnd)
 			httpReq.Header.Set("Range", rangeHeaderVal)
 
-			reqCtx, cancelCause := context.WithCancelCause(ctx)
 			tc := NewTimeoutController()
 			defer tc.Close()
 			go func() {
 				err := tc.Run()
 				if err != nil {
-					cancelCause(err)
+					cCause(err)
 				}
 			}()
 
-			httpReq = httpReq.WithContext(reqCtx)
+			httpReq = httpReq.WithContext(ctx)
 
 			req.Stats.RecordDownloadAttemptStart(retry, offset-origOffset, req.Length)
 			start := time.Now()
-			tc.SetTimeout(reqCtx, req.RespHeadersTimeout)
+			tc.SetTimeout(ctx, req.RespHeadersTimeout)
 			resp, err := req.Fetcher.Do(httpReq)
-			tc.SetTimeout(reqCtx, 0)
+			tc.SetTimeout(ctx, 0)
 			if err != nil {
 				req.Health.RecordFailure()
 				return err
@@ -165,9 +174,10 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			})
 			n, err := io.Copy(w, reader)
 			cleanup()
+			// We successfully wrote this many bytes to |w|. Update |offset|.
 			offset += uint64(n)
 			if err == nil {
-				// Success!
+				// Success! We read until Body returned EOF.
 				req.Health.RecordSuccess()
 				return nil
 			} else if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrShortWrite) {
@@ -175,6 +185,10 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 				return backoff.Permanent(err)
 			} else {
 				if cerr := context.Cause(ctx); errors.Is(err, context.Canceled) && cerr != nil {
+					// HTTP Body reader will return
+					// context.Canceled even if we cancel
+					// with a cause. Convert to the cause
+					// here, if we have one.
 					err = cerr
 				}
 				// Let backoff decide when and if we retry.
