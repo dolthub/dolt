@@ -29,6 +29,7 @@ import (
 )
 
 const statusDefaultRowCount = 10
+const DBPrefix = "__DATABASE__"
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
@@ -61,9 +62,7 @@ func (s StatusTable) String() string {
 }
 
 func (s StatusTable) Schema() sql.Schema {
-	// TODO: should every column be the primary key?
 	return []*sql.Column{
-		{Name: "database_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
@@ -97,7 +96,6 @@ type StatusItr struct {
 }
 
 type statusTableRow struct {
-	databaseName string
 	tableName    string
 	isStaged     bool
 	status       string
@@ -125,7 +123,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			databaseName: dbName,
 			tableName:    tblName,
 			isStaged:     true,
 			status:       statusString(td),
@@ -137,7 +134,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			databaseName: dbName,
 			tableName:    tblName,
 			isStaged:     false,
 			status:       statusString(td),
@@ -148,7 +144,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		ms := st.workingSet.MergeState()
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
 			rows = append(rows, statusTableRow{
-				databaseName: dbName,
 				tableName: tbl,
 				isStaged:  false,
 				status:    "schema conflict",
@@ -157,7 +152,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 		for _, tbl := range ms.MergedTables() {
 			rows = append(rows, statusTableRow{
-				databaseName: dbName,
 				tableName: tbl,
 				isStaged:  true,
 				status:    mergedStatus,
@@ -171,9 +165,8 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 	for _, tbl := range cnfTables {
 		rows = append(rows, statusTableRow{
-			databaseName: dbName,
-			tableName:    tbl,
-			status:       mergeConflictStatus,
+			tableName: tbl,
+			status:    mergeConflictStatus,
 		})
 	}
 
@@ -192,8 +185,8 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	if headColl != stagedColl || headColl != workingColl {
 		rows = append(rows, statusTableRow{
-			databaseName: ctx.GetCurrentDatabase(),
-			status:       "modified",
+			tableName: DBPrefix + dbName,
+			status:    "collation modified",
 		})
 	}
 
@@ -231,7 +224,7 @@ func (itr *StatusItr) Next(*sql.Context) (sql.Row, error) {
 	}
 	row := itr.rows[0]
 	itr.rows = itr.rows[1:]
-	return sql.NewRow(row.databaseName, row.tableName, row.isStaged, row.status), nil
+	return sql.NewRow(row.tableName, row.isStaged, row.status), nil
 }
 
 // Close closes the iterator.
