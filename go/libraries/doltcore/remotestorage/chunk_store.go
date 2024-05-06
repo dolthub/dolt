@@ -56,24 +56,42 @@ var _ nbs.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.LoggingChunkStore = (*DoltChunkStore)(nil)
 
-const (
-	uploadRetryCount = 5
-)
-
 var tracer = otel.Tracer("github.com/dolthub/dolt/go/libraries/doltcore/remotestorage")
 
-func uploadBackOff(ctx context.Context) backoff.BackOff {
+func uploadBackOff(ctx context.Context, max int) backoff.BackOff {
 	ret := backoff.NewExponentialBackOff()
 	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, uploadRetryCount), ctx)
+	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
+}
+
+func downloadBackOff(ctx context.Context, max int) backoff.BackOff {
+	ret := backoff.NewExponentialBackOff()
+	ret.MaxInterval = 5 * time.Second
+	return backoff.WithContext(backoff.WithMaxRetries(ret, uint64(max)), ctx)
 }
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-type ConcurrencyParams struct {
-	ConcurrentDownloads int
+type NetworkRequestParams struct {
+	StartingConcurrentDownloads    int
+	MaximumConcurrentDownloads     int
+	UploadRetryCount               int
+	DownloadRetryCount             int
+	ThroughputMinimumCheckInterval time.Duration
+	ThroughputMinimumBytesPerCheck int
+	ThroughputMinimumNumIntervals  int
+}
+
+var defaultRequestParams = NetworkRequestParams{
+	StartingConcurrentDownloads:    16,
+	MaximumConcurrentDownloads:     16,
+	UploadRetryCount:               5,
+	DownloadRetryCount:             5,
+	ThroughputMinimumCheckInterval: time.Second,
+	ThroughputMinimumBytesPerCheck: 1024,
+	ThroughputMinimumNumIntervals:  5,
 }
 
 type DoltChunkStore struct {
@@ -88,7 +106,7 @@ type DoltChunkStore struct {
 	metadata    *remotesapi.GetRepoMetadataResponse
 	nbf         *types.NomsBinFormat
 	httpFetcher HTTPFetcher
-	concurrency ConcurrencyParams
+	params      NetworkRequestParams
 	stats       cacheStats
 	logger      chunks.DebugLogger
 	wsValidate  bool
@@ -136,7 +154,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		metadata:    metadata,
 		nbf:         nbf,
 		httpFetcher: globalHttpFetcher,
-		concurrency: defaultConcurrency,
+		params:      defaultRequestParams,
 		wsValidate:  wsval,
 	}
 	err = cs.loadRoot(ctx)
@@ -159,7 +177,7 @@ func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore 
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
 		httpFetcher: fetcher,
-		concurrency: dcs.concurrency,
+		params:      dcs.params,
 		stats:       dcs.stats,
 	}
 }
@@ -177,7 +195,7 @@ func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
 		httpFetcher: dcs.httpFetcher,
-		concurrency: dcs.concurrency,
+		params:      dcs.params,
 		stats:       dcs.stats,
 		logger:      dcs.logger,
 	}
@@ -196,13 +214,13 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
 		httpFetcher: dcs.httpFetcher,
-		concurrency: dcs.concurrency,
+		params:      dcs.params,
 		stats:       dcs.stats,
 		logger:      dcs.logger,
 	}
 }
 
-func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams) *DoltChunkStore {
+func (dcs *DoltChunkStore) WithNetworkRequestParams(params NetworkRequestParams) *DoltChunkStore {
 	return &DoltChunkStore{
 		repoId:      dcs.repoId,
 		repoPath:    dcs.repoPath,
@@ -215,7 +233,7 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
 		httpFetcher: dcs.httpFetcher,
-		concurrency: concurrency,
+		params:      params,
 		stats:       dcs.stats,
 		logger:      dcs.logger,
 	}
@@ -393,7 +411,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -409,7 +427,22 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			return url, nil
 		}
 		rangeLen := gr.RangeLen()
-		resp := reliable.StreamingRangeDownload(ctx, stats, health, fetcher, gr.ChunkStartOffset(0), rangeLen, urlF)
+		resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
+			Fetcher:     fetcher,
+			Offset:      gr.ChunkStartOffset(0),
+			Length:      rangeLen,
+			UrlFact:     urlF,
+			Stats:       stats,
+			Health:      health,
+			BackOffFact: func(ctx context.Context) backoff.BackOff {
+				return downloadBackOff(ctx, params.DownloadRetryCount)
+			},
+			Throughput: reliable.MinimumThroughputCheck{
+				CheckInterval: params.ThroughputMinimumCheckInterval,
+				BytesPerCheck: params.ThroughputMinimumBytesPerCheck,
+				NumIntervals:  params.ThroughputMinimumNumIntervals,
+			},
+		})
 		defer resp.Close()
 		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
 		for {
@@ -937,7 +970,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		return nil
 	}
 
-	return backoff.Retry(op, uploadBackOff(ctx))
+	return backoff.Retry(op, uploadBackOff(ctx, dcs.params.UploadRetryCount))
 }
 
 type Sizer interface {
@@ -980,10 +1013,6 @@ func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesa
 const (
 	chunkAggDistance = 8 * 1024
 )
-
-var defaultConcurrency ConcurrencyParams = ConcurrencyParams{
-	ConcurrentDownloads: 32,
-}
 
 func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 	return chunks.TableFileStoreOps{

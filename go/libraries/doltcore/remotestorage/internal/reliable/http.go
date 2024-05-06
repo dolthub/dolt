@@ -53,10 +53,6 @@ var downThroughputCheck = iohelp.MinThroughputCheckParams{
 	NumIntervals:   5,
 }
 
-const (
-	downRetryCount = 5
-)
-
 type StatsRecorder interface {
 	RecordTimeToFirstByte(retry int, size uint64, d time.Duration)
 	RecordDownloadAttemptStart(retry int, offset, size uint64)
@@ -68,14 +64,27 @@ type HealthRecorder interface {
 	RecordFailure()
 }
 
-func downloadBackOff(ctx context.Context) backoff.BackOff {
-	ret := backoff.NewExponentialBackOff()
-	ret.MaxInterval = 5 * time.Second
-	return backoff.WithContext(backoff.WithMaxRetries(ret, downRetryCount), ctx)
-}
-
 var ErrThroughputTooLow = errors.New("throughput below minimum threshold")
 var ErrHttpStatus = errors.New("http status")
+
+type MinimumThroughputCheck struct {
+	CheckInterval time.Duration
+	BytesPerCheck int
+	NumIntervals  int
+}
+
+type BackOffFactory func(context.Context) backoff.BackOff
+
+type StreamingRangeRequest struct {
+	Fetcher     HTTPFetcher
+	Offset      uint64
+	Length      uint64
+	UrlFact     UrlFactoryFunc
+	Stats       StatsRecorder
+	Health      HealthRecorder
+	BackOffFact BackOffFactory
+	Throughput  MinimumThroughputCheck
+}
 
 // |StreamingRangeDownload| makes an immediate GET request to the URL returned
 // from |urlStrF|, returning a |StreamingResponse| object which can be used to
@@ -99,55 +108,57 @@ var ErrHttpStatus = errors.New("http status")
 // |StreamingResponse.Read|.
 //
 // |StreamingResponse.Read| can (and often will) return short reads.
-func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, health HealthRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF UrlFactoryFunc) StreamingResponse {
-	rangeEnd := offset + length - 1
+func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) StreamingResponse {
+	rangeEnd := req.Offset + req.Length - 1
 	r, w := io.Pipe()
 
 	// This is the overall context for the opreation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
-		origOffset := offset
-		offset := offset
+		origOffset := req.Offset
+		offset := req.Offset
 		var retry int
-		op := func() error {
+		var lastError error
+		op := func() (rerr error) {
 			defer func() { retry += 1 }()
+			defer func() { lastError = rerr }()
 			// This is the per-call context. It can be canceled by
 			// EnforceThroughput, for example, without canceling
 			// the entire operation.
 			ctx, cCause := context.WithCancelCause(ctx)
 
-			url, err := urlStrF(nil)
+			url, err := req.UrlFact(lastError)
 			if err != nil {
 				return err
 			}
 
-			req, err := http.NewRequest(http.MethodGet, url, nil)
+			httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 			if err != nil {
 				return err
 			}
 
 			rangeHeaderVal := fmt.Sprintf("bytes=%d-%d", offset, rangeEnd)
-			req.Header.Set("Range", rangeHeaderVal)
+			httpReq.Header.Set("Range", rangeHeaderVal)
 
-			stats.RecordDownloadAttemptStart(retry, offset-origOffset, length)
+			req.Stats.RecordDownloadAttemptStart(retry, offset-origOffset, req.Length)
 			start := time.Now()
-			resp, err := fetcher.Do(req.WithContext(ctx))
+			resp, err := req.Fetcher.Do(httpReq.WithContext(ctx))
 			if err != nil {
 				fmt.Fprintf(color.Error, color.RedString("error from HTTP Do: %v\n", err))
-				health.RecordFailure()
+				req.Health.RecordFailure()
 				return err
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode/100 != 2 {
-				health.RecordFailure()
+				req.Health.RecordFailure()
 				fmt.Fprintf(color.Error, color.RedString("error from HTTP StatusCode: %v\n", resp.StatusCode))
 				return fmt.Errorf("%w: %d", ErrHttpStatus, resp.StatusCode)
 			}
-			stats.RecordTimeToFirstByte(retry, length, time.Since(start))
+			req.Stats.RecordTimeToFirstByte(retry, req.Length, time.Since(start))
 
 			reader := &AtomicCountingReader{r: resp.Body}
-			cleanup := EnforceThroughput(reader.Count, downThroughputCheck, func(err error) {
+			cleanup := EnforceThroughput(reader.Count, req.Throughput, func(err error) {
 				cCause(err)
 			})
 			n, err := io.Copy(w, reader)
@@ -155,7 +166,7 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, health Hea
 			offset += uint64(n)
 			if err == nil {
 				// Success!
-				health.RecordSuccess()
+				req.Health.RecordSuccess()
 				return nil
 			} else if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, io.ErrShortWrite) {
 				// Reader closed; bail.
@@ -166,17 +177,17 @@ func StreamingRangeDownload(ctx context.Context, stats StatsRecorder, health Hea
 				}
 				// Let backoff decide when and if we retry.
 				fmt.Fprintf(color.Error, color.RedString("error from io.Copy: %v\n", err))
-				health.RecordFailure()
+				req.Health.RecordFailure()
 				return err
 			}
 		}
 		start := time.Now()
-		err := backoff.Retry(op, downloadBackOff(ctx))
+		err := backoff.Retry(op, req.BackOffFact(ctx))
 		if err != nil {
 			fmt.Fprintf(color.Error, color.RedString("error from backoff.Retry: %v\n", err))
 			w.CloseWithError(err)
 		} else {
-			stats.RecordDownloadComplete(retry, length, time.Since(start))
+			req.Stats.RecordDownloadComplete(retry, req.Length, time.Since(start))
 			w.Close()
 		}
 	}()
@@ -206,27 +217,23 @@ func (r *AtomicCountingReader) Count() uint64 {
 // source. If the rate by which |cnt| is increasing drops below the configured
 // threshold for too long, it will call |cancel|.  EnforceThroughput should be
 // cleaned up by calling |cleanup| once whatever it is monitoring is finished.
-func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams, cancel func(error)) (cleanup func()) {
+func EnforceThroughput(cnt func() uint64, params MinimumThroughputCheck, cancel func(error)) (cleanup func()) {
 	done := make(chan struct{})
 	go func() {
 		n := params.NumIntervals
-		targetPerMilli := uint64(params.MinBytesPerSec) / uint64(time.Second/time.Millisecond)
-		type point struct {
-			c uint64
-			t time.Time
-		}
-		var points []point
-		var cntPerMilli uint64
+		var counts []uint64
+		// Note: We don't look at the clock when we take these
+		// observations. If we make late observations, then we may see
+		// higher numbers than we should have and think our throughput
+		// is higher than it is.
 		tooSlow := func() bool {
-			if len(points) < n {
+			if len(counts) < n {
 				return false
 			}
-			copy(points[:n], points[len(points)-n:])
-			points = points[:n]
-			dur := points[n-1].t.Sub(points[0].t)
-			cnt := points[n-1].c - points[0].c
-			cntPerMilli = cnt / uint64(dur/time.Millisecond)
-			if cntPerMilli < targetPerMilli {
+			copy(counts[:n], counts[len(counts)-n:])
+			counts = counts[:n]
+			cnt := counts[n-1] - counts[0]
+			if int(cnt) < params.BytesPerCheck*n {
 				return true
 			}
 			return false
@@ -234,11 +241,10 @@ func EnforceThroughput(cnt func() uint64, params iohelp.MinThroughputCheckParams
 		for {
 			select {
 			case <-time.After(params.CheckInterval):
-				points = append(points, point{cnt(), time.Now()})
+				counts = append(counts, cnt())
 				if tooSlow() {
-					cancel(fmt.Errorf("%w: needed %d bytes per milli, got %d; %d bytes at %v, %d bytes at %v",
-						ErrThroughputTooLow, targetPerMilli, cntPerMilli, points[0].c, points[0].t,
-						points[n-1].c, points[n-1].t))
+					cancel(fmt.Errorf("%w: needed %d bytes per interval across %d intervals, went from %d to %d instead",
+						ErrThroughputTooLow, params.BytesPerCheck, n, counts[0], counts[n-1]))
 					return
 				}
 			case <-done:

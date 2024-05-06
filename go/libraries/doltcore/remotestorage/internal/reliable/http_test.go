@@ -21,18 +21,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 func TestEnforceThroughput(t *testing.T) {
 	t.Run("CancelShutsDown", func(t *testing.T) {
 		var didCancel atomic.Bool
 		before := runtime.NumGoroutine()
-		c := EnforceThroughput(func() uint64 { return 0 }, iohelp.MinThroughputCheckParams{
-			MinBytesPerSec: 1024,
-			CheckInterval:  time.Hour,
-			NumIntervals:   16,
+		c := EnforceThroughput(func() uint64 { return 0 }, MinimumThroughputCheck{
+			CheckInterval: time.Hour,
+			BytesPerCheck: 1024,
+			NumIntervals:  16,
 		}, func(error) { didCancel.Store(true) })
 		start := time.Now()
 		for before >= runtime.NumGoroutine() && time.Since(start) < time.Second {
@@ -52,15 +50,15 @@ func TestEnforceThroughput(t *testing.T) {
 				i += 1
 				return uint64(c)
 			}
-			c += 1024
+			c += 128
 			i += 1
 			return uint64(c)
 		}
 		done := make(chan struct{})
-		cleanup := EnforceThroughput(cnt, iohelp.MinThroughputCheckParams{
-			MinBytesPerSec: 65536,
-			CheckInterval:  time.Millisecond,
-			NumIntervals:   16,
+		cleanup := EnforceThroughput(cnt, MinimumThroughputCheck{
+			CheckInterval: time.Millisecond,
+			BytesPerCheck: 64,
+			NumIntervals:  16,
 		}, func(error) { close(done) })
 		t.Cleanup(cleanup)
 
