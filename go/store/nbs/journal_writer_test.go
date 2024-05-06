@@ -244,15 +244,15 @@ func validateAllLookups(t *testing.T, j *journalWriter, data map[hash.Hash]Compr
 	}
 	iterRangeIndex(j.ranges, func(a addr16, r Range) (stop bool) {
 		validateLookup(t, j, r, prefixMap[a])
-		return
+		return true
 	})
 }
 
 func iterRangeIndex(idx rangeIndex, cb func(addr16, Range) (stop bool)) {
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
+	idx.novel.All(func(a hash.Hash, r Range) (stop bool) {
 		return cb(toAddr16(a), r)
 	})
-	idx.cached.Iter(cb)
+	idx.cached.All(cb)
 }
 
 func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {

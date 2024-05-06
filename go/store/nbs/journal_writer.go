@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/dolthub/swiss"
+	"github.com/cockroachdb/swiss"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -203,7 +203,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		// initialize range index with enough capacity to
 		// avoid rehashing during bootstrapping
 		cnt := estimateRangeCount(info)
-		wr.ranges.cached = swiss.NewMap[addr16, Range](cnt)
+		wr.ranges.cached = swiss.New[addr16, Range](int(cnt))
 
 		eg, ectx := errgroup.WithContext(ctx)
 		ch := make(chan []lookup, 4)
@@ -608,8 +608,8 @@ func toAddr16(full hash.Hash) (prefix addr16) {
 
 func newRangeIndex() rangeIndex {
 	return rangeIndex{
-		novel:  swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel),
-		cached: swiss.NewMap[addr16, Range](0),
+		novel:  swiss.New[hash.Hash, Range](journalIndexDefaultMaxNovel),
+		cached: swiss.New[addr16, Range](0),
 	}
 }
 
@@ -634,27 +634,27 @@ func (idx rangeIndex) putCached(h hash.Hash, rng Range) {
 }
 
 func (idx rangeIndex) count() uint32 {
-	return uint32(idx.novel.Count() + idx.cached.Count())
+	return uint32(idx.novel.Len() + idx.cached.Len())
 }
 
 func (idx rangeIndex) novelCount() int {
-	return idx.novel.Count()
+	return idx.novel.Len()
 }
 
 func (idx rangeIndex) novelLookups() (lookups []lookup) {
-	lookups = make([]lookup, 0, idx.novel.Count())
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
+	lookups = make([]lookup, 0, idx.novel.Len())
+	idx.novel.All(func(a hash.Hash, r Range) bool {
 		lookups = append(lookups, lookup{a: a, r: r})
-		return
+		return true
 	})
 	return
 }
 
 func (idx rangeIndex) flatten() rangeIndex {
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
+	idx.novel.All(func(a hash.Hash, r Range) bool {
 		idx.cached.Put(toAddr16(a), r)
-		return
+		return true
 	})
-	idx.novel = swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel)
+	idx.novel = swiss.New[hash.Hash, Range](journalIndexDefaultMaxNovel)
 	return idx
 }
