@@ -19,15 +19,15 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/mysql"
-	"github.com/dolthub/vitess/go/vt/proto/query"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/mysql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // typeSerializer defines the serialization interface for serializing a value in Dolt's
@@ -291,9 +291,12 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 				decimalValue.Exponent(), decimalValue.String())
 		}
 
-		absStringVal := decimalValue.Abs().String()
-		firstFractionalDigitIdx := len(absStringVal) + int(decimalValue.Exponent())
+		absStringVal := decimalValue.Abs().StringFixed(int32(scale))
+		firstFractionalDigitIdx := strings.Index(absStringVal, ".") + 1
 		stringIntegerVal := absStringVal[:firstFractionalDigitIdx-1]
+		for len(stringIntegerVal) < int(numFullDigits) {
+			stringIntegerVal = "0" + stringIntegerVal
+		}
 		stringFractionalVal := absStringVal[firstFractionalDigitIdx:]
 
 		buffer := make([]byte, length)
