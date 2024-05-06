@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -602,7 +603,8 @@ func TestIndexedAccess(t *testing.T, e enginetest.QueryEngine, harness enginetes
 }
 
 func analyzeQuery(ctx *sql.Context, e enginetest.QueryEngine, query string) (sql.Node, error) {
-	parsed, err := e.ParseAndBuildQuery(ctx, nil, query)
+	binder := planbuilder.New(ctx, e.EngineAnalyzer().Catalog, sql.NewMysqlParser())
+	parsed, _, _, err := binder.Parse(query, false)
 	if err != nil {
 		return nil, err
 	}

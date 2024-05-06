@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"strconv"
 	"strings"
@@ -875,7 +876,8 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}
 
-	node, err := server.Engine.ParseAndBuildQuery(ctx, nil, "SELECT "+strValue)
+	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.Parser)
+	node, _, _, err := binder.Parse("SELECT "+strValue, false)
 	if err != nil {
 		return nil, err
 	}

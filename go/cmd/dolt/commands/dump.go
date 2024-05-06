@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"os"
 	"path/filepath"
@@ -436,7 +437,10 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			}
 		}
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := engine.GetUnderlyingEngine().ParseAndBuildQueryWithOptions(ctx, nil, row[fragColIdx].(string), sql.NewSqlModeFromString(sqlMode).ParserOptions())
+		sqlEngine := engine.GetUnderlyingEngine()
+		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
+		cv, _, _, err := binder.Parse(row[fragColIdx].(string), false)
 		if err != nil {
 			return err
 		}

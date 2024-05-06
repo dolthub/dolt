@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -65,7 +66,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	ret, err := se.GetUnderlyingEngine().ParseAndBuildQuery(sqlCtx, nil, fmt.Sprintf("show create table `%s`", tableName))
+	sqlEngine := se.GetUnderlyingEngine()
+	binder := planbuilder.New(sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+	ret, _, _, err := binder.Parse(fmt.Sprintf("show create table `%s`", tableName), false)
 	if err != nil {
 		return nil, err
 	}
