@@ -27,12 +27,12 @@ import (
 func TestDynamic(t *testing.T) {
 	t.Run("Size=0", func(t *testing.T) {
 		assert.Panics(t, func() {
-			NewDynamic(func(context.Context, <-chan struct{}) error { return nil }, 0)
+			NewDynamic(context.Background(), func(context.Context, <-chan struct{}) error { return nil }, 0)
 		})
 	})
 	t.Run("F=nil", func(t *testing.T) {
 		assert.Panics(t, func() {
-			NewDynamic(nil, 16)
+			NewDynamic(context.Background(), nil, 16)
 		})
 	})
 	t.Run("StaticSize", func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestDynamic(t *testing.T) {
 			<-shutdownCh
 			return nil
 		}
-		p := NewDynamic(f, 16)
+		p := NewDynamic(context.Background(), f, 16)
 		select {
 		case <-arrives:
 			assert.FailNow(t, "should not spawn threads with Run()")
@@ -74,7 +74,7 @@ func TestDynamic(t *testing.T) {
 			<-shutdownCh
 			return nil
 		}
-		p := NewDynamic(f, 16)
+		p := NewDynamic(context.Background(), f, 16)
 
 		var err error
 		var wg sync.WaitGroup
@@ -118,7 +118,7 @@ func TestDynamic(t *testing.T) {
 				return context.Cause(ctx)
 			}
 		}
-		p := NewDynamic(f, 64)
+		p := NewDynamic(context.Background(), f, 64)
 		var err error
 		var wg sync.WaitGroup
 		wg.Add(1)
