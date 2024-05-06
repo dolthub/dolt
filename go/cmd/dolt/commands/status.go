@@ -477,7 +477,6 @@ func printEverything(data *printData) error {
 
 	// database changes
 
-
 	// branch name
 	cli.Printf(branchHeader, data.branchName)
 

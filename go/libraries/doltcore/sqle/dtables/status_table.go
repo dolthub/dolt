@@ -149,18 +149,18 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
 			rows = append(rows, statusTableRow{
 				databaseName: dbName,
-				tableName: tbl,
-				isStaged:  false,
-				status:    "schema conflict",
+				tableName:    tbl,
+				isStaged:     false,
+				status:       "schema conflict",
 			})
 		}
 
 		for _, tbl := range ms.MergedTables() {
 			rows = append(rows, statusTableRow{
 				databaseName: dbName,
-				tableName: tbl,
-				isStaged:  true,
-				status:    mergedStatus,
+				tableName:    tbl,
+				isStaged:     true,
+				status:       mergedStatus,
 			})
 		}
 	}
