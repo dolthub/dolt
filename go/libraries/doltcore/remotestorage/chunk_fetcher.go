@@ -93,6 +93,9 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	return ret
 }
 
+// Implements nbs.ChunkFetcher. Request the contents the chunks the given
+// |hashes|. They will be delivered through |Recv|. Returns an error if this
+// ChunkFetcher is terminally failed or if the supplied |ctx| is |Done|.
 func (f *ChunkFetcher) Get(ctx context.Context, hashes hash.HashSet) error {
 	select {
 	case <-ctx.Done():
@@ -104,11 +107,19 @@ func (f *ChunkFetcher) Get(ctx context.Context, hashes hash.HashSet) error {
 	}
 }
 
+// Imeplements nbs.ChunkFetcher. Indicates that no further hashes will be
+// requested through |Get|. |Recv| will only return |io.EOF| after this is
+// called.
 func (f *ChunkFetcher) CloseSend() error {
 	close(f.toGetCh)
 	return nil
 }
 
+// Implements nbs.ChunkFetcher. Returns the next available
+// |nbs.CompressedChunk| whose contents have been fetched after being requested
+// by |Get|. Returns |io.EOF| after |CloseSend| is called and all requested
+// chunks have been successfully received. Returns an error if this
+// |ChunkFetcher| is terminally failed or if the supplied |ctx| is |Done|.
 func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
 	select {
 	case <-ctx.Done():
@@ -123,6 +134,13 @@ func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
 	}
 }
 
+// Implements nbs.ChunkFetcher. Makes sure all resources associated with this
+// ChunkFetcher are released, and returns any errors encountered while fetching
+// requested chunks. This may return a non-|nil| error if the |ChunkFetcher| is
+// |Close|d before it has delivered |io.EOF| on a |Recv| call, but that is not
+// guaranteed. The correct way to guarantee everything has been received
+// without error is to read |Recv| until it returns |io.EOF|, and then to
+// |Close| the |ChunkFetcher|.
 func (f *ChunkFetcher) Close() error {
 	defer StatsFlusher(f.stats)
 	close(f.abortCh)
@@ -131,9 +149,15 @@ func (f *ChunkFetcher) Close() error {
 
 // Reads HashSets from reqCh and batches all the received addresses
 // into |GetDownloadLocsRequest| messages with up to |batchSize| chunk hashes
-// in them. It delivers the messages to be send on |resCh|.
+// in them. It delivers the batched messages to |resCh|.
 func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.HashSet, abortCh chan struct{}, resCh chan *remotesapi.GetDownloadLocsRequest, batchSize int, repoPath string, idFunc func() (*remotesapi.RepoId, string)) error {
+	// This is the buffer of received that we haven't sent to |resCh| yet.
 	var addrs [][]byte
+	// This is the current slice we're trying to send in a
+	// |GetDownloadLocsRequest|.  After we send it successfully, we will
+	// need to allocate a new one for the next message, but we can reuse
+	// its memory when we fail to send on |resCh| to form the next download
+	// request we try to send.
 	var outbound [][]byte
 	for {
 		if reqCh == nil && len(addrs) == 0 {
@@ -144,6 +168,11 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 		var thisResCh chan *remotesapi.GetDownloadLocsRequest
 		var thisRes *remotesapi.GetDownloadLocsRequest
 
+		// Each time through the loop, we build a new
+		// |GetDownloadLocsRequest| to send. It contains up to
+		// |batchSize| hashes from the end of |addrs|. If we
+		// successfully send it, then we will drop those addresses from
+		// the end of |addrs|.
 		if len(addrs) > 0 {
 			end := len(addrs)
 			st := end - batchSize
@@ -212,13 +241,6 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 				if !ok {
 					return stream.CloseSend()
 				}
-				// TODO: There is no timeout or deadline here.
-				// We could impose one with a cancelable
-				// context and some ticking here, or we could
-				// impose one in the sending thread,
-				// fetcherHashSetToGetDlLocsReqsThread, which
-				// could timeout if it can't deliver a download
-				// locs request here for a long time...
 				err := stream.Send(req)
 				if err != nil {
 					return NewRpcError(err, "StreamDownloadLocations", host, req)
@@ -309,6 +331,8 @@ type fetchReq struct {
 	cancelCh chan struct{}
 }
 
+// A simple structure to keep track of *GetRange requests along with
+// |locationRefreshes| for the URL paths we have seen.
 type downloads struct {
 	ranges    *ranges.Tree
 	refreshes map[string]*locationRefresh
@@ -355,7 +379,14 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 	pending := make([]fetchReq, 0)
 	var toSend *GetRange
 	for {
+		// pending is our slice of request threads that showed up
+		// asking for a download. We range through it and try to send
+		// them any work we have available.
 		for j := range pending {
+			// |toSend| could have come from a previous iteration
+			// of this loop or the outer loop. If it's |nil|, we
+			// can get the next range to download from
+			// |downlaods.ranges|.
 			if toSend == nil {
 				max := downloads.ranges.DeleteMaxRegion()
 				if len(max) == 0 {
@@ -377,6 +408,13 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			case pending[j].respCh <- resp:
 				toSend = nil
 			case <-pending[j].cancelCh:
+				// Because of dynamic thread pool sizing, a
+				// request thread could have been canceled and
+				// it has now gone away. If this happens, its
+				// respCh will be set to |nil| below and we
+				// will remove it from our |pending| set. But
+				// we need to hold onto |toSend| so that we do
+				// send it to a request thread eventually.
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			}
@@ -384,6 +422,9 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			pending[j].respCh = nil
 		}
 
+		// Remove anything from |pending| that was actually delivered
+		// to. We use |respCh == nil| to indicate that the above loop
+		// delivered to the download thread.
 		newpending := make([]fetchReq, 0)
 		for i := range pending {
 			if pending[i].respCh != nil {
@@ -392,6 +433,10 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 		}
 		pending = newpending
 
+		// Once |locCh| closes, we set |locCh| to nil. If |locCh| is
+		// nil and our ranges Tree is empty, then we have delivered
+		// every download we will ever see to a download thread. We can
+		// close |doneCh| and return nil.
 		if locCh == nil && downloads.ranges.Len() == 0 {
 			close(doneCh)
 			return nil
@@ -433,9 +478,20 @@ type SizeSetter interface {
 	SetSize(int)
 }
 
+// This does additive increase, multiplicative decrease on calls to |SetSize|,
+// reading successes and failures from calls to |RecordSuccess| and
+// |RecordFailure|. If there have been any faliures in the last update window,
+// it will call |SetSize| with a new size that's 1/2 the current size. If there
+// have been no faliures in the last update window, but there has been at least
+// one success, it will call |SetSize| with a size 1 greater than the current
+// size. Will not scale size greater than |MaxConcurrency|.
 func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss SizeSetter, sz int) error {
 	var justDecreased bool
-	next := 500 * time.Millisecond
+	const (
+		defaultConcurrencyAdjustmentDuration = 500 * time.Millisecond
+		backoffConcurrentAdjustmentDuration  = 5 * time.Second
+	)
+	next := defaultConcurrencyAdjustmentDuration
 	var lastS int64
 	for {
 		select {
@@ -445,9 +501,9 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 				sz = (sz + 1) / 2
 				ss.SetSize(sz)
 				justDecreased = true
-				next = 5 * time.Second
+				next = backoffConcurrentAdjustmentDuration
 			} else {
-				next = 500 * time.Millisecond
+				next = defaultConcurrencyAdjustmentDuration
 				s := cc.successes.Load()
 				if f == 0 && s > lastS && sz < cc.MaxConcurrency {
 					sz += 1
