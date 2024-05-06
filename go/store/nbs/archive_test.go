@@ -450,6 +450,42 @@ func TestPrefixSearch(t *testing.T) {
 	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 22))
 }
 
+func TestFooterVersionAndSignature(t *testing.T) {
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
+	aw := newArchiveWriterWithSink(writer)
+	err := aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte("All work and no play"))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	rdr, err := newArchiveReader(readerAt, fileSize)
+	assert.NoError(t, err)
+
+	assert.Equal(t, archiveFormatVersion, rdr.footer.formatVersion)
+	assert.Equal(t, archiveFileSignature, rdr.footer.fileSignature)
+
+	// Corrupt the version
+	theBytes[fileSize-archiveFooterSize+afrVersionOffset] = 23
+	readerAt = bytes.NewReader(theBytes)
+	_, err = newArchiveReader(readerAt, fileSize)
+	assert.ErrorContains(t, err, "invalid format version")
+
+	// Corrupt the signature, but first restore the version.
+	theBytes[fileSize-archiveFooterSize+afrVersionOffset] = archiveFormatVersion
+	theBytes[fileSize-archiveFooterSize+afrSigOffset+2] = 'X'
+	readerAt = bytes.NewReader(theBytes)
+	_, err = newArchiveReader(readerAt, fileSize)
+	assert.ErrorContains(t, err, "invalid file signature")
+
+}
+
 // Helper functions to create test data below....
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
