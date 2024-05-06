@@ -111,10 +111,11 @@ func ensureGlobalConfig(path string, fs filesys.ReadWriteFS) (config.ReadWriteCo
 	return config.NewFileConfig(path, fs, map[string]string{})
 }
 
-// CreateLocalConfig creates a new repository local config file.  The current directory must have already been initialized
+// CreateLocalConfig creates a new repository local config file with the values from |val|
+// at the directory |dir|. The |dir| directory must have already been initialized
 // as a data repository before a local config can be created.
-func (dcc *DoltCliConfig) CreateLocalConfig(vals map[string]string) error {
-	return dcc.createLocalConfigAt(".", vals)
+func (dcc *DoltCliConfig) CreateLocalConfig(dir string, vals map[string]string) error {
+	return dcc.createLocalConfigAt(dir, vals)
 }
 
 func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string) error {
