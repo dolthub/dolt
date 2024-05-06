@@ -82,6 +82,7 @@ type NetworkRequestParams struct {
 	ThroughputMinimumCheckInterval time.Duration
 	ThroughputMinimumBytesPerCheck int
 	ThroughputMinimumNumIntervals  int
+	RespHeadersTimeout             time.Duration
 }
 
 var defaultRequestParams = NetworkRequestParams{
@@ -92,6 +93,7 @@ var defaultRequestParams = NetworkRequestParams{
 	ThroughputMinimumCheckInterval: time.Second,
 	ThroughputMinimumBytesPerCheck: 1024,
 	ThroughputMinimumNumIntervals:  5,
+	RespHeadersTimeout:             15 * time.Second,
 }
 
 type DoltChunkStore struct {
@@ -442,6 +444,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 				BytesPerCheck: params.ThroughputMinimumBytesPerCheck,
 				NumIntervals:  params.ThroughputMinimumNumIntervals,
 			},
+			RespHeadersTimeout: params.RespHeadersTimeout,
 		})
 		defer resp.Close()
 		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}

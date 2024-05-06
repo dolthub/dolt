@@ -65,14 +65,15 @@ type MinimumThroughputCheck struct {
 type BackOffFactory func(context.Context) backoff.BackOff
 
 type StreamingRangeRequest struct {
-	Fetcher     HTTPFetcher
-	Offset      uint64
-	Length      uint64
-	UrlFact     UrlFactoryFunc
-	Stats       StatsRecorder
-	Health      HealthRecorder
-	BackOffFact BackOffFactory
-	Throughput  MinimumThroughputCheck
+	Fetcher            HTTPFetcher
+	Offset             uint64
+	Length             uint64
+	UrlFact            UrlFactoryFunc
+	Stats              StatsRecorder
+	Health             HealthRecorder
+	BackOffFact        BackOffFactory
+	Throughput         MinimumThroughputCheck
+	RespHeadersTimeout time.Duration
 }
 
 // |StreamingRangeDownload| makes an immediate GET request to the URL returned
@@ -130,9 +131,23 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			rangeHeaderVal := fmt.Sprintf("bytes=%d-%d", offset, rangeEnd)
 			httpReq.Header.Set("Range", rangeHeaderVal)
 
+			reqCtx, cancelCause := context.WithCancelCause(ctx)
+			tc := NewTimeoutController()
+			defer tc.Close()
+			go func() {
+				err := tc.Run()
+				if err != nil {
+					cancelCause(err)
+				}
+			}()
+
+			httpReq = httpReq.WithContext(reqCtx)
+
 			req.Stats.RecordDownloadAttemptStart(retry, offset-origOffset, req.Length)
 			start := time.Now()
-			resp, err := req.Fetcher.Do(httpReq.WithContext(ctx))
+			tc.SetTimeout(reqCtx, req.RespHeadersTimeout)
+			resp, err := req.Fetcher.Do(httpReq)
+			tc.SetTimeout(reqCtx, 0)
 			if err != nil {
 				req.Health.RecordFailure()
 				return err
