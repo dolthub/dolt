@@ -316,7 +316,11 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil {
-		return nil, nil
+		summ, err := delta.GetSummary(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return summ, nil
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(delta.Format(), delta.FromSch, delta.ToSch) {

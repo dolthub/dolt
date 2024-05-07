@@ -185,8 +185,7 @@ func (cmd DiffCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	ap := cmd.ArgParser()
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
@@ -801,6 +800,16 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
+		// TODO: somehow retrieve the database from specific ref
+		if strings.Contains(delta.ToTableName, diff.DBPrefix) {
+			// remove the prefix
+			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
+			continue
+		}
+
 		if isDoltSchemasTable(delta.ToTableName, delta.FromTableName) {
 			// save dolt_schemas table diff for last in diff output
 			doltSchemasChanged = true
@@ -829,7 +838,10 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName string) bool {
 	// TODO: this should be case insensitive
-	return tablesToPrint.Contains(fromTableName) || tablesToPrint.Contains(toTableName)
+	return tablesToPrint.Contains(fromTableName) ||
+		tablesToPrint.Contains(toTableName) ||
+		strings.Contains(fromTableName, diff.DBPrefix) ||
+		strings.Contains(toTableName, diff.DBPrefix)
 }
 
 func isDoltSchemasTable(toTableName, fromTableName string) bool {
@@ -877,6 +889,44 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	}
 
 	return sch, createStmt, nil
+}
+
+func getDatabaseInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (diff.TableInfo, error) {
+	createStmt, err := getDatabaseSchemaAtRef(queryist, sqlCtx, tableName, ref)
+	if err != nil {
+		return diff.TableInfo{}, fmt.Errorf("error: unable to get schema for table '%s': %w", tableName, err)
+	}
+
+	tableInfo := diff.TableInfo{
+		Name:       tableName,
+		CreateStmt: createStmt,
+	}
+	return tableInfo, nil
+}
+
+func getDatabaseSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (string, error) {
+	var rows []sql.Row
+	// TODO: implement `show create database as of ...`
+	tableName = strings.Trim(tableName, diff.DBPrefix)
+	interpolatedQuery, err := dbr.InterpolateForDialect("SHOW CREATE DATABASE ?", []interface{}{dbr.I(tableName)}, dialect.MySQL)
+	if err != nil {
+		return "", fmt.Errorf("error interpolating query: %w", err)
+	}
+	rows, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	if err != nil {
+		return "", fmt.Errorf("error: unable to get create database statement for database '%s': %w", tableName, err)
+	}
+	if len(rows) != 1 {
+		return "", fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
+	}
+	createStmt := rows[0][1].(string)
+
+	// append ; at the end, if one isn't there yet
+	if createStmt[len(createStmt)-1] != ';' {
+		createStmt += ";"
+	}
+
+	return createStmt, nil
 }
 
 // schemaFromCreateTableStmt returns a schema for the CREATE TABLE statement given
@@ -1210,6 +1260,45 @@ func diffDoltSchemasTable(
 			cli.PrintErrf("Unrecognized schema element type: %s", fragmentType)
 			continue
 		}
+	}
+
+	return nil
+}
+
+func diffDatabase(
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
+	if dArgs.diffParts&NameOnlyDiff == 0 {
+		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+	}
+
+	// TODO: properly implement fromTable
+	fromTable := tableSummary.FromTableName
+	var fromTableInfo *diff.TableInfo
+	from, err := getDatabaseInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
+	if err == nil {
+		fromTableInfo = &from
+		fromTableInfo.CreateStmt = "TODO: IMPLEMENT ME CORRECTLY!"
+	}
+
+	toTable := tableSummary.ToTableName
+	var toTableInfo *diff.TableInfo
+	to, err := getDatabaseInfoAtRef(queryist, sqlCtx, toTable, dArgs.toRef)
+	if err == nil {
+		toTableInfo = &to
+	}
+
+	//err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
+	err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil

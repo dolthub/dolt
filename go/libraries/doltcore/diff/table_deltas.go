@@ -195,10 +195,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	if fromColl != toColl {
 		sqlCtx, ok := ctx.(*sql.Context)
 		if ok {
-			dbName := sqlCtx.GetCurrentDatabase()
+			dbName := DBPrefix + sqlCtx.GetCurrentDatabase()
 			deltas = append(deltas, TableDelta{
-				FromName: DBPrefix + dbName,
-				ToName:   DBPrefix + dbName,
+				FromName: dbName,
+				ToName:   dbName,
 			})
 		}
 	}
