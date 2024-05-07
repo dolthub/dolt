@@ -194,7 +194,7 @@ func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStat
 		s.requests.Reset()
 		return nextState, nil
 	} else if errors.As(err, &dre) {
-		// We do not reset the reliable Chan of requsets here.
+		// We do not reset the reliable Chan of requests here.
 		// Once this response is delivered, it will be Ackd and
 		// the channel will be reset by the next state.
 		s.resp = dre.Resp
