@@ -37,7 +37,7 @@ type rebuildableFulltextTable struct {
 
 // rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the pseudo-index tables that were modified by both
 // roots (ours and theirs), or had parents that were modified by both roots.
-func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot *doltdb.RootValue, visitedTables map[string]struct{}) (*doltdb.RootValue, error) {
+func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}) (doltdb.RootValue, error) {
 	// Grab a list of all tables on the root
 	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
@@ -134,7 +134,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot *do
 }
 
 func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltdb.Table, sch schema.Schema,
-	mergedRoot, ourRoot, theirRoot *doltdb.RootValue,
+	mergedRoot, ourRoot, theirRoot doltdb.RootValue,
 	visitedTables map[string]struct{}, doNotDeleteTables map[string]struct{}) (bool, error) {
 	// Even if the parent table was not visited, we still need to check every pseudo-index table due to potential
 	// name overlapping between roots. This also applies to checking whether both ours and theirs have changes.
@@ -182,7 +182,7 @@ func tableNeedsFullTextIndexRebuild(ctx *sql.Context, tblName string, tbl *doltd
 	return wasVisited && oursChanged && theirsChanged, nil
 }
 
-func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildableFulltextTable, mergedRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildableFulltextTable, mergedRoot doltdb.RootValue) (doltdb.RootValue, error) {
 	parentTable, err := createFulltextTable(ctx, tableToRebuild.Name, mergedRoot)
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 
 // purgeFulltextTableData purges all Full-Text tables with the names given. Ignores any tables that are not Full-Text.
 // Also ignores Full-Text config tables. Returns the updated root with the tables purged.
-func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames ...string) (*doltdb.RootValue, error) {
+func purgeFulltextTableData(ctx *sql.Context, root doltdb.RootValue, tableNames ...string) (doltdb.RootValue, error) {
 	for _, tableName := range tableNames {
 		if !doltdb.IsFullTextTable(tableName) {
 			continue
@@ -346,7 +346,7 @@ func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames
 }
 
 // tableChangedBetweenRoots returns whether the given table changed between roots.
-func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot *doltdb.RootValue) (bool, error) {
+func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot doltdb.RootValue) (bool, error) {
 	tbl, ok, err := toRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return false, err
@@ -360,7 +360,7 @@ func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot
 // tableChangedFromRoot returns whether the given table has changed compared to the one found in the given root. If the
 // table does not exist in the root, then that counts as a change. A nil `tbl` is valid, which then checks if the table
 // exists in the root.
-func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) (bool, error) {
+func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, root doltdb.RootValue) (bool, error) {
 	// If `tbl` is nil, then we simply check if the table exists in the root
 	if tbl == nil {
 		return root.HasTable(ctx, tblName)

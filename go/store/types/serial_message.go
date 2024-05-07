@@ -54,7 +54,7 @@ func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (sm SerialMessage) HumanReadableString() string {
-	return sm.humanReadableStringAtIndentationLevel(0)
+	return sm.HumanReadableStringAtIndentationLevel(0)
 }
 
 func printWithIndendationLevel(level int, builder *strings.Builder, format string, a ...any) {
@@ -62,7 +62,7 @@ func printWithIndendationLevel(level int, builder *strings.Builder, format strin
 	fmt.Fprintf(builder, format, a...)
 }
 
-func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string {
+func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string {
 	id := serial.GetFileID(sm)
 	switch id {
 	// NOTE: splunk uses a separate path for some printing
@@ -72,14 +72,14 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StoreRoot{%s}",
-			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
+			SerialMessage(mapbytes).HumanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashListFileID:
 		msg, _ := serial.TryGetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StashList{%s}",
-			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
+			SerialMessage(mapbytes).HumanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashFileID:
 		msg, _ := serial.TryGetRootAsStash(sm, serial.MessagePrefixSz)
@@ -159,15 +159,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
-		msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
-		ret := &strings.Builder{}
-		printWithIndendationLevel(level, ret, "{\n")
-		printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
-		printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		printWithIndendationLevel(level, ret, "\tTables: %s\n",
-			SerialMessage(msg.TablesBytes()).humanReadableStringAtIndentationLevel(level+1))
-		printWithIndendationLevel(level, ret, "}")
-		return ret.String()
+		return RootValueHumanReadableStringAtIndentationLevel(sm, level)
 	case serial.TableFileID:
 		msg, _ := serial.TryGetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
@@ -181,7 +173,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 
 		printWithIndendationLevel(level, ret, "\tPrimary index: #%s\n", hash.Of(msg.PrimaryIndexBytes()))
 		printWithIndendationLevel(level, ret, "\tSecondary indexes: %s\n",
-			SerialMessage(msg.SecondaryIndexesBytes()).humanReadableStringAtIndentationLevel(level+1))
+			SerialMessage(msg.SecondaryIndexesBytes()).HumanReadableStringAtIndentationLevel(level+1))
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
@@ -384,21 +376,7 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			}
 		}
 	case serial.RootValueFileID:
-		var msg serial.RootValue
-		err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
-		if err != nil {
-			return err
-		}
-		err = SerialMessage(msg.TablesBytes()).WalkAddrs(nbf, cb)
-		if err != nil {
-			return err
-		}
-		addr := hash.New(msg.ForeignKeyAddrBytes())
-		if !addr.IsEmpty() {
-			if err = cb(addr); err != nil {
-				return err
-			}
-		}
+		return RootValueWalkAddrs(sm, nbf, cb)
 	case serial.TableFileID:
 		var msg serial.Table
 		err := serial.InitTableRoot(&msg, []byte(sm), serial.MessagePrefixSz)
@@ -539,5 +517,53 @@ func (sm SerialMessage) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (sm SerialMessage) valueReadWriter() ValueReadWriter {
+	return nil
+}
+
+// init assigns the Doltgres-modifiable variables with their Dolt-specific functions. This must be done during init, as
+// assigning them directly to the variables causes an initialization cycle, and this is the only way to bypass it. This
+// is fine to do, as Doltgres is guaranteed to overwrite these functions due to Go's order of initialization.
+func init() {
+	RootValueHumanReadableStringAtIndentationLevel = rootValueHumanReadableStringAtIndentationLevel
+	RootValueWalkAddrs = rootValueWalkAddrs
+}
+
+// RootValueHumanReadableStringAtIndentationLevel returns the human readable string at the given indentation level for
+// root values. This is a variable as it's changed in Doltgres.
+var RootValueHumanReadableStringAtIndentationLevel func(sm SerialMessage, level int) string
+
+// RootValueWalkAddrs walks the given message using the given callback. This is a variable as it's changed in Doltgres.
+var RootValueWalkAddrs func(sm SerialMessage, nbf *NomsBinFormat, cb func(addr hash.Hash) error) error
+
+// rootValueHumanReadableStringAtIndentationLevel is Dolt's implementation of RootValueHumanReadableStringAtIndentationLevel.
+func rootValueHumanReadableStringAtIndentationLevel(sm SerialMessage, level int) string {
+	msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
+	ret := &strings.Builder{}
+	printWithIndendationLevel(level, ret, "{\n")
+	printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
+	printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
+	printWithIndendationLevel(level, ret, "\tTables: %s\n",
+		SerialMessage(msg.TablesBytes()).HumanReadableStringAtIndentationLevel(level+1))
+	printWithIndendationLevel(level, ret, "}")
+	return ret.String()
+}
+
+// rootValueWalkAddrs is Dolt's implementation of RootValueWalkAddrs.
+func rootValueWalkAddrs(sm SerialMessage, nbf *NomsBinFormat, cb func(addr hash.Hash) error) error {
+	var msg serial.RootValue
+	err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+	if err != nil {
+		return err
+	}
+	err = SerialMessage(msg.TablesBytes()).WalkAddrs(nbf, cb)
+	if err != nil {
+		return err
+	}
+	addr := hash.New(msg.ForeignKeyAddrBytes())
+	if !addr.IsEmpty() {
+		if err = cb(addr); err != nil {
+			return err
+		}
+	}
 	return nil
 }

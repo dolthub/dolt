@@ -26,14 +26,14 @@ import (
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
 type UserSpaceDatabase struct {
-	*doltdb.RootValue
+	doltdb.RootValue
 
 	editOpts editor.Options
 }
 
 var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
 
-func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
+func NewUserSpaceDatabase(root doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
 }
 
@@ -102,11 +102,11 @@ func (db *UserSpaceDatabase) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
 
-func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
+func (db *UserSpaceDatabase) GetRoot(*sql.Context) (doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
 
-func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool) {
+func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (doltdb.RootValue, bool) {
 	panic("UserSpaceDatabase should not contain any temporary tables")
 }
 

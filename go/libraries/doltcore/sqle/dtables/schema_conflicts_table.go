@@ -154,7 +154,7 @@ type schemaConflict struct {
 	description string
 }
 
-func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
+func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
 	bs, err := baseRoot.GetAllSchemas(ctx)
 	if err != nil {
 		return schemaConflict{}, err

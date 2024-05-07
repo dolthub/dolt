@@ -243,14 +243,13 @@ func initTestMigrationDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	nv := doltdb.HackNomsValuesFromRootValues(rv)
 
 	ds, err := db.GetDataset(ctx, ref.NewInternalRef("migration").String())
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = db.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	_, err = db.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
 	if err != nil {
 		return nil, err
 	}

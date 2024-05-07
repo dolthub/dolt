@@ -71,7 +71,7 @@ type nomsWriteSession struct {
 var _ WriteSession = &nomsWriteSession{}
 
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
-// locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
+// locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
 func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
 	if types.IsFormat_DOLT(nbf) {
@@ -262,7 +262,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 	return localTableEditor, nil
 }
 
-// setRoot is the inner implementation for SetRoot that does not acquire any locks
+// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
 func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		return fmt.Errorf("cannot set a nomsWriteSession's working set to nil once it has been created")

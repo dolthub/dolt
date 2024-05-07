@@ -27,13 +27,13 @@ import (
 // TableOfTablesWithViolations is a sql.Table implementation that implements a system table which shows the
 // tables that contain constraint violations.
 type TableOfTablesWithViolations struct {
-	root *doltdb.RootValue
+	root doltdb.RootValue
 }
 
 var _ sql.Table = (*TableOfTablesWithViolations)(nil)
 
 // NewTableOfTablesConstraintViolations creates a TableOfTablesWithViolations.
-func NewTableOfTablesConstraintViolations(ctx *sql.Context, root *doltdb.RootValue) sql.Table {
+func NewTableOfTablesConstraintViolations(ctx *sql.Context, root doltdb.RootValue) sql.Table {
 	return &TableOfTablesWithViolations{root: root}
 }
 

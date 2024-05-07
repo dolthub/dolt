@@ -76,10 +76,10 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 func ToDoltSchema(
 	ctx context.Context,
-	root *doltdb.RootValue,
+	root doltdb.RootValue,
 	tableName string,
 	sqlSchema sql.PrimaryKeySchema,
-	headRoot *doltdb.RootValue,
+	headRoot doltdb.RootValue,
 	collation sql.CollationID,
 ) (schema.Schema, error) {
 	var cols []schema.Column

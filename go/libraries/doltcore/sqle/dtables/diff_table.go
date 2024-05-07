@@ -60,7 +60,7 @@ var _ sql.StatisticsTable = (*DiffTable)(nil)
 type DiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
-	workingRoot *doltdb.RootValue
+	workingRoot doltdb.RootValue
 	head        *doltdb.Commit
 
 	headHash          hash.Hash
@@ -87,7 +87,7 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
 	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
@@ -742,7 +742,7 @@ type DiffPartitions struct {
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
 // different values for the hash of the table being looked at.
-func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
+func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
 	tblHash, _, err := root.GetTableHash(ctx, dps.tblName)
 
 	if err != nil {

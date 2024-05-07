@@ -202,7 +202,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 	return s.workingSet, nil
 }
 
-// setRoot is the inner implementation for SetRoot that does not acquire any locks
+// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
 	for tableName, tableWriter := range s.tables {

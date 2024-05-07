@@ -71,7 +71,7 @@ func (dl FileDataLocation) String() string {
 }
 
 // Exists returns true if the DataLocation already exists
-func (dl FileDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+func (dl FileDataLocation) Exists(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	exists, _ := fs.Exists(dl.Path)
 	return exists, nil
 }
@@ -186,7 +186,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
+func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(wr, outSch, csv.NewCSVInfo())

@@ -209,7 +209,7 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 }
 
 type refDetails struct {
-	root       *doltdb.RootValue
+	root       doltdb.RootValue
 	hashStr    string
 	commitTime *types.Timestamp
 }

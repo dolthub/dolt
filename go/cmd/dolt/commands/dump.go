@@ -253,7 +253,7 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	return nil
 }
 
-func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
 	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 	if err != nil {
 		return err
@@ -324,7 +324,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	return nil
 }
 
-func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
 	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -390,7 +390,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 	return nil
 }
 
-func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
 	_, _, ok, err := root.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -615,7 +615,7 @@ func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOption
 }
 
 // checkAndCreateOpenDestFile returns filePath to created dest file after checking for any existing file and handles it
-func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
+func checkAndCreateOpenDestFile(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
 	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
 	if err != nil {
 		return emptyStr, errhand.VerboseErrorFromError(err)
@@ -642,7 +642,7 @@ func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEn
 
 // checkOverwrite returns TRUE if the file exists and force flag not given and
 // FALSE if the file is stream data / file does not exist / file exists and force flag is given
-func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, force bool, dest mvdata.DataLocation) (bool, error) {
+func checkOverwrite(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS, force bool, dest mvdata.DataLocation) (bool, error) {
 	if _, isStream := dest.(mvdata.StreamDataLocation); isStream {
 		return false, nil
 	}
@@ -737,7 +737,7 @@ func newTableArgs(tblName string, destination mvdata.DataLocation, batched, auto
 
 // dumpNonSqlTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
+func dumpNonSqlTables(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = "doltdump/"

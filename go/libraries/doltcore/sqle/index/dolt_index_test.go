@@ -1291,7 +1291,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 	assert.True(t, slice1.equals(slice2, s))
 }
 
-func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
+func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
 	builder := sql.NewIndexBuilder(idx)
@@ -1336,7 +1336,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) (*doltdb.RootValue, map[string]index.DoltIndex) {
+func doltIndexSetup(t *testing.T) (doltdb.RootValue, map[string]index.DoltIndex) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)

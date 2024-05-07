@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newProllyCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func newProllyCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, 
 // for a user table for the v1 format.
 type prollyConstraintViolationsTable struct {
 	tblName string
-	root    *doltdb.RootValue
+	root    doltdb.RootValue
 	sqlSch  sql.PrimaryKeySchema
 	tbl     *doltdb.Table
 	rs      RootSetter

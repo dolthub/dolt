@@ -1537,7 +1537,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 	}
 }
 
-func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged *doltdb.RootValue) {
+func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
 	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB.ValueReadWriter()))
@@ -1602,7 +1602,7 @@ func row(values ...any) sql.Row {
 func singleRow(values ...any) []sql.Row {
 	return []sql.Row{row(values...)}
 }
-func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) *doltdb.RootValue {
+func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.RootValue {
 	ctx := context.Background()
 	wsr, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
 	require.NoError(t, err)
@@ -1618,7 +1618,7 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) *doltdb.
 	return ws.WorkingRoot()
 }
 
-func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) *doltdb.RootValue {
+func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) doltdb.RootValue {
 	ctx := context.Background()
 	wsr, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
 	require.NoError(t, err)
@@ -1632,7 +1632,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
+	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
 	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop)
 	require.NoError(t, err)
@@ -1648,10 +1648,10 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 }
 
 type rootish struct {
-	rv *doltdb.RootValue
+	rv doltdb.RootValue
 }
 
-func (r rootish) ResolveRootValue(ctx context.Context) (*doltdb.RootValue, error) {
+func (r rootish) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
 	return r.rv, nil
 }
 

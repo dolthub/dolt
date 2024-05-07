@@ -27,7 +27,7 @@ import (
 )
 
 // NewConstraintViolationsTable returns a sql.Table that lists constraint violations.
-func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	if root.VRW().Format() == types.Format_DOLT {
 		return newProllyCVTable(ctx, tblName, root, rs)
 	}
@@ -35,7 +35,7 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root *doltdb
 	return newNomsCVTable(ctx, tblName, root, rs)
 }
 
-func newNomsCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newNomsCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func newNomsCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs
 // for a user table for the old format.
 type constraintViolationsTable struct {
 	tblName string
-	root    *doltdb.RootValue
+	root    doltdb.RootValue
 	cvSch   schema.Schema
 	sqlSch  sql.PrimaryKeySchema
 	tbl     *doltdb.Table

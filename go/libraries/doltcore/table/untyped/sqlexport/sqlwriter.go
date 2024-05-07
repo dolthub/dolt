@@ -38,7 +38,7 @@ type SqlExportWriter struct {
 	parentSchs           map[string]schema.Schema
 	foreignKeys          []doltdb.ForeignKey
 	wr                   io.WriteCloser
-	root                 *doltdb.RootValue
+	root                 doltdb.RootValue
 	writtenFirstRow      bool
 	writtenAutocommitOff bool
 	editOpts             editor.Options
@@ -46,7 +46,7 @@ type SqlExportWriter struct {
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
 		return nil, err

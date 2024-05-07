@@ -601,7 +601,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
+func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name string, message string) (doltdb.RootValue, errhand.VerboseError) {
 	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()

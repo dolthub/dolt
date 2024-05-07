@@ -268,7 +268,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	}, err
 }
 
-func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
+func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot doltdb.RootValue) ([]string, error) {
 	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
 		var err error
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)

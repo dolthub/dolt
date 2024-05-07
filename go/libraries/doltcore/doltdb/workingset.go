@@ -33,7 +33,7 @@ import (
 // commit onto which the new commits will be rebased, and the root value of the previous working set, which is used if
 // the rebase is aborted and the working set needs to be restored to its previous state.
 type RebaseState struct {
-	preRebaseWorking *RootValue
+	preRebaseWorking RootValue
 	ontoCommit       *Commit
 	branch           string
 }
@@ -51,7 +51,7 @@ func (rs RebaseState) OntoCommit() *Commit {
 
 // PreRebaseWorkingRoot stores the RootValue of the working set immediately before the current rebase operation was
 // started. This value is used when a rebase is aborted, so that the working set can be restored to its previous state.
-func (rs RebaseState) PreRebaseWorkingRoot() *RootValue {
+func (rs RebaseState) PreRebaseWorkingRoot() RootValue {
 	return rs.preRebaseWorking
 }
 
@@ -60,7 +60,7 @@ type MergeState struct {
 	commit *Commit
 	// the spec string that was used to specify |commit|
 	commitSpecStr    string
-	preMergeWorking  *RootValue
+	preMergeWorking  RootValue
 	unmergableTables []string
 	mergedTables     []string
 	// isCherryPick is set to true when the in-progress merge is a cherry-pick. This is needed so that
@@ -94,7 +94,7 @@ func TodoWorkingSetMeta() *datas.WorkingSetMeta {
 
 // MergeStateFromCommitAndWorking returns a new MergeState.
 // Most clients should not construct MergeState objects directly, but instead use WorkingSet.StartMerge
-func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking *RootValue) *MergeState {
+func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking RootValue) *MergeState {
 	return &MergeState{commit: commit, preMergeWorking: preMergeWorking}
 }
 
@@ -112,7 +112,7 @@ func (m MergeState) IsCherryPick() bool {
 	return m.isCherryPick
 }
 
-func (m MergeState) PreMergeWorkingRoot() *RootValue {
+func (m MergeState) PreMergeWorkingRoot() RootValue {
 	return m.preMergeWorking
 }
 
@@ -131,7 +131,7 @@ func (m MergeState) MergedTables() []string {
 }
 
 func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) (err error) {
-	var to, from *RootValue
+	var to, from RootValue
 
 	to = m.preMergeWorking
 	if from, err = m.commit.GetRootValue(ctx); err != nil {
@@ -196,8 +196,8 @@ type WorkingSet struct {
 	Name        string
 	meta        *datas.WorkingSetMeta
 	addr        *hash.Hash
-	workingRoot *RootValue
-	stagedRoot  *RootValue
+	workingRoot RootValue
+	stagedRoot  RootValue
 	mergeState  *MergeState
 	rebaseState *RebaseState
 }
@@ -211,12 +211,12 @@ func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	}
 }
 
-func (ws WorkingSet) WithStagedRoot(stagedRoot *RootValue) *WorkingSet {
+func (ws WorkingSet) WithStagedRoot(stagedRoot RootValue) *WorkingSet {
 	ws.stagedRoot = stagedRoot
 	return &ws
 }
 
-func (ws WorkingSet) WithWorkingRoot(workingRoot *RootValue) *WorkingSet {
+func (ws WorkingSet) WithWorkingRoot(workingRoot RootValue) *WorkingSet {
 	ws.workingRoot = workingRoot
 	return &ws
 }
@@ -257,7 +257,7 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 // the branch that is being rebased, and |previousRoot| is root value of the branch being rebased. The HEAD and STAGED
 // root values of the branch being rebased must match |previousRoot|; WORKING may be a different root value, but ONLY
 // if it contains only ignored tables.
-func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot *RootValue) (*WorkingSet, error) {
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot RootValue) (*WorkingSet, error) {
 	ws.rebaseState = &RebaseState{
 		ontoCommit:       ontoCommit,
 		preRebaseWorking: previousRoot,
@@ -312,11 +312,11 @@ func (ws WorkingSet) ClearRebase() *WorkingSet {
 	return &ws
 }
 
-func (ws *WorkingSet) WorkingRoot() *RootValue {
+func (ws *WorkingSet) WorkingRoot() RootValue {
 	return ws.workingRoot
 }
 
-func (ws *WorkingSet) StagedRoot() *RootValue {
+func (ws *WorkingSet) StagedRoot() RootValue {
 	return ws.stagedRoot
 }
 
@@ -373,19 +373,19 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 	if err != nil {
 		return nil, err
 	}
-	workingRoot, err := newRootValue(vrw, ns, workingRootVal)
+	workingRoot, err := NewRootValue(ctx, vrw, ns, workingRootVal)
 	if err != nil {
 		return nil, err
 	}
 
-	var stagedRoot *RootValue
+	var stagedRoot RootValue
 	if dsws.StagedAddr != nil {
 		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
 		}
 
-		stagedRoot, err = newRootValue(vrw, ns, stagedRootVal)
+		stagedRoot, err = NewRootValue(ctx, vrw, ns, stagedRootVal)
 		if err != nil {
 			return nil, err
 		}
@@ -420,7 +420,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		preMergeWorkingRoot, err := newRootValue(vrw, ns, preMergeWorkingV)
+		preMergeWorkingRoot, err := NewRootValue(ctx, vrw, ns, preMergeWorkingV)
 		if err != nil {
 			return nil, err
 		}
@@ -452,7 +452,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		preRebaseWorkingRoot, err := newRootValue(vrw, ns, preRebaseWorkingV)
+		preRebaseWorkingRoot, err := NewRootValue(ctx, vrw, ns, preRebaseWorkingV)
 		if err != nil {
 			return nil, err
 		}
@@ -492,7 +492,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 }
 
 // ResolveRootValue implements Rootish.
-func (ws *WorkingSet) ResolveRootValue(context.Context) (*RootValue, error) {
+func (ws *WorkingSet) ResolveRootValue(context.Context) (RootValue, error) {
 	return ws.WorkingRoot(), nil
 }
 
@@ -517,7 +517,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		return nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	var r *RootValue
+	var r RootValue
 	r, workingRoot, err := db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
 		return nil, err

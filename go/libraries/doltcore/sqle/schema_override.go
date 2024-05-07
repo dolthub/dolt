@@ -70,7 +70,7 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 
 // overrideSchemaForTable loads the schema from |overriddenSchemaRoot| for the table named |tableName| and sets the
 // override on |tbl|. If there are any problems loading the overridden schema, this function returns an error.
-func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot *doltdb.RootValue) error {
+func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot doltdb.RootValue) error {
 	overriddenTable, _, ok, err := overriddenSchemaRoot.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
@@ -117,7 +117,7 @@ func getOverriddenSchemaValue(ctx *sql.Context) (string, error) {
 // resolveOverriddenSchemaRoot loads the Dolt schema override session variable, resolves the commit reference, and
 // loads the RootValue for that commit. If the session variable is not set, this function returns nil. If there are
 // any problems resolving the commit or loading the root value, this function returns an error.
-func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootValue, error) {
+func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (doltdb.RootValue, error) {
 	overriddenSchemaValue, err := getOverriddenSchemaValue(ctx)
 	if err != nil {
 		return nil, err

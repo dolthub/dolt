@@ -602,7 +602,7 @@ func (dEnv *DoltEnv) UpdateRoots(ctx context.Context, roots doltdb.Roots) error 
 }
 
 // WorkingRoot returns the working root for the current working branch
-func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (doltdb.RootValue, error) {
 	workingSet, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return nil, err
@@ -635,7 +635,7 @@ func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*
 
 // UpdateWorkingRoot updates the working root for the current working branch to the root value given.
 // This method can fail if another client updates the working root at the same time.
-func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
 
@@ -741,7 +741,7 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}
 }
 
-func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (doltdb.RootValue, error) {
 	commit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
 		return nil, err
@@ -763,7 +763,7 @@ func (dEnv *DoltEnv) DbData() DbData {
 }
 
 // StagedRoot returns the staged root value in the current working set
-func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (doltdb.RootValue, error) {
 	workingSet, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		return nil, err
@@ -774,7 +774,7 @@ func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) 
 
 // UpdateStagedRoot updates the staged root for the current working branch. This can fail if multiple clients attempt
 // to update at the same time.
-func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
 

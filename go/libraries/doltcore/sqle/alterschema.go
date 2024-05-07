@@ -28,7 +28,7 @@ import (
 )
 
 // renameTable renames a table with in a RootValue and returns the updated root.
-func renameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
+func renameTable(ctx context.Context, root doltdb.RootValue, oldName, newName string) (doltdb.RootValue, error) {
 	if newName == oldName {
 		return root, nil
 	} else if root == nil {
@@ -53,7 +53,7 @@ const (
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func addColumnToTable(
 	ctx context.Context,
-	root *doltdb.RootValue,
+	root doltdb.RootValue,
 	tbl *doltdb.Table,
 	tblName string,
 	tag uint64,
@@ -113,7 +113,7 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 // ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
 func validateNewColumn(
 	ctx context.Context,
-	root *doltdb.RootValue,
+	root doltdb.RootValue,
 	tbl *doltdb.Table,
 	tblName string,
 	tag uint64,
