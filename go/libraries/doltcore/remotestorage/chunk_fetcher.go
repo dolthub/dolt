@@ -57,6 +57,9 @@ type ChunkFetcher struct {
 
 const (
 	getLocsBatchSize = 512
+
+	reliableCallReadRequestTimeout = 15 * time.Second
+	reliableCallDeliverRespTimeout = 15 * time.Second
 )
 
 func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
@@ -225,8 +228,8 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 			},
 			ErrF:               processGrpcErr,
 			BackOffF:           grpcBackOff,
-			ReadRequestTimeout: 15 * time.Second,
-			DeliverRespTimeout: 15 * time.Second,
+			ReadRequestTimeout: reliableCallReadRequestTimeout,
+			DeliverRespTimeout: reliableCallDeliverRespTimeout,
 		},
 	)
 	if err != nil {

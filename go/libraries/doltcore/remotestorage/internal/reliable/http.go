@@ -141,6 +141,18 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			rangeHeaderVal := fmt.Sprintf("bytes=%d-%d", offset, rangeEnd)
 			httpReq.Header.Set("Range", rangeHeaderVal)
 
+			// We use a TimeoutController to enforce a timeout for
+			// receiving the response headers. If the request is
+			// successful, the "timeout" on the overall request
+			// will be managed by |EnforceThroughput| on reading
+			// the response body. But we still need to impose a
+			// timeout on receiving the response headers, which we
+			// don't want to block for an indefinite or unspecified
+			// amount of time. Here we set things up so we will
+			// manually cancel the request context if the response
+			// headers are not received in time, but we can cancel
+			// this timeout immediately after the response headers
+			// are received.
 			tc := NewTimeoutController()
 			defer tc.Close()
 			go func() {
@@ -154,6 +166,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 
 			req.Stats.RecordDownloadAttemptStart(retry, offset-origOffset, req.Length)
 			start := time.Now()
+
 			tc.SetTimeout(ctx, req.RespHeadersTimeout)
 			resp, err := req.Fetcher.Do(httpReq)
 			tc.SetTimeout(ctx, 0)
@@ -162,6 +175,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 				return err
 			}
 			defer resp.Body.Close()
+
 			if resp.StatusCode/100 != 2 {
 				req.Health.RecordFailure()
 				return fmt.Errorf("%w: %d", ErrHttpStatus, resp.StatusCode)
