@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"sync"
 
@@ -57,6 +58,7 @@ type archiveWriter struct {
 	dataCheckSum     sha512Sum
 	indexCheckSum    sha512Sum
 	metadataCheckSum sha512Sum
+	footerCheckSum   sha512Sum
 	workflowStage    stage
 }
 
@@ -330,6 +332,9 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.bytesWritten += archiveFileSigSize
 	aw.workflowStage = stageFlush
 
+	aw.footerCheckSum = sha512Sum(aw.output.GetSum())
+	aw.output.ResetHasher()
+
 	return nil
 }
 
@@ -377,6 +382,8 @@ func writeVarUint64(w io.Writer, val uint64) error {
 	return err
 }
 
+// flushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
+// will be the footer hash + ".darc" as a suffix.
 func (aw *archiveWriter) flushToFile(path string) error {
 	if aw.workflowStage != stageFlush {
 		return fmt.Errorf("Runtime error: flushToFile called out of order")
@@ -389,5 +396,9 @@ func (aw *archiveWriter) flushToFile(path string) error {
 		}
 	}
 
-	return aw.output.FlushToFile(path)
+	h := hash.New(aw.footerCheckSum[:hash.ByteLen])
+	fileName := fmt.Sprintf("%s.darc", h.String())
+	fullPath := filepath.Join(path, fileName)
+
+	return aw.output.FlushToFile(fullPath)
 }
