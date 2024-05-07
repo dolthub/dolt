@@ -1154,12 +1154,17 @@ func diffUserTable(
 			}
 		}
 
-		diffStats, err := getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
+		var diffStats []diffStatistics
+		diffStats, err = getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
+		err = dw.WriteTableDiffStats(diffStats, fromColLen, toColLen, areTablesKeyless)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -1227,14 +1232,14 @@ func diffDoltSchemasTable(
 		var newFragment string
 		if row[4] != nil {
 			oldFragment = row[4].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
 				oldFragment += ";"
 			}
 		}
 		if row[5] != nil {
 			newFragment = row[5].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
 				newFragment += ";"
 			}
