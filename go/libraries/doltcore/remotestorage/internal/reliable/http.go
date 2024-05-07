@@ -108,7 +108,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 	// the retried HTTP requests will be writing to |w|.
 	r, w := io.Pipe()
 
-	// This is the overall context for the opreation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
+	// This is the overall context for the operation, encompassing all of its retries. When StreamingResponse is closed, this is canceled.
 	ctx, cancel := context.WithCancel(ctx)
 
 	// This naked go routine makes retried HTTP requests for the byte range, writing the HTTP response bodies to |w|.
