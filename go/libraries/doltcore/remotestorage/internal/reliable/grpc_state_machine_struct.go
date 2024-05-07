@@ -99,7 +99,7 @@ func (s *reliableCallStateMachine[Req, Resp]) stateForError(err error) (CtxState
 var rpcOneShotTimeout = 15 * time.Second
 
 // Open is the normal state of reading requests from the application, sending
-// them to the RPC, and reading thier responses from the RPC, and sending the
+// them to the RPC, and reading their responses from the RPC, and sending the
 // responses to the application.
 func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error) {
 	var nextState CtxStateFunc
