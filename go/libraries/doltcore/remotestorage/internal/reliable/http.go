@@ -77,7 +77,7 @@ type StreamingRangeRequest struct {
 }
 
 // |StreamingRangeDownload| makes an immediate GET request to the URL returned
-// from |urlStrF|, returning a |StreamingResponse| object which can be used to
+// from |req.UrlFact|, returning a |StreamingResponse| object which can be used to
 // consume the body of the response. A |StreamingResponse| should be |Close|d
 // by the consumer, and it is safe to do so before the entire response has been
 // read, if a condition arises where the response is no longer needed.
