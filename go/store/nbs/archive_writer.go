@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"io"
 	"sort"
-
-	"github.com/dolthub/gozstd"
-	"github.com/pkg/errors"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/gozstd"
 )
 
 type stagedByteSpanSlice []byteSpan
@@ -181,16 +180,17 @@ func (aw *archiveWriter) writeIndex() error {
 	}
 
 	redr, wrtr := io.Pipe()
-
 	outCount := &streamCounter{wrapped: aw.output}
-	errCh := make(chan error)
-
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		err := gozstd.StreamCompressLevel(outCount, redr, 6)
 		if err != nil {
-			errCh <- errors.Wrap(err, "Failed to compress archive index")
+			redr.CloseWithError(err) // This will cause the writer to return the error.
+		} else {
+			redr.Close()
 		}
-		close(errCh)
+		wg.Done()
 	}()
 
 	// Write out the stagedByteSpans
@@ -233,10 +233,7 @@ func (aw *archiveWriter) writeIndex() error {
 	if err != nil {
 		return err
 	}
-	err, _ = <-errCh
-	if err != nil {
-		return err
-	}
+	wg.Wait()
 	indexSize := outCount.count
 
 	// Suffixes (uncompresssed)

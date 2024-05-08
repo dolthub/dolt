@@ -99,17 +99,15 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	secRdr := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
 	rawReader := bufio.NewReader(secRdr)
 
-	errChan := make(chan error, 1)
-
 	redr, wrtr := io.Pipe()
+	defer redr.Close()
 	go func() {
-		defer wrtr.Close()
 		err := gozstd.StreamDecompress(wrtr, rawReader)
 		if err != nil {
-			errChan <- errors.Wrap(err, "Failed to decompress archive index")
+			wrtr.CloseWithError(err)
+		} else {
+			wrtr.Close()
 		}
-
-		close(errChan)
 	}()
 	byteReader := bufio.NewReader(redr)
 
@@ -156,13 +154,9 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 
 		chunks[i] = chunkRef{dict: uint32(dict64), data: uint32(data64)}
 	}
+	// Reading the compressed portion should be complete at this point.
 
-	// Wait for all compressed data to finish.
-	err, _ = <-errChan
-	if err != nil {
-		return archiveReader{}, err
-	}
-
+	// Read the suffixes.
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := io.NewSectionReader(reader, int64(suffixSpan.offset), int64(suffixSpan.length))
 	sufReader := bufio.NewReader(sufRdr)
