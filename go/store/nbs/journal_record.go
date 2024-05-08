@@ -228,7 +228,7 @@ func validateJournalRecord(buf []byte) bool {
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
 // offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
-// is returned, or any error encounterd along the way.
+// is returned, or any error encountered along the way.
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
