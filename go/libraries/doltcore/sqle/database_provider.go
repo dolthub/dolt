@@ -461,7 +461,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(ctx *sql.Context, name string)
 
-// ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
+// ConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
 // TODO: consider the replication heads / all heads setting
 func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
@@ -723,8 +723,17 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		}
 	}
 
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, newEnv)
+	if err != nil {
+		return err
+	}
+	dbs, err := ApplyReplicationConfig(ctx, sql.NewBackgroundThreads(), mrEnv, cli.CliErr, db)
+	if err != nil {
+		return err
+	}
+
 	formattedName := formatDbMapKeyName(db.Name())
-	p.databases[formattedName] = db
+	p.databases[formattedName] = dbs[0]
 	p.dbLocations[formattedName] = newEnv.FS
 	return nil
 }

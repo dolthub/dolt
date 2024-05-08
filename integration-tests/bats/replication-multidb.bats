@@ -328,6 +328,61 @@ SQL
     [[ ! "$output" =~ "t2" ]] || false
 }
 
+# Test that a Dolt sql-server automatically pulls new commits from a remote for new databases
+# that have been automatically cloned.
+@test "replication-multidb: sql-server pull on read for new databases" {
+    # Create test data in repo1 and push it to remote1
+    cd "${TMPDIRS}/dbs1/repo1"
+    dolt sql -q "create table t1 (pk int primary key); insert into t1 values (42);"
+    dolt commit -Am "creating table t1"
+    dolt push remote1 main:main
+
+    # Create test data in repo2 and push it to remote1
+    cd "${TMPDIRS}/dbs1/repo2"
+    dolt sql -q "create table t2 (pk int primary key); insert into t2 values (123);"
+    dolt commit -Am "creating table t2"
+    dolt push remote1 main:main
+
+    # Start a read replica server that replicates from the remotes on disk
+    mkdir "${TMPDIRS}/readReplicaServer"
+    cd "${TMPDIRS}/readReplicaServer"
+    dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --global --add sqlserver.global.dolt_replicate_heads main
+    dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
+    start_multi_db_server information_schema
+
+    # Assert that no databases are synced to the read replica server yet
+    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "show databases"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ ! "$output" =~ "repo1" ]] || false
+    [[ ! "$output" =~ "repo2" ]] || false
+
+    # Sync repo1 to the read replica server by use'ing it
+    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "use repo1; show databases;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "repo1" ]] || false
+    [[ ! "$output" =~ "repo2" ]] || false
+
+    # Sync repo1 by using it
+    run dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+
+    # Push a new change to repo1
+    cd "${TMPDIRS}/dbs1/repo1"
+    dolt sql -q "insert into t1 values (43);"
+    dolt commit -Am "Adding row 43"
+    dolt push remote1 main:main
+
+    # Verify that the changes from repo1 have been pulled
+    run dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+    [[ "$output" =~ "43" ]] || false
+}
+
 @test "replication-multidb: sql-server pull on read" {
     push_helper $TMPDIRS
     dolt --data-dir=dbs1 sql -b -q "use repo1; create table t1 (a int primary key)"

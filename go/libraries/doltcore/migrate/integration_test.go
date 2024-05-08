@@ -199,7 +199,7 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 	if err != nil {
 		return nil, err
 	}
-	root, err := ws.WorkingRoot().CreateEmptyTable(ctx, doltdb.TableName{Name: "test"}, sch)
+	root, err := doltdb.CreateEmptyTable(ctx, ws.WorkingRoot(), doltdb.TableName{Name: "test"}, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -243,14 +243,13 @@ func initTestMigrationDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	nv := doltdb.HackNomsValuesFromRootValues(rv)
 
 	ds, err := db.GetDataset(ctx, ref.NewInternalRef("migration").String())
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = db.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	_, err = db.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
 	if err != nil {
 		return nil, err
 	}

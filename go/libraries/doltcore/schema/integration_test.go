@@ -173,7 +173,7 @@ func TestGetKeyTags(t *testing.T) {
 	}
 }
 
-func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.DoltDB, *doltdb.RootValue) {
+func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.DoltDB, doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	cmd := commands.SqlCmd{}
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv)

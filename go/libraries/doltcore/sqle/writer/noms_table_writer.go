@@ -40,7 +40,7 @@ type AutoIncrementGetter interface {
 }
 
 // SessionRootSetter sets the root value for the session.
-type SessionRootSetter func(ctx *sql.Context, dbName string, root *doltdb.RootValue) error
+type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootValue) error
 
 // nomsTableWriter is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //

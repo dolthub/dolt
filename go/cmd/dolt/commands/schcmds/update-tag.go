@@ -94,7 +94,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	tbl, tName, ok, err := root.GetTableInsensitive(ctx, tableName)
+	tbl, tName, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").Build(), usage)
 	}
