@@ -82,7 +82,7 @@ const (
 	indexRecOffsetSz   = 8
 	indexRecChecksumSz = 4
 	lookupSz           = 16 + uint64Size + uint32Size
-	lookupMetaSz       = uint32Size + uint32Size + uint32Size + hash.ByteLen
+	lookupMetaSz       = uint64Size + uint64Size + uint32Size + hash.ByteLen
 )
 
 func journalIndexRecordSize(idx []byte) (recordSz uint32) {
@@ -183,8 +183,8 @@ func validateIndexRecord(buf []byte) bool {
 }
 
 type lookupMeta struct {
-	batchStart int
-	batchEnd   int
+	batchStart int64
+	batchEnd   int64
 	checkSum   uint32
 	latestHash hash.Hash
 }
@@ -270,19 +270,19 @@ func readIndexLookup(r *bufio.Reader) (lookup, error) {
 // start-end range will cause the checksum/crc check to fail. The last root hash
 // is a duplicate sanity check.
 func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
-	var startBuf [uint32Size]byte
+	var startBuf [offsetSize]byte
 	if _, err := io.ReadFull(r, startBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
-	startOff := binary.BigEndian.Uint32(startBuf[:])
+	startOff := binary.BigEndian.Uint64(startBuf[:])
 
-	var endBuf [uint32Size]byte
+	var endBuf [offsetSize]byte
 	if _, err := io.ReadFull(r, endBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
-	endOff := binary.BigEndian.Uint32(endBuf[:])
+	endOff := binary.BigEndian.Uint64(endBuf[:])
 
-	var checksumBuf [uint32Size]byte
+	var checksumBuf [checksumSize]byte
 	if _, err := io.ReadFull(r, checksumBuf[:]); err != nil {
 		return lookupMeta{}, err
 	}
@@ -294,8 +294,8 @@ func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
 	}
 
 	return lookupMeta{
-		batchStart: int(startOff),
-		batchEnd:   int(endOff),
+		batchStart: int64(startOff),
+		batchEnd:   int64(endOff),
 		checkSum:   checksum,
 		latestHash: addr,
 	}, nil
@@ -308,13 +308,13 @@ func writeIndexLookup(w *bufio.Writer, l lookup) error {
 		return err
 	}
 
-	var offsetBuf [uint64Size]byte
+	var offsetBuf [offsetSize]byte
 	binary.BigEndian.PutUint64(offsetBuf[:], l.r.Offset)
 	if _, err := w.Write(offsetBuf[:]); err != nil {
 		return err
 	}
 
-	var lengthBuf [uint32Size]byte
+	var lengthBuf [lengthSize]byte
 	binary.BigEndian.PutUint32(lengthBuf[:], l.r.Length)
 	if _, err := w.Write(lengthBuf[:]); err != nil {
 		return err
@@ -333,14 +333,14 @@ func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, ch
 		return err
 	}
 
-	startBuf := make([]byte, ordinalSize)
-	binary.BigEndian.PutUint32(startBuf, uint32(start))
+	startBuf := make([]byte, offsetSize)
+	binary.BigEndian.PutUint64(startBuf, uint64(start))
 	if _, err := w.Write(startBuf); err != nil {
 		return err
 	}
 
-	endBuf := make([]byte, ordinalSize)
-	binary.BigEndian.PutUint32(endBuf, uint32(end))
+	endBuf := make([]byte, offsetSize)
+	binary.BigEndian.PutUint64(endBuf, uint64(end))
 	if _, err := w.Write(endBuf); err != nil {
 		return err
 	}
