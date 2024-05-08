@@ -33,6 +33,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	batches := 10
 	chunksPerBatch := 1000
 	start := uint64(0)
+	var off int
 	for i := 0; i <= batches; i++ {
 		lookups, meta := newLookups(t, chunksPerBatch, start)
 		for _, l := range lookups {
@@ -42,13 +43,14 @@ func TestRoundTripIndexLookups(t *testing.T) {
 		err := writeJournalIndexMeta(w, meta.latestHash, int64(meta.batchStart), int64(meta.batchEnd), meta.checkSum)
 		require.NoError(t, err)
 		start = uint64(meta.batchEnd)
+		off += (1+lookupSz)*chunksPerBatch + (1 + lookupMetaSz)
 	}
 
 	// read lookups from the buffer
 	lookupCnt := 0
 	metaCnt := 0
 
-	_, err := processIndexRecords(bufio.NewReader(buf), 0, func(meta lookupMeta, lookups []lookup, checksum uint32) error {
+	_, err := processIndexRecords(bufio.NewReader(buf), int64(off), func(meta lookupMeta, lookups []lookup, checksum uint32) error {
 		require.Equal(t, meta.checkSum, checksum)
 		lookupCnt += len(lookups)
 		metaCnt += 1

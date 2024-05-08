@@ -336,9 +336,11 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			path := newTestFilePath(t)
 			j := newTestJournalWriter(t, path)
 			// setup
+			var recordCnt int
 			epochs := append(test.epochs, test.novel)
 			for i, e := range epochs {
 				for _, cc := range e.records {
+					recordCnt++
 					assert.NoError(t, j.writeCompressedChunk(cc))
 					if rand.Int()%10 == 0 { // periodic commits
 						assert.NoError(t, j.commitRootHash(cc.H))
@@ -346,12 +348,10 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				}
 				o := j.offset()                             // precommit offset
 				assert.NoError(t, j.commitRootHash(e.last)) // commit |e.last|
-				if i == len(epochs)-1 {
+				if i == len(epochs) {
 					break // don't index |test.novel|
 				}
 				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
-				_ = j.indexWriter.Flush()
-				_ = j.index.Sync()
 			}
 			err := j.Close()
 			require.NoError(t, err)
@@ -372,17 +372,17 @@ func TestJournalIndexBootstrap(t *testing.T) {
 					}
 				}
 				assert.Equal(t, expected[len(expected)-1].last, last)
+				assert.NoError(t, journal.Close())
 			}
 
 			idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 
 			before, err := os.Stat(idxPath)
 			require.NoError(t, err)
-			if len(test.epochs) > 0 { // expect index
-				assert.True(t, before.Size() > 0)
-			} else {
-				assert.Equal(t, int64(0), before.Size())
-			}
+
+			lookupSize := int64(recordCnt * (1 + lookupSz))
+			metaSize := int64(len(epochs)) * (1 + lookupMetaSz)
+			assert.Equal(t, lookupSize+metaSize, before.Size())
 
 			// bootstrap journal using index
 			validateJournal(path, epochs)
