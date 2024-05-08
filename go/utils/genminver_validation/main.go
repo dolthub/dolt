@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/utils/minver"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
 )
@@ -39,7 +41,7 @@ func main() {
 	}
 
 	err := structwalk.Walk(&sqlserver.YAMLConfig{}, func(field reflect.StructField, depth int) error {
-		fi := sqlserver.MinVerFieldInfoFromStructField(field, depth)
+		fi := minver.FieldInfoFromStructField(field, depth)
 		lines = append(lines, fi.String())
 		return nil
 	})

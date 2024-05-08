@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package minver
 
 import (
 	"fmt"
@@ -24,23 +24,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/version"
 )
 
-func SerializeConfigForVersion(cfg YAMLConfig, versionNum uint32) ([]byte, error) {
-	err := nullUnsupported(versionNum, &cfg)
+func YamlForVersion(st any, versionNum uint32) ([]byte, error) {
+	err := NullUnsupported(versionNum, st)
 	if err != nil {
 		return nil, fmt.Errorf("error nulling unspported fields for version %d: %w", versionNum, err)
 	}
 
-	return yaml.Marshal(cfg)
+	return yaml.Marshal(st)
 }
 
-func nullUnsupported(verNum uint32, st any) error {
+func NullUnsupported(verNum uint32, st any) error {
 	const tagName = "minver"
 
 	// use reflection to loop over all fields in the struct st
 	// for each field check the tag "minver" and if the current version is less than that, set the field to nil
 	t := reflect.TypeOf(st)
 
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() != reflect.Ptr {
+		return fmt.Errorf("expected a pointer to a struct, got %T", st)
+	} else if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 
@@ -101,26 +103,26 @@ func nullUnsupported(verNum uint32, st any) error {
 		if !vIsNullable || !v.IsNil() {
 			// if the field is a pointer to a struct, or a struct, or a slice recurse
 			if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
-				err := nullUnsupported(verNum, v.Interface())
+				err := NullUnsupported(verNum, v.Interface())
 				if err != nil {
 					return err
 				}
 			} else if field.Type.Kind() == reflect.Struct {
-				err := nullUnsupported(verNum, v.Addr().Interface())
+				err := NullUnsupported(verNum, v.Addr().Interface())
 				if err != nil {
 					return err
 				}
 			} else if field.Type.Kind() == reflect.Slice {
 				if field.Type.Elem().Kind() == reflect.Ptr && field.Type.Elem().Elem().Kind() == reflect.Struct {
 					for i := 0; i < v.Len(); i++ {
-						err := nullUnsupported(verNum, v.Index(i).Interface())
+						err := NullUnsupported(verNum, v.Index(i).Interface())
 						if err != nil {
 							return err
 						}
 					}
 				} else if field.Type.Elem().Kind() == reflect.Struct {
 					for i := 0; i < v.Len(); i++ {
-						err := nullUnsupported(verNum, v.Index(i).Addr().Interface())
+						err := NullUnsupported(verNum, v.Index(i).Addr().Interface())
 						if err != nil {
 							return err
 						}
@@ -131,50 +133,4 @@ func nullUnsupported(verNum uint32, st any) error {
 	}
 
 	return nil
-}
-
-type MinVerFieldInfo struct {
-	Name    string
-	TypeStr string
-	MinVer  string
-	YamlTag string
-}
-
-func MinVerFieldInfoFromLine(l string) (MinVerFieldInfo, error) {
-	l = strings.TrimSpace(l)
-	tokens := strings.Split(l, " ")
-
-	if len(tokens) != 4 {
-		return MinVerFieldInfo{}, fmt.Errorf("invalid line in minver_validation.txt: '%s'", l)
-	}
-
-	return MinVerFieldInfo{
-		Name:    tokens[0],
-		TypeStr: tokens[1],
-		MinVer:  tokens[2],
-		YamlTag: tokens[3],
-	}, nil
-}
-
-func MinVerFieldInfoFromStructField(field reflect.StructField, depth int) MinVerFieldInfo {
-	info := MinVerFieldInfo{
-		Name:    strings.Repeat("-", depth) + field.Name,
-		TypeStr: field.Type.String(),
-		MinVer:  field.Tag.Get("minver"),
-		YamlTag: field.Tag.Get("yaml"),
-	}
-
-	if info.MinVer == "" {
-		info.MinVer = "0.0.0"
-	}
-
-	return info
-}
-
-func (fi MinVerFieldInfo) Equals(other MinVerFieldInfo) bool {
-	return fi.Name == other.Name && fi.TypeStr == other.TypeStr && fi.MinVer == other.MinVer && fi.YamlTag == other.YamlTag
-}
-
-func (fi MinVerFieldInfo) String() string {
-	return fmt.Sprintf("%s %s %s %s", fi.Name, fi.TypeStr, fi.MinVer, fi.YamlTag)
 }
