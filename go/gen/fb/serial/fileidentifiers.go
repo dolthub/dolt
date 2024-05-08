@@ -40,6 +40,7 @@ const BranchControlFileID = "BRCL"
 const StashListFileID = "SLST"
 const StashFileID = "STSH"
 const StatisticFileID = "STAT"
+const DoltgresRootValueFileID = "DGRV"
 
 const MessageTypesKind int = 27
 

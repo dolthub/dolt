@@ -118,7 +118,7 @@ func (m MemoryRepoState) CWBHeadSpec() (*doltdb.CommitSpec, error) {
 	return spec, nil
 }
 
-func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
 
@@ -148,7 +148,7 @@ func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.R
 	return m.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, m.workingSetMeta(), nil)
 }
 
-func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
 

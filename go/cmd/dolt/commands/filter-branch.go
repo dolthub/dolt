@@ -117,9 +117,9 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		queryString = string(queryStringBytes)
 	}
 
-	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
+	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 		var cmHash, before hash.Hash
-		var root *doltdb.RootValue
+		var root doltdb.RootValue
 		if verbose {
 			var err error
 			cmHash, err = commit.HashOf()
@@ -207,7 +207,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, verbose bool, continueOnErr bool) (*doltdb.RootValue, error) {
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
 	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err

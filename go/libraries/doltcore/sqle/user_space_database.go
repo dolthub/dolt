@@ -26,14 +26,14 @@ import (
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.
 type UserSpaceDatabase struct {
-	*doltdb.RootValue
+	doltdb.RootValue
 
 	editOpts editor.Options
 }
 
 var _ dsess.SqlDatabase = (*UserSpaceDatabase)(nil)
 
-func NewUserSpaceDatabase(root *doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
+func NewUserSpaceDatabase(root doltdb.RootValue, editOpts editor.Options) *UserSpaceDatabase {
 	return &UserSpaceDatabase{RootValue: root, editOpts: editOpts}
 }
 
@@ -49,7 +49,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return nil, false, nil
 	}
-	table, tableName, ok, err := db.RootValue.GetTableInsensitive(ctx, tableName)
+	table, tableName, ok, err := doltdb.GetTableInsensitive(ctx, db.RootValue, tableName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -102,11 +102,11 @@ func (db *UserSpaceDatabase) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
 
-func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {
+func (db *UserSpaceDatabase) GetRoot(*sql.Context) (doltdb.RootValue, error) {
 	return db.RootValue, nil
 }
 
-func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootValue, bool) {
+func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (doltdb.RootValue, bool) {
 	panic("UserSpaceDatabase should not contain any temporary tables")
 }
 

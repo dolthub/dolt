@@ -300,7 +300,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 				return nil, err
 			}
 
-			table, _, ok, err := root.GetTableInsensitive(ctx, tableName)
+			table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
 			if err != nil {
 				return nil, err
 			}
@@ -388,7 +388,7 @@ func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses
 
 	// Get the new highest value from all tables in the working sets given
 	for _, ws := range wses {
-		table, _, exists, err := ws.WorkingRoot().GetTableInsensitive(ctx, tableName)
+		table, _, exists, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), tableName)
 		if err != nil {
 			return err
 		}
