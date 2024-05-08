@@ -1389,7 +1389,7 @@ type DatabaseUpdateListener interface {
 	// the database being updated, and |before| and |after| are the previous and new RootValues for the working root.
 	// If callers encounter any errors while processing a root update notification, they can return an error, which
 	// will be logged.
-	WorkingRootUpdated(ctx *sql.Context, databaseName string, before *RootValue, after *RootValue) error
+	WorkingRootUpdated(ctx *sql.Context, databaseName string, before RootValue, after RootValue) error
 
 	// DatabaseCreated is called when a new database,  named |databaseName|, has been created.
 	DatabaseCreated(ctx *sql.Context, databaseName string) error
