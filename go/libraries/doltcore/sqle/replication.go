@@ -107,6 +107,11 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		return ReadReplicaDatabase{}, err
 	}
 
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		sqlCtx.GetLogger().Infof(
+			"replication enabled for database '%s' from remote '%s'", name, remoteName)
+	}
+
 	return rrd, nil
 }
 
