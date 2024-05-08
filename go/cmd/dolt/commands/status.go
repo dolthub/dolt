@@ -475,8 +475,6 @@ func printEverything(data *printData) error {
 	constraintViolationsExist := len(data.constraintViolationTables) > 0
 	changesPresent := false
 
-	// database changes
-
 	// branch name
 	cli.Printf(branchHeader, data.branchName)
 

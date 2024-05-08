@@ -19,7 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+"sort"
 	"strconv"
 	"strings"
 
@@ -466,6 +467,10 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	for _, summary := range diffSummaries {
 		// We want to ignore all statistics for Full-Text tables
 		if doltdb.IsFullTextTable(summary.TableName) {
+			continue
+		}
+		// Ignore stats for database collation changes
+		if strings.HasPrefix(summary.TableName, diff.DBPrefix) {
 			continue
 		}
 		if summary.DiffType == "added" {

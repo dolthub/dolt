@@ -801,9 +801,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		// TODO: somehow retrieve the database from specific ref
 		if strings.Contains(delta.ToTableName, diff.DBPrefix) {
-			// remove the prefix
 			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
 				return verr
@@ -1285,13 +1283,13 @@ func diffDatabase(
 		}
 	}
 
-	// TODO: properly implement fromTable
 	fromTable := tableSummary.FromTableName
 	var fromTableInfo *diff.TableInfo
 	from, err := getDatabaseInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
 	if err == nil {
+		// TODO: implement show create database as of ...
 		fromTableInfo = &from
-		fromTableInfo.CreateStmt = "TODO: IMPLEMENT ME CORRECTLY!"
+		fromTableInfo.CreateStmt = ""
 	}
 
 	toTable := tableSummary.ToTableName
@@ -1301,7 +1299,6 @@ func diffDatabase(
 		toTableInfo = &to
 	}
 
-	//err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
 	err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

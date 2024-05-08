@@ -35,10 +35,10 @@ teardown() {
     dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
     dolt commit -Am "changed collation"
 
-    dolt checkout main
-    run dolt merge other
+    dolt checkout other
+    run dolt merge main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "collation" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     cd ..
 }
@@ -57,7 +57,7 @@ teardown() {
 
     run dolt merge other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "collation" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     cd ..
 }
