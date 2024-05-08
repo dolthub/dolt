@@ -54,7 +54,7 @@ type Puller struct {
 	hashes        hash.HashSet
 
 	wr *PullTableFileWriter
-	rd ChunkFetcher
+	rd nbs.ChunkFetcher
 
 	pushLog *log.Logger
 
@@ -109,7 +109,7 @@ func NewPuller(
 		DestStore:            sinkCS.(chunks.TableFileStore),
 	})
 
-	rd := NewPullChunkFetcher(ctx, srcChunkStore)
+	rd := GetChunkFetcher(ctx, srcChunkStore)
 
 	var pushLogger *log.Logger
 	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.ToLower(dbg) == "true" {

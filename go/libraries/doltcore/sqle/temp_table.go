@@ -134,8 +134,8 @@ func NewTempTable(
 	return tempTable, nil
 }
 
-func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	return func(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
+	return func(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
 		newTable, _, err := newRoot.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err

@@ -66,7 +66,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	}
 
 	newWorkingRoot := mergeResult.Root
-	err = doltSession.SetRoot(ctx, dbName, newWorkingRoot)
+	err = doltSession.SetWorkingRoot(ctx, dbName, newWorkingRoot)
 	if err != nil {
 		return "", nil, err
 	}

@@ -94,7 +94,7 @@ type dbRoot struct {
 type savepoint struct {
 	name string
 	// TODO: we need a root value per DB here
-	roots map[string]*doltdb.RootValue
+	roots map[string]doltdb.RootValue
 }
 
 func NewDoltTransaction(
@@ -581,11 +581,11 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	}
 
 	workingRoot := workingSet.WorkingRoot()
-	hasDataConflicts, err := workingRoot.HasConflicts(ctx)
+	hasDataConflicts, err := doltdb.HasConflicts(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
-	hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+	hasConstraintViolations, err := doltdb.HasConstraintViolations(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
@@ -641,7 +641,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
 		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
 		if forceTransactionCommit.(int8) != 1 {
-			badTbls, err := workingRoot.TablesWithConstraintViolations(ctx)
+			badTbls, err := doltdb.TablesWithConstraintViolations(ctx, workingRoot)
 			if err != nil {
 				return err
 			}
@@ -744,7 +744,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 
 // CreateSavepoint creates a new savepoint with the name and roots given. If a savepoint with the name given
 // already exists, it's overwritten.
-func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]*doltdb.RootValue) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.RootValue) {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
@@ -764,7 +764,7 @@ func (tx *DoltTransaction) findSavepoint(name string) int {
 
 // RollbackToSavepoint returns the root values for all applicable databases associated with the savepoint name given, or nil if no such savepoint can
 // be found. All savepoints created after the one being rolled back to are no longer accessible.
-func (tx *DoltTransaction) RollbackToSavepoint(name string) map[string]*doltdb.RootValue {
+func (tx *DoltTransaction) RollbackToSavepoint(name string) map[string]doltdb.RootValue {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		// Clear out any savepoints past this one
@@ -795,7 +795,7 @@ func (tx DoltTransaction) WorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta
 	}
 }
 
-func rootsEqual(left, right *doltdb.RootValue) bool {
+func rootsEqual(left, right doltdb.RootValue) bool {
 	if left == nil || right == nil {
 		return false
 	}

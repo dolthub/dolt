@@ -520,8 +520,8 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 // a slice of SQL path statements that represent the equivalent SQL DDL statements for those schema changes. The
 // specified RootValue, |toRoot|, must be the RootValue that was used as the "To" root when computing the specified
 // TableDelta.
-func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
+func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
 	}

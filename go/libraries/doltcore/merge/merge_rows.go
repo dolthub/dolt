@@ -98,9 +98,9 @@ func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
 }
 
 type RootMerger struct {
-	left  *doltdb.RootValue
-	right *doltdb.RootValue
-	anc   *doltdb.RootValue
+	left  doltdb.RootValue
+	right doltdb.RootValue
+	anc   doltdb.RootValue
 
 	rightSrc doltdb.Rootish
 	ancSrc   doltdb.Rootish
@@ -111,7 +111,7 @@ type RootMerger struct {
 
 // NewMerger creates a new merger utility object.
 func NewMerger(
-	left, right, anc *doltdb.RootValue,
+	left, right, anc doltdb.RootValue,
 	rightSrc, ancestorSrc doltdb.Rootish,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,

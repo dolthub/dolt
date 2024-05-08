@@ -61,9 +61,9 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 	}
 }
 
-type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
+type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot doltdb.RootValue) (rebaseRoot doltdb.RootValue, err error)
 
-type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error)
+type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
 func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {

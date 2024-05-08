@@ -129,7 +129,7 @@ func (db database) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
 
-func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+func (db database) GetRoot(context *sql.Context) (doltdb.RootValue, error) {
 	return nil, errors.New("unimplemented")
 }
 

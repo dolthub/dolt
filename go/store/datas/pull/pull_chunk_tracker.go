@@ -111,13 +111,13 @@ func (t *PullChunkTracker) GetChunksToFetch() (hash.HashSet, bool, error) {
 	select {
 	case t.reqCh <- &req:
 	case <-t.ctx.Done():
-		return nil, false, t.ctx.Err()
+		return nil, false, context.Cause(t.ctx)
 	}
 
 	select {
 	case <-req.ready:
 	case <-t.ctx.Done():
-		return nil, false, t.ctx.Err()
+		return nil, false, context.Cause(t.ctx)
 	}
 
 	return req.hs, req.ok, req.err

@@ -498,7 +498,7 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		return nil, err
 	}
 
-	_, _, ok, err := root.GetTableInsensitive(ctx, table.Name())
+	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, table.Name())
 	if err != nil {
 		return nil, err
 	}
