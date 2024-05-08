@@ -57,7 +57,7 @@ func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, s.path}, nil
+	return &CmpChunkTableWriter{NewMD5HashingByteSink(s), 0, 0, nil, nil, s.path}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -71,7 +71,7 @@ func (tw *CmpChunkTableWriter) ContentLength() uint64 {
 
 // Gets the MD5 of the entire table file
 func (tw *CmpChunkTableWriter) GetMD5() []byte {
-	return tw.sink.GetMD5()
+	return tw.sink.GetSum()
 }
 
 // AddCmpChunk adds a compressed chunk
