@@ -466,11 +466,6 @@ func runMain() int {
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
-	fs, err := fs.WithWorkingDir("~")
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to set the working directory. %v", err))
-		return 1
-	}
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()

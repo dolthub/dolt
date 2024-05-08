@@ -37,6 +37,15 @@ import (
 
 const replicationBranch = "main"
 
+// BinlogEnabled indicates whether binary logging is enabled or not. Similar to Dolt's other replication features,
+// changes to binary logging are only applied at server startup.
+//
+// NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
+//
+//	binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
+//	performance hit that binary logging adds.
+var BinlogEnabled = false
+
 type binlogStreamer struct {
 	quitChan  chan struct{}
 	eventChan chan []mysql.BinlogEvent
@@ -65,6 +74,11 @@ var _ doltdb.DatabaseUpdateListener = (*binlogStreamerManager)(nil)
 
 // DatabaseCreated implements the doltdb.DatabaseUpdateListener interface
 func (m *binlogStreamerManager) DatabaseCreated(ctx *sql.Context, databaseName string) error {
+	// no-op if binary logging isn't turned on
+	if !BinlogEnabled {
+		return nil
+	}
+
 	var binlogEvents []mysql.BinlogEvent
 	binlogEvent, err := m.createGtidEvent(ctx)
 	if err != nil {
@@ -92,6 +106,11 @@ func (m *binlogStreamerManager) DatabaseCreated(ctx *sql.Context, databaseName s
 
 // DatabaseDropped implements the doltdb.DatabaseUpdateListener interface.
 func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName string) error {
+	// no-op if binary logging isn't turned on
+	if !BinlogEnabled {
+		return nil
+	}
+
 	var binlogEvents []mysql.BinlogEvent
 	binlogEvent, err := m.createGtidEvent(ctx)
 	if err != nil {
@@ -139,6 +158,11 @@ func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName s
 // to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
 // that log to stream events back to the connected replicas.
 func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
+	// no-op if binary logging isn't turned on
+	if !BinlogEnabled {
+		return nil
+	}
+
 	var binlogEvents []mysql.BinlogEvent
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
