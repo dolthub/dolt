@@ -85,6 +85,11 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 	return &Table{table: dt}, nil
 }
 
+// NewTableFromDurable creates a table from the given durable object.
+func NewTableFromDurable(table durable.Table) *Table {
+	return &Table{table: table}
+}
+
 func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
 	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
 	if err != nil {

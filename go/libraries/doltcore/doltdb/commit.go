@@ -38,7 +38,7 @@ var ErrGhostCommitRuntimeFailure = errors.New("runtime failure: Ghost commit enc
 // Rootish is an object resolvable to a RootValue.
 type Rootish interface {
 	// ResolveRootValue resolves a Rootish to a RootValue.
-	ResolveRootValue(ctx context.Context) (*RootValue, error)
+	ResolveRootValue(ctx context.Context) (RootValue, error)
 
 	// HashOf returns the hash.Hash of the Rootish.
 	HashOf() (hash.Hash, error)
@@ -129,7 +129,7 @@ func (c *Commit) Height() (uint64, error) {
 }
 
 // GetRootValue gets the RootValue of the commit.
-func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
+func (c *Commit) GetRootValue(ctx context.Context) (RootValue, error) {
 	rootV, err := datas.GetCommittedValue(ctx, c.vrw, c.dCommit.NomsValue())
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	if rootV == nil {
 		return nil, errHasNoRootValue
 	}
-	return newRootValue(c.vrw, c.ns, rootV)
+	return NewRootValue(ctx, c.vrw, c.ns, rootV)
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error) {
@@ -285,7 +285,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCo
 }
 
 // ResolveRootValue implements Rootish.
-func (c *Commit) ResolveRootValue(ctx context.Context) (*RootValue, error) {
+func (c *Commit) ResolveRootValue(ctx context.Context) (RootValue, error) {
 	return c.GetRootValue(ctx)
 }
 

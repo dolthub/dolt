@@ -418,7 +418,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
+func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -520,7 +520,7 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -714,7 +714,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	optCmt, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)

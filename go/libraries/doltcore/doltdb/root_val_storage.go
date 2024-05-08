@@ -230,7 +230,7 @@ type fbRvStorage struct {
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rootValueStorage, error) {
 	var h hash.Hash
-	isempty, err := emptyForeignKeyCollection(v.(types.SerialMessage))
+	isempty, err := EmptyForeignKeyCollection(v.(types.SerialMessage))
 	if err != nil {
 		return nil, err
 	}

@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupEditorIndexTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
+func setupEditorIndexTest(t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
 	index_dEnv := dtestutils.CreateTestEnv()
 	root, err := index_dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)

@@ -118,14 +118,14 @@ var catalogKd = DoltQueryCatalogSchema.GetKeyDescriptor()
 var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor()
 
 // Creates the query catalog table if it doesn't exist.
-func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func createQueryCatalogIfNotExists(ctx context.Context, root doltdb.RootValue) (doltdb.RootValue, error) {
 	_, ok, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
 	if err != nil {
 		return nil, err
 	}
 
 	if !ok {
-		return root.CreateEmptyTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName}, DoltQueryCatalogSchema)
+		return doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName}, DoltQueryCatalogSchema)
 	}
 
 	return root, nil
@@ -133,7 +133,7 @@ func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) 
 
 // NewQueryCatalogEntryWithRandID saves a new entry in the query catalog table and returns the new root value. An ID will be
 // chosen automatically.
-func NewQueryCatalogEntryWithRandID(ctx context.Context, root *doltdb.RootValue, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
+func NewQueryCatalogEntryWithRandID(ctx context.Context, root doltdb.RootValue, name, query, description string) (SavedQuery, doltdb.RootValue, error) {
 	uid, err := uuid.NewRandom()
 	if err != nil {
 		return SavedQuery{}, nil, err
@@ -148,11 +148,11 @@ func NewQueryCatalogEntryWithRandID(ctx context.Context, root *doltdb.RootValue,
 
 // NewQueryCatalogEntryWithNameAsID saves an entry in the query catalog table and returns the new root value. If an
 // entry with the given name is already present, it will be overwritten.
-func NewQueryCatalogEntryWithNameAsID(ctx context.Context, root *doltdb.RootValue, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
+func NewQueryCatalogEntryWithNameAsID(ctx context.Context, root doltdb.RootValue, name, query, description string) (SavedQuery, doltdb.RootValue, error) {
 	return newQueryCatalogEntry(ctx, root, name, name, query, description)
 }
 
-func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
+func newQueryCatalogEntry(ctx context.Context, root doltdb.RootValue, id, name, query, description string) (SavedQuery, doltdb.RootValue, error) {
 	root, err := createQueryCatalogIfNotExists(ctx, root)
 	if err != nil {
 		return SavedQuery{}, nil, err
@@ -288,7 +288,7 @@ func newQueryCatalogEntryProlly(ctx context.Context, tbl *doltdb.Table, id, name
 	}, tbl, nil
 }
 
-func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id string) (SavedQuery, error) {
+func RetrieveFromQueryCatalog(ctx context.Context, root doltdb.RootValue, id string) (SavedQuery, error) {
 	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
 
 	if err != nil {

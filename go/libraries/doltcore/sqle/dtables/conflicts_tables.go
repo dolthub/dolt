@@ -28,8 +28,8 @@ import (
 )
 
 // NewConflictsTable returns a new ConflictsTable instance
-func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	tbl, tblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -47,7 +47,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root 
 	return newNomsConflictsTable(ctx, tbl, tblName, root, rs)
 }
 
-func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	rd, err := merge.NewConflictReader(ctx, tbl, tblName)
 	if err != nil {
 		return nil, err
@@ -76,14 +76,14 @@ var _ sql.DeletableTable = ConflictsTable{}
 type ConflictsTable struct {
 	tblName string
 	sqlSch  sql.PrimaryKeySchema
-	root    *doltdb.RootValue
+	root    doltdb.RootValue
 	tbl     *doltdb.Table
 	rd      *merge.ConflictReader
 	rs      RootSetter
 }
 
 type RootSetter interface {
-	SetRoot(ctx *sql.Context, root *doltdb.RootValue) error
+	SetRoot(ctx *sql.Context, root doltdb.RootValue) error
 }
 
 // Name returns the name of the table

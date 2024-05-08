@@ -43,7 +43,7 @@ func (dl StreamDataLocation) String() string {
 }
 
 // Exists returns true if the DataLocation already exists
-func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+func (dl StreamDataLocation) Exists(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	return true, nil
 }
 
@@ -80,7 +80,7 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, o
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
+func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())

@@ -29,7 +29,7 @@ import (
 
 // ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
 // is used to generate unique tags for the Schema
-func ParseCreateTableStatement(ctx *sql.Context, root *doltdb.RootValue, engine *sqle.Engine, query string) (string, schema.Schema, error) {
+func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *sqle.Engine, query string) (string, schema.Schema, error) {
 	binder := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.Parser)
 	parsed, _, _, err := binder.Parse(query, false)
 	if err != nil {
