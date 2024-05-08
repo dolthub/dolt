@@ -14,6 +14,33 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
 
+@test "status: db collation" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "Changes not staged for commit:" ]] || false
+    [[ ! $output =~ "Changes to be committed:" ]] || false
+    [[ $output =~ "modified:         __DATABASE__colldb" ]] || false
+
+    dolt add .
+    run dolt status
+    [ $status -eq 0 ]
+    [[ ! $output =~ "Changes not staged for commit:" ]] || false
+    [[ $output =~ "Changes to be committed:" ]] || false
+    [[ $output =~ "modified:         __DATABASE__colldb" ]] || false
+
+    dolt commit -m "collation"
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "On branch main" ]] || false
+    [[ $output =~ "nothing to commit, working tree clean" ]] || false
+
+    cd ..
+}
+
 @test "status: no changes" {
     run dolt status
     [ "$status" -eq 0 ]

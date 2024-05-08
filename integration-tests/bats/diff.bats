@@ -22,6 +22,20 @@ teardown() {
     teardown_common
 }
 
+@test "diff: db collation diff" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
+
+    cd ..
+}
+
 @test "diff: row, line, in-place, context diff modes" {
     # We're not using the test table, so we might as well delete it
     dolt sql <<SQL

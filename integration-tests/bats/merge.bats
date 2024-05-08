@@ -27,6 +27,61 @@ teardown() {
     teardown_common
 }
 
+@test "merge: db collation ff merge" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt branch other
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -Am "changed collation"
+
+    dolt checkout main
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "collation" ]] || false
+
+    cd ..
+}
+
+@test "merge: db collation non ff merge" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt checkout -b other
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -Am "changed other collation"
+
+    dolt checkout main
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -Am "changed main collation"
+
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "collation" ]] || false
+
+    cd ..
+}
+
+@test "merge: db collation merge conflict" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt checkout -b other
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -Am "changed other collation"
+
+    dolt checkout main
+    dolt sql -q "alter database colldb collate utf8mb4_danish_ci"
+    dolt commit -Am "changed main collation"
+
+    dolt checkout main
+    run dolt merge other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "collation" ]] || false
+
+    cd ..
+}
+
 @test "merge: unresolved FKs not dropped on merge (issue #5531)" {
     dolt sql <<SQL
     SET foreign_key_checks = off;
