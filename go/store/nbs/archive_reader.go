@@ -211,7 +211,7 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	return
 }
 
-func (ai archiveReader) search(hash hash.Hash) (bool, int) {
+func (ai archiveReader) search(hash hash.Hash) (int, bool) {
 	prefix := hash.Prefix()
 	possibleMatch := prollyBinSearch(ai.prefixes, prefix)
 	targetSfx := hash.Suffix()
@@ -220,18 +220,18 @@ func (ai archiveReader) search(hash hash.Hash) (bool, int) {
 		idx := possibleMatch + i
 
 		if ai.prefixes[idx] != prefix {
-			return false, -1
+			return -1, false
 		}
 
 		if ai.suffixes[idx] == suffix(targetSfx) {
-			return true, idx
+			return idx, true
 		}
 	}
-	return false, -1
+	return -1, true
 }
 
 func (ai archiveReader) has(hash hash.Hash) bool {
-	found, _ := ai.search(hash)
+	_, found := ai.search(hash)
 	return found
 }
 
@@ -272,7 +272,7 @@ func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 //
 // The data returned is still compressed, regardless of the dictionary being present or not.
 func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
-	found, idx := ai.search(hash)
+	idx, found := ai.search(hash)
 	if !found {
 		return nil, nil, nil
 	}
