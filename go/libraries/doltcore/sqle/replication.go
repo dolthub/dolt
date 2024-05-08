@@ -120,7 +120,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 	for i, db := range dbs {
 		dEnv := mrEnv.GetEnv(db.Name())
 		if dEnv == nil {
-			outputDbs = append(outputDbs, db)
+			outputDbs[i] = db
 			continue
 		}
 		postCommitHooks, err := GetCommitHooks(ctx, bThreads, dEnv, logger)
