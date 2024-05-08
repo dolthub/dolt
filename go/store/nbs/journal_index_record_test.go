@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"hash/crc32"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	w := bufio.NewWriter(buf)
 	batches := 10
 	chunksPerBatch := 1000
-	start := uint64(0)
+	start := uint64(math.MaxInt32)
 	var off int
 	for i := 0; i <= batches; i++ {
 		lookups, meta := newLookups(t, chunksPerBatch, start)
@@ -40,7 +41,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 			err := writeIndexLookup(w, l)
 			require.NoError(t, err)
 		}
-		err := writeJournalIndexMeta(w, meta.latestHash, int64(meta.batchStart), int64(meta.batchEnd), meta.checkSum)
+		err := writeJournalIndexMeta(w, meta.latestHash, meta.batchStart, meta.batchEnd, meta.checkSum)
 		require.NoError(t, err)
 		start = uint64(meta.batchEnd)
 		off += (1+lookupSz)*chunksPerBatch + (1 + lookupMetaSz)
@@ -80,8 +81,8 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 		end = start + (rand.Uint64() % 1024)
 	}
 	return lookups, lookupMeta{
-		batchStart: int(start),
-		batchEnd:   int(end),
+		batchStart: int64(start),
+		batchEnd:   int64(end),
 		checkSum:   checksum,
 		latestHash: hash.New(hashes[len(hashes)-1]),
 	}

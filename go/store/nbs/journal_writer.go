@@ -221,7 +221,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 
 		// process the indexed portion of the journal
 		var safeIndexOffset int64
-		var prev int
+		var prev int64
 
 		eg.Go(func() error {
 			defer close(ch)
