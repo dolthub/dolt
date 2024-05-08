@@ -345,6 +345,20 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 // configureBinlogPrimaryController configures the |engine| to use the binlog primary controller from |config|.
 func configureBinlogPrimaryController(config *SqlEngineConfig, engine *gms.Engine) error {
 	engine.Analyzer.Catalog.BinlogPrimaryController = config.BinlogPrimaryController
+
+	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+	if !ok {
+		return fmt.Errorf("unable to load log_bin system variable")
+	}
+	logBin, ok := logBinValue.(int8)
+	if !ok {
+		return fmt.Errorf("unexpected type for log_bin system variable: %T", logBinValue)
+	}
+	if logBin == 1 {
+		logrus.Debug("Enabling binary logging")
+		dblr.BinlogEnabled = true
+	}
+
 	return nil
 }
 

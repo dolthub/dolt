@@ -563,7 +563,16 @@ func readAllRowsIntoSlices(t *testing.T, rows *sqlx.Rows) [][]any {
 	}
 }
 
+// startSqlServers starts a MySQL server and a Dolt sql-server for use in tests.
 func startSqlServers(t *testing.T) {
+	startSqlServersWithDoltSystemVars(t, nil)
+}
+
+// startSqlServersWithDoltSystemVars starts a MySQL server and a Dolt sql-server for use in tests. Before the
+// Dolt sql-server is started, the specified |doltPersistentSystemVars| are persisted in the Dolt sql-server's
+// local configuration. These are useful when you need to set system variables that must be available when the
+// sql-server starts up, such as replication system variables.
+func startSqlServersWithDoltSystemVars(t *testing.T, doltPersistentSystemVars map[string]string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping binlog replication integ tests on Windows OS")
 	} else if runtime.GOOS == "darwin" && os.Getenv("CI") == "true" {
@@ -589,7 +598,7 @@ func startSqlServers(t *testing.T) {
 	// Start up primary and replica databases
 	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
 	require.NoError(t, err)
-	doltPort, doltProcess, err = startDoltSqlServer(testDir)
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, doltPersistentSystemVars)
 	require.NoError(t, err)
 }
 
@@ -801,7 +810,10 @@ func initializeDevDoltBuild(dir string, goDirPath string) string {
 	return cachedDoltDevBuildPath
 }
 
-func startDoltSqlServer(dir string) (int, *os.Process, error) {
+// startDoltSqlServer starts a Dolt sql-server on a free port from the specified directory |dir|. If
+// |doltPeristentSystemVars| is populated, then those system variables will be set, persistently, for
+// the Dolt database, before the Dolt sql-server is started.
+func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) (int, *os.Process, error) {
 	dir = filepath.Join(dir, "dolt")
 	err := os.MkdirAll(dir, 0777)
 	if err != nil {
@@ -829,6 +841,22 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 
 	// use an admin user NOT named "root" to test that we don't require the "root" account
 	adminUser := "admin"
+
+	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
+		// Initialize the dolt directory first
+		err = runDoltCommand(dir, goDirPath, "init")
+		if err != nil {
+			return -1, nil, err
+		}
+
+		for systemVar, value := range doltPersistentSystemVars {
+			query := fmt.Sprintf("SET @@PERSIST.%s=%s;", systemVar, value)
+			err = runDoltCommand(dir, goDirPath, "sql", fmt.Sprintf("-q=%s", query))
+			if err != nil {
+				return -1, nil, err
+			}
+		}
+	}
 
 	args := []string{"go", "run", "./cmd/dolt",
 		"sql-server",
@@ -889,6 +917,31 @@ func startDoltSqlServer(dir string) (int, *os.Process, error) {
 	fmt.Printf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil
+}
+
+// runDoltCommand runs a short-lived dolt CLI command with the specified arguments from |doltArgs|. The Dolt data
+// directory is specified from |doltDataDir| and |goDirPath| is the path to the go directory within the Dolt repo.
+// This function will only return when the Dolt CLI command has completed, so it is not suitable for running
+// long-lived commands such as "sql-server". If the command fails, an error is returned with the combined output.
+func runDoltCommand(doltDataDir string, goDirPath string, doltArgs ...string) error {
+	// If we're running in CI, use a precompiled dolt binary instead of go run
+	devDoltPath := initializeDevDoltBuild(doltDataDir, goDirPath)
+
+	args := append([]string{"go", "run", "./cmd/dolt",
+		fmt.Sprintf("--data-dir=%s", doltDataDir)},
+		doltArgs...)
+	if devDoltPath != "" {
+		args[2] = devDoltPath
+		args = args[2:]
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	fmt.Printf("Running Dolt CMD: %s\n", cmd.String())
+	output, err := cmd.CombinedOutput()
+	fmt.Printf("Dolt CMD output: %s\n", string(output))
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, string(output))
+	}
+	return nil
 }
 
 // waitForSqlServerToStart polls the specified database to wait for it to become available, pausing

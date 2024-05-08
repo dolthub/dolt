@@ -19,14 +19,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 )
+
+// doltReplicationPrimarySystemVars holds the system variables that must be set when the Dolt sql-server launches
+// in order for replication to be enabled. Changes to these system variables are not reflected once the SQL engine
+// has been instantiated, so to change them, they need to be persisted and the SQL server needs to be restarted.
+var doltReplicationPrimarySystemVars = map[string]string{
+	"log_bin": "ON",
+}
 
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
 // binlog events.
 func TestBinlogPrimary(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	time.Sleep(100 * time.Millisecond)
@@ -115,11 +123,30 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_OptIn asserts that binary logging does not work when the log_bin system variable is not set.
+func TestBinlogPrimary_OptIn(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(100 * time.Millisecond)
+
+	// Ensure that log_bin is disabled
+	requirePrimaryResults(t, "select @@log_bin;", [][]any{{"0"}})
+
+	// Create a table and assert that it does not get replicated
+	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255) NOT NULL comment 'foo bar baz');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{})
+}
+
 // TestBinlogPrimary_SimpleSchemaChangesWithAutocommit tests that we can make simple schema changes (e.g. create table,
 // alter table, drop table) and replicate the DDL statements correctly.
 func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -172,7 +199,7 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 // contain a mix of schema and data changes, can be correctly replicated.
 func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	time.Sleep(100 * time.Millisecond)
@@ -207,7 +234,7 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 // drop, and undrop databases.
 func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	time.Sleep(100 * time.Millisecond)
@@ -237,7 +264,7 @@ func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
 
 func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -281,7 +308,7 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 // TestBinlogPrimary_OnlyReplicateMainBranch tests that binlog events are only generated for the main branch of a Dolt repository.
 func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -313,7 +340,7 @@ func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 // TestBinlogPrimary_KeylessTables tests that Dolt can replicate changes to keyless tables.
 func TestBinlogPrimary_KeylessTables(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -351,7 +378,7 @@ func TestBinlogPrimary_KeylessTables(t *testing.T) {
 // TestBinlogPrimary_Merge tests that the binlog is updated when data is merged in from another branch.
 func TestBinlogPrimary_Merge(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -386,7 +413,7 @@ func TestBinlogPrimary_Merge(t *testing.T) {
 // TestBinlogPrimary_Cherrypick tests binlog replication when dolt_cherry_pick() is used to cherry-pick commits.
 func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -425,7 +452,7 @@ func TestBinlogPrimary_Cherrypick(t *testing.T) {
 // TestBinlogPrimary_Revert tests binlog replication when dolt_revert() is used to revert commits.
 func TestBinlogPrimary_Revert(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -464,7 +491,7 @@ func TestBinlogPrimary_Revert(t *testing.T) {
 // TestBinlogPrimary_Reset tests that the binlog is updated when a branch head is reset to a different commit.
 func TestBinlogPrimary_Reset(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -548,10 +575,20 @@ func setupForDoltToMySqlReplication() {
 // |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
 // limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
 // be expressed in strings.
-//
-// TODO: Extract to binlog_test_utils
 func requireReplicaResults(t *testing.T, query string, expectedResults [][]any) {
-	rows, err := replicaDatabase.Queryx(query)
+	requireResults(t, replicaDatabase, query, expectedResults)
+}
+
+// requireReplicaResults runs the specified |query| on the primary database and asserts that the results match
+// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
+// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
+// be expressed in strings.
+func requirePrimaryResults(t *testing.T, query string, expectedResults [][]any) {
+	requireResults(t, primaryDatabase, query, expectedResults)
+}
+
+func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][]any) {
+	rows, err := db.Queryx(query)
 	require.NoError(t, err)
 	allRows := readAllRowsIntoSlices(t, rows)
 	require.Equal(t, len(expectedResults), len(allRows), "Expected %v, got %v", expectedResults, allRows)
