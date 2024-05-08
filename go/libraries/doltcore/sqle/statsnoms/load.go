@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -183,7 +184,7 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 		return nil, nil
 	}
 
-	table, ok, err := roots.Head.GetTable(ctx, qual.Table())
+	table, ok, err := roots.Head.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
 	if !ok {
 		return nil, nil
 	}

@@ -313,7 +313,7 @@ func TestMergeCommits(t *testing.T) {
 
 	ctx := sql.NewEmptyContext()
 
-	tbl, _, err := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(ctx)
 	assert.NoError(t, err)
@@ -367,7 +367,7 @@ func TestNomsMergeCommits(t *testing.T) {
 	}
 	assert.Equal(t, expectedStats, stats, "received stats is incorrect")
 
-	tbl, _, err := root.GetTable(context.Background(), tableName)
+	tbl, _, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
@@ -418,7 +418,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
+func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -520,7 +520,7 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
@@ -714,7 +714,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, doltdb.RootValue, doltdb.RootValue, doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	optCmt, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
@@ -724,13 +724,13 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mRoot, err = mRoot.PutTable(context.Background(), tableName, ancTbl)
+	mRoot, err = mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, ancTbl)
 	require.NoError(t, err)
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, rootTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, rootTbl)
 	require.NoError(t, err)
 
-	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
+	mergeRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, mergeTbl)
 	require.NoError(t, err)
 
 	r, mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)

@@ -601,7 +601,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
+func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name string, message string) (doltdb.RootValue, errhand.VerboseError) {
 	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
@@ -778,7 +778,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
-		cont := func() bool {
+		func() {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -808,13 +808,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				dirty, _ = isDirty(sqlCtx, qryist)
 			}
 			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
-
-			return true
 		}()
-
-		if !cont {
-			return
-		}
 
 		shell.SetPrompt(nextPrompt)
 		shell.SetMultiPrompt(multiPrompt)
@@ -1080,8 +1074,6 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 			return nil, nil, err
 		}
 		return nil, nil, nil
-	case *sqlparser.DBDDL:
-		return dbddl(ctx, qryist, s, query)
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
@@ -1168,36 +1160,4 @@ func updateFileReadProgressOutput() {
 	fileReadProg.printed = fileReadProg.bytesRead
 	displayStr := fmt.Sprintf("Processed %.1f%% of the file", percent)
 	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
-}
-
-func dbddl(ctx *sql.Context, queryist cli.Queryist, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
-	action := strings.ToLower(dbddl.Action)
-	var rowIter sql.RowIter = nil
-	var err error = nil
-
-	if action != sqlparser.CreateStr && action != sqlparser.DropStr {
-		return nil, nil, fmt.Errorf("Unhandled DBDDL action %v in Query %v", action, query)
-	}
-
-	if action == sqlparser.DropStr {
-		// Should not be allowed to delete repo name and information schema
-		if dbddl.DBName == sql.InformationSchemaDatabaseName {
-			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", sql.InformationSchemaDatabaseName)
-		}
-	}
-
-	sch, rowIter, err := queryist.Query(ctx, query)
-
-	if rowIter != nil {
-		err = rowIter.Close(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return sch, nil, nil
 }

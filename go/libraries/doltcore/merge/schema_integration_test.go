@@ -134,7 +134,6 @@ var mergeSchemaTests = []mergeSchemaTest{
 				newColTypeInfo("c9", uint64(4508), typeinfo.Int32Type, false)),
 			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
-		skip: true,
 	},
 	{
 		name: "add constraint, drop constraint, merge",
@@ -156,7 +155,6 @@ var mergeSchemaTests = []mergeSchemaTest{
 				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
 			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
-		skip: true,
 	},
 	{
 		name: "add index, drop index, merge",
@@ -200,7 +198,6 @@ var mergeSchemaTests = []mergeSchemaTest{
 				newColTypeInfo("c33", uint64(4696), typeinfo.Int32Type, false)),
 			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{IsUserDefined: true}),
 		),
-		skip: true,
 	},
 	{
 		name: "rename indexes",
@@ -583,7 +580,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 
 	wr, err := dEnv.WorkingRoot(ctx)
 	assert.NoError(t, err)
-	tbl, ok, err := wr.GetTable(ctx, "test")
+	tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
 	assert.True(t, ok)
 	require.NoError(t, err)
 	sch, err := tbl.GetSchema(ctx)
@@ -598,7 +595,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		ctx := context.Background()
 		wr, err := dEnv.WorkingRoot(ctx)
 		assert.NoError(t, err)
-		tbl, ok, err := wr.GetTable(ctx, "test")
+		tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
 		assert.True(t, ok)
 		require.NoError(t, err)
 		sch, err := tbl.GetSchema(ctx)

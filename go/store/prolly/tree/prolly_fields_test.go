@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/spatial"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
@@ -195,7 +196,19 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 	v, err := GetField(context.Background(), desc, 0, tup, ns)
 	assert.NoError(t, err)
-	assert.Equal(t, test.value, v)
+	jsonType := val.Type{Enc: val.JSONAddrEnc}
+	if test.typ == jsonType {
+		getJson := func(field interface{}) interface{} {
+			jsonWrapper, ok := field.(sql.JSONWrapper)
+			require.Equal(t, ok, true)
+			val, err := jsonWrapper.ToInterface()
+			require.NoError(t, err)
+			return val
+		}
+		assert.Equal(t, getJson(test.value), getJson(v))
+	} else {
+		assert.Equal(t, test.value, v)
+	}
 }
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {

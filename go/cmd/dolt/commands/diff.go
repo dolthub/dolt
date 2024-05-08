@@ -48,10 +48,11 @@ type diffOutput int
 type diffPart int
 
 const (
-	SchemaOnlyDiff diffPart = 1 // 0b0001
-	DataOnlyDiff   diffPart = 2 // 0b0010
-	Stat           diffPart = 4 // 0b0100
-	Summary        diffPart = 8 // 0b1000
+	SchemaOnlyDiff diffPart = 1  // 0b0000 0001
+	DataOnlyDiff   diffPart = 2  // 0b0000 0010
+	NameOnlyDiff   diffPart = 4  // 0b0000 0100
+	Stat           diffPart = 8  // 0b0000 1000
+	Summary        diffPart = 16 // 0b0001 0000
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
@@ -59,16 +60,17 @@ const (
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
 
-	DataFlag    = "data"
-	SchemaFlag  = "schema"
-	StatFlag    = "stat"
-	SummaryFlag = "summary"
-	whereParam  = "where"
-	limitParam  = "limit"
-	SkinnyFlag  = "skinny"
-	MergeBase   = "merge-base"
-	DiffMode    = "diff-mode"
-	ReverseFlag = "reverse"
+	DataFlag     = "data"
+	SchemaFlag   = "schema"
+	NameOnlyFlag = "name-only"
+	StatFlag     = "stat"
+	SummaryFlag  = "summary"
+	whereParam   = "where"
+	limitParam   = "limit"
+	SkinnyFlag   = "skinny"
+	MergeBase    = "merge-base"
+	DiffMode     = "diff-mode"
+	ReverseFlag  = "reverse"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -174,6 +176,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
+	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
 	return ap
 }
 
@@ -216,6 +219,12 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		}
 	}
 
+	if apr.Contains(NameOnlyFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+			return errhand.BuildDError("invalid Arguments: --name-only cannot be combined with --schema, --data, --stat, or --summary").Build()
+		}
+	}
+
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
 	case "tabular", "sql", "json", "":
@@ -238,6 +247,8 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 		displaySettings.diffParts = Stat
 	} else if apr.Contains(SummaryFlag) {
 		displaySettings.diffParts = Summary
+	} else if apr.Contains(NameOnlyFlag) {
+		displaySettings.diffParts = NameOnlyDiff
 	}
 
 	displaySettings.skinny = apr.Contains(SkinnyFlag)
@@ -414,7 +425,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 
 	if len(args) == 0 {
 		if useMergeBase {
-			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+			return nil, errors.New("Must supply at least one revision when using --merge-base flag")
 		}
 		// `dolt diff`
 		return nil, nil
@@ -422,7 +433,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 
 	if strings.Contains(args[0], "..") {
 		if useMergeBase {
-			return nil, fmt.Errorf("Cannot use `..` or `...` with --merge-base flag")
+			return nil, errors.New("Cannot use `..` or `...` with --merge-base flag")
 		}
 		err := dArgs.applyDotRevisions(queryist, sqlCtx, args)
 		if err != nil {
@@ -441,7 +452,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 	if err != nil {
 		// `dolt diff table`
 		if useMergeBase {
-			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
+			return nil, errors.New("Must supply at least one revision when using --merge-base flag")
 		}
 		return args, nil
 	}
@@ -508,7 +519,7 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 		return "", err
 	}
 	if len(rows) != 1 {
-		return "", fmt.Errorf("unexpected number of rows returned from dolt_merge_base")
+		return "", errors.New("unexpected number of rows returned from dolt_merge_base")
 	}
 	ancestor := rows[0][0].(string)
 	return ancestor, nil
@@ -1034,9 +1045,11 @@ func diffUserTable(
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
 
-	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	if dArgs.diffParts&NameOnlyDiff == 0 {
+		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	var fromTableInfo, toTableInfo *diff.TableInfo
@@ -1053,6 +1066,11 @@ func diffUserTable(
 	tableName := fromTable
 	if tableName == "" {
 		tableName = toTable
+	}
+
+	if dArgs.diffParts&NameOnlyDiff != 0 {
+		cli.Println(tableName)
+		return errhand.VerboseErrorFromError(nil)
 	}
 
 	if dArgs.diffParts&Stat != 0 {
@@ -1086,12 +1104,17 @@ func diffUserTable(
 			}
 		}
 
-		diffStats, err := getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
+		var diffStats []diffStatistics
+		diffStats, err = getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
+		err = dw.WriteTableDiffStats(diffStats, fromColLen, toColLen, areTablesKeyless)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -1159,14 +1182,14 @@ func diffDoltSchemasTable(
 		var newFragment string
 		if row[4] != nil {
 			oldFragment = row[4].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
 				oldFragment += ";"
 			}
 		}
 		if row[5] != nil {
 			newFragment = row[5].(string)
-			// Typically schema fragements have the semicolons stripped, so put it back on
+			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
 				newFragment += ";"
 			}

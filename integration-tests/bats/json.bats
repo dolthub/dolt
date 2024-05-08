@@ -29,23 +29,23 @@ SQL
 SQL
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 2}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
+    [ "${lines[2]}" = '2,"{""b"":2}"' ]
 
     dolt sql <<SQL
     UPDATE js SET js = '{"c":3}' WHERE pk = 2;
 SQL
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
-    [ "${lines[2]}" = '2,"{""c"": 3}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
+    [ "${lines[2]}" = '2,"{""c"":3}"' ]
 
     dolt sql <<SQL
     DELETE FROM js WHERE pk = 2;
 SQL
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
 }
 
 @test "json: JSON value printing" {
@@ -59,18 +59,18 @@ SQL
 
     run dolt sql -q "SELECT * FROM js;"
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = '+----+----------+' ]
-    [ "${lines[1]}" = '| pk | js       |' ]
-    [ "${lines[2]}" = '+----+----------+' ]
-    [ "${lines[3]}" = '| 1  | {"a": 1} |' ]
-    [ "${lines[4]}" = '| 2  | {"b": 2} |' ]
-    [ "${lines[5]}" = '+----+----------+' ]
+    [ "${lines[0]}" = '+----+---------+' ]
+    [ "${lines[1]}" = '| pk | js      |' ]
+    [ "${lines[2]}" = '+----+---------+' ]
+    [ "${lines[3]}" = '| 1  | {"a":1} |' ]
+    [ "${lines[4]}" = '| 2  | {"b":2} |' ]
+    [ "${lines[5]}" = '+----+---------+' ]
 
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = 'pk,js' ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 2}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
+    [ "${lines[2]}" = '2,"{""b"":2}"' ]
 
     dolt sql -q "SELECT * FROM js;" -r json
     run dolt sql -q "SELECT * FROM js;" -r json
@@ -109,14 +109,14 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}"  = 'diff --dolt a/js b/js' ]
-    [ "${lines[3]}"  = '+---+----+-----------+' ]
-    [ "${lines[4]}"  = '|   | pk | js        |' ]
-    [ "${lines[5]}"  = '+---+----+-----------+' ]
-    [ "${lines[6]}"  = '| < | 1  | {"a": 1}  |' ]
-    [ "${lines[7]}"  = '| > | 1  | {"a": 11} |' ]
-    [ "${lines[8]}"  = '| - | 2  | {"b": 2}  |' ]
-    [ "${lines[9]}"  = '| + | 3  | {"c": 3}  |' ]
-    [ "${lines[10]}" = '+---+----+-----------+' ]
+    [ "${lines[3]}"  = '+---+----+----------+' ]
+    [ "${lines[4]}"  = '|   | pk | js       |' ]
+    [ "${lines[5]}"  = '+---+----+----------+' ]
+    [ "${lines[6]}"  = '| < | 1  | {"a":1}  |' ]
+    [ "${lines[7]}"  = '| > | 1  | {"a":11} |' ]
+    [ "${lines[8]}"  = '| - | 2  | {"b":2}  |' ]
+    [ "${lines[9]}"  = '| + | 3  | {"c":3}  |' ]
+    [ "${lines[10]}" = '+---+----+----------+' ]
 }
 
 @test "json: merge JSON values" {
@@ -147,8 +147,8 @@ SQL
     dolt merge other --no-commit
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 11}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 22}"' ]
+    [ "${lines[1]}" = '1,"{""a"":11}"' ]
+    [ "${lines[2]}" = '2,"{""b"":22}"' ]
     dolt commit -am "merged other into main"
 
     # test merge conflicts
@@ -165,8 +165,8 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 99}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
+    [ "${lines[2]}" = '2,"{""b"":99}"' ]
 }
 
 @test "json: merge JSON values with stored procedure" {
@@ -197,8 +197,8 @@ SQL
     dolt merge other --no-commit
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 11}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 22}"' ]
+    [ "${lines[1]}" = '1,"{""a"":11}"' ]
+    [ "${lines[2]}" = '2,"{""b"":22}"' ]
     dolt commit -am "merged other into main"
 
     # test merge conflicts
@@ -215,8 +215,8 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": 1}"' ]
-    [ "${lines[2]}" = '2,"{""b"": 99}"' ]
+    [ "${lines[1]}" = '1,"{""a"":1}"' ]
+    [ "${lines[2]}" = '2,"{""b"":99}"' ]
 }
 
 @test "json: insert value with special characters" {
@@ -229,7 +229,7 @@ SQL
 SQL
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"{""a"": ""<>&""}"' ]
+    [ "${lines[1]}" = '1,"{""a"":""<>&""}"' ]
 }
 
 
@@ -243,16 +243,5 @@ SQL
 SQL
     run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,"[{""a"": ""<>&""}]"' ]
-}
-
-@test "json: insert json object with keys out of order" {
-    # JSON map keys are sorted k by length then alphabetically
-    dolt sql <<SQL
-    create table tmp (j json);
-    insert into tmp values ('{"name":"BillyBob", "os":"Mac", "resolution":{"x":1920, "y":1080}}');
-SQL
-    run dolt sql -q "SELECT * FROM tmp;"
-    [ "$status" -eq 0 ]
-    [[ "${lines[3]}" =~ '{"os": "Mac", "name": "BillyBob", "resolution": {"x": 1920, "y": 1080}}' ]] || false
+    [ "${lines[1]}" = '1,"[{""a"":""<>&""}]"' ]
 }

@@ -173,7 +173,7 @@ as CLI tool.
 
 ## From Source
 
-Make sure you have Go installed, and that `go` is in your path.
+Make sure you have Go installed, and that `go` is in your path. Dolt has a dependency on [cgo](https://pkg.go.dev/cmd/cgo), so you will need a working C compiler and toolchain as well.
 
 Clone this repository and cd into the `go` directory. Then run:
 

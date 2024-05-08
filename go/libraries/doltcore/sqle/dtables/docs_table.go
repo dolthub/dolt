@@ -123,7 +123,7 @@ func (dt *DocsTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newDocsWriter(dt)
 }
 
-func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
+func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
 	if dt.backingTable == nil {
 		return dt, nil
 	}
@@ -228,7 +228,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		newSchema := doltdb.DocsSchema
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.DocTableName, newSchema)
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.DocTableName}, newSchema)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -239,31 +239,34 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetRoot because we want to avoid modifying the root
+		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
 		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
 		// created table.
-		err = dbState.WriteSession().SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
+
+		if ws := dbState.WriteSession(); ws != nil {
+			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
+			if err != nil {
+				iw.errDuringStatementBegin = err
+				return
+			}
 		}
 
-		err = dSess.SetRoot(ctx, dbName, newRootValue)
+		err = dSess.SetWorkingRoot(ctx, dbName, newRootValue)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
 		}
 	}
 
-	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.DocTableName, dbName, dSess.SetRoot)
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
+	if ws := dbState.WriteSession(); ws != nil {
+		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.DocTableName}, dbName, dSess.SetWorkingRoot)
+		if err != nil {
+			iw.errDuringStatementBegin = err
+			return
+		}
+		iw.tableWriter = tableWriter
+		tableWriter.StatementBegin(ctx)
 	}
-
-	iw.tableWriter = tableWriter
-
-	tableWriter.StatementBegin(ctx)
 }
 
 // DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning

@@ -248,7 +248,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 }
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
-func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
+func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
 	ours, err := ourRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -264,7 +264,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		return nil, nil, err
 	}
 
-	ancSchs, err := ancRoot.GetAllSchemas(ctx)
+	ancSchs, err := doltdb.GetAllSchemas(ctx, ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -996,10 +996,10 @@ func fkCollSetDifference(fkColl, ancestorFkColl *doltdb.ForeignKeyCollection, an
 }
 
 // pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been removed.
-func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyCollection, mergedRoot *doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
+func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
 	pruned, _ = doltdb.NewForeignKeyCollection()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
-		parentTbl, ok, err := mergedRoot.GetTable(ctx, fk.ReferencedTableName)
+		parentTbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})
 		if err != nil || !ok {
 			return false, err
 		}
@@ -1013,7 +1013,7 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 			}
 		}
 
-		childTbl, ok, err := mergedRoot.GetTable(ctx, fk.TableName)
+		childTbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: fk.TableName})
 		if err != nil || !ok {
 			return false, err
 		}

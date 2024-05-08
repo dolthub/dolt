@@ -87,9 +87,9 @@ func stageTables(
 }
 
 // clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.
-func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
+func clearEmptyConflicts(ctx context.Context, tbls []string, working doltdb.RootValue) (doltdb.RootValue, error) {
 	for _, tblName := range tbls {
-		tbl, ok, err := working.GetTable(ctx, tblName)
+		tbl, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 					return nil, err
 				}
 
-				working, err = working.PutTable(ctx, tblName, clrTbl)
+				working, err = working.PutTable(ctx, doltdb.TableName{Name: tblName}, clrTbl)
 				if err != nil {
 					return nil, err
 				}
@@ -125,7 +125,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.
-func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootValue) error {
+func ValidateTables(ctx context.Context, tbls []string, roots ...doltdb.RootValue) error {
 	var missing []string
 	for _, tbl := range tbls {
 		found := false

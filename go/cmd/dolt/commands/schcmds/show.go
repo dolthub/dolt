@@ -87,7 +87,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	cmStr := "working"
 	args := apr.Args
 
-	var root *doltdb.RootValue
+	var root doltdb.RootValue
 	var verr errhand.VerboseError
 	var cm *doltdb.Commit
 
@@ -120,7 +120,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 		// show usage and error out if there aren't any
 		if len(tables) == 0 {
 			var err error
-			tables, err = root.GetTableNames(ctx)
+			tables, err = root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 			if err != nil {
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()

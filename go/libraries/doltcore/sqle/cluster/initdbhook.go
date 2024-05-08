@@ -28,17 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
-	if controller == nil {
-		return orig
-	}
+func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads) sqle.InitDatabaseHook {
 	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db dsess.SqlDatabase) error {
-		var err error
-		err = orig(ctx, pro, name, denv, db)
-		if err != nil {
-			return err
-		}
-
 		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
 		var remoteUrls []string

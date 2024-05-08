@@ -122,7 +122,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 	}
 
 	root := ws.WorkingRoot()
-	tblNames, err := root.TablesWithDataConflicts(ctx)
+	tblNames, err := doltdb.TablesWithDataConflicts(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 
 	var partitions []*tableInConflict
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 
 		if err != nil {
 			return nil, err

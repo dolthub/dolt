@@ -52,8 +52,8 @@ type DoltDatabaseProvider struct {
 	functions          map[string]sql.Function
 	tableFunctions     map[string]sql.TableFunction
 	externalProcedures sql.ExternalStoredProcedureRegistry
-	InitDatabaseHook   InitDatabaseHook
-	DropDatabaseHook   DropDatabaseHook
+	InitDatabaseHooks  []InitDatabaseHook
+	DropDatabaseHooks  []DropDatabaseHook
 	mu                 *sync.RWMutex
 
 	droppedDatabaseManager *droppedDatabaseManager
@@ -65,6 +65,14 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl string
 	isStandby    *bool
 }
+
+var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
@@ -79,14 +87,6 @@ func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql
 	cp.tableFunctions = funcs
 	return &cp, nil
 }
-
-var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
@@ -146,7 +146,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		fs:                     fs,
 		defaultBranch:          defaultBranch,
 		dbFactoryUrl:           dbFactoryUrl,
-		InitDatabaseHook:       ConfigureReplicationDatabaseHook,
+		InitDatabaseHooks:      []InitDatabaseHook{ConfigureReplicationDatabaseHook},
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 	}, nil
@@ -459,7 +459,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
-type DropDatabaseHook func(name string)
+type DropDatabaseHook func(ctx *sql.Context, name string)
 
 // ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
@@ -598,8 +598,14 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	ddb := db.(Database).ddb
-	err := ddb.Close()
+	var database *doltdb.DoltDB
+	if ddb, ok := db.(Database); ok {
+		database = ddb.ddb
+	} else {
+		return fmt.Errorf("unable to drop database: %s", name)
+	}
+
+	err := database.Close()
 	if err != nil {
 		return err
 	}
@@ -630,10 +636,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return err
 	}
 
-	if p.DropDatabaseHook != nil {
+	for _, dropHook := range p.DropDatabaseHooks {
 		// For symmetry with InitDatabaseHook and the names we see in
 		// MultiEnv initialization, we use `name` here, not `dbKey`.
-		p.DropDatabaseHook(name)
+		dropHook(ctx, name)
 	}
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative
@@ -707,12 +713,14 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		return err
 	}
 
-	// If we have an initialization hook, invoke it.  By default, this will
-	// be ConfigureReplicationDatabaseHook, which will setup replication
-	// for the new database if a remote url template is set.
-	err = p.InitDatabaseHook(ctx, p, name, newEnv, db)
-	if err != nil {
-		return err
+	// If we have any initialization hooks, invoke them, until any error is returned.
+	// By default, this will be ConfigureReplicationDatabaseHook, which will set up
+	// replication for the new database if a remote url template is set.
+	for _, initHook := range p.InitDatabaseHooks {
+		err = initHook(ctx, p, name, newEnv, db)
+		if err != nil {
+			return err
+		}
 	}
 
 	formattedName := formatDbMapKeyName(db.Name())

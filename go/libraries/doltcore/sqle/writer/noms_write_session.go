@@ -35,7 +35,7 @@ import (
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error)
+	GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error)
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
@@ -71,13 +71,13 @@ type nomsWriteSession struct {
 var _ WriteSession = &nomsWriteSession{}
 
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
-// locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
+// locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
 func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
 	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
-			tables:     make(map[string]*prollyTableWriter),
+			tables:     make(map[doltdb.TableName]*prollyTableWriter),
 			aiTracker:  aiTracker,
 			mut:        &sync.RWMutex{},
 		}
@@ -92,7 +92,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -109,12 +109,12 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", table, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", table.Name, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	te, err := s.getTableEditor(ctx, table, sch)
+	te, err := s.getTableEditor(ctx, table.Name, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch, nil)
 
 	return &nomsTableWriter{
-		tableName:   table,
+		tableName:   table.Name,
 		dbName:      db,
 		sch:         sch,
 		sqlSch:      sqlSch.Schema,
@@ -170,7 +170,7 @@ func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		if newRoot != nil {
-			newRoot, err = newRoot.PutTable(ctx, name, table)
+			newRoot, err = newRoot.PutTable(ctx, doltdb.TableName{Name: name}, table)
 		}
 		return err
 	}
@@ -238,7 +238,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 
 	root := s.workingSet.WorkingRoot()
 
-	t, ok, err = root.GetTable(ctx, tableName)
+	t, ok, err = root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 	return localTableEditor, nil
 }
 
-// setRoot is the inner implementation for SetRoot that does not acquire any locks
+// setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
 func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		return fmt.Errorf("cannot set a nomsWriteSession's working set to nil once it has been created")
@@ -274,7 +274,7 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 
 	root := ws.WorkingRoot()
 	for tableName, localTableEditor := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
+		t, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return err
 		}

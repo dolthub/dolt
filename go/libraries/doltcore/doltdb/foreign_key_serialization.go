@@ -222,7 +222,7 @@ func serializeUint64Vector(b *fb.Builder, u []uint64) fb.UOffsetT {
 	return b.EndVector(len(u))
 }
 
-func emptyForeignKeyCollection(msg types.SerialMessage) (bool, error) {
+func EmptyForeignKeyCollection(msg types.SerialMessage) (bool, error) {
 	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
 		return false, nil
 	}

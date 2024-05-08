@@ -38,7 +38,7 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
-func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
+func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
@@ -69,7 +69,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 }
 
 // Runs the query given and returns the error (if any).
-func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) (doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
@@ -185,7 +185,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, nil, nil)
 	require.NoError(t, err)
-	root, err = root.PutTable(ctx, tableName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)

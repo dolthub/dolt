@@ -86,14 +86,14 @@ type DataLocation interface {
 	fmt.Stringer
 
 	// Exists returns true if the DataLocation already exists
-	Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error)
+	Exists(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error)
 
 	// NewReader creates a TableReadCloser for the DataLocation
 	NewReader(ctx context.Context, dEnv *env.DoltEnv, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error)
 
 	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 	// an existing table.
-	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error)
+	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error)
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
