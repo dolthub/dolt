@@ -203,7 +203,7 @@ func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []looku
 	var batchCrc uint32
 	var batch []lookup
 	var batchOff int64
-	for {
+	for off < sz {
 		recTag, err := rd.ReadByte()
 		if err != nil {
 			return off, nil

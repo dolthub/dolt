@@ -229,7 +229,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 					return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
 				}
 				prev = m.batchEnd
-				
+
 				// |r.end| is expected to point to a root hash record in |wr.journal|
 				// containing a hash equal to |r.lastRoot|, validate this here
 				if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
@@ -284,6 +284,8 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		wr.ranges = wr.ranges.flatten()
 	}
 
+	var lastOffset int64
+
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
 	// Index lookups are added to the ongoing batch to re-synchronize.
@@ -304,6 +306,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 			wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 		case rootHashJournalRecKind:
+			lastOffset = o
 			last = hash.Hash(r.address)
 			if !reflogDisabled && reflogRingBuffer != nil {
 				reflogRingBuffer.Push(reflogRootHashEntry{
@@ -319,6 +322,13 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 	})
 	if err != nil {
 		return hash.Hash{}, err
+	}
+
+	if wr.ranges.novelCount() > wr.maxNovel {
+		// save bootstrap progress
+		if err := wr.flushIndexRecord(last, lastOffset); err != nil {
+			return hash.Hash{}, err
+		}
 	}
 
 	wr.currentRoot = last
