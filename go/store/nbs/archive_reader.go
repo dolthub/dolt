@@ -116,8 +116,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 
 	offset := uint64(0)
 	for i := uint32(0); i < footer.byteSpanCount; i++ {
-		length := uint64(0)
-		err := binary.Read(byteReader, binary.BigEndian, &length)
+		length, err := binary.ReadUvarint(byteReader)
 		if err != nil {
 			return archiveReader{}, err
 		}
