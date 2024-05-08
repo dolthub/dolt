@@ -706,7 +706,6 @@ var columnDefaultTests = []schemaMergeTest{
 	},
 	// one side changes columns, the other inserts rows
 	{
-		// TODO: this test silently does the wrong thing without erroring
 		name:     "left side column add, right side insert row",
 		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1)),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
