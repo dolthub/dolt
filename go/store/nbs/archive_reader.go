@@ -120,6 +120,11 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		if err != nil {
 			return archiveReader{}, err
 		}
+
+		if length > math.MaxUint32 {
+			return archiveReader{}, errors.New("invalid byte span length. Byte span lengths must be uint32s.")
+		}
+
 		byteSpans[i+1] = byteSpan{offset: offset, length: length}
 		offset += length
 	}
@@ -132,8 +137,13 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		if err != nil {
 			return archiveReader{}, err
 		}
-		prefixes[i] = lastPrefix + delta
-		lastPrefix = prefixes[i]
+
+		nextDelta := lastPrefix + delta
+		if nextDelta < lastPrefix || nextDelta < delta {
+			return archiveReader{}, errors.New("invalid prefix delta. Overflow occurred.")
+		}
+		prefixes[i] = nextDelta
+		lastPrefix = nextDelta
 	}
 
 	chunks := make([]chunkRef, footer.chunkCount)
