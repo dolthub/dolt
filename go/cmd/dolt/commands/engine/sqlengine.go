@@ -77,7 +77,6 @@ type SqlEngineConfig struct {
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
 	EventSchedulerStatus    eventscheduler.SchedulerStatus
-	Parser                  sql.Parser
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -146,7 +145,6 @@ func NewSqlEngine(
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
-		Parser:         config.Parser,
 	}).WithBackgroundThreads(bThreads)
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
