@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"hash/crc32"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	w := bufio.NewWriter(buf)
 	batches := 10
 	chunksPerBatch := 1000
-	start := uint64(0)
+	start := uint64(math.MaxInt32)
 	var off int
 	for i := 0; i <= batches; i++ {
 		lookups, meta := newLookups(t, chunksPerBatch, start)
