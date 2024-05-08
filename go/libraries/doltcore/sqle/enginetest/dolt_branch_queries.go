@@ -18,12 +18,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
