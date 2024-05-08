@@ -5480,16 +5480,15 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 
 var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 	{
-		Name: "db collation change with dolt_add('.')",
-		SetUpScript: []string{
-		},
+		Name:        "db collation change with dolt_add('.')",
+		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
 				Expected: []sql.Row{},
 			},
 
@@ -5539,11 +5538,11 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 
 			{
-				Query: "call dolt_commit('-m', 'db collation changed')",
+				Query:            "call dolt_commit('-m', 'db collation changed')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
@@ -5563,16 +5562,15 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "db collation change with dolt_add('__DATABASE__mydb')",
-		SetUpScript: []string{
-		},
+		Name:        "db collation change with dolt_add('__DATABASE__mydb')",
+		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
 				Expected: []sql.Row{},
 			},
 
@@ -5622,11 +5620,11 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 
 			{
-				Query: "call dolt_commit('-m', 'db collation changed')",
+				Query:            "call dolt_commit('-m', 'db collation changed')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
@@ -5646,16 +5644,15 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "db collation change with dolt_commit('-Am', '')",
-		SetUpScript: []string{
-		},
+		Name:        "db collation change with dolt_commit('-Am', '')",
+		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
 				Expected: []sql.Row{},
 			},
 
@@ -5686,11 +5683,11 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 
 			{
-				Query: "call dolt_commit('-Am', 'db collation changed')",
+				Query:            "call dolt_commit('-Am', 'db collation changed')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query: "select * from dolt_status",
+				Query:    "select * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
@@ -5728,7 +5725,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select * from dolt_status;",
+				Query:    "select * from dolt_status;",
 				Expected: []sql.Row{},
 			},
 		},
@@ -5748,7 +5745,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "call dolt_checkout('main');",
+				Query:            "call dolt_checkout('main');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5775,7 +5772,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "call dolt_merge('other');",
+				Query:            "call dolt_merge('other');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -5798,7 +5795,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_merge('main');",
+				Query:          "call dolt_merge('main');",
 				ExpectedErrStr: "collation conflicts",
 			},
 		},
