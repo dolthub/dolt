@@ -215,6 +215,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 		last = cc.Hash()
 	}
 	require.NoError(t, j.commitRootHash(last))
+	require.NoError(t, j.Close())
 
 	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)

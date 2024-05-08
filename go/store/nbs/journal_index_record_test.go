@@ -17,7 +17,6 @@ package nbs
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"hash/crc32"
 	"math/rand"
 	"testing"
@@ -49,7 +48,7 @@ func TestRoundTripIndexLookups(t *testing.T) {
 	lookupCnt := 0
 	metaCnt := 0
 
-	err := processIndexRecords(context.Background(), bufio.NewReader(buf), 0, func(meta lookupMeta, lookups []lookup, checksum uint32) error {
+	_, err := processIndexRecords(bufio.NewReader(buf), 0, func(meta lookupMeta, lookups []lookup, checksum uint32) error {
 		require.Equal(t, meta.checkSum, checksum)
 		lookupCnt += len(lookups)
 		metaCnt += 1

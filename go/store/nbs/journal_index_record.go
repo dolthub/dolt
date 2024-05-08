@@ -16,8 +16,6 @@ package nbs
 
 import (
 	"bufio"
-	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -25,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"hash/crc32"
 	"io"
-	"sort"
 )
 
 // indexRec is a record in a chunk journal index file. Index records
@@ -83,6 +80,8 @@ const (
 	indexRecLastRootSz = 20
 	indexRecOffsetSz   = 8
 	indexRecChecksumSz = 4
+	lookupSz           = 16 + uint64Size + uint32Size
+	lookupMetaSz       = uint32Size + uint32Size + uint32Size + hash.ByteLen
 )
 
 func journalIndexRecordSize(idx []byte) (recordSz uint32) {
@@ -197,48 +196,52 @@ const (
 
 // processIndexRecords reads batches of chunk index lookups into the journal.
 // An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
-// indicates whether it is a |lookup| or |meta|.
-func processIndexRecords(ctx context.Context, rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (err error) {
+// indicates whether it is a |lookup| or |meta|. Only callback errors are returned.
+// The caller is expected to track the latest lookupMeta end offset and truncate
+// the index to compensate for partially written batches.
+func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (off int64, err error) {
 	var batchCrc uint32
 	var batch []lookup
+	var batchOff int64
 	for {
 		recTag, err := rd.ReadByte()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return err
+			return off, nil
 		}
+		batchOff += 1
+
 		switch recTag {
 		case indexRecChunk:
 			l, err := readIndexLookup(rd)
-			if errors.Is(err, io.ErrUnexpectedEOF) {
-				return nil
-			} else if err != nil {
-				return err
+			if err != nil {
+				return off, nil
 			}
+			batchOff += lookupSz
 			batch = append(batch, l)
 			batchCrc = crc32.Update(batchCrc, crcTable, l.a[:])
 
 		case indexRecMeta:
 			m, err := readIndexMeta(rd)
-			if errors.Is(err, io.ErrUnexpectedEOF) {
-				return nil
-			} else if err != nil {
-				return err
+			if err != nil {
+				return off, nil
 			}
 			if err := cb(m, batch, batchCrc); err != nil {
-				return err
+				return off, err
 			}
 			batch = nil
 			batchCrc = 0
+			off += batchOff + lookupMetaSz
+			batchOff = 0
 		default:
-			return fmt.Errorf("expected record to start with a chunk or metadata type tag")
+			return off, ErrMalformedIndex
 		}
 	}
+	return off, nil
 }
 
-// readIndexMeta reads a sequence of |chunkAddress|journalOffset|chunkLength|
+var ErrMalformedIndex = errors.New("journal index is malformed")
+
+// readIndexLookup reads a sequence of |chunkAddress|journalOffset|chunkLength|
 // that is used to speed up |journal.ranges| initialization.
 func readIndexLookup(r *bufio.Reader) (lookup, error) {
 	addr := addr16{}
@@ -319,6 +322,9 @@ func writeIndexLookup(w *bufio.Writer, l lookup) error {
 	return nil
 }
 
+// writeJournalIndexMeta writes a metadata record for an index range to verify
+// index bootstrapping integrity. Includes the range of index lookups, a CRC
+// checksum, and the latest root hash before |end|.
 func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, checksum uint32) error {
 	// |journal start|journal end|last root hash|range checkSum|
 
@@ -354,37 +360,4 @@ func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, ch
 type lookup struct {
 	a addr16
 	r Range
-}
-
-const lookupSize = hash.ByteLen + offsetSize + lengthSize
-
-// serializeLookups serializes |lookups| using the table file chunk index format.
-func serializeLookups(lookups []lookup) (index []byte) {
-	index = make([]byte, len(lookups)*lookupSize)
-	sort.Slice(lookups, func(i, j int) bool { // sort by addr
-		return bytes.Compare(lookups[i].a[:], lookups[j].a[:]) < 0
-	})
-	buf := index
-	for _, l := range lookups {
-		copy(buf, l.a[:])
-		buf = buf[hash.ByteLen:]
-		binary.BigEndian.PutUint64(buf, l.r.Offset)
-		buf = buf[offsetSize:]
-		binary.BigEndian.PutUint32(buf, l.r.Length)
-		buf = buf[lengthSize:]
-	}
-	return
-}
-
-func deserializeLookups(index []byte) (lookups []lookup) {
-	lookups = make([]lookup, len(index)/lookupSize)
-	for i := range lookups {
-		copy(lookups[i].a[:], index)
-		index = index[hash.ByteLen:]
-		lookups[i].r.Offset = binary.BigEndian.Uint64(index)
-		index = index[offsetSize:]
-		lookups[i].r.Length = binary.BigEndian.Uint32(index)
-		index = index[lengthSize:]
-	}
-	return
 }

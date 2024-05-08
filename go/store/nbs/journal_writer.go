@@ -215,13 +215,21 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		ch := make(chan []lookup, 4)
 
 		// process the indexed portion of the journal
+		var safeIndexOffset int64
+		var prev int
+
 		eg.Go(func() error {
 			defer close(ch)
-			return processIndexRecords(ectx, bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
+			safeIndexOffset, err = processIndexRecords(bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
 				if m.checkSum != batchChecksum {
 					return fmt.Errorf("invalid index checksum (%d != %d)", batchChecksum, m.checkSum)
 				}
 
+				if m.batchStart != prev {
+					return fmt.Errorf("index records do not cover contiguous region (%d != %d)", m.batchStart, prev)
+				}
+				prev = m.batchEnd
+				
 				// |r.end| is expected to point to a root hash record in |wr.journal|
 				// containing a hash equal to |r.lastRoot|, validate this here
 				if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
@@ -239,6 +247,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 				}
 				return nil
 			})
+			return err
 		})
 		// populate range hashmap
 		eg.Go(func() error {
@@ -260,24 +269,39 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		err = eg.Wait()
 		if err != nil {
 			err = fmt.Errorf("error bootstrapping chunk journal: %s", err.Error())
-			if cerr := wr.corruptIndexRecovery(ctx); cerr != nil {
+			if cerr := wr.corruptIndexRecovery(); cerr != nil {
 				err = fmt.Errorf("error recovering corrupted chunk journal index: %s", err.Error())
 			}
+			return hash.Hash{}, err
+		}
+
+		// rewind index to last safe point. Note that |safeIndexOffset| refers
+		// to a location in the index file, while |wr.indexed| refers to a position
+		// in the journal file.
+		if err := wr.truncateIndex(safeIndexOffset); err != nil {
 			return hash.Hash{}, err
 		}
 		wr.ranges = wr.ranges.flatten()
 	}
 
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
-	// at minimum the non-indexed portion will include a root hash record
+	// at minimum the non-indexed portion will include a root hash record.
+	// Index lookups are added to the ongoing batch to re-synchronize.
 	wr.off, err = processJournalRecords(ctx, wr.journal, wr.indexed, func(o int64, r journalRec) error {
 		switch r.kind {
 		case chunkJournalRecKind:
-			wr.ranges.put(r.address, Range{
+			rng := Range{
 				Offset: uint64(o) + uint64(r.payloadOffset()),
 				Length: uint32(len(r.payload)),
-			})
+			}
+			wr.ranges.put(r.address, rng)
 			wr.uncmpSz += r.uncompressedPayloadSize()
+
+			a := toAddr16(r.address)
+			if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
+				return err
+			}
+			wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
@@ -305,17 +329,24 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 // corruptIndexRecovery handles a corrupted or malformed journal index by truncating
 // the index file and restarting the journal bootstrapping process without an index.
 // todo: make backup file?
-func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
-	if _, err = wr.index.Seek(0, io.SeekStart); err != nil {
-		return
-	}
-	if err = wr.index.Truncate(0); err != nil {
-		return
+func (wr *journalWriter) corruptIndexRecovery() error {
+	if err := wr.truncateIndex(0); err != nil {
+		return err
 	}
 	// reset bootstrapping state
 	wr.off, wr.indexed, wr.uncmpSz = 0, 0, 0
 	wr.ranges = newRangeIndex()
-	return
+	return nil
+}
+
+func (wr *journalWriter) truncateIndex(off int64) error {
+	if _, err := wr.index.Seek(off, io.SeekStart); err != nil {
+		return err
+	}
+	if err := wr.index.Truncate(off); err != nil {
+		return err
+	}
+	return nil
 }
 
 // hasAddr returns true if the journal contains a chunk with addr |h|.
@@ -439,10 +470,13 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	return nil
 }
 
-// flushIndexRecord writes a new record to the out-of-band journal index file. Index records
-// accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
+// flushIndexRecord writes metadata for a range of index lookups to the
+// out-of-band journal index file. Index records accelerate journal
+// bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc)
+	if err := writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc); err != nil {
+		return err
+	}
 	wr.batchCrc = 0
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
