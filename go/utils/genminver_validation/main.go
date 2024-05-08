@@ -16,10 +16,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/utils/minver"
 	"log"
 	"os"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/utils/minver"
 )
 
 func main() {
