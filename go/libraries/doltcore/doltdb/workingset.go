@@ -142,7 +142,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 	if err != nil {
 		return err
 	}
-	toSchemas, err := to.GetAllSchemas(ctx)
+	toSchemas, err := GetAllSchemas(ctx, to)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 	if err != nil {
 		return err
 	}
-	fromSchemas, err := from.GetAllSchemas(ctx)
+	fromSchemas, err := GetAllSchemas(ctx, from)
 	if err != nil {
 		return err
 	}

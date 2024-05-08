@@ -264,7 +264,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		return nil, nil, err
 	}
 
-	ancSchs, err := ancRoot.GetAllSchemas(ctx)
+	ancSchs, err := doltdb.GetAllSchemas(ctx, ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}

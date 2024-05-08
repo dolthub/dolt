@@ -56,39 +56,54 @@ var DoltFeatureVersion FeatureVersion = 7 // last bumped when fixing bug related
 type RootValue interface {
 	Rootish
 
+	// CreateDatabaseSchema creates the given schema. This differs from a table's schema.
 	CreateDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (RootValue, error)
-	CreateEmptyTable(ctx context.Context, tName TableName, sch schema.Schema) (RootValue, error)
+	// DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
+	// all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
+	// when debugging tests.
 	DebugString(ctx context.Context, transitive bool) string
-	GenerateTagsForNewColColl(ctx context.Context, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error)
-	GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind, headRoot RootValue) ([]uint64, error)
-	GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error)
+	// GetCollation returns the database collation.
 	GetCollation(ctx context.Context) (schema.Collation, error)
+	// GetDatabaseSchemas returns all schemas. These differ from a table's schema.
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
+	// GetFeatureVersion returns the feature version of this root, if one is written
 	GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error)
+	// GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
+	// in-place, each returned collection may freely be altered without affecting future returned collections from this root.
 	GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error)
+	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
-	GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error)
+	// GetTableHash returns the hash of the given case-sensitive table name.
 	GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error)
-	GetTableInsensitive(ctx context.Context, tName string) (*Table, string, bool, error)
+	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
-	HasConflicts(ctx context.Context) (bool, error)
-	HasConstraintViolations(ctx context.Context) (bool, error)
+	// HasTable returns whether the root has a table with the given case-sensitive name.
 	HasTable(ctx context.Context, tName string) (bool, error)
+	// IterTables calls the callback function cb on each table in this RootValue.
 	IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error
-	MapTableHashes(ctx context.Context) (map[string]hash.Hash, error)
+	// NodeStore returns this root's NodeStore.
 	NodeStore() tree.NodeStore
+	// NomsValue returns this root's storage as a noms value.
 	NomsValue() types.Value
+	// PutForeignKeyCollection returns a new root with the given foreign key collection.
 	PutForeignKeyCollection(ctx context.Context, fkc *ForeignKeyCollection) (RootValue, error)
+	// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 	PutTable(ctx context.Context, tName TableName, table *Table) (RootValue, error)
+	// RemoveTables removes the given case-sensitive tables from the root, and returns a new root.
 	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error)
+	// RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
+	// column tag information, use this method instead of a table drop + add.
 	RenameTable(ctx context.Context, oldName string, newName string) (RootValue, error)
+	// ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
+	// name was found.
 	ResolveTableName(ctx context.Context, tName string) (string, bool, error)
+	// SetCollation sets the given database collation and returns a new root.
 	SetCollation(ctx context.Context, collation schema.Collation) (RootValue, error)
+	// SetFeatureVersion sets the feature version and returns a new root.
 	SetFeatureVersion(v FeatureVersion) (RootValue, error)
+	// SetTableHash sets the table with the given case-sensitive name to the new hash, and returns a new root.
 	SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error)
-	TablesWithConstraintViolations(ctx context.Context) ([]string, error)
-	TablesWithDataConflicts(ctx context.Context) ([]string, error)
-	ValidateForeignKeysOnSchemas(ctx context.Context) (RootValue, error)
+	// VRW returns this root's ValueReadWriter.
 	VRW() types.ValueReadWriter
 }
 
@@ -214,7 +229,8 @@ func decodeRootNomsValue(ctx context.Context, vrw types.ValueReadWriter, ns tree
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
-			return string(serial.GetFileID(sm)) == serial.RootValueFileID
+			fileID := serial.GetFileID(sm)
+			return fileID == serial.RootValueFileID || fileID == serial.DoltgresRootValueFileID
 		}
 	} else {
 		if st, ok := val.(types.Struct); ok {
@@ -273,7 +289,7 @@ func (root *rootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return !a.IsEmpty(), nil
 }
 
-func (root *rootValue) GenerateTagsForNewColColl(ctx context.Context, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
+func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
 	newColNames := make([]string, 0, cc.Size())
 	newColKinds := make([]types.NomsKind, 0, cc.Size())
 	_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -282,7 +298,7 @@ func (root *rootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 		return false, nil
 	})
 
-	newTags, err := root.GenerateTagsForNewColumns(ctx, tableName, newColNames, newColKinds, nil)
+	newTags, err := GenerateTagsForNewColumns(ctx, root, tableName, newColNames, newColKinds, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -297,8 +313,9 @@ func (root *rootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
-func (root *rootValue) GenerateTagsForNewColumns(
+func GenerateTagsForNewColumns(
 	ctx context.Context,
+	root RootValue,
 	tableName string,
 	newColNames []string,
 	newColKinds []types.NomsKind,
@@ -399,7 +416,7 @@ func GetExistingColumns(
 	return existingCols, nil
 }
 
-func (root *rootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {
+func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schema, error) {
 	m := make(map[string]schema.Schema)
 	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 		m[name] = sch
@@ -503,7 +520,7 @@ func GetTable(ctx context.Context, root RootValue, addr hash.Hash) (*Table, bool
 }
 
 // GetTableInsensitive will retrieve a table by its case-insensitive name.
-func (root *rootValue) GetTableInsensitive(ctx context.Context, tName string) (*Table, string, bool, error) {
+func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Table, string, bool, error) {
 	resolvedName, ok, err := root.ResolveTableName(ctx, tName)
 	if err != nil {
 		return nil, "", false, err
@@ -519,7 +536,7 @@ func (root *rootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 }
 
 // GetTableByColTag looks for the table containing the given column tag.
-func (root *rootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error) {
+func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name string, found bool, err error) {
 	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
 		_, found = s.GetAllCols().GetByTag(tag)
 		if found {
@@ -561,7 +578,7 @@ func (root *rootValue) getTableMap(ctx context.Context, schemaName string) (tabl
 	return root.st.GetTablesMap(ctx, root.vrw, root.ns, schemaName)
 }
 
-func (root *rootValue) TablesWithDataConflicts(ctx context.Context) ([]string, error) {
+func TablesWithDataConflicts(ctx context.Context, root RootValue) ([]string, error) {
 	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
@@ -587,7 +604,7 @@ func (root *rootValue) TablesWithDataConflicts(ctx context.Context) ([]string, e
 }
 
 // TablesWithConstraintViolations returns all tables that have constraint violations.
-func (root *rootValue) TablesWithConstraintViolations(ctx context.Context) ([]string, error) {
+func TablesWithConstraintViolations(ctx context.Context, root RootValue) ([]string, error) {
 	// TODO: schema name
 	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
@@ -614,8 +631,8 @@ func (root *rootValue) TablesWithConstraintViolations(ctx context.Context) ([]st
 	return violating, nil
 }
 
-func (root *rootValue) HasConflicts(ctx context.Context) (bool, error) {
-	cnfTbls, err := root.TablesWithDataConflicts(ctx)
+func HasConflicts(ctx context.Context, root RootValue) (bool, error) {
+	cnfTbls, err := TablesWithDataConflicts(ctx, root)
 
 	if err != nil {
 		return false, err
@@ -625,8 +642,8 @@ func (root *rootValue) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // HasConstraintViolations returns whether any tables have constraint violations.
-func (root *rootValue) HasConstraintViolations(ctx context.Context) (bool, error) {
-	tbls, err := root.TablesWithConstraintViolations(ctx)
+func HasConstraintViolations(ctx context.Context, root RootValue) (bool, error) {
+	tbls, err := TablesWithConstraintViolations(ctx, root)
 	if err != nil {
 		return false, err
 	}
@@ -710,8 +727,28 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
-func (root *rootValue) CreateEmptyTable(ctx context.Context, tName TableName, sch schema.Schema) (RootValue, error) {
-	tbl, err := CreateEmptyTable(ctx, root.NodeStore(), root.VRW(), sch)
+func CreateEmptyTable(ctx context.Context, root RootValue, tName TableName, sch schema.Schema) (RootValue, error) {
+	ns := root.NodeStore()
+	vrw := root.VRW()
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes, err := durable.NewIndexSet(ctx, vrw, ns)
+	if err != nil {
+		return nil, err
+	}
+	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+		// create an empty map for every index
+		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(ctx, vrw, ns, sch, empty, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -756,28 +793,6 @@ func (root *rootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema
 	}
 
 	return root.withStorage(r), nil
-}
-
-func CreateEmptyTable(ctx context.Context, ns tree.NodeStore, vrw types.ValueReadWriter, sch schema.Schema) (*Table, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err := durable.NewIndexSet(ctx, vrw, ns)
-	if err != nil {
-		return nil, err
-	}
-	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
-		// create an empty map for every index
-		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
-		return
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return NewTable(ctx, vrw, ns, sch, empty, indexes, nil)
 }
 
 // HashOf gets the hash of the root value
@@ -890,7 +905,7 @@ func (root *rootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 // ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
 // check any tables' row data.
-func (root *rootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (RootValue, error) {
+func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1078,7 +1093,7 @@ func (root *rootValue) DebugString(ctx context.Context, transitive bool) string 
 }
 
 // MapTableHashes returns a map of each table name and hash.
-func (root *rootValue) MapTableHashes(ctx context.Context) (map[string]hash.Hash, error) {
+func MapTableHashes(ctx context.Context, root RootValue) (map[string]hash.Hash, error) {
 	// TODO: schema name
 	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {

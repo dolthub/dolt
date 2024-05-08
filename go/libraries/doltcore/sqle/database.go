@@ -1129,7 +1129,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 
 	var conflictingTbls []string
 	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, oldTableName, exists, err := root.GetTableByColTag(ctx, tag)
+		_, oldTableName, exists, err := doltdb.GetTableByColTag(ctx, root, tag)
 		if err != nil {
 			return true, err
 		}
@@ -1144,7 +1144,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
-	newRoot, err := root.CreateEmptyTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
+	newRoot, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
 	if err != nil {
 		return err
 	}

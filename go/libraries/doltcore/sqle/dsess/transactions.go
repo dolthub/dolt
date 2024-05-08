@@ -581,11 +581,11 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	}
 
 	workingRoot := workingSet.WorkingRoot()
-	hasDataConflicts, err := workingRoot.HasConflicts(ctx)
+	hasDataConflicts, err := doltdb.HasConflicts(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
-	hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+	hasConstraintViolations, err := doltdb.HasConstraintViolations(ctx, workingRoot)
 	if err != nil {
 		return err
 	}
@@ -641,7 +641,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
 		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
 		if forceTransactionCommit.(int8) != 1 {
-			badTbls, err := workingRoot.TablesWithConstraintViolations(ctx)
+			badTbls, err := doltdb.TablesWithConstraintViolations(ctx, workingRoot)
 			if err != nil {
 				return err
 			}

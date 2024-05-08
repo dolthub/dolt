@@ -433,11 +433,11 @@ func getConstraintViolationStats(ctx context.Context, root doltdb.RootValue, tbl
 // to generate constraint violations. Unique key constraint violations would be caught during the generation of the
 // merged root, therefore it is not a factor for this function.
 func MayHaveConstraintViolations(ctx context.Context, ancestor, merged doltdb.RootValue) (bool, error) {
-	ancTables, err := ancestor.MapTableHashes(ctx)
+	ancTables, err := doltdb.MapTableHashes(ctx, ancestor)
 	if err != nil {
 		return false, err
 	}
-	mergedTables, err := merged.MapTableHashes(ctx)
+	mergedTables, err := doltdb.MapTableHashes(ctx, merged)
 	if err != nil {
 		return false, err
 	}
@@ -478,12 +478,12 @@ func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as
 		as.SchemaConflictsTables = working.MergeState().TablesWithSchemaConflicts()
 	}
 
-	as.DataConflictTables, err = working.WorkingRoot().TablesWithDataConflicts(ctx)
+	as.DataConflictTables, err = doltdb.TablesWithDataConflicts(ctx, working.WorkingRoot())
 	if err != nil {
 		return as, err
 	}
 
-	as.ConstraintViolationsTables, err = working.WorkingRoot().TablesWithConstraintViolations(ctx)
+	as.ConstraintViolationsTables, err = doltdb.TablesWithConstraintViolations(ctx, working.WorkingRoot())
 	if err != nil {
 		return as, err
 	}
@@ -497,17 +497,17 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 		return nil, nil, err
 	}
 
-	headTableHashes, err := roots.Head.MapTableHashes(ctx)
+	headTableHashes, err := doltdb.MapTableHashes(ctx, roots.Head)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingTableHashes, err := roots.Working.MapTableHashes(ctx)
+	workingTableHashes, err := doltdb.MapTableHashes(ctx, roots.Working)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
+	mergeTableHashes, err := doltdb.MapTableHashes(ctx, mergeRoot)
 	if err != nil {
 		return nil, nil, err
 	}

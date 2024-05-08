@@ -484,12 +484,12 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		return diff.TableDelta{}, err
 	}
 
-	fromTable, _, fromTableExists, err := fromRefDetails.root.GetTableInsensitive(ctx, tableName)
+	fromTable, _, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	toTable, _, toTableExists, err := toRefDetails.root.GetTableInsensitive(ctx, tableName)
+	toTable, _, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}

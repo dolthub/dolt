@@ -678,7 +678,7 @@ func childFkConstraintViolationsProcess(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
-	tbl, trueTblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+	tbl, trueTblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}

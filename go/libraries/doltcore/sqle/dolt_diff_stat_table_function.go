@@ -371,7 +371,7 @@ func (ds *DiffStatTableFunction) evaluateArguments() (interface{}, interface{}, 
 func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot doltdb.RootValue, tableName string) (diffStatNode, bool, error) {
 	var oldColLen int
 	var newColLen int
-	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
+	fromTable, _, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRoot, tableName)
 	if err != nil {
 		return diffStatNode{}, false, err
 	}
@@ -384,7 +384,7 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 		oldColLen = len(fromSch.GetAllCols().GetColumns())
 	}
 
-	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
+	toTable, _, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRoot, tableName)
 	if err != nil {
 		return diffStatNode{}, false, err
 	}

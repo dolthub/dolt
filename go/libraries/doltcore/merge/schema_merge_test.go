@@ -1403,9 +1403,9 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 					require.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					exp, err := m.MapTableHashes(ctx)
+					exp, err := doltdb.MapTableHashes(ctx, m)
 					assert.NoError(t, err)
-					act, err := result.Root.MapTableHashes(ctx)
+					act, err := doltdb.MapTableHashes(ctx, result.Root)
 					assert.NoError(t, err)
 
 					assert.Equal(t, len(exp), len(act))

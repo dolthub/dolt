@@ -62,7 +62,7 @@ func (totwv *TableOfTablesWithViolations) Collation() sql.CollationID {
 
 // Partitions implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	tblNames, err := totwv.root.TablesWithConstraintViolations(ctx)
+	tblNames, err := doltdb.TablesWithConstraintViolations(ctx, totwv.root)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.Part
 func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	tblName := string(part.Key())
 	var rows []sql.Row
-	tbl, _, ok, err := totwv.root.GetTableInsensitive(ctx, tblName)
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, totwv.root, tblName)
 	if err != nil {
 		return nil, err
 	}

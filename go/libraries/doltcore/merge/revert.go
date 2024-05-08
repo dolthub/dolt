@@ -81,12 +81,12 @@ func Revert(ctx *sql.Context, ddb *doltdb.DoltDB, root doltdb.RootValue, commits
 		}
 		root = result.Root
 
-		if ok, err := result.Root.HasConflicts(ctx); err != nil {
+		if ok, err := doltdb.HasConflicts(ctx, result.Root); err != nil {
 			return nil, "", err
 		} else if ok {
 			return nil, "", fmt.Errorf("revert currently does not handle conflicts")
 		}
-		if ok, err := result.Root.HasConstraintViolations(ctx); err != nil {
+		if ok, err := doltdb.HasConstraintViolations(ctx, result.Root); err != nil {
 			return nil, "", err
 		} else if ok {
 			return nil, "", fmt.Errorf("revert currently does not handle constraint violations")

@@ -42,7 +42,7 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 	}
 
 	// If schema overrides are in place, see if the table exists in the overridden schema
-	t, _, ok, err := schemaRoot.GetTableInsensitive(ctx, tblName)
+	t, _, ok, err := doltdb.GetTableInsensitive(ctx, schemaRoot, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -71,7 +71,7 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 // overrideSchemaForTable loads the schema from |overriddenSchemaRoot| for the table named |tableName| and sets the
 // override on |tbl|. If there are any problems loading the overridden schema, this function returns an error.
 func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot doltdb.RootValue) error {
-	overriddenTable, _, ok, err := overriddenSchemaRoot.GetTableInsensitive(ctx, tableName)
+	overriddenTable, _, ok, err := doltdb.GetTableInsensitive(ctx, overriddenSchemaRoot, tableName)
 	if err != nil {
 		return fmt.Errorf("unable to find table '%s' at overridden schema root: %s", tableName, err.Error())
 	}

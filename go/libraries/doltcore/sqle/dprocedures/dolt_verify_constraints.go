@@ -163,7 +163,7 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot doltdb.Roo
 func parseTablesToCheck(ctx *sql.Context, workingRoot doltdb.RootValue, apr *argparser.ArgParseResults) (*set.StrSet, error) {
 	tableSet := set.NewStrSet(nil)
 	for _, val := range apr.Args {
-		_, tableName, ok, err := workingRoot.GetTableInsensitive(ctx, val)
+		_, tableName, ok, err := doltdb.GetTableInsensitive(ctx, workingRoot, val)
 		if err != nil {
 			return nil, err
 		}

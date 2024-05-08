@@ -517,7 +517,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 }
 
 func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
+	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
 	}

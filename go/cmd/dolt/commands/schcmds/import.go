@@ -428,7 +428,7 @@ func CombineColCollections(ctx context.Context, root doltdb.RootValue, inferredC
 		return nil, verr
 	}
 
-	newCols, err := root.GenerateTagsForNewColColl(ctx, impOpts.tableName, newCols)
+	newCols, err := doltdb.GenerateTagsForNewColColl(ctx, root, impOpts.tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}

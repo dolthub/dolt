@@ -97,7 +97,7 @@ func ToDoltSchema(
 		kinds = append(kinds, ti.NomsKind())
 	}
 
-	tags, err := root.GenerateTagsForNewColumns(ctx, tableName, names, kinds, headRoot)
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, tableName, names, kinds, headRoot)
 	if err != nil {
 		return nil, err
 	}

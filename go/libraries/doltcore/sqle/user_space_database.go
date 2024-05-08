@@ -49,7 +49,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return nil, false, nil
 	}
-	table, tableName, ok, err := db.RootValue.GetTableInsensitive(ctx, tableName)
+	table, tableName, ok, err := doltdb.GetTableInsensitive(ctx, db.RootValue, tableName)
 	if err != nil {
 		return nil, false, err
 	}

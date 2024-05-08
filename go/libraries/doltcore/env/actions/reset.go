@@ -69,7 +69,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	// tables in |newHead| we silently drop it from the new working set.
 	// these tag collision is typically cause by table renames (bug #751).
 
-	untracked, err := roots.Working.GetAllSchemas(ctx)
+	untracked, err := doltdb.GetAllSchemas(ctx, roots.Working)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
@@ -84,7 +84,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 
 	newWkRoot := roots.Head
 
-	ws, err := newWkRoot.GetAllSchemas(ctx)
+	ws, err := doltdb.GetAllSchemas(ctx, newWkRoot)
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}

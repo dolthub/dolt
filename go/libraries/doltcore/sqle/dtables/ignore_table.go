@@ -248,7 +248,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		}
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName}, newSchema)
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.IgnoreTableName}, newSchema)
 
 		if err != nil {
 			iw.errDuringStatementBegin = err

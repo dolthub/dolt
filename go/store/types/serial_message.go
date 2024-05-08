@@ -159,7 +159,17 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
-		return RootValueHumanReadableStringAtIndentationLevel(sm, level)
+		msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
+		printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "\tTables: %s\n",
+			SerialMessage(msg.TablesBytes()).HumanReadableStringAtIndentationLevel(level+1))
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
+	case serial.DoltgresRootValueFileID:
+		return DoltgresRootValueHumanReadableStringAtIndentationLevel(sm, level)
 	case serial.TableFileID:
 		msg, _ := serial.TryGetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
@@ -376,7 +386,26 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			}
 		}
 	case serial.RootValueFileID:
-		return RootValueWalkAddrs(sm, nbf, cb)
+		var msg serial.RootValue
+		err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
+		err = SerialMessage(msg.TablesBytes()).WalkAddrs(nbf, cb)
+		if err != nil {
+			return err
+		}
+		addr := hash.New(msg.ForeignKeyAddrBytes())
+		if !addr.IsEmpty() {
+			if err = cb(addr); err != nil {
+				return err
+			}
+		}
+	case serial.DoltgresRootValueFileID:
+		if !nbf.UsesFlatbuffers() {
+			return fmt.Errorf("root values for Doltgres only use flatbuffer serialization")
+		}
+		return DoltgresRootValueWalkAddrs(sm, cb)
 	case serial.TableFileID:
 		var msg serial.Table
 		err := serial.InitTableRoot(&msg, []byte(sm), serial.MessagePrefixSz)
@@ -520,50 +549,14 @@ func (sm SerialMessage) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-// init assigns the Doltgres-modifiable variables with their Dolt-specific functions. This must be done during init, as
-// assigning them directly to the variables causes an initialization cycle, and this is the only way to bypass it. This
-// is fine to do, as Doltgres is guaranteed to overwrite these functions due to Go's order of initialization.
-func init() {
-	RootValueHumanReadableStringAtIndentationLevel = rootValueHumanReadableStringAtIndentationLevel
-	RootValueWalkAddrs = rootValueWalkAddrs
+// DoltgresRootValueHumanReadableStringAtIndentationLevel returns the human readable string at the given indentation
+// level for root values. This is a variable as it's changed in Doltgres.
+var DoltgresRootValueHumanReadableStringAtIndentationLevel = func(sm SerialMessage, level int) string {
+	return "DOLTGRES ROOT VALUE"
 }
 
-// RootValueHumanReadableStringAtIndentationLevel returns the human readable string at the given indentation level for
-// root values. This is a variable as it's changed in Doltgres.
-var RootValueHumanReadableStringAtIndentationLevel func(sm SerialMessage, level int) string
-
-// RootValueWalkAddrs walks the given message using the given callback. This is a variable as it's changed in Doltgres.
-var RootValueWalkAddrs func(sm SerialMessage, nbf *NomsBinFormat, cb func(addr hash.Hash) error) error
-
-// rootValueHumanReadableStringAtIndentationLevel is Dolt's implementation of RootValueHumanReadableStringAtIndentationLevel.
-func rootValueHumanReadableStringAtIndentationLevel(sm SerialMessage, level int) string {
-	msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
-	ret := &strings.Builder{}
-	printWithIndendationLevel(level, ret, "{\n")
-	printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
-	printWithIndendationLevel(level, ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-	printWithIndendationLevel(level, ret, "\tTables: %s\n",
-		SerialMessage(msg.TablesBytes()).HumanReadableStringAtIndentationLevel(level+1))
-	printWithIndendationLevel(level, ret, "}")
-	return ret.String()
-}
-
-// rootValueWalkAddrs is Dolt's implementation of RootValueWalkAddrs.
-func rootValueWalkAddrs(sm SerialMessage, nbf *NomsBinFormat, cb func(addr hash.Hash) error) error {
-	var msg serial.RootValue
-	err := serial.InitRootValueRoot(&msg, []byte(sm), serial.MessagePrefixSz)
-	if err != nil {
-		return err
-	}
-	err = SerialMessage(msg.TablesBytes()).WalkAddrs(nbf, cb)
-	if err != nil {
-		return err
-	}
-	addr := hash.New(msg.ForeignKeyAddrBytes())
-	if !addr.IsEmpty() {
-		if err = cb(addr); err != nil {
-			return err
-		}
-	}
-	return nil
+// DoltgresRootValueWalkAddrs walks the given message using the given callback. This is a variable as it's changed in
+// Doltgres.
+var DoltgresRootValueWalkAddrs = func(sm SerialMessage, cb func(addr hash.Hash) error) error {
+	return fmt.Errorf("cannot walk a Doltgres root value from within Dolt")
 }

@@ -145,7 +145,7 @@ func validateNewColumn(
 		return err
 	}
 
-	_, oldTblName, found, err := root.GetTableByColTag(ctx, tag)
+	_, oldTblName, found, err := doltdb.GetTableByColTag(ctx, root, tag)
 	if err != nil {
 		return err
 	}

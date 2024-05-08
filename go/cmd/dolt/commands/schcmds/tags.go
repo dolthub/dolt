@@ -101,7 +101,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	rows := make([]sql.Row, 0)
 
 	for _, tableName := range tables {
-		table, foundTableKey, ok, err := root.GetTableInsensitive(ctx, tableName)
+		table, foundTableKey, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
 
 		// Return an error if table is not found
 		if !ok {

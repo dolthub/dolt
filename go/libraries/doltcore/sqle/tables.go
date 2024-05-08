@@ -1426,7 +1426,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	if err != nil {
 		return err
 	}
-	tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
 	if err != nil {
 		return err
 	}
@@ -2497,7 +2497,7 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		refTbl, _, ok, err = root.GetTableInsensitive(ctx, sqlFk.ParentTable)
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, sqlFk.ParentTable)
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2570,7 +2570,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
-	tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
 	if err != nil {
 		return err
 	}
@@ -2670,7 +2670,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
-		tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
 		if err != nil {
 			return err
 		}
