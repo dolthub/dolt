@@ -309,7 +309,6 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	default:
 		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
-
 }
 
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
@@ -675,23 +674,11 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root)
-	if err != nil {
-		return nil, true, err
-	}
-
-	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
-	if !ok {
-		return nil, false, nil
-	}
-
-	// TODO: should we short-circuit the schema name for system tables?
-	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName})
+	tableName, tbl, ok, err := db.lookupTable(ctx, root, tableName)
 	if err != nil {
 		return nil, false, err
 	} else if !ok {
-		// Should be impossible
-		return nil, false, doltdb.ErrTableNotFound
+		return nil, false, nil
 	}
 
 	sch, err := tbl.GetSchema(ctx)
@@ -721,6 +708,29 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	}
 
 	return table, true, nil
+}
+
+func (db Database) lookupTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+	tableNames, err := db.getAllTableNames(ctx, root)
+	if err != nil {
+		return "", nil, false, err
+	}
+
+	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
+	if !ok {
+		return "", nil, false, nil
+	}
+
+	// TODO: should we short-circuit the schema name for system tables?
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName})
+	if err != nil {
+		return "", nil, false, err
+	} else if !ok {
+		// Should be impossible
+		return "", nil, false, doltdb.ErrTableNotFound
+	}
+
+	return tableName, tbl, true, nil
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
