@@ -192,3 +192,30 @@ func ValidateAgainstFile(t *testing.T, path string, st any) {
 	})
 	require.NoError(t, err)
 }
+
+func GenValidationFile(st any, outFile string) error {
+	lines := []string{
+		"# file automatically updated by the release process.",
+		"# if you are getting an error with this file it's likely you",
+		"# have added a new minver tag with a value other than TBD",
+	}
+
+	err := structwalk.Walk(st, func(field reflect.StructField, depth int) error {
+		fi := FieldInfoFromStructField(field, depth)
+		lines = append(lines, fi.String())
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error generating data for '%s': %w", outFile, err)
+	}
+
+	fileContents := strings.Join(lines, "\n")
+
+	err = os.WriteFile(outFile, []byte(fileContents), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing '%s': %w", outFile, err)
+	}
+
+	return nil
+}
