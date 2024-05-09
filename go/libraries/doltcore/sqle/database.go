@@ -761,12 +761,12 @@ func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.Root
 	
 	schemasToSearch := strings.Split(searchPath.(string), ",")
 	for _, schemaName := range schemasToSearch {
-		schemaName = strings.Trim(schemaName, " ")
+		schemaName = normalizeSearchPathSchema(ctx, schemaName)
 		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
 		if err != nil {
 			return "", "", nil, false, err
 		}
-		
+
 		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
 		if !ok {
 			continue
@@ -785,6 +785,15 @@ func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.Root
 	}
 
 	return "", "", nil, false, nil
+}
+
+func normalizeSearchPathSchema(ctx *sql.Context, schemaName string) string {
+	schemaName = strings.Trim(schemaName, " ")
+	if schemaName == "\"$user\"" {
+		client := ctx.Session.Client()
+		return client.User
+	}
+	return schemaName
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
