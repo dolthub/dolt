@@ -48,7 +48,7 @@ func NewStatsIter(ctx *sql.Context, m prolly.Map) (*statsIter, error) {
 		kb:    keyBuilder,
 		vb:    valueBuilder,
 		ns:    ns,
-		planb: planbuilder.New(ctx, nil),
+		planb: planbuilder.New(ctx, nil, sql.NewMysqlParser()),
 	}, nil
 }
 
