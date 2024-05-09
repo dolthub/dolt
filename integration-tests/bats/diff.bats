@@ -33,6 +33,32 @@ teardown() {
     [[ "$output" =~ "CREATE DATABASE `colldb`" ]] || false
     [[ "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
 
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ ! "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
+
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
+
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    run dolt diff -r json
+    EXPECTED=$(cat <<'EOF'
+{"tables":[{"name":"__DATABASE__colldb","schema_diff":["ALTER DATABASE `colldb` COLLATE='utf8mb4_spanish_ci';"],"data_diff":[]}]}
+EOF
+)
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff -r sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ALTER DATABASE \`colldb\` COLLATE='utf8mb4_spanish_ci';" ]] || false
+
     cd ..
 }
 

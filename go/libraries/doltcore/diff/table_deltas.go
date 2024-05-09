@@ -455,6 +455,13 @@ func (td TableDelta) HasFKChanges() bool {
 		return true
 	}
 
+	if td.FromFks == nil && td.ToFks == nil {
+		return false
+	}
+	if td.FromFksParentSch == nil && td.ToFksParentSch == nil {
+		return false
+	}
+
 	sort.Slice(td.FromFks, func(i, j int) bool {
 		return td.FromFks[i].Name < td.FromFks[j].Name
 	})

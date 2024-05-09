@@ -898,6 +898,7 @@ func getDatabaseInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName 
 
 	tableInfo := diff.TableInfo{
 		Name:       tableName,
+		Sch:        schema.EmptySchema,
 		CreateStmt: createStmt,
 	}
 	return tableInfo, nil
@@ -1311,6 +1312,11 @@ func diffDatabase(
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	verr := diffRows(queryist, sqlCtx, tableSummary, fromTableInfo, toTableInfo, dArgs, dw)
+	if verr != nil {
+		return verr
+	}
+
 	return nil
 }
 
@@ -1399,7 +1405,7 @@ func diffRows(
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
 		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1407,7 +1413,7 @@ func diffRows(
 	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
 		// TODO: this is overly broad, we can absolutely do better
 		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName)
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1416,7 +1422,7 @@ func diffRows(
 
 	// no data diff requested
 	if dArgs.diffParts&DataOnlyDiff == 0 {
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1427,6 +1433,14 @@ func diffRows(
 	tableName := tableSummary.ToTableName
 	if len(tableName) == 0 {
 		tableName = tableSummary.FromTableName
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		err = rowWriter.Close(sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
 	}
 
 	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
