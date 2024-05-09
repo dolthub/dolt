@@ -107,6 +107,11 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		return ReadReplicaDatabase{}, err
 	}
 
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		sqlCtx.GetLogger().Infof(
+			"replication enabled for database '%s' from remote '%s'", name, remoteName)
+	}
+
 	return rrd, nil
 }
 
@@ -115,7 +120,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 	for i, db := range dbs {
 		dEnv := mrEnv.GetEnv(db.Name())
 		if dEnv == nil {
-			outputDbs = append(outputDbs, db)
+			outputDbs[i] = db
 			continue
 		}
 		postCommitHooks, err := GetCommitHooks(ctx, bThreads, dEnv, logger)

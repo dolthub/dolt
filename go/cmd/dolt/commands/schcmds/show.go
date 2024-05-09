@@ -87,7 +87,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	cmStr := "working"
 	args := apr.Args
 
-	var root *doltdb.RootValue
+	var root doltdb.RootValue
 	var verr errhand.VerboseError
 	var cm *doltdb.Commit
 

@@ -173,7 +173,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }
 
-func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, root *doltdb.RootValue) (*importOptions, errhand.VerboseError) {
+func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, root doltdb.RootValue) (*importOptions, errhand.VerboseError) {
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 
@@ -324,7 +324,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	return nil
 }
 
-func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.RootValue, sch schema.Schema) (*doltdb.RootValue, errhand.VerboseError) {
+func putEmptyTableWithSchema(ctx context.Context, tblName string, root doltdb.RootValue, sch schema.Schema) (doltdb.RootValue, errhand.VerboseError) {
 	tbl, tblExists, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
@@ -361,7 +361,7 @@ func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.R
 	return root, nil
 }
 
-func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts *importOptions, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {
+func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts *importOptions, root doltdb.RootValue) (schema.Schema, errhand.VerboseError) {
 	if impOpts.fileType[0] == '.' {
 		impOpts.fileType = impOpts.fileType[1:]
 	}
@@ -405,7 +405,7 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, impOpts 
 	return CombineColCollections(ctx, root, infCols, impOpts)
 }
 
-func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferredCols *schema.ColCollection, impOpts *importOptions) (schema.Schema, errhand.VerboseError) {
+func CombineColCollections(ctx context.Context, root doltdb.RootValue, inferredCols *schema.ColCollection, impOpts *importOptions) (schema.Schema, errhand.VerboseError) {
 	existingCols := impOpts.existingSch.GetAllCols()
 
 	// oldCols is the subset of existingCols that will be kept in the new schema
@@ -428,7 +428,7 @@ func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferred
 		return nil, verr
 	}
 
-	newCols, err := root.GenerateTagsForNewColColl(ctx, impOpts.tableName, newCols)
+	newCols, err := doltdb.GenerateTagsForNewColColl(ctx, root, impOpts.tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}

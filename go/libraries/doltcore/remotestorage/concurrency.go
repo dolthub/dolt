@@ -14,62 +14,6 @@
 
 package remotestorage
 
-import (
-	"context"
-
-	"golang.org/x/sync/errgroup"
-)
-
-func concurrentExec(work []func() error, concurrency int) error {
-	if concurrency <= 0 {
-		panic("Invalid argument")
-	}
-	if len(work) == 0 {
-		return nil
-	}
-	if len(work) < concurrency {
-		concurrency = len(work)
-	}
-
-	ch := make(chan func() error)
-
-	eg, ctx := errgroup.WithContext(context.Background())
-
-	// Push the work...
-	eg.Go(func() error {
-		defer close(ch)
-		for _, w := range work {
-			select {
-			case ch <- w:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		return nil
-	})
-
-	// Do the work...
-	for i := 0; i < concurrency; i++ {
-		eg.Go(func() error {
-			for {
-				select {
-				case w, ok := <-ch:
-					if !ok {
-						return nil
-					}
-					if err := w(); err != nil {
-						return err
-					}
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-		})
-	}
-
-	return eg.Wait()
-}
-
 func batchItr(elemCount, batchSize int, cb func(start, end int) (stop bool)) {
 	for st, end := 0, batchSize; st < elemCount; st, end = end, end+batchSize {
 		if end > elemCount {

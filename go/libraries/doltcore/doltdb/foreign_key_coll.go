@@ -653,7 +653,7 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...str
 // RemoveAndUnresolveTables removes all foreign keys associated with the given tables. If a parent is dropped without
 // its child, then the foreign key goes to an unresolved state. The operation assumes that ALL tables to be removed are
 // in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root *RootValue, tables ...string) error {
+func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...string) error {
 	outgoing := set.NewStrSet(tables)
 	for _, fk := range fkc.foreignKeys {
 		dropChild := outgoing.Contains(fk.TableName)
@@ -794,9 +794,9 @@ func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) (ForeignKey
 	return ForeignKey{}, false
 }
 
-// copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
+// Copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
 // that the original collection is not affected by any operations applied to the copied collection.
-func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
+func (fkc *ForeignKeyCollection) Copy() *ForeignKeyCollection {
 	copiedForeignKeys := make(map[string]ForeignKey)
 	for hashOf, key := range fkc.foreignKeys {
 		copiedForeignKeys[hashOf] = key

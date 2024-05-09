@@ -310,7 +310,7 @@ func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Tab
 	return resolvePkConflicts(ctx, opts, tbl, tblName, sch, conflicts)
 }
 
-func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootValue, table string) error {
+func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table string) error {
 	tables, err := after.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return err
@@ -327,7 +327,7 @@ func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootVa
 	return nil
 }
 
-func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string) (*doltdb.RootValue, error) {
+func clearTableAndUpdateRoot(ctx *sql.Context, root doltdb.RootValue, tbl *doltdb.Table, tblName string) (doltdb.RootValue, error) {
 	newTbl, err := tbl.ClearConflicts(ctx)
 	if err != nil {
 		return nil, err
@@ -399,7 +399,7 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
-func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	for _, tblName := range tblNames {
 		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
@@ -461,7 +461,7 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *dolt
 
 		root = newRoot
 	}
-	return dSess.SetRoot(ctx, dbName, root)
+	return dSess.SetWorkingRoot(ctx, dbName, root)
 }
 
 func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {

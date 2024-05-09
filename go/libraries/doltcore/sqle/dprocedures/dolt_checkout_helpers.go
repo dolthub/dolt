@@ -152,7 +152,7 @@ func transferWorkingChanges(
 	ctx *sql.Context,
 	dbName string,
 	initialRoots doltdb.Roots,
-	branchHead *doltdb.RootValue,
+	branchHead doltdb.RootValue,
 	branchRef ref.BranchRef,
 	force bool,
 ) error {

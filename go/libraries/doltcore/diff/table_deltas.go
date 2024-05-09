@@ -112,7 +112,7 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, roots doltdb.Roots) (stag
 
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
 // It matches tables across roots by finding Schemas with Column tags in common.
-func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (deltas []TableDelta, err error) {
 	fromVRW := fromRoot.VRW()
 	fromNS := fromRoot.NodeStore()
 	toVRW := toRoot.VRW()
@@ -214,10 +214,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
+func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
 	schs := make(map[string]schema.Schema)
 	for _, toFk := range fks {
-		toRefTable, _, ok, err := root.GetTableInsensitive(ctx, toFk.ReferencedTableName)
+		toRefTable, _, ok, err := doltdb.GetTableInsensitive(ctx, root, toFk.ReferencedTableName)
 		if err != nil {
 			return nil, err
 		}

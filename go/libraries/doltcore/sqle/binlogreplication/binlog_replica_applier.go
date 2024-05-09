@@ -757,7 +757,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 	writeSession := writer.NewWriteSession(binFormat, ws, tracker, options)
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	setter := ds.SetRoot
+	setter := ds.SetWorkingRoot
 	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName}, databaseName, setter)
 	if err != nil {
 		return nil, nil, err
@@ -876,7 +876,8 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}
 
-	node, err := planbuilder.Parse(ctx, server.Engine.Analyzer.Catalog, "SELECT "+strValue)
+	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.Parser)
+	node, _, _, err := binder.Parse("SELECT "+strValue, false)
 	if err != nil {
 		return nil, err
 	}

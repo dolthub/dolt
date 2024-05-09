@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha512"
 	"errors"
 	"hash"
 	"io"
@@ -72,8 +73,8 @@ type FixedBufferByteSink struct {
 	pos  uint64
 }
 
-// NewFixedBufferTableSink creates a FixedBufferTableSink which will use the supplied buffer
-func NewFixedBufferTableSink(buff []byte) *FixedBufferByteSink {
+// NewFixedBufferByteSink creates a FixedBufferTableSink which will use the supplied buffer
+func NewFixedBufferByteSink(buff []byte) *FixedBufferByteSink {
 	if len(buff) == 0 {
 		panic("must provide a buffer")
 	}
@@ -119,8 +120,8 @@ type BlockBufferByteSink struct {
 	blocks    [][]byte
 }
 
-// NewBlockBufferTableSink creates a BlockBufferByteSink with the provided block size.
-func NewBlockBufferTableSink(blockSize int) *BlockBufferByteSink {
+// NewBlockBufferByteSink creates a BlockBufferByteSink with the provided block size.
+func NewBlockBufferByteSink(blockSize int) *BlockBufferByteSink {
 	block := make([]byte, 0, blockSize)
 	return &BlockBufferByteSink{blockSize, 0, [][]byte{block}}
 }
@@ -322,7 +323,11 @@ type HashingByteSink struct {
 	size        uint64
 }
 
-func NewHashingByteSink(backingSink ByteSink) *HashingByteSink {
+func NewSHA512HashingByteSink(backingSink ByteSink) *HashingByteSink {
+	return &HashingByteSink{backingSink: backingSink, hasher: sha512.New(), size: 0}
+}
+
+func NewMD5HashingByteSink(backingSink ByteSink) *HashingByteSink {
 	return &HashingByteSink{backingSink: backingSink, hasher: md5.New(), size: 0}
 }
 
@@ -361,9 +366,15 @@ func (sink *HashingByteSink) Reader() (io.ReadCloser, error) {
 	return sink.backingSink.Reader()
 }
 
-// GetMD5 gets the MD5 hash of all the bytes written to the sink
-func (sink *HashingByteSink) GetMD5() []byte {
+// Execute the hasher.Sum() function and return the result
+func (sink *HashingByteSink) GetSum() []byte {
 	return sink.hasher.Sum(nil)
+}
+
+// ResetHasher resets the hasher to allow for checksums at various points in the data stream. The expectation is that
+// you would call GetSum prior to calling this function.
+func (sink *HashingByteSink) ResetHasher() {
+	sink.hasher.Reset()
 }
 
 // Size gets the number of bytes written to the sink
