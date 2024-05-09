@@ -675,7 +675,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	var tbl *doltdb.Table
-	if UseSearchPath {
+	if UseSearchPath && db.schemaName == "" {
 		tableName, tbl, ok, err = db.resolveTableWithSearchPath(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
@@ -720,7 +720,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	return table, true, nil
 }
 
-func (db Database) resolveTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+func (db Database) resolveTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
 	tableNames, err := db.getAllTableNames(ctx, root)
 	if err != nil {
 		return "", nil, false, err
@@ -745,7 +745,7 @@ func (db Database) resolveTable(ctx *sql.Context, root *doltdb.RootValue, tableN
 
 var defaultSearchPath = "doltgres,public"
 
-func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
 	searchPath, err := ctx.GetSessionVariable(ctx, "search_path")
 	if sql.ErrUnknownSystemVariable.Is(err) {
 		// TODO: make this a real error
