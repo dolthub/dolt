@@ -311,7 +311,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
@@ -516,7 +516,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 }
 
 // resolveAsOf resolves given expression to a commit, if one exists.
-func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, *doltdb.RootValue, error) {
+func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, doltdb.RootValue, error) {
 	head, err := db.rsr.CWBHeadRef()
 	if err != nil {
 		return nil, nil, err
@@ -531,7 +531,7 @@ func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commi
 	}
 }
 
-func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf time.Time) (*doltdb.Commit, *doltdb.RootValue, error) {
+func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf time.Time) (*doltdb.Commit, doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, nil, err
@@ -584,7 +584,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	return nil, nil, nil
 }
 
-func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
+func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commitRef string) (*doltdb.Commit, doltdb.RootValue, error) {
 	ddb := db.ddb
 
 	if commitRef == doltdb.Working || commitRef == doltdb.Staged {
@@ -646,7 +646,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 }
 
 // getTable returns the user table with the given baseName from the root given
-func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (sql.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
@@ -832,7 +832,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
 	return db.getAllTableNames(ctx, root)
 }
 
-func (db Database) getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
+func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) ([]string, error) {
 	systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
 	if err != nil {
 		return nil, err
@@ -853,7 +853,7 @@ func filterDoltInternalTables(tblNames []string) []string {
 }
 
 // GetRoot returns the root value for this database session
-func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+func (db Database) GetRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
@@ -889,13 +889,13 @@ func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
-func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+func (db Database) SetRoot(ctx *sql.Context, newRoot doltdb.RootValue) error {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return sess.SetRoot(ctx, db.RevisionQualifiedName(), newRoot)
+	return sess.SetWorkingRoot(ctx, db.RevisionQualifiedName(), newRoot)
 }
 
 // GetHeadRoot returns root value for the current session head
-func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+func (db Database) GetHeadRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	head, err := sess.GetHeadCommit(ctx, db.RevisionQualifiedName())
 	if err != nil {
@@ -1115,7 +1115,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
 }
 
-func hasDatabaseSchema(ctx context.Context, root *doltdb.RootValue, schemaName string) (bool, error) {
+func hasDatabaseSchema(ctx context.Context, root doltdb.RootValue, schemaName string) (bool, error) {
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
 		return false, err
@@ -1179,7 +1179,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 }
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
-func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root *doltdb.RootValue, doltSch schema.Schema) error {
+func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -1188,7 +1188,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 
 	var conflictingTbls []string
 	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, oldTableName, exists, err := root.GetTableByColTag(ctx, tag)
+		_, oldTableName, exists, err := doltdb.GetTableByColTag(ctx, root, tag)
 		if err != nil {
 			return true, err
 		}
@@ -1203,7 +1203,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
-	newRoot, err := root.CreateEmptyTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
+	newRoot, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
 	if err != nil {
 		return err
 	}
@@ -1953,11 +1953,11 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing
 type noopRepoStateWriter struct{}
 
-func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (n noopRepoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	return nil
 }
 
-func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+func (n noopRepoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.RootValue) error {
 	return nil
 }
 

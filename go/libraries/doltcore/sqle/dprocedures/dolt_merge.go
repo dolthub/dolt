@@ -554,7 +554,7 @@ func mergeRootToWorking(
 	return ws, nil
 }
 
-func applyChanges(ctx *sql.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
+func applyChanges(ctx *sql.Context, root doltdb.RootValue, workingDiffs map[string]hash.Hash) (doltdb.RootValue, error) {
 	var err error
 	for tblName, h := range workingDiffs {
 		root, err = root.SetTableHash(ctx, tblName, h)

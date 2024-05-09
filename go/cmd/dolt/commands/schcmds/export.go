@@ -89,7 +89,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	var tblName string
 	var fileName string
 	switch apr.NArg() {
@@ -148,7 +148,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	return nil
 }
 
-func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
+func exportTblSchema(ctx context.Context, tblName string, root doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)

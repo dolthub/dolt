@@ -351,13 +351,11 @@ var columnAddDropTests = []schemaMergeTest{
 		skipOldFmt: true,
 	},
 	{
-		name:       "independent column drops",
-		ancestor:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3)),
-		merged:     *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1)),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		name:     "independent column drops",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1)),
 	},
 	{
 		name:     "convergent column adds",
@@ -443,13 +441,11 @@ var columnAddDropTests = []schemaMergeTest{
 		},
 	},
 	{
-		name:       "convergent column adds, independent drops",
-		ancestor:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, c int)"), row(1, 3, 4)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, c int)"), row(1, 2, 4)),
-		merged:     *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int)       "), row(1, 4)),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		name:     "convergent column adds, independent drops",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, c int)"), row(1, 3, 4)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, c int)"), row(1, 2, 4)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int)       "), row(1, 4)),
 	},
 	{
 		name:       "convergent column drops, independent adds",
@@ -469,13 +465,11 @@ var columnAddDropTests = []schemaMergeTest{
 		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, nil)),
 	},
 	{
-		name:                "left side column drop, right side insert row",
-		ancestor:            *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:                tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		right:               tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, 22)),
-		merged:              *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
-		skipNewFmt:          true,
-		skipFlipOnOldFormat: true,
+		name:     "left side column drop, right side insert row",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2), row(11, 22)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1), row(11)),
 	},
 	// both sides change columns and insert rows
 	{
@@ -488,13 +482,11 @@ var columnAddDropTests = []schemaMergeTest{
 		skipOldFmt: true,
 	},
 	{
-		name:       "independent column drops, both sides insert independent rows",
-		ancestor:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2), row(12, 22)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3), row(13, 33)),
-		merged:     *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1), row(12), row(13)),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		name:     "independent column drops, both sides insert independent rows",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2), row(12, 22)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3), row(13, 33)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1), row(12), row(13)),
 	},
 	{
 		name:     "convergent column adds, both sides insert independent rows",
@@ -520,13 +512,11 @@ var columnAddDropTests = []schemaMergeTest{
 		skipOldFmt: true,
 	},
 	{
-		name:       "independent column drops, both sides insert same row",
-		ancestor:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2), row(12, 22)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3), row(12, 33)),
-		merged:     *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1), row(12)),
-		skipNewFmt: true,
-		skipOldFmt: true,
+		name:     "independent column drops, both sides insert same row",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)"), row(1, 2, 3)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       "), row(1, 2), row(12, 22)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       "), row(1, 3), row(12, 33)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1), row(12)),
 	},
 	{
 		name:     "right side drops and adds column of same type",
@@ -716,14 +706,11 @@ var columnDefaultTests = []schemaMergeTest{
 	},
 	// one side changes columns, the other inserts rows
 	{
-		// TODO: this test silently does the wrong thing without erroring
-		skipNewFmt: true,
-		skipOldFmt: true,
-		name:       "left side column add, right side insert row",
-		ancestor:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1)),
-		left:       tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
-		right:      tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(12)),
-		merged:     *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(12, 42)),
+		name:     "left side column add, right side insert row",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                  "), row(1), row(12)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int DEFAULT 42)"), row(1, 42), row(12, 42)),
 	},
 	// both sides change columns and insert rows
 	{
@@ -1403,9 +1390,9 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 					require.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					exp, err := m.MapTableHashes(ctx)
+					exp, err := doltdb.MapTableHashes(ctx, m)
 					assert.NoError(t, err)
-					act, err := result.Root.MapTableHashes(ctx)
+					act, err := doltdb.MapTableHashes(ctx, result.Root)
 					assert.NoError(t, err)
 
 					assert.Equal(t, len(exp), len(act))
@@ -1445,17 +1432,16 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							require.EqualValues(t, numConstraintViolations, len(expConstraintViolations))
 
+							sch, err := actTbl.GetSchema(ctx)
+							require.NoError(t, err)
+							kd, vd := sch.GetMapDescriptors()
+
 							if len(expConstraintViolations) > 0 {
 								artifacts, err := actTbl.GetArtifacts(ctx)
 								require.NoError(t, err)
 								artifactMap := durable.ProllyMapFromArtifactIndex(artifacts)
 								artifactIter, err := artifactMap.IterAllCVs(ctx)
 								require.NoError(t, err)
-
-								sch, err := actTbl.GetSchema(ctx)
-								require.NoError(t, err)
-
-								kd, vd := sch.GetMapDescriptors()
 
 								// value tuples encoded in ConstraintViolationMeta may
 								// violate the not null constraints assumed by fixed access
@@ -1472,10 +1458,18 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 								if addr != a {
 									expTbl, _, err := m.GetTable(ctx, doltdb.TableName{Name: name})
 									require.NoError(t, err)
+									expSchema, err := expTbl.GetSchema(ctx)
+									require.NoError(t, err)
 									expRowDataHash, err := expTbl.GetRowDataHash(ctx)
 									require.NoError(t, err)
 									actRowDataHash, err := actTbl.GetRowDataHash(ctx)
 									require.NoError(t, err)
+									if !expSchema.GetKeyDescriptor().Equals(kd) {
+										t.Fatal("Primary key descriptors unequal")
+									}
+									if !expSchema.GetValueDescriptor().Equals(vd) {
+										t.Fatal("Value descriptors unequal")
+									}
 									if expRowDataHash != actRowDataHash {
 										t.Error("Rows unequal")
 										t.Logf("expected rows: %s", expTbl.DebugString(ctx, m.NodeStore()))
@@ -1484,8 +1478,6 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									expIndexSet, err := expTbl.GetIndexSet(ctx)
 									require.NoError(t, err)
 									actIndexSet, err := actTbl.GetIndexSet(ctx)
-									require.NoError(t, err)
-									expSchema, err := expTbl.GetSchema(ctx)
 									require.NoError(t, err)
 									expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, index.Name())
@@ -1537,7 +1529,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 	}
 }
 
-func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged *doltdb.RootValue) {
+func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
 	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB.ValueReadWriter()))
@@ -1602,7 +1594,7 @@ func row(values ...any) sql.Row {
 func singleRow(values ...any) []sql.Row {
 	return []sql.Row{row(values...)}
 }
-func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) *doltdb.RootValue {
+func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.RootValue {
 	ctx := context.Background()
 	wsr, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
 	require.NoError(t, err)
@@ -1618,7 +1610,7 @@ func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) *doltdb.
 	return ws.WorkingRoot()
 }
 
-func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) *doltdb.RootValue {
+func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) doltdb.RootValue {
 	ctx := context.Background()
 	wsr, err := ref.WorkingSetRefForHead(ref.NewBranchRef("main"))
 	require.NoError(t, err)
@@ -1632,7 +1624,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 
 	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", ws)
 	require.NoError(t, err)
-	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
+	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
 	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop)
 	require.NoError(t, err)
@@ -1648,10 +1640,10 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 }
 
 type rootish struct {
-	rv *doltdb.RootValue
+	rv doltdb.RootValue
 }
 
-func (r rootish) ResolveRootValue(ctx context.Context) (*doltdb.RootValue, error) {
+func (r rootish) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
 	return r.rv, nil
 }
 

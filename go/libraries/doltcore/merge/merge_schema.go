@@ -248,7 +248,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 }
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
-func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
+func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRoot doltdb.RootValue) (*doltdb.ForeignKeyCollection, []FKConflict, error) {
 	ours, err := ourRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -264,7 +264,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		return nil, nil, err
 	}
 
-	ancSchs, err := ancRoot.GetAllSchemas(ctx)
+	ancSchs, err := doltdb.GetAllSchemas(ctx, ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -583,7 +583,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs == nil && anc != nil:
 				// Column doesn't exist on their side, but does exist in ancestor
 				// This means the column was deleted on theirs side
-				if !anc.Equals(*ours) {
+				if !anc.EqualsWithoutTag(*ours) {
 					// col altered on our branch and deleted on their branch
 					conflicts = append(conflicts, ColConflict{
 						Kind: NameCollision,
@@ -623,7 +623,7 @@ func checkSchemaConflicts(columnMappings columnMappings) ([]ColConflict, error) 
 			case theirs != nil && anc != nil:
 				// Column exists on their side and in ancestor
 				// If ancs doesn't match theirs, the column was altered on both sides
-				if !anc.Equals(*theirs) {
+				if !anc.EqualsWithoutTag(*theirs) {
 					// col deleted on our branch and altered on their branch
 					conflicts = append(conflicts, ColConflict{
 						Kind:   NameCollision,
@@ -996,7 +996,7 @@ func fkCollSetDifference(fkColl, ancestorFkColl *doltdb.ForeignKeyCollection, an
 }
 
 // pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been removed.
-func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyCollection, mergedRoot *doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
+func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
 	pruned, _ = doltdb.NewForeignKeyCollection()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		parentTbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})

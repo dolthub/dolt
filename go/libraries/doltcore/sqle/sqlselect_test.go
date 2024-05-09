@@ -1617,7 +1617,7 @@ func createWorkingRootUpdate() map[string]TableUpdate {
 	}
 }
 
-func updateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
+func updateTables(t *testing.T, ctx context.Context, root doltdb.RootValue, tblUpdates map[string]TableUpdate) doltdb.RootValue {
 	for tblName, updates := range tblUpdates {
 		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 		require.NoError(t, err)

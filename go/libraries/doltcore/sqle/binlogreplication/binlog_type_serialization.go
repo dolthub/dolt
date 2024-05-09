@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -291,10 +292,19 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 				decimalValue.Exponent(), decimalValue.String())
 		}
 
-		absStringVal := decimalValue.Abs().String()
-		firstFractionalDigitIdx := len(absStringVal) + int(decimalValue.Exponent())
-		stringIntegerVal := absStringVal[:firstFractionalDigitIdx-1]
-		stringFractionalVal := absStringVal[firstFractionalDigitIdx:]
+		// Load the value into a fully padded (to precision and scale) string format,
+		// so that we can process the digit groups for the binary encoding.
+		absStringVal := decimalValue.Abs().StringFixed(int32(scale))
+		stringIntegerVal := absStringVal
+		stringFractionalVal := ""
+		if scale > 0 {
+			firstFractionalDigitIdx := strings.Index(absStringVal, ".") + 1
+			stringIntegerVal = absStringVal[:firstFractionalDigitIdx-1]
+			stringFractionalVal = absStringVal[firstFractionalDigitIdx:]
+		}
+		for len(stringIntegerVal) < int(numFullDigits) {
+			stringIntegerVal = "0" + stringIntegerVal
+		}
 
 		buffer := make([]byte, length)
 		bufferPos := 0
@@ -319,23 +329,26 @@ func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor va
 				remainingString)
 		}
 
-		// Fill in full fractional digits
-		writtenBytes, remainingString, err = encodeDecimalBits(stringFractionalVal, buffer[bufferPos:])
-		if err != nil {
-			return nil, err
-		}
-		bufferPos += int(writtenBytes)
+		// If there is a scale, then encode the fractional digits of the number
+		if scale > 0 {
+			// Fill in full fractional digits
+			writtenBytes, remainingString, err = encodeDecimalBits(stringFractionalVal, buffer[bufferPos:])
+			if err != nil {
+				return nil, err
+			}
+			bufferPos += int(writtenBytes)
 
-		// Fill in partial fractional digits – these are at the end of the fractional component
-		writtenBytes, err = encodePartialDecimalBits(remainingString, buffer[bufferPos:])
-		if err != nil {
-			return nil, err
-		}
-		bufferPos += int(writtenBytes)
+			// Fill in partial fractional digits – these are at the end of the fractional component
+			writtenBytes, err = encodePartialDecimalBits(remainingString, buffer[bufferPos:])
+			if err != nil {
+				return nil, err
+			}
+			bufferPos += int(writtenBytes)
 
-		if bufferPos != len(buffer) {
-			return nil, fmt.Errorf(
-				"unexpected position; bufferPos: %d, len(buffer): %d", bufferPos, len(buffer))
+			if bufferPos != len(buffer) {
+				return nil, fmt.Errorf(
+					"unexpected position; bufferPos: %d, len(buffer): %d", bufferPos, len(buffer))
+			}
 		}
 
 		// We always xor the first bit in the first byte to indicate a positive value. If the value is

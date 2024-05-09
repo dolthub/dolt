@@ -2541,35 +2541,4 @@ var SchemaChangeTestsForJsonConflicts = []MergeScriptTest{
 
 // These tests are not run because they cause panics during set-up.
 // Each one is labeled with a GitHub issue.
-var DisabledSchemaChangeTests = []MergeScriptTest{
-	{
-		Name: "panic regression test https://github.com/dolthub/dolt/issues/7762",
-		AncSetUpScript: []string{
-			"CREATE table t (pk int primary key, col1 int, col2 int);",
-			"INSERT into t values (1, 10, 100), (2, 20, 200);",
-		},
-		RightSetUpScript: []string{
-			"alter table t drop column col2;",
-			"insert into t values (3, 30), (4, 40);",
-		},
-		LeftSetUpScript: []string{
-			"alter table t drop column col1;",
-			"alter table t rename column col2 to col1;",
-			"insert into t values (5, 50), (6, 60);",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
-			},
-			{
-				Query: "select * from t;",
-				Expected: []sql.Row{
-					{1, 10}, {2, 20},
-					{3, 30}, {4, 40},
-					{5, 50}, {6, 60},
-				},
-			},
-		},
-	},
-}
+var DisabledSchemaChangeTests = []MergeScriptTest{}

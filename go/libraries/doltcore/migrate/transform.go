@@ -224,7 +224,6 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	if err != nil {
 		return err
 	}
-	nv := doltdb.HackNomsValuesFromRootValues(rv)
 
 	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
@@ -237,7 +236,7 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	if err != nil {
 		return err
 	}
-	ds, err = datasDB.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	ds, err = datasDB.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
 	if err != nil {
 		return err
 	}
@@ -282,7 +281,7 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog *progr
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent doltdb.RootValue) (doltdb.RootValue, error) {
 	migrated := newParent
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
@@ -374,7 +373,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 }
 
 // renames also get returned here
-func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
+func getRemovedTableNames(ctx context.Context, prev, curr doltdb.RootValue) ([]string, error) {
 	prevNames, err := prev.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err

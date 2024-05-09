@@ -253,7 +253,7 @@ func commitRoot(
 	ctx context.Context,
 	ddb *doltdb.DoltDB,
 	br ref.BranchRef,
-	root *doltdb.RootValue,
+	root doltdb.RootValue,
 	parent *doltdb.Commit,
 ) error {
 	roots := doltdb.Roots{

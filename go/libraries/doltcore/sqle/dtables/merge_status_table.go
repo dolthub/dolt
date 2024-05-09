@@ -88,12 +88,12 @@ type MergeStatusIter struct {
 func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatusIter, error) {
 	wr := ws.WorkingRoot()
 
-	inConflict, err := wr.TablesWithDataConflicts(ctx)
+	inConflict, err := doltdb.TablesWithDataConflicts(ctx, wr)
 	if err != nil {
 		return nil, err
 	}
 
-	tblsWithViolations, err := wr.TablesWithConstraintViolations(ctx)
+	tblsWithViolations, err := doltdb.TablesWithConstraintViolations(ctx, wr)
 	if err != nil {
 		return nil, err
 	}
