@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -1330,19 +1329,20 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := sqlparser.ParseWithOptions(fragments[i].fragment,
-			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
-		if err != nil {
-			return nil, sql.ViewDefinition{}, false, err
-		}
-
-		createView, ok := cv.(*sqlparser.DDL)
-		if ok {
-			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr,
-				CreateViewStatement: fragments[i].fragment, SqlMode: fragment.sqlMode}
+		if strings.HasPrefix(strings.ToLower(fragments[i].fragment), "select") {
+			// older versions
+			views[i] = sql.ViewDefinition{
+				Name:                fragments[i].name,
+				TextDefinition:      fragments[i].fragment,
+				CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment),
+			}
 		} else {
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
+			views[i] = sql.ViewDefinition{
+				Name: fragments[i].name,
+				// TODO: need to define TextDefinition
+				CreateViewStatement: fragments[i].fragment,
+				SqlMode:             fragment.sqlMode,
+			}
 		}
 
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
@@ -1533,9 +1533,9 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	catalog := db.getCatalog(ctx)
-	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
-	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
+	b := planbuilder.New(ctx, db.getCatalog(ctx), sql.NewMysqlParser())
+	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
+	parsed, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), false)
 	if err != nil {
 		return nil, err
 	}
