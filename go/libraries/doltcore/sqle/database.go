@@ -676,12 +676,17 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 	var tbl *doltdb.Table
 	if UseSearchPath && db.schemaName == "" {
-		tableName, tbl, ok, err = db.resolveTableWithSearchPath(ctx, root, tableName)
+		var schemaName string
+		tableName, schemaName, tbl, ok, err = db.resolveTableWithSearchPath(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
 			return nil, false, nil
 		}
+
+		// For the remainder of this method, we will use the schema name that was resolved and the table resolved 
+		// will inherit it
+		db.schemaName = schemaName
 	} else {
 		tableName, tbl, ok, err = db.resolveTable(ctx, root, tableName)
 		if err != nil {
@@ -745,41 +750,41 @@ func (db Database) resolveTable(ctx *sql.Context, root doltdb.RootValue, tableNa
 
 var defaultSearchPath = "doltgres,public"
 
-func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, string, *doltdb.Table, bool, error) {
 	searchPath, err := ctx.GetSessionVariable(ctx, "search_path")
 	if sql.ErrUnknownSystemVariable.Is(err) {
 		// TODO: make this a real error
 		searchPath = defaultSearchPath
 	} else if err != nil {
-		return "", nil, false, err
+		return "", "", nil, false, err
 	}
 	
 	schemasToSearch := strings.Split(searchPath.(string), ",")
 	for _, schemaName := range schemasToSearch {
+		schemaName = strings.Trim(schemaName, " ")
 		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
 		if err != nil {
-			return "", nil, false, err
+			return "", "", nil, false, err
 		}
 		
-		var ok bool
-		tableName, ok = sql.GetTableNameInsensitive(tableName, tablesInSchema)
+		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
 		if !ok {
 			continue
 		}
 
 		// TODO: what schema name do we use for system tables?
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName})
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: correctedTableName, Schema: schemaName})
 		if err != nil {
-			return "", nil, false, err
+			return "", "", nil, false, err
 		} else if !ok {
 			// Should be impossible
-			return "", nil, false, doltdb.ErrTableNotFound
+			return "", "", nil, false, doltdb.ErrTableNotFound
 		}
 
-		return tableName, tbl, true, nil
+		return correctedTableName, schemaName, tbl, true, nil
 	}
-	
-	return "", nil, false, nil
+
+	return "", "", nil, false, nil
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
@@ -1180,6 +1185,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
+	// TODO: need to consider schema
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
