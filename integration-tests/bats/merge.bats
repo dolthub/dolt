@@ -74,7 +74,6 @@ teardown() {
     dolt sql -q "alter database colldb collate utf8mb4_danish_ci"
     dolt commit -Am "changed main collation"
 
-    dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
     [[ "$output" =~ "collation" ]] || false

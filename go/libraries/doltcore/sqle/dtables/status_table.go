@@ -29,7 +29,6 @@ import (
 )
 
 const statusDefaultRowCount = 10
-const DBPrefix = "__DATABASE__"
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
