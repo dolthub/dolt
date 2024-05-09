@@ -90,8 +90,6 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			}
 		}
 
-		// TODO: check if apr.Args is now empty?
-
 		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err

@@ -1276,11 +1276,18 @@ func diffDatabase(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	if dArgs.diffParts&NameOnlyDiff == 0 {
-		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
+	if dArgs.diffParts&NameOnlyDiff != 0 {
+		cli.Println(tableSummary.FromTableName)
+		return nil
+	}
+
+	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	if dArgs.diffParts&SchemaOnlyDiff == 0 {
+		return nil
 	}
 
 	fromTable := tableSummary.FromTableName

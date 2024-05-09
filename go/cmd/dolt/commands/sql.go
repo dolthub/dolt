@@ -805,9 +805,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				sqlCtx.SetCurrentDatabase(db)
 			}
 			if branch != "" {
-				// TODO: probably don't need to always check this?
-				//   select statements definitely do not make it dirty
-				//   if it was dirty before chances are it's still dirty? manually undoing changes I guess...
 				dirty, _ = isDirty(sqlCtx, qryist)
 			}
 			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
