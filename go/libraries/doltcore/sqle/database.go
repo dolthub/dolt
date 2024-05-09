@@ -674,11 +674,21 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		}
 	}
 
-	tableName, tbl, ok, err := db.lookupTable(ctx, root, tableName)
-	if err != nil {
-		return nil, false, err
-	} else if !ok {
-		return nil, false, nil
+	var tbl *doltdb.Table
+	if UseSearchPath {
+		tableName, tbl, ok, err = db.resolveTableWithSearchPath(ctx, root, tableName)
+		if err != nil {
+			return nil, false, err
+		} else if !ok {
+			return nil, false, nil
+		}
+	} else {
+		tableName, tbl, ok, err = db.resolveTable(ctx, root, tableName)
+		if err != nil {
+			return nil, false, err
+		} else if !ok {
+			return nil, false, nil
+		}
 	}
 
 	sch, err := tbl.GetSchema(ctx)
@@ -710,7 +720,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	return table, true, nil
 }
 
-func (db Database) lookupTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+func (db Database) resolveTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
 	tableNames, err := db.getAllTableNames(ctx, root)
 	if err != nil {
 		return "", nil, false, err
@@ -731,6 +741,45 @@ func (db Database) lookupTable(ctx *sql.Context, root *doltdb.RootValue, tableNa
 	}
 
 	return tableName, tbl, true, nil
+}
+
+var defaultSearchPath = "doltgres,public"
+
+func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root *doltdb.RootValue, tableName string) (string, *doltdb.Table, bool, error) {
+	searchPath, err := ctx.GetSessionVariable(ctx, "search_path")
+	if sql.ErrUnknownSystemVariable.Is(err) {
+		// TODO: make this a real error
+		searchPath = defaultSearchPath
+	} else if err != nil {
+		return "", nil, false, err
+	}
+	
+	schemasToSearch := strings.Split(searchPath.(string), ",")
+	for _, schemaName := range schemasToSearch {
+		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
+		if err != nil {
+			return "", nil, false, err
+		}
+		
+		var ok bool
+		tableName, ok = sql.GetTableNameInsensitive(tableName, tablesInSchema)
+		if !ok {
+			continue
+		}
+
+		// TODO: what schema name do we use for system tables?
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName})
+		if err != nil {
+			return "", nil, false, err
+		} else if !ok {
+			// Should be impossible
+			return "", nil, false, doltdb.ErrTableNotFound
+		}
+
+		return tableName, tbl, true, nil
+	}
+	
+	return "", nil, false, nil
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
