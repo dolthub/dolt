@@ -801,7 +801,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		if strings.Contains(delta.ToTableName, diff.DBPrefix) {
+		if strings.HasPrefix(delta.ToTableName, diff.DBPrefix) {
 			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
 				return verr
@@ -839,8 +839,8 @@ func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName
 	// TODO: this should be case insensitive
 	return tablesToPrint.Contains(fromTableName) ||
 		tablesToPrint.Contains(toTableName) ||
-		strings.Contains(fromTableName, diff.DBPrefix) ||
-		strings.Contains(toTableName, diff.DBPrefix)
+		strings.HasPrefix(fromTableName, diff.DBPrefix) ||
+		strings.HasPrefix(toTableName, diff.DBPrefix)
 }
 
 func isDoltSchemasTable(toTableName, fromTableName string) bool {
