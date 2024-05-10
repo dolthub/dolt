@@ -128,9 +128,11 @@ type SqlDatabase interface {
 	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
 
 	// TODO: get rid of this, it's managed by the session, not the DB
-	GetRoot(*sql.Context) (*doltdb.RootValue, error)
+	GetRoot(*sql.Context) (doltdb.RootValue, error)
 	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
 	DbData() env.DbData
 	// DoltDatabases returns all underlying DoltDBs for this database.
 	DoltDatabases() []*doltdb.DoltDB
+	// Schema returns the schema of the database.
+	Schema() string
 }

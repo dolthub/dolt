@@ -1823,7 +1823,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 	if err != nil {
 		return false, err
 	}
-	if modifiedVD.Comparator().CompareValues(i, baseCol, modifiedCol, modifiedVD.Types[i]) == 0 {
+	if modifiedVD.Comparator().CompareValues(i, baseCol, modifiedCol, modifiedVD.Types[modifiedColIdx]) == 0 {
 		return false, nil
 	}
 	return true, nil
@@ -1998,7 +1998,11 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, nil
 	}
 
-	mergedBytes, err := json.Marshal(mergedDoc.ToInterface())
+	mergedVal, err := mergedDoc.ToInterface()
+	if err != nil {
+		return nil, true, err
+	}
+	mergedBytes, err := json.Marshal(mergedVal)
 	if err != nil {
 		return nil, true, err
 	}

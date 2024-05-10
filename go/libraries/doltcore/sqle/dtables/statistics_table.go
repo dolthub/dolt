@@ -52,7 +52,24 @@ func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return numBytesPerRow * numRows, nil
+
+	// maxSize is the upper bound for how much space a table takes up on disk. It will typically
+	// greatly overestimate the actual size of the table on disk because it does not take into
+	// account that the data on disk is compressed and it assumes that every variable length
+	// field is fully used. Because of this, maxSize can easily be several orders of magnitude
+	// larger than the actual space used by the table on disk.
+	maxSize := numBytesPerRow * numRows
+
+	// To return a more realistic estimate of the size of the table on disk, we multiply maxSize by
+	// compressionFactor. This will still not give an accurate size of the table on disk, but it
+	// will generally be much closer than maxSize. This value comes from quickly testing some dbs
+	// with only columns that have a fixed length (e.g. int) and some with only columns that have
+	// a variable length (e.g. TEXT). 0.002 was between the two sets of values. Ultimately, having
+	// accurate table statistics is a better long term solution for this.
+	// https://github.com/dolthub/dolt/issues/6624
+	const compressionFactor = 0.002
+	estimatedSize := float64(maxSize) * compressionFactor
+	return uint64(estimatedSize), nil
 }
 
 type BranchStatsProvider interface {

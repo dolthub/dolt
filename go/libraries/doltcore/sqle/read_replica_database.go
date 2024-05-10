@@ -111,6 +111,8 @@ func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
+	ctx.GetLogger().Tracef("pulling from remote %s for database %s", rrd.remote.Name, rrd.Name())
+
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateHeads)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateHeads)

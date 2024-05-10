@@ -346,16 +346,13 @@ func (c *Controller) SetDropDatabase(dropDatabase func(*sql.Context, string) err
 	c.dropDatabase = dropDatabase
 }
 
-// Our DropDatabaseHook gets called when the database provider drops a
+// DropDatabaseHook gets called when the database provider drops a
 // database. This is how we learn that we need to replicate a drop database.
-func (c *Controller) DropDatabaseHook() func(string) {
-	if c == nil {
-		return nil
-	}
+func (c *Controller) DropDatabaseHook() func(*sql.Context, string) {
 	return c.dropDatabaseHook
 }
 
-func (c *Controller) dropDatabaseHook(dbname string) {
+func (c *Controller) dropDatabaseHook(_ *sql.Context, dbname string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

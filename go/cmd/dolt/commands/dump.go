@@ -253,8 +253,8 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 	return nil
 }
 
-func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
+func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
@@ -324,8 +324,8 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	return nil
 }
 
-func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := root.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
+func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -390,8 +390,8 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 	return nil
 }
 
-func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := root.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
+	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -436,10 +436,11 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 				sqlMode = s
 			}
 		}
-
-		opts := sql.NewSqlModeFromString(sqlMode).ParserOptions()
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := planbuilder.ParseWithOptions(ctx, engine.GetUnderlyingEngine().Analyzer.Catalog, row[fragColIdx].(string), opts)
+		sqlEngine := engine.GetUnderlyingEngine()
+		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
+		cv, _, _, err := binder.Parse(row[fragColIdx].(string), false)
 		if err != nil {
 			return err
 		}
@@ -615,7 +616,7 @@ func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOption
 }
 
 // checkAndCreateOpenDestFile returns filePath to created dest file after checking for any existing file and handles it
-func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
+func checkAndCreateOpenDestFile(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, dumpOpts *dumpOptions, fileName string) (string, errhand.VerboseError) {
 	ow, err := checkOverwrite(ctx, root, dEnv.FS, force, dumpOpts.dest)
 	if err != nil {
 		return emptyStr, errhand.VerboseErrorFromError(err)
@@ -642,7 +643,7 @@ func checkAndCreateOpenDestFile(ctx context.Context, root *doltdb.RootValue, dEn
 
 // checkOverwrite returns TRUE if the file exists and force flag not given and
 // FALSE if the file is stream data / file does not exist / file exists and force flag is given
-func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, force bool, dest mvdata.DataLocation) (bool, error) {
+func checkOverwrite(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS, force bool, dest mvdata.DataLocation) (bool, error) {
 	if _, isStream := dest.(mvdata.StreamDataLocation); isStream {
 		return false, nil
 	}
@@ -737,7 +738,7 @@ func newTableArgs(tblName string, destination mvdata.DataLocation, batched, auto
 
 // dumpNonSqlTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
+func dumpNonSqlTables(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = "doltdump/"

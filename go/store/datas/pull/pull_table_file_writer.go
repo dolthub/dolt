@@ -302,10 +302,10 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan *nbs.
 			select {
 			case respCh <- ttf:
 			case <-ctx.Done():
-				return ctx.Err()
+				return context.Cause(ctx)
 			}
 		case <-ctx.Done():
-			return ctx.Err()
+			return context.Cause(ctx)
 		}
 	}
 }

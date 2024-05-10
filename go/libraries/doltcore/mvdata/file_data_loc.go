@@ -71,7 +71,7 @@ func (dl FileDataLocation) String() string {
 }
 
 // Exists returns true if the DataLocation already exists
-func (dl FileDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+func (dl FileDataLocation) Exists(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	exists, _ := fs.Exists(dl.Path)
 	return exists, nil
 }
@@ -133,7 +133,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 			if opts == nil {
 				return nil, false, errors.New("Unable to determine table name on JSON import")
 			}
-			tbl, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
+			tbl, exists, err := root.GetTable(context.TODO(), doltdb.TableName{Name: jsonOpts.TableName})
 			if !exists {
 				return nil, false, fmt.Errorf("The following table could not be found:\n%v", jsonOpts.TableName)
 			}
@@ -165,7 +165,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 			if opts == nil {
 				return nil, false, errors.New("Unable to determine table name on JSON import")
 			}
-			tbl, tableExists, tErr := root.GetTable(context.TODO(), parquetOpts.TableName)
+			tbl, tableExists, tErr := root.GetTable(context.TODO(), doltdb.TableName{Name: parquetOpts.TableName})
 			if !tableExists {
 				return nil, false, fmt.Errorf("The following table could not be found:\n%v", parquetOpts.TableName)
 			}
@@ -186,7 +186,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
+func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlRowWriter, error) {
 	switch dl.Format {
 	case CsvFile:
 		return csv.NewCSVWriter(wr, outSch, csv.NewCSVInfo())

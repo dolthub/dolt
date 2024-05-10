@@ -753,7 +753,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	roots := make(map[string]*doltdb.RootValue)
+	roots := make(map[string]doltdb.RootValue)
 	for _, db := range d.provider.DoltDatabases() {
 		branchState, ok, err := d.lookupDbState(ctx, db.Name())
 		if err != nil {
@@ -788,7 +788,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 	}
 
 	for dbName, root := range roots {
-		err := d.SetRoot(ctx, dbName, root)
+		err := d.SetWorkingRoot(ctx, dbName, root)
 		if err != nil {
 			return err
 		}
@@ -859,7 +859,7 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 // special identifiers |WORKING| or |STAGED|
 // Returns the root value associated with the identifier given, its commit time and its hash string. The hash string
 // for special identifiers |WORKING| or |STAGED| would be itself, 'WORKING' or 'STAGED', respectively.
-func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (*doltdb.RootValue, *types.Timestamp, string, error) {
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (doltdb.RootValue, *types.Timestamp, string, error) {
 	if refStr == doltdb.Working || refStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
@@ -872,7 +872,7 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		}
 	}
 
-	var root *doltdb.RootValue
+	var root doltdb.RootValue
 	var commitTime *types.Timestamp
 	cs, err := doltdb.NewCommitSpec(refStr)
 	if err != nil {
@@ -921,13 +921,12 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	return root, commitTime, commitHash.String(), nil
 }
 
-// SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
+// SetWorkingRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
 // changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
 // update the session's root value via this method.
 // The dbName given should generally be a revision-qualified database name.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
-// TODO: rename to SetWorkingRoot
-func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
 	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -994,9 +993,11 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
-	if err != nil {
-		return err
+	if writeSess := branchState.WriteSession(); writeSess != nil {
+		err = writeSess.SetWorkingSet(ctx, ws)
+		if err != nil {
+			return err
+		}
 	}
 
 	branchState.dirty = true
@@ -1124,17 +1125,21 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	if intVal == 0 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = true
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = true
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else if intVal == 1 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = false
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = false
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else {

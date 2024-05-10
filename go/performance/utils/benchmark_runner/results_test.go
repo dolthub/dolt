@@ -37,7 +37,7 @@ var (
 	testStamp         = time.Date(2019, 8, 19, 0, 0, 0, 0, time.UTC).Format(stampFormat)
 )
 
-// getRandomResult returns a result with random numbers
+// genRandomResult returns a result with random numbers
 func genRandomResult() *Result {
 	return &Result{
 		RuntimeOS:                testOS,

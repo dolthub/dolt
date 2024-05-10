@@ -170,7 +170,7 @@ func TestFeatureVersion(t *testing.T) {
 			doltdb.DoltFeatureVersion = newVersion
 			defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
-			assertFeatureVersion := func(r *doltdb.RootValue) {
+			assertFeatureVersion := func(r doltdb.RootValue) {
 				act, ok, err := r.GetFeatureVersion(ctx)
 				require.NoError(t, err)
 				require.True(t, ok)

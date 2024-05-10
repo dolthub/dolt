@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -93,7 +94,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	tbl, tName, ok, err := root.GetTableInsensitive(ctx, tableName)
+	tbl, tName, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get table").Build(), usage)
 	}
@@ -116,7 +117,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update table schema").AddCause(err).Build(), usage)
 	}
 
-	root, err = root.PutTable(ctx, tName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tName}, tbl)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to put table in root").AddCause(err).Build(), usage)
 	}

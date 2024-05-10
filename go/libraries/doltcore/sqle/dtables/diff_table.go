@@ -60,7 +60,7 @@ var _ sql.StatisticsTable = (*DiffTable)(nil)
 type DiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
-	workingRoot *doltdb.RootValue
+	workingRoot doltdb.RootValue
 	head        *doltdb.Commit
 
 	headHash          hash.Hash
@@ -87,10 +87,10 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+	table, tblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	t, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
+	t, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 // TODO the structure of the diff iterator doesn't appear to accommodate
 // several children for a parent hash.
 func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	_, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
+	_, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -428,7 +428,7 @@ func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs
 		return TblInfoAtCommit{}, err
 	}
 
-	tbl, exactName, ok, err := r.GetTableInsensitive(ctx, table)
+	tbl, exactName, ok, err := doltdb.GetTableInsensitive(ctx, r, table)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
@@ -454,7 +454,7 @@ func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs
 // commits. The structure of the iter requires we pre-populate the parents
 // of to_commit for diffing.
 func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	t, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
+	t, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -742,7 +742,7 @@ type DiffPartitions struct {
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
 // different values for the hash of the table being looked at.
-func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
+func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
 	tblHash, _, err := root.GetTableHash(ctx, dps.tblName)
 
 	if err != nil {
@@ -814,7 +814,7 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 			return nil, err
 		}
 
-		tbl, _, _, err := root.GetTableInsensitive(ctx, dps.tblName)
+		tbl, _, _, err := doltdb.GetTableInsensitive(ctx, root, dps.tblName)
 
 		if err != nil {
 			return nil, err

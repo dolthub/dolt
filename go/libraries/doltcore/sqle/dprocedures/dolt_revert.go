@@ -126,7 +126,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 	if !headHash.Equal(workingHash) {
-		err = dSess.SetRoot(ctx, dbName, workingRoot)
+		err = dSess.SetWorkingRoot(ctx, dbName, workingRoot)
 		if err != nil {
 			return 1, err
 		}

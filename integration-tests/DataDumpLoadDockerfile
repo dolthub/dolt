@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ubuntu:18.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 # install mysql-client, mysql-server, libmysqlclient-dev
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,9 +7,10 @@ RUN apt update -y && \
         curl \
         gnupg \
         software-properties-common && \
-    curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
+    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
     apt update -y && \
     apt install -y \
+        build-essential \
         git \
         mysql-client \
         mysql-server \

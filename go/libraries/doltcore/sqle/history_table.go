@@ -59,12 +59,13 @@ var _ sql.PrimaryKeyTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	doltTable     *DoltTable
-	commitFilters []sql.Expression
-	cmItr         doltdb.CommitItr
-	commitCheck   doltdb.CommitFilter
-	indexLookup   sql.IndexLookup
-	projectedCols []uint64
+	doltTable                  *DoltTable
+	commitFilters              []sql.Expression
+	cmItr                      doltdb.CommitItr
+	commitCheck                doltdb.CommitFilter
+	indexLookup                sql.IndexLookup
+	projectedCols              []uint64
+	conversionWarningsByColumn map[string]struct{}
 }
 
 func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
@@ -179,8 +180,9 @@ func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) 
 	}
 
 	h := &HistoryTable{
-		doltTable: table,
-		cmItr:     cmItr,
+		doltTable:                  table,
+		cmItr:                      cmItr,
+		conversionWarningsByColumn: make(map[string]struct{}),
 	}
 	return h
 }
@@ -436,7 +438,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 // PartitionRows takes a partition and returns a row iterator for that partition
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
-	return newRowItrForTableAtCommit(ctx, ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.ProjectedTags())
+	return ht.newRowItrForTableAtCommit(ctx, ht.doltTable, cp.h, cp.cm, ht.indexLookup, ht.ProjectedTags())
 }
 
 // commitPartition is a single commit
@@ -483,7 +485,7 @@ type historyIter struct {
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
+func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, projections []uint64) (*historyIter, error) {
 	targetSchema := table.Schema()
 
 	root, err := cm.GetRootValue(ctx)
@@ -496,7 +498,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 		return nil, err
 	}
 
-	_, _, ok, err := root.GetTableInsensitive(ctx, table.Name())
+	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, table.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +544,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 		}
 	}
 
-	converter := rowConverter(lockedTable.Schema(), targetSchema, h, meta, projections)
+	converter := ht.rowConverter(ctx, lockedTable.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,
@@ -587,7 +589,11 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
+// rowConverter returns a function that converts a row to another schema for the dolt_history system tables. |srcSchema|
+// describes the incoming row, |targetSchema| describes the desired row schema, and |projections| controls which fields
+// are including the returned row. The hash |h| and commit metadata |meta| are used to augment the row with custom
+// fields for the dolt_history table to return commit metadata.
+func (ht *HistoryTable) rowConverter(ctx *sql.Context, srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
 	for i, col := range targetSchema {
 		srcIdx := srcSchema.IndexOfColName(col.Name)
@@ -596,6 +602,12 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 			// TODO: we could do a projection to convert between types in some cases
 			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
 				srcToTarget[srcIdx] = i
+			} else {
+				if _, alreadyWarned := ht.conversionWarningsByColumn[col.Name]; !alreadyWarned {
+					ctx.Warn(1246, "Unable to convert field %s in historical rows because its type (%s) doesn't match "+
+						"current schema's type (%s)", col.Name, col.Type.String(), srcSchema[srcIdx].Type.String())
+					ht.conversionWarningsByColumn[col.Name] = struct{}{}
+				}
 			}
 		}
 	}

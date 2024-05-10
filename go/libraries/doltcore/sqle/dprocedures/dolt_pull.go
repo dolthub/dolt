@@ -230,14 +230,10 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 // TODO: remove this as it does not do anything useful
 func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	for {
-		if ctx.Err() != nil {
-			return
-		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-statsCh:
-		default:
 		}
 	}
 }

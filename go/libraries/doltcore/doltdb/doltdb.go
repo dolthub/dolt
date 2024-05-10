@@ -213,7 +213,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 			return err
 		}
 
-		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.nomsValue(), commitOpts)
+		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.NomsValue(), commitOpts)
 		if err != nil {
 			return err
 		}
@@ -328,9 +328,9 @@ func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref strin
 //
 // See doltEnvironment.Roots(context.Context)
 type Roots struct {
-	Head    *RootValue
-	Working *RootValue
-	Staged  *RootValue
+	Head    RootValue
+	Working RootValue
+	Staged  RootValue
 }
 
 func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef, nomsRoot hash.Hash) (*hash.Hash, error) {
@@ -591,7 +591,7 @@ func (ddb *DoltDB) workingSetFromDataset(ctx context.Context, workingSetRef ref.
 // written.  This method is the primary place in doltcore that handles setting
 // the FeatureVersion of root values to the current value, so all writes of
 // RootValues should happen here.
-func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (*RootValue, hash.Hash, error) {
+func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv RootValue) (RootValue, hash.Hash, error) {
 	nrv, ref, err := ddb.writeRootValue(ctx, rv)
 	if err != nil {
 		return nil, hash.Hash{}, err
@@ -599,12 +599,12 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (*RootValu
 	return nrv, ref.TargetHash(), nil
 }
 
-func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (*RootValue, types.Ref, error) {
+func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue, types.Ref, error) {
 	rv, err := rv.SetFeatureVersion(DoltFeatureVersion)
 	if err != nil {
 		return nil, types.Ref{}, err
 	}
-	ref, err := ddb.vrw.WriteValue(ctx, rv.nomsValue())
+	ref, err := ddb.vrw.WriteValue(ctx, rv.NomsValue())
 	if err != nil {
 		return nil, types.Ref{}, err
 	}
@@ -613,12 +613,12 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (*RootValu
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
 // be read, or if the hash given doesn't represent a dolt RootValue.
-func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, error) {
+func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (RootValue, error) {
 	val, err := ddb.vrw.ReadValue(ctx, h)
 	if err != nil {
 		return nil, err
 	}
-	return decodeRootNomsValue(ddb.vrw, ddb.ns, val)
+	return decodeRootNomsValue(ctx, ddb.vrw, ddb.ns, val)
 }
 
 // ReadCommit reads the Commit whose hash is |h|, if one exists.
@@ -1432,7 +1432,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	}
 
 	commitDataset, _, err := ddb.db.withReplicationStatusController(replicationStatus).
-		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), *wsSpec, prevHash, commit.CommitOptions)
+		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.NomsValue(), *wsSpec, prevHash, commit.CommitOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -1760,7 +1760,7 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 // AddStash takes current branch head commit, stash root value and stash metadata to create a new stash.
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
-func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue, meta *datas.StashMeta) error {
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash RootValue, meta *datas.StashMeta) error {
 	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return err
@@ -1917,7 +1917,7 @@ func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, e
 
 // GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
 // of the stash at given index.
-func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (RootValue, *Commit, *datas.StashMeta, error) {
 	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
 	if err != nil {
 		return nil, nil, nil, err

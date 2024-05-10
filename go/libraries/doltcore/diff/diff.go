@@ -87,5 +87,5 @@ type SchemaDiffWriter interface {
 	// many SQL statements for a single diff. WriteSchemaDiff will be called before any row diffs via |WriteRow|
 	WriteSchemaDiff(schemaDiffStatement string) error
 	// Close finalizes the work of this writer.
-	Close(ctx context.Context) error
+	Close() error
 }

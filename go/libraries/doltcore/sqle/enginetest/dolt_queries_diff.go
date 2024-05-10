@@ -3548,6 +3548,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into t values (1, null, 1, 1), (2, 2, null, 2), (3, 3, 3, 3)",
 			"CALL dolt_commit('-Am', 'new table t')",
 			"CALL dolt_checkout('-b', 'other')",
+			"alter table t modify column a varchar(100) comment 'foo';",
+			"alter table t rename column c to z;",
 			"alter table t drop column b",
 			"alter table t add column d int",
 			"delete from t where pk = 3",
@@ -3559,11 +3561,18 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT statement FROM dolt_patch('main', 'other', 't') ORDER BY statement_order",
 				Expected: []sql.Row{
+					{"ALTER TABLE `t` MODIFY COLUMN `a` varchar(100) COMMENT 'foo';"},
 					{"ALTER TABLE `t` DROP `b`;"},
+					{"ALTER TABLE `t` RENAME COLUMN `c` TO `z`;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
-					{"UPDATE `t` SET `a`=9 WHERE `pk`=1;"},
+					// TODO: The two updates to z below aren't necessary, since the column
+					//       was renamed and those are the old values, but it shows as a diff
+					//       because of the column name change, so we output UPDATE statements
+					//       for them. This isn't a correctness issue, but it is inefficient.
+					{"UPDATE `t` SET `a`='9',`z`=1 WHERE `pk`=1;"},
+					{"UPDATE `t` SET `z`=2 WHERE `pk`=2;"},
 					{"DELETE FROM `t` WHERE `pk`=3;"},
-					{"INSERT INTO `t` (`pk`,`a`,`c`,`d`) VALUES (7,7,7,7);"},
+					{"INSERT INTO `t` (`pk`,`a`,`z`,`d`) VALUES (7,'7',7,7);"},
 				},
 			},
 		},

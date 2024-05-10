@@ -53,13 +53,13 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 	return nil
 }
 
-func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValue) error {
-	names, err := old.GetTableNames(ctx)
+func validateRootValue(ctx context.Context, oldParent, old, new doltdb.RootValue) error {
+	names, err := old.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return err
 	}
 	for _, name := range names {
-		o, ok, err := old.GetTable(ctx, name)
+		o, ok, err := old.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValu
 		}
 
 		// Skip tables that haven't changed
-		op, ok, err := oldParent.GetTable(ctx, name)
+		op, ok, err := oldParent.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValu
 			}
 		}
 
-		n, ok, err := new.GetTable(ctx, name)
+		n, ok, err := new.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return err
 		}

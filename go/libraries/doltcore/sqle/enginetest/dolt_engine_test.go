@@ -38,6 +38,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -147,21 +148,43 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "physical columns added after virtual one",
+			Name: "Delayed foreign key resolution: update",
 			SetUpScript: []string{
-				"create table t (pk int primary key, col1 int as (pk + 1));",
-				"insert into t (pk) values (1), (3)",
-				"alter table t add index idx1 (col1, pk);",
-				"alter table t add index idx2 (col1);",
-				"alter table t add column col2 int;",
-				"alter table t add column col3 int;",
-				"insert into t (pk, col2, col3) values (2, 4, 5);",
+				"set foreign_key_checks=0;",
+				"create table delayed_parent(pk int primary key);",
+				"create table delayed_child(pk int primary key, foreign key(pk) references delayed_parent(pk));",
+				"insert into delayed_parent values (10), (20);",
+				"insert into delayed_child values (1), (20);",
+				"set foreign_key_checks=1;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select * from t where col1 = 2",
+					// No-op update bad to bad should not cause constraint violation
+					Skip:  true,
+					Query: "update delayed_child set pk=1 where pk=1;",
 					Expected: []sql.Row{
-						{1, 2, nil, nil},
+						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
+					},
+				},
+				{
+					// Update on non-existent row should not cause constraint violation
+					Query: "update delayed_child set pk=3 where pk=3;",
+					Expected: []sql.Row{
+						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 0, Updated: 0}}},
+					},
+				},
+				{
+					// No-op update good to good should not cause constraint violation
+					Query: "update delayed_child set pk=20 where pk=20;",
+					Expected: []sql.Row{
+						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
+					},
+				},
+				{
+					// Updating bad value to good value still fails
+					Query: "update delayed_child set pk=10 where pk=1;",
+					Expected: []sql.Row{
+						{gmstypes.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 					},
 				},
 			},
@@ -624,11 +647,8 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	require.NoError(t, err)
 	defer e.Close()
 
-	for _, tt := range DoltDiffPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
-	}
-	for _, tt := range DoltCommitPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
+	for _, tt := range append(DoltDiffPlanTests, DoltCommitPlanTests...) {
+		enginetest.TestQueryPlanWithName(t, tt.Query, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
 	}
 }
 
@@ -3021,7 +3041,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3077,7 +3097,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3153,7 +3173,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3267,12 +3287,14 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, e)
 
-	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
-		if name == "cannot_create" {
-			return fmt.Errorf("there was an error initializing this database. abort!")
-		}
-		return nil
-	}
+	doltDatabaseProvider := dh.provider.(*sqle.DoltDatabaseProvider)
+	doltDatabaseProvider.InitDatabaseHooks = append(doltDatabaseProvider.InitDatabaseHooks,
+		func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+			if name == "cannot_create" {
+				return fmt.Errorf("there was an error initializing this database. abort!")
+			}
+			return nil
+		})
 
 	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "can_create")
 	require.NoError(t, err)

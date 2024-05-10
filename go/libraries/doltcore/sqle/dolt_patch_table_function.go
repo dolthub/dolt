@@ -495,7 +495,6 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-
 			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
@@ -517,8 +516,8 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 	return patches, nil
 }
 
-func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
+func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
 	}
@@ -660,6 +659,10 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 			}
 			if cd.Old.Name != cd.New.Name {
 				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+			if cd.Old.TypeInfo != cd.New.TypeInfo {
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableModifyColStmt(td.ToName,
+					sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
 	}

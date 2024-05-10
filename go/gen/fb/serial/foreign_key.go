@@ -307,7 +307,41 @@ func (rcv *ForeignKey) UnresolvedParentColumnsLength() int {
 	return 0
 }
 
-const ForeignKeyNumFields = 11
+func (rcv *ForeignKey) ChildTableDatabaseSchema(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *ForeignKey) ChildTableDatabaseSchemaLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *ForeignKey) ParentTableDatabaseSchema(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *ForeignKey) ParentTableDatabaseSchemaLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+const ForeignKeyNumFields = 13
 
 func ForeignKeyStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ForeignKeyNumFields)
@@ -355,6 +389,18 @@ func ForeignKeyAddUnresolvedParentColumns(builder *flatbuffers.Builder, unresolv
 	builder.PrependUOffsetTSlot(10, flatbuffers.UOffsetT(unresolvedParentColumns), 0)
 }
 func ForeignKeyStartUnresolvedParentColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func ForeignKeyAddChildTableDatabaseSchema(builder *flatbuffers.Builder, childTableDatabaseSchema flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(11, flatbuffers.UOffsetT(childTableDatabaseSchema), 0)
+}
+func ForeignKeyStartChildTableDatabaseSchemaVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func ForeignKeyAddParentTableDatabaseSchema(builder *flatbuffers.Builder, parentTableDatabaseSchema flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(12, flatbuffers.UOffsetT(parentTableDatabaseSchema), 0)
+}
+func ForeignKeyStartParentTableDatabaseSchemaVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func ForeignKeyEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

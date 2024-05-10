@@ -26,7 +26,7 @@ import (
 
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
-func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltdb.RootValue) (*doltdb.RootValue, error) {
+func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
 	tblSet := set.NewStrSet(tbls)
 
 	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
@@ -96,7 +96,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 				}
 			}
 
-			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
+			dest, err = dest.PutTable(ctx, doltdb.TableName{Name: td.ToName}, td.ToTable)
 			if err != nil {
 				return nil, err
 			}
@@ -123,7 +123,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	return dest, nil
 }
 
-func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
+func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []string) error {
 	notExist := []string{}
 	for _, tbl := range unknown {
 		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
