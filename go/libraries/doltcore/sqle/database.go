@@ -1390,6 +1390,30 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, nil
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, nil
+	}
+
+	var triggers []sql.TriggerDefinition
+	var ok bool
+	if triggers, ok = dbState.SessionCache().GetCachedTriggers(key, db.schemaName); ok {
+		return triggers, nil
+	}
+
+	defer dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
+
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
@@ -1403,7 +1427,6 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, err
 	}
 
-	var triggers []sql.TriggerDefinition
 	for _, frag := range frags {
 		triggers = append(triggers, sql.TriggerDefinition{
 			Name:            frag.name,
