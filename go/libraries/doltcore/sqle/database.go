@@ -964,7 +964,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
-	
+
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(tableName)
 	}

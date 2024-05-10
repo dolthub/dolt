@@ -5480,11 +5480,11 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 
 var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 	{
-		Name:       "can't use __DATABASE__ prefix in table names",
+		Name:        "can't use __DATABASE__ prefix in table names",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "create table __DATABASE__t(i int);",
+				Query:          "create table __DATABASE__t(i int);",
 				ExpectedErrStr: "Invalid table name __DATABASE__t. Table names beginning with `__DATABASE__` are reserved for internal use",
 			},
 		},
