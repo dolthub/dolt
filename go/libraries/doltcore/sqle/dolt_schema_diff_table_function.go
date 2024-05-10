@@ -330,7 +330,8 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			}
 		}
 
-		var schemasAreDifferent = fromCreate != toCreate
+		isDbCollationDiff := strings.HasPrefix(fromName, diff.DBPrefix) || strings.HasPrefix(toName, diff.DBPrefix)
+		var schemasAreDifferent = fromCreate != toCreate || isDbCollationDiff
 		if !schemasAreDifferent {
 			continue
 		}

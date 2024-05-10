@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -466,6 +467,10 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	for _, summary := range diffSummaries {
 		// We want to ignore all statistics for Full-Text tables
 		if doltdb.IsFullTextTable(summary.TableName) {
+			continue
+		}
+		// Ignore stats for database collation changes
+		if strings.HasPrefix(summary.TableName, diff.DBPrefix) {
 			continue
 		}
 		if summary.DiffType == "added" {

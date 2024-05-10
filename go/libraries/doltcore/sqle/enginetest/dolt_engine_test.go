@@ -2552,6 +2552,18 @@ func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
 	}
 }
 
+func TestDoltDatabaseCollationDiffs(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range DoltDatabaseCollationScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestQueryDiff(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()

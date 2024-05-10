@@ -36,6 +36,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -55,6 +56,7 @@ import (
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
+var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table names beginning with `__DATABASE__` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 // Database implements sql.Database for a dolt DB.
@@ -452,6 +454,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
+
 		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
@@ -957,8 +960,13 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
 	}
 
 	if !doltdb.IsValidTableName(tableName) {
@@ -973,8 +981,13 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
 	}
 
 	if !doltdb.IsValidTableName(tableName) {
@@ -1157,6 +1170,10 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
+	}
+
 	if !doltdb.IsValidTableName(tableName) {
 		return ErrInvalidTableName.New(tableName)
 	}
@@ -1244,6 +1261,10 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 	if doltdb.HasDoltPrefix(newName) {
 		return ErrReservedTableName.New(newName)
+	}
+
+	if strings.HasPrefix(newName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(newName)
 	}
 
 	if !doltdb.IsValidTableName(newName) {
