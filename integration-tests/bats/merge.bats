@@ -73,6 +73,12 @@ teardown() {
     run dolt merge other
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database collation conflict" ]] || false
+
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -Am "fix main collation"
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "merge: unresolved FKs not dropped on merge (issue #5531)" {
