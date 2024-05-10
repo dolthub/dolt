@@ -72,7 +72,7 @@ teardown() {
 
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "collation" ]] || false
+    [[ "$output" =~ "database collation conflict" ]] || false
 }
 
 @test "merge: unresolved FKs not dropped on merge (issue #5531)" {

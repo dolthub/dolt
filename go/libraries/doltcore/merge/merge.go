@@ -205,7 +205,9 @@ func MergeRoots(
 	if oColl != tColl {
 		// both sides changed, and not the same, conflict
 		if oColl != aColl && tColl != aColl {
-			return nil, fmt.Errorf("collation conflicts")
+			oCollName := sql.CollationID(oColl).Collation().Name
+			tCollName := sql.CollationID(tColl).Collation().Name
+			return nil, fmt.Errorf("database collation conflict, please resolve manually. ours: %s, theirs: %s", oCollName, tCollName)
 		}
 		// only their side changed, take their side
 		if oColl == aColl {

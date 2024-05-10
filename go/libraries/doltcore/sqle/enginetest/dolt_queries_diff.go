@@ -5480,6 +5480,16 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 
 var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 	{
+		Name:       "can't use __DATABASE__ prefix in table names",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "create table __DATABASE__t(i int);",
+				ExpectedErrStr: "Invalid table name __DATABASE__t. Table names beginning with `__DATABASE__` are reserved for internal use",
+			},
+		},
+	},
+	{
 		Name:        "db collation change with dolt_add('.')",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
@@ -5796,7 +5806,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_merge('main');",
-				ExpectedErrStr: "collation conflicts",
+				ExpectedErrStr: "database collation conflict, please resolve manually. ours: utf8mb4_danish_ci, theirs: utf8mb4_spanish_ci",
 			},
 		},
 	},
