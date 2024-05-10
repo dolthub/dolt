@@ -58,8 +58,6 @@ EOF
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ALTER DATABASE \`colldb\` COLLATE='utf8mb4_spanish_ci';" ]] || false
-
-    cd ..
 }
 
 @test "diff: row, line, in-place, context diff modes" {

@@ -39,8 +39,6 @@ teardown() {
     run dolt merge main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
-
-    cd ..
 }
 
 @test "merge: db collation non ff merge" {
@@ -58,8 +56,6 @@ teardown() {
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
-
-    cd ..
 }
 
 @test "merge: db collation merge conflict" {
@@ -77,8 +73,6 @@ teardown() {
     run dolt merge other
     [ "$status" -eq 1 ]
     [[ "$output" =~ "collation" ]] || false
-
-    cd ..
 }
 
 @test "merge: unresolved FKs not dropped on merge (issue #5531)" {

@@ -37,8 +37,6 @@ get_head_commit() {
     [ $status -eq 0 ]
     [[ $output =~ "On branch main" ]] || false
     [[ $output =~ "nothing to commit, working tree clean" ]] || false
-
-    cd ..
 }
 
 @test "status: no changes" {
