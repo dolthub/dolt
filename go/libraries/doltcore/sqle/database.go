@@ -1412,7 +1412,9 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return triggers, nil
 	}
 
-	defer dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
+	defer func() {
+		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
+	}()
 
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
