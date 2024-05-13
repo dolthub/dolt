@@ -128,7 +128,7 @@ EOF
     PORT=$( definePORT )
     dolt sql-server --loglevel TrAcE --port=$PORT --user dolt --socket "dolt.$PORT.sock" > log.txt 2>&1 &
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
     dolt sql -q "show databases;"
     stop_sql_server
 
@@ -145,7 +145,7 @@ listener:
 EOF
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
     dolt sql -q "show databases;"
     stop_sql_server
 }
@@ -1490,7 +1490,7 @@ data_dir: $DATA_DIR
 
     dolt sql-server --port $PORT --user dolt >> log.txt 2>&1 &
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     cat log.txt
 
@@ -1520,7 +1520,7 @@ data_dir: $DATA_DIR
 
     dolt sql-server --port $PORT --user dolt --socket > log.txt 2>&1 &
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     run dolt sql -q "select 1 as col1"
     [ $status -eq 0 ]
@@ -1543,7 +1543,7 @@ data_dir: $DATA_DIR
     secondPORT=$( definePORT )
     dolt sql-server --port=$secondPORT --socket="$REPO_NAME/mysql.sock" --user dolt > log.txt 2>&1 &
     SECOND_SERVER_PID=$!
-    run wait_for_connection $secondPORT 5000
+    run wait_for_connection $secondPORT 8500
     [ "$status" -eq 0 ]
 
     run grep 'unix socket set up failed: file already in use:' log.txt
@@ -1580,7 +1580,7 @@ behavior:
 
     dolt sql-server --config server.yaml > log.txt 2>&1 &
     SERVER_PID=$!
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     run dolt sql -q "select 1 as col1"
     [ $status -eq 0 ]
@@ -1619,7 +1619,7 @@ behavior:
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --socket "dolt.$PORT.sock" &
     SERVER_PID=$! # will get killed by teardown_common
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     dolt sql -q "create database mydb1;"
     stop_sql_server 1
@@ -1865,7 +1865,7 @@ behavior:
     dolt sql-server --data-dir=$baseDir --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$!
     SQL_USER='root'
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 
     run dolt --data-dir=$baseDir sql -q "select current_user"
     [ $status -eq 0 ]
