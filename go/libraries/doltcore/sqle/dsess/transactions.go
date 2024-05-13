@@ -107,9 +107,12 @@ var startPointsPool = sync.Pool{
 }
 
 func putStartPoints(m map[string]dbRoot) {
-	for k, _ := range m {
-		delete(m, k)
-	}
+	go func() {
+		for k, _ := range m {
+			delete(m, k)
+		}
+		startPointsPool.Put(m)
+	}()
 }
 
 func getStartPoints() map[string]dbRoot {
