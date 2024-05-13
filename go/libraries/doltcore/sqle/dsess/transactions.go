@@ -97,13 +97,32 @@ type savepoint struct {
 	roots map[string]doltdb.RootValue
 }
 
+var startPointsPool = sync.Pool{
+	New: func() any {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		return make(map[string]dbRoot)
+	},
+}
+
+func putStartPoints(m map[string]dbRoot) {
+	for k, _ := range m {
+		delete(m, k)
+	}
+}
+
+func getStartPoints() map[string]dbRoot {
+	return startPointsPool.Get().(map[string]dbRoot)
+}
+
 func NewDoltTransaction(
 	ctx *sql.Context,
 	dbs []SqlDatabase,
 	tCharacteristic sql.TransactionCharacteristic,
 ) (*DoltTransaction, error) {
 
-	startPoints := make(map[string]dbRoot)
+	startPoints := getStartPoints()
 	for _, db := range dbs {
 		nomsRoot, err := db.DbData().Ddb.NomsRoot(ctx)
 		if err != nil {
@@ -169,6 +188,7 @@ var txLock sync.Mutex
 // TODO: Non-working roots aren't merged into the working set and just stomp any changes made there. We need merge
 // strategies for staged as well as merge state.
 func (tx *DoltTransaction) Commit(ctx *sql.Context, workingSet *doltdb.WorkingSet, dbName string) (*doltdb.WorkingSet, error) {
+	defer putStartPoints(tx.dbStartPoints)
 	ws, _, err := tx.doCommit(ctx, workingSet, nil, txCommit, dbName)
 	return ws, err
 }
