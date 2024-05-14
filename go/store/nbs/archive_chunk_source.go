@@ -17,6 +17,8 @@ package nbs
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -29,6 +31,27 @@ type archiveChunkSource struct {
 }
 
 var _ chunkSource = &archiveChunkSource{}
+
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
+	archiveFile := filepath.Join(dir, h.String()+archiveFileSuffix)
+
+	file, err := os.Open(archiveFile)
+	if err != nil {
+		return archiveChunkSource{}, err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		return archiveChunkSource{}, err
+	}
+	fileSize := stat.Size()
+
+	aRdr, err := newArchiveReader(file, uint64(fileSize))
+	if err != nil {
+		return archiveChunkSource{}, err
+	}
+	return archiveChunkSource{aRdr}, nil
+}
 
 func (acs archiveChunkSource) has(h hash.Hash) (bool, error) {
 	return acs.aRdr.has(h), nil

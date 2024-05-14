@@ -152,6 +152,7 @@ const (
 		archiveCheckSumSize +
 		1 + // version byte
 		archiveFileSigSize
+	archiveFileSuffix = ".darc"
 )
 
 /*
