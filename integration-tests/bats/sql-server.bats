@@ -598,7 +598,6 @@ SQL
 
      run dolt sql -q "SELECT * FROM test"
      [ $status -eq 0 ]
-     echo $output
      [[ $output =~ " 1 " ]] || false
      [[ $output =~ " 2 " ]] || false
      [[ $output =~ " 3 " ]] || false
@@ -1883,3 +1882,30 @@ behavior:
     [ $status -eq 0 ]
     [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
 }
+
+@test "sql-server: --data-dir used to load persisted system variables" {
+    prevWd=$(pwd)
+    baseDir=$(mktemp -d)
+
+    # Initialize a Dolt directory and persist a global variable
+    cd $baseDir
+    dolt init
+    dolt sql -q "SET @@PERSIST.log_bin=1;"
+    run cat .dolt/config.json
+    [ $status -eq 0 ]
+    [[ "$output" =~ "\"sqlserver.global.log_bin\":\"1\"" ]] || false
+
+    # Start a sql-server and make sure the persisted global was loaded
+    cd $prevWd
+    PORT=$( definePORT )
+    dolt sql-server --data-dir=$baseDir --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$!
+    SQL_USER='root'
+    wait_for_connection $PORT 7500
+
+    run dolt --data-dir=$baseDir sql -q "select @@log_bin"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
+

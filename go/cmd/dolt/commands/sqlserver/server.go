@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -154,14 +155,25 @@ func ConfigureServices(
 
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
+		InitF: func(ctx context.Context) (err error) {
 			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
 				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
 				if err != nil {
 					return err
 				}
+				// If datadir has changed, then reload the DoltEnv to ensure its local
+				// configuration store gets configured correctly
 				dEnv.FS = fs
+				dEnv = env.Load(ctx, dEnv.GetUserHomeDir, fs, doltdb.LocalDirDoltDB, dEnv.Version)
+
+				// If the datadir has changed, then we need to load any persisted global variables
+				// from the new datadir's local configuration store
+				err = dsess.InitPersistedSystemVars(dEnv)
+				if err != nil {
+					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
+				}
 			}
+			dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 			return nil
 		},
 	}

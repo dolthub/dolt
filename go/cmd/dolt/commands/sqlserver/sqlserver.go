@@ -207,9 +207,6 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	// We need a username and password for many SQL commands, so set defaults if they don't exist
-	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
-
 	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 	if err != nil {
 		cli.Println(color.RedString(err.Error()))
@@ -235,7 +232,6 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-
 	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv)
 	if err != nil {
 		return err
