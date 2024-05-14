@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/val"
 	"strings"
 	"sync"
 
@@ -25,11 +27,34 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
+	// TODO |indexes| cached based on schema address
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
 	views   map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	schemas map[doltdb.DataCacheKey]*SchemaState
 
 	mu sync.RWMutex
+}
+
+type SchemaState struct {
+	DoltSchema schema.Schema
+	PkSchema   sql.PrimaryKeySchema
+	PriIndex   IndexState
+	SecIndexes []IndexState
+	AutoIncCol schema.Column
+}
+
+type IndexState struct {
+	Name          string
+	Schema        schema.Schema
+	ValMapping    val.OrdinalMapping
+	KeyMapping    val.OrdinalMapping
+	PkMapping     val.OrdinalMapping
+	IsFullText    bool
+	IsUnique      bool
+	IsSpatial     bool
+	PrefixLengths []uint16
+	Count         int
 }
 
 // DatabaseCache stores databases and their initial states, offloading the compute / IO involved in resolving a
@@ -174,6 +199,34 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 
 	table, ok := tablesForKey[tableName.ToLower()]
 	return table, ok
+}
+
+// GetCachedSchemaState returns the cached SchemaState for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*SchemaState, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.schemas == nil {
+		return nil, false
+	}
+	schemaState, ok := c.schemas[key]
+	return schemaState, ok
+}
+
+// CacheSchemaState caches a SchemaState implementation for the table named
+func (c *SessionCache) CacheSchemaState(key doltdb.DataCacheKey, state *SchemaState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.schemas == nil {
+		c.schemas = make(map[doltdb.DataCacheKey]*SchemaState)
+	}
+	if len(c.schemas) > maxCachedKeys {
+		for k := range c.schemas {
+			delete(c.schemas, k)
+		}
+	}
+
+	c.schemas[key] = state
 }
 
 // CacheViews caches all views in a database for the cache key given

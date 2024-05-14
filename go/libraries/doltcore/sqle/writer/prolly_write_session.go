@@ -15,7 +15,8 @@
 package writer
 
 import (
-	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -37,10 +38,10 @@ type prollyWriteSession struct {
 	mut        *sync.RWMutex
 }
 
-var _ WriteSession = &prollyWriteSession{}
+var _ dsess.WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -56,33 +57,77 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		return nil, doltdb.ErrTableNotFound
 	}
 
-	sch, err := t.GetSchema(ctx)
+	// get schema hash
+	// get session cache
+	// check if schHash in cache
+	// if yes, access the Dolt and sql schemas
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db)
 	if err != nil {
 		return nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema("", table.Name, sch)
-	if err != nil {
-		return nil, err
+	if !ok {
+		return nil, fmt.Errorf("no state for database %s", db)
 	}
-	autoCol := autoIncrementColFromSchema(sch)
 
-	var pw indexWriter
-	var sws map[string]indexWriter
-	if schema.IsKeyless(sch) {
-		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+	schHash, err := t.GetSchemaHash(ctx)
+
+	schKey := doltdb.DataCacheKey{Hash: schHash}
+	schState, ok := dbState.SessionCache().GetCachedSchemaState(schKey)
+	if !ok {
+		schState = new(dsess.SchemaState)
+		schState.DoltSchema, err = t.GetSchema(ctx)
 		if err != nil {
 			return nil, err
 		}
-		sws, err = getSecondaryKeylessProllyWriters(ctx, t, pkSch.Schema, sch, pw.(prollyKeylessWriter))
+		schState.PkSchema, err = sqlutil.FromDoltSchema("", table.Name, schState.DoltSchema)
+		if err != nil {
+			return nil, err
+		}
+
+		schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
+
+		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
+		schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
+
+		definitions := schState.DoltSchema.Indexes().AllIndexes()
+		for _, def := range definitions {
+			keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
+			pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
+			idxState := dsess.IndexState{
+				KeyMapping:    keyMap,
+				ValMapping:    valMap,
+				PkMapping:     pkMap,
+				Name:          def.Name(),
+				Schema:        def.Schema(),
+				Count:         def.Count(),
+				IsFullText:    def.IsFullText(),
+				IsUnique:      def.IsUnique(),
+				IsSpatial:     def.IsSpatial(),
+				PrefixLengths: def.PrefixLengths(),
+			}
+			schState.SecIndexes = append(schState.SecIndexes, idxState)
+		}
+		defer dbState.SessionCache().CacheSchemaState(schKey, schState)
+	}
+
+	var pw indexWriter
+	var sws map[string]indexWriter
+	if schema.IsKeyless(schState.DoltSchema) {
+		pw, err = getPrimaryKeylessProllyWriter(ctx, t, schState)
+		if err != nil {
+			return nil, err
+		}
+		sws, err = getSecondaryKeylessProllyWriters(ctx, t, schState, pw.(prollyKeylessWriter))
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		pw, err = getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
+		pw, err = getPrimaryProllyWriter(ctx, t, schState)
 		if err != nil {
 			return nil, err
 		}
-		sws, err = getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
+		sws, err = getSecondaryProllyIndexWriters(ctx, t, schState)
 		if err != nil {
 			return nil, err
 		}
@@ -94,9 +139,9 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		primary:   pw,
 		secondary: sws,
 		tbl:       t,
-		sch:       sch,
-		sqlSch:    pkSch.Schema,
-		aiCol:     autoCol,
+		sch:       schState.DoltSchema,
+		sqlSch:    schState.PkSchema.Schema,
+		aiCol:     schState.AutoIncCol,
 		aiTracker: s.aiTracker,
 		flusher:   s,
 		setter:    setter,
@@ -203,7 +248,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 }
 
 // setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
-func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
 	for tableName, tableWriter := range s.tables {
 		t, ok, err := root.GetTable(ctx, tableName)

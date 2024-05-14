@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -145,7 +144,7 @@ type ignoreWriter struct {
 	it                      *IgnoreTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
-	tableWriter             writer.TableWriter
+	tableWriter             dsess.TableWriter
 }
 
 func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {

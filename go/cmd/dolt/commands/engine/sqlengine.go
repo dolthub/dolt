@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"os"
 	"runtime"
 	"strconv"
@@ -396,7 +397,7 @@ func sqlContextFactory() contextFactory {
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession)
 		if err != nil {
 			return nil, err
 		}

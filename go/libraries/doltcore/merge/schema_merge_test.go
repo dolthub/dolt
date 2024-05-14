@@ -1480,9 +1480,9 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									actIndexSet, err := actTbl.GetIndexSet(ctx)
 									require.NoError(t, err)
 									expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
-										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, index.Name())
+										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
 										require.NoError(t, err)
-										actIndex, err := actIndexSet.GetIndex(ctx, expSchema, index.Name())
+										actIndex, err := actIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
 										require.NoError(t, err)
 										expIndexHash, err := expIndex.HashOf()
 										require.NoError(t, err)

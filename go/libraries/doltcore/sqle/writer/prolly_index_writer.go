@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"strings"
 
@@ -23,13 +24,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (prollyIndexWriter, error) {
+func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (prollyIndexWriter, error) {
 	idx, err := t.GetRowData(ctx)
 	if err != nil {
 		return prollyIndexWriter{}, err
@@ -38,18 +38,17 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Sch
 	m := durable.ProllyMapFromIndex(idx)
 
 	keyDesc, valDesc := m.Descriptors()
-	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
 		keyBld: val.NewTupleBuilder(keyDesc),
-		keyMap: keyMap,
+		keyMap: schState.PriIndex.KeyMapping,
 		valBld: val.NewTupleBuilder(valDesc),
-		valMap: valMap,
+		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
 
-func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (prollyKeylessWriter, error) {
+func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (prollyKeylessWriter, error) {
 	idx, err := t.GetRowData(ctx)
 	if err != nil {
 		return prollyKeylessWriter{}, err
@@ -58,13 +57,12 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch 
 	m := durable.ProllyMapFromIndex(idx)
 
 	keyDesc, valDesc := m.Descriptors()
-	_, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
 		keyBld: val.NewTupleBuilder(keyDesc),
 		valBld: val.NewTupleBuilder(valDesc),
-		valMap: valMap,
+		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
 

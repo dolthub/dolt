@@ -517,7 +517,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db                 Database
-	pinnedWriteSession writer.WriteSession
+	pinnedWriteSession dsess.WriteSession
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -566,10 +566,10 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWriter, err error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 
-	var writeSession writer.WriteSession
+	var writeSession dsess.WriteSession
 	if t.pinnedWriteSession != nil {
 		writeSession = t.pinnedWriteSession
 	} else {
@@ -595,7 +595,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		if err != nil {
 			return nil, err
 		}
-		return multiEditor.(writer.TableWriter), nil
+		return multiEditor.(dsess.TableWriter), nil
 	} else {
 		return ed, nil
 	}
@@ -3124,7 +3124,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return fmt.Errorf("not implemented: AlterableDoltTable.DropPrimaryKey()")
 }
 
-func (t *WritableDoltTable) SetWriteSession(session writer.WriteSession) {
+func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
 }
 

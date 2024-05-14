@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -62,6 +61,7 @@ type DoltSession struct {
 	statsProv        sql.StatsProvider
 	mu               *sync.Mutex
 	fs               filesys.Filesys
+	writeSessProv    writeSessFunc
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -90,6 +90,8 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 	}
 }
 
+type writeSessFunc func(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession
+
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(
 	sqlSess *sql.BaseSession,
@@ -97,6 +99,7 @@ func NewDoltSession(
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
+	writeSessProv writeSessFunc,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -115,6 +118,7 @@ func NewDoltSession(
 		statsProv:        statsProvider,
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    writeSessProv,
 	}
 
 	return sess, nil
@@ -1253,7 +1257,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		branchState.writeSession = writer.NewWriteSession(nbf, branchState.WorkingSet(), tracker, editOpts)
+		branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
 	}
 
 	// WorkingSet is nil in the case of a read only, detached head DB
@@ -1741,4 +1745,40 @@ func DefaultHead(baseName string, db SqlDatabase) (string, error) {
 	}
 
 	return head, nil
+}
+
+// WriteSession encapsulates writes made within a SQL session.
+// It's responsible for creating and managing the lifecycle of TableWriter's.
+type WriteSession interface {
+	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
+	GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error)
+
+	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
+	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+
+	// GetOptions returns the editor.Options for this session.
+	GetOptions() editor.Options
+
+	// SetOptions sets the editor.Options for this session.
+	SetOptions(opts editor.Options)
+
+	WriteSessionFlusher
+}
+
+type TableWriter interface {
+	sql.TableEditor
+	sql.ForeignKeyEditor
+	sql.AutoIncrementSetter
+}
+
+// SessionRootSetter sets the root value for the session.
+type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootValue) error
+
+// WriteSessionFlusher is responsible for flushing any pending edits to the session
+type WriteSessionFlusher interface {
+	// Flush flushes the pending writes in the session.
+	Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
+	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
+	// for any tables provided in the map
+	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
 }

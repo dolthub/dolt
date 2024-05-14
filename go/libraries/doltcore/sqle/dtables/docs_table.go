@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -154,7 +153,7 @@ type docsWriter struct {
 	it                      *DocsTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
-	tableWriter             writer.TableWriter
+	tableWriter             dsess.TableWriter
 }
 
 func newDocsWriter(it *DocsTable) *docsWriter {

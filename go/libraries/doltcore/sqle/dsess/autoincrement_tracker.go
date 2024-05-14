@@ -216,7 +216,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 			return nil, err
 		}
 
-		indexData, err = indexes.GetIndex(ctx, sch, aiIndex.Name())
+		indexData, err = indexes.GetIndex(ctx, sch, nil, aiIndex.Name())
 		if err != nil {
 			return nil, err
 		}

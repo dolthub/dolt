@@ -16,7 +16,8 @@ package writer
 
 import (
 	"context"
-
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -49,50 +50,49 @@ type prollyTableWriter struct {
 	nextAutoIncrementValue map[string]uint64
 	setAutoIncrement       bool
 
-	flusher WriteSessionFlusher
-	setter  SessionRootSetter
+	flusher dsess.WriteSessionFlusher
+	setter  dsess.SessionRootSetter
 
 	errEncountered error
 }
 
-var _ TableWriter = &prollyTableWriter{}
+var _ dsess.TableWriter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
-func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
+func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pkDesc, _ := sch.GetMapDescriptors()
+	pkDesc, _ := schState.DoltSchema.GetMapDescriptors()
 
-	definitions := sch.Indexes().AllIndexes()
+	// check session cache based on schema hash argument
+	// we want to get or save the
 	writers := make(map[string]indexWriter)
 
-	for _, def := range definitions {
-		if def.IsFullText() {
+	for _, def := range schState.SecIndexes {
+		if def.IsFullText {
 			continue
 		}
-		defName := def.Name()
-		idxRows, err := s.GetIndex(ctx, sch, defName)
+		defName := def.Name
+		idxRows, err := s.GetIndex(ctx, schState.DoltSchema, def.Schema, defName)
 		if err != nil {
 			return nil, err
 		}
 		idxMap := durable.ProllyMapFromIndex(idxRows)
 
-		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, _ := idxMap.Descriptors()
 
 		// mapping from secondary index key to primary key
-		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), sch.GetPKCols())
 		writers[defName] = prollySecondaryIndexWriter{
 			name:          defName,
 			mut:           idxMap.Mutate(),
-			unique:        def.IsUnique(),
-			prefixLengths: def.PrefixLengths(),
-			idxCols:       def.Count(),
-			keyMap:        keyMap,
+			unique:        def.IsUnique,
+			prefixLengths: def.PrefixLengths,
+			idxCols:       def.Count,
+			keyMap:        def.KeyMapping,
 			keyBld:        val.NewTupleBuilder(keyDesc),
-			pkMap:         pkMap,
+			pkMap:         def.PkMapping,
 			pkBld:         val.NewTupleBuilder(pkDesc),
 		}
 	}
@@ -100,41 +100,39 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 	return writers, nil
 }
 
-func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema, primary prollyKeylessWriter) (map[string]indexWriter, error) {
+func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState, primary prollyKeylessWriter) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	definitions := sch.Indexes().AllIndexes()
 	writers := make(map[string]indexWriter)
 
-	for _, def := range definitions {
-		if def.IsFullText() {
+	for _, def := range schState.SecIndexes {
+		if def.IsFullText {
 			continue
 		}
-		defName := def.Name()
-		idxRows, err := s.GetIndex(ctx, sch, defName)
+		defName := def.Name
+		idxRows, err := s.GetIndex(ctx, schState.DoltSchema, def.Schema, defName)
 		if err != nil {
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idxRows)
 		m = prolly.ConvertToSecondaryKeylessIndex(m)
 
-		keyMap, _ := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, _ := m.Descriptors()
 
 		writers[defName] = prollyKeylessSecondaryWriter{
 			name:          defName,
 			mut:           m.Mutate(),
 			primary:       primary,
-			unique:        def.IsUnique(),
-			spatial:       def.IsSpatial(),
-			prefixLengths: def.PrefixLengths(),
+			unique:        def.IsUnique,
+			spatial:       def.IsSpatial,
+			prefixLengths: def.PrefixLengths,
 			keyBld:        val.NewTupleBuilder(keyDesc),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count())),
+			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count)),
 			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
-			keyMap:        keyMap,
+			keyMap:        def.KeyMapping,
 		}
 	}
 
@@ -294,7 +292,56 @@ func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
-func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
+func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := ds.LookupDbState(ctx, w.dbName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no state for database %s", w.dbName)
+	}
+
+	schHash, err := tbl.GetSchemaHash(ctx)
+	schKey := doltdb.DataCacheKey{Hash: schHash}
+	schState, ok := dbState.SessionCache().GetCachedSchemaState(schKey)
+	if !ok {
+		schState = new(dsess.SchemaState)
+		schState.DoltSchema, err = tbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+		schState.PkSchema, err = sqlutil.FromDoltSchema("", w.tableName.Name, schState.DoltSchema)
+		if err != nil {
+			return err
+		}
+
+		schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
+
+		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
+		schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
+
+		definitions := schState.DoltSchema.Indexes().AllIndexes()
+		for _, def := range definitions {
+			keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
+			pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
+			idxState := dsess.IndexState{
+				KeyMapping:    keyMap,
+				ValMapping:    valMap,
+				PkMapping:     pkMap,
+				Name:          def.Name(),
+				Schema:        def.Schema(),
+				Count:         def.Count(),
+				IsFullText:    def.IsFullText(),
+				IsUnique:      def.IsUnique(),
+				IsSpatial:     def.IsSpatial(),
+				PrefixLengths: def.PrefixLengths(),
+			}
+			schState.SecIndexes = append(schState.SecIndexes, idxState)
+		}
+		defer dbState.SessionCache().CacheSchemaState(schKey, schState)
+	}
+
 	sqlSch, err := sqlutil.FromDoltSchema("", w.tableName.Name, sch)
 	if err != nil {
 		return err
@@ -304,20 +351,20 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 
 	var newSecondaries map[string]indexWriter
 	if schema.IsKeyless(sch) {
-		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, schState)
 		if err != nil {
 			return err
 		}
-		newSecondaries, err = getSecondaryKeylessProllyWriters(ctx, tbl, sqlSch.Schema, sch, newPrimary.(prollyKeylessWriter))
+		newSecondaries, err = getSecondaryKeylessProllyWriters(ctx, tbl, schState, newPrimary.(prollyKeylessWriter))
 		if err != nil {
 			return err
 		}
 	} else {
-		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, schState)
 		if err != nil {
 			return err
 		}
-		newSecondaries, err = getSecondaryProllyIndexWriters(ctx, tbl, sqlSch.Schema, sch)
+		newSecondaries, err = getSecondaryProllyIndexWriters(ctx, tbl, schState)
 		if err != nil {
 			return err
 		}

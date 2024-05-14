@@ -113,11 +113,15 @@ type RootValue interface {
 
 // rootValue is Dolt's implementation of RootValue.
 type rootValue struct {
-	vrw  types.ValueReadWriter
-	ns   tree.NodeStore
-	st   rootValueStorage
-	fkc  *ForeignKeyCollection // cache the first load
-	hash hash.Hash             // cache first load
+	vrw          types.ValueReadWriter
+	ns           tree.NodeStore
+	st           rootValueStorage
+	fkc          *ForeignKeyCollection // cache the first load
+	hash         hash.Hash
+	fragmentHash hash.Hash
+	schemaHash   hash.Hash
+	// TODO cache schema fragment table hash
+	// TODO cache schema hash
 }
 
 var _ RootValue = (*rootValue)(nil)
@@ -161,7 +165,7 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 		}
 	}
 
-	return &rootValue{vrw, ns, storage, nil, hash.Hash{}}, nil
+	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, hash.Hash{}, hash.Hash{}}, nil
 }
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
@@ -683,7 +687,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name string, tabl
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}}
+	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, hash.Hash{}, hash.Hash{}}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -813,6 +817,30 @@ func (root *rootValue) HashOf() (hash.Hash, error) {
 		}
 	}
 	return root.hash, nil
+}
+
+// SchemaHash gets the hash of the schema value
+func (root *rootValue) SchemaHash() (hash.Hash, error) {
+	if root.schemaHash.IsEmpty() {
+		var err error
+		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
+		if err != nil {
+			return hash.Hash{}, nil
+		}
+	}
+	return root.schemaHash, nil
+}
+
+// FragmentHash gets the hash of the schema fragment table root
+func (root *rootValue) FragmentHash() (hash.Hash, error) {
+	if root.fragmentHash.IsEmpty() {
+		var err error
+		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
+		if err != nil {
+			return hash.Hash{}, nil
+		}
+	}
+	return root.fragmentHash, nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
