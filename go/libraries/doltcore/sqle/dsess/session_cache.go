@@ -15,14 +15,14 @@
 package dsess
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/val"
 	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
