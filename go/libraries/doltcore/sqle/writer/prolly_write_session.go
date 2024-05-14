@@ -69,7 +69,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		schHash, err := t.GetSchemaHash(ctx)
 
 		schKey := doltdb.DataCacheKey{Hash: schHash}
-		if schState, ok = dbState.SessionCache().GetCachedSchemaState(schKey); !ok {
+		if schState, ok = dbState.SessionCache().GetCachedWriterState(schKey); !ok {
 			schState, err = getWriterSchemas(ctx, t, table.Name)
 			if err != nil {
 				return nil, err

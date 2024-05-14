@@ -212,8 +212,8 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 	return table, ok
 }
 
-// GetCachedSchemaState returns the cached WriterState for the table named, and whether the cache was present
-func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*WriterState, bool) {
+// GetCachedWriterState returns the cached WriterState for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedWriterState(key doltdb.DataCacheKey) (*WriterState, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.writers == nil {
@@ -223,8 +223,8 @@ func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*WriterSta
 	return schemaState, ok
 }
 
-// CacheSchemaState caches a WriterState implementation for the table named
-func (c *SessionCache) CacheSchemaState(key doltdb.DataCacheKey, state *WriterState) {
+// CacheWriterState caches a WriterState implementation for the table named
+func (c *SessionCache) CacheWriterState(key doltdb.DataCacheKey, state *WriterState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

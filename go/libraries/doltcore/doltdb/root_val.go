@@ -113,15 +113,11 @@ type RootValue interface {
 
 // rootValue is Dolt's implementation of RootValue.
 type rootValue struct {
-	vrw          types.ValueReadWriter
-	ns           tree.NodeStore
-	st           rootValueStorage
-	fkc          *ForeignKeyCollection // cache the first load
-	hash         hash.Hash
-	fragmentHash hash.Hash
-	schemaHash   hash.Hash
-	// TODO cache schema fragment table hash
-	// TODO cache schema hash
+	vrw  types.ValueReadWriter
+	ns   tree.NodeStore
+	st   rootValueStorage
+	fkc  *ForeignKeyCollection // cache the first load
+	hash hash.Hash             // cache the first load
 }
 
 var _ RootValue = (*rootValue)(nil)

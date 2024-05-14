@@ -305,7 +305,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 		schHash, err := w.tbl.GetSchemaHash(ctx)
 
 		schKey := doltdb.DataCacheKey{Hash: schHash}
-		if schState, ok = dbState.SessionCache().GetCachedSchemaState(schKey); !ok {
+		if schState, ok = dbState.SessionCache().GetCachedWriterState(schKey); !ok {
 			schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)
 			if err != nil {
 				return err
