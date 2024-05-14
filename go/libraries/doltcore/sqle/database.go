@@ -1123,7 +1123,8 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		}
 
 		for _, s := range schemas {
-			schemaName, exists, err := resolveDatabaseSchema(ctx, root, s)
+			var exists bool
+			schemaName, exists, err = resolveDatabaseSchema(ctx, root, s)
 			if err != nil {
 				return err
 			}
@@ -1136,9 +1137,12 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		}
 		
 		// No existing schema found in the search_path and none specified in the statement means we can't create the table
-		return sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
+		if db.schemaName == "" {
+			return sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
+		}
 	}
 	
+	// TODO: schema name
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {

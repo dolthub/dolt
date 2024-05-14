@@ -483,6 +483,28 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return err
 		}
 	}
+	
+	// If the search path is enabled, we need to create our initial schema object (public is available by default)
+	if UseSearchPath {
+		workingRoot, err := newEnv.WorkingRoot(ctx)
+		if err != nil {
+			return err
+		}
+
+		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+			Name: "public",
+		})
+		if err != nil {
+			return err
+		}
+
+		if err = newEnv.UpdateWorkingRoot(ctx, workingRoot); err != nil {
+			return err
+		}
+		if err = newEnv.UpdateStagedRoot(ctx, workingRoot); err != nil {
+			return err
+		}
+	}
 
 	return p.registerNewDatabase(ctx, name, newEnv)
 }
