@@ -27,16 +27,18 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
-	// TODO |indexes| cached based on schema address
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	tables  map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
 	views   map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
-	schemas map[doltdb.DataCacheKey]*SchemaState
+	schemas map[doltdb.DataCacheKey]*WriterState
 
 	mu sync.RWMutex
 }
 
-type SchemaState struct {
+// WriterState caches expensive objects required for writing rows.
+// All objects in writerState are valid as long as a table schema
+// is the same.
+type WriterState struct {
 	DoltSchema schema.Schema
 	PkSchema   sql.PrimaryKeySchema
 	PriIndex   IndexState
@@ -44,6 +46,8 @@ type SchemaState struct {
 	AutoIncCol schema.Column
 }
 
+// IndexState caches objects required for writing specific indexes.
+// The objects are valid as long as the index's schema is the same.
 type IndexState struct {
 	Name          string
 	Schema        schema.Schema
@@ -201,8 +205,8 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 	return table, ok
 }
 
-// GetCachedSchemaState returns the cached SchemaState for the table named, and whether the cache was present
-func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*SchemaState, bool) {
+// GetCachedSchemaState returns the cached WriterState for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*WriterState, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.schemas == nil {
@@ -212,13 +216,13 @@ func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*SchemaSta
 	return schemaState, ok
 }
 
-// CacheSchemaState caches a SchemaState implementation for the table named
-func (c *SessionCache) CacheSchemaState(key doltdb.DataCacheKey, state *SchemaState) {
+// CacheSchemaState caches a WriterState implementation for the table named
+func (c *SessionCache) CacheSchemaState(key doltdb.DataCacheKey, state *WriterState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.schemas == nil {
-		c.schemas = make(map[doltdb.DataCacheKey]*SchemaState)
+		c.schemas = make(map[doltdb.DataCacheKey]*WriterState)
 	}
 	if len(c.schemas) > maxCachedKeys {
 		for k := range c.schemas {

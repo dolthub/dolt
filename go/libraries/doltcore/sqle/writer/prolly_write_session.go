@@ -57,58 +57,29 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		return nil, doltdb.ErrTableNotFound
 	}
 
-	// get schema hash
-	// get session cache
-	// check if schHash in cache
-	// if yes, access the Dolt and sql schemas
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := sess.LookupDbState(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("no state for database %s", db)
-	}
-
-	schHash, err := t.GetSchemaHash(ctx)
-
-	schKey := doltdb.DataCacheKey{Hash: schHash}
-	schState, ok := dbState.SessionCache().GetCachedSchemaState(schKey)
-	if !ok {
-		schState = new(dsess.SchemaState)
-		schState.DoltSchema, err = t.GetSchema(ctx)
+	var schState *dsess.WriterState
+	if sess, ok := ctx.Session.(*dsess.DoltSession); ok {
+		dbState, ok, err := sess.LookupDbState(ctx, db)
 		if err != nil {
 			return nil, err
 		}
-		schState.PkSchema, err = sqlutil.FromDoltSchema("", table.Name, schState.DoltSchema)
-		if err != nil {
-			return nil, err
+		if !ok {
+			return nil, fmt.Errorf("no state for database %s", db)
 		}
+		schHash, err := t.GetSchemaHash(ctx)
 
-		schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
-
-		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
-		schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
-
-		definitions := schState.DoltSchema.Indexes().AllIndexes()
-		for _, def := range definitions {
-			keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
-			pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
-			idxState := dsess.IndexState{
-				KeyMapping:    keyMap,
-				ValMapping:    valMap,
-				PkMapping:     pkMap,
-				Name:          def.Name(),
-				Schema:        def.Schema(),
-				Count:         def.Count(),
-				IsFullText:    def.IsFullText(),
-				IsUnique:      def.IsUnique(),
-				IsSpatial:     def.IsSpatial(),
-				PrefixLengths: def.PrefixLengths(),
+		schKey := doltdb.DataCacheKey{Hash: schHash}
+		if schState, ok = dbState.SessionCache().GetCachedSchemaState(schKey); !ok {
+			schState, err = getWriterSchemas(ctx, t, table.Name)
+			if err != nil {
+				return nil, err
 			}
-			schState.SecIndexes = append(schState.SecIndexes, idxState)
 		}
-		defer dbState.SessionCache().CacheSchemaState(schKey, schState)
+	} else {
+		schState, err = getWriterSchemas(ctx, t, table.Name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var pw indexWriter
@@ -149,6 +120,44 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 	s.tables[table] = twr
 
 	return twr, nil
+}
+
+func getWriterSchemas(ctx *sql.Context, table *doltdb.Table, tableName string) (*dsess.WriterState, error) {
+	var err error
+	schState := new(dsess.WriterState)
+	schState.DoltSchema, err = table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	schState.PkSchema, err = sqlutil.FromDoltSchema("", tableName, schState.DoltSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
+
+	keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
+	schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
+
+	definitions := schState.DoltSchema.Indexes().AllIndexes()
+	for _, def := range definitions {
+		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
+		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
+		idxState := dsess.IndexState{
+			KeyMapping:    keyMap,
+			ValMapping:    valMap,
+			PkMapping:     pkMap,
+			Name:          def.Name(),
+			Schema:        def.Schema(),
+			Count:         def.Count(),
+			IsFullText:    def.IsFullText(),
+			IsUnique:      def.IsUnique(),
+			IsSpatial:     def.IsSpatial(),
+			PrefixLengths: def.PrefixLengths(),
+		}
+		schState.SecIndexes = append(schState.SecIndexes, idxState)
+	}
+	return schState, nil
 }
 
 // Flush implemented WriteSession.

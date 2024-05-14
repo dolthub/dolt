@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
@@ -59,7 +58,7 @@ type prollyTableWriter struct {
 var _ dsess.TableWriter = &prollyTableWriter{}
 var _ AutoIncrementGetter = &prollyTableWriter{}
 
-func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (map[string]indexWriter, error) {
+func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -100,7 +99,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 	return writers, nil
 }
 
-func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState, primary prollyKeylessWriter) (map[string]indexWriter, error) {
+func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState, primary prollyKeylessWriter) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -293,60 +292,32 @@ func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	ds := dsess.DSessFromSess(ctx.Session)
-	dbState, ok, err := ds.LookupDbState(ctx, w.dbName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("no state for database %s", w.dbName)
-	}
-
-	schHash, err := tbl.GetSchemaHash(ctx)
-	schKey := doltdb.DataCacheKey{Hash: schHash}
-	schState, ok := dbState.SessionCache().GetCachedSchemaState(schKey)
-	if !ok {
-		schState = new(dsess.SchemaState)
-		schState.DoltSchema, err = tbl.GetSchema(ctx)
+	var schState *dsess.WriterState
+	var err error
+	if sess, ok := ctx.Session.(*dsess.DoltSession); ok {
+		dbState, ok, err := sess.LookupDbState(ctx, w.dbName)
 		if err != nil {
 			return err
 		}
-		schState.PkSchema, err = sqlutil.FromDoltSchema("", w.tableName.Name, schState.DoltSchema)
-		if err != nil {
-			return err
+		if !ok {
+			return fmt.Errorf("no state for database %s", w.dbName)
 		}
+		schHash, err := w.tbl.GetSchemaHash(ctx)
 
-		schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
-
-		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
-		schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
-
-		definitions := schState.DoltSchema.Indexes().AllIndexes()
-		for _, def := range definitions {
-			keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
-			pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
-			idxState := dsess.IndexState{
-				KeyMapping:    keyMap,
-				ValMapping:    valMap,
-				PkMapping:     pkMap,
-				Name:          def.Name(),
-				Schema:        def.Schema(),
-				Count:         def.Count(),
-				IsFullText:    def.IsFullText(),
-				IsUnique:      def.IsUnique(),
-				IsSpatial:     def.IsSpatial(),
-				PrefixLengths: def.PrefixLengths(),
+		schKey := doltdb.DataCacheKey{Hash: schHash}
+		if schState, ok = dbState.SessionCache().GetCachedSchemaState(schKey); !ok {
+			schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)
+			if err != nil {
+				return err
 			}
-			schState.SecIndexes = append(schState.SecIndexes, idxState)
 		}
-		defer dbState.SessionCache().CacheSchemaState(schKey, schState)
+	} else {
+		schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)
+		if err != nil {
+			return err
+		}
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema("", w.tableName.Name, sch)
-	if err != nil {
-		return err
-	}
-	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
 
 	var newSecondaries map[string]indexWriter
@@ -372,10 +343,10 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 
 	w.tbl = tbl
 	w.sch = sch
-	w.sqlSch = sqlSch.Schema
+	w.sqlSch = schState.PkSchema.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
-	w.aiCol = aiCol
+	w.aiCol = schState.AutoIncCol
 	w.flusher = sess
 
 	return nil

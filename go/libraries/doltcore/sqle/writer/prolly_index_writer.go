@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (prollyIndexWriter, error) {
+func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (prollyIndexWriter, error) {
 	idx, err := t.GetRowData(ctx)
 	if err != nil {
 		return prollyIndexWriter{}, err
@@ -48,7 +48,7 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 	}, nil
 }
 
-func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.SchemaState) (prollyKeylessWriter, error) {
+func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (prollyKeylessWriter, error) {
 	idx, err := t.GetRowData(ctx)
 	if err != nil {
 		return prollyKeylessWriter{}, err
