@@ -753,17 +753,12 @@ func (db Database) resolveTable(ctx *sql.Context, root doltdb.RootValue, tableNa
 var defaultSearchPath = "doltgres,public"
 
 func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, string, *doltdb.Table, bool, error) {
-	searchPath, err := ctx.GetSessionVariable(ctx, "search_path")
-	if sql.ErrUnknownSystemVariable.Is(err) {
-		// TODO: make this a real error
-		searchPath = defaultSearchPath
-	} else if err != nil {
+	schemasToSearch, err := searchPath(ctx)
+	if err != nil {
 		return "", "", nil, false, err
 	}
 	
-	schemasToSearch := strings.Split(searchPath.(string), ",")
 	for _, schemaName := range schemasToSearch {
-		schemaName = normalizeSearchPathSchema(ctx, schemaName)
 		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
 		if err != nil {
 			return "", "", nil, false, err
@@ -787,6 +782,22 @@ func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.Root
 	}
 
 	return "", "", nil, false, nil
+}
+
+// searchPath returns all the schemas in the search_path setting, with elements like "$user" expanded
+func searchPath(ctx *sql.Context) ([]string, error) {
+	searchPathVar, err := ctx.GetSessionVariable(ctx, "search_path")
+	if err != nil {
+		return nil, err
+	}
+
+	pathElems := strings.Split(searchPathVar.(string), ",")
+	path := make([]string, len(pathElems))
+	for i, pathElem := range pathElems {
+		path[i] = normalizeSearchPathSchema(ctx, pathElem)
+	}
+	
+	return path, nil
 }
 
 func normalizeSearchPathSchema(ctx *sql.Context, schemaName string) string {
@@ -1033,7 +1044,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-
+	
 	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -1105,7 +1116,29 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	root := ws.WorkingRoot()
 
 	// TODO: enforce that schema exists (redundant with other checks)
+	if UseSearchPath && db.schemaName == "" {
+		schemas, err := searchPath(ctx)
+		if err != nil {
+			return err
+		}
 
+		for _, s := range schemas {
+			schemaName, exists, err := resolveDatabaseSchema(ctx, root, s)
+			if err != nil {
+				return err
+			}
+			
+			// The first element of the search path becomes the effective db for the rest of this operation
+			if exists {
+				db.schemaName = schemaName
+				break
+			}	
+		}
+		
+		// No existing schema found in the search_path and none specified in the statement means we can't create the table
+		return sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
+	}
+	
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -1272,6 +1305,15 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 		return err
 	}
 
+	_, exists, err := resolveDatabaseSchema(ctx, root, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return sql.ErrDatabaseSchemaExists.New(schemaName)
+	}
+
 	root, err = root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 		Name: schemaName,
 	})
@@ -1280,6 +1322,21 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	}
 
 	return db.SetRoot(ctx, root)
+}
+
+func resolveDatabaseSchema(ctx *sql.Context, root doltdb.RootValue, schemaName string) (string, bool, error) {
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	for _, databaseSchema := range schemas {
+		if strings.EqualFold(databaseSchema.Name, schemaName) {
+			return databaseSchema.Name, true, nil
+		}
+	}
+	
+	return "", false, nil
 }
 
 // GetSchema implements sql.SchemaDatabase
