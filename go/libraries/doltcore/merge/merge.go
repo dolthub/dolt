@@ -335,6 +335,11 @@ func MergeRoots(
 		return nil, err
 	}
 
+	mergedRoot, err = mergedRoot.HandlePostMerge(ctx, ourRoot, theirRoot, ancRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	h, err := merger.rightSrc.HashOf()
 	if err != nil {
 		return nil, err

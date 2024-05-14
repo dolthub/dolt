@@ -77,6 +77,10 @@ type RootValue interface {
 	GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error)
 	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
+	// HandlePostMerge handles merging for any root elements that are not handled by the standard merge workflow. This
+	// is called at the end of the standard merge workflow. The calling root is the merged root, so it is valid to
+	// return it if no further merge work needs to be done. This is primarily used by Doltgres.
+	HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name.
 	HasTable(ctx context.Context, tName string) (bool, error)
 	// IterTables calls the callback function cb on each table in this RootValue.
@@ -275,6 +279,10 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 		return nil, err
 	}
 	return root.withStorage(newStorage), nil
+}
+
+func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error) {
+	return root, nil
 }
 
 func (root *rootValue) HasTable(ctx context.Context, tName string) (bool, error) {
