@@ -25,9 +25,10 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
-	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
-	tables  map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
-	views   map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	indexes  map[doltdb.DataCacheKey]map[string][]sql.Index
+	tables   map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
+	views    map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	triggers map[TableSchemaKey][]sql.TriggerDefinition
 
 	mu sync.RWMutex
 }
@@ -234,6 +235,46 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 
 	table, ok := viewsForKey[viewName.ToLower()]
 	return table, ok
+}
+
+type TableSchemaKey struct {
+	key    doltdb.DataCacheKey
+	schema string
+}
+
+// CacheTriggers caches all views in a database for the cache key given
+func (c *SessionCache) CacheTriggers(key doltdb.DataCacheKey, triggers []sql.TriggerDefinition, schema string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.triggers == nil {
+		c.triggers = make(map[TableSchemaKey][]sql.TriggerDefinition)
+	}
+	if len(c.triggers) > maxCachedKeys {
+		for k := range c.triggers {
+			delete(c.triggers, k)
+		}
+	}
+
+	schKey := TableSchemaKey{key: key, schema: schema}
+	_, ok := c.triggers[schKey]
+	if !ok {
+		// create backing array to differentiate no triggers/no cache
+		c.triggers[schKey] = make([]sql.TriggerDefinition, 0)
+	}
+
+	c.triggers[schKey] = append(c.triggers[schKey], triggers...)
+}
+
+// GetCachedTriggers returns the cached view named, and whether the cache was present
+func (c *SessionCache) GetCachedTriggers(key doltdb.DataCacheKey, schema string) ([]sql.TriggerDefinition, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	schKey := TableSchemaKey{key: key, schema: schema}
+
+	triggers, ok := c.triggers[schKey]
+	return triggers, ok
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present
