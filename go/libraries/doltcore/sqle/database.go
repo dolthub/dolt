@@ -1303,10 +1303,11 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	fragHash, err := root.FragmentHash()
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+	key := doltdb.DataCacheKey{Hash: fragHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())

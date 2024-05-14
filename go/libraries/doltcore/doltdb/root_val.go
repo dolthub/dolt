@@ -109,6 +109,8 @@ type RootValue interface {
 	SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error)
 	// VRW returns this root's ValueReadWriter.
 	VRW() types.ValueReadWriter
+	// FragmentHash gets the hash of the schema fragment table root
+	FragmentHash() (hash.Hash, error)
 }
 
 // rootValue is Dolt's implementation of RootValue.
