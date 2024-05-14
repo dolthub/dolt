@@ -27,11 +27,17 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
+	// indexes is keyed by table schema
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
-	tables  map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
-	views   map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
-	schemas map[doltdb.DataCacheKey]*WriterState
+	// tables is keyed by table root value
+	tables map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
+
+	// TODO: cache views/triggers by schema fragment hash
+	views    map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
 	triggers map[TableSchemaKey][]sql.TriggerDefinition
+
+	// writers is keyed by table schema hash
+	writers map[doltdb.DataCacheKey]*WriterState
 
 	mu sync.RWMutex
 }
@@ -210,10 +216,10 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 func (c *SessionCache) GetCachedSchemaState(key doltdb.DataCacheKey) (*WriterState, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.schemas == nil {
+	if c.writers == nil {
 		return nil, false
 	}
-	schemaState, ok := c.schemas[key]
+	schemaState, ok := c.writers[key]
 	return schemaState, ok
 }
 
@@ -222,16 +228,16 @@ func (c *SessionCache) CacheSchemaState(key doltdb.DataCacheKey, state *WriterSt
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.schemas == nil {
-		c.schemas = make(map[doltdb.DataCacheKey]*WriterState)
+	if c.writers == nil {
+		c.writers = make(map[doltdb.DataCacheKey]*WriterState)
 	}
-	if len(c.schemas) > maxCachedKeys {
-		for k := range c.schemas {
-			delete(c.schemas, k)
+	if len(c.writers) > maxCachedKeys {
+		for k := range c.writers {
+			delete(c.writers, k)
 		}
 	}
 
-	c.schemas[key] = state
+	c.writers[key] = state
 }
 
 // CacheViews caches all views in a database for the cache key given

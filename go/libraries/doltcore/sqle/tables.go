@@ -228,6 +228,20 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return key, true, nil
 }
 
+func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
+	tab, err := t.DoltTable(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	key, err := tab.GetSchemaHash(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	return doltdb.DataCacheKey{Hash: key}, true, nil
+}
+
 func (t *DoltTable) workingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	root := t.lockedToRoot
 	if root == nil {
@@ -250,7 +264,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, nil
 	}
 
-	key, tableIsCacheable, err := t.DataCacheKey(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}

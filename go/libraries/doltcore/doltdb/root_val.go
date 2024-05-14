@@ -109,8 +109,6 @@ type RootValue interface {
 	SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error)
 	// VRW returns this root's ValueReadWriter.
 	VRW() types.ValueReadWriter
-	// FragmentHash gets the hash of the schema fragment table root
-	FragmentHash() (hash.Hash, error)
 }
 
 // rootValue is Dolt's implementation of RootValue.
@@ -819,30 +817,6 @@ func (root *rootValue) HashOf() (hash.Hash, error) {
 		}
 	}
 	return root.hash, nil
-}
-
-// SchemaHash gets the hash of the schema value
-func (root *rootValue) SchemaHash() (hash.Hash, error) {
-	if root.schemaHash.IsEmpty() {
-		var err error
-		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
-		if err != nil {
-			return hash.Hash{}, nil
-		}
-	}
-	return root.schemaHash, nil
-}
-
-// FragmentHash gets the hash of the schema fragment table root
-func (root *rootValue) FragmentHash() (hash.Hash, error) {
-	if root.fragmentHash.IsEmpty() {
-		var err error
-		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
-		if err != nil {
-			return hash.Hash{}, nil
-		}
-	}
-	return root.fragmentHash, nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
