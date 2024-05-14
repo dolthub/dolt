@@ -74,7 +74,7 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
-func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
+func DefaultSession(pro DoltDatabaseProvider, sessFunc writeSessFunc) *DoltSession {
 	return &DoltSession{
 		Session:          sql.NewBaseSession(),
 		username:         "",
@@ -87,6 +87,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    sessFunc,
 	}
 }
 
