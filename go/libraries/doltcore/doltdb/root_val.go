@@ -161,7 +161,7 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 		}
 	}
 
-	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, hash.Hash{}, hash.Hash{}}, nil
+	return &rootValue{vrw, ns, storage, nil, hash.Hash{}}, nil
 }
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
@@ -683,7 +683,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name string, tabl
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, hash.Hash{}, hash.Hash{}}
+	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}}
 }
 
 func (root *rootValue) NomsValue() types.Value {
