@@ -27,7 +27,7 @@ import (
 // in order for replication to be enabled. Changes to these system variables are not reflected once the SQL engine
 // has been instantiated, so to change them, they need to be persisted and the SQL server needs to be restarted.
 var doltReplicationPrimarySystemVars = map[string]string{
-	"log_bin": "ON",
+	"log_bin": "1",
 }
 
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
