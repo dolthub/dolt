@@ -88,6 +88,22 @@ SQL
     
 }
 
+@test "json: JSON value printing HTML characters" {
+    dolt sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+    INSERT INTO js VALUES (1, '{"<>&":"<>&"}');
+SQL
+
+    dolt sql -q "SELECT * FROM js" -r json
+    run dolt sql -q "SELECT * FROM js" -r json
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = '{"rows": [{"js":{"<>&":"<>&"},"pk":1}]}' ]
+
+}
+
 @test "json: diff JSON values" {
     dolt sql <<SQL
     CREATE TABLE js (

@@ -46,6 +46,25 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables
 	return StageTables(ctx, roots, tbls, filterIgnoredTables)
 }
 
+func StageDatabase(ctx context.Context, roots doltdb.Roots, filterIgnoredTables bool) (doltdb.Roots, error) {
+	wColl, err := roots.Working.GetCollation(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	sColl, err := roots.Staged.GetCollation(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	if wColl == sColl {
+		return roots, nil
+	}
+	roots.Staged, err = roots.Staged.SetCollation(ctx, wColl)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	return roots, nil
+}
+
 func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {

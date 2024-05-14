@@ -482,9 +482,28 @@ type patchNode struct {
 
 func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails, includeSchemaDiff, includeDataDiff bool) (patches []*patchNode, err error) {
 	for _, td := range tableDeltas {
-		// no diff
 		if td.FromTable == nil && td.ToTable == nil {
-			continue
+			// no diff
+			if !strings.HasPrefix(td.FromName, diff.DBPrefix) || !strings.HasPrefix(td.ToName, diff.DBPrefix) {
+				continue
+			}
+
+			// db collation diff
+			dbName := strings.TrimPrefix(td.ToName, diff.DBPrefix)
+			fromColl, cerr := fromRefDetails.root.GetCollation(ctx)
+			if cerr != nil {
+				return nil, cerr
+			}
+			toColl, cerr := toRefDetails.root.GetCollation(ctx)
+			if cerr != nil {
+				return nil, cerr
+			}
+			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
+			patches = append(patches, &patchNode{
+				tblName:          td.FromName,
+				schemaPatchStmts: []string{alterDBCollStmt},
+				dataPatchStmts:   []string{},
+			})
 		}
 
 		tblName := td.ToName

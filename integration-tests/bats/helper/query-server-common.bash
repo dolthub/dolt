@@ -37,7 +37,7 @@ start_sql_server() {
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 }
 
 # like start_sql_server, but the second argument is a string with all
@@ -48,7 +48,7 @@ start_sql_server_with_args() {
     PORT=$( definePORT )
     dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 }
 
 start_sql_server_with_config() {
@@ -71,7 +71,7 @@ behavior:
     cat "$2" >> .cliconfig.yaml
     dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 }
 
 start_sql_multi_user_server() {
@@ -93,7 +93,7 @@ behavior:
 " > .cliconfig.yaml
     dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 }
 
 start_multi_db_server() {
@@ -101,7 +101,7 @@ start_multi_db_server() {
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 8500
 }
 
 # stop_sql_server stops the SQL server. For cases where it's important

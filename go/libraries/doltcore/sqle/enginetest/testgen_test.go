@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -47,7 +48,8 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 	for _, tt := range queries.PlanTests {
 		_, _ = w.WriteString("\t{\n")
 		ctx := enginetest.NewContextWithEngine(harness, engine)
-		parsed, err := planbuilder.Parse(ctx, engine.EngineAnalyzer().Catalog, tt.Query)
+		binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, sql.NewMysqlParser())
+		parsed, _, _, err := binder.Parse(tt.Query, false)
 		require.NoError(t, err)
 
 		node, err := engine.EngineAnalyzer().Analyze(ctx, parsed, nil)

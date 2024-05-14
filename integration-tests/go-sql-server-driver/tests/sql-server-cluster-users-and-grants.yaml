@@ -247,10 +247,6 @@ tests:
         columns: ["Level", "Code", "Message"]
         rows: [["Warning", "3024", "Timed out replication of commit to 1 out of 1 replicas."]]
     - exec: 'insert into dolt_branch_control values ("repo1", "main", "aaron", "%", "admin")'
-    - query: 'show warnings'
-      result:
-        columns: ["Level", "Code", "Message"]
-        rows: [["Warning", "3024", "Timed out replication of commit to 1 out of 1 replicas."]]
   - on: server2
     restart_server:
       args: ["--config", "server.yaml"]

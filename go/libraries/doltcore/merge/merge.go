@@ -186,6 +186,39 @@ func MergeRoots(
 		}
 	}
 
+	// merge collations
+	oColl, err := ourRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tColl, err := theirRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	aColl, err := ancRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergedRoot := ourRoot
+
+	// there is a collation change
+	if oColl != tColl {
+		// both sides changed, and not the same, conflict
+		if oColl != aColl && tColl != aColl {
+			oCollName := sql.CollationID(oColl).Collation().Name
+			tCollName := sql.CollationID(tColl).Collation().Name
+			return nil, fmt.Errorf("database collation conflict, please resolve manually. ours: %s, theirs: %s", oCollName, tCollName)
+		}
+		// only their side changed, take their side
+		if oColl == aColl {
+			mergedRoot, err = mergedRoot.SetCollation(ctx, tColl)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// only our side changed, keep our side
+	}
+
 	// Make sure to pass in ourRoot as the first RootValue so that ourRoot's table names will be merged first.
 	// This helps to avoid non-deterministic error result for table rename cases. Renaming a table creates two changes:
 	// 1. dropping the old name table
@@ -199,8 +232,6 @@ func MergeRoots(
 	}
 
 	tblToStats := make(map[string]*MergeStats)
-
-	mergedRoot := ourRoot
 
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
@@ -300,6 +331,11 @@ func MergeRoots(
 	}
 
 	mergedRoot, err = mergedRoot.PutForeignKeyCollection(ctx, mergedFKColl)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedRoot, err = mergedRoot.HandlePostMerge(ctx, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, err
 	}
