@@ -311,8 +311,10 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 		sep = ", "
 	}
 
+	sqlEngine := s.se.GetUnderlyingEngine()
+	binder := planbuilder.New(s.sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
 	insert := fmt.Sprintf("insert into `%s` (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
-	parsed, err := planbuilder.Parse(s.sqlCtx, s.se.GetUnderlyingEngine().Analyzer.Catalog, insert)
+	parsed, _, _, err := binder.Parse(insert, false)
 	if err != nil {
 		return nil, fmt.Errorf("error constructing import query '%s': %w", insert, err)
 	}

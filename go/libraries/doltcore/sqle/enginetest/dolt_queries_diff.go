@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2022-2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -5472,6 +5473,340 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "execute patch using @Commit0, @Commit1, @t1_name",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+}
+
+var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
+	{
+		Name:        "can't use __DATABASE__ prefix in table names",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "create table __DATABASE__t(i int);",
+				ExpectedErrStr: "Invalid table name __DATABASE__t. Table names beginning with `__DATABASE__` are reserved for internal use",
+			},
+		},
+	},
+	{
+		Name:        "db collation change with dolt_add('.')",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{},
+			},
+
+			{
+				Query: "alter database mydb collate utf8mb4_spanish_ci",
+				Expected: []sql.Row{
+					{gmstypes.NewOkResult(1)},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, "modified"},
+				},
+			},
+			{
+				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"WORKING", "__DATABASE__mydb", false, true},
+				},
+			},
+
+			{
+				Query: "call dolt_add('.')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", true, "modified"},
+				},
+			},
+			{
+				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"STAGED", "__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+
+			{
+				Query:            "call dolt_commit('-m', 'db collation changed')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"db collation changed"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name:        "db collation change with dolt_add('__DATABASE__mydb')",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{},
+			},
+
+			{
+				Query: "alter database mydb collate utf8mb4_spanish_ci",
+				Expected: []sql.Row{
+					{gmstypes.NewOkResult(1)},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, "modified"},
+				},
+			},
+			{
+				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"WORKING", "__DATABASE__mydb", false, true},
+				},
+			},
+
+			{
+				Query: "call dolt_add('__DATABASE__mydb')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", true, "modified"},
+				},
+			},
+			{
+				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"STAGED", "__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+
+			{
+				Query:            "call dolt_commit('-m', 'db collation changed')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"db collation changed"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name:        "db collation change with dolt_commit('-Am', '')",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{},
+			},
+
+			{
+				Query: "alter database mydb collate utf8mb4_spanish_ci",
+				Expected: []sql.Row{
+					{gmstypes.NewOkResult(1)},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, "modified"},
+				},
+			},
+			{
+				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"WORKING", "__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+
+			{
+				Query:            "call dolt_commit('-Am', 'db collation changed')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select table_name, data_change, schema_change from dolt_diff",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, true},
+				},
+			},
+			{
+				Query: "select message from dolt_log",
+				Expected: []sql.Row{
+					{"db collation changed"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "db collation hard reset",
+		SetUpScript: []string{
+			"alter database mydb collate utf8mb4_spanish_ci",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"__DATABASE__mydb", false, "modified"},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard');",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "db collation with branch",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'other');",
+			"alter database mydb collate utf8mb4_spanish_ci;",
+			"call dolt_commit('-Am', 'db collation');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create database mydb;",
+				Expected: []sql.Row{
+					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci */"},
+				},
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create database mydb;",
+				Expected: []sql.Row{
+					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */"},
+				},
+			},
+		},
+	},
+	{
+		Name: "db collation with ff merge",
+		SetUpScript: []string{
+			"call dolt_checkout('-b', 'other');",
+			"alter database mydb collate utf8mb4_spanish_ci;",
+			"call dolt_commit('-Am', 'db collation');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create database mydb;",
+				Expected: []sql.Row{
+					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */"},
+				},
+			},
+			{
+				Query:            "call dolt_merge('other');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create database mydb;",
+				Expected: []sql.Row{
+					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci */"},
+				},
+			},
+		},
+	},
+	{
+		Name: "db collation merge conflict",
+		SetUpScript: []string{
+			"call dolt_branch('other');",
+			"alter database mydb collate utf8mb4_spanish_ci;",
+			"call dolt_commit('-Am', 'main collation');",
+			"call dolt_checkout('other');",
+			"alter database mydb collate utf8mb4_danish_ci;",
+			"call dolt_commit('-Am', 'main collation');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('main');",
+				ExpectedErrStr: "database collation conflict, please resolve manually. ours: utf8mb4_danish_ci, theirs: utf8mb4_spanish_ci",
 			},
 		},
 	},

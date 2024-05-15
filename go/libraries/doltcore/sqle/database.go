@@ -32,11 +32,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
@@ -56,6 +56,7 @@ import (
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
+var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table names beginning with `__DATABASE__` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 // Database implements sql.Database for a dolt DB.
@@ -453,6 +454,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
+
 		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
@@ -958,8 +960,13 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
 	}
 
 	if !doltdb.IsValidTableName(tableName) {
@@ -974,8 +981,13 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
 	}
 
 	if !doltdb.IsValidTableName(tableName) {
@@ -1158,6 +1170,10 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(tableName)
+	}
+
 	if !doltdb.IsValidTableName(tableName) {
 		return ErrInvalidTableName.New(tableName)
 	}
@@ -1247,6 +1263,10 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrReservedTableName.New(newName)
 	}
 
+	if strings.HasPrefix(newName, diff.DBPrefix) {
+		return ErrReservedDiffTableName.New(newName)
+	}
+
 	if !doltdb.IsValidTableName(newName) {
 		return ErrInvalidTableName.New(newName)
 	}
@@ -1330,19 +1350,20 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := sqlparser.ParseWithOptions(fragments[i].fragment,
-			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
-		if err != nil {
-			return nil, sql.ViewDefinition{}, false, err
-		}
-
-		createView, ok := cv.(*sqlparser.DDL)
-		if ok {
-			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr,
-				CreateViewStatement: fragments[i].fragment, SqlMode: fragment.sqlMode}
+		if strings.HasPrefix(strings.ToLower(fragments[i].fragment), "select") {
+			// older versions
+			views[i] = sql.ViewDefinition{
+				Name:                fragments[i].name,
+				TextDefinition:      fragments[i].fragment,
+				CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment),
+			}
 		} else {
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
+			views[i] = sql.ViewDefinition{
+				Name: fragments[i].name,
+				// TODO: need to define TextDefinition
+				CreateViewStatement: fragments[i].fragment,
+				SqlMode:             fragment.sqlMode,
+			}
 		}
 
 		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
@@ -1390,6 +1411,32 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, nil
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, nil
+	}
+
+	var triggers []sql.TriggerDefinition
+	var ok bool
+	if triggers, ok = dbState.SessionCache().GetCachedTriggers(key, db.schemaName); ok {
+		return triggers, nil
+	}
+
+	defer func() {
+		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
+	}()
+
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
@@ -1403,7 +1450,6 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, err
 	}
 
-	var triggers []sql.TriggerDefinition
 	for _, frag := range frags {
 		triggers = append(triggers, sql.TriggerDefinition{
 			Name:            frag.name,
@@ -1533,9 +1579,9 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	catalog := db.getCatalog(ctx)
-	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
-	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
+	b := planbuilder.New(ctx, db.getCatalog(ctx), sql.NewMysqlParser())
+	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
+	parsed, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), false)
 	if err != nil {
 		return nil, err
 	}

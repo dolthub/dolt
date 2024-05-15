@@ -935,9 +935,7 @@ SQL
   dolt sql -q "SELECT * FROM test2" -r json
   run dolt sql -q "SELECT * FROM test2" -r json
   [ $status -eq 0 ]
-  # The golang json encoder escapes < and > and & for HTML compatibility
-  JSON_TESTSTR='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^\u0026*()){}[]/=?+|,.\u003c\u003e;:_-_%d%s%f'
-  [[ "$output" =~ "$JSON_TESTSTR" ]] || false
+  [[ "$output" =~ "$TESTSTR" ]] || false
 
   dolt add .
   dolt commit -m "added data"

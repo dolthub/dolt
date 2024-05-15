@@ -66,7 +66,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	ret, err := planbuilder.Parse(sqlCtx, se.GetUnderlyingEngine().Analyzer.Catalog, fmt.Sprintf("show create table `%s`", tableName))
+	sqlEngine := se.GetUnderlyingEngine()
+	binder := planbuilder.New(sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+	ret, _, _, err := binder.Parse(fmt.Sprintf("show create table `%s`", tableName), false)
 	if err != nil {
 		return nil, err
 	}

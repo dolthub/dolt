@@ -231,6 +231,15 @@ func AlterTableCollateStmt(tableName string, fromCollation, toCollation schema.C
 	return b.String()
 }
 
+func AlterDatabaseCollateStmt(dbName string, fromCollation, toCollation schema.Collation) string {
+	var b strings.Builder
+	b.WriteString("ALTER DATABASE ")
+	b.WriteString(QuoteIdentifier(dbName))
+	toCollationId := sql.CollationID(toCollation)
+	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
+	return b.String()
+}
+
 func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")

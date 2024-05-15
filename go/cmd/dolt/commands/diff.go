@@ -801,6 +801,14 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
+		if strings.HasPrefix(delta.ToTableName, diff.DBPrefix) {
+			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
+			if verr != nil {
+				return verr
+			}
+			continue
+		}
+
 		if isDoltSchemasTable(delta.ToTableName, delta.FromTableName) {
 			// save dolt_schemas table diff for last in diff output
 			doltSchemasChanged = true
@@ -829,7 +837,10 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName string) bool {
 	// TODO: this should be case insensitive
-	return tablesToPrint.Contains(fromTableName) || tablesToPrint.Contains(toTableName)
+	return tablesToPrint.Contains(fromTableName) ||
+		tablesToPrint.Contains(toTableName) ||
+		strings.HasPrefix(fromTableName, diff.DBPrefix) ||
+		strings.HasPrefix(toTableName, diff.DBPrefix)
 }
 
 func isDoltSchemasTable(toTableName, fromTableName string) bool {
@@ -877,6 +888,45 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	}
 
 	return sch, createStmt, nil
+}
+
+func getDatabaseInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (diff.TableInfo, error) {
+	createStmt, err := getDatabaseSchemaAtRef(queryist, sqlCtx, tableName, ref)
+	if err != nil {
+		return diff.TableInfo{}, fmt.Errorf("error: unable to get schema for table '%s': %w", tableName, err)
+	}
+
+	tableInfo := diff.TableInfo{
+		Name:       tableName,
+		Sch:        schema.EmptySchema,
+		CreateStmt: createStmt,
+	}
+	return tableInfo, nil
+}
+
+func getDatabaseSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (string, error) {
+	var rows []sql.Row
+	// TODO: implement `show create database as of ...`
+	tableName = strings.Trim(tableName, diff.DBPrefix)
+	interpolatedQuery, err := dbr.InterpolateForDialect("SHOW CREATE DATABASE ?", []interface{}{dbr.I(tableName)}, dialect.MySQL)
+	if err != nil {
+		return "", fmt.Errorf("error interpolating query: %w", err)
+	}
+	rows, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	if err != nil {
+		return "", fmt.Errorf("error: unable to get create database statement for database '%s': %w", tableName, err)
+	}
+	if len(rows) != 1 {
+		return "", fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
+	}
+	createStmt := rows[0][1].(string)
+
+	// append ; at the end, if one isn't there yet
+	if createStmt[len(createStmt)-1] != ';' {
+		createStmt += ";"
+	}
+
+	return createStmt, nil
 }
 
 // schemaFromCreateTableStmt returns a schema for the CREATE TABLE statement given
@@ -1220,6 +1270,56 @@ func diffDoltSchemasTable(
 	return nil
 }
 
+func diffDatabase(
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	dArgs *diffArgs,
+	dw diffWriter,
+) errhand.VerboseError {
+	if dArgs.diffParts&NameOnlyDiff != 0 {
+		cli.Println(tableSummary.FromTableName)
+		return nil
+	}
+
+	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	if dArgs.diffParts&SchemaOnlyDiff == 0 {
+		return nil
+	}
+
+	fromTable := tableSummary.FromTableName
+	var fromTableInfo *diff.TableInfo
+	from, err := getDatabaseInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
+	if err == nil {
+		// TODO: implement show create database as of ...
+		fromTableInfo = &from
+		fromTableInfo.CreateStmt = ""
+	}
+
+	toTable := tableSummary.ToTableName
+	var toTableInfo *diff.TableInfo
+	to, err := getDatabaseInfoAtRef(queryist, sqlCtx, toTable, dArgs.toRef)
+	if err == nil {
+		toTableInfo = &to
+	}
+
+	err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	verr := diffRows(queryist, sqlCtx, tableSummary, fromTableInfo, toTableInfo, dArgs, dw)
+	if verr != nil {
+		return verr
+	}
+
+	return nil
+}
+
 // arePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
 // passed in schema are from the same table between commits.
 func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool {
@@ -1305,7 +1405,7 @@ func diffRows(
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
 		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1313,7 +1413,7 @@ func diffRows(
 	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
 		// TODO: this is overly broad, we can absolutely do better
 		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName)
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1322,7 +1422,7 @@ func diffRows(
 
 	// no data diff requested
 	if dArgs.diffParts&DataOnlyDiff == 0 {
-		err := rowWriter.Close(sqlCtx)
+		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1333,6 +1433,14 @@ func diffRows(
 	tableName := tableSummary.ToTableName
 	if len(tableName) == 0 {
 		tableName = tableSummary.FromTableName
+	}
+
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
+		err = rowWriter.Close(sqlCtx)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		return nil
 	}
 
 	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
