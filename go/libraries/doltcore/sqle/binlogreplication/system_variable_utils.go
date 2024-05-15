@@ -15,7 +15,9 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -37,15 +39,15 @@ func getServerId() (uint32, error) {
 	return 0, fmt.Errorf("@@server_id is not a valid uint32 – must be set to a non-zero value")
 }
 
-// getServerUuid returns the @@server_uuid system variable value. If the value of @@server_uuid is
-// empty or is not a string, then an error is returned.
-func getServerUuid(ctx *sql.Context) (string, error) {
-	variable, err := ctx.GetSessionVariable(ctx, "server_uuid")
-	if err != nil {
-		return "", err
+// getServerUuid returns the global @@server_uuid system variable value. If the value of @@server_uuid
+// is empty or is not a string, then an error is returned.
+func getServerUuid(_ context.Context) (string, error) {
+	_, serverUuidValue, ok := sql.SystemVariables.GetGlobal("server_uuid")
+	if !ok {
+		return "", fmt.Errorf("global variable 'server_uuid' not found")
 	}
 
-	if s, ok := variable.(string); ok {
+	if s, ok := serverUuidValue.(string); ok {
 		if len(s) == 0 {
 			return "", fmt.Errorf("@@server_uuid is empty – must be set to a valid UUID")
 		}

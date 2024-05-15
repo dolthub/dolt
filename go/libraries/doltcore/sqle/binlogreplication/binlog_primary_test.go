@@ -24,10 +24,14 @@ import (
 )
 
 // doltReplicationPrimarySystemVars holds the system variables that must be set when the Dolt sql-server launches
-// in order for replication to be enabled. Changes to these system variables are not reflected once the SQL engine
-// has been instantiated, so to change them, they need to be persisted and the SQL server needs to be restarted.
+// in order for replication to be enabled. Changes to some of these system variables (i.e. log_bin)  are not reflected
+// once the SQL engine has been instantiated, so to change them, they must be persisted and the SQL server needs to be
+// restarted. Other system variables (i.e. enforce_gtid_consistency, gtid_mode) can be set on a running server, but
+// are set here for convenience.
 var doltReplicationPrimarySystemVars = map[string]string{
-	"log_bin": "1",
+	"log_bin":                  "1",
+	"enforce_gtid_consistency": "ON",
+	"gtid_mode":                "ON",
 }
 
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
@@ -121,6 +125,49 @@ func TestBinlogPrimary(t *testing.T) {
 			`{"foo": "bar"}`, `{"foo": {"baz": "bar"}}`,
 		},
 	})
+}
+
+// TestBinlogPrimary_ReplicaReconnect tests that a Dolt primary server can be restarted and that a replica
+// will successfully reconnect and continue replicating binlog events.
+func TestBinlogPrimary_ReplicaReconnect(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a table on the primary and assert that it get replicated
+	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
+
+	// Assert that the executed GTID position on the replica is GTID #2
+	// (GTID #1 was assigned for creating the database, and not replicated)
+	serverUuid := queryPrimaryServerUuid(t)
+	status := queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":2", status["Executed_Gtid_Set"])
+
+	// Stop the Dolt primary server
+	stopDoltSqlServer(t)
+	time.Sleep(2_000 * time.Millisecond)
+	prevReplicaDatabase := replicaDatabase
+
+	// Restart the Dolt primary server
+	var err error
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+	primaryDatabase = replicaDatabase
+	replicaDatabase = prevReplicaDatabase
+	waitForReplicaToReconnect(t)
+
+	// Create another table and assert that it gets replicated
+	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
+	time.Sleep(250 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
+
+	// Assert the executed GTID position now contains GTID #2 and GTID #3
+	status = queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":2-3", status["Executed_Gtid_Set"])
 }
 
 // TestBinlogPrimary_OptIn asserts that binary logging does not work when the log_bin system variable is not set.
@@ -544,14 +591,6 @@ func setupForDoltToMySqlReplication() {
 	primaryDatabase = replicaDatabase
 	replicaDatabase = tempDatabase
 
-	// On the Primary, turn on GTID mode
-	// NOTE: Dolt doesn't currently require moving through the GTID_MODE states like this, but
-	//       MySQL does, so we do it here anyway.
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='OFF_PERMISSIVE';")
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON_PERMISSIVE';")
-	primaryDatabase.MustExec("set GLOBAL ENFORCE_GTID_CONSISTENCY='ON';")
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON';")
-
 	// Create the db01 database that our tests will use
 	primaryDatabase.MustExec("create database db01;")
 	primaryDatabase.MustExec("use db01;")
@@ -569,6 +608,10 @@ func setupForDoltToMySqlReplication() {
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.
 	replicaDatabase.MustExec("SET @@time_zone = '+0:00';")
+
+	// Reset binary logs and gtids on the replica, so that @@gtid_executed doesn't contain any
+	// executed GTIDs from the replica server.
+	replicaDatabase.MustExec("reset binary logs and gtids;")
 }
 
 // requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
@@ -617,4 +660,43 @@ func outputShowReplicaStatus(t *testing.T) {
 	require.NoError(t, err)
 	allNewRows := readAllRowsIntoMaps(t, newRows)
 	fmt.Printf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
+}
+
+// queryReplicaStatus returns the results of `SHOW REPLICA STATUS` as a map, for the replica
+// database. If any errors are encountered, this function will fail the current test.
+func queryReplicaStatus(t *testing.T) map[string]any {
+	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	status := convertMapScanResultToStrings(readNextRow(t, rows))
+	require.NoError(t, rows.Close())
+	return status
+}
+
+// queryPrimaryServerUuid queries the primary server for its server UUID. If any errors are encountered,
+// this function will fail the current test.
+func queryPrimaryServerUuid(t *testing.T) string {
+	rows, err := primaryDatabase.Queryx("SELECT @@server_uuid;")
+	require.NoError(t, err)
+	serverUuid := convertMapScanResultToStrings(readNextRow(t, rows))
+	require.NoError(t, rows.Close())
+	return serverUuid["@@server_uuid"].(string)
+}
+
+// waitForReplicaToReconnect will poll the status of the replica and return when the status indicates
+// the replica has reconnected to the primary. If after 60s the replica hasn't reconnected, this
+// function will fail the current test.
+func waitForReplicaToReconnect(t *testing.T) {
+	startTime := time.Now()
+	for {
+		time.Sleep(500 * time.Millisecond)
+
+		status := queryReplicaStatus(t)
+		if status["Replica_IO_Running"] == "Yes" {
+			break
+		}
+
+		if startTime.Add(time.Second * 60).Before(time.Now()) {
+			t.Fatalf("Unable to detect replica reconnect after 60s")
+		}
+	}
 }

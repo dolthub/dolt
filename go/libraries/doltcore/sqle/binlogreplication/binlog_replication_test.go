@@ -165,9 +165,7 @@ func TestResetReplica(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, rows.Close())
 
-	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	status := convertMapScanResultToStrings(readNextRow(t, rows))
+	status := queryReplicaStatus(t)
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "0", status["Last_IO_Errno"])
@@ -176,7 +174,6 @@ func TestResetReplica(t *testing.T) {
 	require.Equal(t, "0", status["Last_SQL_Errno"])
 	require.Equal(t, "", status["Last_SQL_Error"])
 	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
-	require.NoError(t, rows.Close())
 
 	// Calling RESET REPLICA ALL clears out all replica configuration
 	rows, err = replicaDatabase.Queryx("RESET REPLICA ALL;")
@@ -633,8 +630,9 @@ func stopDoltSqlServer(t *testing.T) {
 func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
-		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='replicator', "+
-			"SOURCE_PASSWORD='Zqr8_blrGm1!', SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1;", port))
+		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
+			"SOURCE_USER='replicator', SOURCE_PASSWORD='Zqr8_blrGm1!', "+
+			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
 }
@@ -820,7 +818,11 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 		return -1, nil, err
 	}
 
-	doltPort = findFreePort()
+	// If we already assigned a port, re-use it. This is useful when testing restarting a primary, since
+	// we want the primary to come back up on the same port, so the replica can reconnect.
+	if doltPort == 0 {
+		doltPort = findFreePort()
+	}
 	fmt.Printf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
 
 	// take the CWD and move up four directories to find the go directory

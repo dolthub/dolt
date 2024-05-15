@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -68,6 +70,7 @@ type binlogStreamerManager struct {
 	quitChan     chan struct{}
 	binlogStream *mysql.BinlogStream
 	binlogFormat mysql.BinlogFormat
+	gtidPosition *mysql.Position
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogStreamerManager)(nil)
@@ -484,9 +487,67 @@ func (m *binlogStreamerManager) createRowEvents(ctx *sql.Context, tableDeltas []
 	return events, nil
 }
 
+// initializeGtidPosition loads the persisted GTID position from disk and initializes it
+// in this binlogStreamerManager instance. If the gtidPosition has already been loaded
+// from disk and initialized, this method simply returns. If any problems were encountered
+// loading the GTID position from disk, or parsing its value, an error is returned.
+func (m *binlogStreamerManager) initializeGtidPosition(ctx *sql.Context) error {
+	if m.gtidPosition != nil {
+		return nil
+	}
+
+	position, err := positionStore.Load(ctx)
+	if err != nil {
+		return err
+	}
+
+	// If there is no position stored on disk, then initialize to an empty GTID set
+	if position == nil || position.IsZero() || position.GTIDSet.String() == "" {
+		m.gtidPosition = &mysql.Position{
+			GTIDSet: mysql.Mysql56GTIDSet{},
+		}
+		return nil
+	}
+
+	// Otherwise, interpret the value loaded from disk and set the GTID position
+	// Unfortunately, the GTIDSet API from Vitess doesn't provide a good way to directly
+	// access the GTID value, so we have to resort to string parsing.
+	m.gtidPosition = position
+	gtidString := position.GTIDSet.String()
+	if strings.Contains(gtidString, ",") {
+		return fmt.Errorf("unexpected GTID format: %s", gtidString)
+	}
+	gtidComponents := strings.Split(gtidString, ":")
+	if len(gtidComponents) != 2 {
+		return fmt.Errorf("unexpected GTID format: %s", gtidString)
+	}
+	sequenceComponents := strings.Split(gtidComponents[1], "-")
+	var gtidSequenceString string
+	switch len(sequenceComponents) {
+	case 1:
+		gtidSequenceString = sequenceComponents[0]
+	case 2:
+		gtidSequenceString = sequenceComponents[1]
+	default:
+		return fmt.Errorf("unexpected GTID format: %s", gtidString)
+	}
+
+	i, err := strconv.Atoi(gtidSequenceString)
+	if err != nil {
+		return fmt.Errorf("unable to parse GTID position (%s): %s", gtidString, err.Error())
+	}
+	gtidSequence = int64(i + 1)
+	return nil
+}
+
 // createGtidEvent creates a new GTID event for the current transaction and updates the stream's
 // current log position.
 func (m *binlogStreamerManager) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, error) {
+	err := m.initializeGtidPosition(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	serverUuid, err := getServerUuid(ctx)
 	if err != nil {
 		return nil, err
@@ -499,6 +560,13 @@ func (m *binlogStreamerManager) createGtidEvent(ctx *sql.Context) (mysql.BinlogE
 	binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
 	m.binlogStream.LogPosition += binlogEvent.Length()
 	gtidSequence++
+
+	// Store the latest executed GTID to disk
+	m.gtidPosition.GTIDSet = m.gtidPosition.GTIDSet.AddGTID(gtid)
+	err = positionStore.Save(ctx, m.gtidPosition)
+	if err != nil {
+		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
+	}
 
 	return binlogEvent, nil
 }
