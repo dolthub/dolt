@@ -36,6 +36,7 @@ start_sql_server() {
     else
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
+    echo db:$DEFAULT_DB logFile:$logFile PORT:$PORT CWD:$PWD
     SERVER_PID=$!
     wait_for_connection $PORT 7500
 }
