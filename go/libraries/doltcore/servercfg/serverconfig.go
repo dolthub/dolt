@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package servercfg
 
 import (
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
+	"runtime"
 	"strings"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -42,34 +37,38 @@ const (
 )
 
 const (
-	defaultHost                    = "localhost"
-	defaultPort                    = 3306
-	defaultUser                    = "root"
-	defaultPass                    = ""
-	defaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
-	defaultReadOnly                = false
-	defaultLogLevel                = LogLevel_Info
-	defaultAutoCommit              = true
-	defaultDoltTransactionCommit   = false
-	defaultMaxConnections          = 100
-	defaultQueryParallelism        = 0
-	defaultPersistenceBahavior     = loadPerisistentGlobals
-	defaultDataDir                 = "."
-	defaultCfgDir                  = ".doltcfg"
-	defaultPrivilegeFilePath       = "privileges.db"
-	defaultBranchControlFilePath   = "branch_control.db"
-	defaultMetricsHost             = ""
-	defaultMetricsPort             = -1
-	defaultAllowCleartextPasswords = false
-	defaultUnixSocketFilePath      = "/tmp/mysql.sock"
-	defaultMaxLoggedQueryLen       = 0
-	defaultEncodeLoggedQuery       = false
+	DefaultHost                    = "localhost"
+	DefaultPort                    = 3306
+	DefaultUser                    = "root"
+	DefaultPass                    = ""
+	DefaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
+	DefaultReadOnly                = false
+	DefaultLogLevel                = LogLevel_Info
+	DefaultAutoCommit              = true
+	DefaultDoltTransactionCommit   = false
+	DefaultMaxConnections          = 100
+	DefaultQueryParallelism        = 0
+	DefaultPersistenceBahavior     = LoadPerisistentGlobals
+	DefaultDataDir                 = "."
+	DefaultCfgDir                  = ".doltcfg"
+	DefaultPrivilegeFilePath       = "privileges.db"
+	DefaultBranchControlFilePath   = "branch_control.db"
+	DefaultMetricsHost             = ""
+	DefaultMetricsPort             = -1
+	DefaultAllowCleartextPasswords = false
+	DefaultUnixSocketFilePath      = "/tmp/mysql.sock"
+	DefaultMaxLoggedQueryLen       = 0
+	DefaultEncodeLoggedQuery       = false
 )
 
 const (
-	ignorePeristentGlobals = "ignore"
-	loadPerisistentGlobals = "load"
+	IgnorePeristentGlobals = "ignore"
+	LoadPerisistentGlobals = "load"
 )
+
+func ptr[T any](t T) *T {
+	return &t
+}
 
 // String returns the string representation of the log level.
 func (level LogLevel) String() string {
@@ -89,6 +88,35 @@ func (level LogLevel) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+type ClusterConfig interface {
+	StandbyRemotes() []ClusterStandbyRemoteConfig
+	BootstrapRole() string
+	BootstrapEpoch() int
+	RemotesAPIConfig() ClusterRemotesAPIConfig
+}
+
+type ClusterRemotesAPIConfig interface {
+	Address() string
+	Port() int
+	TLSKey() string
+	TLSCert() string
+	TLSCA() string
+	ServerNameURLMatches() []string
+	ServerNameDNSMatches() []string
+}
+
+type ClusterStandbyRemoteConfig interface {
+	Name() string
+	RemoteURLTemplate() string
+}
+
+type ServerJwksConfig struct {
+	Name        string            `yaml:"name"`
+	LocationUrl string            `yaml:"location_url"`
+	Claims      map[string]string `yaml:"claims"`
+	FieldsToLog []string          `yaml:"fields_to_log"`
 }
 
 // ServerConfig contains all of the configurable options for the MySQL-compatible server.
@@ -154,9 +182,9 @@ type ServerConfig interface {
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
 	// SystemVars is a map setting global SQL system variables. For example, `secure_file_priv`.
-	SystemVars() engine.SystemVariables
+	SystemVars() map[string]interface{}
 	// JwksConfig is an array containing jwks config
-	JwksConfig() []engine.JwksConfig
+	JwksConfig() []ServerJwksConfig
 	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
 	AllowCleartextPasswords() bool
 	// Socket is a path to the unix socket file
@@ -169,11 +197,43 @@ type ServerConfig interface {
 	// RemotesapiReadOnly is true if the remotesapi interface should be read only.
 	RemotesapiReadOnly() *bool
 	// ClusterConfig is the configuration for clustering in this sql-server.
-	ClusterConfig() cluster.Config
+	ClusterConfig() ClusterConfig
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
 	EventSchedulerStatus() string
 	// ValueSet returns whether the value string provided was explicitly set in the config
 	ValueSet(value string) bool
+}
+
+// DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
+func DefaultServerConfig() ServerConfig {
+	return &YAMLConfig{
+		LogLevelStr:       ptr(string(DefaultLogLevel)),
+		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),
+		EncodeLoggedQuery: ptr(DefaultEncodeLoggedQuery),
+		BehaviorConfig: BehaviorYAMLConfig{
+			ReadOnly:              ptr(DefaultReadOnly),
+			AutoCommit:            ptr(DefaultAutoCommit),
+			PersistenceBehavior:   ptr(DefaultPersistenceBahavior),
+			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
+		},
+		UserConfig: UserYAMLConfig{
+			Name:     ptr(""),
+			Password: ptr(""),
+		},
+		ListenerConfig: ListenerYAMLConfig{
+			HostStr:                 ptr(DefaultHost),
+			PortNumber:              ptr(DefaultPort),
+			MaxConnections:          ptr(uint64(DefaultMaxConnections)),
+			ReadTimeoutMillis:       ptr(uint64(DefaultTimeout)),
+			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
+			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
+		},
+		PerformanceConfig: PerformanceYAMLConfig{QueryParallelism: ptr(DefaultQueryParallelism)},
+		DataDirStr:        ptr(DefaultDataDir),
+		CfgDirStr:         ptr(filepath.Join(DefaultDataDir, DefaultCfgDir)),
+		PrivilegeFile:     ptr(filepath.Join(DefaultDataDir, DefaultCfgDir, DefaultPrivilegeFilePath)),
+		BranchControlFile: ptr(filepath.Join(DefaultDataDir, DefaultCfgDir, DefaultBranchControlFilePath)),
+	}
 }
 
 // WritableServerConfig is a ServerConfig that support overwriting certain values.
@@ -185,19 +245,11 @@ type WritableServerConfig interface {
 	SetPassword(string)
 }
 
-type validatingServerConfig interface {
+type ValidatingServerConfig interface {
 	ServerConfig
 	// goldenMysqlConnectionString returns a connection string for a mysql
 	// instance that can be used to validate query results
-	goldenMysqlConnectionString() string
-}
-
-// ServerConfigReader is an interface for reading a ServerConfig from a file or command line arguments.
-type ServerConfigReader interface {
-	// ReadConfigFile reads a config file and returns a ServerConfig for it
-	ReadConfigFile(cwdFS filesys.Filesys, file string) (ServerConfig, error)
-	// ReadConfigArgs reads command line arguments and returns a ServerConfig for them
-	ReadConfigArgs(args *argparser.ArgParseResults) (ServerConfig, error)
+	GoldenMysqlConnectionString() string
 }
 
 // ValidateConfig returns an `error` if any field is not valid.
@@ -221,37 +273,41 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 const (
-	maxConnectionsKey = "max_connections"
-	readTimeoutKey    = "net_read_timeout"
-	writeTimeoutKey   = "net_write_timeout"
-	eventSchedulerKey = "event_scheduler"
+	MaxConnectionsKey = "max_connections"
+	ReadTimeoutKey    = "net_read_timeout"
+	WriteTimeoutKey   = "net_write_timeout"
+	EventSchedulerKey = "event_scheduler"
 )
 
+type SystemVariableTarget interface {
+	SetGlobal(name string, value interface{}) error
+}
+
 // ApplySystemVariables sets the global system variables based on the given `ServerConfig`.
-func ApplySystemVariables(cfg ServerConfig) error {
-	if cfg.ValueSet(maxConnectionsKey) {
-		err := sql.SystemVariables.SetGlobal("max_connections", cfg.MaxConnections())
+func ApplySystemVariables(cfg ServerConfig, sysVarTarget SystemVariableTarget) error {
+	if cfg.ValueSet(MaxConnectionsKey) {
+		err := sysVarTarget.SetGlobal("max_connections", cfg.MaxConnections())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.ValueSet(readTimeoutKey) {
-		err := sql.SystemVariables.SetGlobal("net_read_timeout", cfg.ReadTimeout())
+	if cfg.ValueSet(ReadTimeoutKey) {
+		err := sysVarTarget.SetGlobal("net_read_timeout", cfg.ReadTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.ValueSet(writeTimeoutKey) {
-		err := sql.SystemVariables.SetGlobal("net_write_timeout", cfg.WriteTimeout())
+	if cfg.ValueSet(WriteTimeoutKey) {
+		err := sysVarTarget.SetGlobal("net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.ValueSet(eventSchedulerKey) {
-		err := sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
+	if cfg.ValueSet(EventSchedulerKey) {
+		err := sysVarTarget.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
 		if err != nil {
 			return err
 		}
@@ -260,7 +316,7 @@ func ApplySystemVariables(cfg ServerConfig) error {
 	return nil
 }
 
-func ValidateClusterConfig(config cluster.Config) error {
+func ValidateClusterConfig(config ClusterConfig) error {
 	if config == nil {
 		return nil
 	}
@@ -316,7 +372,7 @@ func ConnectionString(config ServerConfig, database string) string {
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
 	socket := ""
-	sock, useSock, err := checkForUnixSocket(config)
+	sock, useSock, err := CheckForUnixSocket(config)
 	if err != nil {
 		panic(err)
 	}
@@ -344,16 +400,21 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 	}, nil
 }
 
-// DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
-// and command line options.
-type DoltServerConfigReader struct{}
+// CheckForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.
+// If user defined socket flag or host is 'localhost', it returns the unix socket file location
+// either user-defined or the default if it was not defined.
+func CheckForUnixSocket(config ServerConfig) (string, bool, error) {
+	if config.Socket() != "" {
+		if runtime.GOOS == "windows" {
+			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
+		}
+		return config.Socket(), true, nil
+	} else {
+		// if host is undefined or defined as "localhost" -> unix
+		if runtime.GOOS != "windows" && config.Host() == "localhost" {
+			return DefaultUnixSocketFilePath, true, nil
+		}
+	}
 
-var _ ServerConfigReader = DoltServerConfigReader{}
-
-func (d DoltServerConfigReader) ReadConfigFile(cwdFS filesys.Filesys, file string) (ServerConfig, error) {
-	return YamlConfigFromFile(cwdFS, file)
-}
-
-func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults) (ServerConfig, error) {
-	return NewCommandLineConfig(nil, args)
+	return "", false, nil
 }

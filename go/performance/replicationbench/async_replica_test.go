@@ -17,11 +17,11 @@ package serverbench
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"runtime/pprof"
 	"strings"
 	"testing"
 
-	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -59,7 +59,7 @@ func BenchmarkAsyncPushOnWrite(b *testing.B) {
 
 func benchmarkAsyncPush(b *testing.B, test serverTest) {
 	var dEnv *env.DoltEnv
-	var cfg srv.ServerConfig
+	var cfg servercfg.ServerConfig
 	ctx := context.Background()
 
 	// setup
@@ -86,7 +86,7 @@ func benchmarkAsyncPush(b *testing.B, test serverTest) {
 	})
 }
 
-func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg srv.ServerConfig) {
+func getAsyncEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg servercfg.ServerConfig) {
 	multiSetup := testcommands.NewMultiRepoTestSetup(b.Fatal)
 
 	multiSetup.NewDB("dolt_bench")
@@ -122,7 +122,7 @@ listener:
  write_timeout_millis: 28800000
 `, writerName, multiSetup.DbPaths[writerName], port))
 
-	cfg, err := srv.NewYamlConfig(yaml)
+	cfg, err := servercfg.NewYamlConfig(yaml)
 	if err != nil {
 		b.Fatal(err)
 	}

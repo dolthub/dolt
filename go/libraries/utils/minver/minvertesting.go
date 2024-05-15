@@ -55,7 +55,7 @@ func FieldInfoFromLine(l string) (FieldInfo, error) {
 func FieldInfoFromStructField(field reflect.StructField, depth int) FieldInfo {
 	info := FieldInfo{
 		Name:    strings.Repeat("-", depth) + field.Name,
-		TypeStr: field.Type.String(),
+		TypeStr: strings.Replace(field.Type.String(), " ", "", -1),
 		MinVer:  field.Tag.Get("minver"),
 		YamlTag: field.Tag.Get("yaml"),
 	}

@@ -17,6 +17,7 @@ package serverbench
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"os"
 	"path"
 	"runtime"
@@ -76,7 +77,7 @@ func BenchmarkServerExample(b *testing.B) {
 
 func benchmarkServer(b *testing.B, test serverTest) {
 	var dEnv *env.DoltEnv
-	var cfg srv.ServerConfig
+	var cfg servercfg.ServerConfig
 	ctx := context.Background()
 
 	// setup
@@ -110,7 +111,7 @@ const (
 	email = "name@fake.horse"
 )
 
-func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg srv.ServerConfig) {
+func getEnvAndConfig(ctx context.Context, b *testing.B) (dEnv *env.DoltEnv, cfg servercfg.ServerConfig) {
 	tmp := b.TempDir()
 	//b.Logf("db directory: %s", tmp)
 	dbDir := path.Join(tmp, database)
@@ -157,7 +158,7 @@ listener:
  write_timeout_millis: 28800000
 `, database, dbDir, port))
 
-	cfg, err = srv.NewYamlConfig(yaml)
+	cfg, err = servercfg.NewYamlConfig(yaml)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -175,7 +176,7 @@ func getProfFile(b *testing.B) *os.File {
 	return f
 }
 
-func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg srv.ServerConfig, queries []query) {
+func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, cfg servercfg.ServerConfig, queries []query) {
 	sc := svcs.NewController()
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -210,8 +211,8 @@ func executeServerQueries(ctx context.Context, b *testing.B, dEnv *env.DoltEnv, 
 	}
 }
 
-func executeQuery(cfg srv.ServerConfig, q query) error {
-	cs := srv.ConnectionString(cfg, database)
+func executeQuery(cfg servercfg.ServerConfig, q query) error {
+	cs := servercfg.ConnectionString(cfg, database)
 	conn, err := dbr.Open("mysql", cs, nil)
 	if err != nil {
 		return err

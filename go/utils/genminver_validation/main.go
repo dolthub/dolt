@@ -19,7 +19,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/minver"
 )
 
@@ -30,7 +30,7 @@ func main() {
 
 	outFile := os.Args[1]
 
-	err := minver.GenValidationFile(&sqlserver.YAMLConfig{}, outFile)
+	err := minver.GenValidationFile(&servercfg.YAMLConfig{}, outFile)
 	if err != nil {
 		log.Fatal(err)
 	}

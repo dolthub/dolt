@@ -23,15 +23,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )
 
-type JwksConfig struct {
-	Name        string            `yaml:"name"`
-	LocationUrl string            `yaml:"location_url"`
-	Claims      map[string]string `yaml:"claims"`
-	FieldsToLog []string          `yaml:"fields_to_log"`
-}
+type JwksConfig servercfg.ServerJwksConfig
 
 // authenticateDoltJWTPlugin is used to authenticate plaintext user plugins
 type authenticateDoltJWTPlugin struct {

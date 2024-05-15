@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"math/rand"
 	"runtime"
 	"strings"
@@ -554,7 +555,7 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 // the block.
 func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	dEnv := dtestutils.CreateTestEnv()
-	serverConfig := sqlserver.DefaultServerConfig()
+	serverConfig := sqlserver.DefaultCommandLineServerConfig()
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig = serverConfig.WithPort(port)
@@ -660,9 +661,9 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 }
 
 // startServer will start sql-server with given host, unix socket file path and whether to use specific port, which is defined randomly.
-func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *svcs.Controller, sqlserver.ServerConfig) {
+func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *svcs.Controller, servercfg.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
-	serverConfig := sqlserver.DefaultServerConfig()
+	serverConfig := sqlserver.DefaultCommandLineServerConfig()
 	if withPort {
 		rand.Seed(time.Now().UnixNano())
 		port := 15403 + rand.Intn(25)
@@ -679,7 +680,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	return dEnv, onEnv, config
 }
 
-func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv) (*svcs.Controller, sqlserver.ServerConfig) {
+func startServerOnEnv(t *testing.T, serverConfig servercfg.ServerConfig, dEnv *env.DoltEnv) (*svcs.Controller, servercfg.ServerConfig) {
 	sc := svcs.NewController()
 	go func() {
 		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
@@ -691,9 +692,9 @@ func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *e
 }
 
 // newConnection takes sqlserver.serverConfig and opens a connection, and will return that connection with a new session
-func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
+func newConnection(t *testing.T, serverConfig servercfg.ServerConfig) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig, dbName), nil)
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess
@@ -709,7 +710,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	dEnv, sc, serverConfig := startServer(t, false, "", defaultUnixSocketPath)
 	sc.WaitForStart()
 	defer dEnv.DoltDB.Close()
-	require.True(t, strings.Contains(sqlserver.ConnectionString(serverConfig, "dolt"), "unix"))
+	require.True(t, strings.Contains(servercfg.ConnectionString(serverConfig, "dolt"), "unix"))
 
 	// default unix socket connection works
 	localConn, localSess := newConnection(t, serverConfig)
@@ -719,21 +720,21 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 
 	t.Run("connecting to local server with tcp connections", func(t *testing.T) {
 		// connect with port defined
-		serverConfigWithPortOnly := sqlserver.DefaultServerConfig().WithPort(3306)
+		serverConfigWithPortOnly := sqlserver.DefaultCommandLineServerConfig().WithPort(3306)
 		conn1, sess1 := newConnection(t, serverConfigWithPortOnly)
 		rows1, err := sess1.Query("select 1")
 		require.NoError(t, err)
 		assertResultsEqual(t, []sql.Row{{1}}, rows1)
 
 		// connect with host defined
-		serverConfigWithPortandHost := sqlserver.DefaultServerConfig().WithHost("127.0.0.1")
+		serverConfigWithPortandHost := sqlserver.DefaultCommandLineServerConfig().WithHost("127.0.0.1")
 		conn2, sess2 := newConnection(t, serverConfigWithPortandHost)
 		rows2, err := sess2.Query("select 1")
 		require.NoError(t, err)
 		assertResultsEqual(t, []sql.Row{{1}}, rows2)
 
 		// connect with port and host defined
-		serverConfigWithPortandHost1 := sqlserver.DefaultServerConfig().WithPort(3306).WithHost("0.0.0.0")
+		serverConfigWithPortandHost1 := sqlserver.DefaultCommandLineServerConfig().WithPort(3306).WithHost("0.0.0.0")
 		conn3, sess3 := newConnection(t, serverConfigWithPortandHost1)
 		rows3, err := sess3.Query("select 1")
 		require.NoError(t, err)
@@ -757,11 +758,11 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	dEnv, tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
 	tcpSc.WaitForStart()
 	defer dEnv.DoltDB.Close()
-	require.False(t, strings.Contains(sqlserver.ConnectionString(tcpServerConfig, "dolt"), "unix"))
+	require.False(t, strings.Contains(servercfg.ConnectionString(tcpServerConfig, "dolt"), "unix"))
 
 	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {
 		// unix socket connection should fail
-		localServerConfig := sqlserver.DefaultServerConfig().WithSocket(defaultUnixSocketPath)
+		localServerConfig := sqlserver.DefaultCommandLineServerConfig().WithSocket(defaultUnixSocketPath)
 		conn, sess := newConnection(t, localServerConfig)
 		_, err := sess.Query("select 1")
 		require.Error(t, err)

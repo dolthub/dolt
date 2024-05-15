@@ -18,6 +18,7 @@ import (
 	"context"
 	sql2 "database/sql"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -42,7 +43,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 
 	// ParseDSN currently doesn't support `/` in the db name
 	dbName, _ := dsess.SplitRevisionDbName(dbRev)
-	parsedMySQLConfig, err := mysql.ParseDSN(ConnectionString(clientConfig, dbName))
+	parsedMySQLConfig, err := mysql.ParseDSN(servercfg.ConnectionString(clientConfig, dbName))
 	if err != nil {
 		return nil, err
 	}

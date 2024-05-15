@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"net/http"
 	"os"
 	"strings"
@@ -166,31 +167,31 @@ func TestServerGoodParams(t *testing.T) {
 		assert.NoError(t, env.DoltDB.Close())
 	}()
 
-	tests := []ServerConfig{
-		DefaultServerConfig(),
-		DefaultServerConfig().WithHost("127.0.0.1").WithPort(15400),
-		DefaultServerConfig().WithHost("localhost").WithPort(15401),
-		//DefaultServerConfig().WithHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
-		DefaultServerConfig().withUser("testusername").WithPort(15403),
-		DefaultServerConfig().withPassword("hunter2").WithPort(15404),
-		DefaultServerConfig().withTimeout(0).WithPort(15405),
-		DefaultServerConfig().withTimeout(5).WithPort(15406),
-		DefaultServerConfig().withLogLevel(LogLevel_Debug).WithPort(15407),
-		DefaultServerConfig().withLogLevel(LogLevel_Info).WithPort(15408),
-		DefaultServerConfig().withReadOnly(true).WithPort(15409),
-		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
-		DefaultServerConfig().withAllowCleartextPasswords(true),
+	tests := []servercfg.ServerConfig{
+		DefaultCommandLineServerConfig(),
+		DefaultCommandLineServerConfig().WithHost("127.0.0.1").WithPort(15400),
+		DefaultCommandLineServerConfig().WithHost("localhost").WithPort(15401),
+		//DefaultCommandLineServerConfig().WithHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
+		DefaultCommandLineServerConfig().withUser("testusername").WithPort(15403),
+		DefaultCommandLineServerConfig().withPassword("hunter2").WithPort(15404),
+		DefaultCommandLineServerConfig().withTimeout(0).WithPort(15405),
+		DefaultCommandLineServerConfig().withTimeout(5).WithPort(15406),
+		DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Debug).WithPort(15407),
+		DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Info).WithPort(15408),
+		DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15409),
+		DefaultCommandLineServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
+		DefaultCommandLineServerConfig().withAllowCleartextPasswords(true),
 	}
 
 	for _, test := range tests {
-		t.Run(ConfigInfo(test), func(t *testing.T) {
+		t.Run(servercfg.ConfigInfo(test), func(t *testing.T) {
 			sc := svcs.NewController()
-			go func(config ServerConfig, sc *svcs.Controller) {
+			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
 				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
-			conn, err := dbr.Open("mysql", ConnectionString(test, "dbname"), nil)
+			conn, err := dbr.Open("mysql", servercfg.ConnectionString(test, "dbname"), nil)
 			require.NoError(t, err)
 			err = conn.Close()
 			require.NoError(t, err)
@@ -208,7 +209,7 @@ func TestServerSelect(t *testing.T) {
 		assert.NoError(t, env.DoltDB.Close())
 	}()
 
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15300)
 
 	sc := svcs.NewController()
 	defer sc.Stop()
@@ -219,7 +220,7 @@ func TestServerSelect(t *testing.T) {
 	require.NoError(t, err)
 
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 	sess := conn.NewSession(nil)
@@ -307,7 +308,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 		assert.NoError(t, dEnv.DoltDB.Close())
 	}()
 
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)
 
 	sc := svcs.NewController()
 	defer sc.Stop()
@@ -321,7 +322,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	defaultBranch := env.DefaultInitBranch
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 
@@ -342,7 +343,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	runDefaultBranchTests(t, tests, conn)
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
@@ -367,7 +368,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	runDefaultBranchTests(t, tests, conn)
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
@@ -384,7 +385,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	runDefaultBranchTests(t, tests, conn)
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
@@ -397,7 +398,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	runDefaultBranchTests(t, tests, conn)
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
@@ -410,7 +411,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	runDefaultBranchTests(t, tests, conn)
 
-	conn, err = dbr.Open("mysql", ConnectionString(serverConfig, dbName), nil)
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
 	require.NoError(t, err)
 	sess = conn.NewSession(nil)
 
@@ -469,7 +470,7 @@ func TestReadReplica(t *testing.T) {
 
 	// start server as read replica
 	sc := svcs.NewController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15303)
 
 	// set socket to nil to force tcp
 	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
@@ -489,7 +490,7 @@ func TestReadReplica(t *testing.T) {
 	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
 
 	t.Run("read replica pulls multiple branches", func(t *testing.T) {
-		conn, err := dbr.Open("mysql", ConnectionString(serverConfig, readReplicaDbName), nil)
+		conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, readReplicaDbName), nil)
 		defer conn.Close()
 		require.NoError(t, err)
 		sess := conn.NewSession(nil)

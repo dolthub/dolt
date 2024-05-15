@@ -19,10 +19,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"net"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +76,7 @@ var ErrCouldNotLockDatabase = goerrors.NewKind("database \"%s\" is locked by ano
 func Serve(
 	ctx context.Context,
 	version string,
-	serverConfig ServerConfig,
+	serverConfig servercfg.ServerConfig,
 	controller *svcs.Controller,
 	dEnv *env.DoltEnv,
 ) (startError error, closeError error) {
@@ -96,14 +96,14 @@ func Serve(
 }
 
 func ConfigureServices(
-	serverConfig ServerConfig,
+	serverConfig servercfg.ServerConfig,
 	controller *svcs.Controller,
 	version string,
 	dEnv *env.DoltEnv,
 ) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
-			return ValidateConfig(serverConfig)
+			return servercfg.ValidateConfig(serverConfig)
 		},
 	}
 	controller.Register(ValidateConfigStep)
@@ -219,6 +219,12 @@ func ConfigureServices(
 	}
 	controller.Register(LoadServerConfig)
 
+	serverJwksConfigs := serverConfig.JwksConfig()
+	jwksConfigs := make([]engine.JwksConfig, len(serverJwksConfigs))
+	for i := range serverJwksConfigs {
+		jwksConfigs[i] = engine.JwksConfig(serverJwksConfigs[i])
+	}
+
 	// Create SQL Engine with users
 	var config *engine.SqlEngineConfig
 	InitSqlEngineConfig := &svcs.AnonService{
@@ -233,7 +239,7 @@ func ConfigureServices(
 				ServerHost:              serverConfig.Host(),
 				Autocommit:              serverConfig.AutoCommit(),
 				DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
-				JwksConfig:              serverConfig.JwksConfig(),
+				JwksConfig:              jwksConfigs,
 				SystemVariables:         serverConfig.SystemVars(),
 				ClusterController:       clusterController,
 				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
@@ -289,7 +295,7 @@ func ConfigureServices(
 					mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
 				}
 			} else if !privsExist {
-				mysqlDb.AddSuperUser(ed, defaultUser, "%", defaultPass)
+				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, "%", servercfg.DefaultPass)
 			}
 			ed.Close()
 
@@ -514,15 +520,15 @@ func ConfigureServices(
 	var mySQLServer *server.Server
 	InitSQLServer := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
-			v, ok := serverConfig.(validatingServerConfig)
-			if ok && v.goldenMysqlConnectionString() != "" {
+			v, ok := serverConfig.(servercfg.ValidatingServerConfig)
+			if ok && v.GoldenMysqlConnectionString() != "" {
 				mySQLServer, err = server.NewServerWithHandler(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
 					newSessionBuilder(sqlEngine, serverConfig),
 					metListener,
 					func(h mysql.Handler) (mysql.Handler, error) {
-						return golden.NewValidatingHandler(h, v.goldenMysqlConnectionString(), logrus.StandardLogger())
+						return golden.NewValidatingHandler(h, v.GoldenMysqlConnectionString(), logrus.StandardLogger())
 					},
 				)
 			} else {
@@ -756,7 +762,7 @@ func (r *remotesapiAuth) ApiAuthorize(ctx context.Context, superUserRequired boo
 	return true, nil
 }
 
-func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
+func LoadClusterTLSConfig(cfg servercfg.ClusterConfig) (*tls.Config, error) {
 	rcfg := cfg.RemotesAPIConfig()
 	if rcfg.TLSKey() == "" && rcfg.TLSCert() == "" {
 		return nil, nil
@@ -782,7 +788,7 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.SessionBuilder {
+func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) server.SessionBuilder {
 	userToSessionVars := make(map[string]map[string]string)
 	userVars := config.UserVars()
 	for _, curr := range userVars {
@@ -820,7 +826,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 }
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
-func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error) {
+func getConfigFromServerConfig(serverConfig servercfg.ServerConfig) (server.Config, error) {
 	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
 		return server.Config{}, err
@@ -831,14 +837,14 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error)
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 
-	tlsConfig, err := LoadTLSConfig(serverConfig)
+	tlsConfig, err := servercfg.LoadTLSConfig(serverConfig)
 	if err != nil {
 		return server.Config{}, err
 	}
 
 	// if persist is 'load' we use currently set persisted global variable,
 	// else if 'ignore' we set persisted global variable to current value from serverConfig
-	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+	if serverConfig.PersistenceBehavior() == servercfg.LoadPerisistentGlobals {
 		serverConf, err = serverConf.NewConfig()
 		if err != nil {
 			return server.Config{}, err
@@ -864,7 +870,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error)
 }
 
 // handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.
-func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) {
+func handleProtocolAndAddress(serverConfig servercfg.ServerConfig) (server.Config, error) {
 	serverConf := server.Config{Protocol: "tcp"}
 
 	portAsString := strconv.Itoa(serverConfig.Port())
@@ -875,7 +881,7 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 	}
 	serverConf.Address = hostPort
 
-	sock, useSock, err := checkForUnixSocket(serverConfig)
+	sock, useSock, err := servercfg.CheckForUnixSocket(serverConfig)
 	if err != nil {
 		return server.Config{}, err
 	}
@@ -884,25 +890,6 @@ func handleProtocolAndAddress(serverConfig ServerConfig) (server.Config, error) 
 	}
 
 	return serverConf, nil
-}
-
-// checkForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.
-// If user defined socket flag or host is 'localhost', it returns the unix socket file location
-// either user-defined or the default if it was not defined.
-func checkForUnixSocket(config ServerConfig) (string, bool, error) {
-	if config.Socket() != "" {
-		if runtime.GOOS == "windows" {
-			return "", false, fmt.Errorf("cannot define unix socket file on Windows")
-		}
-		return config.Socket(), true, nil
-	} else {
-		// if host is undefined or defined as "localhost" -> unix
-		if runtime.GOOS != "windows" && config.Host() == "localhost" {
-			return defaultUnixSocketFilePath, true, nil
-		}
-	}
-
-	return "", false, nil
 }
 
 func getEventSchedulerStatus(status string) (eventscheduler.SchedulerStatus, error) {
