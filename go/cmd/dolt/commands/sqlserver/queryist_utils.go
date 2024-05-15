@@ -18,7 +18,6 @@ import (
 	"context"
 	sql2 "database/sql"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,6 +27,7 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

@@ -17,17 +17,17 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
-	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"

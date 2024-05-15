@@ -17,7 +17,6 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"math/rand"
 	"runtime"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 

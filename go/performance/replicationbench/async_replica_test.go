@@ -17,10 +17,11 @@ package serverbench
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"runtime/pprof"
 	"strings"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"

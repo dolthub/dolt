@@ -17,7 +17,6 @@ package serverbench
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"os"
 	"path"
 	"runtime"
@@ -31,6 +30,7 @@ import (
 	srv "github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )

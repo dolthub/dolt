@@ -16,11 +16,12 @@ package sqlserver
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
