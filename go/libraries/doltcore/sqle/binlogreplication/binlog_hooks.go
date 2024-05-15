@@ -16,13 +16,15 @@ package binlogreplication
 
 import (
 	"context"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 )
 
 // NewBinlogInitDatabaseHook returns an InitDatabaseHook function that records the database creation in the binlog events.

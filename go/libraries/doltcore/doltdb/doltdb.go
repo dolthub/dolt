@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -1488,7 +1488,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
 	var prevWorkingSet *WorkingSet
 	// TODO: support making the binlog branch configurable
-	if workingSet.Name == "heads/main" {
+	if workingSet.Name == "heads/"+"main" {
 		if wsDs.HasHead() {
 			prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
 			if err != nil {

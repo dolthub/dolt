@@ -43,9 +43,8 @@ const replicationBranch = "main"
 // changes to binary logging are only applied at server startup.
 //
 // NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
-//
-//	binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
-//	performance hit that binary logging adds.
+// binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
+// performance hit that binary logging adds.
 var BinlogEnabled = false
 
 type binlogStreamer struct {
@@ -139,7 +138,7 @@ func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName s
 	return nil
 }
 
-// WorkingRootUpdated implements the DatabaseUpdateListener interface. When a transaction is committed, this function
+// WorkingRootUpdated implements the DatabaseUpdateListener interface. When a working root changes, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
 // For a data update, the following events are generated
@@ -219,7 +218,7 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 	}
 
 	for _, streamer := range m.streamers {
-		logrus.StandardLogger().Warnf("sending %d binlog events\n", len(binlogEvents))
+		logrus.StandardLogger().Tracef("sending %d binlog events\n", len(binlogEvents))
 		streamer.eventChan <- binlogEvents
 	}
 
@@ -292,9 +291,6 @@ func (m *binlogStreamerManager) createTableMapEvents(ctx *sql.Context, databaseN
 		if err != nil {
 			return nil, nil, err
 		}
-
-		// TODO: Make sure to not replicate ignored tables? Or do we want to replicate them and
-		//       just exclude them from Dolt commits?
 
 		if !dataChanged || tableDelta.IsDrop() {
 			continue
@@ -442,8 +438,6 @@ func (m *binlogStreamerManager) createRowEvents(ctx *sql.Context, tableDeltas []
 			m.binlogStream.LogPosition += binlogEvent.Length()
 		}
 
-		// TODO: Ordering – Should we execute all deletes first? Or updates, deletes, then inserts?
-		//       A delete would never delete a row inserted or updated in the same transaction, so it seems like processing those first makes sense
 		if tableRowsToDelete != nil {
 			rows := mysql.Rows{
 				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
@@ -663,7 +657,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 	}
 
 	return &mysql.TableMap{
-		Flags:     0x0001, // TODO: hardcoding to end of statement
+		Flags:     0x0000,
 		Database:  databaseName,
 		Name:      tableName,
 		Types:     types,
@@ -724,19 +718,19 @@ func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.C
 	}
 
 	for {
-		logrus.StandardLogger().Warn("streamer is listening for messages")
+		logrus.StandardLogger().Trace("streamer is listening for messages")
 
 		select {
 		case <-streamer.quitChan:
-			logrus.StandardLogger().Warn("received message from streamer's quit channel")
+			logrus.StandardLogger().Trace("received message from streamer's quit channel")
 			streamer.ticker.Stop()
 			return nil
 
 		case <-streamer.ticker.C:
 			if conn.IsClosed() {
-				logrus.StandardLogger().Warn("connection is closed! can't send heartbeat")
+				logrus.StandardLogger().Trace("connection is closed! can't send heartbeat")
 			} else {
-				logrus.StandardLogger().Warn("sending heartbeat")
+				logrus.StandardLogger().Trace("sending heartbeat")
 				if err := sendHeartbeat(conn, m.binlogFormat, m.binlogStream); err != nil {
 					return err
 				}
@@ -746,8 +740,8 @@ func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.C
 			}
 
 		case events := <-streamer.eventChan:
-			logrus.StandardLogger().Warn("received message from streamer's event channel")
-			logrus.StandardLogger().Warnf("sending %d binlog events", len(events))
+			logrus.StandardLogger().Trace("received message from streamer's event channel")
+			logrus.StandardLogger().Tracef("sending %d binlog events", len(events))
 
 			// TODO: need to gracefully handle connection closed errors
 			for _, event := range events {
@@ -903,7 +897,7 @@ func sendFormatDescription(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, bi
 
 func sendHeartbeat(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	binlogStream.Timestamp = uint32(0) // Timestamp needs to be zero for a heartbeat event
-	logrus.StandardLogger().Warnf("sending heartbeat with log position: %v", binlogStream.LogPosition)
+	logrus.StandardLogger().Tracef("sending heartbeat with log position: %v", binlogStream.LogPosition)
 
 	binlogEvent := mysql.NewHeartbeatEventWithLogFile(binlogFormat, binlogStream, binlogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)
