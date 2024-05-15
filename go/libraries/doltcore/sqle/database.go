@@ -1328,6 +1328,8 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	return db.SetRoot(ctx, root)
 }
 
+// resolveDatabaseSchema returns the case-sensitive name for the schema requested, if it exists, and an error if
+// schemas could not be loaded.
 func resolveDatabaseSchema(ctx *sql.Context, root doltdb.RootValue, schemaName string) (string, bool, error) {
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
