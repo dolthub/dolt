@@ -311,6 +311,7 @@ func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tb
 			if err != nil {
 				return err
 			}
+			dbState.SessionCache().CacheWriterState(schKey, schState)
 		}
 	} else {
 		schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)

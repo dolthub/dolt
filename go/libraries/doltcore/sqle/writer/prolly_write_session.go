@@ -74,6 +74,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 			if err != nil {
 				return nil, err
 			}
+			dbState.SessionCache().CacheWriterState(schKey, schState)
 		}
 	} else {
 		schState, err = getWriterSchemas(ctx, t, table.Name)
