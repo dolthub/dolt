@@ -45,6 +45,7 @@ const (
 	stageMetadata
 	stageFooter
 	stageFlush
+	stageDone
 )
 
 type archiveWriter struct {
@@ -60,6 +61,7 @@ type archiveWriter struct {
 	metadataCheckSum sha512Sum
 	footerCheckSum   sha512Sum
 	workflowStage    stage
+	finalPath        string
 }
 
 /*
@@ -384,7 +386,7 @@ func writeVarUint64(w io.Writer, val uint64) error {
 
 // flushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
 // will be the footer hash + ".darc" as a suffix.
-func (aw *archiveWriter) flushToFile(path string) error {
+func (aw *archiveWriter) flushToFile(fullPath string) error {
 	if aw.workflowStage != stageFlush {
 		return fmt.Errorf("Runtime error: flushToFile called out of order")
 	}
@@ -396,9 +398,34 @@ func (aw *archiveWriter) flushToFile(path string) error {
 		}
 	}
 
-	h := hash.New(aw.footerCheckSum[:hash.ByteLen])
-	fileName := fmt.Sprintf("%s.darc", h.String())
-	fullPath := filepath.Join(path, fileName)
+	aw.finalPath = fullPath
+	err := aw.output.FlushToFile(fullPath)
+	if err != nil {
+		return err
+	}
+	aw.workflowStage = stageDone
+	return nil
+}
 
-	return aw.output.FlushToFile(fullPath)
+func (aw *archiveWriter) getName() (hash.Hash, error) {
+	if aw.workflowStage != stageFlush && aw.workflowStage != stageDone {
+		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
+	}
+
+	return hash.New(aw.footerCheckSum[:hash.ByteLen]), nil
+}
+
+func (aw *archiveWriter) genFileName(path string) (string, error) {
+	if aw.workflowStage != stageFlush {
+		return "", fmt.Errorf("Runtime error: genFileName called out of order")
+	}
+
+	h, err := aw.getName()
+	if err != nil {
+		return "", err
+	}
+
+	fileName := fmt.Sprintf("%s%s", h.String(), archiveFileSuffix)
+	fullPath := filepath.Join(path, fileName)
+	return fullPath, nil
 }
