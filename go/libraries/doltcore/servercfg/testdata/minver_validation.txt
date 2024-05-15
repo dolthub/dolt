@@ -56,7 +56,7 @@ Vars []servercfg.UserSessionVars 0.0.0 user_session_vars
 -Name string 0.0.0 name
 -Vars map[string]string 0.0.0 vars
 SystemVars_ map[string]interface{} 1.11.1 system_variables,omitempty
-Jwks []servercfg.ServerJwksConfig 0.0.0 jwks
+Jwks []servercfg.JwksConfig 0.0.0 jwks
 -Name string 0.0.0 name
 -LocationUrl string 0.0.0 location_url
 -Claims map[string]string 0.0.0 claims
