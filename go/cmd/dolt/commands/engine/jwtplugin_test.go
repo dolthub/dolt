@@ -16,9 +16,10 @@ package engine
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"testing"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 
 	"github.com/stretchr/testify/require"
 )
