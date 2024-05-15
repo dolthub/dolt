@@ -574,10 +574,20 @@ func TestSingleScriptPrepared(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	t.Skip("versioning setup violates session writer caching based on table hash")
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueries(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEngine(t, e, h, tt)
+	}
 }
 
 func TestAnsiQuotesSqlMode(t *testing.T) {
@@ -1358,11 +1368,19 @@ func TestBranchViewsPrepared(t *testing.T) {
 }
 
 func TestVersionedViews(t *testing.T) {
-	t.Skip("versioning setup violates session writer caching based on table hash")
-
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedViews(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, testCase := range queries.VersionedViewTests {
+		t.Run(testCase.Query, func(t *testing.T) {
+			ctx := enginetest.NewContext(h)
+			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil)
+		})
+	}
 }
 
 func TestWindowFunctions(t *testing.T) {
@@ -2844,12 +2862,20 @@ func TestPreparedStatistics(t *testing.T) {
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	t.Skip("versioning setup violates session writer caching based on table hash")
-
-	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueriesPrepared(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestPreparedQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEnginePrepared(t, e, h, tt)
+	}
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {
