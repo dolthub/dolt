@@ -20,12 +20,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
@@ -71,7 +73,7 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
-		indentLines(ServerConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
+		indentLines(servercfg.ServerConfigAsYAMLConfig(DefaultCommandLineServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}data_dir{{.EmphasisRight}}: A directory where the server will load dolt databases to serve, and create new ones. Defaults to the current directory.
@@ -147,7 +149,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 }
 
 func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
-	serverConfig := DefaultServerConfig()
+	serverConfig := DefaultCommandLineServerConfig()
 
 	ap := argparser.NewArgParserWithVariableArgs(name)
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
@@ -237,12 +239,12 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
-	err = ApplySystemVariables(serverConfig)
+	err = servercfg.ApplySystemVariables(serverConfig, sql.SystemVariables)
 	if err != nil {
 		return err
 	}
 
-	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
+	cli.PrintErrf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
 	if startError != nil {
@@ -256,7 +258,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 }
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
-func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
+func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (servercfg.ServerConfig, error) {
 	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
 }
 
@@ -267,7 +269,7 @@ func ServerConfigFromArgsWithReader(
 	args []string,
 	dEnv *env.DoltEnv,
 	reader ServerConfigReader,
-) (ServerConfig, error) {
+) (servercfg.ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
@@ -288,7 +290,7 @@ func ServerConfigFromArgsWithReader(
 
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (ServerConfig, error) {
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (servercfg.ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 	if !ok {
 		return reader.ReadConfigArgs(apr)
@@ -301,7 +303,7 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, read
 
 	// if command line user argument was given, override the config file's user and password
 	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
-		if wcfg, ok := cfg.(WritableServerConfig); ok {
+		if wcfg, ok := cfg.(servercfg.WritableServerConfig); ok {
 			pass, _ := apr.GetValue(passwordFlag)
 			wcfg.SetUserName(user)
 			wcfg.SetPassword(pass)
@@ -309,7 +311,7 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, read
 	}
 
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		if yamlCfg, ok := cfg.(YAMLConfig); ok {
+		if yamlCfg, ok := cfg.(servercfg.YAMLConfig); ok {
 			cli.Println(connStr)
 			yamlCfg.GoldenMysqlConn = &connStr
 		}
@@ -322,19 +324,19 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, read
 // is a little confusing, but it is because the client and server use the same configuration struct. The main difference
 // between this method and getServerConfig is that this method required a cli.UserPassword argument. It is created by
 // prompting the user, and we don't want the server to follow that code path.
-func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults) (servercfg.ServerConfig, error) {
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
 
 	if !hasCfgFile {
 		return NewCommandLineConfig(creds, apr)
 	}
 
-	var yamlCfg YAMLConfig
-	cfg, err := YamlConfigFromFile(cwdFS, cfgFile)
+	var yamlCfg servercfg.YAMLConfig
+	cfg, err := servercfg.YamlConfigFromFile(cwdFS, cfgFile)
 	if err != nil {
 		return nil, err
 	}
-	yamlCfg = cfg.(YAMLConfig)
+	yamlCfg = cfg.(servercfg.YAMLConfig)
 
 	// if command line user argument was given, replace yaml's user and password
 	if creds.Specified {
@@ -351,7 +353,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 }
 
 // setupDoltConfig updates the given server config with where to create .doltcfg directory
-func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
+func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config servercfg.ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
 		return nil
 	}

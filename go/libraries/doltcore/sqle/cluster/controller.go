@@ -47,6 +47,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -74,7 +75,7 @@ type databaseDropReplication struct {
 }
 
 type Controller struct {
-	cfg           Config
+	cfg           servercfg.ClusterConfig
 	persistentCfg config.ReadWriteConfig
 	role          Role
 	epoch         int
@@ -130,7 +131,7 @@ const (
 	DoltClusterRemoteApiAudience = "dolt-cluster-remote-api.dolthub.com"
 )
 
-func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (*Controller, error) {
+func NewController(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.ReadWriteConfig) (*Controller, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -485,7 +486,7 @@ func (c *Controller) persistVariables() error {
 	return c.persistentCfg.SetStrings(toset)
 }
 
-func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) (Role, int, error) {
+func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg servercfg.ClusterConfig, pCfg config.ReadWriteConfig) (Role, int, error) {
 	toset := make(map[string]string)
 	persistentRole := pCfg.GetStringOrDefault(dsess.DoltClusterRoleVariable, "")
 	var roleFromPersistentConfig bool
