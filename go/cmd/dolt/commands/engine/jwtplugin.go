@@ -27,14 +27,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )
 
-type JwksConfig servercfg.ServerJwksConfig
-
 // authenticateDoltJWTPlugin is used to authenticate plaintext user plugins
 type authenticateDoltJWTPlugin struct {
-	jwksConfig []JwksConfig
+	jwksConfig []servercfg.JwksConfig
 }
 
-func NewAuthenticateDoltJWTPlugin(jwksConfig []JwksConfig) mysql_db.PlaintextAuthPlugin {
+func NewAuthenticateDoltJWTPlugin(jwksConfig []servercfg.JwksConfig) mysql_db.PlaintextAuthPlugin {
 	return &authenticateDoltJWTPlugin{jwksConfig: jwksConfig}
 }
 
@@ -42,7 +40,7 @@ func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user stri
 	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass, time.Now())
 }
 
-func validateJWT(config []JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
+func validateJWT(config []servercfg.JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
 		return false, errors.New("ValidateJWT: JWKS server config not found")
 	}
@@ -112,7 +110,7 @@ func getClaimFromKey(claims *jwtauth.Claims, field string) string {
 	return ""
 }
 
-func getMatchingJwksConfig(config []JwksConfig, name string) (*JwksConfig, error) {
+func getMatchingJwksConfig(config []servercfg.JwksConfig, name string) (*servercfg.JwksConfig, error) {
 	for _, item := range config {
 		if item.Name == name {
 			return &item, nil

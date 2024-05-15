@@ -71,7 +71,6 @@ const sqlServerHeartbeatIntervalEnvVar = "DOLT_SQL_SERVER_HEARTBEAT_INTERVAL"
 var ExternalDisableUsers bool = false
 
 var ErrCouldNotLockDatabase = goerrors.NewKind("database \"%s\" is locked by another dolt process; either clone the database to run a second server, or stop the dolt process which currently holds an exclusive write lock on the database")
-var ErrCouldNotLockDatabaseWithDir = goerrors.NewKind("datadir: \"%s\", database \"%s\" is locked by another dolt process; either clone the database to run a second server, or stop the dolt process which currently holds an exclusive write lock on the database")
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -181,7 +180,7 @@ func ConfigureServices(
 		InitF: func(ctx context.Context) (err error) {
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 				if dEnv.IsAccessModeReadOnly() {
-					return true, ErrCouldNotLockDatabaseWithDir.New(name, serverConfig.DataDir())
+					return true, ErrCouldNotLockDatabase.New(name)
 				}
 				return false, nil
 			})
@@ -220,12 +219,6 @@ func ConfigureServices(
 	}
 	controller.Register(LoadServerConfig)
 
-	serverJwksConfigs := serverConfig.JwksConfig()
-	jwksConfigs := make([]engine.JwksConfig, len(serverJwksConfigs))
-	for i := range serverJwksConfigs {
-		jwksConfigs[i] = engine.JwksConfig(serverJwksConfigs[i])
-	}
-
 	// Create SQL Engine with users
 	var config *engine.SqlEngineConfig
 	InitSqlEngineConfig := &svcs.AnonService{
@@ -240,7 +233,7 @@ func ConfigureServices(
 				ServerHost:              serverConfig.Host(),
 				Autocommit:              serverConfig.AutoCommit(),
 				DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
-				JwksConfig:              jwksConfigs,
+				JwksConfig:              serverConfig.JwksConfig(),
 				SystemVariables:         serverConfig.SystemVars(),
 				ClusterController:       clusterController,
 				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,

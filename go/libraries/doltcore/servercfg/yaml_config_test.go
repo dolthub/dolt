@@ -122,7 +122,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = []ServerJwksConfig{
+	expected.Jwks = []JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",

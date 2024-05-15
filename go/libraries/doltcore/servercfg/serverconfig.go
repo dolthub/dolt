@@ -112,7 +112,7 @@ type ClusterStandbyRemoteConfig interface {
 	RemoteURLTemplate() string
 }
 
-type ServerJwksConfig struct {
+type JwksConfig struct {
 	Name        string            `yaml:"name"`
 	LocationUrl string            `yaml:"location_url"`
 	Claims      map[string]string `yaml:"claims"`
@@ -184,7 +184,7 @@ type ServerConfig interface {
 	// SystemVars is a map setting global SQL system variables. For example, `secure_file_priv`.
 	SystemVars() map[string]interface{}
 	// JwksConfig is an array containing jwks config
-	JwksConfig() []ServerJwksConfig
+	JwksConfig() []JwksConfig
 	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
 	AllowCleartextPasswords() bool
 	// Socket is a path to the unix socket file

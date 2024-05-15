@@ -140,7 +140,7 @@ type YAMLConfig struct {
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []ServerJwksConfig     `yaml:"jwks"`
+	Jwks            []JwksConfig           `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 }
 
@@ -462,7 +462,7 @@ func (cfg YAMLConfig) SystemVars() map[string]interface{} {
 }
 
 // wksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
-func (cfg YAMLConfig) JwksConfig() []ServerJwksConfig {
+func (cfg YAMLConfig) JwksConfig() []JwksConfig {
 	if cfg.Jwks != nil {
 		return cfg.Jwks
 	}

@@ -327,7 +327,7 @@ func (cfg *commandLineServerConfig) SystemVars() map[string]interface{} {
 	return nil
 }
 
-func (cfg *commandLineServerConfig) JwksConfig() []servercfg.ServerJwksConfig {
+func (cfg *commandLineServerConfig) JwksConfig() []servercfg.JwksConfig {
 	return nil
 }
 

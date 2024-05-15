@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"os"
 	"runtime"
 	"strconv"
@@ -72,7 +73,7 @@ type SqlEngineConfig struct {
 	Autocommit              bool
 	DoltTransactionCommit   bool
 	Bulk                    bool
-	JwksConfig              []JwksConfig
+	JwksConfig              []servercfg.JwksConfig
 	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
