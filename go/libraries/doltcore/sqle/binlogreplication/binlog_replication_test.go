@@ -217,6 +217,13 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.ErrorContains(t, err, "Invalid (empty) username")
 	require.Nil(t, rows)
 
+	// SOURCE_AUTO_POSITION cannot be disabled – we only support GTID positioning
+	rows, err = replicaDatabase.Queryx("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, " +
+		"SOURCE_HOST='localhost', SOURCE_USER='replicator', SOURCE_AUTO_POSITION=0;")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Error 1105 (HY000): SOURCE_AUTO_POSITION cannot be disabled")
+	require.Nil(t, rows)
+
 	// START REPLICA logs a warning if replication is already running
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
