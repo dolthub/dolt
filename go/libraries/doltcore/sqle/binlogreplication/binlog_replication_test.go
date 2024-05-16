@@ -49,7 +49,7 @@ var originalWorkingDir string
 
 func teardown(t *testing.T) {
 	if mySqlProcess != nil {
-		mySqlProcess.Kill()
+		stopMySqlServer(t)
 	}
 	if doltProcess != nil {
 		stopDoltSqlServer(t)
@@ -599,6 +599,14 @@ func startSqlServersWithDoltSystemVars(t *testing.T, doltPersistentSystemVars ma
 	require.NoError(t, err)
 }
 
+// stopMySqlServer stops the running MySQL server. If any errors are encountered while stopping
+// the MySQL server, this function will fail the current test.
+func stopMySqlServer(t *testing.T) {
+	require.NoError(t, mySqlProcess.Kill())
+}
+
+// stopDoltSqlServer stops the running Dolt sql-server. If any errors are encountered while
+// stopping the Dolt sql-server, this function will fail the current test.
 func stopDoltSqlServer(t *testing.T) {
 	// Use the negative process ID so that we grab the entire process group.
 	// This is necessary to kill all the processes the child spawns.
@@ -712,16 +720,21 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		username = "mysql"
 	}
 
-	// Create a fresh MySQL server for the primary
-	chmodCmd := exec.Command("mysqld",
-		"--no-defaults",
-		"--user="+username,
-		"--initialize-insecure",
-		"--datadir="+dataDir,
-		"--default-authentication-plugin=mysql_native_password")
-	output, err = chmodCmd.CombinedOutput()
-	if err != nil {
-		return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
+	// Check to see if the MySQL data directory has the "mysql" directory in it, which
+	// tells us whether this MySQL instance has been initialized yet or not.
+	initialized := directoryExists(filepath.Join(dataDir, "mysql"))
+	if !initialized {
+		// Create a fresh MySQL server for the primary
+		chmodCmd := exec.Command("mysqld",
+			"--no-defaults",
+			"--user="+username,
+			"--initialize-insecure",
+			"--datadir="+dataDir,
+			"--default-authentication-plugin=mysql_native_password")
+		output, err = chmodCmd.CombinedOutput()
+		if err != nil {
+			return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
+		}
 	}
 
 	cmd = exec.Command("mysqld",
@@ -729,6 +742,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		"--user="+username,
 		"--datadir="+dataDir,
 		"--gtid-mode=ON",
+		"--skip-replica-start=ON",
 		"--enforce-gtid-consistency=ON",
 		fmt.Sprintf("--port=%v", mySqlPort),
 		"--server-id=11223344",
@@ -760,8 +774,12 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Create the initial database on the MySQL server
-	primaryDatabase.MustExec("create database db01;")
+	// Create the initial database and replication user on the MySQL server if this is the first launch
+	if !initialized {
+		primaryDatabase.MustExec("create database db01;")
+		primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
+		primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
+	}
 
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
@@ -769,10 +787,17 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	os.Chdir(originalCwd)
 	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
 
-	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
-	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
-
 	return mySqlPort, cmd.Process, nil
+}
+
+// directoryExists returns true if the specified |path| is to a directory that exists, otherwise,
+// if the path doesn't exist or isn't a directory, false is returned.
+func directoryExists(path string) bool {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
 }
 
 var cachedDoltDevBuildPath = ""

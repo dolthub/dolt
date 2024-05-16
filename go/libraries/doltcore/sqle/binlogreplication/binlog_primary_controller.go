@@ -20,6 +20,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -57,19 +58,63 @@ type binlogStreamer struct {
 func newBinlogStreamer() *binlogStreamer {
 	return &binlogStreamer{
 		quitChan:  make(chan struct{}),
-		eventChan: make(chan []mysql.BinlogEvent),
+		eventChan: make(chan []mysql.BinlogEvent, 5),
 		ticker:    time.NewTicker(30 * time.Second),
+	}
+}
+
+// streamEvents listens for new binlog events sent to this streamer over its binlog even
+// channel and sends them over |conn|. It also listens for ticker ticks to send hearbeats
+// over |conn|. The specified |binlogFormat| is used to define the format of binlog events
+// and |binlogStream| records the position of the stream. This method blocks until an error
+// is received over the stream (e.g. the connection closing) or the streamer is closed,
+// through it's quit channel.
+func (streamer *binlogStreamer) streamEvents(ctx *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
+	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogStream); err != nil {
+		return err
+	}
+
+	for {
+		logrus.StandardLogger().Trace("streamer is listening for messages")
+
+		select {
+		case <-streamer.quitChan:
+			logrus.StandardLogger().Trace("received message from streamer's quit channel")
+			streamer.ticker.Stop()
+			return nil
+
+		case <-streamer.ticker.C:
+			logrus.StandardLogger().Trace("sending heartbeat")
+			if err := sendHeartbeat(conn, binlogFormat, binlogStream); err != nil {
+				return err
+			}
+			if err := conn.FlushBuffer(); err != nil {
+				return fmt.Errorf("unable to flush connection: %s", err.Error())
+			}
+
+		case events := <-streamer.eventChan:
+			logrus.StandardLogger().Tracef("streaming %d binlog events", len(events))
+			for _, event := range events {
+				if err := conn.WriteBinlogEvent(event, false); err != nil {
+					return err
+				}
+			}
+			if err := conn.FlushBuffer(); err != nil {
+				return fmt.Errorf("unable to flush connection: %s", err.Error())
+			}
+		}
 	}
 }
 
 // RemoteReplicaStreamer?
 // RemoteReplicaManager?
 type binlogStreamerManager struct {
-	streamers    []*binlogStreamer
-	quitChan     chan struct{}
-	binlogStream *mysql.BinlogStream
-	binlogFormat mysql.BinlogFormat
-	gtidPosition *mysql.Position
+	streamers      []*binlogStreamer
+	streamersMutex sync.Mutex
+	quitChan       chan struct{}
+	binlogStream   *mysql.BinlogStream
+	binlogFormat   mysql.BinlogFormat
+	gtidPosition   *mysql.Position
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogStreamerManager)(nil)
@@ -99,7 +144,8 @@ func (m *binlogStreamerManager) DatabaseCreated(ctx *sql.Context, databaseName s
 	binlogEvents = append(binlogEvents, binlogEvent)
 	m.binlogStream.LogPosition += binlogEvent.Length()
 
-	for _, streamer := range m.streamers {
+	streamers := m.copyStreamers()
+	for _, streamer := range streamers {
 		streamer.eventChan <- binlogEvents
 	}
 
@@ -131,7 +177,8 @@ func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName s
 	binlogEvents = append(binlogEvents, binlogEvent)
 	m.binlogStream.LogPosition += binlogEvent.Length()
 
-	for _, streamer := range m.streamers {
+	streamers := m.copyStreamers()
+	for _, streamer := range streamers {
 		streamer.eventChan <- binlogEvents
 	}
 
@@ -217,12 +264,23 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 		m.binlogStream.LogPosition += binlogEvent.Length()
 	}
 
-	for _, streamer := range m.streamers {
-		logrus.StandardLogger().Tracef("sending %d binlog events\n", len(binlogEvents))
+	streamers := m.copyStreamers()
+	for _, streamer := range streamers {
+		logrus.StandardLogger().Tracef("queuing %d binlog events\n", len(binlogEvents))
 		streamer.eventChan <- binlogEvents
 	}
 
 	return nil
+}
+
+// copyStreamers returns a copy of the streamers owned by this streamer manager.
+func (m *binlogStreamerManager) copyStreamers() []*binlogStreamer {
+	m.streamersMutex.Lock()
+	defer m.streamersMutex.Unlock()
+
+	results := make([]*binlogStreamer, len(m.streamers))
+	copy(results, m.streamers)
+	return results
 }
 
 // createSchemaChangeQueryEvents processes the specified |tableDeltas| for the database |databaseName| at |newRoot| and returns
@@ -685,10 +743,11 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 	}
 
 	manager := &binlogStreamerManager{
-		streamers:    make([]*binlogStreamer, 0),
-		quitChan:     make(chan struct{}),
-		binlogFormat: binlogFormat,
-		binlogStream: binlogStream,
+		streamers:      make([]*binlogStreamer, 0),
+		streamersMutex: sync.Mutex{},
+		quitChan:       make(chan struct{}),
+		binlogFormat:   binlogFormat,
+		binlogStream:   binlogStream,
 	}
 
 	doltdb.RegisterDatabaseUpdateListener(manager)
@@ -698,7 +757,8 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 			select {
 			case <-manager.quitChan:
 				// TODO: Since we just have one channel now... might be easier to just use an atomic var
-				for _, streamer := range manager.streamers {
+				streamers := manager.copyStreamers()
+				for _, streamer := range streamers {
 					streamer.quitChan <- struct{}{}
 				}
 				return
@@ -709,50 +769,35 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 	return manager
 }
 
-func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.Conn) error {
+// StreamEvents starts a new binlogStreamer and streams events over |conn| until the connection
+// is closed, the streamer is sent a quit signal over its quit channel, or the streamer receives
+// errors while sending events over the connection. Note that this method blocks until the
+// streamer exits.
+func (m *binlogStreamerManager) StreamEvents(ctx *sql.Context, conn *mysql.Conn) error {
 	streamer := newBinlogStreamer()
+	m.addStreamer(streamer)
+	defer m.removeStreamer(streamer)
+
+	return streamer.streamEvents(ctx, conn, m.binlogFormat, m.binlogStream)
+}
+
+// addStreamer adds |streamer| to the slice of streamers managed by this binlogStreamerManager.
+func (m *binlogStreamerManager) addStreamer(streamer *binlogStreamer) {
+	m.streamersMutex.Lock()
+	defer m.streamersMutex.Unlock()
+
 	m.streamers = append(m.streamers, streamer)
+}
 
-	if err := sendInitialEvents(ctx, conn, m.binlogFormat, m.binlogStream); err != nil {
-		return err
-	}
+// removeStreamer removes |streamer| from the slice of streamers managed by this binlogStreamerManager.
+func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
+	m.streamersMutex.Lock()
+	defer m.streamersMutex.Unlock()
 
-	for {
-		logrus.StandardLogger().Trace("streamer is listening for messages")
-
-		select {
-		case <-streamer.quitChan:
-			logrus.StandardLogger().Trace("received message from streamer's quit channel")
-			streamer.ticker.Stop()
-			return nil
-
-		case <-streamer.ticker.C:
-			if conn.IsClosed() {
-				logrus.StandardLogger().Trace("connection is closed! can't send heartbeat")
-			} else {
-				logrus.StandardLogger().Trace("sending heartbeat")
-				if err := sendHeartbeat(conn, m.binlogFormat, m.binlogStream); err != nil {
-					return err
-				}
-				if err := conn.FlushBuffer(); err != nil {
-					return fmt.Errorf("unable to flush connection: %s", err.Error())
-				}
-			}
-
-		case events := <-streamer.eventChan:
-			logrus.StandardLogger().Trace("received message from streamer's event channel")
-			logrus.StandardLogger().Tracef("sending %d binlog events", len(events))
-
-			// TODO: need to gracefully handle connection closed errors
-			for _, event := range events {
-				if err := conn.WriteBinlogEvent(event, false); err != nil {
-					return err
-				}
-			}
-
-			if err := conn.FlushBuffer(); err != nil {
-				return fmt.Errorf("unable to flush connection: %s", err.Error())
-			}
+	m.streamers = make([]*binlogStreamer, len(m.streamers)-1, 0)
+	for _, element := range m.streamers {
+		if element != streamer {
+			m.streamers = append(m.streamers, element)
 		}
 	}
 }
@@ -794,7 +839,14 @@ func (d doltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql.
 
 // BinlogDumpGtid implements the BinlogPrimaryController interface.
 func (d doltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, gtidSet mysql.GTIDSet) error {
-	return doltBinlogStreamerManager.StartNewStreamer(ctx, conn)
+	err := doltBinlogStreamerManager.StreamEvents(ctx, conn)
+	if err != nil {
+		logrus.Warnf("exiting binlog streamer due to error: %s", err.Error())
+	} else {
+		logrus.Trace("exiting binlog streamer cleanly")
+	}
+
+	return err
 }
 
 // ListReplicas implements the BinlogPrimaryController interface.
@@ -897,7 +949,7 @@ func sendFormatDescription(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, bi
 
 func sendHeartbeat(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	binlogStream.Timestamp = uint32(0) // Timestamp needs to be zero for a heartbeat event
-	logrus.StandardLogger().Tracef("sending heartbeat with log position: %v", binlogStream.LogPosition)
+	logrus.WithField("log_position", binlogStream.LogPosition).Tracef("sending heartbeat")
 
 	binlogEvent := mysql.NewHeartbeatEventWithLogFile(binlogFormat, binlogStream, binlogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)

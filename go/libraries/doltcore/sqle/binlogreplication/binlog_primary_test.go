@@ -127,16 +127,68 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 }
 
-// TestBinlogPrimary_ReplicaReconnect tests that a Dolt primary server can be restarted and that a replica
-// will successfully reconnect and continue replicating binlog events.
-func TestBinlogPrimary_ReplicaReconnect(t *testing.T) {
+// TestBinlogPrimary_ReplicaRestart tests that the Dolt primary server behaves correctly when the
+// replica server is stopped, and then later reconnects.
+func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 	time.Sleep(100 * time.Millisecond)
 
-	// Create a table on the primary and assert that it get replicated
+	// Create a table on the primary and assert that it gets replicated
+	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
+
+	// Assert that the executed GTID position on the replica is GTID #2
+	// (GTID #1 was assigned for creating the database, and not replicated)
+	serverUuid := queryPrimaryServerUuid(t)
+	status := queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":2", status["Executed_Gtid_Set"])
+
+	// Stop the MySQL replica server and wait for a few seconds
+	stopMySqlServer(t)
+	time.Sleep(5_000 * time.Millisecond)
+
+	// Make a change while the replica is stopped to test that the server
+	// doesn't error out when a registered replica is not available.
+	// NOTE: This won't be replicated until we start persisting the binlog to disk
+	primaryDatabase.MustExec("insert into db01.t1 values (1, 'one');")
+	time.Sleep(200 * time.Millisecond)
+
+	// Restart the MySQL replica and reconnect to the Dolt primary
+	prevPrimaryDatabase := primaryDatabase
+	var err error
+	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	require.NoError(t, err)
+	replicaDatabase = primaryDatabase
+	primaryDatabase = prevPrimaryDatabase
+	startReplication(t, doltPort)
+	time.Sleep(250 * time.Millisecond)
+
+	// Create another table and assert that it gets replicated
+	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
+	time.Sleep(250 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
+
+	// Assert the executed GTID position now contains GTID #2 and GTID #4
+	// (#1 isn't present, because it was executed before we turned on replication,
+	// and #3 isn't present, because it was executed while the replica was stopped)
+	status = queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":2:4", status["Executed_Gtid_Set"])
+}
+
+// TestBinlogPrimary_PrimaryRestart tests that a Dolt primary server can be restarted and that a replica
+// will successfully reconnect and continue replicating binlog events.
+func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
 	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
