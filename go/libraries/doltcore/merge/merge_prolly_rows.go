@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -374,7 +375,7 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 			continue
 		}
 
-		expr, err := index.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
+		expr, err := expranalysis.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
 		if err != nil {
 			return checkValidator{}, err
 		}
@@ -1192,7 +1193,7 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 		}
 
 		if col.Default != "" || col.Generated != "" || col.OnUpdate != "" {
-			expr, err := index.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
+			expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
 			if err != nil {
 				return true, err
 			}
