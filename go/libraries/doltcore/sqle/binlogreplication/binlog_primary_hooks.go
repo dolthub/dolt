@@ -59,7 +59,7 @@ func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpd
 // created. A newly created database can only have existing data in the case where it has been undropped via
 // dolt_undrop().
 func replicateExistingData(ctx *sql.Context, ddb *doltdb.DoltDB, listener doltdb.DatabaseUpdateListener, databaseName string) error {
-	roots, err := ddb.ResolveBranchRoots(ctx, ref.NewBranchRef(replicationBranch))
+	roots, err := ddb.ResolveBranchRoots(ctx, ref.NewBranchRef(binlogBranch))
 	if err != nil {
 		return err
 	}
