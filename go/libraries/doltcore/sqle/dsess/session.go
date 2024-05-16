@@ -1474,7 +1474,7 @@ func (d *DoltSession) RemoveAllPersistedGlobals() error {
 	return d.globalsConf.Unset(allVars)
 }
 
-// RemoveAllPersistedGlobals implements sql.PersistableSession
+// GetPersistedValue implements sql.PersistableSession
 func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
