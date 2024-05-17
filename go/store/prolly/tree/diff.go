@@ -17,7 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 )
 
@@ -176,19 +175,20 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 	return Diff{}, io.EOF
 }
 
-// NM4. gdoc.
+/*
+// NM4. gdoc. Not sure if this is in the right place at all.
 func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	from, to StaticMap[K, V, O],
 	cb DiffFn,
 ) error {
-	differ, layerDepth, err := AddressDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order, 1000)
+	differ, err := layerDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
 	if err != nil {
 		return err
 	}
 	for {
 		for {
-			var diff Diff
+			var diff AddrDiff
 			if diff, err = differ.Next(ctx); err != nil {
 				break
 			}
@@ -198,7 +198,7 @@ func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 			}
 		}
 		if layerDepth > 0 {
-			differ, layerDepth, err = AddressDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order, layerDepth)
+			differ, layerDepth, err = layerDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
 			if err != nil {
 				return err
 			}
@@ -208,46 +208,7 @@ func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	}
 	return err
 }
-
-var ErrShallowTree = errors.New("tree too shallow") // NM4 We can do better than this. TBD.
-func AddressDifferFromRoots[K ~[]byte, O Ordering[K]](
-	ctx context.Context,
-	fromNs NodeStore, toNs NodeStore,
-	from, to Node,
-	order O,
-	desiredLayer int,
-) (Differ[K, O], int, error) {
-	orig, err := DifferFromRoots[K, O](ctx, fromNs, toNs, from, to, order, false)
-	if err != nil {
-		return orig, -1, err
-	}
-
-	depthActual := depth(orig.from)
-	if depthActual < desiredLayer {
-		desiredLayer = depthActual
-	}
-
-	for desiredLayer <= depthActual {
-		orig.from = orig.from.parent
-		orig.to = orig.to.parent
-		orig.fromStop = orig.fromStop.parent
-		orig.toStop = orig.toStop.parent
-
-		if orig.from == nil || orig.to == nil || orig.fromStop == nil || orig.toStop == nil {
-			return orig, -1, ErrShallowTree
-		}
-		depthActual--
-	}
-
-	return orig, depthActual, err
-}
-
-func depth(n *cursor) int {
-	if n == nil {
-		return 0
-	}
-	return 1 + depth(n.parent)
-}
+*/
 
 func sendRemoved(ctx context.Context, from *cursor) (diff Diff, err error) {
 	diff = Diff{
