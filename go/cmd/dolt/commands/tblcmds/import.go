@@ -671,6 +671,7 @@ func moveRows(
 				return err
 			}
 		} else {
+			// TODO this could just create val.Tuple pairs
 			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper)
 			if err != nil {
 				return err

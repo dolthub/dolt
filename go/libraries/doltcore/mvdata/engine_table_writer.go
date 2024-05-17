@@ -17,16 +17,23 @@ package mvdata
 import (
 	"context"
 	"fmt"
-	"io"
-	"sync/atomic"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -132,11 +139,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	_, _, err = s.se.Query(s.sqlCtx, "START TRANSACTION")
-	if err != nil {
-		return err
-	}
-
 	if s.disableFks {
 		_, _, err = s.se.Query(s.sqlCtx, "SET FOREIGN_KEY_CHECKS = 0")
 		if err != nil {
@@ -149,83 +151,204 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	updateStats := func(row sql.Row) {
-		if row == nil {
-			return
-		}
+	// TODO: need to count updates in apply mutations
+	// could return ins,upd,del from apply mutations?
+	// or add a callback where we calculate it?
 
-		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.tableSchema.Schema) {
-			oldRow := row[:len(row)/2]
-			newRow := row[len(row)/2:]
+	// TODO: MutateMapWithTupleIter
+	// use MutateMapWithTupleIter to directly write sorted rows from the CSV to the prolly map
+	// (only primary index, requires sorted input)
 
-			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
-				if ok {
-					s.stats.SameVal++
-				} else {
-					s.stats.Modifications++
-				}
-			}
-		} else {
-			s.stats.Additions++
-		}
-	}
+	dSess := dsess.DSessFromSess(s.sqlCtx.Session)
 
-	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, false)
+	tx, err := dSess.StartTransaction(s.sqlCtx, sql.ReadWrite)
 	if err != nil {
 		return err
 	}
 
-	iter, err := rowexec.DefaultBuilder.Build(s.sqlCtx, insertOrUpdateOperation, nil)
+	sqlDb, err := dSess.Provider().Database(s.sqlCtx, s.database)
+	sqlTable, _, err := sqlDb.GetTableInsensitive(s.sqlCtx, s.tableName)
+
+	var dTab *doltdb.Table
+	switch t := sqlTable.(type) {
+	case *sqle.AlterableDoltTable:
+		dTab, err = t.DoltTable.DoltTable(s.sqlCtx)
+	case *sqle.WritableDoltTable:
+		dTab, err = t.DoltTable.DoltTable(s.sqlCtx)
+	case *sqle.DoltTable:
+		dTab, err = t.DoltTable(s.sqlCtx)
+	default:
+		err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
+	}
+
+	priIdx, err := dTab.GetRowData(s.sqlCtx)
+	priMap := durable.ProllyMapFromIndex(priIdx)
+
+	// row strings, need schema sql.Types to convert to normal types, then tuple desc put field
+	kd, vd := priMap.Descriptors()
+
+	dSchema, err := dTab.GetSchema(ctx)
+	keyMap, valMap := writer.OrdinalMappingsFromSchema(s.rowOperationSchema.Schema, dSchema)
+
+	iter := &tupleIter{
+		ctx:       s.sqlCtx,
+		inp:       inputChannel,
+		stats:     s.stats,
+		statsCB:   s.statsCB,
+		badRowCb:  badRowCb,
+		tableName: s.tableName,
+		sch:       s.tableSchema,
+		ns:        priMap.NodeStore(),
+		valBld:    val.NewTupleBuilder(vd),
+		keyBld:    val.NewTupleBuilder(kd),
+		keyMap:    keyMap,
+		valMap:    valMap,
+	}
+	// tuple iter: converts sql.Row->(Tup,Tup), does counter
+	newMap, err := prolly.MutateMapWithTupleIter(s.sqlCtx, priMap, iter)
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		rerr := iter.Close(s.sqlCtx)
-		if err == nil {
-			err = rerr
+	if iter.err != nil {
+		return iter.err
+	}
+
+	// final stats check
+	s.statsCB(s.stats)
+
+	// save map
+	newTab, err := dTab.UpdateRows(ctx, durable.IndexFromProllyMap(newMap))
+	if err != nil {
+		return err
+	}
+
+	ws, err := dSess.WorkingSet(s.sqlCtx, s.database)
+	if err != nil {
+		return err
+	}
+
+	wr, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: s.tableName}, newTab)
+	if err != nil {
+		return err
+	}
+
+	ws = ws.WithWorkingRoot(wr)
+	if err := dSess.SetWorkingSet(s.sqlCtx, s.database, ws); err != nil {
+		return err
+	}
+
+	return dSess.CommitTransaction(s.sqlCtx, tx)
+}
+
+type tupleIter struct {
+	ctx context.Context
+	err error
+
+	inp       chan sql.Row
+	statsCB   noms.StatsCB
+	stats     types.AppliedEditStats
+	badRowCb  func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, lineNumber int, err error) bool
+	sch       sql.PrimaryKeySchema
+	tableName string
+
+	b    planbuilder.Builder
+	line int
+
+	ns     tree.NodeStore
+	keyBld *val.TupleBuilder
+	valBld *val.TupleBuilder
+	keyMap val.OrdinalMapping
+	valMap val.OrdinalMapping
+}
+
+var _ prolly.TupleIter = (*tupleIter)(nil)
+
+func (t *tupleIter) Next(ctx context.Context) (val.Tuple, val.Tuple) {
+	select {
+	case <-ctx.Done():
+	case r, ok := <-t.inp:
+		if !ok {
+			return nil, nil
 		}
-	}()
+		t.statsCheck()
+		t.line++
+		sqlRow := t.convert(r)
+		if t.err != nil {
+			break
+		}
+		k, v := t.tuples(sqlRow)
+		if t.err != nil {
+			break
+		}
+		// todo bad row callback
+		// todo error handling
+		return k, v
+	}
 
-	line := 1
-
-	for {
-		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
-			atomic.StoreInt32(&s.statOps, 0)
-			s.statsCB(s.stats)
+	if t.err != nil {
+		var offendingRow sql.Row
+		switch n := t.err.(type) {
+		case sql.WrappedInsertError:
+			offendingRow = n.OffendingRow
+		case sql.IgnorableError:
+			offendingRow = n.OffendingRow
 		}
 
-		row, err := iter.Next(s.sqlCtx)
-		line += 1
+		quit := t.badRowCb(offendingRow, t.sch, t.tableName, t.line, t.err)
+		if quit {
+			return nil, nil
+		}
+		t.err = nil
+	}
+	return nil, nil
+}
 
-		// All other errors are handled by the errorHandler
-		if err == nil {
-			_ = atomic.AddInt32(&s.statOps, 1)
-			updateStats(row)
-		} else if err == io.EOF {
-			atomic.LoadInt32(&s.statOps)
-			atomic.StoreInt32(&s.statOps, 0)
-			if s.statsCB != nil {
-				s.statsCB(s.stats)
-			}
-
-			return err
-		} else {
-			var offendingRow sql.Row
-			switch n := err.(type) {
-			case sql.WrappedInsertError:
-				offendingRow = n.OffendingRow
-			case sql.IgnorableError:
-				offendingRow = n.OffendingRow
-			}
-
-			quit := badRowCb(offendingRow, s.tableSchema, s.tableName, line, err)
-			if quit {
-				return err
-			}
+func (t *tupleIter) convert(r sql.Row) sql.Row {
+	ret := make(sql.Row, len(r))
+	for i, v := range r {
+		sqlTyp := t.sch.Schema[i].Type
+		var valTyp ast.ValType
+		if types2.IsNumber(sqlTyp) {
+			valTyp = ast.IntVal
+		} else if types2.IsText(sqlTyp) {
+			valTyp = ast.StrVal
+		}
+		val := &ast.SQLVal{Type: valTyp, Val: []byte(v.(string))}
+		e := t.b.ConvertVal(val)
+		ret[i], _, t.err = sqlTyp.Convert(e.(*expression.Literal).Value())
+		if t.err != nil {
+			return nil
 		}
 	}
+	return ret
+}
+
+func (t *tupleIter) statsCheck() {
+	if t.statsCB != nil && t.line%tableWriterStatUpdateRate == 0 {
+		t.statsCB(t.stats)
+	}
+}
+
+func (t *tupleIter) tuples(sqlRow sql.Row) (val.Tuple, val.Tuple) {
+	for to := range t.keyMap {
+		from := t.keyMap.MapOrdinal(to)
+		if err := tree.PutField(t.ctx, t.ns, t.keyBld, to, sqlRow[from]); err != nil {
+			t.err = err
+			return nil, nil
+		}
+	}
+	k := t.keyBld.BuildPermissive(t.ns.Pool())
+
+	for to := range t.valMap {
+		from := t.valMap.MapOrdinal(to)
+		if err := tree.PutField(t.ctx, t.ns, t.valBld, to, sqlRow[from]); err != nil {
+			t.err = err
+			return nil, nil
+		}
+	}
+	v := t.valBld.Build(t.ns.Pool())
+	return k, v
 }
 
 func (s *SqlEngineTableWriter) Commit(ctx context.Context) error {

@@ -381,7 +381,7 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	return w.setter(ctx, w.dbName, ws.WorkingRoot())
 }
 
-func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
+func OrdinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
 	km = makeOrdinalMapping(from, to.GetPKCols())
 	vm = makeOrdinalMapping(from, to.GetNonPKCols())
 	return
