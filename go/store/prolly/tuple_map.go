@@ -54,9 +54,6 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 	if len(tups)%2 != 0 {
 		return Map{}, fmt.Errorf("tuples must be key-value pairs")
 	}
-	// TODO: implement empty map?
-	if len(tups) == 0 {
-	}
 
 	return NewMapFromTupleIter(ctx, ns, keyDesc, valDesc, &tupleIter{tuples: tups})
 }
