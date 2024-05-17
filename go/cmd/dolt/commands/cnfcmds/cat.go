@@ -239,7 +239,7 @@ func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, 
 
 	unionCols := []schema.Column{}
 	for _, colName := range unionColNames {
-		col := schema.NewColumn(colName, 0, types.StringKind, false)
+		col := schema.NewColumn(colName, 0, types.BlobKind, false)
 		unionCols = append(unionCols, col)
 	}
 	unionColl := schema.NewColCollection(unionCols...)
