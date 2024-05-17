@@ -191,8 +191,9 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 
 func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (sql.Schema, error) {
 	// using array to preserve column order
+	conflictCpy := conflictsSch.Copy()
 	var baseCols, theirCols, ourCols sql.Schema
-	for _, col := range conflictsSch {
+	for _, col := range conflictCpy {
 		conflictColName := col.Name
 		_, shouldIgnore := conflictColsToIgnore[conflictColName]
 		if shouldIgnore {
