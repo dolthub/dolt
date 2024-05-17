@@ -203,6 +203,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		keyBld:    val.NewTupleBuilder(kd),
 		keyMap:    keyMap,
 		valMap:    valMap,
+		b:         planbuilder.New(s.sqlCtx, nil, nil),
 	}
 	// tuple iter: converts sql.Row->(Tup,Tup), does counter
 	newMap, err := prolly.MutateMapWithTupleIter(s.sqlCtx, priMap, iter)
@@ -252,7 +253,7 @@ type tupleIter struct {
 	sch       sql.PrimaryKeySchema
 	tableName string
 
-	b    planbuilder.Builder
+	b    *planbuilder.Builder
 	line int
 
 	ns     tree.NodeStore

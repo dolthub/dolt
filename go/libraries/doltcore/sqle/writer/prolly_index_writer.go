@@ -38,7 +38,7 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Sch
 	m := durable.ProllyMapFromIndex(idx)
 
 	keyDesc, valDesc := m.Descriptors()
-	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
+	keyMap, valMap := OrdinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
@@ -58,7 +58,7 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch 
 	m := durable.ProllyMapFromIndex(idx)
 
 	keyDesc, valDesc := m.Descriptors()
-	_, valMap := ordinalMappingsFromSchema(sqlSch, sch)
+	_, valMap := OrdinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
