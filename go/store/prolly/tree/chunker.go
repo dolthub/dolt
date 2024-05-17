@@ -369,6 +369,10 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 	assertTrue(!tc.done, "chunker must not be done")
 	tc.done = true
 
+	if tc.cur == nil && tc.builder.count() == 0 {
+		//return Node{}, nil
+	}
+
 	if tc.cur != nil {
 		if err := tc.finalizeCursor(ctx); err != nil {
 			return Node{}, err

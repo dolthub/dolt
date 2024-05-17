@@ -601,7 +601,7 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 		from, err = td.FromTable.GetRowData(ctx)
 	} else {
 		// If there is no |FromTable| use the |ToTable|'s schema to make the index.
-		from, err = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.ToSch)
+		//from, err = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.ToSch)
 	}
 	if err != nil {
 		return nil, nil, err
