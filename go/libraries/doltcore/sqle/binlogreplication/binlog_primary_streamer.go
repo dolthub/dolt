@@ -250,9 +250,14 @@ func (m *binlogStreamerManager) DatabaseDropped(ctx *sql.Context, databaseName s
 // TODO: This function currently sends the events to all connected replicas (through a channel). Eventually we need
 // to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
 // that log to stream events back to the connected replicas.
-func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseName string, before doltdb.RootValue, after doltdb.RootValue) error {
+func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before doltdb.RootValue, after doltdb.RootValue) error {
 	// no-op if binary logging isn't turned on
 	if !BinlogEnabled {
+		return nil
+	}
+
+	// We only support updates to a single branch for binlog events, so ignore all other updates
+	if branchName != binlogBranch {
 		return nil
 	}
 

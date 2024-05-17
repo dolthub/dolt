@@ -69,7 +69,7 @@ func replicateExistingData(ctx *sql.Context, ddb *doltdb.DoltDB, listener doltdb
 		return err
 	}
 
-	return listener.WorkingRootUpdated(ctx, databaseName, emptyRoot, roots.Working)
+	return listener.WorkingRootUpdated(ctx, databaseName, binlogBranch, emptyRoot, roots.Working)
 }
 
 // NewBinlogDropDatabaseHook returns a new DropDatabaseHook function that records a database drop in the binlog events.
