@@ -30,13 +30,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
+			"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
-)
+	)
 
 type mergeStatus struct {
 	isMerging      bool
@@ -176,19 +173,14 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
 		}
 
-		targetSch, err := getUnionSchemaFromConflictsSchema(confSqlSch)
+		sqlTargetSch, err := getUnionSchemaFromConflictsSchema(confSqlSch)
 		if err != nil {
 			return fmt.Errorf("error: failed to get union schema for table '%s': %w", tblName, err)
 		}
 
-		sqlTargetSch, err := sqlutil.FromDoltSchema(sqlCtx.GetCurrentDatabase(), tblName, targetSch)
-		if err != nil {
-			return fmt.Errorf("error: failed to convert dolt schema to sql schema for table '%s': %w", tblName, err)
-		}
+		tw := tabular.NewFixedWidthConflictTableWriter(sqlTargetSch, stdOut, 100)
 
-		tw := tabular.NewFixedWidthConflictTableWriter(sqlTargetSch.Schema, stdOut, 100)
-
-		err = writeConflictResults(sqlCtx, confSqlSch, sqlTargetSch.Schema, rowItr, tw)
+		err = writeConflictResults(sqlCtx, confSqlSch, sqlTargetSch, rowItr, tw)
 		if err != nil {
 			return fmt.Errorf("error: failed to write conflict results for table '%s': %w", tblName, err)
 		}
@@ -197,57 +189,25 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 	return nil
 }
 
-func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, error) {
+func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (sql.Schema, error) {
 	// using array to preserve column order
-	baseColNames, theirColNames, ourColNames := []string{}, []string{}, []string{}
-
+	var baseCols, theirCols, ourCols sql.Schema
 	for _, col := range conflictsSch {
 		conflictColName := col.Name
 		_, shouldIgnore := conflictColsToIgnore[conflictColName]
 		if shouldIgnore {
 			continue
 		}
-
-		if strings.HasPrefix(conflictColName, basePrefix) {
-			colName := conflictColName[len(basePrefix):]
-			baseColNames = append(baseColNames, colName)
-		} else if strings.HasPrefix(conflictColName, theirPrefix) {
-			colName := conflictColName[len(theirPrefix):]
-			theirColNames = append(theirColNames, colName)
-		} else if strings.HasPrefix(conflictColName, ourPrefix) {
-			colName := conflictColName[len(ourPrefix):]
-			ourColNames = append(ourColNames, colName)
+		switch {
+		case strings.HasPrefix(conflictColName, basePrefix):
+			baseCols = append(baseCols, col)
+		case strings.HasPrefix(conflictColName, theirPrefix):
+			theirCols = append(theirCols, col)
+		case strings.HasPrefix(conflictColName, ourPrefix):
+			ourCols = append(ourCols, col)
 		}
 	}
-
-	unionColNames := []string{}
-	for _, colName := range baseColNames {
-		if !isStringInArray(colName, unionColNames) {
-			unionColNames = append(unionColNames, colName)
-		}
-	}
-	for _, colName := range theirColNames {
-		if !isStringInArray(colName, unionColNames) {
-			unionColNames = append(unionColNames, colName)
-		}
-	}
-	for _, colName := range ourColNames {
-		if !isStringInArray(colName, unionColNames) {
-			unionColNames = append(unionColNames, colName)
-		}
-	}
-
-	unionCols := []schema.Column{}
-	for _, colName := range unionColNames {
-		col := schema.NewColumn(colName, 0, types.BlobKind, false)
-		unionCols = append(unionCols, col)
-	}
-	unionColl := schema.NewColCollection(unionCols...)
-	unionSchema, err := schema.SchemaFromCols(unionColl)
-	if err != nil {
-		return nil, fmt.Errorf("error: failed to create union schema: %w", err)
-	}
-	return unionSchema, nil
+	return append(append(baseCols, theirCols...), ourCols...), nil
 }
 
 func printSchemaConflicts(queryist cli.Queryist, sqlCtx *sql.Context, wrCloser io.WriteCloser, table string) error {
