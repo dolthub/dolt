@@ -30,10 +30,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-			"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	)
+)
 
 type mergeStatus struct {
 	isMerging      bool
@@ -200,10 +200,13 @@ func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (sql.Schema, err
 		}
 		switch {
 		case strings.HasPrefix(conflictColName, basePrefix):
+			col.Name = conflictColName[len(basePrefix):]
 			baseCols = append(baseCols, col)
 		case strings.HasPrefix(conflictColName, theirPrefix):
+			col.Name = conflictColName[len(theirPrefix):]
 			theirCols = append(theirCols, col)
 		case strings.HasPrefix(conflictColName, ourPrefix):
+			col.Name = conflictColName[len(ourPrefix):]
 			ourCols = append(ourCols, col)
 		}
 	}
