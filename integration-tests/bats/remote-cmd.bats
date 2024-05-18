@@ -34,7 +34,7 @@ teardown() {
 
     run dolt remote add origin http://otherhost/org/db
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "a remote named 'origin' already exists" ]] || false
+    [[ "$output" =~ "remote already exists" ]] || false
 }
 
 @test "remote-cmd: perform remove" {
@@ -59,12 +59,19 @@ teardown() {
 
 # TODO - expand aws/gcp/oci testing.
 @test "remote-cmd: aws params" {
-    run dolt remote add --aws-region us-west origin aws://customhost/org/db
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "origin aws://customhost/org/db {\"aws-region\":\"us-west\"}" ]]
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+       # Verify that we get the right errors when there is a server running.
+        run dolt remote add --aws-region us-west origin aws://customhost/org/db
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "Stop server and re-run" ]] || false
+    else
+        dolt remote add --aws-region us-west origin aws://customhost/org/db
+        run dolt remote -v
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "origin aws://customhost/org/db {\"aws-region\": \"us-west\"}" ]] || false
 
-
-    run dolt remote add --aws-region us-west other http://customhost/org/db
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "only valid for aws remotes" ]]
+        run dolt remote add --aws-region us-west other http://customhost/org/db
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "only valid for aws remotes" ]] || false
+    fi
 }

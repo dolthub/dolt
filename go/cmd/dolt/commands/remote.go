@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -122,12 +123,11 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	var verr errhand.VerboseError
-
 	switch {
 	case apr.NArg() == 0:
 		verr = printRemotes(sqlCtx, queryist, apr)
 	case apr.Arg(0) == addRemoteId:
-		verr = addRemote(sqlCtx, queryist, apr)
+		verr = addRemote(sqlCtx, queryist, dEnv, apr)
 	case apr.Arg(0) == removeRemoteId, apr.Arg(0) == removeRemoteShortId:
 		verr = removeRemote(sqlCtx, queryist, apr)
 	default:
@@ -150,7 +150,7 @@ func removeRemote(sqlCtx *sql.Context, qureyist cli.Queryist, apr *argparser.Arg
 	return nil
 }
 
-func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
+func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -159,27 +159,50 @@ func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgPar
 
 	remoteUrl := apr.Arg(2)
 
-	/* NM4 - handle this
 	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).AddCause(err).Build()
 	}
-
-
-
 	params, verr := parseRemoteArgs(apr, scheme, absRemoteUrl)
 	if verr != nil {
 		return verr
 	}
-	_ = params
-	*/
 
-	err := callSQLAdd(sqlCtx, queryist, remoteName, remoteUrl)
-
-	if err != nil {
-		return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
+	if len(params) == 0 {
+		err := callSQLAdd(sqlCtx, queryist, remoteName, remoteUrl)
+		if err != nil {
+			return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
+		}
+	} else {
+		// We only support adding remotes with parameters in the local configuration
+		if _, ok := queryist.(*engine.SqlEngine); !ok {
+			return errhand.BuildDError("error: remote add failed. sql-server running while attempting to use advanced remote parameters. Stop server and re-run").Build()
+		}
+		return addRemoteLocaly(remoteName, absRemoteUrl, params, dEnv)
 	}
 	return nil
+}
+
+// addRemoteLocal adds a remote to the local configuration, which should only be used in the event that there
+// are AWS/GCP/OSS parameters. These are not supported in the SQL interface
+func addRemoteLocaly(remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) errhand.VerboseError {
+	rmot := env.NewRemote(remoteName, remoteUrl, params)
+	err := dEnv.AddRemote(rmot)
+
+	switch err {
+	case nil:
+		return nil
+	case env.ErrRemoteAlreadyExists:
+		return errhand.BuildDError("error: a remote named '%s' already exists.", rmot.Name).AddDetails("remove it before running this command again").Build()
+	case env.ErrRemoteNotFound:
+		return errhand.BuildDError("error: unknown remote: '%s' ", rmot.Name).Build()
+	case env.ErrInvalidRemoteURL:
+		return errhand.BuildDError("error: '%s' is not valid.", rmot.Url).AddCause(err).Build()
+	case env.ErrInvalidRemoteName:
+		return errhand.BuildDError("error: invalid remote name: " + rmot.Name).Build()
+	default:
+		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
+	}
 }
 
 func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
@@ -270,7 +293,14 @@ func getJsonAsString(sqlCtx *sql.Context, params interface{}) (string, error) {
 	case string:
 		return p, nil
 	case types.JSONDocument:
-		return p.JSONString()
+		jStr, err := p.JSONString()
+		if err != nil {
+			return "", err
+		}
+		if jStr == "{}" {
+			return "", nil
+		}
+		return jStr, nil
 	default:
 		return "", fmt.Errorf("unexpected interface{} type: %T", p)
 	}
