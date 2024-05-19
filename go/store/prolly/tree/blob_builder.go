@@ -296,6 +296,14 @@ func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, erro
 	return sqltypes.NewLazyJSONDocument(buf), nil
 }
 
+func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, error) {
+	root, err := b.ns.Read(ctx, b.Addr)
+	if err != nil {
+		return nil, err
+	}
+	return NewIndexedJsonDocument(root, b.ns), nil
+}
+
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
