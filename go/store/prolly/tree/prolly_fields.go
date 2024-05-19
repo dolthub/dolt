@@ -249,11 +249,11 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutGeometryAddr(i, h)
 	case val.JSONAddrEnc:
-		buf, err := convJson(v)
+		j, err := convJson(v)
 		if err != nil {
 			return err
 		}
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
+		h, err := SerializeJsonToAddr(ctx, ns, j)
 		if err != nil {
 			return err
 		}
@@ -405,10 +405,10 @@ func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSi
 	return addr, nil
 }
 
-func convJson(v interface{}) (buf []byte, err error) {
+func convJson(v interface{}) (res sql.JSONWrapper, err error) {
 	v, _, err = types.JSON.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return types.MarshallJson(v.(sql.JSONWrapper))
+	return v.(sql.JSONWrapper), nil
 }
