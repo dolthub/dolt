@@ -217,6 +217,9 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 // searchForKey returns a SearchFn for |key|.
 func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
 	return func(nd Node) (idx int) {
+		if nd.keys.IsEmpty() {
+			return 0
+		}
 		n := int(nd.Count())
 		// Define f(-1) == false and f(n) == true.
 		// Invariant: f(i-1) == false, f(j) == true.
@@ -311,7 +314,11 @@ func recursiveFetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node,
 }
 
 func currentCursorItems(cur *cursor) (key, value Item) {
-	key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	if cur.nd.keys.IsEmpty() {
+		key = cur.parent.CurrentKey()
+	} else {
+		key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	}
 	value = cur.nd.values.GetItem(cur.idx, cur.nd.msg)
 	return
 }

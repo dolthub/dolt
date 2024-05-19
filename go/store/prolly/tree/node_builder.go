@@ -31,6 +31,12 @@ type novelNode struct {
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
+
+	var lastKey Item
+	if len(bld.keys) > 0 {
+		lastKey = bld.keys[len(bld.keys)-1]
+	}
+
 	node, err := bld.build()
 	if err != nil {
 		return novelNode{}, err
@@ -39,13 +45,6 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
-	}
-
-	var lastKey Item
-	if node.count > 0 {
-		k := getLastKey(node)
-		lastKey = ns.Pool().Get(uint64(len(k)))
-		copy(lastKey, k)
 	}
 
 	cnt, err := node.TreeCount()
