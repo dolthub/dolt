@@ -406,3 +406,34 @@ SQL
     [[ "$output" =~ "merge from origin" ]] || false
 }
 
+@test "sql-pull: pull two different branches same session" {
+    cd repo2
+    dolt pull
+    
+    dolt sql <<SQL
+    insert into t1 values (1,1), (2,2);
+    call dolt_commit('-Am', 'new rows in t1');
+    call dolt_branch('b1');
+    call dolt_checkout('b1');
+    insert into t1 values (3,3);
+    call dolt_commit('-Am', 'new row on b1');
+SQL
+
+    dolt push origin main
+    dolt checkout b1
+    dolt push origin b1
+    dolt checkout main
+
+    cd ../repo1
+    
+    dolt sql <<SQL
+    set autocommit = 0;
+    call dolt_checkout('main');
+    call dolt_pull('origin', 'main');
+    call dolt_checkout('b1');
+    call dolt_pull('origin', 'b1');
+    call dolt_branch('b2', 'main'); -- implicitly commits
+SQL
+    
+}
+
