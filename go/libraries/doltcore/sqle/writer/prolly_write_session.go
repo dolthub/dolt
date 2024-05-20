@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"sync"
 
@@ -44,6 +45,9 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 
 // GetTableWriter implemented WriteSession.
 func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
+	if t == nil {
+		return nil, fmt.Errorf("expected table to be non-nil: %s.%s", db, tableName)
+	}
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
