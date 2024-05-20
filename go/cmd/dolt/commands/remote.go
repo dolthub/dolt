@@ -144,7 +144,7 @@ func removeRemote(sqlCtx *sql.Context, qureyist cli.Queryist, apr *argparser.Arg
 	}
 	toRemove := strings.TrimSpace(apr.Arg(1))
 
-	err := callSQLRemove(sqlCtx, qureyist, toRemove)
+	err := callSQLRemoteRemove(sqlCtx, qureyist, toRemove)
 	if err != nil {
 		return errhand.BuildDError("error: Unable to remove remote.").AddCause(err).Build()
 	}
@@ -170,7 +170,7 @@ func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, ap
 	}
 
 	if len(params) == 0 {
-		err := callSQLAdd(sqlCtx, queryist, remoteName, remoteUrl)
+		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, remoteUrl)
 		if err != nil {
 			return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
 		}
@@ -225,7 +225,8 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 	return params, nil
 }
 
-func callSQLAdd(sqlCtx *sql.Context, queryist cli.Queryist, remoteName, remoteUrl string) error {
+// callSQLRemoteAdd calls the SQL function `call `dolt_remote('add', remoteName, remoteUrl)`
+func callSQLRemoteAdd(sqlCtx *sql.Context, queryist cli.Queryist, remoteName, remoteUrl string) error {
 	qry, err := dbr.InterpolateForDialect("call dolt_remote('add', ?, ?)", []interface{}{remoteName, remoteUrl}, dialect.MySQL)
 	if err != nil {
 		return err
@@ -235,8 +236,8 @@ func callSQLAdd(sqlCtx *sql.Context, queryist cli.Queryist, remoteName, remoteUr
 	return err
 }
 
-// callSQLRemove calls the SQL function `call `dolt_remote('remove', remoteName)`
-func callSQLRemove(sqlCtxe *sql.Context, queryist cli.Queryist, remoteName string) error {
+// callSQLRemoteRemove calls the SQL function `call `dolt_remote('remove', remoteName)`
+func callSQLRemoteRemove(sqlCtxe *sql.Context, queryist cli.Queryist, remoteName string) error {
 	qry, err := dbr.InterpolateForDialect("call dolt_remote('remove', ?)", []interface{}{remoteName}, dialect.MySQL)
 	if err != nil {
 		return err
@@ -293,15 +294,15 @@ func getJsonAsString(sqlCtx *sql.Context, params interface{}) (string, error) {
 	switch p := params.(type) {
 	case string:
 		return p, nil
-	case types.JSONDocument:
-		jStr, err := p.JSONString()
+	case sql.JSONWrapper:
+		json, err := types.StringifyJSON(p)
 		if err != nil {
 			return "", err
 		}
-		if jStr == "{}" {
+		if json == "{}" {
 			return "", nil
 		}
-		return jStr, nil
+		return json, nil
 	default:
 		return "", fmt.Errorf("unexpected interface{} type: %T", p)
 	}
