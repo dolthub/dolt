@@ -273,7 +273,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
-		table, _, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
+		table, _, err := ws.GetWorkingSet().WorkingRoot().GetTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -300,7 +300,10 @@ func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error)
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
 func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
-	return iw.tableWriter.StatementComplete(ctx)
+	if iw.tableWriter != nil {
+		return iw.tableWriter.StatementComplete(ctx)
+	}
+	return nil
 }
 
 // Close finalizes the delete operation, persisting the result.

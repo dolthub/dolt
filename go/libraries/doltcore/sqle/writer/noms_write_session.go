@@ -66,6 +66,10 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
+func (s *nomsWriteSession) GetWorkingSet() *doltdb.WorkingSet {
+	return s.workingSet
+}
+
 func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, _ *doltdb.Table, table doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()

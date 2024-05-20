@@ -38,6 +38,10 @@ type prollyWriteSession struct {
 
 var _ dsess.WriteSession = &prollyWriteSession{}
 
+func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
+	return s.workingSet
+}
+
 // GetTableWriter implemented WriteSession.
 func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()

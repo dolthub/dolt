@@ -28,6 +28,9 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx *sql.Context, t *doltdb.Table, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error)
 
+	// GetWorkingSet returns the session's current working set.
+	GetWorkingSet() *doltdb.WorkingSet
+
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
 
