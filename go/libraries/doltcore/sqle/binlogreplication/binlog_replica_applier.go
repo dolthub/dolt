@@ -758,7 +758,18 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot
-	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName}, databaseName, setter)
+
+	table, _, err := engine.Analyzer.Catalog.Table(ctx, databaseName, tableName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dTab, err := table.(*sqle.WritableDoltTable).DoltTable.DoltTable(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tableWriter, err := writeSession.GetTableWriter(ctx, dTab, doltdb.TableName{Name: tableName}, databaseName, setter)
 	if err != nil {
 		return nil, nil, err
 	}

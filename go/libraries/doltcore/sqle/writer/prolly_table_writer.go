@@ -16,14 +16,12 @@ package writer
 
 import (
 	"context"
-	"fmt"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -293,31 +291,9 @@ func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx *sql.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	var schState *dsess.WriterState
-	var err error
-	if sess, ok := ctx.Session.(*dsess.DoltSession); ok {
-		dbState, ok, err := sess.LookupDbState(ctx, w.dbName)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("no state for database %s", w.dbName)
-		}
-		schHash, err := w.tbl.GetSchemaHash(ctx)
-
-		schKey := doltdb.DataCacheKey{Hash: schHash}
-		if schState, ok = dbState.SessionCache().GetCachedWriterState(schKey); !ok {
-			schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)
-			if err != nil {
-				return err
-			}
-			dbState.SessionCache().CacheWriterState(schKey, schState)
-		}
-	} else {
-		schState, err = getWriterSchemas(ctx, w.tbl, w.tableName.Name)
-		if err != nil {
-			return err
-		}
+	schState, err := writerSchema(ctx, tbl, w.tableName.Name, w.dbName)
+	if err != nil {
+		return err
 	}
 
 	var newPrimary indexWriter
@@ -399,30 +375,4 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	return w.setter(ctx, w.dbName, ws.WorkingRoot())
-}
-
-func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
-	km = makeOrdinalMapping(from, to.GetPKCols())
-	vm = makeOrdinalMapping(from, to.GetNonPKCols())
-	return
-}
-
-func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, to.StoredSize())
-	for i := range m {
-		col := to.GetByStoredIndex(i)
-		name := col.Name
-		colIdx := from.IndexOfColName(name)
-		m[i] = colIdx
-	}
-	return
-}
-
-// NB: only works for primary-key tables/indexes
-func makeIndexToIndexMapping(from, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
-	for i, col := range to.GetColumns() {
-		m[i] = from.TagToIdx[col.Tag]
-	}
-	return
 }

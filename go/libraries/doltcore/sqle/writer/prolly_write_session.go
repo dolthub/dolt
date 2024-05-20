@@ -15,7 +15,7 @@
 package writer
 
 import (
-	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -23,9 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -41,46 +39,17 @@ type prollyWriteSession struct {
 var _ dsess.WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	if tw, ok := s.tables[table]; ok {
+	if tw, ok := s.tables[tableName]; ok {
 		return tw, nil
 	}
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
+	schState, err := writerSchema(ctx, t, tableName.Name, db)
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
-		return nil, doltdb.ErrTableNotFound
-	}
-
-	var schState *dsess.WriterState
-	if sess, ok := ctx.Session.(*dsess.DoltSession); ok {
-		dbState, ok, err := sess.LookupDbState(ctx, db)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("no state for database %s", db)
-		}
-		schHash, err := t.GetSchemaHash(ctx)
-
-		schKey := doltdb.DataCacheKey{Hash: schHash}
-		if schState, ok = dbState.SessionCache().GetCachedWriterState(schKey); !ok {
-			schState, err = getWriterSchemas(ctx, t, table.Name)
-			if err != nil {
-				return nil, err
-			}
-			dbState.SessionCache().CacheWriterState(schKey, schState)
-		}
-	} else {
-		schState, err = getWriterSchemas(ctx, t, table.Name)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	var pw indexWriter
@@ -106,7 +75,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 	}
 
 	twr := &prollyTableWriter{
-		tableName: table,
+		tableName: tableName,
 		dbName:    db,
 		primary:   pw,
 		secondary: sws,
@@ -118,47 +87,9 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		flusher:   s,
 		setter:    setter,
 	}
-	s.tables[table] = twr
+	s.tables[tableName] = twr
 
 	return twr, nil
-}
-
-func getWriterSchemas(ctx *sql.Context, table *doltdb.Table, tableName string) (*dsess.WriterState, error) {
-	var err error
-	schState := new(dsess.WriterState)
-	schState.DoltSchema, err = table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-	schState.PkSchema, err = sqlutil.FromDoltSchema("", tableName, schState.DoltSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	schState.AutoIncCol = autoIncrementColFromSchema(schState.DoltSchema)
-
-	keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, schState.DoltSchema)
-	schState.PriIndex = dsess.IndexState{KeyMapping: keyMap, ValMapping: valMap}
-
-	definitions := schState.DoltSchema.Indexes().AllIndexes()
-	for _, def := range definitions {
-		keyMap, valMap := ordinalMappingsFromSchema(schState.PkSchema.Schema, def.Schema())
-		pkMap := makeIndexToIndexMapping(def.Schema().GetPKCols(), schState.DoltSchema.GetPKCols())
-		idxState := dsess.IndexState{
-			KeyMapping:    keyMap,
-			ValMapping:    valMap,
-			PkMapping:     pkMap,
-			Name:          def.Name(),
-			Schema:        def.Schema(),
-			Count:         def.Count(),
-			IsFullText:    def.IsFullText(),
-			IsUnique:      def.IsUnique(),
-			IsSpatial:     def.IsSpatial(),
-			PrefixLengths: def.PrefixLengths(),
-		}
-		schState.SecIndexes = append(schState.SecIndexes, idxState)
-	}
-	return schState, nil
 }
 
 // Flush implemented WriteSession.

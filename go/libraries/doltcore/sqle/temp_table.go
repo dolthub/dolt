@@ -126,7 +126,7 @@ func NewTempTable(
 		opts:      opts,
 	}
 
-	tempTable.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: name}, db, setTempTableRoot(tempTable))
+	tempTable.ed, err = writeSession.GetTableWriter(ctx, tbl, doltdb.TableName{Name: name}, db, setTempTableRoot(tempTable))
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 		}
 
 		writeSession := writer.NewWriteSession(newTable.Format(), newWs, ait, t.opts)
-		t.ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName}, t.dbName, setTempTableRoot(t))
+		t.ed, err = writeSession.GetTableWriter(ctx, t.table, doltdb.TableName{Name: t.tableName}, t.dbName, setTempTableRoot(t))
 		if err != nil {
 			return err
 		}

@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -274,7 +273,12 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName}, dbName, dSess.SetWorkingRoot)
+		table, _, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
+		if err != nil {
+			iw.errDuringStatementBegin = err
+			return
+		}
+		tableWriter, err := ws.GetTableWriter(ctx, table, doltdb.TableName{Name: doltdb.IgnoreTableName}, dbName, dSess.SetWorkingRoot)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return

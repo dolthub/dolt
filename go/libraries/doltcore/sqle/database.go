@@ -1417,6 +1417,9 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 	}
 
 	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, err
+	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())

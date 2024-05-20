@@ -21,13 +21,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
-	// indexes is keyed by table schema
+	// indexes is keyed by table schema hash
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	// tables is keyed by table root value
 	tables map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
@@ -40,32 +38,6 @@ type SessionCache struct {
 	writers map[doltdb.DataCacheKey]*WriterState
 
 	mu sync.RWMutex
-}
-
-// WriterState caches expensive objects required for writing rows.
-// All objects in writerState are valid as long as a table schema
-// is the same.
-type WriterState struct {
-	DoltSchema schema.Schema
-	PkSchema   sql.PrimaryKeySchema
-	PriIndex   IndexState
-	SecIndexes []IndexState
-	AutoIncCol schema.Column
-}
-
-// IndexState caches objects required for writing specific indexes.
-// The objects are valid as long as the index's schema is the same.
-type IndexState struct {
-	Name          string
-	Schema        schema.Schema
-	ValMapping    val.OrdinalMapping
-	KeyMapping    val.OrdinalMapping
-	PkMapping     val.OrdinalMapping
-	IsFullText    bool
-	IsUnique      bool
-	IsSpatial     bool
-	PrefixLengths []uint16
-	Count         int
 }
 
 // DatabaseCache stores databases and their initial states, offloading the compute / IO involved in resolving a
@@ -216,9 +188,6 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 func (c *SessionCache) GetCachedWriterState(key doltdb.DataCacheKey) (*WriterState, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.writers == nil {
-		return nil, false
-	}
 	schemaState, ok := c.writers[key]
 	return schemaState, ok
 }

@@ -15,10 +15,10 @@
 package writer
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -200,16 +200,4 @@ func (te *nomsTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	return te.setter(ctx, te.dbName, ws.WorkingRoot())
-}
-
-func autoIncrementColFromSchema(sch schema.Schema) schema.Column {
-	var autoCol schema.Column
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			autoCol = col
-			stop = true
-		}
-		return
-	})
-	return autoCol
 }
