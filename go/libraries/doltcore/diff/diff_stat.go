@@ -103,8 +103,15 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 		return err
 	}
 
-	f := durable.ProllyMapFromIndex(from)
-	t := durable.ProllyMapFromIndex(to)
+	var f, t prolly.Map
+	if from != nil {
+		f = durable.ProllyMapFromIndex(from)
+	}
+	if to != nil {
+		t = durable.ProllyMapFromIndex(to)
+
+	}
+
 	_, fVD := f.Descriptors()
 	_, tVD := t.Descriptors()
 
@@ -112,15 +119,23 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 	if keyless {
 		rpr = reportKeylessChanges
 	} else {
-		fc, err := from.Count()
-		if err != nil {
-			return err
+		var fc uint64
+		if from != nil {
+			fc, err = from.Count()
+			if err != nil {
+				return err
+			}
 		}
+
 		cfc := uint64(len(fromSch.GetAllCols().GetColumns())) * fc
-		tc, err := to.Count()
-		if err != nil {
-			return err
+		var tc uint64
+		if to != nil {
+			tc, err = to.Count()
+			if err != nil {
+				return err
+			}
 		}
+
 		ctc := uint64(len(toSch.GetAllCols().GetColumns())) * tc
 		rpr = reportPkChanges
 		ch <- DiffStatProgress{
