@@ -406,15 +406,15 @@ SQL
     [[ "$output" =~ "merge from origin" ]] || false
 }
 
-@test "sql-pull: pull two different branches same session" {
+@test "sql-pull: pull two different branches in the same session" {
     cd repo2
     dolt pull
     
     dolt sql <<SQL
+    call dolt_checkout('main');
     insert into t1 values (1,1), (2,2);
     call dolt_commit('-Am', 'new rows in t1');
-    call dolt_branch('b1');
-    call dolt_checkout('b1');
+    call dolt_checkout('-b', 'b1');
     insert into t1 values (3,3);
     call dolt_commit('-Am', 'new row on b1');
 SQL
@@ -425,15 +425,79 @@ SQL
     dolt checkout main
 
     cd ../repo1
+    dolt pull origin main
+    dolt checkout b1
+    dolt pull origin b1
+
+    cd ../repo2
+    dolt sql <<SQL
+    call dolt_checkout('main');
+    insert into t1 values (4,4);
+    call dolt_commit('-Am', 'new row in t1');
+    call dolt_checkout('b1');
+    insert into t1 values (5,5);
+    call dolt_commit('-Am', 'new row on b1');
+SQL
+
+    dolt push origin main
+    dolt checkout b1
+    dolt push origin b1
+    dolt checkout main
     
+    cd ../repo1
+
+    dolt sql <<SQL
+    call dolt_checkout('main');
+    insert into t1 values (6,6);
+    call dolt_commit('-Am', 'new row in t1');
+    call dolt_checkout('b1');
+    insert into t1 values (7,7);
+    call dolt_commit('-Am', 'new row on b1');
+SQL
+
+    # Now pull from both branches and make sure we can commit the result in a single tx
     dolt sql <<SQL
     set autocommit = 0;
     call dolt_checkout('main');
     call dolt_pull('origin', 'main');
     call dolt_checkout('b1');
     call dolt_pull('origin', 'b1');
-    call dolt_branch('b2', 'main'); -- implicitly commits
+    commit;
 SQL
-    
 }
+
+@test "sql-pull: pull two different branches same session, already up to date" {
+    cd repo2
+    dolt pull
+    
+    dolt sql <<SQL
+    call dolt_checkout('main');
+    insert into t1 values (1,1), (2,2);
+    call dolt_commit('-Am', 'new rows in t1');
+    call dolt_checkout('-b', 'b1');
+    insert into t1 values (3,3);
+    call dolt_commit('-Am', 'new row on b1');
+SQL
+
+    dolt push origin main
+    dolt checkout b1
+    dolt push origin b1
+    dolt checkout main
+
+    cd ../repo1
+    dolt pull origin main
+    dolt checkout b1
+    dolt pull origin b1
+
+    # Make sure we can commit the result after a no-op pull on two branches
+    dolt sql <<SQL
+    set autocommit=off;
+    call dolt_checkout('main');
+    call dolt_pull('origin', 'main');
+    call dolt_checkout('b1');
+    call dolt_pull('origin', 'b1');
+    commit;
+SQL
+}
+
 
