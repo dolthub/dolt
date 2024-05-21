@@ -68,15 +68,28 @@ func newNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuil
 	return
 }
 
+func newBlobLeafNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuilder[S]) {
+	nb = &nodeBuilder[S]{
+		level:           level,
+		serializer:      serializer,
+		ignoreKeyLength: true,
+	}
+	return
+}
+
 type nodeBuilder[S message.Serializer] struct {
-	keys, values [][]byte
-	size, level  int
-	subtrees     subtreeCounts
-	serializer   S
+	keys, values    [][]byte
+	size, level     int
+	subtrees        subtreeCounts
+	serializer      S
+	ignoreKeyLength bool
 }
 
 func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {
-	sum := nb.size + len(key) + len(value)
+	sum := nb.size + len(value)
+	if !nb.ignoreKeyLength {
+		sum += len(key)
+	}
 	return sum <= int(message.MaxVectorOffset)
 }
 
@@ -88,12 +101,15 @@ func (nb *nodeBuilder[S]) addItems(key, value Item, subtree uint64) {
 	}
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
-	nb.size += len(key) + len(value)
+	if !nb.ignoreKeyLength {
+		nb.size += len(key)
+	}
+	nb.size += len(value)
 	nb.subtrees = append(nb.subtrees, subtree)
 }
 
 func (nb *nodeBuilder[S]) count() int {
-	return len(nb.keys)
+	return len(nb.values)
 }
 
 func (nb *nodeBuilder[S]) build() (node Node, err error) {
