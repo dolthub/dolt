@@ -78,7 +78,6 @@ type SqlEngineConfig struct {
 	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
-	BinlogPrimaryController binlogreplication.BinlogPrimaryController
 	EventSchedulerStatus    eventscheduler.SchedulerStatus
 }
 
@@ -244,10 +243,8 @@ func NewSqlEngine(
 		}
 	}
 
-	if config.BinlogPrimaryController != nil {
-		if err := configureBinlogPrimaryController(config, engine); err != nil {
-			return nil, err
-		}
+	if err := configureBinlogPrimaryController(engine); err != nil {
+		return nil, err
 	}
 
 	return sqlEngine, nil
@@ -343,9 +340,15 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	return nil
 }
 
-// configureBinlogPrimaryController configures the |engine| to use the binlog primary controller from |config|.
-func configureBinlogPrimaryController(config *SqlEngineConfig, engine *gms.Engine) error {
-	engine.Analyzer.Catalog.BinlogPrimaryController = config.BinlogPrimaryController
+// configureBinlogPrimaryController configures the |engine| to use the default Dolt binlog primary controller, as well
+// as enabling the binlog producer if @@log_bin has been set to 1.
+//
+// NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
+// binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
+// performance hit that binary logging adds.
+func configureBinlogPrimaryController(engine *gms.Engine) error {
+	primaryController := dblr.NewDoltBinlogPrimaryController()
+	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
 
 	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
 	if !ok {
@@ -357,7 +360,9 @@ func configureBinlogPrimaryController(config *SqlEngineConfig, engine *gms.Engin
 	}
 	if logBin == 1 {
 		logrus.Debug("Enabling binary logging")
-		dblr.BinlogEnabled = true
+		binlogProducer := dblr.NewBinlogProducer(primaryController.StreamerManager())
+		doltdb.RegisterDatabaseUpdateListener(binlogProducer)
+		primaryController.BinlogProducer = binlogProducer
 	}
 
 	return nil

@@ -1389,7 +1389,7 @@ type DatabaseUpdateListener interface {
 	// the database being updated, and |before| and |after| are the previous and new RootValues for the working root.
 	// If callers encounter any errors while processing a root update notification, they can return an error, which
 	// will be logged.
-	WorkingRootUpdated(ctx *sql.Context, databaseName string, before RootValue, after RootValue) error
+	WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before RootValue, after RootValue) error
 
 	// DatabaseCreated is called when a new database,  named |databaseName|, has been created.
 	DatabaseCreated(ctx *sql.Context, databaseName string) error
@@ -1487,14 +1487,16 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 // encountered. If any listeners are registered for working root updates, then they will be notified as well.
 func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
 	var prevWorkingSet *WorkingSet
-	// TODO: support making the binlog branch configurable
-	if workingSet.Name == "heads/"+"main" {
-		if wsDs.HasHead() {
-			prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
-			if err != nil {
-				return nil, err
-			}
+	if wsDs.HasHead() {
+		prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+		if err != nil {
+			return nil, err
 		}
+	}
+
+	var branchName string
+	if strings.HasPrefix(workingSet.Name, "heads/") {
+		branchName = workingSet.Name[len("heads/"):]
 	}
 
 	wsSpec, err = workingSet.writeValues(ctx, ddb, meta)
@@ -1502,7 +1504,7 @@ func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workin
 		return nil, err
 	}
 
-	if prevWorkingSet != nil {
+	if prevWorkingSet != nil && branchName != "" {
 		for _, listener := range DatabaseUpdateListeners {
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {

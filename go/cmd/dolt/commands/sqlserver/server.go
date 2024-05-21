@@ -249,7 +249,6 @@ func ConfigureServices(
 				SystemVariables:         serverConfig.SystemVars(),
 				ClusterController:       clusterController,
 				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
-				BinlogPrimaryController: binlogreplication.DoltBinlogPrimaryController,
 			}
 			return nil
 		},
