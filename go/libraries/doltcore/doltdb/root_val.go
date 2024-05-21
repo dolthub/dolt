@@ -100,7 +100,7 @@ type RootValue interface {
 	RenameTable(ctx context.Context, oldName string, newName string) (RootValue, error)
 	// ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 	// name was found.
-	ResolveTableName(ctx context.Context, tName string) (string, bool, error)
+	ResolveTableName(ctx context.Context, tName TableName) (string, bool, error)
 	// SetCollation sets the given database collation and returns a new root.
 	SetCollation(ctx context.Context, collation schema.Collation) (RootValue, error)
 	// SetFeatureVersion sets the feature version and returns a new root.
@@ -472,33 +472,33 @@ func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 // name was found.
-func (root *rootValue) ResolveTableName(ctx context.Context, tName string) (string, bool, error) {
-	// TODO: schema name
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) ResolveTableName(ctx context.Context, tName TableName) (string, bool, error) {
+	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
 		return "", false, err
 	}
 
-	a, err := tableMap.Get(ctx, tName)
+	a, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return "", false, err
 	}
 	if !a.IsEmpty() {
-		return tName, true, nil
+		return tName.Name, true, nil
 	}
 
 	found := false
-	lwrName := strings.ToLower(tName)
+	lwrName := strings.ToLower(tName.Name)
+	resolvedName := tName.Name
 	err = tmIterAll(ctx, tableMap, func(name string, addr hash.Hash) {
 		if found == false && lwrName == strings.ToLower(name) {
-			tName = name
+			resolvedName = name
 			found = true
 		}
 	})
 	if err != nil {
 		return "", false, nil
 	}
-	return tName, found, nil
+	return resolvedName, found, nil
 }
 
 // GetTable will retrieve a table by its case-sensitive name.
@@ -528,8 +528,9 @@ func GetTable(ctx context.Context, root RootValue, addr hash.Hash) (*Table, bool
 }
 
 // GetTableInsensitive will retrieve a table by its case-insensitive name.
+// TODO: schema
 func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Table, string, bool, error) {
-	resolvedName, ok, err := root.ResolveTableName(ctx, tName)
+	resolvedName, ok, err := root.ResolveTableName(ctx, TableName{Name: tName})
 	if err != nil {
 		return nil, "", false, err
 	}

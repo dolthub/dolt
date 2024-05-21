@@ -2565,17 +2565,14 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
-
+	
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+	tbl, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return sql.ErrTableNotFound.New(t.tableName)
 	}
 
 	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
