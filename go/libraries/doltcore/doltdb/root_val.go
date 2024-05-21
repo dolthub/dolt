@@ -528,16 +528,15 @@ func GetTable(ctx context.Context, root RootValue, addr hash.Hash) (*Table, bool
 }
 
 // GetTableInsensitive will retrieve a table by its case-insensitive name.
-// TODO: schema
-func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Table, string, bool, error) {
-	resolvedName, ok, err := root.ResolveTableName(ctx, TableName{Name: tName})
+func GetTableInsensitive(ctx context.Context, root RootValue, tName TableName) (*Table, string, bool, error) {
+	resolvedName, ok, err := root.ResolveTableName(ctx, tName)
 	if err != nil {
 		return nil, "", false, err
 	}
 	if !ok {
 		return nil, "", false, nil
 	}
-	tbl, ok, err := root.GetTable(ctx, TableName{Name: resolvedName})
+	tbl, ok, err := root.GetTable(ctx, TableName{Name: resolvedName, Schema: tName.Schema})
 	if err != nil {
 		return nil, "", false, err
 	}

@@ -2497,7 +2497,9 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, sqlFk.ParentTable)
+		// TODO: the parent table can be in another schema
+		
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2667,7 +2669,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
-		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}

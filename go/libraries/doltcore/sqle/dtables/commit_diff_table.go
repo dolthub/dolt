@@ -59,7 +59,8 @@ var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
-	table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
+	// TODO: schema
+	table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -191,12 +192,12 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		return nil, err
 	}
 
-	toTable, _, _, err := doltdb.GetTableInsensitive(ctx, toRoot, dt.name)
+	toTable, _, _, err := doltdb.GetTableInsensitive(ctx, toRoot, doltdb.TableName{Name: dt.name})
 	if err != nil {
 		return nil, err
 	}
 
-	fromTable, _, _, err := doltdb.GetTableInsensitive(ctx, fromRoot, dt.name)
+	fromTable, _, _, err := doltdb.GetTableInsensitive(ctx, fromRoot, doltdb.TableName{Name: dt.name})
 	if err != nil {
 		return nil, err
 	}
