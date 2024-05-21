@@ -20,10 +20,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -34,7 +35,7 @@ type commandLineServerConfig struct {
 	password                string
 	timeout                 uint64
 	readOnly                bool
-	logLevel                LogLevel
+	logLevel                servercfg.LogLevel
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
@@ -58,39 +59,39 @@ type commandLineServerConfig struct {
 	valuesSet               map[string]struct{}
 }
 
-var _ ServerConfig = (*commandLineServerConfig)(nil)
+var _ servercfg.ServerConfig = (*commandLineServerConfig)(nil)
 
-// DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
-func DefaultServerConfig() *commandLineServerConfig {
+// DefaultCommandLineServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
+func DefaultCommandLineServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:                    defaultHost,
-		port:                    defaultPort,
-		password:                defaultPass,
-		timeout:                 defaultTimeout,
-		readOnly:                defaultReadOnly,
-		logLevel:                defaultLogLevel,
-		autoCommit:              defaultAutoCommit,
-		maxConnections:          defaultMaxConnections,
-		queryParallelism:        defaultQueryParallelism,
-		persistenceBehavior:     defaultPersistenceBahavior,
-		dataDir:                 defaultDataDir,
-		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
-		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
-		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
-		allowCleartextPasswords: defaultAllowCleartextPasswords,
-		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
+		host:                    servercfg.DefaultHost,
+		port:                    servercfg.DefaultPort,
+		password:                servercfg.DefaultPass,
+		timeout:                 servercfg.DefaultTimeout,
+		readOnly:                servercfg.DefaultReadOnly,
+		logLevel:                servercfg.DefaultLogLevel,
+		autoCommit:              servercfg.DefaultAutoCommit,
+		maxConnections:          servercfg.DefaultMaxConnections,
+		queryParallelism:        servercfg.DefaultQueryParallelism,
+		persistenceBehavior:     servercfg.DefaultPersistenceBahavior,
+		dataDir:                 servercfg.DefaultDataDir,
+		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
+		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
+		branchControlFilePath:   filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultBranchControlFilePath),
+		allowCleartextPasswords: servercfg.DefaultAllowCleartextPasswords,
+		maxLoggedQueryLen:       servercfg.DefaultMaxLoggedQueryLen,
 		valuesSet:               map[string]struct{}{},
 	}
 }
 
 // NewCommandLineConfig returns server config based on the credentials and command line arguments given.
-func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
-	config := DefaultServerConfig()
+func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (servercfg.ServerConfig, error) {
+	config := DefaultCommandLineServerConfig()
 
 	if sock, ok := apr.GetValue(socketFlag); ok {
 		// defined without value gets default
 		if sock == "" {
-			sock = defaultUnixSocketFilePath
+			sock = servercfg.DefaultUnixSocketFilePath
 		}
 		config.WithSocket(sock)
 	}
@@ -144,7 +145,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	}
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		config.withLogLevel(LogLevel(strings.ToLower(logLevel)))
+		config.withLogLevel(servercfg.LogLevel(strings.ToLower(logLevel)))
 	}
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
@@ -215,7 +216,7 @@ func (cfg *commandLineServerConfig) ReadOnly() bool {
 }
 
 // LogLevel returns the level of logging that the server will use.
-func (cfg *commandLineServerConfig) LogLevel() LogLevel {
+func (cfg *commandLineServerConfig) LogLevel() servercfg.LogLevel {
 	return cfg.logLevel
 }
 
@@ -287,11 +288,11 @@ func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
 }
 
 func (cfg *commandLineServerConfig) MetricsHost() string {
-	return defaultMetricsHost
+	return servercfg.DefaultMetricsHost
 }
 
 func (cfg *commandLineServerConfig) MetricsPort() int {
-	return defaultMetricsPort
+	return servercfg.DefaultMetricsPort
 }
 
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
@@ -302,7 +303,7 @@ func (cfg *commandLineServerConfig) RemotesapiReadOnly() *bool {
 	return cfg.remotesapiReadOnly
 }
 
-func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
+func (cfg *commandLineServerConfig) ClusterConfig() servercfg.ClusterConfig {
 	return nil
 }
 
@@ -318,15 +319,15 @@ func (cfg *commandLineServerConfig) BranchControlFilePath() string {
 }
 
 // UserVars is an array containing user specific session variables.
-func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
+func (cfg *commandLineServerConfig) UserVars() []servercfg.UserSessionVars {
 	return nil
 }
 
-func (cfg *commandLineServerConfig) SystemVars() engine.SystemVariables {
+func (cfg *commandLineServerConfig) SystemVars() map[string]interface{} {
 	return nil
 }
 
-func (cfg *commandLineServerConfig) JwksConfig() []engine.JwksConfig {
+func (cfg *commandLineServerConfig) JwksConfig() []servercfg.JwksConfig {
 	return nil
 }
 
@@ -376,8 +377,8 @@ func (cfg *commandLineServerConfig) withPassword(password string) *commandLineSe
 // withTimeout updates the timeout and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withTimeout(timeout uint64) *commandLineServerConfig {
 	cfg.timeout = timeout
-	cfg.valuesSet[readTimeoutKey] = struct{}{}
-	cfg.valuesSet[writeTimeoutKey] = struct{}{}
+	cfg.valuesSet[servercfg.ReadTimeoutKey] = struct{}{}
+	cfg.valuesSet[servercfg.WriteTimeoutKey] = struct{}{}
 	return cfg
 }
 
@@ -388,7 +389,7 @@ func (cfg *commandLineServerConfig) withReadOnly(readonly bool) *commandLineServ
 }
 
 // withLogLevel updates the log level and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withLogLevel(loglevel LogLevel) *commandLineServerConfig {
+func (cfg *commandLineServerConfig) withLogLevel(loglevel servercfg.LogLevel) *commandLineServerConfig {
 	cfg.logLevel = loglevel
 	return cfg
 }
@@ -397,7 +398,7 @@ func (cfg *commandLineServerConfig) withLogLevel(loglevel LogLevel) *commandLine
 // `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
 	cfg.maxConnections = maxConnections
-	cfg.valuesSet[maxConnectionsKey] = struct{}{}
+	cfg.valuesSet[servercfg.MaxConnectionsKey] = struct{}{}
 	return cfg
 }
 
@@ -459,7 +460,7 @@ func (cfg *commandLineServerConfig) WithRemotesapiReadOnly(readonly *bool) *comm
 	return cfg
 }
 
-func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {
+func (cfg *commandLineServerConfig) GoldenMysqlConnectionString() string {
 	return cfg.goldenMysqlConn
 }
 
@@ -481,11 +482,33 @@ func (cfg *commandLineServerConfig) EventSchedulerStatus() string {
 
 func (cfg *commandLineServerConfig) withEventScheduler(es string) *commandLineServerConfig {
 	cfg.eventSchedulerStatus = es
-	cfg.valuesSet[eventSchedulerKey] = struct{}{}
+	cfg.valuesSet[servercfg.EventSchedulerKey] = struct{}{}
 	return cfg
 }
 
 func (cfg *commandLineServerConfig) ValueSet(value string) bool {
 	_, ok := cfg.valuesSet[value]
 	return ok
+}
+
+// DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
+// and command line options.
+type DoltServerConfigReader struct{}
+
+// ServerConfigReader is an interface for reading a ServerConfig from a file or command line arguments.
+type ServerConfigReader interface {
+	// ReadConfigFile reads a config file and returns a ServerConfig for it
+	ReadConfigFile(cwdFS filesys.Filesys, file string) (servercfg.ServerConfig, error)
+	// ReadConfigArgs reads command line arguments and returns a ServerConfig for them
+	ReadConfigArgs(args *argparser.ArgParseResults) (servercfg.ServerConfig, error)
+}
+
+var _ ServerConfigReader = DoltServerConfigReader{}
+
+func (d DoltServerConfigReader) ReadConfigFile(cwdFS filesys.Filesys, file string) (servercfg.ServerConfig, error) {
+	return servercfg.YamlConfigFromFile(cwdFS, file)
+}
+
+func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults) (servercfg.ServerConfig, error) {
+	return NewCommandLineConfig(nil, args)
 }
