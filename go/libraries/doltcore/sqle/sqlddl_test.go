@@ -357,7 +357,7 @@ func TestDropTable(t *testing.T) {
 
 			require.NotNil(t, updatedRoot)
 			for _, tableName := range tt.tableNames {
-				has, err := updatedRoot.HasTable(ctx, tableName)
+				has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tableName})
 				assert.NoError(t, err)
 				assert.False(t, has)
 			}
@@ -769,7 +769,7 @@ func TestRenameTableStatements(t *testing.T) {
 			}
 			require.NotNil(t, updatedRoot)
 
-			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
+			has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.oldTableName})
 			require.NoError(t, err)
 			assert.False(t, has)
 

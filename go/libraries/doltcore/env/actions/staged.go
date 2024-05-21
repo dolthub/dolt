@@ -16,6 +16,8 @@ package actions
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -144,8 +146,8 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working doltdb.Root
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.
-func ValidateTables(ctx context.Context, tbls []string, roots ...doltdb.RootValue) error {
-	var missing []string
+func ValidateTables(ctx context.Context, tbls []doltdb.TableName, roots ...doltdb.RootValue) error {
+	var missing []doltdb.TableName
 	for _, tbl := range tbls {
 		found := false
 		for _, root := range roots {
@@ -166,5 +168,17 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...doltdb.RootValu
 		return nil
 	}
 
-	return NewTblNotExistError(missing)
+	return NewTblNotExistError(summarizeTableNames(missing))
+}
+
+func summarizeTableNames(names []doltdb.TableName) []string {
+	namesStrs := make([]string, len(names))
+	for i, name := range names {
+		if name.Schema != "" {
+			namesStrs[i] = fmt.Sprintf("%s.%s", name.Schema, name.Name)
+		} else {
+			namesStrs[i] = fmt.Sprintf("%s", name.Name)
+		}
+	}
+	return namesStrs
 }

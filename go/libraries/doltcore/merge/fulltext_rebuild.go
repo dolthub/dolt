@@ -363,7 +363,7 @@ func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot
 func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, root doltdb.RootValue) (bool, error) {
 	// If `tbl` is nil, then we simply check if the table exists in the root
 	if tbl == nil {
-		return root.HasTable(ctx, tblName)
+		return root.HasTable(ctx, doltdb.TableName{Name: tblName})
 	}
 	fromTbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {

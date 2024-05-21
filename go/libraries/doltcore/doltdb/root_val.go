@@ -82,7 +82,7 @@ type RootValue interface {
 	// return it if no further merge work needs to be done. This is primarily used by Doltgres.
 	HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name.
-	HasTable(ctx context.Context, tName string) (bool, error)
+	HasTable(ctx context.Context, tName TableName) (bool, error)
 	// IterTables calls the callback function cb on each table in this RootValue.
 	IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error
 	// NodeStore returns this root's NodeStore.
@@ -285,12 +285,12 @@ func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, 
 	return root, nil
 }
 
-func (root *rootValue) HasTable(ctx context.Context, tName string) (bool, error) {
-	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, DefaultSchemaName)
+func (root *rootValue) HasTable(ctx context.Context, tName TableName) (bool, error) {
+	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, tName.Schema)
 	if err != nil {
 		return false, err
 	}
-	a, err := tableMap.Get(ctx, tName)
+	a, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return false, err
 	}

@@ -145,11 +145,11 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
+		fromTblExists, err := fromRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
+		toTblExists, err := toRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}

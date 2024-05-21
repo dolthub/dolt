@@ -295,7 +295,7 @@ func MergeRoots(
 			continue
 		}
 
-		newRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
+		newRootHasTable, err := mergedRoot.HasTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}

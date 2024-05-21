@@ -165,7 +165,7 @@ func (m importOptions) FloatThreshold() float64 {
 
 func (m importOptions) checkOverwrite(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	if !m.force && m.operation == mvdata.CreateOp {
-		return root.HasTable(ctx, m.destTableName)
+		return root.HasTable(ctx, doltdb.TableName{Name: m.destTableName})
 	}
 	return false, nil
 }

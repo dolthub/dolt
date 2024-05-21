@@ -126,7 +126,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest doltdb
 func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []string) error {
 	notExist := []string{}
 	for _, tbl := range unknown {
-		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
+		if has, err := currRoot.HasTable(ctx, doltdb.TableName{Name: tbl}); err != nil {
 			return err
 		} else if !has {
 			notExist = append(notExist, tbl)

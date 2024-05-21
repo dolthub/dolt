@@ -184,7 +184,7 @@ func TestCreateTable(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
-			has, err := working.HasTable(context.Background(), tableName)
+			has, err := working.HasTable(context.Background(), doltdb.TableName{Name: tableName})
 			assert.NoError(t, err)
 			assert.False(t, has, "table exists before creating it")
 
@@ -199,11 +199,11 @@ func TestCreateTable(t *testing.T) {
 			working, err = dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			if test.expectedRes == 0 {
-				has, err := working.HasTable(context.Background(), tableName)
+				has, err := working.HasTable(context.Background(), doltdb.TableName{Name: tableName})
 				assert.NoError(t, err)
 				assert.True(t, has, "table doesn't exist after creating it")
 			} else {
-				has, err := working.HasTable(context.Background(), tableName)
+				has, err := working.HasTable(context.Background(), doltdb.TableName{Name: tableName})
 				assert.NoError(t, err)
 				assert.False(t, has, "table shouldn't exist after error")
 			}

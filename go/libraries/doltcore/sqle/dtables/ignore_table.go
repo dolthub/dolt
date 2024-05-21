@@ -206,7 +206,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.IgnoreTableName)
+	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
 
 	if err != nil {
 		iw.errDuringStatementBegin = err

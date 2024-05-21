@@ -145,7 +145,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			if doltdb.IsFullTextTable(tblName) {
 				continue
 			}
-			ok, err := root.HasTable(ctx, tblName)
+			ok, err := root.HasTable(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return errhand.BuildDError("unable to get table '%s'", tblName).AddCause(err).Build()
 			}

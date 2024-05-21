@@ -215,7 +215,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.DocTableName)
+	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.DocTableName})
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
