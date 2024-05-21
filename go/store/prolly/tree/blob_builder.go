@@ -87,6 +87,8 @@ func (b *BlobBuilder) Reset() {
 	b.buf = nil
 	b.vals = nil
 	b.subtrees = nil
+	b.lastN = Node{}
+	b.levelCap = 0
 	for i := range b.keys {
 		b.keys[i] = zeroKey
 	}
