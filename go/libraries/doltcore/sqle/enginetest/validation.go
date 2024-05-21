@@ -120,7 +120,7 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 			if err != nil {
 				return true, err
 			}
-			idx, err := set.GetIndex(ctx, sch, def.Name())
+			idx, err := set.GetIndex(ctx, sch, nil, def.Name())
 			if err != nil {
 				return true, err
 			}
@@ -153,13 +153,14 @@ func validateIndexConsistency(
 // index consistency issues.
 func printIndexContents(ctx context.Context, prollyMap prolly.Map) {
 	fmt.Printf("Secondary index contents:\n")
+	kd := prollyMap.KeyDesc()
 	iterAll, _ := prollyMap.IterAll(ctx)
 	for {
 		k, _, err := iterAll.Next(ctx)
 		if err == io.EOF {
 			break
 		}
-		fmt.Printf("  - k: %v \n", k)
+		fmt.Printf("  - k: %v \n", kd.Format(k))
 	}
 }
 

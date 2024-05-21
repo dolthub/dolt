@@ -565,19 +565,19 @@ func migrateIndexSet(
 		return nil, err
 	}
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := oldParentSet.GetIndex(ctx, sch, def.Name())
+		idx, err := oldParentSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}
 		oldParent := durable.NomsMapFromIndex(idx)
 
-		idx, err = oldSet.GetIndex(ctx, sch, def.Name())
+		idx, err = oldSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}
 		old := durable.NomsMapFromIndex(idx)
 
-		idx, err = newParentSet.GetIndex(ctx, sch, def.Name())
+		idx, err = newParentSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}

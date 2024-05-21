@@ -117,7 +117,7 @@ type rootValue struct {
 	ns   tree.NodeStore
 	st   rootValueStorage
 	fkc  *ForeignKeyCollection // cache the first load
-	hash hash.Hash             // cache first load
+	hash hash.Hash             // cache the first load
 }
 
 var _ RootValue = (*rootValue)(nil)

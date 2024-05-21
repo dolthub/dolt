@@ -31,13 +31,13 @@ import (
 )
 
 func TestDoltSessionInit(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider())
+	dsess := DefaultSession(emptyDatabaseProvider(), nil)
 	conf := config.NewMapConfig(make(map[string]string))
 	assert.Equal(t, conf, dsess.globalsConf)
 }
 
 func TestNewPersistedSystemVariables(t *testing.T) {
-	dsess := DefaultSession(emptyDatabaseProvider())
+	dsess := DefaultSession(emptyDatabaseProvider(), nil)
 	conf := config.NewMapConfig(map[string]string{"max_connections": "1000"})
 	dsess = dsess.WithGlobals(conf)
 
