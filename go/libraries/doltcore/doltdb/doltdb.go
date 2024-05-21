@@ -72,12 +72,11 @@ var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
-// Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
-// errors in many cases.
 type DoltDB struct {
-	db  hooksDatabase
-	vrw types.ValueReadWriter
-	ns  tree.NodeStore
+	db           hooksDatabase
+	vrw          types.ValueReadWriter
+	ns           tree.NodeStore
+	databaseName string
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -86,7 +85,7 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns}
 }
 
 // HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
@@ -124,11 +123,14 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
+	// Pull the database name out of the URL string
+	name := findParentDirectory(urlStr, ".dolt")
+
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map
@@ -316,6 +318,26 @@ func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref strin
 	}
 
 	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
+}
+
+// findParentDirectory searches the components of the specified |path| looking for a directory
+// named |targetDir| and returns the name of the parent directory for |targetDir|. The search
+// starts from the deepest component of |path|, so if |path| contains |targetDir| multiple times,
+// the parent directory of the last occurrence in |path| is returned.
+func findParentDirectory(path string, targetDir string) string {
+	base := filepath.Base(path)
+	dir := filepath.Dir(path)
+
+	switch base {
+	case "":
+		return base
+
+	case targetDir:
+		return filepath.Base(dir)
+
+	default:
+		return findParentDirectory(dir, targetDir)
+	}
 }
 
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
@@ -1509,8 +1531,8 @@ func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workin
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {
 				err := listener.WorkingRootUpdated(sqlCtx,
-					//ddb.databaseName,
-					sqlCtx.GetCurrentDatabase(),
+					ddb.databaseName,
+					branchName,
 					prevWorkingSet.workingRoot,
 					workingSet.WorkingRoot())
 				if err != nil {
