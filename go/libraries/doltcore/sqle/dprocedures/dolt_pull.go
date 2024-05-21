@@ -204,11 +204,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, "", err
 			}
-
-			err = sess.SetWorkingSet(ctx, dbName, ws)
-			if err != nil {
-				return conflicts, fastForward, "", err
-			}
 		}
 		if !rsSeen {
 			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpec.GetRemRefToLocal())
