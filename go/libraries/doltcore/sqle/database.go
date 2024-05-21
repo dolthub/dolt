@@ -1115,33 +1115,14 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	}
 	root := ws.WorkingRoot()
 
-	// TODO: enforce that schema exists (redundant with other checks)
 	if UseSearchPath && db.schemaName == "" {
-		schemas, err := searchPath(ctx)
+		schemaName, err = firstExistingSchemaOnSearchPath(ctx, root)
 		if err != nil {
 			return err
 		}
-
-		for _, s := range schemas {
-			var exists bool
-			schemaName, exists, err = resolveDatabaseSchema(ctx, root, s)
-			if err != nil {
-				return err
-			}
-			
-			// The first element of the search path becomes the effective db for the rest of this operation
-			if exists {
-				db.schemaName = schemaName
-				break
-			}	
-		}
-		
-		// No existing schema found in the search_path and none specified in the statement means we can't create the table
-		if db.schemaName == "" {
-			return sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
-		}
+		db.schemaName = schemaName
 	}
-	
+
 	// TODO: schema name
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
@@ -1178,6 +1159,34 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
 }
 
+// firstExistingSchemaOnSearchPath returns the first schema in the search path that exists in the database.
+func firstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (string, error) {
+	schemas, err := searchPath(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	schemaName := ""
+	for _, s := range schemas {
+		var exists bool
+		schemaName, exists, err = resolveDatabaseSchema(ctx, root, s)
+		if err != nil {
+			return "", err
+		}
+		
+		if exists {
+			break
+		}
+	}
+
+	// No existing schema found in the search_path and none specified in the statement means we can't create the table
+	if schemaName == "" {
+		return "", sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
+	}
+	
+	return schemaName, nil
+}
+
 func hasDatabaseSchema(ctx context.Context, root doltdb.RootValue, schemaName string) (bool, error) {
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
@@ -1200,6 +1209,14 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 		return err
 	}
 	root := ws.WorkingRoot()
+
+	if UseSearchPath && db.schemaName == "" {
+		schemaName, err = firstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return err
+		}
+		db.schemaName = schemaName
+	}
 
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
