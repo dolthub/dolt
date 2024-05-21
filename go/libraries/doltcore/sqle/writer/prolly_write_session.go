@@ -15,7 +15,6 @@
 package writer
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -44,15 +43,24 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 }
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, t *doltdb.Table, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
-	if t == nil {
-		return nil, fmt.Errorf("expected table to be non-nil: %s.%s", db, tableName)
-	}
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
 	if tw, ok := s.tables[tableName]; ok {
 		return tw, nil
+	}
+
+	// XXX: certain table editors rely on this embedded working set. See
+	// fullTextRewriteEditor for one example, where the |ctx| maintains
+	// the old version of the data while fulltext indexes are rebuilt
+	// using this hidden empty workingSet.
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, doltdb.ErrTableNotFound
 	}
 
 	schState, err := writerSchema(ctx, t, tableName.Name, db)
