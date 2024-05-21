@@ -264,12 +264,12 @@ func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
 	bb := &blobBuilderPool
-	return nodeStoreValidator{ns: ns, bb: bb}
+	return nodeStoreValidator{ns: ns, bbp: bb}
 }
 
 type nodeStoreValidator struct {
-	ns NodeStore
-	bb *sync.Pool
+	ns  NodeStore
+	bbp *sync.Pool
 }
 
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
@@ -320,11 +320,16 @@ func (v nodeStoreValidator) Pool() pool.BuffPool {
 }
 
 func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
-	bb := v.bb.Get().(*BlobBuilder)
+	bb := v.bbp.Get().(*BlobBuilder)
 	if bb.ns == nil {
 		bb.SetNodeStore(v)
 	}
 	return bb
+}
+
+// PutBlobBuilder implements NodeStore.
+func (v nodeStoreValidator) PutBlobBuilder(bb *BlobBuilder) {
+	v.bbp.Put(bb)
 }
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {
