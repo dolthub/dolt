@@ -351,7 +351,7 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 
 	bb := ns.BlobBuilder()
 	defer ns.PutBlobBuilder(bb)
-	
+
 	bb.Init(int(value.Len()))
 	_, addr, err := bb.Chunk(ctx, bytes.NewReader(buf))
 	if err != nil {
