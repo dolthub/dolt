@@ -698,6 +698,27 @@ type TableName struct {
 	Schema string
 }
 
+func (tn TableName) ToLower() TableName {
+	return TableName{
+		Name:   strings.ToLower(tn.Name),
+		Schema: strings.ToLower(tn.Schema),
+	}
+}
+
+func (tn TableName) Less(o TableName) bool {
+	if tn.Schema < o.Schema {
+		return true
+	}
+	return tn.Name < o.Name
+}
+
+func (tn TableName) String() string {
+	if tn.Schema == "" {
+		return tn.Name
+	}
+	return tn.Schema + "." + tn.Name
+}
+
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
 // primary (unnamed) table store in a root.
 var DefaultSchemaName = ""

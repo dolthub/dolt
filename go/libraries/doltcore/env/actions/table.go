@@ -26,7 +26,7 @@ import (
 
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
-func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
+func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
 	tblSet := set.NewStrSet(tbls)
 
 	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
