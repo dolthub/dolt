@@ -144,17 +144,22 @@ func NewSqlEngine(
 	sqlEngine := &SqlEngine{}
 
 	// Create the engine
-	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
-	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
+	if err := configureBinlogPrimaryController(engine); err != nil {
+		return nil, err
+	}
+
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
 
-		// Standbys are read only, primarys are not.
+		// Standbys are read only, primaries are not.
 		// We only change this here if the server was not forced read
 		// only by its startup config.
 		if !config.IsReadOnly {
@@ -241,10 +246,6 @@ func NewSqlEngine(
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	if err := configureBinlogPrimaryController(engine); err != nil {
-		return nil, err
 	}
 
 	return sqlEngine, nil
