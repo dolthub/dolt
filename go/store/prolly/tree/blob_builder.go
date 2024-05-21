@@ -84,6 +84,10 @@ func (b *BlobBuilder) SetNodeStore(ns NodeStore) {
 func (b *BlobBuilder) Reset() {
 	b.wr = nil
 	b.topLevel = 0
+	b.keys = nil
+	b.buf = nil
+	b.vals = nil
+	b.subtrees = nil
 }
 
 // Init calculates tree dimensions for a given blob.
