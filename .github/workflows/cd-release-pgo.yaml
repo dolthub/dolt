@@ -66,17 +66,17 @@ jobs:
       - name: Set minver TBD to version
         run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
         env:
-          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
+          FILE: ${{ format('{0}/go/libraries/doltcore/servercfg/yaml_config.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - name: update minver_validation.txt
         working-directory: ./go
         run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
-          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
+          FILE: ${{ format('{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt', github.workspace) }}
       - uses: EndBug/add-and-commit@v9.1.4
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('["{0}/go/cmd/dolt/doltversion/version.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
+          add: ${{ format('["{0}/go/cmd/dolt/doltversion/version.go", "{0}/go/libraries/doltcore/servercfg/yaml_config.go", "{0}/go/libraries/doltcore/servercfg/testdata/minver_validation.txt"]', github.workspace) }}
           cwd: "."
           pull: "--ff"
       - name: Build PGO Binaries

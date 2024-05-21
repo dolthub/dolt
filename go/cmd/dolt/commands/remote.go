@@ -16,11 +16,17 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -109,17 +115,22 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	var verr errhand.VerboseError
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 
+	var verr errhand.VerboseError
 	switch {
 	case apr.NArg() == 0:
-		verr = printRemotes(dEnv, apr)
+		verr = printRemotes(sqlCtx, queryist, apr)
 	case apr.Arg(0) == addRemoteId:
-		verr = addRemote(dEnv, apr)
-	case apr.Arg(0) == removeRemoteId:
-		verr = removeRemote(ctx, dEnv, apr)
-	case apr.Arg(0) == removeRemoteShortId:
-		verr = removeRemote(ctx, dEnv, apr)
+		verr = addRemote(sqlCtx, queryist, dEnv, apr)
+	case apr.Arg(0) == removeRemoteId, apr.Arg(0) == removeRemoteShortId:
+		verr = removeRemote(sqlCtx, queryist, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -127,31 +138,20 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func removeRemote(sqlCtx *sql.Context, qureyist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
+	toRemove := strings.TrimSpace(apr.Arg(1))
 
-	old := strings.TrimSpace(apr.Arg(1))
-	err := dEnv.RemoveRemote(ctx, old)
-
-	switch err {
-	case nil:
-		return nil
-	case env.ErrFailedToWriteRepoState:
-		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
-	case env.ErrFailedToDeleteRemote:
-		return errhand.BuildDError("error: failed to delete remote tracking ref").AddCause(err).Build()
-	case env.ErrFailedToReadFromDb:
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	case env.ErrRemoteNotFound:
-		return errhand.BuildDError("error: unknown remote: '%s' ", old).Build()
-	default:
-		return errhand.BuildDError("error: unknown error").AddCause(err).Build()
+	err := callSQLRemoteRemove(sqlCtx, qureyist, toRemove)
+	if err != nil {
+		return errhand.BuildDError("error: Unable to remove remote.").AddCause(err).Build()
 	}
+	return nil
 }
 
-func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func addRemote(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -159,30 +159,48 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	remoteName := strings.TrimSpace(apr.Arg(1))
 
 	remoteUrl := apr.Arg(2)
+
 	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).AddCause(err).Build()
 	}
-
 	params, verr := parseRemoteArgs(apr, scheme, absRemoteUrl)
 	if verr != nil {
 		return verr
 	}
 
-	r := env.NewRemote(remoteName, remoteUrl, params)
-	err = dEnv.AddRemote(r)
+	if len(params) == 0 {
+		err := callSQLRemoteAdd(sqlCtx, queryist, remoteName, remoteUrl)
+		if err != nil {
+			return errhand.BuildDError("error: Unable to add remote.").AddCause(err).Build()
+		}
+	} else {
+		// We only support adding remotes with parameters in the local configuration
+		if _, ok := queryist.(*engine.SqlEngine); !ok {
+			return errhand.BuildDError("error: remote add failed. sql-server running while attempting to use advanced remote parameters. Stop server and re-run").Build()
+		}
+		return addRemoteLocaly(remoteName, absRemoteUrl, params, dEnv)
+	}
+	return nil
+}
+
+// addRemoteLocal adds a remote to the local configuration, which should only be used in the event that there
+// are AWS/GCP/OSS parameters. These are not supported in the SQL interface
+func addRemoteLocaly(remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) errhand.VerboseError {
+	rmot := env.NewRemote(remoteName, remoteUrl, params)
+	err := dEnv.AddRemote(rmot)
 
 	switch err {
 	case nil:
 		return nil
 	case env.ErrRemoteAlreadyExists:
-		return errhand.BuildDError("error: a remote named '%s' already exists.", r.Name).AddDetails("remove it before running this command again").Build()
+		return errhand.BuildDError("error: a remote named '%s' already exists.", rmot.Name).AddDetails("remove it before running this command again").Build()
 	case env.ErrRemoteNotFound:
-		return errhand.BuildDError("error: unknown remote: '%s' ", r.Name).Build()
+		return errhand.BuildDError("error: unknown remote: '%s' ", rmot.Name).Build()
 	case env.ErrInvalidRemoteURL:
-		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
+		return errhand.BuildDError("error: '%s' is not valid.", rmot.Url).AddCause(err).Build()
 	case env.ErrInvalidRemoteName:
-		return errhand.BuildDError("error: invalid remote name: " + r.Name).Build()
+		return errhand.BuildDError("error: invalid remote name: " + rmot.Name).Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
@@ -207,21 +225,98 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 	return params, nil
 }
 
-func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	remotes, err := dEnv.GetRemotes()
+// callSQLRemoteAdd calls the SQL function `call `dolt_remote('add', remoteName, remoteUrl)`
+func callSQLRemoteAdd(sqlCtx *sql.Context, queryist cli.Queryist, remoteName, remoteUrl string) error {
+	qry, err := dbr.InterpolateForDialect("call dolt_remote('add', ?, ?)", []interface{}{remoteName, remoteUrl}, dialect.MySQL)
+	if err != nil {
+		return err
+	}
 
+	_, err = GetRowsForSql(queryist, sqlCtx, qry)
+	return err
+}
+
+// callSQLRemoteRemove calls the SQL function `call `dolt_remote('remove', remoteName)`
+func callSQLRemoteRemove(sqlCtxe *sql.Context, queryist cli.Queryist, remoteName string) error {
+	qry, err := dbr.InterpolateForDialect("call dolt_remote('remove', ?)", []interface{}{remoteName}, dialect.MySQL)
+	if err != nil {
+		return err
+	}
+
+	_, err = GetRowsForSql(queryist, sqlCtxe, qry)
+	return err
+}
+
+type remote struct {
+	Name   string
+	Url    string
+	Params string
+}
+
+func getRemotesSQL(sqlCtx *sql.Context, queryist cli.Queryist) ([]remote, error) {
+	qry := "select name,url,params from dolt_remotes"
+	rows, err := GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return nil, err
+	}
+
+	remotes := make([]remote, 0, len(rows))
+	for _, r := range rows {
+		name, ok := r[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid remote name")
+		}
+
+		url, ok := r[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid remote url")
+		}
+
+		params, err := getJsonAsString(sqlCtx, r[2])
+		if err != nil {
+			return nil, fmt.Errorf("invalid params")
+		}
+
+		remotes = append(remotes, remote{
+			Name:   name,
+			Url:    url,
+			Params: params,
+		})
+	}
+
+	return remotes, nil
+}
+
+// getJsonAsString returns a string representation of the given interface{}, which can either be a string or a JSONDocument.
+// If it is a string, it gets returned as is. If it is a JSONDocument, it gets converted to a string.
+// SQLEngine and the remote connection behave a little differently here, which is the reason for needing this.
+func getJsonAsString(sqlCtx *sql.Context, params interface{}) (string, error) {
+	switch p := params.(type) {
+	case string:
+		return p, nil
+	case sql.JSONWrapper:
+		json, err := types.StringifyJSON(p)
+		if err != nil {
+			return "", err
+		}
+		if json == "{}" {
+			return "", nil
+		}
+		return json, nil
+	default:
+		return "", fmt.Errorf("unexpected interface{} type: %T", p)
+	}
+}
+
+func printRemotes(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
+	remotes, err := getRemotesSQL(sqlCtx, queryist)
 	if err != nil {
 		return errhand.BuildDError("Unable to get remotes from the local directory").AddCause(err).Build()
 	}
 
-	for _, r := range remotes.Snapshot() {
+	for _, r := range remotes {
 		if apr.Contains(cli.VerboseFlag) {
-			paramStr := make([]byte, 0)
-			if len(r.Params) > 0 {
-				paramStr, _ = json.Marshal(r.Params)
-			}
-
-			cli.Printf("%s %s %s\n", r.Name, r.Url, paramStr)
+			cli.Printf("%s %s %s\n", r.Name, r.Url, r.Params)
 		} else {
 			cli.Println(r.Name)
 		}

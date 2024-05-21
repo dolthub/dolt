@@ -27,6 +27,7 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -42,7 +43,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 
 	// ParseDSN currently doesn't support `/` in the db name
 	dbName, _ := dsess.SplitRevisionDbName(dbRev)
-	parsedMySQLConfig, err := mysql.ParseDSN(ConnectionString(clientConfig, dbName))
+	parsedMySQLConfig, err := mysql.ParseDSN(servercfg.ConnectionString(clientConfig, dbName))
 	if err != nil {
 		return nil, err
 	}

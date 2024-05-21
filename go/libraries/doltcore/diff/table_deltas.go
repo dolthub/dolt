@@ -600,21 +600,15 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 	if td.FromTable != nil {
 		from, err = td.FromTable.GetRowData(ctx)
 		if err != nil {
-			return from, to, err
+			return nil, nil, err
 		}
-	} else {
-		// If there is no |FromTable| use the |ToTable|'s schema to make the index.
-		from, _ = durable.NewEmptyIndex(ctx, td.FromVRW, td.FromNodeStore, td.ToSch)
 	}
 
 	if td.ToTable != nil {
 		to, err = td.ToTable.GetRowData(ctx)
 		if err != nil {
-			return from, to, err
+			return nil, nil, err
 		}
-	} else {
-		// If there is no |ToTable| use the |FromTable|'s schema to make the index.
-		to, _ = durable.NewEmptyIndex(ctx, td.ToVRW, td.ToNodeStore, td.FromSch)
 	}
 
 	return from, to, nil
