@@ -987,19 +987,37 @@ func GetAllTagsForRoots(ctx context.Context, roots ...RootValue) (tags schema.Ta
 
 // UnionTableNames returns an array of all table names in all roots passed as params.
 // The table names are in order of the RootValues passed in.
-func UnionTableNames(ctx context.Context, roots ...RootValue) ([]string, error) {
-	seenTblNamesMap := make(map[string]bool)
-	tblNames := []string{}
+func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, error) {
+	seenTblNamesMap := make(map[TableName]bool)
+	var tblNames []TableName
+	
 	for _, root := range roots {
-		// TODO: schema name
-		rootTblNames, err := root.GetTableNames(ctx, DefaultSchemaName)
+		dbSchemas, err := root.GetDatabaseSchemas(ctx)
 		if err != nil {
 			return nil, err
 		}
-		for _, tn := range rootTblNames {
-			if _, ok := seenTblNamesMap[tn]; !ok {
-				seenTblNamesMap[tn] = true
-				tblNames = append(tblNames, tn)
+		
+		var schemaNames []string
+		if len(dbSchemas) == 0 {
+			schemaNames = []string{DefaultSchemaName}
+		} else {
+			schemaNames = make([]string, len(dbSchemas))
+			for i, dbSchema := range dbSchemas {
+				schemaNames[i] = dbSchema.Name
+			}
+		}
+		
+		for _, schemaName := range schemaNames {
+			rootTblNames, err := root.GetTableNames(ctx, schemaName)
+			if err != nil {
+				return nil, err
+			}
+			for _, tn := range rootTblNames {
+				tn := TableName{Name: tn, Schema: schemaName}
+				if _, ok := seenTblNamesMap[tn]; !ok {
+					seenTblNamesMap[tn] = true
+					tblNames = append(tblNames, tn)
+				}
 			}
 		}
 	}

@@ -27,20 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func CheckoutAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return MoveTablesFromHeadToWorking(ctx, roots, tbls)
-}
-
-// CheckoutTables takes in a set of tables and docs and checks them out to another branch.
-func CheckoutTables(ctx context.Context, roots doltdb.Roots, tables []string) (doltdb.Roots, error) {
-	return MoveTablesFromHeadToWorking(ctx, roots, tables)
-}
-
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
 // working changes, and returns the new resulting roots
 func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
