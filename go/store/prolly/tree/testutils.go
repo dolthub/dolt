@@ -329,6 +329,7 @@ func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
 
 // PutBlobBuilder implements NodeStore.
 func (v nodeStoreValidator) PutBlobBuilder(bb *BlobBuilder) {
+	bb.Reset()
 	v.bbp.Put(bb)
 }
 
