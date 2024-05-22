@@ -498,10 +498,6 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				rows.DataColumns.Set(i, true)
 			}
 
-			if tableRowsToDelete == nil && tableRowsToUpdate == nil {
-				rows.Flags |= 0x0001 // End of Statement
-			}
-
 			binlogEvent := mysql.NewWriteRowsEvent(*b.binlogFormat, b.binlogStream, tableId, rows)
 			events = append(events, binlogEvent)
 			b.binlogStream.LogPosition += binlogEvent.Length()
@@ -517,10 +513,6 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				rows.IdentifyColumns.Set(i, true)
 			}
 
-			if tableRowsToUpdate == nil {
-				rows.Flags |= 0x0001 // End of Statement
-			}
-
 			binlogEvent := mysql.NewDeleteRowsEvent(*b.binlogFormat, b.binlogStream, tableId, rows)
 			events = append(events, binlogEvent)
 			b.binlogStream.LogPosition += binlogEvent.Length()
@@ -528,7 +520,6 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 		if tableRowsToUpdate != nil {
 			rows := mysql.Rows{
-				Flags:           0x0001,
 				DataColumns:     mysql.NewServerBitmap(len(columns)),
 				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
 				Rows:            tableRowsToUpdate,

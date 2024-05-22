@@ -329,6 +329,53 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	requireReplicaResults(t, "select * from t;", [][]any{{"1", "one", "foo"}})
 }
 
+// TestBinlogPrimary_MultipleTablesManualCommit tests that binlog events are generated correctly
+// when multiple tables are changed in a single SQL commit.
+func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	time.Sleep(100 * time.Millisecond)
+
+	// Insert to multiple tables in a single SQL transaction
+	primaryDatabase.MustExec("set @@autocommit=0;")
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("create table t1 (pk int primary key, c1 varchar(100), c2 int);")
+	primaryDatabase.MustExec("insert into t1 values (1, 'one', 1);")
+	primaryDatabase.MustExec("create table t2 (pk int primary key, c1 varchar(100), c2 int);")
+	primaryDatabase.MustExec("insert into t2 values (1, 'eins', 1);")
+	primaryDatabase.MustExec("commit;")
+
+	// Verify the results on the replica
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
+	requireReplicaResults(t, "select * from t1;", [][]any{{"1", "one", "1"}})
+	requireReplicaResults(t, "select * from t2;", [][]any{{"1", "eins", "1"}})
+
+	// Update to multiple tables in a single SQL transaction
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("update t1 set c2=1111;")
+	primaryDatabase.MustExec("update t2 set c2=2222;")
+	primaryDatabase.MustExec("commit;")
+
+	// Verify the results on the replica
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from t1;", [][]any{{"1", "one", "1111"}})
+	requireReplicaResults(t, "select * from t2;", [][]any{{"1", "eins", "2222"}})
+
+	// Delete from multiple tables in a single SQL transaction
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("delete from t1 where c2=1111;")
+	primaryDatabase.MustExec("delete from t2 where c2=2222;")
+	primaryDatabase.MustExec("commit;")
+
+	// Verify the results on the replica
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from t1;", [][]any{})
+	requireReplicaResults(t, "select * from t2;", [][]any{})
+}
+
 // TestBinlogPrimary_ReplicateCreateDropDatabase tests that Dolt can correctly replicate statements to create,
 // drop, and undrop databases.
 func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
