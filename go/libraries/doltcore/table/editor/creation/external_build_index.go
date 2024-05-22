@@ -130,21 +130,27 @@ type tupleIterWithCb struct {
 
 var _ prolly.TupleIter = (*tupleIterWithCb)(nil)
 
-func (t tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
-	k, err := t.iter.Next(ctx)
-	if err != nil {
-		if !errors.Is(err, io.EOF) {
-			t.err = err
-		}
-		return nil, nil
-	}
-	if t.uniqCb != nil && t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, k) == 0 {
-		// register a constraint violation if |key| collides with |lastKey|
-		if err := t.uniqCb(ctx, t.lastKey, k); err != nil {
-			t.err = err
+func (t *tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
+	for {
+		k, err := t.iter.Next(ctx)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.err = err
+			}
 			return nil, nil
 		}
+		if t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, k) == 0 {
+			if t.uniqCb != nil {
+				// register a constraint violation if |key| collides with |lastKey|
+				if err := t.uniqCb(ctx, t.lastKey, k); err != nil {
+					t.err = err
+					return nil, nil
+				}
+			} else {
+				continue
+			}
+		}
+		t.lastKey = k
+		return k, val.EmptyTuple
 	}
-	t.lastKey = k
-	return k, val.EmptyTuple
 }
