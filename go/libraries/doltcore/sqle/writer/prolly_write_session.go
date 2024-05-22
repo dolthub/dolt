@@ -15,7 +15,6 @@
 package writer
 
 import (
-	"context"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -23,8 +22,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -37,18 +36,26 @@ type prollyWriteSession struct {
 	mut        *sync.RWMutex
 }
 
-var _ WriteSession = &prollyWriteSession{}
+var _ dsess.WriteSession = &prollyWriteSession{}
+
+func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
+	return s.workingSet
+}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	if tw, ok := s.tables[table]; ok {
+	if tw, ok := s.tables[tableName]; ok {
 		return tw, nil
 	}
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
+	// XXX: certain table editors rely on this embedded working set. See
+	// fullTextRewriteEditor for one example, where the |ctx| maintains
+	// the old version of the data while fulltext indexes are rebuilt
+	// using this hidden empty workingSet.
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -56,52 +63,47 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		return nil, doltdb.ErrTableNotFound
 	}
 
-	sch, err := t.GetSchema(ctx)
+	schState, err := writerSchema(ctx, t, tableName.Name, db)
 	if err != nil {
 		return nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema("", table.Name, sch)
-	if err != nil {
-		return nil, err
-	}
-	autoCol := autoIncrementColFromSchema(sch)
 
 	var pw indexWriter
 	var sws map[string]indexWriter
-	if schema.IsKeyless(sch) {
-		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+	if schema.IsKeyless(schState.DoltSchema) {
+		pw, err = getPrimaryKeylessProllyWriter(ctx, t, schState)
 		if err != nil {
 			return nil, err
 		}
-		sws, err = getSecondaryKeylessProllyWriters(ctx, t, pkSch.Schema, sch, pw.(prollyKeylessWriter))
+		sws, err = getSecondaryKeylessProllyWriters(ctx, t, schState, pw.(prollyKeylessWriter))
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		pw, err = getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
+		pw, err = getPrimaryProllyWriter(ctx, t, schState)
 		if err != nil {
 			return nil, err
 		}
-		sws, err = getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
+		sws, err = getSecondaryProllyIndexWriters(ctx, t, schState)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	twr := &prollyTableWriter{
-		tableName: table,
+		tableName: tableName,
 		dbName:    db,
 		primary:   pw,
 		secondary: sws,
 		tbl:       t,
-		sch:       sch,
-		sqlSch:    pkSch.Schema,
-		aiCol:     autoCol,
+		sch:       schState.DoltSchema,
+		sqlSch:    schState.PkSchema.Schema,
+		aiCol:     schState.AutoIncCol,
 		aiTracker: s.aiTracker,
 		flusher:   s,
 		setter:    setter,
 	}
-	s.tables[table] = twr
+	s.tables[tableName] = twr
 
 	return twr, nil
 }
@@ -203,7 +205,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 }
 
 // setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks
-func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+func (s *prollyWriteSession) setWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
 	for tableName, tableWriter := range s.tables {
 		t, ok, err := root.GetTable(ctx, tableName)

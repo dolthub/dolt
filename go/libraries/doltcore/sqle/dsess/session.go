@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -62,6 +61,7 @@ type DoltSession struct {
 	statsProv        sql.StatsProvider
 	mu               *sync.Mutex
 	fs               filesys.Filesys
+	writeSessProv    WriteSessFunc
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -74,7 +74,7 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
-func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
+func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
 	return &DoltSession{
 		Session:          sql.NewBaseSession(),
 		username:         "",
@@ -87,6 +87,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    sessFunc,
 	}
 }
 
@@ -97,6 +98,7 @@ func NewDoltSession(
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -115,6 +117,7 @@ func NewDoltSession(
 		statsProv:        statsProvider,
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    writeSessProv,
 	}
 
 	return sess, nil
@@ -1253,7 +1256,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		branchState.writeSession = writer.NewWriteSession(nbf, branchState.WorkingSet(), tracker, editOpts)
+		branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
 	}
 
 	// WorkingSet is nil in the case of a read only, detached head DB
@@ -1764,3 +1767,8 @@ func DefaultHead(baseName string, db SqlDatabase) (string, error) {
 
 	return head, nil
 }
+
+// WriteSessFunc is a constructor that session builders use to
+// create fresh table editors.
+// The indirection avoids a writer/dsess package import cycle.
+type WriteSessFunc func(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession

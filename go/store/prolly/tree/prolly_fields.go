@@ -397,6 +397,7 @@ func serializeGeometry(v interface{}) []byte {
 
 func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
 	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
 	bb.Init(dataSize)
 	_, addr, err := bb.Chunk(ctx, r)
 	if err != nil {

@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -433,7 +434,7 @@ func sqlContextFactory() contextFactory {
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession)
 		if err != nil {
 			return nil, err
 		}

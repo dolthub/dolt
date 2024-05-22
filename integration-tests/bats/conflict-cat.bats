@@ -9,6 +9,36 @@ teardown() {
     teardown_common
 }
 
+@test "conflict-cat: large diff" {
+    dolt sql -q "create table t (i int primary key, t text);"
+    dolt commit -Am "create table t"
+
+    dolt branch other
+    dolt sql -q "insert into t values (1, space(10000));"
+    dolt commit -Am "main 10000 spaces"
+
+    dolt checkout other
+    dolt sql -q "insert into t values (1, space(10001));"
+    dolt commit -Am "other 10001 spaces"
+
+    dolt checkout main
+    run dolt merge other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content): Merge conflict in t" ]] || false
+
+    run dolt conflicts cat t
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "select length(base_t), length(our_t), length(their_t) from dolt_conflicts_t";
+    run dolt sql -q "select length(base_t), length(our_t), length(their_t) from dolt_conflicts_t";
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+----------------+---------------+-----------------+" ]] || false
+    [[ "$output" =~ "| length(base_t) | length(our_t) | length(their_t) |" ]] || false
+    [[ "$output" =~ "+----------------+---------------+-----------------+" ]] || false
+    [[ "$output" =~ "| NULL           | 10000         | 10001           |" ]] || false
+    [[ "$output" =~ "+----------------+---------------+-----------------+" ]] || false
+}
+
 @test "conflict-cat: smoke test print schema output" {
     dolt sql << SQL
 CREATE TABLE people (

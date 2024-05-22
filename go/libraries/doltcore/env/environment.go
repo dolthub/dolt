@@ -303,6 +303,13 @@ func (dEnv *DoltEnv) HasDoltDataDir() bool {
 	return exists && isDir
 }
 
+// HasDoltSqlServerInfo returns true if this Dolt environment has a sql-server.info file, indicating
+// that a sql-server is running from this Dolt environment.
+func (dEnv *DoltEnv) HasDoltSqlServerInfo() bool {
+	exists, _ := dEnv.FS.Exists(filepath.Join(dbfactory.DoltDir, "sql-server.info"))
+	return exists
+}
+
 func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {

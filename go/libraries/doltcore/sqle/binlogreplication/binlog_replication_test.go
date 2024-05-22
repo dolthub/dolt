@@ -217,6 +217,13 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.ErrorContains(t, err, "Invalid (empty) username")
 	require.Nil(t, rows)
 
+	// SOURCE_AUTO_POSITION cannot be disabled – we only support GTID positioning
+	rows, err = replicaDatabase.Queryx("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, " +
+		"SOURCE_HOST='localhost', SOURCE_USER='replicator', SOURCE_AUTO_POSITION=0;")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Error 1105 (HY000): SOURCE_AUTO_POSITION cannot be disabled")
+	require.Nil(t, rows)
+
 	// START REPLICA logs a warning if replication is already running
 	startReplication(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
@@ -1018,4 +1025,41 @@ func assertRepoStateFileExists(t *testing.T, db string) {
 
 	_, err := os.Stat(repoStateFile)
 	require.NoError(t, err)
+}
+
+// requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
+// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
+// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
+// be expressed in strings.
+func requireReplicaResults(t *testing.T, query string, expectedResults [][]any) {
+	requireResults(t, replicaDatabase, query, expectedResults)
+}
+
+// requireReplicaResults runs the specified |query| on the primary database and asserts that the results match
+// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
+// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
+// be expressed in strings.
+func requirePrimaryResults(t *testing.T, query string, expectedResults [][]any) {
+	requireResults(t, primaryDatabase, query, expectedResults)
+}
+
+func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][]any) {
+	rows, err := db.Queryx(query)
+	require.NoError(t, err)
+	allRows := readAllRowsIntoSlices(t, rows)
+	require.Equal(t, len(expectedResults), len(allRows), "Expected %v, got %v", expectedResults, allRows)
+	for i := range expectedResults {
+		require.Equal(t, expectedResults[i], allRows[i], "Expected %v, got %v", expectedResults[i], allRows[i])
+	}
+	require.NoError(t, rows.Close())
+}
+
+// queryReplicaStatus returns the results of `SHOW REPLICA STATUS` as a map, for the replica
+// database. If any errors are encountered, this function will fail the current test.
+func queryReplicaStatus(t *testing.T) map[string]any {
+	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	status := convertMapScanResultToStrings(readNextRow(t, rows))
+	require.NoError(t, rows.Close())
+	return status
 }

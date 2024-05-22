@@ -26,7 +26,7 @@ teardown() {
     skiponwindows "this is being interpreted as valid"
     run dolt remote add origin file:///poop/
     [ $status -ne 0 ]
-    [[ "$output" =~ "'file:///poop/' is not valid" ]] || false
+    [[ "$output" =~ "failed to create directory '/poop'" ]] || false
 }
 
 @test "remotes-file-system: push, pull, and clone file based remotes" {

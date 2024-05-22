@@ -104,6 +104,12 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		types.Format_Default = types.Format_DOLT
 	}
 
+	if dEnv.HasDoltSqlServerInfo() {
+		cli.PrintErrln(color.RedString("Detected that a Dolt sql-server is running from this directory. " +
+			"Stop the sql-server before initializing this directory as a Dolt database."))
+		return 1
+	}
+
 	name, _ := apr.GetValue(usernameParamName)
 	email, _ := apr.GetValue(emailParamName)
 	initBranch, _ := apr.GetValue(initBranchParamName)

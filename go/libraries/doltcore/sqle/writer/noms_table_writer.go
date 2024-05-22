@@ -17,30 +17,21 @@ package writer
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type TableWriter interface {
-	sql.TableEditor
-	sql.ForeignKeyEditor
-	sql.AutoIncrementSetter
-}
-
 // AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
 // inserted.
 type AutoIncrementGetter interface {
 	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
-
-// SessionRootSetter sets the root value for the session.
-type SessionRootSetter func(ctx *sql.Context, dbName string, root doltdb.RootValue) error
 
 // nomsTableWriter is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //
@@ -60,12 +51,12 @@ type nomsTableWriter struct {
 	vrw         types.ValueReadWriter
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
-	flusher     WriteSessionFlusher
+	flusher     dsess.WriteSessionFlusher
 
 	autoInc                globalstate.AutoIncrementTracker
 	nextAutoIncrementValue map[string]uint64
 
-	setter         SessionRootSetter
+	setter         dsess.SessionRootSetter
 	errEncountered error
 }
 
@@ -73,7 +64,7 @@ func (te *nomsTableWriter) PreciseMatch() bool {
 	return true
 }
 
-var _ TableWriter = &nomsTableWriter{}
+var _ dsess.TableWriter = &nomsTableWriter{}
 var _ AutoIncrementGetter = &nomsTableWriter{}
 
 func (te *nomsTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
@@ -210,16 +201,4 @@ func (te *nomsTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	return te.setter(ctx, te.dbName, ws.WorkingRoot())
-}
-
-func autoIncrementColFromSchema(sch schema.Schema) schema.Column {
-	var autoCol schema.Column
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			autoCol = col
-			stop = true
-		}
-		return
-	})
-	return autoCol
 }

@@ -48,6 +48,7 @@ type NodeStore interface {
 	Format() *types.NomsBinFormat
 
 	BlobBuilder() *BlobBuilder
+	PutBlobBuilder(*BlobBuilder)
 }
 
 type nodeStore struct {
@@ -176,10 +177,14 @@ func (ns nodeStore) Pool() pool.BuffPool {
 // BlobBuilder implements NodeStore.
 func (ns nodeStore) BlobBuilder() *BlobBuilder {
 	bb := ns.bbp.Get().(*BlobBuilder)
-	if bb.ns == nil {
-		bb.SetNodeStore(ns)
-	}
+	bb.SetNodeStore(ns)
 	return bb
+}
+
+// PutBlobBuilder implements NodeStore.
+func (ns nodeStore) PutBlobBuilder(bb *BlobBuilder) {
+	bb.Reset()
+	ns.bbp.Put(bb)
 }
 
 func (ns nodeStore) Format() *types.NomsBinFormat {

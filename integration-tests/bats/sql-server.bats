@@ -1908,4 +1908,56 @@ behavior:
     [[ "$output" =~ "1" ]] || false
 }
 
+# Tests that when a Dolt sql-server is running from a directory that hasn't been initialized as a dolt
+# database, that the CLI gives good error messages.
+@test "sql-server: dolt CLI commands give good error messages in an uninitialized sql-server dir" {
+    # Start a sql-server from an uninitialized directory
+    PORT=$( definePORT )
+    dolt sql-server --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$!
+    SQL_USER='root'
+    wait_for_connection $PORT 7500
 
+    # Test various commands to make sure they give a good error message
+    run dolt pull
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt ls
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt rebase
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt stash
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt docs print
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt rebase
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt tag
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt remote
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    run dolt push
+    [ $status -ne 0 ]
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
+
+    # dolt init has a different error message, since the sql-server won't pick up the initialized directory
+    run dolt init
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Detected that a Dolt sql-server is running from this directory." ]] || false
+    [[ "$output" =~ "Stop the sql-server before initializing this directory as a Dolt database." ]] || false
+}
