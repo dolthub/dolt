@@ -514,7 +514,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
+			schemaStmts, err = GenerateSqlPatchSchemaStatements(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
 			}
@@ -535,7 +535,11 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 	return patches, nil
 }
 
-func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+// GenerateSqlPatchSchemaStatements examines the table schema changes in the specified TableDelta |td| and returns
+// a slice of SQL path statements that represent the equivalent SQL DDL statements for those schema changes. The
+// specified RootValue, |toRoot|, must be the RootValue that was used as the "To" root when computing the specified
+// TableDelta.
+func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
 	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
 	if err != nil {
 		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
@@ -679,7 +683,7 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 			if cd.Old.Name != cd.New.Name {
 				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
 			}
-			if cd.Old.TypeInfo != cd.New.TypeInfo {
+			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
 				ddlStatements = append(ddlStatements, sqlfmt.AlterTableModifyColStmt(td.ToName,
 					sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
