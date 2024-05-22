@@ -406,8 +406,13 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			tableName = tableDelta.FromName
 		}
 
-		fromMap := durable.ProllyMapFromIndex(fromRowData)
-		toMap := durable.ProllyMapFromIndex(toRowData)
+		var fromMap, toMap prolly.Map
+		if fromRowData != nil {
+			fromMap = durable.ProllyMapFromIndex(fromRowData)
+		}
+		if toRowData != nil {
+			toMap = durable.ProllyMapFromIndex(toRowData)
+		}
 
 		sch, err := tableDelta.ToTable.GetSchema(ctx)
 		if err != nil {
