@@ -16,7 +16,6 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/pkg/errors"
 )
 
 type ArchiveCmd struct {
@@ -98,10 +98,8 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		return nil
 	})
 
-	v := dEnv.DoltDB
-
 	groupings := nbs.NewChunkRelations()
-	err = historicalFuzzyMatching(ctx, hs, &groupings, v)
+	err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
@@ -151,6 +149,8 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 	return nil
 }
 
+var ErrNoShallowClones = errors.New("building archives only allowed for full clones")
+
 func relateChunkToParents(ctx context.Context, commit hash.Hash, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
 	oCmt, err := db.ReadCommit(ctx, commit)
 	if err != nil {
@@ -158,7 +158,7 @@ func relateChunkToParents(ctx context.Context, commit hash.Hash, groupings *nbs.
 	}
 	cmt, ok := oCmt.ToCommit()
 	if !ok {
-		return fmt.Errorf("Ghost commit. Must run on a full clone.")
+		return ErrNoShallowClones
 	}
 	cmtRv, err := cmt.GetRootValue(ctx)
 	if err != nil {
@@ -168,9 +168,12 @@ func relateChunkToParents(ctx context.Context, commit hash.Hash, groupings *nbs.
 	// Dolt supports only 1 or 2 parents, but the logic is the same for each. And if there are no parents, no op.
 	for i := 0; i < cmt.NumParents(); i++ {
 		oCmt, err = cmt.GetParent(ctx, i)
+		if err != nil {
+			return err
+		}
 		parent, exists := oCmt.ToCommit()
 		if !exists {
-			return fmt.Errorf("Ghost commit")
+			return ErrNoShallowClones
 		}
 
 		parentRv, err := parent.GetRootValue(ctx)

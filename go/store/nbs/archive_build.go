@@ -47,7 +47,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 
 			archivePath := ""
 			archiveName := hash.Hash{}
-			archivePath, archiveName, err = groupAllChunks(ctx, ogcs, idx, dagGroups, outPath)
+			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath)
 			if err != nil {
 				return err
 			}
@@ -58,7 +58,6 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			}
 
 			// p("Verified table file: %s\n", archivePath)
-			// p("Total Verification Execution time: %v\n", duration)
 
 			//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
 			specs, err := gs.oldGen.tables.toSpecs()
@@ -81,21 +80,181 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	return nil
 }
 
-func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string) (string, hash.Hash, error) {
+func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string) (string, hash.Hash, error) {
+
+	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	var defaultDict []byte
+	if len(defaultSamples) > 25 {
+		defaultDict = buildDictionary(defaultSamples)
+	} else {
+		return "", hash.Hash{}, errors.New("Not enough samples to build default dictionary")
+	}
+
+	defaultCDict, err := gozstd.NewCDict(defaultDict)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	cgList := dagGroups.convertToChunkGroups(allChunks, defaultCDict)
+	sort.Slice(cgList, func(i, j int) bool {
+		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
+	})
+
+	// NM4 - this is helpful info to ensure that the groups are being built correctly. Maybe write to a log, or a channel.
+	// for n, cg := range cgList {
+	//	cg.print(n, p)
+	//}
+
+	// Allocate buffer used to compress chunks.
+	cmpBuff := make([]byte, 0, maxChunkSize)
+
+	cmpDefDict := gozstd.Compress(cmpBuff, defaultDict)
+	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
+
+	arcW, err := newArchiveWriter()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+	var defaultDictByteSpanId uint32
+	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpDefDict)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	_, grouped, singles, err := writeChunkGroupToArchive(cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	err = indexAndFinalizeArchive(arcW, archivePath)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	if grouped+singles != idx.chunkCount() {
+		// Leaving as a panic. This should never happen.
+		missing := idx.chunkCount() - (grouped + singles)
+		panic(fmt.Sprintf("chunk count mismatch. Missing: %d", missing))
+	}
+
+	name, err := arcW.getName()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	return arcW.finalPath, name, err
+}
+
+// indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
+// to the directory provided. The name is calculate from the footer, and can be obtained by calling getName on the archive.
+func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string) error {
+	err := arcW.finalizeByteSpans()
+	if err != nil {
+		return err
+	}
+
+	err = arcW.writeIndex()
+	if err != nil {
+		return err
+	}
+
+	// NM4 - Pin down what we want in the metatdata.
+	err = arcW.writeMetadata([]byte("{dolt_version: 0.0.0}"))
+	if err != nil {
+		return err
+	}
+
+	err = arcW.writeFooter()
+	if err != nil {
+		return err
+	}
+
+	fileName, err := arcW.genFileName(archivePath)
+	if err != nil {
+		return err
+	}
+
+	return arcW.flushToFile(fileName)
+}
+
+func writeChunkGroupToArchive(
+	cmpBuff []byte,
+	allChunks map[hash.Hash]*chunks.Chunk,
+	cgList []*chunkGroup,
+	defaultSpanId uint32,
+	defaultDict *gozstd.CDict,
+	arcW *archiveWriter,
+) (groupCount, groupedChunkCount, individualChunkCount uint32, err error) {
+	for _, cg := range cgList {
+		if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
+			groupCount++
+
+			cmpDict := gozstd.Compress(cmpBuff, cg.dict)
+
+			dictId, err := arcW.writeByteSpan(cmpDict)
+			if err != nil {
+				return 0, 0, 0, err
+			}
+
+			for _, cs := range cg.chks {
+				c := cs.chunk
+				if !arcW.chunkSeen(c.Hash()) {
+					compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
+
+					dataId, err := arcW.writeByteSpan(compressed)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					err = arcW.stageChunk(c.Hash(), dictId, dataId)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					groupedChunkCount++
+				}
+				delete(allChunks, c.Hash())
+			}
+		}
+	}
+
+	// Any chunks remaining will be written out individually.
+	for h, c := range allChunks {
+		var compressed []byte
+		dictId := uint32(0)
+
+		compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultDict)
+		dictId = defaultSpanId
+
+		id, err := arcW.writeByteSpan(compressed)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		err = arcW.stageChunk(h, dictId, id)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+	}
+	individualChunkCount = uint32(len(allChunks))
+
+	return
+}
+
+// gatherAllChunks reads all the chunks from the chunk source and returns them in a map. The map is keyed by the hash of
+// the chunk. This is going to take up a bunch of memory.
+// It also returns a list of default samples, which are the first 1000 chunks that are read. These are used to build the default dictionary.
+func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex) (map[hash.Hash]*chunks.Chunk, []*chunks.Chunk, error) {
 	records := make([]getRecord, idx.chunkCount())
 	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var h hash.Hash
 		_, err := idx.indexEntry(i, &h)
 		if err != nil {
-			return "", hash.Hash{}, err
+			return nil, nil, err
 		}
 
 		records = append(records, getRecord{&h, h.Prefix(), false})
-	}
-
-	arcW, err := newArchiveWriter()
-	if err != nil {
-		return "", hash.Hash{}, err
 	}
 
 	group, ctx := errgroup.WithContext(ctx)
@@ -103,7 +262,6 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	allChunks := map[hash.Hash]*chunks.Chunk{}
 	defaultSamples := make([]*chunks.Chunk, 0, 1000)
 
-	// Allocate buffer used to compress chunks.
 	bottleneck := sync.Mutex{} // This code doesn't cope with parallelism yet.
 	var stats Stats
 	allFound, err := cs.getMany(ctx, group, records, func(_ context.Context, c *chunks.Chunk) {
@@ -121,162 +279,15 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 		panic(err)
 	}
 	if !allFound { // Unlikely to happen, given we got the list of chunks from this index.
-		panic("not all chunks found")
+		return nil, nil, errors.New("missing chunks")
 	}
 	err = group.Wait()
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
-	var defaultDict []byte
-	if len(defaultSamples) > 25 {
-		defaultDict = buildDictionary(defaultSamples)
-		// p("Default Sample Size: %d\n", len(defaultSamples))
-	} else {
-		return "", hash.Hash{}, errors.New("Not enough samples to build default dictionary")
-	}
-
-	defaultCDict, err := gozstd.NewCDict(defaultDict)
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	cgList := dagGroups.convertToChunkGroups(allChunks, defaultCDict)
-	// p("Naive groups: %d\n", len(cgList))
-
-	sort.Slice(cgList, func(i, j int) bool {
-		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
-	})
-
-	// for n, cg := range cgList {
-	//	cg.print(n, p)
-	//}
-
-	unGroupCount := 0
-	groupCount := 0
-
-	cmpDefDict := gozstd.Compress(nil, defaultDict)
-	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
-
-	var defaultDictByteSpanId uint32
-	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpDefDict)
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-	if defaultDictByteSpanId != 1 {
-		panic(fmt.Sprintf("Default Dict should be byte span 1. Is: %d\n", defaultDictByteSpanId))
-	}
-
-	// Allocate buffer used to compress chunks.
-	cmpBuff := make([]byte, 0, maxChunkSize)
-
-	groupsUsed := 0
-
-	for _, cg := range cgList {
-		if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
-			groupsUsed++
-
-			cmpDict := gozstd.Compress(nil, cg.dict)
-			// p("Dict Raw vs Compressed: %d , %d\n", len(cg.dict), len(cmpDict))
-
-			dictId, err := arcW.writeByteSpan(cmpDict)
-			if err != nil {
-				return "", hash.Hash{}, err
-			}
-
-			for _, cs := range cg.chks {
-				c := cs.chunk
-				if !arcW.chunkSeen(c.Hash()) {
-					compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
-
-					dataId, err := arcW.writeByteSpan(compressed)
-					if err != nil {
-						return "", hash.Hash{}, err
-					}
-					err = arcW.stageChunk(c.Hash(), dictId, dataId)
-					if err != nil {
-						return "", hash.Hash{}, err
-					}
-					groupCount++
-				}
-				delete(allChunks, c.Hash())
-			}
-		}
-	}
-
-	// p("Actual groups used: %d\n", groupsUsed)
-
-	// Any chunks remaining will be written out individually.
-	for h, c := range allChunks {
-		var compressed []byte
-		dictId := uint32(0)
-
-		if defaultDict != nil {
-			compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultCDict)
-			dictId = defaultDictByteSpanId
-		} else {
-			compressed = gozstd.Compress(cmpBuff, c.Data())
-		}
-
-		id, err := arcW.writeByteSpan(compressed)
-		if err != nil {
-			panic(err)
-		}
-		err = arcW.stageChunk(h, dictId, id)
-		if err != nil {
-			panic(err)
-		}
-		unGroupCount++
-	}
-
-	err = arcW.finalizeByteSpans()
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	err = arcW.writeIndex()
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	err = arcW.writeMetadata([]byte("Dolt Version: 0.0.0"))
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	// p("index size: %d\n", arcW.indexLen)
-
-	err = arcW.writeFooter()
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	fileName, err := arcW.genFileName(archivePath)
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	err = arcW.flushToFile(fileName)
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	// p("grouped: %d\n", groupCount)
-	// p("ungrouped: %d\n", unGroupCount)
-
-	if groupCount+unGroupCount != int(idx.chunkCount()) {
-		missing := int(idx.chunkCount()) - (groupCount + unGroupCount)
-		panic(fmt.Sprintf("chunk count mismatch. Missing: %d", missing))
-	}
-
-	name, err := arcW.getName()
-	if err != nil {
-		return "", hash.Hash{}, err
-	}
-
-	return arcW.finalPath, name, err
+	return allChunks, defaultSamples, nil
 }
-
 func verifyAllChunks(idx tableIndex, archiveFile string) error {
 	file, err := os.Open(archiveFile)
 	if err != nil {
