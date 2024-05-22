@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -318,7 +318,7 @@ func (b *binlogProducer) createSchemaChangeQueryEvents(
 			continue
 		}
 
-		schemaPatchStatements, err := sqle.GenerateSqlPatchSchemaStatements(ctx, newRoot, tableDelta)
+		schemaPatchStatements, err := sqlfmt.GenerateSqlPatchSchemaStatements(ctx, newRoot, tableDelta)
 		if err != nil {
 			return nil, false, err
 		}

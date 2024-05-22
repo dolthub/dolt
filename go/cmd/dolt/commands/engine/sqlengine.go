@@ -153,7 +153,6 @@ func NewSqlEngine(
 	if err := configureBinlogPrimaryController(engine); err != nil {
 		return nil, err
 	}
-
 	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 

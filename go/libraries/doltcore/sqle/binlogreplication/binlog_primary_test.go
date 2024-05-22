@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -716,33 +715,6 @@ func setupForDoltToMySqlReplication() {
 	replicaDatabase.MustExec("reset binary logs and gtids;")
 }
 
-// requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
-// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
-// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
-// be expressed in strings.
-func requireReplicaResults(t *testing.T, query string, expectedResults [][]any) {
-	requireResults(t, replicaDatabase, query, expectedResults)
-}
-
-// requireReplicaResults runs the specified |query| on the primary database and asserts that the results match
-// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
-// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
-// be expressed in strings.
-func requirePrimaryResults(t *testing.T, query string, expectedResults [][]any) {
-	requireResults(t, primaryDatabase, query, expectedResults)
-}
-
-func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][]any) {
-	rows, err := db.Queryx(query)
-	require.NoError(t, err)
-	allRows := readAllRowsIntoSlices(t, rows)
-	require.Equal(t, len(expectedResults), len(allRows), "Expected %v, got %v", expectedResults, allRows)
-	for i := range expectedResults {
-		require.Equal(t, expectedResults[i], allRows[i], "Expected %v, got %v", expectedResults[i], allRows[i])
-	}
-	require.NoError(t, rows.Close())
-}
-
 // outputReplicaApplierStatus prints out the replica applier status information from the
 // performance_schema replication_applier_status_by_worker table. This is useful for debugging
 // replication from a Dolt primary to a MySQL replica, since this often contains more detailed
@@ -762,16 +734,6 @@ func outputShowReplicaStatus(t *testing.T) {
 	require.NoError(t, err)
 	allNewRows := readAllRowsIntoMaps(t, newRows)
 	fmt.Printf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
-}
-
-// queryReplicaStatus returns the results of `SHOW REPLICA STATUS` as a map, for the replica
-// database. If any errors are encountered, this function will fail the current test.
-func queryReplicaStatus(t *testing.T) map[string]any {
-	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	status := convertMapScanResultToStrings(readNextRow(t, rows))
-	require.NoError(t, rows.Close())
-	return status
 }
 
 // queryPrimaryServerUuid queries the primary server for its server UUID. If any errors are encountered,
