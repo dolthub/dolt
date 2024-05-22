@@ -128,7 +128,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetJSONAddr(i, tup)
 		if ok {
-			v, err = NewJSONDoc(h, ns).ToLazyJSONDocument(ctx)
+			v, err = NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
 		}
 	case val.StringAddrEnc:
 		var h hash.Hash
@@ -253,10 +253,11 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		if err != nil {
 			return err
 		}
-		h, err := SerializeJsonToAddr(ctx, ns, j)
+		root, err := SerializeJsonToAddr(ctx, ns, j)
 		if err != nil {
 			return err
 		}
+		h := root.HashOf()
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
 		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
