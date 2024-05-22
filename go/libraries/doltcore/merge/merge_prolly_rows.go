@@ -541,7 +541,7 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 			continue // todo: how do we validate in this case?
 		}
 
-		idx, err := indexes.GetIndex(ctx, sch, def.Name())
+		idx, err := indexes.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return uniqValidator{}, err
 		}

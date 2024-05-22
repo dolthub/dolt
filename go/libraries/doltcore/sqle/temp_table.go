@@ -44,7 +44,7 @@ type TempTable struct {
 
 	lookup sql.IndexLookup
 
-	ed   writer.TableWriter
+	ed   dsess.TableWriter
 	opts editor.Options
 }
 
