@@ -84,7 +84,7 @@ type RootValue interface {
 	// HasTable returns whether the root has a table with the given case-sensitive name.
 	HasTable(ctx context.Context, tName TableName) (bool, error)
 	// IterTables calls the callback function cb on each table in this RootValue.
-	IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error
+	IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error
 	// NodeStore returns this root's NodeStore.
 	NodeStore() tree.NodeStore
 	// NomsValue returns this root's storage as a noms value.
@@ -659,27 +659,34 @@ func HasConstraintViolations(ctx context.Context, root RootValue) (bool, error) 
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
-func (root *rootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
-	// TODO: schema name
+func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error {
 	tm, err := root.getTableMap(ctx, DefaultSchemaName)
 	if err != nil {
 		return err
 	}
+	
+	schemaNames, err := schemaNames(ctx, root)
+	for _, schemaName := range schemaNames {
+		err = tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
+			nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
+			if err != nil {
+				return true, err
+			}
+			tbl := &Table{table: nt}
 
-	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
-		nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
+			sch, err := tbl.GetSchema(ctx)
+			if err != nil {
+				return true, err
+			}
+
+			return cb(TableName{Name: name, Schema: schemaName}, tbl, sch)
+		})
 		if err != nil {
-			return true, err
+			return err
 		}
-		tbl := &Table{table: nt}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		return cb(name, tbl, sch)
-	})
+	}
+	
+	return nil
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
@@ -1013,21 +1020,11 @@ func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, erro
 	var tblNames []TableName
 	
 	for _, root := range roots {
-		dbSchemas, err := root.GetDatabaseSchemas(ctx)
+		schemaNames, err := schemaNames(ctx, root)
 		if err != nil {
 			return nil, err
 		}
-		
-		var schemaNames []string
-		if len(dbSchemas) == 0 {
-			schemaNames = []string{DefaultSchemaName}
-		} else {
-			schemaNames = make([]string, len(dbSchemas))
-			for i, dbSchema := range dbSchemas {
-				schemaNames[i] = dbSchema.Name
-			}
-		}
-		
+
 		for _, schemaName := range schemaNames {
 			rootTblNames, err := root.GetTableNames(ctx, schemaName)
 			if err != nil {
@@ -1046,8 +1043,23 @@ func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, erro
 	return tblNames, nil
 }
 
+// schemaNames returns all names of all schemas which may have tables
+func schemaNames(ctx context.Context, root RootValue) ([]string, error) {
+	dbSchemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaNames := make([]string, len(dbSchemas)+1)
+	for i, dbSchema := range dbSchemas {
+		schemaNames[i] = dbSchema.Name
+	}
+	schemaNames[len(dbSchemas)] = DefaultSchemaName
+	return schemaNames, nil
+}
+
 // FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
-func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
+func FilterIgnoredTables(ctx context.Context, tables []TableName, roots Roots) (ignoredTables IgnoredTables, err error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
 		return ignoredTables, err

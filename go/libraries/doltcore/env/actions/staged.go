@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-func StageTables(ctx context.Context, roots doltdb.Roots, tbls []string, filterIgnoredTables bool) (doltdb.Roots, error) {
+func StageTables(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName, filterIgnoredTables bool) (doltdb.Roots, error) {
 	if filterIgnoredTables {
 		var err error
 		filteredTables, err := doltdb.FilterIgnoredTables(ctx, tbls, roots)
@@ -72,7 +72,7 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 		return doltdb.Roots{}, err
 	}
 
-	var tbls []string
+	var tbls []doltdb.TableName
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
 			tbls = append(tbls, tableDelta.FromName)
@@ -82,11 +82,7 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 	return stageTables(ctx, roots, tbls)
 }
 
-func stageTables(
-	ctx context.Context,
-	roots doltdb.Roots,
-	tbls []string,
-) (doltdb.Roots, error) {
+func stageTables(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName, ) (doltdb.Roots, error) {
 	var err error
 	err = ValidateTables(ctx, tbls, roots.Staged, roots.Working)
 	if err != nil {

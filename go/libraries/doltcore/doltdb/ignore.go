@@ -20,7 +20,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
-
+	
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -37,8 +37,8 @@ func NewIgnorePattern(pattern string, ignore bool) IgnorePattern {
 
 // IgnoredTables contains the results of comparing a series of tables to a set of dolt_ignore patterns.
 type IgnoredTables struct {
-	Ignore     []string
-	DontIgnore []string
+	Ignore     []TableName
+	DontIgnore []TableName
 	Conflicts  []DoltIgnoreConflictError
 }
 

@@ -51,8 +51,8 @@ type TableInfo struct {
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
 type TableDelta struct {
-	FromName         string
-	ToName           string
+	FromName         doltdb.TableName
+	ToName           doltdb.TableName
 	FromTable        *doltdb.Table
 	ToTable          *doltdb.Table
 	FromNodeStore    tree.NodeStore
