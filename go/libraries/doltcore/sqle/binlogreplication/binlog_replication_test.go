@@ -679,13 +679,17 @@ func findFreePort() int {
 	if err != nil {
 		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
-	mySqlPort := listener.Addr().(*net.TCPAddr).Port
+	freePort := listener.Addr().(*net.TCPAddr).Port
 	err = listener.Close()
 	if err != nil {
 		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
 
-	return mySqlPort
+	if freePort < 0 {
+		panic(fmt.Sprintf("unable to find available TCP port; found port %v", freePort))
+	}
+
+	return freePort
 }
 
 // startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
@@ -852,7 +856,7 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 
 	// If we already assigned a port, re-use it. This is useful when testing restarting a primary, since
 	// we want the primary to come back up on the same port, so the replica can reconnect.
-	if doltPort == 0 {
+	if doltPort < 1 {
 		doltPort = findFreePort()
 	}
 	fmt.Printf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)

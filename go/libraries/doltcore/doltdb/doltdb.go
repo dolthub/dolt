@@ -1508,9 +1508,19 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 // specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
 // encountered. If any listeners are registered for working root updates, then they will be notified as well.
 func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
-	var prevWorkingSet *WorkingSet
+	var prevRoot RootValue
 	if wsDs.HasHead() {
-		prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+		if err != nil {
+			return nil, err
+		}
+		prevRoot = prevWorkingSet.workingRoot
+	} else {
+		// If the working set dataset doesn't have a head, then there isn't a previous root value for us to use
+		// for the database update, so instead we pass in an EmptyRootValue so that implementations of
+		// DatabaseUpdateListener don't have to do nil checking. This can happen when a new database is created
+		// or when a new branch is created.
+		prevRoot, err = EmptyRootValue(ctx, ddb.vrw, ddb.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -1526,14 +1536,14 @@ func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workin
 		return nil, err
 	}
 
-	if prevWorkingSet != nil && branchName != "" {
+	if branchName != "" {
 		for _, listener := range DatabaseUpdateListeners {
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {
 				err := listener.WorkingRootUpdated(sqlCtx,
 					ddb.databaseName,
 					branchName,
-					prevWorkingSet.workingRoot,
+					prevRoot,
 					workingSet.WorkingRoot())
 				if err != nil {
 					logrus.Errorf("error notifying working root listener of update: %s", err.Error())

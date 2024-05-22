@@ -45,7 +45,7 @@ func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpd
 
 			// After creating the database, try to replicate any existing data.
 			// This is only needed when dolt_undrop() has been used to restore a dropped database.
-			err = replicateExistingData(ctx, denv.DoltDB, binlogBranch, listener, name)
+			err = replicateExistingData(ctx, denv.DoltDB, BinlogBranch, listener, name)
 			if err != nil {
 				logrus.Errorf("error replicating data from newly created database: %s", err.Error())
 				return err
@@ -60,7 +60,10 @@ func NewBinlogInitDatabaseHook(_ context.Context, listeners []doltdb.DatabaseUpd
 // dolt_undrop().
 func replicateExistingData(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string, listener doltdb.DatabaseUpdateListener, databaseName string) error {
 	roots, err := ddb.ResolveBranchRoots(ctx, ref.NewBranchRef(branchName))
-	if err != nil {
+	if err == doltdb.ErrBranchNotFound {
+		// If the branch doesn't exist, just return
+		return nil
+	} else if err != nil {
 		return err
 	}
 

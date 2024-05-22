@@ -35,13 +35,13 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// binlogBranch specifies the branch used for generating binlog events.
-const binlogBranch = "main"
+// BinlogBranch specifies the branch used for generating binlog events.
+var BinlogBranch = "main"
 
 // binlogFilename is the name of the filename used in binlog events. Note that
 // currently, this doesn't map to a real file on disk yet, but the filename is
 // still needed for binlog messages.
-const binlogFilename = "binlog-" + binlogBranch + ".000001"
+var binlogFilename = "binlog-" + BinlogBranch + ".000001"
 
 // binlogProducer implements the doltdb.DatabaseUpdateListener interface so that it can listen for updates to Dolt
 // databases and generate binlog events describing them. Those binlog events are sent to the binlogStreamerManager,
@@ -92,8 +92,7 @@ func NewBinlogProducer(streamerManager *binlogStreamerManager) *binlogProducer {
 // TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit. We should split this out to a background routine to process, in order of the commits.
 func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before doltdb.RootValue, after doltdb.RootValue) error {
 	// We only support updates to a single branch for binlog events, so ignore all other updates
-	// TODO: support making the binlog branch configurable
-	if branchName != binlogBranch {
+	if branchName != BinlogBranch {
 		return nil
 	}
 

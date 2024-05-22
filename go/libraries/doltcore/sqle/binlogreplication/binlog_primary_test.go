@@ -240,6 +240,46 @@ func TestBinlogPrimary_OptIn(t *testing.T) {
 	requireReplicaResults(t, "show tables;", [][]any{})
 }
 
+// TestBinlogPrimary_ChangeReplicationBranch asserts that the log_bin_branch system variable can
+// be used to control what branch is replicated.
+func TestBinlogPrimary_ChangeReplicationBranch(t *testing.T) {
+	defer teardown(t)
+	mapCopy := copyMap(doltReplicationPrimarySystemVars)
+	mapCopy["log_bin_branch"] = "branch1"
+	startSqlServersWithDoltSystemVars(t, mapCopy)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(100 * time.Millisecond)
+
+	// No events should be generated when we're not updating the configured replication branch
+	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{})
+
+	// Create the branch1 branch and make sure it gets replicated
+	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
+	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"t"}})
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
+
+	// Insert another row on main and make sure it doesn't get replicated
+	primaryDatabase.MustExec("call dolt_checkout('main');")
+	primaryDatabase.MustExec("insert into db01.t values('two hundred', 200, 2000);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
+
+	// Assert that changing log_bin_branch while the server is running has no effect
+	primaryDatabase.MustExec("SET @@GLOBAL.log_bin_branch='main';")
+	primaryDatabase.MustExec("call dolt_checkout('main');")
+	primaryDatabase.MustExec("insert into db01.t values('three hundred', 300, 2023);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
+}
+
 // TestBinlogPrimary_SimpleSchemaChangesWithAutocommit tests that we can make simple schema changes (e.g. create table,
 // alter table, drop table) and replicate the DDL statements correctly.
 func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
@@ -734,6 +774,15 @@ func outputShowReplicaStatus(t *testing.T) {
 	require.NoError(t, err)
 	allNewRows := readAllRowsIntoMaps(t, newRows)
 	fmt.Printf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
+}
+
+// copyMap returns a copy of the specified map |m|.
+func copyMap(m map[string]string) map[string]string {
+	mapCopy := make(map[string]string)
+	for key, value := range m {
+		mapCopy[key] = value
+	}
+	return mapCopy
 }
 
 // queryPrimaryServerUuid queries the primary server for its server UUID. If any errors are encountered,
