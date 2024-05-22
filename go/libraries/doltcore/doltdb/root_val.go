@@ -22,7 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -707,8 +706,6 @@ type TableName struct {
 	Schema string
 }
 
-var _ set.Element = TableName{}
-
 func (tn TableName) ToLower() TableName {
 	return TableName{
 		Name:   strings.ToLower(tn.Name),
@@ -728,15 +725,6 @@ func (tn TableName) String() string {
 		return tn.Name
 	}
 	return tn.Schema + "." + tn.Name
-}
-
-func (tn TableName) ElementLess(other set.Element) bool {
-	otherTn := other.(TableName)
-	return tn.Less(otherTn)
-}
-
-func (tn TableName) ElementLower() set.Element {
-	return tn.ToLower()
 }
 
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
