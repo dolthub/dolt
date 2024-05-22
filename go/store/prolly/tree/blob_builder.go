@@ -93,8 +93,6 @@ func (b *BlobBuilder) Reset() {
 
 // Init calculates tree dimensions for a given blob.
 func (b *BlobBuilder) Init(dataSize int) {
-	b.Reset()
-
 	if dataSize == 0 {
 		return
 	}
