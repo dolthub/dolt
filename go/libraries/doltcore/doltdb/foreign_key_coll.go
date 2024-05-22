@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
+	
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -133,7 +133,7 @@ func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 // column names to column tags, which is why |fkSchemasByName| and |otherSchemasByName| are passed in. Each of these
 // is a map of table schemas for |fk| and |other|, where the child table and every parent table referenced in the
 // foreign key is present in the map.
-func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[string]schema.Schema) bool {
+func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[TableName]schema.Schema) bool {
 	// If both FKs are resolved or unresolved, we can just deeply compare them
 	if fk.IsResolved() == other.IsResolved() {
 		return fk.DeepEquals(other)
@@ -154,7 +154,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 
 	// Sort out which FK is resolved and which is not
 	var resolvedFK, unresolvedFK ForeignKey
-	var resolvedSchemasByName map[string]schema.Schema
+	var resolvedSchemasByName map[TableName]schema.Schema
 	if fk.IsResolved() {
 		resolvedFK, unresolvedFK, resolvedSchemasByName = fk, other, fkSchemasByName
 	} else {
@@ -167,7 +167,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.TableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.TableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[resolvedFK.TableName]
+		resolvedSch, ok := resolvedSchemasByName[TableName{Name: resolvedFK.TableName}]
 		if !ok {
 			return false
 		}
@@ -186,7 +186,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.ReferencedTableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.ReferencedTableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[unresolvedFK.ReferencedTableName]
+		resolvedSch, ok := resolvedSchemasByName[TableName{Name: unresolvedFK.ReferencedTableName}]
 		if !ok {
 			return false
 		}
@@ -578,13 +578,13 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // declaredFk contains all foreign keys in which this table declared the foreign key. The array referencedByFk contains
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
-func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, referencedByFk []ForeignKey) {
-	lowercaseTblName := strings.ToLower(tableName)
+func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
+	lowercaseTblName := tableName.ToLower()
 	for _, foreignKey := range fkc.foreignKeys {
-		if strings.ToLower(foreignKey.TableName) == lowercaseTblName {
+		if strings.ToLower(foreignKey.TableName) == lowercaseTblName.Name {
 			declaredFk = append(declaredFk, foreignKey)
 		}
-		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName {
+		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName.Name {
 			referencedByFk = append(referencedByFk, foreignKey)
 		}
 	}

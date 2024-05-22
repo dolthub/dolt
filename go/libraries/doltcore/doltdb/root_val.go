@@ -426,8 +426,9 @@ func GetExistingColumns(
 
 func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schema, error) {
 	m := make(map[string]schema.Schema)
-	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-		m[name] = sch
+	err := root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
+		// TODO: schema name
+		m[name.Name] = sch
 		return false, nil
 	})
 
@@ -544,8 +545,8 @@ func GetTableInsensitive(ctx context.Context, root RootValue, tName TableName) (
 }
 
 // GetTableByColTag looks for the table containing the given column tag.
-func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name string, found bool, err error) {
-	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
+func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name TableName, found bool, err error) {
+	err = root.IterTables(ctx, func(tn TableName, t *Table, s schema.Schema) (bool, error) {
 		_, found = s.GetAllCols().GetByTag(tag)
 		if found {
 			name, tbl = tn, t
@@ -555,7 +556,7 @@ func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Tab
 	})
 
 	if err != nil {
-		return nil, "", false, err
+		return nil, TableName{}, false, err
 	}
 
 	return tbl, name, found, nil
@@ -1000,9 +1001,10 @@ func GetAllTagsForRoots(ctx context.Context, roots ...RootValue) (tags schema.Ta
 		if root == nil {
 			continue
 		}
-		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+		err = root.IterTables(ctx, func(tblName TableName, _ *Table, sch schema.Schema) (stop bool, err error) {
 			for _, t := range sch.GetAllCols().Tags {
-				tags.Add(t, tblName)
+				// TODO: schema names
+				tags.Add(t, tblName.Name)
 			}
 			return
 		})
@@ -1137,9 +1139,9 @@ func (root *rootValue) DebugString(ctx context.Context, transitive bool) string 
 
 	if transitive {
 		buf.WriteString("\nTables:")
-		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
+		root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
-			buf.WriteString(name)
+			buf.WriteString(name.Name)
 			buf.WriteString(":\n")
 
 			buf.WriteString(table.DebugString(ctx, root.ns))

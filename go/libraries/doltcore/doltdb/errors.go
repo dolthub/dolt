@@ -175,7 +175,7 @@ func GetUnreachableRootCause(err error) error {
 
 // DoltIgnoreConflictError is an error that is returned when the user attempts to stage a table that matches conflicting dolt_ignore patterns
 type DoltIgnoreConflictError struct {
-	Table         string
+	Table         TableName
 	TruePatterns  []string
 	FalsePatterns []string
 }
@@ -183,7 +183,7 @@ type DoltIgnoreConflictError struct {
 func (dc DoltIgnoreConflictError) Error() string {
 	var buffer bytes.Buffer
 	buffer.WriteString("the table ")
-	buffer.WriteString(dc.Table)
+	buffer.WriteString(dc.Table.Name)
 	buffer.WriteString(" matches conflicting patterns in dolt_ignore:")
 
 	for _, pattern := range dc.TruePatterns {
