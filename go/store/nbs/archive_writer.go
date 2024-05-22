@@ -83,6 +83,18 @@ When all of these steps have been completed without error, the ByteSink used to 
 to complete the archive writing process.
 */
 
+// newArchiveWriter - Create an *archiveWriter with the given output ByteSync, which will be used to materialize an archive on disk.
+func newArchiveWriter() (*archiveWriter, error) {
+	// NM4 - get a real tmp.
+	bs, err := NewBufferedFileByteSink("/tmp", defaultTableSinkBlockSize, defaultChBufferSize)
+	if err != nil {
+		return nil, err
+	}
+
+	hbs := NewSHA512HashingByteSink(bs)
+	return &archiveWriter{output: hbs, seenChunks: hash.HashSet{}}, nil
+}
+
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbs := NewSHA512HashingByteSink(bs)
 	return &archiveWriter{output: hbs, seenChunks: hash.HashSet{}}

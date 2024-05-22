@@ -36,6 +36,8 @@ type AddrDiffStream[K ~[]byte, O Ordering[K]] struct {
 	dfr    []Differ[K, O]
 }
 
+type AddrDiffFn func(context.Context, AddrDiff) error
+
 func (ads *AddrDiffStream[K, O]) Next(ctx context.Context) (AddrDiff, error) {
 	for {
 		if len(ads.dfr) > 0 {
@@ -102,4 +104,32 @@ func layerDifferFromRoots[K ~[]byte, O Ordering[K]](
 	}
 	return stream, nil
 
+}
+
+func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	from, to StaticMap[K, V, O],
+	cb AddrDiffFn,
+) error {
+	differ, err := layerDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff AddrDiff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+
+	if err == io.EOF {
+		err = nil
+	}
+
+	return err
 }

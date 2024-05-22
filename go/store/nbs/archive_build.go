@@ -15,15 +15,328 @@
 package nbs
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"math"
+	"math/rand"
+	"os"
 	"sort"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
+	"golang.org/x/sync/errgroup"
 )
 
 const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chunk. TBD.
+
+func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations) (err error) {
+	if gs, ok := cs.(*GenerationalNBS); ok {
+		outPath, _ := gs.oldGen.Path()
+		oldgen := gs.oldGen.tables.upstream
+
+		for tf, ogcs := range oldgen {
+			// NM4 - We should probably provide a way to pick a particular table file to build an archive for.
+
+			idx, err := ogcs.index()
+			if err != nil {
+				return err
+			}
+
+			archivePath := ""
+			archiveName := hash.Hash{}
+			archivePath, archiveName, err = groupAllChunks(ctx, ogcs, idx, dagGroups, outPath)
+			if err != nil {
+				return err
+			}
+
+			err = verifyAllChunks(idx, archivePath)
+			if err != nil {
+				return err
+			}
+
+			// p("Verified table file: %s\n", archivePath)
+			// p("Total Verification Execution time: %v\n", duration)
+
+			//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
+			specs, err := gs.oldGen.tables.toSpecs()
+			newSpecs := make([]tableSpec, 0, len(specs))
+			for _, spec := range specs {
+				if spec.name != tf {
+					newSpecs = append(newSpecs, spec)
+				} else {
+					newSpecs = append(newSpecs, tableSpec{archiveName, spec.chunkCount})
+				}
+			}
+			err = gs.oldGen.swapTables(ctx, newSpecs)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		return errors.New("Modern DB Expected")
+	}
+	return nil
+}
+
+func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string) (string, hash.Hash, error) {
+	records := make([]getRecord, idx.chunkCount())
+	for i := uint32(0); i < idx.chunkCount(); i++ {
+		var h hash.Hash
+		_, err := idx.indexEntry(i, &h)
+		if err != nil {
+			return "", hash.Hash{}, err
+		}
+
+		records = append(records, getRecord{&h, h.Prefix(), false})
+	}
+
+	arcW, err := newArchiveWriter()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	group, ctx := errgroup.WithContext(ctx)
+
+	allChunks := map[hash.Hash]*chunks.Chunk{}
+	defaultSamples := make([]*chunks.Chunk, 0, 1000)
+
+	// Allocate buffer used to compress chunks.
+	bottleneck := sync.Mutex{} // This code doesn't cope with parallelism yet.
+	var stats Stats
+	allFound, err := cs.getMany(ctx, group, records, func(_ context.Context, c *chunks.Chunk) {
+		bottleneck.Lock()
+		defer bottleneck.Unlock()
+
+		if len(defaultSamples) < cap(defaultSamples) {
+			defaultSamples = append(defaultSamples, c)
+		}
+
+		h := c.Hash()
+		allChunks[h] = c
+	}, &stats)
+	if err != nil {
+		panic(err)
+	}
+	if !allFound { // Unlikely to happen, given we got the list of chunks from this index.
+		panic("not all chunks found")
+	}
+	err = group.Wait()
+	if err != nil {
+		panic(err)
+	}
+
+	var defaultDict []byte
+	if len(defaultSamples) > 25 {
+		defaultDict = buildDictionary(defaultSamples)
+		// p("Default Sample Size: %d\n", len(defaultSamples))
+	} else {
+		return "", hash.Hash{}, errors.New("Not enough samples to build default dictionary")
+	}
+
+	defaultCDict, err := gozstd.NewCDict(defaultDict)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	cgList := dagGroups.convertToChunkGroups(allChunks, defaultCDict)
+	// p("Naive groups: %d\n", len(cgList))
+
+	sort.Slice(cgList, func(i, j int) bool {
+		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
+	})
+
+	// for n, cg := range cgList {
+	//	cg.print(n, p)
+	//}
+
+	unGroupCount := 0
+	groupCount := 0
+
+	cmpDefDict := gozstd.Compress(nil, defaultDict)
+	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
+
+	var defaultDictByteSpanId uint32
+	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpDefDict)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+	if defaultDictByteSpanId != 1 {
+		panic(fmt.Sprintf("Default Dict should be byte span 1. Is: %d\n", defaultDictByteSpanId))
+	}
+
+	// Allocate buffer used to compress chunks.
+	cmpBuff := make([]byte, 0, maxChunkSize)
+
+	groupsUsed := 0
+
+	for _, cg := range cgList {
+		if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
+			groupsUsed++
+
+			cmpDict := gozstd.Compress(nil, cg.dict)
+			// p("Dict Raw vs Compressed: %d , %d\n", len(cg.dict), len(cmpDict))
+
+			dictId, err := arcW.writeByteSpan(cmpDict)
+			if err != nil {
+				return "", hash.Hash{}, err
+			}
+
+			for _, cs := range cg.chks {
+				c := cs.chunk
+				if !arcW.chunkSeen(c.Hash()) {
+					compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
+
+					dataId, err := arcW.writeByteSpan(compressed)
+					if err != nil {
+						return "", hash.Hash{}, err
+					}
+					err = arcW.stageChunk(c.Hash(), dictId, dataId)
+					if err != nil {
+						return "", hash.Hash{}, err
+					}
+					groupCount++
+				}
+				delete(allChunks, c.Hash())
+			}
+		}
+	}
+
+	// p("Actual groups used: %d\n", groupsUsed)
+
+	// Any chunks remaining will be written out individually.
+	for h, c := range allChunks {
+		var compressed []byte
+		dictId := uint32(0)
+
+		if defaultDict != nil {
+			compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultCDict)
+			dictId = defaultDictByteSpanId
+		} else {
+			compressed = gozstd.Compress(cmpBuff, c.Data())
+		}
+
+		id, err := arcW.writeByteSpan(compressed)
+		if err != nil {
+			panic(err)
+		}
+		err = arcW.stageChunk(h, dictId, id)
+		if err != nil {
+			panic(err)
+		}
+		unGroupCount++
+	}
+
+	err = arcW.finalizeByteSpans()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	err = arcW.writeIndex()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	err = arcW.writeMetadata([]byte("Dolt Version: 0.0.0"))
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	// p("index size: %d\n", arcW.indexLen)
+
+	err = arcW.writeFooter()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	fileName, err := arcW.genFileName(archivePath)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	err = arcW.flushToFile(fileName)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	// p("grouped: %d\n", groupCount)
+	// p("ungrouped: %d\n", unGroupCount)
+
+	if groupCount+unGroupCount != int(idx.chunkCount()) {
+		missing := int(idx.chunkCount()) - (groupCount + unGroupCount)
+		panic(fmt.Sprintf("chunk count mismatch. Missing: %d", missing))
+	}
+
+	name, err := arcW.getName()
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
+
+	return arcW.finalPath, name, err
+}
+
+func verifyAllChunks(idx tableIndex, archiveFile string) error {
+	file, err := os.Open(archiveFile)
+	if err != nil {
+		return err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	fileSize := stat.Size()
+
+	index, err := newArchiveReader(file, uint64(fileSize))
+	if err != nil {
+		return err
+	}
+
+	hashList := make([]hash.Hash, 0, idx.chunkCount())
+
+	for i := uint32(0); i < idx.chunkCount(); i++ {
+		var h hash.Hash
+		_, err := idx.indexEntry(i, &h)
+		if err != nil {
+			return err
+		}
+
+		hashList = append(hashList, h)
+	}
+
+	rand.Shuffle(len(hashList), func(i, j int) {
+		hashList[i], hashList[j] = hashList[j], hashList[i]
+	})
+
+	for _, h := range hashList {
+		if !index.has(h) {
+			msg := fmt.Sprintf("chunk not found in archive: %s", h.String())
+			return errors.New(msg)
+		}
+
+		data, err := index.get(h)
+		if err != nil {
+			return fmt.Errorf("error reading chunk: %s (err: %s)", h.String(), err.Error())
+		}
+		if data == nil {
+			msg := fmt.Sprintf("nil data returned from archive for expected chunk: %s", h.String())
+			return errors.New(msg)
+		}
+
+		chk := chunks.NewChunk(data)
+
+		// Verify the hash of the chunk. This is the best sanity check that our data is being stored and retrieved
+		// without any errors.
+		if chk.Hash() != h {
+			msg := fmt.Sprintf("hash mismatch for chunk: %s", h.String())
+			return errors.New(msg)
+		}
+	}
+
+	return nil
+}
 
 // chunkGroup is a collection of chunks that are compressed together using the same Dictionary. It also contains
 // calculated statistics about the group, specifically the total compression ratio and the average raw chunk size.
