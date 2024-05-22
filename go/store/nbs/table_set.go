@@ -289,11 +289,11 @@ func (ts tableSet) Size() int {
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
 func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, error) {
-	addrs := hash.NewHashSet()
-	for _, getAddrs := range mt.getChildAddrs {
-		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
-	}
-	mt.addChildRefs(addrs)
+	//addrs := hash.NewHashSet()
+	//for _, getAddrs := range mt.getChildAddrs {
+	//	getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
+	//}
+	//mt.addChildRefs(addrs)
 
 	for i := range mt.pendingRefs {
 		if !mt.pendingRefs[i].has && hasCache.Contains(*mt.pendingRefs[i].a) {
