@@ -124,7 +124,8 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		if _, doNotDelete := doNotDeleteTables[tblName]; doNotDelete || !doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, tblName)
+		// TODO: schema name
+		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}

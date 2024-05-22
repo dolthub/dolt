@@ -94,7 +94,7 @@ type RootValue interface {
 	// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 	PutTable(ctx context.Context, tName TableName, table *Table) (RootValue, error)
 	// RemoveTables removes the given case-sensitive tables from the root, and returns a new root.
-	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error)
+	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...TableName) (RootValue, error)
 	// RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 	// column tag information, use this method instead of a table drop + add.
 	RenameTable(ctx context.Context, oldName, newName TableName) (RootValue, error)
@@ -661,13 +661,17 @@ func HasConstraintViolations(ctx context.Context, root RootValue) (bool, error) 
 
 // IterTables calls the callback function cb on each table in this RootValue.
 func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error {
-	tm, err := root.getTableMap(ctx, DefaultSchemaName)
+	schemaNames, err := schemaNames(ctx, root)
 	if err != nil {
 		return err
 	}
 	
-	schemaNames, err := schemaNames(ctx, root)
 	for _, schemaName := range schemaNames {
+		tm, err := root.getTableMap(ctx, schemaName)
+		if err != nil {
+			return err
+		}
+
 		err = tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
 			nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
 			if err != nil {
@@ -725,6 +729,15 @@ func (tn TableName) String() string {
 		return tn.Name
 	}
 	return tn.Schema + "." + tn.Name
+}
+
+// ToTableNames is a migration helper function that converts a slice of table names to a slice of TableName structs.
+func ToTableNames(names []string, schemaName string) []TableName {
+	tbls := make([]TableName, len(names))
+	for i, name := range names {
+		tbls[i] = TableName{schemaName, name}
+	}
+	return tbls
 }
 
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
@@ -854,25 +867,23 @@ func (root *rootValue) RenameTable(ctx context.Context, oldName, newName TableNa
 	return root.withStorage(newStorage), nil
 }
 
-func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error) {
-	// TODO: schema name
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...TableName) (RootValue, error) {
+	// TODO: support multiple schemas in same operation, or make an error
+	tableMap, err := root.getTableMap(ctx, tables[0].Schema)
 	if err != nil {
 		return nil, err
 	}
 
 	edits := make([]tableEdit, len(tables))
 	for i, name := range tables {
-		a, err := tableMap.Get(ctx, name)
+		a, err := tableMap.Get(ctx, name.Name)
 		if err != nil {
 			return nil, err
 		}
 		if a.IsEmpty() {
 			return nil, fmt.Errorf("%w: '%s'", ErrTableNotFound, name)
 		}
-		edits[i].name = TableName{
-			Name: name,
-		}
+		edits[i].name = name
 	}
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits)

@@ -631,11 +631,12 @@ func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...string) error {
-	outgoing := set.NewStrSet(tables)
+func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...TableName) error {
+	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(fk.TableName)
-		dropParent := outgoing.Contains(fk.ReferencedTableName)
+		// TODO: schema names
+		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
+		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
 		if dropParent && !dropChild {
 			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
@@ -653,11 +654,11 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...str
 // RemoveAndUnresolveTables removes all foreign keys associated with the given tables. If a parent is dropped without
 // its child, then the foreign key goes to an unresolved state. The operation assumes that ALL tables to be removed are
 // in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...string) error {
-	outgoing := set.NewStrSet(tables)
+func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...TableName) error {
+	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(fk.TableName)
-		dropParent := outgoing.Contains(fk.ReferencedTableName)
+		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
+		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
 		if dropParent && !dropChild {
 			if !fk.IsResolved() {
 				continue

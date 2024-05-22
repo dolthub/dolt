@@ -68,13 +68,13 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 			return &AutoIncrementTracker{}, err
 		}
 
-		err = root.IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
+		err = root.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
 			ok := schema.HasAutoIncrement(sch)
 			if !ok {
 				return false, nil
 			}
 
-			tableName = strings.ToLower(tableName)
+			tableName = tableName.ToLower()
 
 			seq, err := table.GetAutoIncrementValue(ctx)
 			if err != nil {

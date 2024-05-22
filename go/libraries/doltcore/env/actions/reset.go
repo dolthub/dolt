@@ -278,7 +278,7 @@ func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot
 // CleanUntracked deletes untracked tables from the working root.
 // Evaluates untracked tables as: all working tables - all staged tables.
 func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
-	untrackedTables := make(map[string]struct{})
+	untrackedTables := make(map[doltdb.TableName]struct{})
 
 	var err error
 	if len(tables) == 0 {
@@ -294,7 +294,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
-		untrackedTables[name] = struct{}{}
+		untrackedTables[doltdb.TableName{Name: name}] = struct{}{}
 	}
 
 	// untracked tables = working tables - staged tables
@@ -304,11 +304,11 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 	}
 
 	for _, name := range headTblNames {
-		delete(untrackedTables, name)
+		delete(untrackedTables, doltdb.TableName{Name: name})
 	}
 
 	newRoot := roots.Working
-	var toDelete []string
+	var toDelete []doltdb.TableName
 	for t := range untrackedTables {
 		toDelete = append(toDelete, t)
 	}

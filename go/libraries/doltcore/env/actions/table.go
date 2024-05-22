@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
@@ -96,7 +95,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 				}
 			}
 
-			dest, err = dest.PutTable(ctx, doltdb.TableName{Name: td.ToName}, td.ToTable)
+			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
 			if err != nil {
 				return nil, err
 			}
@@ -123,10 +122,10 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 	return dest, nil
 }
 
-func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []string) error {
-	notExist := []string{}
+func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []doltdb.TableName) error {
+	var notExist []doltdb.TableName
 	for _, tbl := range unknown {
-		if has, err := currRoot.HasTable(ctx, doltdb.TableName{Name: tbl}); err != nil {
+		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
 			return err
 		} else if !has {
 			notExist = append(notExist, tbl)
@@ -134,7 +133,7 @@ func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown
 	}
 
 	if len(notExist) > 0 {
-		return NewTblNotExistError(notExist)
+		return NewTblNotExistError(summarizeTableNames(notExist))
 	}
 
 	return nil

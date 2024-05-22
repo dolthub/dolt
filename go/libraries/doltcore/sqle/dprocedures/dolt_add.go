@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
@@ -90,7 +91,8 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			}
 		}
 
-		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
+		// TODO: schema name
+		roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(apr.Args, doltdb.DefaultSchemaName), !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err
 		}

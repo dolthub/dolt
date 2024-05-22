@@ -138,8 +138,8 @@ func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWri
 
 	me := nm.Edit()
 	for _, e := range edits {
-		if e.old_name != "" {
-			old, f, err := nm.MaybeGet(ctx, types.String(e.old_name))
+		if e.old_name.Name != "" {
+			old, f, err := nm.MaybeGet(ctx, types.String(e.old_name.Name))
 			if err != nil {
 				return nil, err
 			}
@@ -153,7 +153,7 @@ func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWri
 			if f {
 				return nil, ErrTableExists
 			}
-			me = me.Remove(types.String(e.old_name)).Set(types.String(e.name.Name), old)
+			me = me.Remove(types.String(e.old_name.Name)).Set(types.String(e.name.Name), old)
 		} else {
 			if e.ref == nil {
 				me = me.Remove(types.String(e.name.Name))
@@ -352,8 +352,8 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	}
 	ae := am.Editor()
 	for _, e := range edits {
-		if e.old_name != "" {
-			oldaddr, err := am.Get(ctx, e.old_name)
+		if e.old_name.Name != "" {
+			oldaddr, err := am.Get(ctx, e.old_name.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -367,7 +367,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			if !newaddr.IsEmpty() {
 				return nil, ErrTableExists
 			}
-			err = ae.Delete(ctx, e.old_name)
+			err = ae.Delete(ctx, e.old_name.Name)
 			if err != nil {
 				return nil, err
 			}

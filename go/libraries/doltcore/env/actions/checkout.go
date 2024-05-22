@@ -30,10 +30,10 @@ import (
 
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
 // working changes, and returns the new resulting roots
-func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	var unknownTbls []string
+func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName) (doltdb.Roots, error) {
+	var unknownTbls []doltdb.TableName
 	for _, tblName := range tbls {
-		tbl, ok, err := roots.Staged.GetTable(ctx, doltdb.TableName{Name: tblName})
+		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -43,7 +43,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		if !ok {
-			tbl, ok, err = roots.Head.GetTable(ctx, doltdb.TableName{Name: tblName})
+			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
@@ -59,7 +59,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 			}
 		}
 
-		roots.Working, err = roots.Working.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
+		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -364,7 +364,7 @@ func mergeForeignKeyChanges(
 ) (*doltdb.ForeignKeyCollection, error) {
 	fksByTable := make(map[doltdb.TableName][]doltdb.ForeignKey)
 
-	conflicts := doltdb.NewTableNameSet()
+	conflicts := doltdb.NewTableNameSet(nil)
 	
 	err := newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		oldFksForTable, _ := oldFks.KeysForTable(tblName)
@@ -449,10 +449,11 @@ func writeTableHashes(ctx context.Context, head doltdb.RootValue, tblHashes map[
 		return nil, err
 	}
 
-	var toDrop []string
+	var toDrop []doltdb.TableName
 	for _, name := range names {
 		if _, ok := tblHashes[name]; !ok {
-			toDrop = append(toDrop, name)
+			// TODO: schema support
+			toDrop = append(toDrop, doltdb.TableName{Name: name})
 		}
 	}
 
