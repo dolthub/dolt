@@ -27,7 +27,7 @@ import (
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
 func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
-	tblSet := set.NewStrSet(tbls)
+	tblSet := doltdb.NewTableNameSet(tbls)
 
 	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -60,16 +60,16 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 		for _, ftIndex := range ftIndexes {
 			props := ftIndex.FullTextProperties()
 			tblSet.Add(
-				props.ConfigTable,
-				props.PositionTable,
-				props.DocCountTable,
-				props.GlobalCountTable,
-				props.RowCountTable,
+				doltdb.TableName{Name: props.ConfigTable},
+				doltdb.TableName{Name: props.PositionTable},
+				doltdb.TableName{Name: props.DocCountTable},
+				doltdb.TableName{Name: props.GlobalCountTable},
+				doltdb.TableName{Name: props.RowCountTable},
 			)
 		}
 	}
 
-	tblsToDrop := set.NewStrSet(nil)
+	tblsToDrop := doltdb.NewTableNameSet(nil)
 
 	for _, td := range tblDeltas {
 		if td.IsDrop() {

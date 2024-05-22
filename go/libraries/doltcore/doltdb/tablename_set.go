@@ -38,8 +38,8 @@ func newTableNameSet(items []TableName, caseSensitive bool) *TableNameSet {
 	return s
 }
 
-func NewTableNameSet() *TableNameSet {
-	return newTableNameSet([]TableName(nil), true)
+func NewTableNameSet(items []TableName) *TableNameSet {
+	return newTableNameSet(items, true)
 }
 
 func NewCaseInsensitiveTableNameSet(items []TableName) *TableNameSet {
@@ -202,9 +202,9 @@ func (s *TableNameSet) Iterate(callBack func(TableName) (cont bool)) {
 // LeftIntersectionRight takes a slice of strings and returns a slice of strings containing the intersection with the
 // set, and a slice of strings for the ones missing from the set.
 func (s *TableNameSet) LeftIntersectionRight(other *TableNameSet) (left *TableNameSet, intersection *TableNameSet, right *TableNameSet) {
-	left = NewTableNameSet()
-	intersection = NewTableNameSet()
-	right = NewTableNameSet()
+	left = NewTableNameSet(nil)
+	intersection = NewTableNameSet(nil)
+	right = NewTableNameSet(nil)
 
 	for os := range other.items {
 		if s.Contains(os) {

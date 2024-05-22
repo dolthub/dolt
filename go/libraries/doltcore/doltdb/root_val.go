@@ -97,7 +97,7 @@ type RootValue interface {
 	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error)
 	// RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 	// column tag information, use this method instead of a table drop + add.
-	RenameTable(ctx context.Context, oldName string, newName string) (RootValue, error)
+	RenameTable(ctx context.Context, oldName, newName TableName) (RootValue, error)
 	// ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 	// name was found.
 	ResolveTableName(ctx context.Context, tName TableName) (string, bool, error)
@@ -127,7 +127,7 @@ type tableEdit struct {
 	ref  *types.Ref
 
 	// Used for rename.
-	old_name string
+	old_name TableName
 }
 
 // NewRootValue returns a new RootValue. This is a variable as it's changed in Doltgres.
@@ -846,8 +846,8 @@ func (root *rootValue) HashOf() (hash.Hash, error) {
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
-func (root *rootValue) RenameTable(ctx context.Context, oldName, newName string) (RootValue, error) {
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: TableName{Name: newName}}})
+func (root *rootValue) RenameTable(ctx context.Context, oldName, newName TableName) (RootValue, error) {
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
