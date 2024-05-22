@@ -486,6 +486,7 @@ func TestBinlogPrimary_Merge(t *testing.T) {
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// No events should be generated when we're not updating the main branch
@@ -522,6 +523,7 @@ func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
 	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
+	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a couple of commits on branch1 so that we can cherry-pick them
@@ -600,6 +602,7 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
 	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
+	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a couple of commits on main so that we can test resetting to them
