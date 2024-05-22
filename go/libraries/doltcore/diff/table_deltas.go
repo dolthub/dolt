@@ -71,20 +71,20 @@ type TableDeltaSummary struct {
 	DiffType      string
 	DataChange    bool
 	SchemaChange  bool
-	TableName     string
-	FromTableName string
-	ToTableName   string
+	TableName     doltdb.TableName
+	FromTableName doltdb.TableName
+	ToTableName   doltdb.TableName
 	AlterStmts    []string
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (tds TableDeltaSummary) IsAdd() bool {
-	return tds.FromTableName == "" && tds.ToTableName != ""
+	return tds.FromTableName.Name == "" && tds.ToTableName.Name != ""
 }
 
 // IsDrop returns true if the table was dropped between the fromRoot and toRoot.
 func (tds TableDeltaSummary) IsDrop() bool {
-	return tds.FromTableName != "" && tds.ToTableName == ""
+	return tds.FromTableName.Name != "" && tds.ToTableName.Name == ""
 }
 
 // IsRename return true if the table was renamed between the fromRoot and toRoot.

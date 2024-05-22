@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -361,15 +362,15 @@ func mergeForeignKeyChanges(
 	changedFks *doltdb.ForeignKeyCollection,
 	force bool,
 ) (*doltdb.ForeignKeyCollection, error) {
-	fksByTable := make(map[string][]doltdb.ForeignKey)
+	fksByTable := make(map[doltdb.TableName][]doltdb.ForeignKey)
 
-	conflicts := set.NewEmptyStrSet()
+	conflicts := set.NewGenericSet[doltdb.TableName, doltdb.TableName]()
 	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
-
-	for _, tblName := range tblNames {
+	
+	err = newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		oldFksForTable, _ := oldFks.KeysForTable(tblName)
 		newFksForTable, _ := newFks.KeysForTable(tblName)
 		changedFksForTable, _ := changedFks.KeysForTable(tblName)
@@ -396,8 +397,11 @@ func mergeForeignKeyChanges(
 		} else {
 			conflicts.Add(tblName)
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
-
+	
 	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err

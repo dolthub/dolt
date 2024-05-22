@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -706,6 +707,8 @@ type TableName struct {
 	Schema string
 }
 
+var _ set.Element[TableName] = TableName{}
+
 func (tn TableName) ToLower() TableName {
 	return TableName{
 		Name:   strings.ToLower(tn.Name),
@@ -713,12 +716,19 @@ func (tn TableName) ToLower() TableName {
 	}
 }
 
-func (tn TableName) Less(o TableName) bool {
-	if tn.Schema < o.Schema {
-		return true
-	}
-	return tn.Name < o.Name
+func (tn TableName) Less(o set.Element[TableName]) bool {
+		if tn.Schema < o.Schema {
+			return true
+		}
+		return tn.Name < o.Name
 }
+
+// func (tn TableName) Less(o TableName) bool {
+// 	if tn.Schema < o.Schema {
+// 		return true
+// 	}
+// 	return tn.Name < o.Name
+// }
 
 func (tn TableName) String() string {
 	if tn.Schema == "" {
