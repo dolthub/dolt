@@ -648,6 +648,7 @@ func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, f
 }
 
 func (dp DiffPartition) Key() []byte {
+	// TODO: schema name
 	return []byte(dp.toName + dp.fromName)
 }
 

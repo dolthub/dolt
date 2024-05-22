@@ -190,16 +190,17 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 
 // findMatchingDelta returns the best matching table delta for the table name
 // given, taking renames into account
+// TODO: schema name
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
-		if strings.ToLower(d.ToName) == tableName {
+		if strings.ToLower(d.ToName.Name) == tableName {
 			return d
 		}
 	}
 
 	for _, d := range deltas {
-		if strings.ToLower(d.FromName) == tableName {
+		if strings.ToLower(d.FromName.Name) == tableName {
 			return d
 		}
 	}
@@ -510,9 +511,10 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	delta := findMatchingDelta(deltas, tableName)
 
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
+	// TODO: schema name
 	if delta.FromTable == nil && delta.ToTable == nil {
-		delta.FromName = tableName
-		delta.ToName = tableName
+		delta.FromName = doltdb.TableName{Name: tableName}
+		delta.ToName = doltdb.TableName{Name: tableName}
 		delta.FromTable = fromTable
 		delta.ToTable = toTable
 

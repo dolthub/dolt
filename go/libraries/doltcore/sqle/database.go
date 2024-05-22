@@ -967,7 +967,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, true, false, tableName)
+	newRoot, err := root.RemoveTables(ctx, true, false, doltdb.TableName{Name: tableName, Schema: db.schemaName})
 	if err != nil {
 		return err
 	}
@@ -1271,8 +1271,8 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		if err != nil {
 			return true, err
 		}
-		if exists && oldTableName != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName).Error()
+		if exists && oldTableName.Name != tableName {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
 		return false, nil

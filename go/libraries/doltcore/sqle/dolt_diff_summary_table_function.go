@@ -280,7 +280,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	}
 
 	sort.Slice(deltas, func(i, j int) bool {
-		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+		return deltas[i].ToName.Less(deltas[j].ToName)
 	})
 
 	// If tableNameExpr defined, return a single table diff summary result
@@ -316,7 +316,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil {
-		if !strings.HasPrefix(delta.FromName, diff.DBPrefix) && !strings.HasPrefix(delta.ToName, diff.DBPrefix) {
+		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
 		}
 		summ, err := delta.GetSummary(ctx)

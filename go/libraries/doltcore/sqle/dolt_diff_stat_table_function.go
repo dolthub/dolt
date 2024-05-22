@@ -306,15 +306,16 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	var diffStats []diffStatNode
 	for _, delta := range deltas {
 		tblName := delta.ToName
-		if tblName == "" {
+		if tblName.Name == "" {
 			tblName = delta.FromName
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+		// TODO: schema name
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName.Name)
 		if err != nil {
 			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))
 				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
+				diffStats = append(diffStats, diffStatNode{tblName: tblName.Name})
 				continue
 			}
 			return nil, err

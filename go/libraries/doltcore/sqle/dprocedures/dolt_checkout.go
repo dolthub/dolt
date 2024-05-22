@@ -477,7 +477,7 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
 	// TODO: schema name
-	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, doltdb.ToTableNames(tables, doltdb.DefaultSchemaName)
+	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, doltdb.ToTableNames(tables, doltdb.DefaultSchemaName))
 
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {

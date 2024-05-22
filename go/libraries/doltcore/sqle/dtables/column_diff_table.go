@@ -172,7 +172,7 @@ type doltColDiffWorkingSetRowItr struct {
 	stagedTableDeltas   []diff.TableDelta
 	unstagedTableDeltas []diff.TableDelta
 	currentTableDelta   *diff.TableDelta
-	tableName           string
+	tableName           doltdb.TableName
 	colNames            []string
 	diffTypes           []string
 }
@@ -462,7 +462,7 @@ func (itr *doltColDiffCommitHistoryRowItr) Close(*sql.Context) error {
 // tableColChange is an internal data structure used to hold the results of processing
 // a diff.TableDelta structure into the output data for this system table.
 type tableColChange struct {
-	tableName string
+	tableName doltdb.TableName
 	colNames  []string
 	diffTypes []string
 }
@@ -525,7 +525,8 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 	diffTableCols := diffTableSchema.GetAllCols()
 
 	now := time.Now() // accurate commit time returned elsewhere
-	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName, delta.FromName, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch)
+	// TODO: schema name?
+	dp := NewDiffPartition(delta.ToTable, delta.FromTable, delta.ToName.Name, delta.FromName.Name, (*dtypes.Timestamp)(&now), (*dtypes.Timestamp)(&now), delta.ToSch, delta.FromSch)
 	ri := NewDiffPartitionRowIter(*dp, ddb, j)
 
 	var resultColNames []string
