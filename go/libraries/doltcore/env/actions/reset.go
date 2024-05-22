@@ -217,20 +217,6 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return roots, nil
 }
 
-// ResetSoft resets the staged value from HEAD for the tables given and returns the updated roots.
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (doltdb.Roots, error) {
-	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-	return resetStaged(ctx, roots, tables)
-}
-
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
 // set to the commit specified by the spec string. The Working root is not set
 func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (doltdb.Roots, error) {
@@ -268,7 +254,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	}, err
 }
 
-func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot doltdb.RootValue) ([]doltdb.TableName, error) {
+func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot, headRoot doltdb.RootValue) ([]doltdb.TableName, error) {
 	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
 		var err error
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)

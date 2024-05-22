@@ -17,19 +17,26 @@ package set
 import (
 	"sort"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-// TableNameSet is a simple set implementation providing standard set operations for table names.
-type TableNameSet struct {
-	items         map[doltdb.TableName]bool
+type Element[V any] interface {
+	Less(other Element[V]) bool
+	ToLower() Element[V]
+	String() string
+}
+
+// GenericSet is a simple set implementation providing standard set operations for table names.
+type GenericSet[T Element[V], V comparable] struct {
+	items         map[Element[V]]bool
 	caseSensitive bool
 }
 
 // NewStrSet creates a set from a list of strings
-func newTableNameSet(items []doltdb.TableName, caseSensitive bool) *TableNameSet {
-	s := &TableNameSet{make(map[doltdb.TableName]bool, len(items)), caseSensitive}
+func newGenericSet[T Element[V], V comparable](items []Element[V], caseSensitive bool) *GenericSet[T, V] {
+	s := &GenericSet[T,V]{
+		items: make(map[Element[V]]bool, len(items)),
+		caseSensitive: caseSensitive,
+	}
 
 	for _, item := range items {
 		s.items[item] = true
@@ -38,31 +45,32 @@ func newTableNameSet(items []doltdb.TableName, caseSensitive bool) *TableNameSet
 	return s
 }
 
-func NewTableNameSet() *TableNameSet {
-	return newTableNameSet(nil, true)
+func NewGenericSet[T Element[V], V comparable]() *GenericSet[T, V] {
+	return newGenericSet[T,V]([]Element[V](nil), true)
 }
 
-func NewCaseInsensitiveTableNameSet(items []doltdb.TableName) *TableNameSet {
-	// lower case the table names
-	newItems := make([]doltdb.TableName, len(items))
+func NewCaseInsensitiveGenericSet[T Element[V], V comparable](items []T) *GenericSet[T, V] {
+	newItems := make([]Element[V], len(items))
 	for i, item := range items {
 		newItems[i] = item.ToLower()
 	}
-	return newTableNameSet(newItems, false)
+	return nil
+	return newGenericSet[T,V](newItems, false)
 }
 
 // Add adds new items to the set
-func (s *TableNameSet) Add(items ...doltdb.TableName) {
+func (s *GenericSet[T,V]) Add(items ...Element[V]) {
 	for _, item := range items {
 		if !s.caseSensitive {
-			item = item.ToLower()
+			lowerItem := item.ToLower()
+			item = lowerItem
 		}
 		s.items[item] = true
 	}
 }
 
 // Remove removes existing items from the set
-func (s *TableNameSet) Remove(items ...doltdb.TableName) {
+func (s *GenericSet[T,V]) Remove(items ...Element[V]) {
 	for _, item := range items {
 		if !s.caseSensitive {
 			item = item.ToLower()
@@ -73,7 +81,7 @@ func (s *TableNameSet) Remove(items ...doltdb.TableName) {
 }
 
 // Contains returns true if the item being checked is already in the set.
-func (s *TableNameSet) Contains(item doltdb.TableName) bool {
+func (s *GenericSet[T,V]) Contains(item Element[V]) bool {
 	if s == nil {
 		return false
 	}
@@ -86,7 +94,7 @@ func (s *TableNameSet) Contains(item doltdb.TableName) bool {
 }
 
 // ContainsAll returns true if all the items being checked are already in the set.
-func (s *TableNameSet) ContainsAll(items []doltdb.TableName) bool {
+func (s *GenericSet[T,V]) ContainsAll(items []Element[V]) bool {
 	if s == nil {
 		return false
 	}
@@ -103,7 +111,7 @@ func (s *TableNameSet) ContainsAll(items []doltdb.TableName) bool {
 	return true
 }
 
-func (s *TableNameSet) Equals(other *TableNameSet) bool {
+func (s *GenericSet[T,V]) Equals(other *GenericSet[T,V]) bool {
 	// two string sets can be equal even if one is sensitive and the other is insensitive as long al the items are a
 	// case sensitive match.
 	ss := s.AsSlice()
@@ -129,7 +137,7 @@ func (s *TableNameSet) Equals(other *TableNameSet) bool {
 }
 
 // Size returns the number of unique elements in the set
-func (s *TableNameSet) Size() int {
+func (s *GenericSet[T,V]) Size() int {
 	if s == nil {
 		return 0
 	}
@@ -138,12 +146,12 @@ func (s *TableNameSet) Size() int {
 
 // AsSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set.
-func (s *TableNameSet) AsSlice() []doltdb.TableName {
+func (s *GenericSet[T,V]) AsSlice() []Element[V] {
 	if s == nil {
 		return nil
 	}
 	size := len(s.items)
-	sl := make([]doltdb.TableName, size)
+	sl := make([]Element[V], size)
 
 	i := 0
 	for k := range s.items {
@@ -156,7 +164,7 @@ func (s *TableNameSet) AsSlice() []doltdb.TableName {
 
 // AsSortedSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set. The slice is sorted in ascending order.
-func (s *TableNameSet) AsSortedSlice() []doltdb.TableName {
+func (s *GenericSet[T,V]) AsSortedSlice() []Element[V] {
 	if s == nil {
 		return nil
 	}
@@ -169,7 +177,7 @@ func (s *TableNameSet) AsSortedSlice() []doltdb.TableName {
 
 // Iterate accepts a callback which will be called once for each element in the set until all items have been
 // exhausted or callback returns false.
-func (s *TableNameSet) Iterate(callBack func(doltdb.TableName) (cont bool)) {
+func (s *GenericSet[T,V]) Iterate(callBack func(Element[V]) (cont bool)) {
 	if s == nil {
 		return
 	}
@@ -182,10 +190,10 @@ func (s *TableNameSet) Iterate(callBack func(doltdb.TableName) (cont bool)) {
 
 // LeftIntersectionRight takes a slice of strings and returns a slice of strings containing the intersection with the
 // set, and a slice of strings for the ones missing from the set.
-func (s *TableNameSet) LeftIntersectionRight(other *TableNameSet) (left *TableNameSet, intersection *TableNameSet, right *TableNameSet) {
-	left = NewTableNameSet()
-	intersection = NewTableNameSet()
-	right = NewTableNameSet()
+func (s *GenericSet[T,V]) LeftIntersectionRight(other *GenericSet[T,V]) (left *GenericSet[T,V], intersection *GenericSet[T,V], right *GenericSet[T,V]) {
+	left = NewGenericSet[T,V]()
+	intersection = NewGenericSet[T,V]()
+	right = NewGenericSet[T,V]()
 
 	for os := range other.items {
 		if s.Contains(os) {
@@ -204,7 +212,7 @@ func (s *TableNameSet) LeftIntersectionRight(other *TableNameSet) (left *TableNa
 }
 
 // JoinStrings returns the sorted values from the set concatenated with a given sep
-func (s *TableNameSet) JoinStrings(sep string) string {
+func (s *GenericSet[T,V]) JoinStrings(sep string) string {
 	slice := s.AsSlice()
 	sort.Slice(slice, func(i, j int) bool {
 		return slice[i].Less(slice[j])
