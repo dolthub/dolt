@@ -17,6 +17,7 @@ package diff
 import (
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -41,24 +42,24 @@ var sch5 = schema.MustSchemaFromCols(schema.NewColCollection(
 
 func TestMatchTableDeltas(t *testing.T) {
 	var fromDeltas = []TableDelta{
-		{FromName: "should_match_on_name", FromSch: sch},
-		{FromName: "dropped", FromSch: sch},
-		{FromName: "dropped2", FromSch: sch3},
-		{FromName: "renamed_before", FromSch: sch5},
+		{FromName: doltdb.TableName{Name: "should_match_on_name"}, FromSch: sch},
+		{FromName: doltdb.TableName{Name: "dropped"}, FromSch: sch},
+		{FromName: doltdb.TableName{Name: "dropped2"}, FromSch: sch3},
+		{FromName: doltdb.TableName{Name: "renamed_before"}, FromSch: sch5},
 	}
 	var toDeltas = []TableDelta{
-		{ToName: "should_match_on_name", ToSch: sch},
-		{ToName: "added", ToSch: sch2},
-		{ToName: "added2", ToSch: sch4},
-		{ToName: "renamed_after", ToSch: sch5},
+		{ToName: doltdb.TableName{Name: "should_match_on_name"}, ToSch: sch},
+		{ToName: doltdb.TableName{Name: "added"}, ToSch: sch2},
+		{ToName: doltdb.TableName{Name: "added2"}, ToSch: sch4},
+		{ToName: doltdb.TableName{Name: "renamed_after"}, ToSch: sch5},
 	}
 	expected := []TableDelta{
-		{FromName: "should_match_on_name", ToName: "should_match_on_name", FromSch: sch, ToSch: sch},
-		{FromName: "renamed_before", ToName: "renamed_after", FromSch: sch5, ToSch: sch5},
-		{FromName: "dropped", FromSch: sch},
-		{FromName: "dropped2", FromSch: sch3},
-		{ToName: "added", ToSch: sch2},
-		{ToName: "added2", ToSch: sch4},
+		{FromName: doltdb.TableName{Name: "should_match_on_name"}, ToName: doltdb.TableName{Name: "should_match_on_name"}, FromSch: sch, ToSch: sch},
+		{FromName: doltdb.TableName{Name: "renamed_before"}, ToName: doltdb.TableName{Name: "renamed_after"}, FromSch: sch5, ToSch: sch5},
+		{FromName: doltdb.TableName{Name: "dropped"}, FromSch: sch},
+		{FromName: doltdb.TableName{Name: "dropped2"}, FromSch: sch3},
+		{ToName: doltdb.TableName{Name: "added"}, ToSch: sch2},
+		{ToName: doltdb.TableName{Name: "added2"}, ToSch: sch4},
 	}
 
 	for i := 0; i < 100; i++ {
