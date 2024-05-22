@@ -466,29 +466,29 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	// get table operations
 	for _, summary := range diffSummaries {
 		// We want to ignore all statistics for Full-Text tables
-		if doltdb.IsFullTextTable(summary.TableName) {
+		if doltdb.IsFullTextTable(summary.TableName.Name) {
 			continue
 		}
 		// Ignore stats for database collation changes
-		if strings.HasPrefix(summary.TableName, diff.DBPrefix) {
+		if strings.HasPrefix(summary.TableName.Name, diff.DBPrefix) {
 			continue
 		}
 		if summary.DiffType == "added" {
 			allUnmodified = false
-			mergeStats[summary.TableName] = &merge.MergeStats{
+			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableAdded,
 			}
 		} else if summary.DiffType == "dropped" {
 			allUnmodified = false
-			mergeStats[summary.TableName] = &merge.MergeStats{
+			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableRemoved,
 			}
 		} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
 			allUnmodified = false
-			mergeStats[summary.TableName] = &merge.MergeStats{
+			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableModified,
 			}
-			tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, fromRef, toRef)
+			tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName.Name, fromRef, toRef)
 			if err != nil {
 				return nil, false, err
 			}
@@ -496,7 +496,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 				diffStats[tableStats[0].TableName] = tableStats[0]
 			}
 		} else {
-			mergeStats[summary.TableName] = &merge.MergeStats{
+			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableUnmodified,
 			}
 		}

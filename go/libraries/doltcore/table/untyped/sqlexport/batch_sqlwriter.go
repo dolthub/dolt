@@ -61,7 +61,8 @@ func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root dol
 		return nil, errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 	}
 
-	foreignKeys, _ := fkc.KeysForTable(tableName)
+	// TODO: schema name
+	foreignKeys, _ := fkc.KeysForTable(doltdb.TableName{Name: tableName})
 
 	return &BatchSqlExportWriter{
 		tableName:     tableName,

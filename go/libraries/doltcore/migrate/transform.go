@@ -299,20 +299,21 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		return nil, err
 	}
 
-	migrated, err = migrated.RemoveTables(ctx, true, false, removedTables...)
+	migrated, err = migrated.RemoveTables(ctx, true, false, doltdb.ToTableNames(removedTables, doltdb.DefaultSchemaName)...)
 	if err != nil {
 		return nil, err
 	}
 
-	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
+	err = oldRoot.IterTables(ctx, func(name doltdb.TableName, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
 			return true, err
 		} else if ok && !menv.DropConflicts {
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
-
-		newSch, err := migrateSchema(ctx, name, sch)
+		
+		// TODO: schema names
+		newSch, err := migrateSchema(ctx, name.Name, sch)
 		if err != nil {
 			return true, err
 		}
@@ -324,7 +325,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		// diff against an empty table and rewrite everything
 		var parentSch schema.Schema
 
-		oldParentTbl, ok, err := oldParent.GetTable(ctx, doltdb.TableName{Name: name})
+		oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
 		if err != nil {
 			return true, err
 		}
@@ -342,7 +343,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			}
 		}
 
-		newParentTbl, ok, err := newParent.GetTable(ctx, doltdb.TableName{Name: name})
+		newParentTbl, ok, err := newParent.GetTable(ctx, name)
 		if err != nil {
 			return true, err
 		}
@@ -359,7 +360,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			return true, err
 		}
 
-		migrated, err = migrated.PutTable(ctx, doltdb.TableName{Name: name}, mtbl)
+		migrated, err = migrated.PutTable(ctx, name, mtbl)
 		if err != nil {
 			return true, err
 		}

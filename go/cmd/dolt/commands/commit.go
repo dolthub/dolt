@@ -650,12 +650,13 @@ func getModifiedAndRemovedNotStaged(notStagedRows []sql.Row, inCnfSet, violation
 	return lines
 }
 
-func getAddedNotStagedTables(notStagedRows []sql.Row) (tables []string) {
-	tables = make([]string, 0, len(notStagedRows))
+func getAddedNotStagedTables(notStagedRows []sql.Row) (tables []doltdb.TableName) {
+	tables = make([]doltdb.TableName, 0, len(notStagedRows))
 	for _, row := range notStagedRows {
 		if row[1] == "added" || row[1] == "renamed" {
 			names := strings.Split(row[0].(string), " -> ")
-			tables = append(tables, names[0])
+			// TODO: schema name
+			tables = append(tables, doltdb.TableName{Name: names[0]})
 		}
 	}
 	return tables
@@ -735,7 +736,7 @@ func printStagedDiffs(wr io.Writer, stagedRows []sql.Row, printHelp bool) int {
 }
 
 // filterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
-func filterIgnoredTables(sqlCtx *sql.Context, queryist cli.Queryist, addedNotStagedTables []string) (ignoredTables doltdb.IgnoredTables, err error) {
+func filterIgnoredTables(sqlCtx *sql.Context, queryist cli.Queryist, addedNotStagedTables []doltdb.TableName) (ignoredTables doltdb.IgnoredTables, err error) {
 	ignorePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
 	if err != nil {
 		return ignoredTables, err
