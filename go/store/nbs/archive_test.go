@@ -467,7 +467,102 @@ func TestFooterVersionAndSignature(t *testing.T) {
 
 }
 
-// Helper functions to create test data below....
+func TestChunkRelations(t *testing.T) {
+	cr := NewChunkRelations()
+	assert.Equal(t, 0, cr.Count())
+
+	h1 := hashWithPrefix(t, 1)
+	h2 := hashWithPrefix(t, 2)
+	h3 := hashWithPrefix(t, 3)
+	h4 := hashWithPrefix(t, 4)
+	h5 := hashWithPrefix(t, 5)
+	h6 := hashWithPrefix(t, 6)
+	h7 := hashWithPrefix(t, 7)
+
+	cr.Add(h1, h2)
+	assert.Equal(t, 2, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h3, h4)
+	assert.Equal(t, 4, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h5, h6)
+	assert.Equal(t, 6, cr.Count())
+	assert.Equal(t, 3, len(cr.groups()))
+
+	// restart.
+	cr = NewChunkRelations()
+
+	cr.Add(h1, h2)
+	assert.Equal(t, 2, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h2, h3)
+	assert.Equal(t, 3, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h2, h3) // Adding again should have no effect.
+	assert.Equal(t, 3, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h4, h5) // New group.
+	assert.Equal(t, 5, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h6, h7) // New group.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 3, len(cr.groups()))
+
+	cr.Add(h1, h7) // Merging groups.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h2, h5) // Another merge into one mega group.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+}
+
+func TestArchiveChunkGroup(t *testing.T) {
+	// This test has a lot of magic numbers. They have been verified at the time of writing, and heavily
+	// depend on the random data generated. If the random data generation changes, these numbers will
+	//
+	// The totalBytesSavedWDict is eyeballed to be correct.
+	defDict := generateTerribleDefaultDictionary()
+
+	cg := newChunkGroup(nil, generateSimilarChunks(42, 10), defDict)
+	assert.True(t, cg.totalRatioWDict >= 0.8666)
+	assert.True(t, cg.totalRatioWDict <= 0.8667)
+	assert.Equal(t, 8705, cg.totalBytesSavedWDict)
+	assert.Equal(t, 1004, cg.avgRawChunkSize)
+
+	unsimilar := generateRandomChunk(23, 980) // 20 bytes shorter to effect the average size.
+	v, err := cg.testChunk(unsimilar)
+	assert.NoError(t, err)
+	assert.False(t, v)
+
+	similar := generateRandomChunk(42, 999)
+	v, err = cg.testChunk(similar)
+	assert.NoError(t, err)
+	assert.True(t, v)
+
+	err = cg.addChunk(nil, similar, defDict)
+	assert.NoError(t, err)
+	assert.True(t, cg.totalRatioWDict >= 0.8768)
+	assert.True(t, cg.totalRatioWDict <= 0.8769)
+	assert.Equal(t, 9684, cg.totalBytesSavedWDict) // 11 chunks.
+	assert.Equal(t, 1004, cg.avgRawChunkSize)
+
+	// Adding unsimilar chunk should change the ratio significantly downward.
+	err = cg.addChunk(nil, unsimilar, defDict)
+	assert.NoError(t, err)
+	assert.True(t, cg.totalRatioWDict >= 0.8046)
+	assert.True(t, cg.totalRatioWDict <= 0.8047)
+	assert.Equal(t, 9675, cg.totalBytesSavedWDict) // 12 chunks, with virtually no improvement for the last one.
+	assert.Equal(t, 1002, cg.avgRawChunkSize)
+}
+
+// Helper functions to create test data below...dd.
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
 	n, err := rand.Read(randomBytes)
@@ -476,6 +571,14 @@ func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 
 	binary.BigEndian.PutUint64(randomBytes, prefix)
 	return hash.Hash(randomBytes)
+}
+
+// For tests which need a default dictionary, we generate a terrible one so it won't be used.
+func generateTerribleDefaultDictionary() *gozstd.CDict {
+	chks := generateSimilarChunks(1977, 10)
+	rawDict := buildDictionary(chks)
+	cDict, _ := gozstd.NewCDict(rawDict)
+	return cDict
 }
 
 func generateSimilarChunks(seed int64, count int) []*chunks.Chunk {
