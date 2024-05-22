@@ -740,6 +740,16 @@ func ToTableNames(names []string, schemaName string) []TableName {
 	return tbls
 }
 
+// FlattenTableNames is a migration helper function that converts a slice of table names to a slice of strings by 
+// stripping off any schema elements.
+func FlattenTableNames(names []TableName) []string {
+	tbls := make([]string, len(names))
+	for i, name := range names {
+		tbls[i] = name.Name
+	}
+	return tbls
+}
+
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
 // primary (unnamed) table store in a root.
 var DefaultSchemaName = ""
