@@ -19,22 +19,23 @@ import (
 	"strings"
 )
 
-type Element[V any] interface {
-	Less(other Element[V]) bool
-	ToLower() Element[V]
+type Element interface {
+	Less(other Element) bool
+	ToLower() Element
 	String() string
+	Key() Element
 }
 
 // GenericSet is a simple set implementation providing standard set operations for table names.
-type GenericSet[T Element[V], V comparable] struct {
-	items         map[Element[V]]bool
+type GenericSet struct {
+	items         map[Element]bool
 	caseSensitive bool
 }
 
 // NewStrSet creates a set from a list of strings
-func newGenericSet[T Element[V], V comparable](items []Element[V], caseSensitive bool) *GenericSet[T, V] {
-	s := &GenericSet[T,V]{
-		items: make(map[Element[V]]bool, len(items)),
+func newGenericSet(items []Element, caseSensitive bool) *GenericSet {
+	s := &GenericSet{
+		items: make(map[Element]bool, len(items)),
 		caseSensitive: caseSensitive,
 	}
 
@@ -45,21 +46,21 @@ func newGenericSet[T Element[V], V comparable](items []Element[V], caseSensitive
 	return s
 }
 
-func NewGenericSet[T Element[V], V comparable]() *GenericSet[T, V] {
-	return newGenericSet[T,V]([]Element[V](nil), true)
+func NewGenericSet() *GenericSet {
+	return newGenericSet([]Element(nil), true)
 }
 
-func NewCaseInsensitiveGenericSet[T Element[V], V comparable](items []T) *GenericSet[T, V] {
-	newItems := make([]Element[V], len(items))
+func NewCaseInsensitiveGenericSet(items []Element) *GenericSet {
+	newItems := make([]Element, len(items))
 	for i, item := range items {
 		newItems[i] = item.ToLower()
 	}
 	return nil
-	return newGenericSet[T,V](newItems, false)
+	return newGenericSet(newItems, false)
 }
 
 // Add adds new items to the set
-func (s *GenericSet[T,V]) Add(items ...Element[V]) {
+func (s *GenericSet) Add(items ...Element) {
 	for _, item := range items {
 		if !s.caseSensitive {
 			lowerItem := item.ToLower()
@@ -70,7 +71,7 @@ func (s *GenericSet[T,V]) Add(items ...Element[V]) {
 }
 
 // Remove removes existing items from the set
-func (s *GenericSet[T,V]) Remove(items ...Element[V]) {
+func (s *GenericSet) Remove(items ...Element) {
 	for _, item := range items {
 		if !s.caseSensitive {
 			item = item.ToLower()
@@ -81,7 +82,7 @@ func (s *GenericSet[T,V]) Remove(items ...Element[V]) {
 }
 
 // Contains returns true if the item being checked is already in the set.
-func (s *GenericSet[T,V]) Contains(item Element[V]) bool {
+func (s *GenericSet) Contains(item Element) bool {
 	if s == nil {
 		return false
 	}
@@ -94,7 +95,7 @@ func (s *GenericSet[T,V]) Contains(item Element[V]) bool {
 }
 
 // ContainsAll returns true if all the items being checked are already in the set.
-func (s *GenericSet[T,V]) ContainsAll(items []Element[V]) bool {
+func (s *GenericSet) ContainsAll(items []Element) bool {
 	if s == nil {
 		return false
 	}
@@ -111,7 +112,7 @@ func (s *GenericSet[T,V]) ContainsAll(items []Element[V]) bool {
 	return true
 }
 
-func (s *GenericSet[T,V]) Equals(other *GenericSet[T,V]) bool {
+func (s *GenericSet) Equals(other *GenericSet) bool {
 	// two string sets can be equal even if one is sensitive and the other is insensitive as long al the items are a
 	// case sensitive match.
 	ss := s.AsSlice()
@@ -137,7 +138,7 @@ func (s *GenericSet[T,V]) Equals(other *GenericSet[T,V]) bool {
 }
 
 // Size returns the number of unique elements in the set
-func (s *GenericSet[T,V]) Size() int {
+func (s *GenericSet) Size() int {
 	if s == nil {
 		return 0
 	}
@@ -146,12 +147,12 @@ func (s *GenericSet[T,V]) Size() int {
 
 // AsSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set.
-func (s *GenericSet[T,V]) AsSlice() []Element[V] {
+func (s *GenericSet) AsSlice() []Element {
 	if s == nil {
 		return nil
 	}
 	size := len(s.items)
-	sl := make([]Element[V], size)
+	sl := make([]Element, size)
 
 	i := 0
 	for k := range s.items {
@@ -164,7 +165,7 @@ func (s *GenericSet[T,V]) AsSlice() []Element[V] {
 
 // AsSortedSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set. The slice is sorted in ascending order.
-func (s *GenericSet[T,V]) AsSortedSlice() []Element[V] {
+func (s *GenericSet) AsSortedSlice() []Element {
 	if s == nil {
 		return nil
 	}
@@ -177,7 +178,7 @@ func (s *GenericSet[T,V]) AsSortedSlice() []Element[V] {
 
 // Iterate accepts a callback which will be called once for each element in the set until all items have been
 // exhausted or callback returns false.
-func (s *GenericSet[T,V]) Iterate(callBack func(Element[V]) (cont bool)) {
+func (s *GenericSet) Iterate(callBack func(Element) (cont bool)) {
 	if s == nil {
 		return
 	}
@@ -190,10 +191,10 @@ func (s *GenericSet[T,V]) Iterate(callBack func(Element[V]) (cont bool)) {
 
 // LeftIntersectionRight takes a slice of strings and returns a slice of strings containing the intersection with the
 // set, and a slice of strings for the ones missing from the set.
-func (s *GenericSet[T,V]) LeftIntersectionRight(other *GenericSet[T,V]) (left *GenericSet[T,V], intersection *GenericSet[T,V], right *GenericSet[T,V]) {
-	left = NewGenericSet[T,V]()
-	intersection = NewGenericSet[T,V]()
-	right = NewGenericSet[T,V]()
+func (s *GenericSet) LeftIntersectionRight(other *GenericSet) (left *GenericSet, intersection *GenericSet, right *GenericSet) {
+	left = NewGenericSet()
+	intersection = NewGenericSet()
+	right = NewGenericSet()
 
 	for os := range other.items {
 		if s.Contains(os) {
@@ -212,7 +213,7 @@ func (s *GenericSet[T,V]) LeftIntersectionRight(other *GenericSet[T,V]) (left *G
 }
 
 // JoinStrings returns the sorted values from the set concatenated with a given sep
-func (s *GenericSet[T,V]) JoinStrings(sep string) string {
+func (s *GenericSet) JoinStrings(sep string) string {
 	slice := s.AsSlice()
 	sort.Slice(slice, func(i, j int) bool {
 		return slice[i].Less(slice[j])
