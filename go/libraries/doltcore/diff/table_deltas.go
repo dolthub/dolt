@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -612,36 +611,6 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 	}
 
 	return from, to, nil
-}
-
-// GetDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
-func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
-	if len(row) != len(colDiffTypes) {
-		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
-	}
-
-	switch rowDiffType {
-	case Added:
-		return sqlfmt.SqlRowAsInsertStmt(row, tableName, sch)
-	case Removed:
-		return sqlfmt.SqlRowAsDeleteStmt(row, tableName, sch, 0)
-	case ModifiedNew:
-		updatedCols := set.NewEmptyStrSet()
-		for i, diffType := range colDiffTypes {
-			if diffType != None {
-				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
-			}
-		}
-		if updatedCols.Size() == 0 {
-			return "", nil
-		}
-		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
-	case ModifiedOld:
-		// do nothing, we only issue UPDATE for ModifiedNew
-		return "", nil
-	default:
-		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
-	}
 }
 
 // WorkingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
