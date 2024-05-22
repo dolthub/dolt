@@ -17,7 +17,6 @@ package actions
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
