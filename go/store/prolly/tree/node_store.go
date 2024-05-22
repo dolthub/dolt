@@ -177,9 +177,7 @@ func (ns nodeStore) Pool() pool.BuffPool {
 // BlobBuilder implements NodeStore.
 func (ns nodeStore) BlobBuilder() *BlobBuilder {
 	bb := ns.bbp.Get().(*BlobBuilder)
-	if bb.ns == nil {
-		bb.SetNodeStore(ns)
-	}
+	bb.SetNodeStore(ns)
 	return bb
 }
 

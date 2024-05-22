@@ -89,9 +89,6 @@ func (b *BlobBuilder) Reset() {
 	b.subtrees = nil
 	b.lastN = Node{}
 	b.levelCap = 0
-	for i := range b.keys {
-		b.keys[i] = zeroKey
-	}
 }
 
 // Init calculates tree dimensions for a given blob.
