@@ -707,7 +707,7 @@ type TableName struct {
 	Schema string
 }
 
-var _ set.Element[TableName] = TableName{}
+var _ set.Element = TableName{}
 
 func (tn TableName) ToLower() TableName {
 	return TableName{
@@ -716,25 +716,27 @@ func (tn TableName) ToLower() TableName {
 	}
 }
 
-func (tn TableName) Less(o set.Element[TableName]) bool {
-		if tn.Schema < o.Schema {
-			return true
-		}
-		return tn.Name < o.Name
+func (tn TableName) Less(o TableName) bool {
+	if tn.Schema < o.Schema {
+		return true
+	}
+	return tn.Name < o.Name
 }
-
-// func (tn TableName) Less(o TableName) bool {
-// 	if tn.Schema < o.Schema {
-// 		return true
-// 	}
-// 	return tn.Name < o.Name
-// }
 
 func (tn TableName) String() string {
 	if tn.Schema == "" {
 		return tn.Name
 	}
 	return tn.Schema + "." + tn.Name
+}
+
+func (tn TableName) ElementLess(other set.Element) bool {
+	otherTn := other.(TableName)
+	return tn.Less(otherTn)
+}
+
+func (tn TableName) ElementLower() set.Element {
+	return tn.ToLower()
 }
 
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the

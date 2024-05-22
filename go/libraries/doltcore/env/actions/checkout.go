@@ -364,28 +364,24 @@ func mergeForeignKeyChanges(
 ) (*doltdb.ForeignKeyCollection, error) {
 	fksByTable := make(map[doltdb.TableName][]doltdb.ForeignKey)
 
-	conflicts := set.NewGenericSet[doltdb.TableName, doltdb.TableName]()
-	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
+	conflicts := doltdb.NewTableNameSet()
 	
-	err = newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	err := newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		oldFksForTable, _ := oldFks.KeysForTable(tblName)
 		newFksForTable, _ := newFks.KeysForTable(tblName)
 		changedFksForTable, _ := changedFks.KeysForTable(tblName)
 
 		oldHash, err := doltdb.CombinedHash(oldFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 		newHash, err := doltdb.CombinedHash(newFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 		changedHash, err := doltdb.CombinedHash(changedFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 
 		if oldHash == changedHash {
@@ -397,28 +393,25 @@ func mergeForeignKeyChanges(
 		} else {
 			conflicts.Add(tblName)
 		}
+		
+		return false, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	
-	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, tblName := range tblNames {
+	err = changedRoot.IterTables(ctx, func(tblName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		if _, exists := fksByTable[tblName]; !exists {
 			oldKeys, _ := oldFks.KeysForTable(tblName)
 			oldHash, err := doltdb.CombinedHash(oldKeys)
 			if err != nil {
-				return nil, err
+				return true, err
 			}
 
 			changedKeys, _ := changedFks.KeysForTable(tblName)
 			changedHash, err := doltdb.CombinedHash(changedKeys)
 			if err != nil {
-				return nil, err
+				return true, err
 			}
 
 			if oldHash == emptyHash {
@@ -429,10 +422,15 @@ func mergeForeignKeyChanges(
 				conflicts.Add(tblName)
 			}
 		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if conflicts.Size() > 0 {
-		return nil, ErrCheckoutWouldOverwrite{conflicts.AsSlice()}
+		return nil, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
 	}
 
 	fks := make([]doltdb.ForeignKey, 0)
