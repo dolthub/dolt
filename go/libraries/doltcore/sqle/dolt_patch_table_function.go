@@ -140,7 +140,7 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 	}
 
 	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
+		return tableDeltas[i].ToName.Less(tableDeltas[j].ToName)
 	})
 
 	// If tableNameExpr defined, return a single table patch result
@@ -484,12 +484,12 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 	for _, td := range tableDeltas {
 		if td.FromTable == nil && td.ToTable == nil {
 			// no diff
-			if !strings.HasPrefix(td.FromName, diff.DBPrefix) || !strings.HasPrefix(td.ToName, diff.DBPrefix) {
+			if !strings.HasPrefix(td.FromName.Name, diff.DBPrefix) || !strings.HasPrefix(td.ToName.Name, diff.DBPrefix) {
 				continue
 			}
 
 			// db collation diff
-			dbName := strings.TrimPrefix(td.ToName, diff.DBPrefix)
+			dbName := strings.TrimPrefix(td.ToName.Name, diff.DBPrefix)
 			fromColl, cerr := fromRefDetails.root.GetCollation(ctx)
 			if cerr != nil {
 				return nil, cerr
@@ -500,7 +500,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
 			patches = append(patches, &patchNode{
-				tblName:          td.FromName,
+				tblName:          td.FromName.Name,
 				schemaPatchStmts: []string{alterDBCollStmt},
 				dataPatchStmts:   []string{},
 			})
@@ -529,7 +529,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 		}
 
-		patches = append(patches, &patchNode{tblName: tblName, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
+		patches = append(patches, &patchNode{tblName: tblName.Name, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
 	}
 
 	return patches, nil
@@ -548,9 +548,10 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 
 	var ddlStatements []string
 	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
+		// TODO: schema name
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -564,6 +565,14 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 	}
 
 	return ddlStatements, nil
+}
+
+func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
+	nameMap := make(map[string]schema.Schema)
+	for name := range tableNameMap {
+		nameMap[name.Name] = tableNameMap[name] 
+	}
+	return nameMap
 }
 
 func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
@@ -591,12 +600,13 @@ func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.Table
 		return nil, err
 	}
 
-	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName, td.ToSch)
+	// TODO: schema name
+	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName.Name, td.ToSch)
 	if err != nil {
 		return nil, err
 	}
 
-	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName, td.ToSch)
+	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName.Name, td.ToSch)
 }
 
 func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projections []sql.Expression, iter sql.RowIter, tn string, tsch schema.Schema) ([]string, error) {
@@ -646,6 +656,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 }
 
 // GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
+// TODO: schema name
 func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
@@ -654,7 +665,7 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 
 	var ddlStatements []string
 	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName.Name, td.ToName.Name))
 	}
 
 	eq := schema.SchemasAreEqual(fromSch, toSch)
@@ -668,19 +679,19 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName.Name, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
 		case diff.SchDiffModified:
 			// Ignore any primary key set changes here
 			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 				continue
 			}
 			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
 			}
 			if cd.Old.TypeInfo != cd.New.TypeInfo {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableModifyColStmt(td.ToName,
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableModifyColStmt(td.ToName.Name,
 					sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
@@ -688,9 +699,9 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName.Name))
 		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols().GetColumnNames()))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName.Name, toSch.GetPKCols().GetColumnNames()))
 		}
 	}
 
@@ -698,12 +709,12 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
 		case diff.SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		}
 	}
 
@@ -729,7 +740,7 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 	toCollation := toSch.GetCollation()
 	fromCollation := fromSch.GetCollation()
 	if toCollation != fromCollation {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableCollateStmt(td.ToName, fromCollation, toCollation))
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableCollateStmt(td.ToName.Name, fromCollation, toCollation))
 	}
 
 	return ddlStatements, nil

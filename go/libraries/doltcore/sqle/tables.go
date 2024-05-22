@@ -1081,7 +1081,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 		return nil, err
 	}
 
-	declaredFks, _ := fkc.KeysForTable(t.tableName)
+	declaredFks, _ := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
 	for i, fk := range declaredFks {
@@ -1133,7 +1133,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 		return nil, err
 	}
 
-	_, referencedByFk := fkc.KeysForTable(t.tableName)
+	_, referencedByFk := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
 
 	for i, fk := range referencedByFk {
