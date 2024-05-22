@@ -96,17 +96,18 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 
 	eg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any)
-	eg.Go(func() error {
-		return recvIndexRecords(ctx, indexChan, wr.indexWriter)
-	})
-
-	return &journalWriter{
+	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
 		indexEg:   eg,
 		indexChan: indexChan,
-	}, true, nil
+	}
+	eg.Go(func() error {
+		return recvIndexRecords(ctx, indexChan, wr)
+	})
+
+	return wr, true, nil
 }
 
 func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, err error) {
@@ -143,20 +144,21 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 
 	eg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any)
-	eg.Go(func() error {
-		return recvIndexRecords(ctx, indexChan, wr.indexWriter)
-	})
-
-	return &journalWriter{
+	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
 		indexEg:   eg,
 		indexChan: indexChan,
-	}, nil
+	}
+	eg.Go(func() error {
+		return recvIndexRecords(ctx, indexChan, wr)
+	})
+
+	return wr, nil
 }
 
-func recvIndexRecords(ctx context.Context, c chan any, wr *bufio.Writer) error {
+func recvIndexRecords(ctx context.Context, c chan any, wr *journalWriter) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -168,9 +170,9 @@ func recvIndexRecords(ctx context.Context, c chan any, wr *bufio.Writer) error {
 			var err error
 			switch l := obj.(type) {
 			case lookup:
-				err = writeIndexLookup(wr, l)
+				err = writeIndexLookup(wr.indexWriter, l)
 			case lookupMeta:
-				err = writeJournalIndexMeta(wr, l.latestHash, l.batchStart, l.batchEnd, l.checkSum)
+				err = writeJournalIndexMeta(wr.indexWriter, l.latestHash, l.batchStart, l.batchEnd, l.checkSum)
 			default:
 				err = fmt.Errorf("invalid index channel object")
 			}
@@ -472,7 +474,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 
 	a := toAddr16(cc.H)
 
-	wr.indexChan <- lookup{a: a, r: rng}
+	wr.sendIndexRecord(lookup{a: a, r: rng})
 	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 	// To fulfill our durability guarantees, we technically only need to
@@ -495,6 +497,15 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	}
 
 	return nil
+}
+
+func (wr *journalWriter) sendIndexRecord(r interface{}) {
+	if wr.indexWriter != nil {
+		wr.indexChan <- r
+	} else {
+		close(wr.indexChan)
+	}
+
 }
 
 // commitRootHash commits |root| to the journal and syncs the file to disk.
@@ -532,12 +543,12 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // out-of-band journal index file. Index records accelerate journal
 // bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	wr.indexChan <- lookupMeta{
+	wr.sendIndexRecord(lookupMeta{
 		batchStart: wr.indexed,
 		batchEnd:   end,
 		checkSum:   wr.batchCrc,
 		latestHash: root,
-	}
+	})
 	wr.batchCrc = 0
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
