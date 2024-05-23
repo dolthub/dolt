@@ -72,7 +72,7 @@ func BuildProllyIndexExternal(
 	}
 
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
-		return prefixDesc.Compare(t1, t2) < 0
+		return secondary.KeyDesc().Compare(t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
 
@@ -132,25 +132,22 @@ var _ prolly.TupleIter = (*tupleIterWithCb)(nil)
 
 func (t *tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
 	for {
-		k, err := t.iter.Next(ctx)
+		curKey, err := t.iter.Next(ctx)
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				t.err = err
 			}
 			return nil, nil
 		}
-		if t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, k) == 0 {
-			if t.uniqCb != nil {
-				// register a constraint violation if |key| collides with |lastKey|
-				if err := t.uniqCb(ctx, t.lastKey, k); err != nil {
-					t.err = err
-					return nil, nil
-				}
-			} else {
-				continue
+		if t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, curKey) == 0 && t.uniqCb != nil {
+			// register a constraint violation if |key| collides with |lastKey|
+			if err := t.uniqCb(ctx, t.lastKey, curKey); err != nil {
+				t.err = err
+				return nil, nil
 			}
+
 		}
-		t.lastKey = k
-		return k, val.EmptyTuple
+		t.lastKey = curKey
+		return curKey, val.EmptyTuple
 	}
 }
