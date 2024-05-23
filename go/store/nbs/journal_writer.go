@@ -96,17 +96,18 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		return nil, true, err
 	}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	sendEg, ctx := errgroup.WithContext(ctx)
+	recvEg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
-		indexEg:   eg,
+		recvEg:    recvEg,
+		sendEg:    sendEg,
 		indexChan: indexChan,
-		done:      make(chan struct{}),
 	}
-	eg.Go(func() error {
+	recvEg.Go(func() error {
 		return wr.recvIndexRecords(ctx, indexChan)
 	})
 
@@ -145,17 +146,18 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	sendEg, _ := errgroup.WithContext(ctx)
+	recvEg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
-		indexEg:   eg,
+		recvEg:    recvEg,
+		sendEg:    sendEg,
 		indexChan: indexChan,
-		done:      make(chan struct{}),
 	}
-	eg.Go(func() error {
+	recvEg.Go(func() error {
 		return wr.recvIndexRecords(ctx, indexChan)
 	})
 
@@ -165,12 +167,6 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error {
 	for {
 		select {
-		case <-wr.done:
-			if len(c) > 0 {
-				continue
-			}
-			close(c)
-			return nil
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case obj, ok := <-c:
@@ -223,8 +219,8 @@ type journalWriter struct {
 	batchCrc    uint32
 	maxNovel    int
 	indexChan   chan any
-	done        chan struct{}
-	indexEg     *errgroup.Group
+	recvEg      *errgroup.Group
+	sendEg      *errgroup.Group
 
 	lock sync.RWMutex
 }
@@ -512,19 +508,14 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 
 func (wr *journalWriter) sendIndexRecord(r interface{}) {
 	if wr.indexWriter != nil {
-		select {
-		case <-wr.done:
-			return
-		default:
-		}
-		go func() {
+		wr.sendEg.Go(func() error {
 			select {
 			case wr.indexChan <- r:
 			}
-		}()
+			return nil
+		})
 	} else {
 		close(wr.indexChan)
-		close(wr.done)
 	}
 
 }
@@ -705,11 +696,13 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		// |done| will prevent new records and signal background
-		// thread to shutdown after draining
-		close(wr.done)
-		// wait returns after write thread drains
-		_ = wr.indexEg.Wait()
+		// wait for async funcs to all send
+		_ = wr.sendEg.Wait()
+		// safe to close |indexChan| after all have sent
+		close(wr.indexChan)
+		// wait for writer to drain |indexChan|
+		_ = wr.recvEg.Wait()
+		// ensure writes make it to disk, close file
 		_ = wr.indexWriter.Flush()
 		_ = wr.index.Close()
 	}
