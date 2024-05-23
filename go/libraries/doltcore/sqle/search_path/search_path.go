@@ -30,16 +30,16 @@ func ResolveTableWithSearchPath(
 		ctx *sql.Context,
 		root doltdb.RootValue,
 		tableName string,
-) (string, string, *doltdb.Table, bool, error) {
+) (doltdb.TableName, *doltdb.Table, bool, error) {
 	schemasToSearch, err := SearchPath(ctx)
 	if err != nil {
-		return "", "", nil, false, err
+		return doltdb.TableName{}, nil, false, err
 	}
 
 	for _, schemaName := range schemasToSearch {
 		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
 		if err != nil {
-			return "", "", nil, false, err
+			return doltdb.TableName{}, nil, false, err
 		}
 
 		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
@@ -48,18 +48,19 @@ func ResolveTableWithSearchPath(
 		}
 
 		// TODO: what schema name do we use for system tables?
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: correctedTableName, Schema: schemaName})
+		candidate := doltdb.TableName{Name: correctedTableName, Schema: schemaName}
+		tbl, ok, err := root.GetTable(ctx, candidate)
 		if err != nil {
-			return "", "", nil, false, err
+			return doltdb.TableName{}, nil, false, err
 		} else if !ok {
 			// Should be impossible
-			return "", "", nil, false, doltdb.ErrTableNotFound
+			return doltdb.TableName{}, nil, false, nil
 		}
 
-		return correctedTableName, schemaName, tbl, true, nil
+		return candidate, tbl, true, nil
 	}
 
-	return "", "", nil, false, nil
+	return doltdb.TableName{}, nil, false, nil
 }
 
 // SearchPath returns all the schemas in the search_path setting, with elements like "$user" expanded

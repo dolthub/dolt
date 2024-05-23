@@ -679,8 +679,8 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 	var tbl *doltdb.Table
 	if search_path.UseSearchPath && db.schemaName == "" {
-		var schemaName string
-		tableName, schemaName, tbl, ok, err = search_path.ResolveTableWithSearchPath(ctx, root, tableName)
+		var tblName doltdb.TableName
+		tblName, tbl, ok, err = search_path.ResolveTableWithSearchPath(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -689,7 +689,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 
 		// For the remainder of this method, we will use the schema name that was resolved and the table resolved 
 		// will inherit it
-		db.schemaName = schemaName
+		db.schemaName = tblName.Schema
 	} else {
 		tableName, tbl, ok, err = db.resolveTable(ctx, root, tableName)
 		if err != nil {

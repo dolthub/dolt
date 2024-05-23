@@ -92,11 +92,33 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			}
 		}
 
-		// TODO: schema name
+		// If we are using the search path, we need to resolve the table names to their fully qualified names. This code 
+		// doesn't belong in Dolt, but because we resolve table names out of band at execution time like this, we don't 
+		// have much of a choice.
+		unqualifiedTableNames := apr.Args
+		tableNames := make([]doltdb.TableName, len(unqualifiedTableNames))
+		var missingTables []string
 		if search_path.UseSearchPath {
+			for i, name := range unqualifiedTableNames {
+				tblName, _, ok, err := search_path.ResolveTableWithSearchPath(ctx, roots.Working, name)
+				if err != nil {
+					return 1, err
+				}
+				if !ok {
+					missingTables = append(missingTables, name)
+					continue
+				}
+				
+				tableNames[i] = tblName
+			}
 			
+			// This mirrors the logic in actions.StageTables
+			if len(missingTables) > 0 {
+				return 1, actions.NewTblNotExistError(missingTables)
+			}
 		}
-		roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(apr.Args, doltdb.DefaultSchemaName), !apr.Contains(cli.ForceFlag))
+		
+		roots, err = actions.StageTables(ctx, roots, tableNames, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err
 		}
