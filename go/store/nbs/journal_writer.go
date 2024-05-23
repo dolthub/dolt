@@ -51,6 +51,8 @@ const (
 	// journalMaybeSyncThreshold determines how much un-syncd written data
 	// can be outstanding to the journal before we will sync it.
 	journalMaybeSyncThreshold = 64 * 1024 * 1024
+
+	indexChanSize = 256
 )
 
 var (
@@ -95,16 +97,17 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
-	indexChan := make(chan any)
+	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
 		indexEg:   eg,
 		indexChan: indexChan,
+		done:      make(chan struct{}),
 	}
 	eg.Go(func() error {
-		return recvIndexRecords(ctx, indexChan, wr)
+		return wr.recvIndexRecords(ctx, indexChan)
 	})
 
 	return wr, true, nil
@@ -143,22 +146,23 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
-	indexChan := make(chan any)
+	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:       make([]byte, 0, journalWriterBuffSize),
 		journal:   f,
 		path:      path,
 		indexEg:   eg,
 		indexChan: indexChan,
+		done:      make(chan struct{}),
 	}
 	eg.Go(func() error {
-		return recvIndexRecords(ctx, indexChan, wr)
+		return wr.recvIndexRecords(ctx, indexChan)
 	})
 
 	return wr, nil
 }
 
-func recvIndexRecords(ctx context.Context, c chan any, wr *journalWriter) error {
+func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -170,8 +174,11 @@ func recvIndexRecords(ctx context.Context, c chan any, wr *journalWriter) error 
 			var err error
 			switch l := obj.(type) {
 			case lookup:
+				wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, l.a[:])
 				err = writeIndexLookup(wr.indexWriter, l)
 			case lookupMeta:
+				l.checkSum = wr.batchCrc
+				wr.batchCrc = 0
 				err = writeJournalIndexMeta(wr.indexWriter, l.latestHash, l.batchStart, l.batchEnd, l.checkSum)
 			default:
 				err = fmt.Errorf("invalid index channel object")
@@ -473,9 +480,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	wr.ranges.put(cc.H, rng)
 
 	a := toAddr16(cc.H)
-
 	wr.sendIndexRecord(lookup{a: a, r: rng})
-	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -501,9 +506,15 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 
 func (wr *journalWriter) sendIndexRecord(r interface{}) {
 	if wr.indexWriter != nil {
-		wr.indexChan <- r
+		go func() {
+			select {
+			case wr.indexChan <- r:
+			case <-wr.done:
+			}
+		}()
 	} else {
 		close(wr.indexChan)
+		close(wr.done)
 	}
 
 }
@@ -546,10 +557,8 @@ func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error)
 	wr.sendIndexRecord(lookupMeta{
 		batchStart: wr.indexed,
 		batchEnd:   end,
-		checkSum:   wr.batchCrc,
 		latestHash: root,
 	})
-	wr.batchCrc = 0
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end
@@ -686,7 +695,11 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
+		// |done| cancels in-flight records
+		close(wr.done)
+		// |indexChan| will let the write thread drain
 		close(wr.indexChan)
+		// wait returns after write thread drains
 		_ = wr.indexEg.Wait()
 		_ = wr.indexWriter.Flush()
 		_ = wr.index.Close()
