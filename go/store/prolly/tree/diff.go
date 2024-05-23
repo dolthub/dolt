@@ -175,41 +175,6 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 	return Diff{}, io.EOF
 }
 
-/*
-// NM4. gdoc. Not sure if this is in the right place at all.
-func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
-	ctx context.Context,
-	from, to StaticMap[K, V, O],
-	cb DiffFn,
-) error {
-	differ, err := layerDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
-	if err != nil {
-		return err
-	}
-	for {
-		for {
-			var diff AddrDiff
-			if diff, err = differ.Next(ctx); err != nil {
-				break
-			}
-
-			if err = cb(ctx, diff); err != nil {
-				break
-			}
-		}
-		if layerDepth > 0 {
-			differ, layerDepth, err = layerDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
-			if err != nil {
-				return err
-			}
-		} else {
-			break
-		}
-	}
-	return err
-}
-*/
-
 func sendRemoved(ctx context.Context, from *cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
