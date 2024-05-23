@@ -165,6 +165,12 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error {
 	for {
 		select {
+		case <-wr.done:
+			if len(c) > 0 {
+				continue
+			}
+			close(c)
+			return nil
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case obj, ok := <-c:
@@ -506,10 +512,14 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 
 func (wr *journalWriter) sendIndexRecord(r interface{}) {
 	if wr.indexWriter != nil {
+		select {
+		case <-wr.done:
+			return
+		default:
+		}
 		go func() {
 			select {
 			case wr.indexChan <- r:
-			case <-wr.done:
 			}
 		}()
 	} else {
@@ -695,10 +705,9 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		// |done| cancels in-flight records
+		// |done| will prevent new records and signal background
+		// thread to shutdown after draining
 		close(wr.done)
-		// |indexChan| will let the write thread drain
-		close(wr.indexChan)
 		// wait returns after write thread drains
 		_ = wr.indexEg.Wait()
 		_ = wr.indexWriter.Flush()
