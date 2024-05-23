@@ -19,8 +19,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // Single layer trees are entirly root nodes - which are imbedded in the table flatbuffer, so we don't

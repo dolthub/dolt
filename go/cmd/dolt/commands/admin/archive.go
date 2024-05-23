@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/pkg/errors"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/pkg/errors"
 )
 
 type ArchiveCmd struct {

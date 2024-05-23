@@ -19,8 +19,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // TestDifferFromRoots tests the DifferFromRoots function, very minimally. We don't have any direct tests of this
