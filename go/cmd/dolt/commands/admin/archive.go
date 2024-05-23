@@ -140,7 +140,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 			return err
 		}
 
-		err = relateChunkToParents(ctx, h, groupings, db)
+		err = relateCommitToParentChunks(ctx, h, groupings, db)
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 
 var ErrNoShallowClones = errors.New("building archives only allowed for full clones")
 
-func relateChunkToParents(ctx context.Context, commit hash.Hash, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
+func relateCommitToParentChunks(ctx context.Context, commit hash.Hash, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
 	oCmt, err := db.ReadCommit(ctx, commit)
 	if err != nil {
 		return nil // Only want commits. Skip others.
