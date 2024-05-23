@@ -338,8 +338,8 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		}
 
 		row := sql.Row{
-			fromName,   // 0
-			toName,     // 1
+			fromName.Name,   // 0
+			toName.Name,     // 1
 			fromCreate, // 2
 			toCreate,   // 3
 		}
