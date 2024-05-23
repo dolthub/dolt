@@ -405,12 +405,12 @@ SQL
 
     run dolt filter-branch -q "alter table test add column filter int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "local changes detected, call dolt stash or commit changes" ]] || false
+    [[ "$output" =~ "local changes detected, use dolt stash or commit changes before using filter-branch" ]] || false
 
     dolt add .
     run dolt filter-branch -q "alter table test add column filter int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "local changes detected, call dolt stash or commit changes" ]] || false
+    [[ "$output" =~ "local changes detected, use dolt stash or commit changes before using filter-branch" ]] || false
 
     dolt commit -m "added row"
     run dolt filter-branch -q "alter table test add column filter int"
