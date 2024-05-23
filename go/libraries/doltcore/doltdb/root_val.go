@@ -878,6 +878,10 @@ func (root *rootValue) RenameTable(ctx context.Context, oldName, newName TableNa
 }
 
 func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...TableName) (RootValue, error) {
+	if len(tables) == 0 {
+		return root, nil
+	}
+
 	// TODO: support multiple schemas in same operation, or make an error
 	tableMap, err := root.getTableMap(ctx, tables[0].Schema)
 	if err != nil {
