@@ -98,6 +98,11 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
 }
 
+func WorkingSet(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	// TODO: somehow retrieve ref to working/staged set
+	return nil
+}
+
 func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dbData.Ddb
 	heads := make([]*doltdb.Commit, len(refs))
@@ -112,6 +117,19 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	newHeads, err := rebase(ctx, ddb, replay, nerf, heads...)
 	if err != nil {
 		return err
+	}
+
+	workingSets := make([]*doltdb.WorkingSet, len(refs))
+	for i, dRef := range refs {
+		var wsRef ref.WorkingSetRef
+		wsRef, err = ref.WorkingSetRefForHead(dRef)
+		if err != nil {
+			return err
+		}
+		workingSets[i], err = ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
 	}
 
 	for i, r := range refs {
