@@ -735,7 +735,7 @@ func (tn TableName) String() string {
 func ToTableNames(names []string, schemaName string) []TableName {
 	tbls := make([]TableName, len(names))
 	for i, name := range names {
-		tbls[i] = TableName{schemaName, name}
+		tbls[i] = TableName{Name: name, Schema: schemaName}
 	}
 	return tbls
 }
