@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
@@ -49,7 +50,7 @@ func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser)
 }
 
 func (w SqlDiffWriter) WriteRow(ctx context.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
-	stmt, err := diff.GetDataDiffStatement(w.tableName, w.sch, row, rowDiffType, colDiffTypes)
+	stmt, err := sqlfmt.GenerateDataDiffStatement(w.tableName, w.sch, row, rowDiffType, colDiffTypes)
 	if err != nil {
 		return err
 	}
