@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -92,6 +93,9 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 		}
 
 		// TODO: schema name
+		if search_path.UseSearchPath {
+			
+		}
 		roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(apr.Args, doltdb.DefaultSchemaName), !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err

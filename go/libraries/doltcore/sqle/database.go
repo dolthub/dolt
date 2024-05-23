@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -677,9 +678,9 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	var tbl *doltdb.Table
-	if UseSearchPath && db.schemaName == "" {
+	if search_path.UseSearchPath && db.schemaName == "" {
 		var schemaName string
-		tableName, schemaName, tbl, ok, err = db.resolveTableWithSearchPath(ctx, root, tableName)
+		tableName, schemaName, tbl, ok, err = search_path.ResolveTableWithSearchPath(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -748,65 +749,6 @@ func (db Database) resolveTable(ctx *sql.Context, root doltdb.RootValue, tableNa
 	}
 
 	return tableName, tbl, true, nil
-}
-
-var defaultSearchPath = "doltgres,public"
-
-func (db Database) resolveTableWithSearchPath(ctx *sql.Context, root doltdb.RootValue, tableName string) (string, string, *doltdb.Table, bool, error) {
-	schemasToSearch, err := searchPath(ctx)
-	if err != nil {
-		return "", "", nil, false, err
-	}
-	
-	for _, schemaName := range schemasToSearch {
-		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
-		if err != nil {
-			return "", "", nil, false, err
-		}
-
-		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
-		if !ok {
-			continue
-		}
-
-		// TODO: what schema name do we use for system tables?
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: correctedTableName, Schema: schemaName})
-		if err != nil {
-			return "", "", nil, false, err
-		} else if !ok {
-			// Should be impossible
-			return "", "", nil, false, doltdb.ErrTableNotFound
-		}
-
-		return correctedTableName, schemaName, tbl, true, nil
-	}
-
-	return "", "", nil, false, nil
-}
-
-// searchPath returns all the schemas in the search_path setting, with elements like "$user" expanded
-func searchPath(ctx *sql.Context) ([]string, error) {
-	searchPathVar, err := ctx.GetSessionVariable(ctx, "search_path")
-	if err != nil {
-		return nil, err
-	}
-
-	pathElems := strings.Split(searchPathVar.(string), ",")
-	path := make([]string, len(pathElems))
-	for i, pathElem := range pathElems {
-		path[i] = normalizeSearchPathSchema(ctx, pathElem)
-	}
-	
-	return path, nil
-}
-
-func normalizeSearchPathSchema(ctx *sql.Context, schemaName string) string {
-	schemaName = strings.Trim(schemaName, " ")
-	if schemaName == "\"$user\"" {
-		client := ctx.Session.Client()
-		return client.User
-	}
-	return schemaName
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
@@ -1115,8 +1057,8 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	}
 	root := ws.WorkingRoot()
 
-	if UseSearchPath && db.schemaName == "" {
-		schemaName, err = firstExistingSchemaOnSearchPath(ctx, root)
+	if search_path.UseSearchPath && db.schemaName == "" {
+		schemaName, err = search_path.FirstExistingSchemaOnSearchPath(ctx, root)
 		if err != nil {
 			return err
 		}
@@ -1158,49 +1100,6 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
 }
 
-// firstExistingSchemaOnSearchPath returns the first schema in the search path that exists in the database.
-func firstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (string, error) {
-	schemas, err := searchPath(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	schemaName := ""
-	for _, s := range schemas {
-		var exists bool
-		schemaName, exists, err = resolveDatabaseSchema(ctx, root, s)
-		if err != nil {
-			return "", err
-		}
-		
-		if exists {
-			break
-		}
-	}
-
-	// No existing schema found in the search_path and none specified in the statement means we can't create the table
-	if schemaName == "" {
-		return "", sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
-	}
-	
-	return schemaName, nil
-}
-
-func hasDatabaseSchema(ctx context.Context, root doltdb.RootValue, schemaName string) (bool, error) {
-	schemas, err := root.GetDatabaseSchemas(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, schema := range schemas {
-		if strings.EqualFold(schema.Name, schemaName) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
 func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
@@ -1209,8 +1108,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 	root := ws.WorkingRoot()
 
-	if UseSearchPath && db.schemaName == "" {
-		schemaName, err = firstExistingSchemaOnSearchPath(ctx, root)
+	if search_path.UseSearchPath && db.schemaName == "" {
+		schemaName, err = search_path.FirstExistingSchemaOnSearchPath(ctx, root)
 		if err != nil {
 			return err
 		}
@@ -1324,7 +1223,7 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 		return err
 	}
 
-	_, exists, err := resolveDatabaseSchema(ctx, root, schemaName)
+	_, exists, err := doltdb.ResolveDatabaseSchema(ctx, root, schemaName)
 	if err != nil {
 		return err
 	}
@@ -1341,23 +1240,6 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	}
 
 	return db.SetRoot(ctx, root)
-}
-
-// resolveDatabaseSchema returns the case-sensitive name for the schema requested, if it exists, and an error if
-// schemas could not be loaded.
-func resolveDatabaseSchema(ctx *sql.Context, root doltdb.RootValue, schemaName string) (string, bool, error) {
-	schemas, err := root.GetDatabaseSchemas(ctx)
-	if err != nil {
-		return "", false, err
-	}
-
-	for _, databaseSchema := range schemas {
-		if strings.EqualFold(databaseSchema.Name, schemaName) {
-			return databaseSchema.Name, true, nil
-		}
-	}
-	
-	return "", false, nil
 }
 
 // GetSchema implements sql.SchemaDatabase
@@ -1381,7 +1263,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	}
 
 	// For a temporary backwards compatibility solution, always pretend the public schema exists.
-	// Should create it explicitly when we create a new db in future.
+	// We create it explicitly for new databases.
 	if strings.EqualFold(schemaName, "public") {
 		db.schemaName = "public"
 		return db, true, nil

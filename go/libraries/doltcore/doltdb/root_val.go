@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -1211,3 +1212,21 @@ func NewDataCacheKey(rv RootValue) (DataCacheKey, error) {
 
 	return DataCacheKey{hash}, nil
 }
+
+// ResolveDatabaseSchema returns the case-sensitive name for the schema requested, if it exists, and an error if
+// schemas could not be loaded.
+func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) (string, bool, error) {
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	for _, databaseSchema := range schemas {
+		if strings.EqualFold(databaseSchema.Name, schemaName) {
+			return databaseSchema.Name, true, nil
+		}
+	}
+
+	return "", false, nil
+}
+

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -65,8 +66,6 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl string
 	isStandby    *bool
 }
-
-var UseSearchPath = false
 
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.SchemaDatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -252,7 +251,7 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 func (p *DoltDatabaseProvider) SchemaDatabase(ctx *sql.Context, dbName, schemaName string) (sql.DatabaseSchema, bool, error) {
 	// If search path isn't enabled, this becomes a simple DB lookup on the schema name, which is the qualifier specified
 	// in the query
-	if !UseSearchPath {
+	if !search_path.UseSearchPath {
 		database, err := p.Database(ctx, schemaName)
 		return database, err == nil, err
 	}
@@ -485,7 +484,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 	
 	// If the search path is enabled, we need to create our initial schema object (public is available by default)
-	if UseSearchPath {
+	if search_path.UseSearchPath {
 		workingRoot, err := newEnv.WorkingRoot(ctx)
 		if err != nil {
 			return err
