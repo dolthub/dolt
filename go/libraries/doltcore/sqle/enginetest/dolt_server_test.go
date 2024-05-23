@@ -241,11 +241,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -290,12 +290,12 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
 			},
 			{
 				// TODO: this could be handled better, not the best experience. Maybe kill the session?
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1049 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -417,7 +417,7 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client b */ show tables;",
-				ExpectedErrStr: "Error 1105 (HY000): database not found: db01/branch1",
+				ExpectedErrStr: "Error 1049 (HY000): database not found: db01/branch1",
 			},
 		},
 	},
