@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search_path
+package resolve
 
 import (
 	"strings"
@@ -24,44 +24,6 @@ import (
 // UseSearchPath is a global variable that determines whether or not to use the search path when resolving table names.
 // Currently used by Doltgres
 var UseSearchPath = false
-
-// ResolveTableWithSearchPath resolves a table name to a table in the root value, searching through the schemas in the
-func ResolveTableWithSearchPath(
-		ctx *sql.Context,
-		root doltdb.RootValue,
-		tableName string,
-) (doltdb.TableName, *doltdb.Table, bool, error) {
-	schemasToSearch, err := SearchPath(ctx)
-	if err != nil {
-		return doltdb.TableName{}, nil, false, err
-	}
-
-	for _, schemaName := range schemasToSearch {
-		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
-		if err != nil {
-			return doltdb.TableName{}, nil, false, err
-		}
-
-		correctedTableName, ok := sql.GetTableNameInsensitive(tableName, tablesInSchema)
-		if !ok {
-			continue
-		}
-
-		// TODO: what schema name do we use for system tables?
-		candidate := doltdb.TableName{Name: correctedTableName, Schema: schemaName}
-		tbl, ok, err := root.GetTable(ctx, candidate)
-		if err != nil {
-			return doltdb.TableName{}, nil, false, err
-		} else if !ok {
-			// Should be impossible
-			return doltdb.TableName{}, nil, false, nil
-		}
-
-		return candidate, tbl, true, nil
-	}
-
-	return doltdb.TableName{}, nil, false, nil
-}
 
 // SearchPath returns all the schemas in the search_path setting, with elements like "$user" expanded
 func SearchPath(ctx *sql.Context) ([]string, error) {

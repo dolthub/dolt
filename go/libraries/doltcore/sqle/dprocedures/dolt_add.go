@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -98,9 +98,9 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 		unqualifiedTableNames := apr.Args
 		tableNames := make([]doltdb.TableName, len(unqualifiedTableNames))
 		var missingTables []string
-		if search_path.UseSearchPath {
+		if resolve.UseSearchPath {
 			for i, name := range unqualifiedTableNames {
-				tblName, _, ok, err := search_path.ResolveTableWithSearchPath(ctx, roots.Working, name)
+				tblName, _, ok, err := resolve.TableWithSearchPath(ctx, roots.Working, name)
 				if err != nil {
 					return 1, err
 				}

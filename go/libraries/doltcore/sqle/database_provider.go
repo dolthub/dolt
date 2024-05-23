@@ -251,7 +251,7 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 func (p *DoltDatabaseProvider) SchemaDatabase(ctx *sql.Context, dbName, schemaName string) (sql.DatabaseSchema, bool, error) {
 	// If search path isn't enabled, this becomes a simple DB lookup on the schema name, which is the qualifier specified
 	// in the query
-	if !search_path.UseSearchPath {
+	if !resolve.UseSearchPath {
 		database, err := p.Database(ctx, schemaName)
 		return database, err == nil, err
 	}
@@ -484,7 +484,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 	
 	// If the search path is enabled, we need to create our initial schema object (public is available by default)
-	if search_path.UseSearchPath {
+	if resolve.UseSearchPath {
 		workingRoot, err := newEnv.WorkingRoot(ctx)
 		if err != nil {
 			return err

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
@@ -485,12 +486,12 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		return diff.TableDelta{}, err
 	}
 
-	fromTable, _, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRefDetails.root, doltdb.TableName{Name: tableName})
+	fromTableName, fromTable, fromTableExists, err :=	resolve.Table(ctx, fromRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	toTable, _, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRefDetails.root, doltdb.TableName{Name: tableName})
+	toTableName, toTable, toTableExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
@@ -513,8 +514,8 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
 	// TODO: schema name
 	if delta.FromTable == nil && delta.ToTable == nil {
-		delta.FromName = doltdb.TableName{Name: tableName}
-		delta.ToName = doltdb.TableName{Name: tableName}
+		delta.FromName = fromTableName
+		delta.ToName = toTableName
 		delta.FromTable = fromTable
 		delta.ToTable = toTable
 

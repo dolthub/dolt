@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -678,9 +678,9 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	var tbl *doltdb.Table
-	if search_path.UseSearchPath && db.schemaName == "" {
+	if resolve.UseSearchPath && db.schemaName == "" {
 		var tblName doltdb.TableName
-		tblName, tbl, ok, err = search_path.ResolveTableWithSearchPath(ctx, root, tableName)
+		tblName, tbl, ok, err = resolve.TableWithSearchPath(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -1057,8 +1057,8 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	}
 	root := ws.WorkingRoot()
 
-	if search_path.UseSearchPath && db.schemaName == "" {
-		schemaName, err = search_path.FirstExistingSchemaOnSearchPath(ctx, root)
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
 		if err != nil {
 			return err
 		}
@@ -1108,8 +1108,8 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 	root := ws.WorkingRoot()
 
-	if search_path.UseSearchPath && db.schemaName == "" {
-		schemaName, err = search_path.FirstExistingSchemaOnSearchPath(ctx, root)
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
 		if err != nil {
 			return err
 		}
