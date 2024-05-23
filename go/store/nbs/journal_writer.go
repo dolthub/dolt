@@ -100,12 +100,12 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	recvEg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
-		buf:       make([]byte, 0, journalWriterBuffSize),
-		journal:   f,
-		path:      path,
-		recvEg:    recvEg,
-		sendEg:    sendEg,
-		indexChan: indexChan,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
+		recvEg:  recvEg,
+		sendEg:  sendEg,
+		indexCh: indexChan,
 	}
 	recvEg.Go(func() error {
 		return wr.recvIndexRecords(ctx, indexChan)
@@ -150,12 +150,12 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	recvEg, ctx := errgroup.WithContext(ctx)
 	indexChan := make(chan any, indexChanSize)
 	wr = &journalWriter{
-		buf:       make([]byte, 0, journalWriterBuffSize),
-		journal:   f,
-		path:      path,
-		recvEg:    recvEg,
-		sendEg:    sendEg,
-		indexChan: indexChan,
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
+		recvEg:  recvEg,
+		sendEg:  sendEg,
+		indexCh: indexChan,
 	}
 	recvEg.Go(func() error {
 		return wr.recvIndexRecords(ctx, indexChan)
@@ -218,9 +218,13 @@ type journalWriter struct {
 	indexWriter *bufio.Writer
 	batchCrc    uint32
 	maxNovel    int
-	indexChan   chan any
-	recvEg      *errgroup.Group
-	sendEg      *errgroup.Group
+	// indexCh linearizes index record writes
+	indexCh chan any
+	// recvEg tracks goroutines that are trying to enqueue
+	// records to |indexCh|
+	recvEg *errgroup.Group
+	// sendEg tracks the thread writing indexCh records to disk
+	sendEg *errgroup.Group
 
 	lock sync.RWMutex
 }
@@ -506,18 +510,19 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	return nil
 }
 
+// sendIndexRecord launches a goroutine that will enqueue
+// a record to the indexCh channel.
 func (wr *journalWriter) sendIndexRecord(r interface{}) {
 	if wr.indexWriter != nil {
 		wr.sendEg.Go(func() error {
 			select {
-			case wr.indexChan <- r:
+			case wr.indexCh <- r:
 			}
 			return nil
 		})
 	} else {
-		close(wr.indexChan)
+		close(wr.indexCh)
 	}
-
 }
 
 // commitRootHash commits |root| to the journal and syncs the file to disk.
@@ -698,8 +703,8 @@ func (wr *journalWriter) Close() (err error) {
 	if wr.index != nil {
 		// wait for async funcs to all send
 		_ = wr.sendEg.Wait()
-		// safe to close |indexChan| after all have sent
-		close(wr.indexChan)
+		// safe to close |indexChan| after all sent
+		close(wr.indexCh)
 		// wait for writer to drain |indexChan|
 		_ = wr.recvEg.Wait()
 		// ensure writes make it to disk, close file
