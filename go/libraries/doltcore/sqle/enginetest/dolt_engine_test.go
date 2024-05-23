@@ -144,7 +144,7 @@ func TestSchemaOverrides(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
