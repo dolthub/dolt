@@ -69,7 +69,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 
-		roots, err = actions.StageDatabase(ctx, roots, !apr.Contains(cli.ForceFlag))
+		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {
 			return 1, err
 		}
@@ -86,7 +86,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			}
 			// remove from slice
 			apr.Args = append(apr.Args[:i], apr.Args[i+1:]...)
-			roots, err = actions.StageDatabase(ctx, roots, !apr.Contains(cli.ForceFlag))
+			roots, err = actions.StageDatabase(ctx, roots)
 			if err != nil {
 				return 1, err
 			}

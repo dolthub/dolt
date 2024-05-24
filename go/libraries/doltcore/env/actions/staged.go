@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -47,7 +48,7 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables
 	return StageTables(ctx, roots, tbls, filterIgnoredTables)
 }
 
-func StageDatabase(ctx context.Context, roots doltdb.Roots, filterIgnoredTables bool) (doltdb.Roots, error) {
+func StageDatabase(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	wColl, err := roots.Working.GetCollation(ctx)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -74,6 +75,9 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 
 	var tbls []doltdb.TableName
 	for _, tableDelta := range unstaged {
+		if strings.HasPrefix(tableDelta.FromName.Name, diff.DBPrefix) {
+			continue
+		}
 		if !tableDelta.IsAdd() {
 			tbls = append(tbls, tableDelta.FromName)
 		}
