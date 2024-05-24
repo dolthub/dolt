@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -682,7 +683,7 @@ func stopDoltSqlServer(t *testing.T) {
 	}
 }
 
-func startReplication(_ *testing.T, port int) {
+func startReplication(t *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
@@ -690,6 +691,19 @@ func startReplication(_ *testing.T, port int) {
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
+	time.Sleep(100 * time.Millisecond)
+
+	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to
+	// replicate to the replica. Note that when re-starting replication in certain tests, we can't rely on
+	// the replica to contain all GTIDs (i.e. Dolt -> MySQL replication when restarting the replica, since
+	// Dolt doesn't yet resend events that occurred while the replica wasn't connected).
+	dbNames := mustListDatabases(t, primaryDatabase)
+	if !slices.Contains(dbNames, "db01") {
+		primaryDatabase.MustExec("create database db01;")
+		waitForReplicaToCatchUp(t)
+	}
+	primaryDatabase.MustExec("use db01;")
+	_, _ = replicaDatabase.Exec("use db01;")
 }
 
 func assertCreateTableStatement(t *testing.T, database *sqlx.DB, table string, expectedStatement string) {
@@ -825,10 +839,13 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Ensure the replication user exists with the right grants
-	mustCreateReplicatorUser(primaryDatabase)
+	// Ensure the replication user exists with the right grants when we initialize
+	// the MySQL server for the first time
+	if !initialized {
+		mustCreateReplicatorUser(primaryDatabase)
+	}
 
-	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", mySqlPort)
+	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
 	os.Chdir(originalCwd)
@@ -1109,4 +1126,17 @@ func queryReplicaStatus(t *testing.T) map[string]any {
 	status := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.NoError(t, rows.Close())
 	return status
+}
+
+// mustListDatabases returns a string slice of the databases (i.e. schemas) available on the specified |db|. If
+// any errors are encountered, this function will fail the current test.
+func mustListDatabases(t *testing.T, db *sqlx.DB) []string {
+	rows, err := db.Queryx("show databases;")
+	require.NoError(t, err)
+	allRows := readAllRowsIntoSlices(t, rows)
+	dbNames := make([]string, len(allRows))
+	for i, row := range allRows {
+		dbNames[i] = row[0].(string)
+	}
+	return dbNames
 }

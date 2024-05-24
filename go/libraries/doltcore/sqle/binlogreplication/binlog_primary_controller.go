@@ -54,6 +54,10 @@ func (d *doltBinlogPrimaryController) StreamerManager() *binlogStreamerManager {
 
 // RegisterReplica implements the BinlogPrimaryController interface.
 func (d *doltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql.Conn, replicaHost string, replicaPort uint16) error {
+	if d.BinlogProducer == nil {
+		return fmt.Errorf("no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
+	}
+
 	// TODO: Do we actually need the connection here? Doesn't seem like it...
 	// TODO: Obviously need locking on the datastructure, but just getting something stubbed out
 	d.registeredReplicas = append(d.registeredReplicas, &registeredReplica{

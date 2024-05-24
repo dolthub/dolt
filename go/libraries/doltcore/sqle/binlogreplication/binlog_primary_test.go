@@ -34,7 +34,7 @@ var doltReplicationPrimarySystemVars = map[string]string{
 }
 
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
-// binlog events.
+// binlog events from a wide variety of SQL data types.
 func TestBinlogPrimary(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
@@ -219,26 +219,29 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 // TestBinlogPrimary_OptIn asserts that binary logging does not work when the log_bin system variable is not set.
 func TestBinlogPrimary_OptIn(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, map[string]string{
+		"enforce_gtid_consistency": "ON",
+		"gtid_mode":                "ON",
+	})
 	setupForDoltToMySqlReplication()
 
-	// Manually create the test database on the replica, since replication isn't enabled
-	// and it won't get automatically created.
-	replicaDatabase.MustExec("create database db01;")
-	replicaDatabase.MustExec("reset binary logs and gtids;")
-
+	// Ensure that log_bin is disabled before having the replica try to connect
+	requirePrimaryResults(t, "select @@log_bin;", [][]any{{"0"}})
 	startReplication(t, doltPort)
 
-	// Ensure that log_bin is disabled
-	requirePrimaryResults(t, "select @@log_bin;", [][]any{{"0"}})
+	// MySQL doesn't return errors directly from the START REPLICA statement; instead,
+	// callers must check the replica status information for errors
+	replicaStatus := queryReplicaStatus(t)
+	require.Equal(t, "Source command COM_REGISTER_REPLICA failed: unknown error: no binlog currently being recorded; make sure the server is started with @@log_bin enabled (Errno: 1105)", replicaStatus["Last_IO_Error"])
 
-	// Create a table and assert that it does not get replicated
-	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255) NOT NULL comment 'foo bar baz');")
+	// Create a database and assert that it does not get replicated
+	primaryDatabase.MustExec("create database newDb;")
 
 	// Note that we use a sleep here, instead of waitForReplicaToCatchUp, since
 	// replication is not enabled in this test
 	time.Sleep(200 * time.Millisecond)
-	requireReplicaResults(t, "show tables;", [][]any{})
+	requireReplicaResults(t, "show databases;",
+		[][]any{{"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
 }
 
 // TestBinlogPrimary_ChangeReplicationBranch asserts that the log_bin_branch system variable can
@@ -702,11 +705,6 @@ func setupForDoltToMySqlReplication() {
 	var tempDatabase = primaryDatabase
 	primaryDatabase = replicaDatabase
 	replicaDatabase = tempDatabase
-
-	// Create the replication user on the Dolt primary server
-	// TODO: this should probably be done on both primary and replica as part of the shared setup code
-	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
-	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 
 	// On the Primary, make sure we have a unique, non-zero SERVER_ID set
 	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
