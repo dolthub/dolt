@@ -1219,7 +1219,8 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	stashes, err := ddb.GetStashes(ctx)
-	if len(stashes) > 0 {}
+	if len(stashes) > 0 {
+	}
 
 	// Update the corresponding working set at the same time, either by updating it or creating a new one
 	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already

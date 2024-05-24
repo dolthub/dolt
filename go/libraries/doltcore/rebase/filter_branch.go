@@ -102,7 +102,6 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 	//diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	//datas.NewStashMeta(curBranchName, commitMeta.Description, addedTblsToStage)
 
-
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
 }
 
