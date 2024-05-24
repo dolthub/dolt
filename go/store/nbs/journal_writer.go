@@ -190,10 +190,7 @@ func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error
 				// separate a specific chunk write from a write error. An error
 				// now disables journal indexing for the remainder of the engine
 				// process. The error is saved and reported during finalization.
-				wr.indexWriteErr = err
 				close(wr.done)
-				wr.indexCh = nil
-				close(c)
 				return err
 			}
 		}
@@ -522,6 +519,7 @@ func (wr *journalWriter) sendIndexRecord(r interface{}) {
 		select {
 		case wr.indexCh <- r:
 		case <-wr.done:
+			wr.indexCh = nil
 		}
 	}
 }
@@ -702,30 +700,24 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		if wr.indexWriteErr != nil {
-			err = wr.indexWriteErr
-		}
-		if wr.indexCh != nil {
-			close(wr.done)
-			close(wr.indexCh)
-		}
+		close(wr.indexCh)
 		// wait for writer to drain |indexChan|
 		if werr := wr.recvEg.Wait(); werr != nil {
-			err = werr
+			err = errors.Join(err, werr)
 		}
 		// ensure writes make it to disk, close file
 		if ferr := wr.indexWriter.Flush(); ferr != nil {
-			err = ferr
+			err = errors.Join(err, ferr)
 		}
 		if cerr := wr.index.Close(); cerr != nil {
-			err = cerr
+			err = errors.Join(err, cerr)
 		}
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
-		err = cerr
+		err = errors.Join(err, cerr)
 	}
 	if cerr := wr.journal.Close(); cerr != nil {
-		err = cerr
+		err = errors.Join(err, cerr)
 	} else {
 		// Nil out the journal after the file has been closed, so that it's obvious it's been closed
 		wr.journal = nil
