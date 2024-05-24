@@ -96,7 +96,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		return nil, true, err
 	}
 
-	recvEg, ctx := errgroup.WithContext(ctx)
+	recvEg, ctx := errgroup.WithContext(context.Background())
 	indexCh := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
@@ -107,7 +107,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		done:    make(chan struct{}),
 	}
 	recvEg.Go(func() error {
-		return wr.recvIndexRecords(ctx, indexCh)
+		return wr.recvIndexRecords(context.Background(), indexCh)
 	})
 
 	return wr, true, nil
@@ -145,7 +145,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
-	recvEg, ctx := errgroup.WithContext(ctx)
+	recvEg, ctx := errgroup.WithContext(context.Background())
 	indexCh := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
@@ -156,7 +156,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		done:    make(chan struct{}),
 	}
 	recvEg.Go(func() error {
-		return wr.recvIndexRecords(ctx, indexCh)
+		return wr.recvIndexRecords(context.Background(), indexCh)
 	})
 
 	return wr, nil
