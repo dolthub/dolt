@@ -116,7 +116,7 @@ func BuildProllyIndexExternal(
 		return nil, err
 	}
 	if tupIter.err != nil {
-		return nil, err
+		return nil, tupIter.err
 	}
 
 	return durable.IndexFromProllyMap(ret), nil
