@@ -21,8 +21,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
@@ -30,7 +28,9 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"golang.org/x/exp/slices"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -118,6 +118,7 @@ func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 
 // PartitionRows is a sql.Table interface function that takes a partition and returns all rows in that partition.
 // This table has a partition for just schema changes, one for just data changes, and one for both.
+// TODO: schema names
 func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
 	if err != nil {
@@ -514,7 +515,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-			schemaStmts, err = sqlfmt.GenerateSqlPatchSchemaStatements(ctx, toRefDetails.root, td)
+			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
 			}
@@ -548,10 +549,9 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 
 	var ddlStatements []string
 	if td.IsDrop() {
-		// TODO: schema name
 		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
+		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -565,14 +565,6 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 	}
 
 	return ddlStatements, nil
-}
-
-func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
-	nameMap := make(map[string]schema.Schema)
-	for name := range tableNameMap {
-		nameMap[name.Name] = tableNameMap[name] 
-	}
-	return nameMap
 }
 
 func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
@@ -600,7 +592,6 @@ func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.Table
 		return nil, err
 	}
 
-	// TODO: schema name
 	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName.Name, td.ToSch)
 	if err != nil {
 		return nil, err
@@ -636,14 +627,14 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = diff.GetDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = diff.GetDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
@@ -656,7 +647,6 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 }
 
 // GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
-// TODO: schema name
 func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods

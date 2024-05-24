@@ -74,9 +74,9 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 
 	var ddlStatements []string
 	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName))
+		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -93,6 +93,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 }
 
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
+// TODO: schema names
 func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
@@ -101,7 +102,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 
 	var ddlStatements []string
 	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, RenameTableStmt(td.FromName, td.ToName))
+		ddlStatements = append(ddlStatements, RenameTableStmt(td.FromName.Name, td.ToName.Name))
 	}
 
 	eq := schema.SchemasAreEqual(fromSch, toSch)
@@ -115,19 +116,19 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName, cd.Old.Name))
+			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
 		case diff.SchDiffModified:
 			// Ignore any primary key set changes here
 			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
 				continue
 			}
 			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
 			}
 			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
-				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName,
+				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
 					GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
@@ -135,9 +136,9 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, AlterTableDropPks(td.ToName))
+		ddlStatements = append(ddlStatements, AlterTableDropPks(td.ToName.Name))
 		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols().GetColumnNames()))
+			ddlStatements = append(ddlStatements, AlterTableAddPrimaryKeys(td.ToName.Name, toSch.GetPKCols().GetColumnNames()))
 		}
 	}
 
@@ -145,12 +146,12 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
 		case diff.SchDiffModified:
-			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		}
 	}
 
@@ -176,7 +177,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	toCollation := toSch.GetCollation()
 	fromCollation := fromSch.GetCollation()
 	if toCollation != fromCollation {
-		ddlStatements = append(ddlStatements, AlterTableCollateStmt(td.ToName, fromCollation, toCollation))
+		ddlStatements = append(ddlStatements, AlterTableCollateStmt(td.ToName.Name, fromCollation, toCollation))
 	}
 
 	return ddlStatements, nil
@@ -435,7 +436,13 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 // GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
 // `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
-func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+// TODO: schema names
+func GenerateCreateTableStatement(
+		tblName string,
+		sch schema.Schema,
+		fks []doltdb.ForeignKey,
+		fksParentSch map[doltdb.TableName]schema.Schema,
+) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 
 	// Statement creation parts for each column
