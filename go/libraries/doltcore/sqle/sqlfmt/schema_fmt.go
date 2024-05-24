@@ -441,7 +441,7 @@ func GenerateCreateTableStatement(
 		tblName string,
 		sch schema.Schema,
 		fks []doltdb.ForeignKey,
-		fksParentSch map[doltdb.TableName]schema.Schema,
+		fksParentSch map[string]schema.Schema,
 ) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 

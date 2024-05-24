@@ -551,7 +551,7 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 	if td.IsDrop() {
 		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -565,6 +565,14 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableD
 	}
 
 	return ddlStatements, nil
+}
+
+func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
+	nameMap := make(map[string]schema.Schema)
+	for name := range tableNameMap {
+		nameMap[name.Name] = tableNameMap[name]
+	}
+	return nameMap
 }
 
 func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
@@ -627,14 +635,14 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
