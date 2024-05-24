@@ -289,6 +289,12 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 		return nil, fmt.Errorf("unable to store GTID executed metadata to disk: %s", err.Error())
 	}
 
+	err = sql.SystemVariables.AssignValues(map[string]any{
+		"gtid_executed": b.gtidPosition.GTIDSet.String()})
+	if err != nil {
+		return nil, err
+	}
+
 	return binlogEvent, nil
 }
 

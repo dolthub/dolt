@@ -40,7 +40,6 @@ func TestBinlogPrimary(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (" +
 		"pk int primary key, " +
@@ -61,9 +60,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"json6 json, json7 json" +
 		");")
 
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t"}})
 
 	primaryDatabase.MustExec("insert into db01.t values (" +
@@ -85,7 +82,7 @@ func TestBinlogPrimary(t *testing.T) {
 		`POINT(1,1), 'true', '[true, false]', '[true, [true, false]]', '["foo","bar"]', '["baz", 1.0, 2.0, "bash"]', ` +
 		`'{"foo":"bar"}', '{"foo": {"baz": "bar"}}'` +
 		");")
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 
 	// Debugging output
 	outputReplicaApplierStatus(t)
@@ -97,7 +94,8 @@ func TestBinlogPrimary(t *testing.T) {
 	allRows := readAllRowsIntoMaps(t, rows)
 	require.Equal(t, 1, len(allRows))
 	require.NoError(t, rows.Close())
-	//require.Equal(t, "3ab04dd4-8c9e-471e-a223-9712a3b7c37e:1-2", allRows[0]["Executed_Gtid_Set"])
+	uuid := queryPrimaryServerUuid(t)
+	require.Equal(t, uuid+":1-3", allRows[0]["Executed_Gtid_Set"])
 	require.Equal(t, "", allRows[0]["Last_IO_Error"])
 	require.Equal(t, "", allRows[0]["Last_SQL_Error"])
 	require.Equal(t, "Yes", allRows[0]["Replica_IO_Running"])
@@ -133,28 +131,25 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
 
-	// Assert that the executed GTID position on the replica is GTID #2
-	// (GTID #1 was assigned for creating the database, and not replicated)
+	// Assert that the executed GTID position on the replica contains GTIDs 1 and 2
 	serverUuid := queryPrimaryServerUuid(t)
 	status := queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":2", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-2", status["Executed_Gtid_Set"])
 
 	// Stop the MySQL replica server and wait for a few seconds
 	stopMySqlServer(t)
-	time.Sleep(5_000 * time.Millisecond)
+	time.Sleep(4_000 * time.Millisecond)
 
 	// Make a change while the replica is stopped to test that the server
 	// doesn't error out when a registered replica is not available.
 	// NOTE: This won't be replicated until we start persisting the binlog to disk
 	primaryDatabase.MustExec("insert into db01.t1 values (1, 'one');")
-	time.Sleep(200 * time.Millisecond)
 
 	// Restart the MySQL replica and reconnect to the Dolt primary
 	prevPrimaryDatabase := primaryDatabase
@@ -164,18 +159,20 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	replicaDatabase = primaryDatabase
 	primaryDatabase = prevPrimaryDatabase
 	startReplication(t, doltPort)
-	time.Sleep(250 * time.Millisecond)
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
-	time.Sleep(250 * time.Millisecond)
+	// We can't use waitForReplicaToCatchUp here, because it won't get the statement
+	// that was executed while the replica was stopped. Once we support replaying binlog
+	// events from a log file, we can switch this to waitForReplicaToCatchUp(t)
+	waitForReplicaToReplicateLatestGtid(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 
 	// Assert the executed GTID position now contains GTID #2 and GTID #4
 	// (#1 isn't present, because it was executed before we turned on replication,
 	// and #3 isn't present, because it was executed while the replica was stopped)
 	status = queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":2:4", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-2:4", status["Executed_Gtid_Set"])
 }
 
 // TestBinlogPrimary_PrimaryRestart tests that a Dolt primary server can be restarted and that a replica
@@ -185,18 +182,16 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
 
-	// Assert that the executed GTID position on the replica is GTID #2
-	// (GTID #1 was assigned for creating the database, and not replicated)
+	// Assert that the executed GTID position on the replica contains GTIDs 1 and 2
 	serverUuid := queryPrimaryServerUuid(t)
 	status := queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":2", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-2", status["Executed_Gtid_Set"])
 
 	// Stop the Dolt primary server
 	stopDoltSqlServer(t)
@@ -213,12 +208,12 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 
 	// Assert the executed GTID position now contains GTID #2 and GTID #3
 	status = queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":2-3", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-3", status["Executed_Gtid_Set"])
 }
 
 // TestBinlogPrimary_OptIn asserts that binary logging does not work when the log_bin system variable is not set.
@@ -226,16 +221,22 @@ func TestBinlogPrimary_OptIn(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
+
+	// Manually create the test database on the replica, since replication isn't enabled
+	// and it won't get automatically created.
+	replicaDatabase.MustExec("create database db01;")
+	replicaDatabase.MustExec("reset binary logs and gtids;")
+
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	// Ensure that log_bin is disabled
 	requirePrimaryResults(t, "select @@log_bin;", [][]any{{"0"}})
 
 	// Create a table and assert that it does not get replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255) NOT NULL comment 'foo bar baz');")
+
+	// Note that we use a sleep here, instead of waitForReplicaToCatchUp, since
+	// replication is not enabled in this test
 	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "show tables;", [][]any{})
 }
@@ -249,34 +250,31 @@ func TestBinlogPrimary_ChangeReplicationBranch(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, mapCopy)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	// No events should be generated when we're not updating the configured replication branch
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{})
 
 	// Create the branch1 branch and make sure it gets replicated
 	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
 	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t"}})
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
 
 	// Insert another row on main and make sure it doesn't get replicated
 	primaryDatabase.MustExec("call dolt_checkout('main');")
 	primaryDatabase.MustExec("insert into db01.t values('two hundred', 200, 2000);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
 
 	// Assert that changing log_bin_branch while the server is running has no effect
 	primaryDatabase.MustExec("SET @@GLOBAL.log_bin_branch='main';")
 	primaryDatabase.MustExec("call dolt_checkout('main');")
 	primaryDatabase.MustExec("insert into db01.t values('three hundred', 300, 2023);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"hundred", "100", "2000"}})
 }
 
@@ -287,13 +285,10 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	// Create a table
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255) NOT NULL comment 'foo bar baz');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
 	requireReplicaResults(t, "show create table db01.t1;", [][]any{{"t1",
 		"CREATE TABLE `t1` (\n  `pk` int NOT NULL,\n  `c1` varchar(255) COLLATE utf8mb4_0900_bin NOT NULL COMMENT 'foo bar baz',\n" +
@@ -301,34 +296,34 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 
 	// Insert some data
 	primaryDatabase.MustExec("insert into db01.t1 (pk, c1) values (1, 'foo');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t1;", [][]any{{"1", "foo"}})
 
 	// Modify the table
 	primaryDatabase.MustExec("alter table db01.t1 rename column c1 to z1;")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show create table db01.t1;", [][]any{{"t1",
 		"CREATE TABLE `t1` (\n  `pk` int NOT NULL,\n  `z1` varchar(255) COLLATE utf8mb4_0900_bin NOT NULL COMMENT 'foo bar baz',\n" +
 			"  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}})
 
 	// Insert some data
 	primaryDatabase.MustExec("insert into db01.t1 (pk, z1) values (2, 'bar');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t1;", [][]any{{"1", "foo"}, {"2", "bar"}})
 
 	// Drop the table
 	primaryDatabase.MustExec("drop table db01.t1;")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{})
 
 	// Rename a table
 	primaryDatabase.MustExec("create table originalName(pk1 int, pk2 int, c1 varchar(200), c2 varchar(200), primary key (pk1, pk2));")
 	primaryDatabase.MustExec("insert into originalName values (1, 2, 'one', 'two');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"originalName"}})
 	requireReplicaResults(t, "select * from originalName;", [][]any{{"1", "2", "one", "two"}})
 	primaryDatabase.MustExec("rename table originalName to newName;")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"newName"}})
 	requireReplicaResults(t, "select * from newName;", [][]any{{"1", "2", "one", "two"}})
 }
@@ -340,7 +335,6 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	// Create table
 	primaryDatabase.MustExec("set @@autocommit=0;")
@@ -348,7 +342,7 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	primaryDatabase.MustExec("create table t (pk int primary key, c1 varchar(100), c2 int);")
 	primaryDatabase.MustExec("insert into t values (1, 'one', 1);")
 	primaryDatabase.MustExec("commit;")
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show create table t;", [][]any{{"t", "CREATE TABLE `t` (\n  " +
 		"`pk` int NOT NULL,\n  `c1` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  " +
 		"`c2` int DEFAULT NULL,\n  PRIMARY KEY (`pk`)\n) " +
@@ -360,7 +354,7 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	primaryDatabase.MustExec("alter table t modify column c2 varchar(100);")
 	primaryDatabase.MustExec("update t set c2='foo';")
 	primaryDatabase.MustExec("commit;")
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show create table t;", [][]any{{"t", "CREATE TABLE `t` (\n  " +
 		"`pk` int NOT NULL,\n  `c1` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  " +
 		"`c2` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  PRIMARY KEY (`pk`)\n) " +
@@ -375,7 +369,6 @@ func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	// Insert to multiple tables in a single SQL transaction
 	primaryDatabase.MustExec("set @@autocommit=0;")
@@ -387,7 +380,7 @@ func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
 	primaryDatabase.MustExec("commit;")
 
 	// Verify the results on the replica
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 	requireReplicaResults(t, "select * from t1;", [][]any{{"1", "one", "1"}})
 	requireReplicaResults(t, "select * from t2;", [][]any{{"1", "eins", "1"}})
@@ -399,7 +392,7 @@ func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
 	primaryDatabase.MustExec("commit;")
 
 	// Verify the results on the replica
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from t1;", [][]any{{"1", "one", "1111"}})
 	requireReplicaResults(t, "select * from t2;", [][]any{{"1", "eins", "2222"}})
 
@@ -410,7 +403,7 @@ func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
 	primaryDatabase.MustExec("commit;")
 
 	// Verify the results on the replica
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from t1;", [][]any{})
 	requireReplicaResults(t, "select * from t2;", [][]any{})
 }
@@ -422,26 +415,25 @@ func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	time.Sleep(100 * time.Millisecond)
 
 	// Test CREATE DATABASE
 	primaryDatabase.MustExec("create database foobar1;")
 	primaryDatabase.MustExec("create table foobar1.table1 (c1 enum('red', 'green', 'blue'));")
 	primaryDatabase.MustExec("insert into foobar1.table1 values ('blue');")
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show databases;", [][]any{
 		{"db01"}, {"foobar1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
 	requireReplicaResults(t, "select * from foobar1.table1;", [][]any{{"blue"}})
 
 	// Test DROP DATABASE
 	primaryDatabase.MustExec("drop database foobar1;")
-	time.Sleep(100 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show databases;", [][]any{
 		{"db01"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
 
 	// Test DOLT_UNDROP()
 	primaryDatabase.MustExec("call dolt_undrop('foobar1');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show databases;", [][]any{
 		{"db01"}, {"foobar1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
 	requireReplicaResults(t, "select * from foobar1.table1;", [][]any{{"blue"}})
@@ -452,28 +444,24 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 
 	// Insert multiple rows
 	primaryDatabase.MustExec("insert into db01.t values ('1', 1, 1981), ('2', 2, 1982), ('3', 3, 1983), ('4', 4, 1984);")
-	time.Sleep(450 * time.Millisecond)
-	outputReplicaApplierStatus(t)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
 		{"1", "1", "1981"}, {"2", "2", "1982"}, {"3", "3", "1983"}, {"4", "4", "1984"}})
 
 	// Delete multiple rows
 	primaryDatabase.MustExec("delete from db01.t where pk in ('1', '3');")
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
 		{"2", "2", "1982"}, {"4", "4", "1984"}})
 
 	// Update multiple rows
 	primaryDatabase.MustExec("update db01.t set c2 = 1942;")
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
 		{"2", "2", "1942"}, {"4", "4", "1942"}})
 
@@ -483,7 +471,7 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	primaryDatabase.MustExec("delete from db01.t where pk in ('11', '13');")
 	primaryDatabase.MustExec("update db01.t set c2 = 2042 where c2 > 2000;")
 	primaryDatabase.MustExec("COMMIT;")
-	time.Sleep(250 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
 		{"10", "10", "2042"}, {"12", "12", "2042"},
 		{"2", "2", "1942"}, {"4", "4", "1942"},
@@ -496,9 +484,6 @@ func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -507,18 +492,18 @@ func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 	// No events should be generated when we're not updating the main branch
 	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
 	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Insert another row on branch1 and make sure it doesn't get replicated
 	primaryDatabase.MustExec("insert into db01.t values('two hundred', 200, 2000);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Events should be generated from the main branch
 	primaryDatabase.MustExec("call dolt_checkout('main');")
 	primaryDatabase.MustExec("insert into db01.t values('42', 42, 2042);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
 }
 
@@ -528,9 +513,6 @@ func TestBinlogPrimary_KeylessTables(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (c1 varchar(100), c2 int, c3 int unsigned);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -538,25 +520,25 @@ func TestBinlogPrimary_KeylessTables(t *testing.T) {
 
 	// Test inserts
 	primaryDatabase.MustExec("insert into db01.t values('one', 1, 11), ('two', 2, 22);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{{"one", "1", "11"}, {"two", "2", "22"}})
 
 	// Test inserting duplicate rows
 	primaryDatabase.MustExec("insert into db01.t values('one', 1, 11), ('one', 1, 11);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{
 		{"one", "1", "11"}, {"one", "1", "11"}, {"one", "1", "11"}, {"two", "2", "22"}})
 
 	// Test updating multiple rows
 	primaryDatabase.MustExec("update db01.t set c1='uno' where c1='one';")
 	primaryDatabase.MustExec("update db01.t set c1='zwei' where c1='two';")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{
 		{"uno", "1", "11"}, {"uno", "1", "11"}, {"uno", "1", "11"}, {"zwei", "2", "22"}})
 
 	// Test deleting multiple rows
 	primaryDatabase.MustExec("delete from db01.t where c1='uno';")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{{"zwei", "2", "22"}})
 }
 
@@ -566,32 +548,29 @@ func TestBinlogPrimary_Merge(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// No events should be generated when we're not updating the main branch
 	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
 	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000), ('two-hundred', 200, 2001);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'inserting rows 100 and 200 on branch1');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a commit on main, so that we don't get a fast-forward merge later
 	primaryDatabase.MustExec("call dolt_checkout('main');")
 	primaryDatabase.MustExec("insert into db01.t values('42', 42, 2042);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'inserting row 42 on main');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
 
 	// Merge branch1 into main
 	primaryDatabase.MustExec("call dolt_merge('branch1');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{
 		{"42", "42", "2042"}, {"hundred", "100", "2000"}, {"two-hundred", "200", "2001"}})
 }
@@ -602,14 +581,11 @@ func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
 	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a couple of commits on branch1 so that we can cherry-pick them
@@ -627,12 +603,12 @@ func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	// Cherry-pick a commit from branch1 onto main
 	primaryDatabase.MustExec("call dolt_checkout('main');")
 	primaryDatabase.MustExec("call dolt_cherry_pick(@RowTwoCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"02", "2"}})
 
 	// Cherry-pick another commit from branch1 onto main
 	primaryDatabase.MustExec("call dolt_cherry_pick(@RowThreeCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"02", "2"}, {"03", "3"}})
 }
 
@@ -642,13 +618,11 @@ func TestBinlogPrimary_Revert(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
 	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a couple of commits on main so that we can revert one
@@ -661,17 +635,17 @@ func TestBinlogPrimary_Revert(t *testing.T) {
 	primaryDatabase.MustExec("insert into db01.t values('03', 3);")
 	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 03');")
 	primaryDatabase.MustExec("SET @RowThreeCommit=dolt_hashof('HEAD');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
 
 	// Revert a commit
 	primaryDatabase.MustExec("call dolt_revert(@RowTwoCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"03", "3"}})
 
 	// Revert another commit
 	primaryDatabase.MustExec("call dolt_revert(@RowOneCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"03", "3"}})
 }
 
@@ -681,14 +655,11 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
-	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
-	//       Here we just pause to let the hardcoded binlog events be delivered
-	time.Sleep(100 * time.Millisecond)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
 	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Make a couple of commits on main so that we can test resetting to them
@@ -701,27 +672,27 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	primaryDatabase.MustExec("insert into db01.t values('03', 3);")
 	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 03');")
 	primaryDatabase.MustExec("SET @ThreeRowsCommit=dolt_hashof('HEAD');")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
 
 	// Reset back to the first commit when no rows are present
 	primaryDatabase.MustExec("call dolt_reset('--hard', @EmptyTableCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Reset back to the second commit when only one row is present
 	primaryDatabase.MustExec("call dolt_reset('--hard', @OneRowCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}})
 
 	// Reset back to the second commit when only one row is present
 	primaryDatabase.MustExec("call dolt_reset('--hard', @TwoRowsCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}})
 
 	// Reset back to the second commit when only one row is present
 	primaryDatabase.MustExec("call dolt_reset('--hard', @ThreeRowsCommit);")
-	time.Sleep(200 * time.Millisecond)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
 }
 
@@ -732,18 +703,12 @@ func setupForDoltToMySqlReplication() {
 	primaryDatabase = replicaDatabase
 	replicaDatabase = tempDatabase
 
-	// Create the db01 database that our tests will use
-	primaryDatabase.MustExec("create database db01;")
-	primaryDatabase.MustExec("use db01;")
-
 	// Create the replication user on the Dolt primary server
 	// TODO: this should probably be done on both primary and replica as part of the shared setup code
 	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
 	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 
-	// On the Primary, make sure we have a non-zero SERVER_ID set
-	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
-	// TODO: Do we still need to do this? it would default to 1 and MySQL would fail to replica, right?
+	// On the Primary, make sure we have a unique, non-zero SERVER_ID set
 	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing

@@ -32,11 +32,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/vitess/go/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 var mySqlPort, doltPort int
@@ -473,6 +474,45 @@ func waitForReplicaToCatchUp(t *testing.T) {
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
 }
 
+// waitForReplicaToReplicateLatestGtid waits (up to 60s) for the replica to contain the
+// most recent GTID executed from the primary. Both the primary and replica are queried
+// for the value of @@gtid_executed to determine if the replica contains the most recent
+// transaction from the primary.
+func waitForReplicaToReplicateLatestGtid(t *testing.T) {
+	timeLimit := 60 * time.Second
+	endTime := time.Now().Add(timeLimit)
+	for time.Now().Before(endTime) {
+		replicaGtid := queryGtid(t, replicaDatabase)
+		primaryGtid := queryGtid(t, primaryDatabase)
+
+		replicaGtidSet, err := mysql.ParseMysql56GTIDSet(replicaGtid)
+		require.NoError(t, err)
+
+		idx := strings.Index(primaryGtid, ":")
+		require.True(t, idx > 0)
+		uuid := primaryGtid[:idx]
+		sequencePortion := primaryGtid[idx+1:]
+		if strings.Contains(sequencePortion, ":") {
+			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, ":")+1:]
+		}
+		if strings.Contains(sequencePortion, "-") {
+			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, "-")+1:]
+		}
+
+		latestGtid, err := mysql.ParseGTID("MySQL56", uuid+":"+sequencePortion)
+		require.NoError(t, err)
+
+		if replicaGtidSet.ContainsGTID(latestGtid) {
+			return
+		} else {
+			fmt.Printf("replica does not contain latest GTID from the primary yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	t.Fatal("replica did not synchronize the latest GTID from the primary within " + timeLimit.String())
+}
+
 // waitForReplicaToReachGtid waits (up to 10s) for the replica's @@gtid_executed sys var to show that
 // it has executed the |target| gtid transaction number.
 func waitForReplicaToReachGtid(t *testing.T, target int) {
@@ -785,12 +825,8 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Create the initial database and replication user on the MySQL server if this is the first launch
-	if !initialized {
-		primaryDatabase.MustExec("create database db01;")
-		primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
-		primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
-	}
+	// Ensure the replication user exists with the right grants
+	mustCreateReplicatorUser(primaryDatabase)
 
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
@@ -952,9 +988,16 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 		return -1, nil, err
 	}
 
+	mustCreateReplicatorUser(replicaDatabase)
 	fmt.Printf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil
+}
+
+// mustCreateReplicatorUser creates the replicator user on the specified |db| and grants them replication slave privs.
+func mustCreateReplicatorUser(db *sqlx.DB) {
+	db.MustExec("CREATE USER if not exists 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
+	db.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 }
 
 // runDoltCommand runs a short-lived dolt CLI command with the specified arguments from |doltArgs|. The Dolt data
