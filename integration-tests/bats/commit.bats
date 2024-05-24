@@ -68,8 +68,12 @@ teardown() {
     cd colldb
 
     dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
-    run dolt commit -a -m "collation"
+    dolt commit -a -m "collation"
+
+    run dolt status
     [ $status -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "commit: -m sets commit message properly" {
