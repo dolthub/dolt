@@ -76,7 +76,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 	if td.IsDrop() {
 		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -91,6 +91,15 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 
 	return ddlStatements, nil
 }
+
+func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
+	nameMap := make(map[string]schema.Schema)
+	for name := range tableNameMap {
+		nameMap[name.Name] = tableNameMap[name]
+	}
+	return nameMap
+}
+
 
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
 // TODO: schema names
