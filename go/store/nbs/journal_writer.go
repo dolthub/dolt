@@ -96,19 +96,18 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		return nil, true, err
 	}
 
-	sendEg, ctx := errgroup.WithContext(ctx)
 	recvEg, ctx := errgroup.WithContext(ctx)
-	indexChan := make(chan any, indexChanSize)
+	indexCh := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
 		journal: f,
 		path:    path,
 		recvEg:  recvEg,
-		sendEg:  sendEg,
-		indexCh: indexChan,
+		indexCh: indexCh,
+		done:    make(chan struct{}),
 	}
 	recvEg.Go(func() error {
-		return wr.recvIndexRecords(ctx, indexChan)
+		return wr.recvIndexRecords(ctx, indexCh)
 	})
 
 	return wr, true, nil
@@ -146,25 +145,25 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
-	sendEg, _ := errgroup.WithContext(ctx)
 	recvEg, ctx := errgroup.WithContext(ctx)
-	indexChan := make(chan any, indexChanSize)
+	indexCh := make(chan any, indexChanSize)
 	wr = &journalWriter{
 		buf:     make([]byte, 0, journalWriterBuffSize),
 		journal: f,
 		path:    path,
 		recvEg:  recvEg,
-		sendEg:  sendEg,
-		indexCh: indexChan,
+		indexCh: indexCh,
+		done:    make(chan struct{}),
 	}
 	recvEg.Go(func() error {
-		return wr.recvIndexRecords(ctx, indexChan)
+		return wr.recvIndexRecords(ctx, indexCh)
 	})
 
 	return wr, nil
 }
 
 func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error {
+	var batchCrc uint32
 	for {
 		select {
 		case <-ctx.Done():
@@ -176,16 +175,20 @@ func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error
 			var err error
 			switch l := obj.(type) {
 			case lookup:
-				wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, l.a[:])
+				batchCrc = crc32.Update(batchCrc, crcTable, l.a[:])
 				err = writeIndexLookup(wr.indexWriter, l)
 			case lookupMeta:
-				l.checkSum = wr.batchCrc
-				wr.batchCrc = 0
+				l.checkSum = batchCrc
+				batchCrc = 0
 				err = writeJournalIndexMeta(wr.indexWriter, l.latestHash, l.batchStart, l.batchEnd, l.checkSum)
 			default:
 				err = fmt.Errorf("invalid index channel object")
 			}
 			if err != nil {
+				wr.indexWriteErr = err
+				close(wr.done)
+				wr.indexCh = nil
+				close(c)
 				return err
 			}
 		}
@@ -216,15 +219,14 @@ type journalWriter struct {
 	ranges      rangeIndex
 	index       *os.File
 	indexWriter *bufio.Writer
-	batchCrc    uint32
 	maxNovel    int
 	// indexCh linearizes index record writes
 	indexCh chan any
+	done    chan struct{}
 	// recvEg tracks goroutines that are trying to enqueue
 	// records to |indexCh|
-	recvEg *errgroup.Group
-	// sendEg tracks the thread writing indexCh records to disk
-	sendEg *errgroup.Group
+	recvEg        *errgroup.Group
+	indexWriteErr error
 
 	lock sync.RWMutex
 }
@@ -349,6 +351,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 	}
 
 	var lastOffset int64
+	var batchCrc uint32
 
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
@@ -367,7 +370,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 			if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
 				return err
 			}
-			wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, a[:])
+			batchCrc = crc32.Update(batchCrc, crcTable, a[:])
 
 		case rootHashJournalRecKind:
 			lastOffset = o
@@ -514,14 +517,11 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 // a record to the indexCh channel.
 func (wr *journalWriter) sendIndexRecord(r interface{}) {
 	if wr.indexWriter != nil {
-		wr.sendEg.Go(func() error {
-			select {
-			case wr.indexCh <- r:
-			}
-			return nil
-		})
-	} else {
-		close(wr.indexCh)
+		// block on send, unlikely to bottleneck compared to chunk writes
+		select {
+		case wr.indexCh <- r:
+		case <-wr.done:
+		}
 	}
 }
 
@@ -701,15 +701,24 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
-		// wait for async funcs to all send
-		_ = wr.sendEg.Wait()
-		// safe to close |indexChan| after all sent
-		close(wr.indexCh)
+		if wr.indexWriteErr != nil {
+			err = wr.indexWriteErr
+		}
+		if wr.indexCh != nil {
+			close(wr.done)
+			close(wr.indexCh)
+		}
 		// wait for writer to drain |indexChan|
-		_ = wr.recvEg.Wait()
+		if werr := wr.recvEg.Wait(); werr != nil {
+			err = werr
+		}
 		// ensure writes make it to disk, close file
-		_ = wr.indexWriter.Flush()
-		_ = wr.index.Close()
+		if ferr := wr.indexWriter.Flush(); ferr != nil {
+			err = ferr
+		}
+		if cerr := wr.index.Close(); cerr != nil {
+			err = cerr
+		}
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
