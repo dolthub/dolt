@@ -789,3 +789,32 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 
 	return 0
 }
+
+// HasLocalChanges compares the working and staged hash against the head hash to determine if there are uncommitted changes.
+func HasLocalChanges(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
+	hRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return false, err
+	}
+	wRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return false, err
+	}
+	sRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return false, err
+	}
+	hHash, err := hRoot.HashOf()
+	if err != nil {
+		return false, err
+	}
+	wHash, err := wRoot.HashOf()
+	if err != nil {
+		return false, err
+	}
+	sHash, err := sRoot.HashOf()
+	if err != nil {
+		return false, err
+	}
+	return !hHash.Equal(wHash) || !hHash.Equal(sHash), nil
+}
