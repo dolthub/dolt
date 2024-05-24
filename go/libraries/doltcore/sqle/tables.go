@@ -596,7 +596,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWrit
 
 	setter := ds.SetWorkingRoot
 
-	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName}, t.db.RevisionQualifiedName(), setter)
+	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
 	}
