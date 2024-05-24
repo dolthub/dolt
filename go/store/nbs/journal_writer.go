@@ -351,7 +351,6 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 	}
 
 	var lastOffset int64
-	var batchCrc uint32
 
 	// process the non-indexed portion of the journal starting at |wr.indexed|,
 	// at minimum the non-indexed portion will include a root hash record.
@@ -367,10 +366,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 			wr.uncmpSz += r.uncompressedPayloadSize()
 
 			a := toAddr16(r.address)
-			if err := writeIndexLookup(wr.indexWriter, lookup{a: a, r: rng}); err != nil {
-				return err
-			}
-			batchCrc = crc32.Update(batchCrc, crcTable, a[:])
+			wr.sendIndexRecord(lookup{a: a, r: rng})
 
 		case rootHashJournalRecKind:
 			lastOffset = o
