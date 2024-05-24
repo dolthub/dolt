@@ -311,7 +311,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		} else if ok && !menv.DropConflicts {
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
-		
+
 		// TODO: schema names
 		newSch, err := migrateSchema(ctx, name.Name, sch)
 		if err != nil {

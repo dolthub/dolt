@@ -367,7 +367,7 @@ func mergeForeignKeyChanges(
 	fksByTable := make(map[doltdb.TableName][]doltdb.ForeignKey)
 
 	conflicts := doltdb.NewTableNameSet(nil)
-	
+
 	err := newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		oldFksForTable, _ := oldFks.KeysForTable(tblName)
 		newFksForTable, _ := newFks.KeysForTable(tblName)
@@ -395,13 +395,13 @@ func mergeForeignKeyChanges(
 		} else {
 			conflicts.Add(tblName)
 		}
-		
+
 		return false, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = changedRoot.IterTables(ctx, func(tblName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		if _, exists := fksByTable[tblName]; !exists {
 			oldKeys, _ := oldFks.KeysForTable(tblName)

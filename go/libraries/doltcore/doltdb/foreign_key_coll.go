@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"

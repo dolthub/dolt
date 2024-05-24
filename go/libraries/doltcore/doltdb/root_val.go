@@ -665,7 +665,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 	if err != nil {
 		return err
 	}
-	
+
 	for _, schemaName := range schemaNames {
 		tm, err := root.getTableMap(ctx, schemaName)
 		if err != nil {
@@ -690,7 +690,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -740,7 +740,7 @@ func ToTableNames(names []string, schemaName string) []TableName {
 	return tbls
 }
 
-// FlattenTableNames is a migration helper function that converts a slice of table names to a slice of strings by 
+// FlattenTableNames is a migration helper function that converts a slice of table names to a slice of strings by
 // stripping off any schema elements.
 func FlattenTableNames(names []TableName) []string {
 	tbls := make([]string, len(names))
@@ -1045,7 +1045,7 @@ func GetAllTagsForRoots(ctx context.Context, roots ...RootValue) (tags schema.Ta
 func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, error) {
 	seenTblNamesMap := make(map[TableName]bool)
 	var tblNames []TableName
-	
+
 	for _, root := range roots {
 		schemaNames, err := schemaNames(ctx, root)
 		if err != nil {
@@ -1228,4 +1228,3 @@ func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) 
 
 	return "", false, nil
 }
-

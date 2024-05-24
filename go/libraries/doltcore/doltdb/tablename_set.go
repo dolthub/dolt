@@ -27,7 +27,7 @@ type TableNameSet struct {
 
 func newTableNameSet(items []TableName, caseSensitive bool) *TableNameSet {
 	s := &TableNameSet{
-		items: make(map[TableName]bool, len(items)),
+		items:         make(map[TableName]bool, len(items)),
 		caseSensitive: caseSensitive,
 	}
 
@@ -119,7 +119,7 @@ func (s *TableNameSet) Equals(other *TableNameSet) bool {
 	sort.Slice(os, func(i, j int) bool {
 		return os[i].Less(os[j])
 	})
-	
+
 	for i := range ss {
 		if ss[i] != os[i] {
 			return false

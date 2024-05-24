@@ -17,8 +17,9 @@ package resolve
 import (
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // UseSearchPath is a global variable that determines whether or not to use the search path when resolving table names.
@@ -77,4 +78,3 @@ func FirstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (s
 
 	return schemaName, nil
 }
-

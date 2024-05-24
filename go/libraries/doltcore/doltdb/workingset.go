@@ -178,7 +178,7 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 				return err
 			}
 		}
-		
+
 		sc.ToFks, _ = toFKs.KeysForTable(TableName{Name: name})
 		sc.ToParentSchemas = toSchemas
 

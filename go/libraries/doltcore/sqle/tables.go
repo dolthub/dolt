@@ -2513,7 +2513,7 @@ func (t *WritableDoltTable) createForeignKey(
 		var ok bool
 		var err error
 		// TODO: the parent table can be in another schema
-		
+
 		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
@@ -2582,7 +2582,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
-	
+
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
@@ -2741,7 +2741,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	if err != nil {
 		return err
 	}
-	
+
 	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, ret.NewTable)
 	if err != nil {
 		return err

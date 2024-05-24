@@ -20,7 +20,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"

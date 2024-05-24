@@ -100,7 +100,6 @@ func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) ma
 	return nameMap
 }
 
-
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
 // TODO: schema names
 func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
@@ -447,10 +446,10 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 // possible.
 // TODO: schema names
 func GenerateCreateTableStatement(
-		tblName string,
-		sch schema.Schema,
-		fks []doltdb.ForeignKey,
-		fksParentSch map[string]schema.Schema,
+	tblName string,
+	sch schema.Schema,
+	fks []doltdb.ForeignKey,
+	fksParentSch map[string]schema.Schema,
 ) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 

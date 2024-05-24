@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -37,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -266,7 +266,7 @@ func (p *DoltDatabaseProvider) SchemaDatabase(ctx *sql.Context, dbName, schemaNa
 	if !ok {
 		return nil, false, nil
 	}
-	
+
 	return sdb.GetSchema(ctx, schemaName)
 }
 
@@ -482,7 +482,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			return err
 		}
 	}
-	
+
 	// If the search path is enabled, we need to create our initial schema object (public is available by default)
 	if resolve.UseSearchPath {
 		workingRoot, err := newEnv.WorkingRoot(ctx)

@@ -86,7 +86,7 @@ func StageModifiedAndDeletedTables(ctx context.Context, roots doltdb.Roots) (dol
 	return stageTables(ctx, roots, tbls)
 }
 
-func stageTables(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName, ) (doltdb.Roots, error) {
+func stageTables(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName) (doltdb.Roots, error) {
 	var err error
 	err = ValidateTables(ctx, tbls, roots.Staged, roots.Working)
 	if err != nil {

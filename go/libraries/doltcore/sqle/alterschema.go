@@ -35,7 +35,7 @@ func renameTable(ctx context.Context, root doltdb.RootValue, oldName, newName st
 		panic("invalid parameters")
 	}
 
-	// TODO: schema name 
+	// TODO: schema name
 	return root.RenameTable(ctx, doltdb.TableName{Name: oldName}, doltdb.TableName{Name: newName})
 }
 

@@ -15,16 +15,17 @@
 package resolve
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-// Table returns the schema-qualified name of the table given in the root provided, along with the table itself 
+// Table returns the schema-qualified name of the table given in the root provided, along with the table itself
 // and whether it exists.
 func Table(
-		ctx *sql.Context,
-		root doltdb.RootValue,
-		tableName string,
+	ctx *sql.Context,
+	root doltdb.RootValue,
+	tableName string,
 ) (doltdb.TableName, *doltdb.Table, bool, error) {
 	if UseSearchPath {
 		return TableWithSearchPath(ctx, root, tableName)
@@ -37,9 +38,9 @@ func Table(
 
 // TableWithSearchPath resolves a table name to a table in the root value, searching through the schemas in the
 func TableWithSearchPath(
-		ctx *sql.Context,
-		root doltdb.RootValue,
-		tableName string,
+	ctx *sql.Context,
+	root doltdb.RootValue,
+	tableName string,
 ) (doltdb.TableName, *doltdb.Table, bool, error) {
 	schemasToSearch, err := SearchPath(ctx)
 	if err != nil {
@@ -72,4 +73,3 @@ func TableWithSearchPath(
 
 	return doltdb.TableName{}, nil, false, nil
 }
-
