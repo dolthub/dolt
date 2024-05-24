@@ -185,6 +185,11 @@ func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error
 				err = fmt.Errorf("invalid index channel object")
 			}
 			if err != nil {
+				// In the past, an index write error would synchronously block the
+				// originating chunk write. Several layers of abstraction now
+				// separate a specific chunk write from a write error. An error
+				// now disables journal indexing for the remainder of the engine
+				// process. The error is saved and reported during finalization.
 				wr.indexWriteErr = err
 				close(wr.done)
 				wr.indexCh = nil
