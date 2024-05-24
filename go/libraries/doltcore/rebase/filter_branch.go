@@ -95,6 +95,14 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 	if err != nil {
 		return nil
 	}
+	//roots, err := dEnv.Roots(ctx)
+	//
+	//dEnv.WorkingRoot(ctx)
+	//
+	//diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	//datas.NewStashMeta(curBranchName, commitMeta.Description, addedTblsToStage)
+
+
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
 }
 
