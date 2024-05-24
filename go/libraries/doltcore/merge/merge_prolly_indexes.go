@@ -55,7 +55,7 @@ func mergeProllySecondaryIndexes(
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
 		ok := sch.Indexes().Contains(indexName)
 		if ok {
-			idx, err := iS.GetIndex(ctx, sch, indexName)
+			idx, err := iS.GetIndex(ctx, sch, nil, indexName)
 			if err != nil {
 				return prolly.Map{}, false, err
 			}

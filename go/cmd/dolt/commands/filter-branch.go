@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -117,6 +118,12 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		queryString = string(queryStringBytes)
 	}
 
+	if hasChanges, err := HasLocalChanges(ctx, dEnv); err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	} else if hasChanges {
+		verr := errhand.BuildDError("local changes detected, use dolt stash or commit changes before using filter-branch").Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 		var cmHash, before hash.Hash
 		var root doltdb.RootValue
@@ -292,7 +299,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	sess := dsess.DefaultSession(pro)
+	sess := dsess.DefaultSession(pro, writer.NewWriteSession)
 
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(sess))
 	err = sqlCtx.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)

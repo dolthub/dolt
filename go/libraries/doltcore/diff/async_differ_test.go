@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
@@ -332,7 +331,15 @@ func getKeylessRow(ctx context.Context, vals []types.Value) ([]types.Value, erro
 	vals = append(prefix, vals...)
 
 	return []types.Value{
-		dtu.MustTuple(rowIdTag, id1),
-		dtu.MustTuple(vals...),
+		mustTuple(rowIdTag, id1),
+		mustTuple(vals...),
 	}, nil
+}
+
+func mustTuple(vals ...types.Value) types.Tuple {
+	tup, err := types.NewTuple(types.Format_Default, vals...)
+	if err != nil {
+		panic(err)
+	}
+	return tup
 }

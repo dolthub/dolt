@@ -1453,7 +1453,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 
 	key, err := doltdb.NewDataCacheKey(root)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)

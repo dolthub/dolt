@@ -683,7 +683,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 //
 
 // closeWriteSession flushes and closes the specified |writeSession| and returns an error if anything failed.
-func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string, writeSession writer.WriteSession) error {
+func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string, writeSession dsess.WriteSession) error {
 	newWorkingSet, err := writeSession.Flush(ctx)
 	if err != nil {
 		return err
@@ -727,7 +727,7 @@ func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.
-func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string, foreignKeyChecksDisabled bool) (writer.WriteSession, writer.TableWriter, error) {
+func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string, foreignKeyChecksDisabled bool) (dsess.WriteSession, dsess.TableWriter, error) {
 	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
 		return nil, nil, err
@@ -758,6 +758,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetWorkingRoot
+
 	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName}, databaseName, setter)
 	if err != nil {
 		return nil, nil, err

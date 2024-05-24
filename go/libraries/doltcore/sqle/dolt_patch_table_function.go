@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
@@ -28,9 +30,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"golang.org/x/exp/slices"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -514,7 +514,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
+			schemaStmts, err = sqlfmt.GenerateSqlPatchSchemaStatements(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
 			}
@@ -636,14 +636,14 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}

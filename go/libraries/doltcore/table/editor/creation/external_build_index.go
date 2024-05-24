@@ -15,6 +15,7 @@
 package creation
 
 import (
+	"context"
 	"errors"
 	"io"
 
@@ -71,7 +72,7 @@ func BuildProllyIndexExternal(
 	}
 
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
-		return prefixDesc.Compare(t1, t2) < 0
+		return secondary.KeyDesc().Compare(t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
 
@@ -103,40 +104,53 @@ func BuildProllyIndexExternal(
 	}
 	defer sortedKeys.Close()
 
-	mut := secondary.Mutate()
 	it, err := sortedKeys.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer it.Close()
 
-	var lastKey val.Tuple
-	for {
-		key, err := it.Next(ctx)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, err
-		}
-		if lastKey != nil && prefixDesc.Compare(lastKey, key) == 0 {
-			if uniqCb != nil {
-				// register a constraint violation if |key| collides with |lastKey|
-				if err := uniqCb(ctx, lastKey, key); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if err = mut.Put(ctx, key, val.EmptyTuple); err != nil {
-			return nil, err
-		}
-		lastKey = key
-	}
-
-	secondary, err = mut.Map(ctx)
+	tupIter := &tupleIterWithCb{iter: it, prefixDesc: prefixDesc, uniqCb: uniqCb}
+	ret, err := prolly.MutateMapWithTupleIter(ctx, secondary, tupIter)
 	if err != nil {
 		return nil, err
 	}
+	if tupIter.err != nil {
+		return nil, tupIter.err
+	}
 
-	return durable.IndexFromProllyMap(secondary), nil
+	return durable.IndexFromProllyMap(ret), nil
+}
+
+type tupleIterWithCb struct {
+	iter sort.KeyIter
+	err  error
+
+	prefixDesc val.TupleDesc
+	uniqCb     DupEntryCb
+	lastKey    val.Tuple
+}
+
+var _ prolly.TupleIter = (*tupleIterWithCb)(nil)
+
+func (t *tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
+	for {
+		curKey, err := t.iter.Next(ctx)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.err = err
+			}
+			return nil, nil
+		}
+		if t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, curKey) == 0 && t.uniqCb != nil {
+			// register a constraint violation if |key| collides with |lastKey|
+			if err := t.uniqCb(ctx, t.lastKey, curKey); err != nil {
+				t.err = err
+				return nil, nil
+			}
+
+		}
+		t.lastKey = curKey
+		return curKey, val.EmptyTuple
+	}
 }

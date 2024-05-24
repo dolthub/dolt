@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -145,7 +144,7 @@ type ignoreWriter struct {
 	it                      *IgnoreTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
-	tableWriter             writer.TableWriter
+	tableWriter             dsess.TableWriter
 }
 
 func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {
@@ -297,7 +296,10 @@ func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error)
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
 func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
-	return iw.tableWriter.StatementComplete(ctx)
+	if iw.tableWriter != nil {
+		return iw.tableWriter.StatementComplete(ctx)
+	}
+	return nil
 }
 
 // Close finalizes the delete operation, persisting the result.
