@@ -47,7 +47,6 @@ func NewCaseInsensitiveTableNameSet(items []TableName) *TableNameSet {
 	for i, item := range items {
 		newItems[i] = item.ToLower()
 	}
-	return nil
 	return newTableNameSet(newItems, false)
 }
 
@@ -155,7 +154,7 @@ func (s *TableNameSet) AsSlice() []TableName {
 	return sl
 }
 
-// AsStringslice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
+// AsStringSlice converts the set to a slice of strings. If this is an insensitive set the resulting slice will be lowercase
 // regardless of the case that was used when adding the string to the set.
 func (s *TableNameSet) AsStringSlice() []string {
 	if s == nil {
