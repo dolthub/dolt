@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/search_path"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"

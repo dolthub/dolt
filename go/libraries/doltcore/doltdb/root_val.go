@@ -75,7 +75,7 @@ type RootValue interface {
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
-	GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error)
+	GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error)
 	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
 	// HandlePostMerge handles merging for any root elements that are not handled by the standard merge workflow. This
@@ -440,14 +440,13 @@ func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schem
 	return m, nil
 }
 
-func (root *rootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
-	// TODO: schema
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error) {
+	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
-	tVal, err := tableMap.Get(ctx, tName)
+	tVal, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
@@ -1188,7 +1187,7 @@ func MapTableHashes(ctx context.Context, root RootValue) (map[string]hash.Hash, 
 	}
 	nameToHash := make(map[string]hash.Hash)
 	for _, name := range names {
-		h, ok, err := root.GetTableHash(ctx, name)
+		h, ok, err := root.GetTableHash(ctx, TableName{Name: name})
 		if err != nil {
 			return nil, err
 		} else if !ok {

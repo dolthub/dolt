@@ -245,23 +245,24 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (dolt
 // in this case, we throw a conflict and error (as per Git).
 func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, conflicts *set.StrSet, force bool) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
+	// TODO: schema name
 	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tblName := range tblNames {
-		oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+		oldHash, _, err := oldRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
 
-		newHash, _, err := newRoot.GetTableHash(ctx, tblName)
+		newHash, _, err := newRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
 
-		changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+		changedHash, _, err := changedRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
@@ -277,6 +278,7 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 		}
 	}
 
+	// TODO: schema names
 	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
@@ -284,12 +286,12 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 
 	for _, tblName := range tblNames {
 		if _, exists := resultMap[tblName]; !exists {
-			oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+			oldHash, _, err := oldRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return nil, err
 			}
 
-			changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+			changedHash, _, err := changedRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return nil, err
 			}
