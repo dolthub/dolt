@@ -96,9 +96,10 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 		// doesn't belong in Dolt, but because we resolve table names out of band at execution time like this, we don't 
 		// have much of a choice.
 		unqualifiedTableNames := apr.Args
-		tableNames := make([]doltdb.TableName, len(unqualifiedTableNames))
-		var missingTables []string
+		var tableNames []doltdb.TableName
 		if resolve.UseSearchPath {
+			var missingTables []string
+			tableNames = make([]doltdb.TableName, len(unqualifiedTableNames))
 			for i, name := range unqualifiedTableNames {
 				tblName, _, ok, err := resolve.TableWithSearchPath(ctx, roots.Working, name)
 				if err != nil {
@@ -117,7 +118,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 				return 1, actions.NewTblNotExistError(missingTables)
 			}
 		} else {
-			doltdb.ToTableNames(unqualifiedTableNames, doltdb.DefaultSchemaName)
+			tableNames = doltdb.ToTableNames(unqualifiedTableNames, doltdb.DefaultSchemaName)
 		}
 		
 		roots, err = actions.StageTables(ctx, roots, tableNames, !apr.Contains(cli.ForceFlag))
