@@ -678,7 +678,8 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	var tbl *doltdb.Table
-	if resolve.UseSearchPath && db.schemaName == "" {
+	// TODO: dolt_schemas needs work to be compatible with multiple schemas
+	if resolve.UseSearchPath && db.schemaName == "" && !doltdb.HasDoltPrefix(tableName) {
 		var tblName doltdb.TableName
 		tblName, tbl, ok, err = resolve.TableWithSearchPath(ctx, root, tableName)
 		if err != nil {
