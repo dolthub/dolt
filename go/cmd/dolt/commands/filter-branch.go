@@ -119,28 +119,24 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
-		var cmHash, before hash.Hash
-		var root doltdb.RootValue
+		root, err := commit.GetRootValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+		cmHash, err := commit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		var before hash.Hash
 		if verbose {
-			var err error
-			cmHash, err = commit.HashOf()
-			if err != nil {
-				return nil, err
-			}
-
-			cli.Printf("processing commit %s\n", cmHash.String())
-
-			root, err = commit.GetRootValue(ctx)
-			if err != nil {
-				return nil, err
-			}
 			before, err = root.HashOf()
 			if err != nil {
 				return nil, err
 			}
+			cli.Printf("processing commit %s\n", cmHash.String())
 		}
 
-		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, verbose, continueOnErr)
+		updatedRoot, err := processFilterQuery(ctx, dEnv, root, cmHash, queryString, verbose, continueOnErr)
 
 		if err != nil {
 			return nil, err
@@ -208,8 +204,8 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
-	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, cmHash hash.Hash, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
+	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, root)
 	if err != nil {
 		return nil, err
 	}
@@ -246,10 +242,6 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		if err != nil {
 			if continueOnErr {
 				if verbose {
-					cmHash, cmErr := cm.HashOf()
-					if cmErr != nil {
-						return nil, err
-					}
 					cli.PrintErrf("error encountered processing commit %s (continuing): %s\n", cmHash.String(), err.Error())
 				}
 			} else {
@@ -271,7 +263,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 // The SQL engine returned has transactions disabled. This is to prevent transactions starts from overwriting the root
 // we set manually with the one at the working set of the HEAD being rebased.
 // Some functionality will not work on this kind of engine, e.g. many DOLT_ functions.
-func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *engine.SqlEngine, error) {
+func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue) (*sql.Context, *engine.SqlEngine, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, nil, err
@@ -308,11 +300,6 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
-
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	err = db.SetRoot(sqlCtx, root)
 	if err != nil {

@@ -65,7 +65,8 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
-func validBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
+func validateBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
+	return nil
 	for _, r := range refs {
 		headComm, err := ddb.ResolveCommitRef(ctx, r)
 		if err != nil {
@@ -114,6 +115,11 @@ func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCom
 		return err
 	}
 
+	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
+	if err != nil {
+		return err
+	}
+
 	tags, err := dEnv.DoltDB.GetTags(ctx)
 	if err != nil {
 		return err
@@ -128,7 +134,7 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 		return err
 	}
 
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
+	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
 	if err != nil {
 		return err
 	}
@@ -143,7 +149,7 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 		return nil
 	}
 
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, headRef)
+	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, headRef)
 	if err != nil {
 		return err
 	}
@@ -258,6 +264,8 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		allRebasedParents = append(allRebasedParents, rp)
 	}
 
+
+	// TODO: replace needs to work with rootvalue?
 	rebasedRoot, err := replay(ctx, commit, allParents[0], allRebasedParents[0])
 	if err != nil {
 		return nil, err
