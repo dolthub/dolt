@@ -65,7 +65,7 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
-func validBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs... ref.DoltRef) error {
+func validBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
 	for _, r := range refs {
 		headComm, err := ddb.ResolveCommitRef(ctx, r)
 		if err != nil {
