@@ -118,12 +118,12 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		queryString = string(queryStringBytes)
 	}
 
-	if hasChanges, err := HasLocalChanges(ctx, dEnv); err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	} else if hasChanges {
-		verr := errhand.BuildDError("local changes detected, use dolt stash or commit changes before using filter-branch").Build()
-		return HandleVErrAndExitCode(verr, usage)
-	}
+	//if hasChanges, err := HasLocalChanges(ctx, dEnv); err != nil {
+	//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	//} else if hasChanges {
+	//	verr := errhand.BuildDError("local changes detected, use dolt stash or commit changes before using filter-branch").Build()
+	//	return HandleVErrAndExitCode(verr, usage)
+	//}
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 		var cmHash, before hash.Hash
 		var root doltdb.RootValue
@@ -146,6 +146,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
+		// TODO: how to get working set commit?
 		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, verbose, continueOnErr)
 
 		if err != nil {
