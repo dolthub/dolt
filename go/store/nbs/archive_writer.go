@@ -85,8 +85,7 @@ to complete the archive writing process.
 
 // newArchiveWriter - Create an *archiveWriter with the given output ByteSync, which will be used to materialize an archive on disk.
 func newArchiveWriter() (*archiveWriter, error) {
-	// NM4 - get a real tmp.
-	bs, err := NewBufferedFileByteSink("/tmp", defaultTableSinkBlockSize, defaultChBufferSize)
+	bs, err := NewBufferedFileByteSink("", defaultTableSinkBlockSize, defaultChBufferSize)
 	if err != nil {
 		return nil, err
 	}
