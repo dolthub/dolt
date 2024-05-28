@@ -367,11 +367,11 @@ func (b *binlogProducer) createTableMapEvents(ctx *sql.Context, databaseName str
 		// For every table with data changes, we need to send a TableMap event over the stream.
 		tableId++
 		tableName := tableDelta.ToName
-		if tableName == "" {
+		if tableName.Name == "" {
 			tableName = tableDelta.FromName
 		}
-		tablesToId[tableName] = tableId
-		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
+		tablesToId[tableName.Name] = tableId
+		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName.Name, tableDelta.ToTable)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -401,7 +401,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 		}
 
 		tableName := tableDelta.ToName
-		if tableName == "" {
+		if tableName.Name == "" {
 			tableName = tableDelta.FromName
 		}
 
@@ -419,7 +419,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 		}
 
 		columns := sch.GetAllCols().GetColumns()
-		tableId := tablesToId[tableName]
+		tableId := tablesToId[tableName.Name]
 
 		var tableRowsToWrite []mysql.Row
 		var tableRowsToDelete []mysql.Row
