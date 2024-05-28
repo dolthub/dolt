@@ -76,7 +76,7 @@ func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 		})
 	}
 
-	cb := func(n string, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	cb := func(n doltdb.TableName, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		if sch == nil {
 			return true, fmt.Errorf("expected non-nil schema: %v", sch)
 		}
@@ -108,7 +108,7 @@ func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 // validateSecondaryIndexes checks that secondary index contents are consistent
 // with primary index contents.
 func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
-	cb := func(n string, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	cb := func(n doltdb.TableName, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		rows, err := t.GetRowData(ctx)
 		if err != nil {
 			return false, err
@@ -484,7 +484,7 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 func iterDatabaseTables(
 	ctx context.Context,
 	db sqle.Database,
-	cb func(name string, t *doltdb.Table, sch schema.Schema) (bool, error),
+	cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
 ) error {
 	ddb := db.GetDoltDB()
 	branches, err := ddb.GetBranches(ctx)

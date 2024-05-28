@@ -62,6 +62,7 @@ func HasDoltPrefix(s string) bool {
 
 // IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
 // indexes.
+// TODO: Schema name
 func IsFullTextTable(name string) bool {
 	return HasDoltPrefix(name) && (strings.HasSuffix(name, "_fts_config") ||
 		strings.HasSuffix(name, "_fts_position") ||

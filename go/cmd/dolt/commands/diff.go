@@ -584,14 +584,15 @@ func printDiffSummary(ctx context.Context, diffSummaries []diff.TableDeltaSummar
 
 	for _, diffSummary := range diffSummaries {
 
-		shouldPrintTables := dArgs.tableSet.Contains(diffSummary.FromTableName) || dArgs.tableSet.Contains(diffSummary.ToTableName)
+		// TODO: schema name
+		shouldPrintTables := dArgs.tableSet.Contains(diffSummary.FromTableName.Name) || dArgs.tableSet.Contains(diffSummary.ToTableName.Name)
 		if !shouldPrintTables {
 			return nil
 		}
 
-		tableName := diffSummary.TableName
+		tableName := diffSummary.TableName.Name
 		if diffSummary.DiffType == "renamed" {
-			tableName = fmt.Sprintf("%s -> %s", diffSummary.FromTableName, diffSummary.ToTableName)
+			tableName = fmt.Sprintf("%s -> %s", diffSummary.FromTableName.Name, diffSummary.ToTableName.Name)
 		}
 		err := wr.WriteSqlRow(ctx, sql.Row{tableName, diffSummary.DiffType, diffSummary.DataChange, diffSummary.SchemaChange})
 		if err != nil {
@@ -691,9 +692,9 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		}
 
 		summary := diff.TableDeltaSummary{
-			TableName:     tableName,
-			FromTableName: fromTable,
-			ToTableName:   toTable,
+			TableName:     doltdb.TableName{Name: tableName},
+			FromTableName: doltdb.TableName{Name: fromTable},
+			ToTableName:   doltdb.TableName{Name: toTable},
 			DiffType:      diffType,
 			DataChange:    false,
 			SchemaChange:  true,
@@ -717,8 +718,8 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 
 	for _, row := range dataDiffRows {
 		summary := diff.TableDeltaSummary{}
-		summary.FromTableName = row[0].(string)
-		summary.ToTableName = row[1].(string)
+		summary.FromTableName.Name = row[0].(string)
+		summary.ToTableName.Name = row[1].(string)
 		summary.DiffType = row[2].(string)
 		summary.DataChange, err = GetTinyIntColAsBool(row[3])
 		if err != nil {
@@ -772,12 +773,12 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 	doltSchemasChanged := false
 	for _, delta := range deltas {
-		if doltdb.IsFullTextTable(delta.TableName) {
+		if doltdb.IsFullTextTable(delta.TableName.Name) {
 			continue
 		}
 
 		// Don't print tables if one side of the diff is an ignored table in the working set being added.
-		if len(delta.FromTableName) == 0 {
+		if len(delta.FromTableName.Name) == 0 {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.ToTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
@@ -787,7 +788,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			}
 		}
 
-		if len(delta.ToTableName) == 0 {
+		if len(delta.ToTableName.Name) == 0 {
 			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(delta.FromTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
@@ -797,11 +798,11 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			}
 		}
 
-		if !shouldPrintTableDelta(dArgs.tableSet, delta.ToTableName, delta.FromTableName) {
+		if !shouldPrintTableDelta(dArgs.tableSet, delta.ToTableName.Name, delta.FromTableName.Name) {
 			continue
 		}
 
-		if strings.HasPrefix(delta.ToTableName, diff.DBPrefix) {
+		if strings.HasPrefix(delta.ToTableName.Name, diff.DBPrefix) {
 			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
 				return verr
@@ -809,7 +810,7 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
-		if isDoltSchemasTable(delta.ToTableName, delta.FromTableName) {
+		if isDoltSchemasTable(delta.ToTableName.Name, delta.FromTableName.Name) {
 			// save dolt_schemas table diff for last in diff output
 			doltSchemasChanged = true
 		} else {
@@ -1096,7 +1097,8 @@ func diffUserTable(
 	toTable := tableSummary.ToTableName
 
 	if dArgs.diffParts&NameOnlyDiff == 0 {
-		err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+		// TODO: schema names
+		err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -1104,17 +1106,17 @@ func diffUserTable(
 
 	var fromTableInfo, toTableInfo *diff.TableInfo
 
-	from, err := getTableInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
+	from, err := getTableInfoAtRef(queryist, sqlCtx, fromTable.Name, dArgs.fromRef)
 	if err == nil {
 		fromTableInfo = &from
 	}
-	to, err := getTableInfoAtRef(queryist, sqlCtx, toTable, dArgs.toRef)
+	to, err := getTableInfoAtRef(queryist, sqlCtx, toTable.Name, dArgs.toRef)
 	if err == nil {
 		toTableInfo = &to
 	}
 
 	tableName := fromTable
-	if tableName == "" {
+	if tableName.Name == "" {
 		tableName = toTable
 	}
 
@@ -1155,7 +1157,7 @@ func diffUserTable(
 		}
 
 		var diffStats []diffStatistics
-		diffStats, err = getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
+		diffStats, err = getTableDiffStats(queryist, sqlCtx, tableName.Name, dArgs.fromRef, dArgs.toRef)
 		if err != nil {
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
@@ -1282,7 +1284,7 @@ func diffDatabase(
 		return nil
 	}
 
-	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
+	err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -1293,7 +1295,7 @@ func diffDatabase(
 
 	fromTable := tableSummary.FromTableName
 	var fromTableInfo *diff.TableInfo
-	from, err := getDatabaseInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
+	from, err := getDatabaseInfoAtRef(queryist, sqlCtx, fromTable.Name, dArgs.fromRef)
 	if err == nil {
 		// TODO: implement show create database as of ...
 		fromTableInfo = &from
@@ -1302,7 +1304,7 @@ func diffDatabase(
 
 	toTable := tableSummary.ToTableName
 	var toTableInfo *diff.TableInfo
-	to, err := getDatabaseInfoAtRef(queryist, sqlCtx, toTable, dArgs.toRef)
+	to, err := getDatabaseInfoAtRef(queryist, sqlCtx, toTable.Name, dArgs.toRef)
 	if err == nil {
 		toTableInfo = &to
 	}
@@ -1430,9 +1432,10 @@ func diffRows(
 	}
 
 	// do the data diff
-	tableName := tableSummary.ToTableName
+	// TODO: schema names
+	tableName := tableSummary.ToTableName.Name
 	if len(tableName) == 0 {
-		tableName = tableSummary.FromTableName
+		tableName = tableSummary.FromTableName.Name
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {

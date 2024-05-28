@@ -241,7 +241,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err
 	}
 
-	err = dEnv.DoltDB.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, addedTblsToStage))
+	err = dEnv.DoltDB.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)))
 	if err != nil {
 		return err
 	}
@@ -287,9 +287,9 @@ func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roo
 
 // stashedTableSets returns array of table names for all tables that are being stashed and added tables in staged.
 // These table names are determined from all tables in the staged set of changes as they are being stashed only.
-func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]string, []string, error) {
-	var addedTblsInStaged []string
-	var allTbls []string
+func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]doltdb.TableName, []doltdb.TableName, error) {
+	var addedTblsInStaged []doltdb.TableName
+	var allTbls []doltdb.TableName
 	staged, _, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return nil, nil, err

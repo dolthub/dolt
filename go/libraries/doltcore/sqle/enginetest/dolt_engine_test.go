@@ -148,44 +148,48 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Delayed foreign key resolution: update",
+			Name: "test hashof",
 			SetUpScript: []string{
-				"set foreign_key_checks=0;",
-				"create table delayed_parent(pk int primary key);",
-				"create table delayed_child(pk int primary key, foreign key(pk) references delayed_parent(pk));",
-				"insert into delayed_parent values (10), (20);",
-				"insert into delayed_child values (1), (20);",
-				"set foreign_key_checks=1;",
+				"CREATE TABLE hashof_test (pk int primary key, c1 int)",
+				"INSERT INTO hashof_test values (1,1), (2,2), (3,3)",
+				"CALL DOLT_ADD('hashof_test')",
+				"CALL DOLT_COMMIT('-a', '-m', 'first commit')",
+				"SET @Commit1 = (SELECT commit_hash FROM DOLT_LOG() LIMIT 1)",
+				"INSERT INTO hashof_test values (4,4), (5,5), (6,6)",
+				"CALL DOLT_COMMIT('-a', '-m', 'second commit')",
+				"SET @Commit2 = (SELECT commit_hash from DOLT_LOG() LIMIT 1)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					// No-op update bad to bad should not cause constraint violation
-					Skip:  true,
-					Query: "update delayed_child set pk=1 where pk=1;",
+					Query:    "SELECT (hashof(@Commit1) = hashof(@Commit2))",
+					Expected: []sql.Row{{false}},
+				},
+				{
+					Query: "SELECT (hashof(@Commit1) = hashof('HEAD~1'))",
 					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
+						{true},
 					},
 				},
 				{
-					// Update on non-existent row should not cause constraint violation
-					Query: "update delayed_child set pk=3 where pk=3;",
+					Query: "SELECT (hashof(@Commit2) = hashof('HEAD'))",
 					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 0, Updated: 0}}},
+						{true},
 					},
 				},
 				{
-					// No-op update good to good should not cause constraint violation
-					Query: "update delayed_child set pk=20 where pk=20;",
+					Query: "SELECT (hashof(@Commit2) = hashof('main'))",
 					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
+						{true},
 					},
 				},
 				{
-					// Updating bad value to good value still fails
-					Query: "update delayed_child set pk=10 where pk=1;",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
-					},
+					Query:          "SELECT hashof('non_branch')",
+					ExpectedErrStr: "invalid ref spec",
+				},
+				{
+					// Test that a short commit is invalid. This may change in the future.
+					Query:          "SELECT hashof(left(@Commit2,30))",
+					ExpectedErrStr: "invalid ref spec",
 				},
 			},
 		},

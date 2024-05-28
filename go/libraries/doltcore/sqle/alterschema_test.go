@@ -106,10 +106,10 @@ func TestRenameTable(t *testing.T) {
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
 
-			has, err := updatedRoot.HasTable(ctx, tt.oldName)
+			has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.oldName})
 			require.NoError(t, err)
 			assert.False(t, has)
-			has, err = updatedRoot.HasTable(ctx, tt.newName)
+			has, err = updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.newName})
 			require.NoError(t, err)
 			assert.True(t, has)
 

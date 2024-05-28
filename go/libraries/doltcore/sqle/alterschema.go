@@ -35,7 +35,8 @@ func renameTable(ctx context.Context, root doltdb.RootValue, oldName, newName st
 		panic("invalid parameters")
 	}
 
-	return root.RenameTable(ctx, oldName, newName)
+	// TODO: schema name
+	return root.RenameTable(ctx, doltdb.TableName{Name: oldName}, doltdb.TableName{Name: newName})
 }
 
 // Nullable represents whether a column can have a null value.
@@ -150,7 +151,7 @@ func validateNewColumn(
 		return err
 	}
 	if found {
-		return schema.ErrTagPrevUsed(tag, newColName, tblName, oldTblName)
+		return schema.ErrTagPrevUsed(tag, newColName, tblName, oldTblName.Name)
 	}
 
 	return nil
@@ -333,7 +334,8 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
 	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
 
-	declared, referenced := fkc.KeysForTable(tbl)
+	// TODO: schema names
+	declared, referenced := fkc.KeysForTable(doltdb.TableName{Name: tbl})
 	for _, fk := range declared {
 		if fk.TableIndex == "" {
 			// pk used in fk definition on |tbl|

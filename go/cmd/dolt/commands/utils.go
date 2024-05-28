@@ -535,7 +535,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 			stagedChangedTables[tableName] = true
 		} else {
 			// filter out ignored tables from untracked tables
-			ignored, err := ignoredPatterns.IsTableNameIgnored(tableName)
+			ignored, err := ignoredPatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 			if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 				continue
 			} else if err != nil {

@@ -6094,7 +6094,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
+				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_tEST;",
 				Expected: []sql.Row{{2, nil, "added"}},
 			},
 			{
