@@ -190,7 +190,7 @@ func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error
 				// separate a specific chunk write from a write error. An error
 				// now disables journal indexing for the remainder of the engine
 				// process. The error is saved and reported during finalization.
-				close(wr.done)
+				wr.done <- struct{}{}
 				return err
 			}
 		}
@@ -224,11 +224,10 @@ type journalWriter struct {
 	maxNovel    int
 	// indexCh linearizes index record writes
 	indexCh chan any
-	done    chan struct{}
-	// recvEg tracks goroutines that are trying to enqueue
-	// records to |indexCh|
-	recvEg        *errgroup.Group
-	indexWriteErr error
+	// done is used to communicate error routine
+	done chan struct{}
+	// recvEg holds the index writer thread
+	recvEg *errgroup.Group
 
 	lock sync.RWMutex
 }
@@ -518,8 +517,12 @@ func (wr *journalWriter) sendIndexRecord(r interface{}) {
 		// block on send, unlikely to bottleneck compared to chunk writes
 		select {
 		case wr.indexCh <- r:
-		case <-wr.done:
-			wr.indexCh = nil
+		case _, ok := <-wr.done:
+			// error case: send to done, receive here w/ thread fairness,
+			// close the first time, let |indexCh| fill and clean on Close.
+			if ok {
+				close(wr.done)
+			}
 		}
 	}
 }
