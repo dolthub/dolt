@@ -102,7 +102,7 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 		buf:     make([]byte, 0, journalWriterBuffSize),
 		journal: f,
 		path:    path,
-		recvEg:  recvEg,
+		indexEg: recvEg,
 		indexCh: indexCh,
 		done:    make(chan struct{}),
 	}
@@ -151,7 +151,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		buf:     make([]byte, 0, journalWriterBuffSize),
 		journal: f,
 		path:    path,
-		recvEg:  recvEg,
+		indexEg: recvEg,
 		indexCh: indexCh,
 		done:    make(chan struct{}),
 	}
@@ -189,8 +189,8 @@ func (wr *journalWriter) recvIndexRecords(ctx context.Context, c chan any) error
 				// originating chunk write. Several layers of abstraction now
 				// separate a specific chunk write from a write error. An error
 				// now disables journal indexing for the remainder of the engine
-				// process. The error is saved and reported during finalization.
-				wr.done <- struct{}{}
+				// process. The error is reported by |recvEg| on Close().
+				close(wr.done)
 				return err
 			}
 		}
@@ -226,8 +226,8 @@ type journalWriter struct {
 	indexCh chan any
 	// done is used to communicate error routine
 	done chan struct{}
-	// recvEg holds the index writer thread
-	recvEg *errgroup.Group
+	// indexEg holds the index writer thread
+	indexEg *errgroup.Group
 
 	lock sync.RWMutex
 }
@@ -517,12 +517,7 @@ func (wr *journalWriter) sendIndexRecord(r interface{}) {
 		// block on send, unlikely to bottleneck compared to chunk writes
 		select {
 		case wr.indexCh <- r:
-		case _, ok := <-wr.done:
-			// error case: send to done, receive here w/ thread fairness,
-			// close the first time, let |indexCh| fill and clean on Close.
-			if ok {
-				close(wr.done)
-			}
+		case <-wr.done:
 		}
 	}
 }
@@ -705,7 +700,7 @@ func (wr *journalWriter) Close() (err error) {
 	if wr.index != nil {
 		close(wr.indexCh)
 		// wait for writer to drain |indexChan|
-		if werr := wr.recvEg.Wait(); werr != nil {
+		if werr := wr.indexEg.Wait(); werr != nil {
 			err = errors.Join(err, werr)
 		}
 		// ensure writes make it to disk, close file
