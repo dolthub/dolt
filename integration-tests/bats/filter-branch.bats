@@ -400,30 +400,134 @@ SQL
     [[ "$output" =~ "does not exist" ]] || false
 }
 
-@test "filter-branch: fails with working and staged changes" {
+@test "filter-branch: fails with working and staged changes in current branch" {
     dolt sql -q "insert into test values (3, 3)"
 
     run dolt filter-branch -q "alter table test add column filter int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "local changes detected, use dolt stash or commit changes before using filter-branch" ]] || false
+    [[ "$output" =~ "local changes detected on branch refs/heads/main, use dolt stash or commit changes before using filter-branch" ]] || false
 
     dolt add .
     run dolt filter-branch -q "alter table test add column filter int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "local changes detected, use dolt stash or commit changes before using filter-branch" ]] || false
+    [[ "$output" =~ "local changes detected on branch refs/heads/main, use dolt stash or commit changes before using filter-branch" ]] || false
 
     dolt commit -m "added row"
     run dolt filter-branch -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "select * from test as of 'HEAD'"
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+----+----+--------+" ]] || false
-    [[ "$output" =~ "| pk | c0 | filter |" ]] || false
-    [[ "$output" =~ "+----+----+--------+" ]] || false
-    [[ "$output" =~ "| 0  | 0  | NULL   |" ]] || false
-    [[ "$output" =~ "| 1  | 1  | NULL   |" ]] || false
-    [[ "$output" =~ "| 2  | 2  | NULL   |" ]] || false
-    [[ "$output" =~ "| 3  | 3  | NULL   |" ]] || false
-    [[ "$output" =~ "+----+----+--------+" ]] || false
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
 }
+
+@test "filter-branch: works with working and staged changes in other branch" {
+    dolt sql << SQL
+call dolt_checkout('-b', 'other');
+insert into test values (3, 3);
+SQL
+    run dolt filter-branch -q "alter table test add column filter int"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+
+    dolt checkout other
+    run dolt filter-branch -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/other, use dolt stash or commit changes before using filter-branch" ]] || false
+}
+
+@test "filter-branch: --all fails with working and staged changes on other branch" {
+    dolt sql << SQL
+call dolt_checkout('-b', 'other');
+insert into test values (3, 3);
+SQL
+
+    run dolt filter-branch --all -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/other, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt checkout other
+
+    dolt add .
+    run dolt filter-branch --all -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/other, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt commit -m "added row"
+    run dolt filter-branch --all -q "alter table test add column filter int"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
+}
+
+@test "filter-branch: --branches fails with working and staged changes" {
+    dolt sql << SQL
+call dolt_checkout('-b', 'other');
+insert into test values (3, 3);
+SQL
+
+    run dolt filter-branch --branches -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/other, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt checkout other
+
+    dolt add .
+    run dolt filter-branch --branches -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/other, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt commit -m "added row"
+    run dolt filter-branch --branches -q "alter table test add column filter int"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
+}
+
+@test "filter-branch: --continue still fails with working and staged changes" {
+    dolt sql -q "insert into test values (3, 3)"
+
+    run dolt filter-branch --continue -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/main, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt add .
+    run dolt filter-branch --continue -q "alter table test add column filter int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "local changes detected on branch refs/heads/main, use dolt stash or commit changes before using filter-branch" ]] || false
+
+    dolt commit -m "added row"
+    run dolt filter-branch --continue -q "alter table test add column filter int"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
+}
+
