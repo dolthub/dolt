@@ -140,7 +140,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		// TODO: how to get working set commit?
 		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, verbose, continueOnErr)
 
 		if err != nil {
