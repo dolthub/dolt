@@ -330,7 +330,7 @@ func verifyAllChunks(idx tableIndex, archiveFile string) error {
 
 		data, err := index.get(h)
 		if err != nil {
-			return fmt.Errorf("error reading chunk: %s (err: %s)", h.String(), err.Error())
+			return fmt.Errorf("error reading chunk: %s (err: %w)", h.String(), err)
 		}
 		if data == nil {
 			msg := fmt.Sprintf("nil data returned from archive for expected chunk: %s", h.String())
