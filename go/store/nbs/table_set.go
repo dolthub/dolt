@@ -403,7 +403,7 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		// open missing tables in parallel
 		spec := s
 		eg.Go(func() error {
-			cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
+			cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats) // NM4 - spec.name is the tf/arch name.
 			if err != nil {
 				return err
 			}
