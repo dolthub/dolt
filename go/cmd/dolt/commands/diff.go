@@ -1432,12 +1432,13 @@ func diffRows(
 	}
 
 	// do the data diff
-	tableName := tableSummary.ToTableName
-	if len(tableName.Name) == 0 {
-		tableName = tableSummary.FromTableName
+	// TODO: schema names
+	tableName := tableSummary.ToTableName.Name
+	if len(tableName) == 0 {
+		tableName = tableSummary.FromTableName.Name
 	}
 
-	if strings.HasPrefix(tableName.Name, diff.DBPrefix) {
+	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		err = rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
