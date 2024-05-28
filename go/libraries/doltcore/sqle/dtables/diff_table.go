@@ -91,7 +91,7 @@ const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom war
 func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	_, table, tableExists, err := resolve.Table(ctx, root, tblName)
+	resolvedTableName, table, tableExists, err := resolve.Table(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, 
 	}
 
 	return &DiffTable{
-		name:             tblName,
+		name:             resolvedTableName.Name,
 		ddb:              ddb,
 		workingRoot:      root,
 		head:             head,

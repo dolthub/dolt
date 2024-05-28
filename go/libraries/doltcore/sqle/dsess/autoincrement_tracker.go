@@ -80,10 +80,12 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 			if err != nil {
 				return true, err
 			}
-
-			oldValue, loaded := ait.sequences.LoadOrStore(tableName, seq)
+			
+			// TODO: support schema name as part of the key
+			tableNameStr := tableName.Name
+			oldValue, loaded := ait.sequences.LoadOrStore(tableNameStr, seq)
 			if loaded && seq > oldValue.(uint64) {
-				ait.sequences.Store(tableName, seq)
+				ait.sequences.Store(tableNameStr, seq)
 			}
 
 			return false, nil

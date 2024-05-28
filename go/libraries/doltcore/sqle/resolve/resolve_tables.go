@@ -32,7 +32,8 @@ func Table(
 	}
 
 	tName := doltdb.TableName{Schema: doltdb.DefaultSchemaName, Name: tableName}
-	tbl, _, tblExists, err := doltdb.GetTableInsensitive(ctx, root, tName)
+	tbl, correctedTableName, tblExists, err := doltdb.GetTableInsensitive(ctx, root, tName)
+	tName.Name = correctedTableName
 	return tName, tbl, tblExists, err
 }
 
