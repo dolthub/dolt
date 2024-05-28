@@ -101,7 +101,7 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
 	bld := val.NewTupleBuilder(desc)
-	// modify value in the first half of the tree
+	// modify value in the second half of the tree
 	bld.PutUint32(0, uint32(42))
 	toTups[23700][1] = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
