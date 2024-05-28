@@ -1692,11 +1692,12 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	}
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
-	// TODO: For now, we are hardcoding the only system variable that requires us to persist the
-	//       default value – @@server_uuid. To clean this up, we should add a DefaultPersisted
-	//       property to the @@server_uuid system variable definition in GMS, and then update
-	//       this code to find the persisted system variables with that property and do this
-	//       more generically.
+	// TODO: For now, we are explicitly handling the only system variable that requires us to
+	//       persist the default value – @@server_uuid. To clean up and generalize this, we
+	//       could add a "DefaultPersisted" property to the @@server_uuid system variable
+	//       definition, and then update this code to find the persisted system variables with
+	//       that property and do this more generically, but for now, there's only system
+	//       variable that requires this handling.
 	foundServerUuidSysVar := false
 	for _, persistedGlobalVar := range persistedGlobalVars {
 		if persistedGlobalVar.GetName() == "server_uuid" {

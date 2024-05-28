@@ -55,7 +55,7 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 	}
 
 	for {
-		logrus.StandardLogger().Trace("streamer is listening for messages")
+		logrus.StandardLogger().Trace("binlog streamer is listening for messages")
 
 		select {
 		case <-streamer.quitChan:
@@ -64,12 +64,12 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 			return nil
 
 		case <-streamer.ticker.C:
-			logrus.StandardLogger().Trace("sending heartbeat")
+			logrus.StandardLogger().Trace("sending binlog heartbeat")
 			if err := sendHeartbeat(conn, binlogFormat, binlogStream); err != nil {
 				return err
 			}
 			if err := conn.FlushBuffer(); err != nil {
-				return fmt.Errorf("unable to flush connection: %s", err.Error())
+				return fmt.Errorf("unable to flush binlog connection: %s", err.Error())
 			}
 
 		case events := <-streamer.eventChan:
@@ -80,7 +80,7 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 				}
 			}
 			if err := conn.FlushBuffer(); err != nil {
-				return fmt.Errorf("unable to flush connection: %s", err.Error())
+				return fmt.Errorf("unable to flush binlog connection: %s", err.Error())
 			}
 		}
 	}
@@ -107,7 +107,6 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 		for {
 			select {
 			case <-manager.quitChan:
-				// TODO: Since we just have one channel now... might be easier to just use an atomic var
 				streamers := manager.copyStreamers()
 				for _, streamer := range streamers {
 					streamer.quitChan <- struct{}{}
@@ -172,7 +171,7 @@ func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
 }
 
 func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
-	binlogStream.Timestamp = uint32(0) // Timestamp needs to be zero for a heartbeat event
+	binlogStream.Timestamp = uint32(0) // Timestamp is zero for a heartbeat event
 	logrus.WithField("log_position", binlogStream.LogPosition).Tracef("sending heartbeat")
 
 	binlogEvent := mysql.NewHeartbeatEventWithLogFile(*binlogFormat, binlogStream, binlogFilename)
@@ -197,7 +196,6 @@ func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.Bin
 
 func sendRotateEvent(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	binlogFilePosition := uint64(0)
-	// TODO: why does vitess define binlogStream.LogPosition as a uint32? We should probably just change that.
 	binlogStream.LogPosition = uint32(binlogFilePosition)
 
 	binlogEvent := mysql.NewRotateEvent(*binlogFormat, binlogStream, binlogFilePosition, binlogFilename)

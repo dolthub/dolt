@@ -64,22 +64,18 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // NewBinlogProducer creates and returns a new instance of BinlogProducer. Note that callers must register the
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
-func NewBinlogProducer(streamerManager *binlogStreamerManager) *binlogProducer {
+func NewBinlogProducer(streamerManager *binlogStreamerManager) (*binlogProducer, error) {
 	binlogFormat := createBinlogFormat()
 	binlogStream, err := createBinlogStream()
 	if err != nil {
-		// TODO: Change this to log an error message, and say that we weren't able to start replication
-		//       because of this error. Make the error message say that the value needs to be set persistently,
-		//       and then the server needs to be restarted before replication will work. We can always
-		//       make that better later, but at least it'll work and will be consistent with dolt replication.
-		panic(err.Error())
+		return nil, err
 	}
 
 	return &binlogProducer{
 		binlogStream:    binlogStream,
 		binlogFormat:    binlogFormat,
 		streamerManager: streamerManager,
-	}
+	}, nil
 }
 
 // WorkingRootUpdated implements the doltdb.DatabaseUpdateListener interface. When a working root changes,
@@ -88,8 +84,6 @@ func NewBinlogProducer(streamerManager *binlogStreamerManager) *binlogProducer {
 // This function currently sends the events to all connected replicas as the events are produced. Eventually we
 // need to change this so that it writes to a binary log file as the intermediate, and the readers watch that
 // log to stream events back to the connected replicas.
-//
-// TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit. We should split this out to a background routine to process, in order of the commits.
 func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before doltdb.RootValue, after doltdb.RootValue) error {
 	// We only support updates to a single branch for binlog events, so ignore all other updates
 	if branchName != BinlogBranch {
@@ -475,7 +469,6 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 				}
 
 			case tree.RemovedDiff:
-				// TODO: If the schema of the table has changed between FromTable and ToTable, then this probably breaks
 				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
 					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {

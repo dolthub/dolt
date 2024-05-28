@@ -1413,7 +1413,7 @@ type DatabaseUpdateListener interface {
 	// will be logged.
 	WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before RootValue, after RootValue) error
 
-	// DatabaseCreated is called when a new database,  named |databaseName|, has been created.
+	// DatabaseCreated is called when a new database, named |databaseName|, has been created.
 	DatabaseCreated(ctx *sql.Context, databaseName string) error
 
 	// DatabaseDropped is called with the database named |databaseName| has been dropped.

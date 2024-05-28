@@ -361,7 +361,10 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 	}
 	if logBin == 1 {
 		logrus.Debug("Enabling binary logging")
-		binlogProducer := dblr.NewBinlogProducer(primaryController.StreamerManager())
+		binlogProducer, err := dblr.NewBinlogProducer(primaryController.StreamerManager())
+		if err != nil {
+			return err
+		}
 		doltdb.RegisterDatabaseUpdateListener(binlogProducer)
 		primaryController.BinlogProducer = binlogProducer
 	}

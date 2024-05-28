@@ -23,10 +23,10 @@ import (
 )
 
 // doltReplicationPrimarySystemVars holds the system variables that must be set when the Dolt sql-server launches
-// in order for replication to be enabled. Changes to some of these system variables (i.e. log_bin)  are not reflected
-// once the SQL engine has been instantiated, so to change them, they must be persisted and the SQL server needs to be
-// restarted. Other system variables (i.e. enforce_gtid_consistency, gtid_mode) can be set on a running server, but
-// are set here for convenience.
+// in order for it to operate as a binlog primary server. Changes to some of these system variables (i.e. log_bin)
+// are not reflected once the SQL engine has been instantiated, so to change them, they must be persisted and the
+// SQL server needs to be restarted. Other system variables (i.e. enforce_gtid_consistency, gtid_mode) can be set
+// on a running server, but are set here for convenience.
 var doltReplicationPrimarySystemVars = map[string]string{
 	"log_bin":                  "1",
 	"enforce_gtid_consistency": "ON",
@@ -84,7 +84,7 @@ func TestBinlogPrimary(t *testing.T) {
 		");")
 	waitForReplicaToCatchUp(t)
 
-	// Debugging output
+	// Debugging output – useful to see deeper status from replica when tests are failing
 	outputReplicaApplierStatus(t)
 	outputShowReplicaStatus(t)
 
@@ -122,6 +122,9 @@ func TestBinlogPrimary(t *testing.T) {
 			`{"foo": "bar"}`, `{"foo": {"baz": "bar"}}`,
 		},
 	})
+
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{
+		{"binlog-main.000001", "2342", "", "", uuid + ":1-3"}})
 }
 
 // TestBinlogPrimary_ReplicaRestart tests that the Dolt primary server behaves correctly when the
@@ -165,7 +168,7 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	// We can't use waitForReplicaToCatchUp here, because it won't get the statement
 	// that was executed while the replica was stopped. Once we support replaying binlog
 	// events from a log file, we can switch this to waitForReplicaToCatchUp(t)
-	waitForReplicaToReplicateLatestGtid(t)
+	waitForReplicaToHaveLatestGtid(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 
 	// Assert the executed GTID position now contains GTID #2 and GTID #4
@@ -232,7 +235,8 @@ func TestBinlogPrimary_OptIn(t *testing.T) {
 	// MySQL doesn't return errors directly from the START REPLICA statement; instead,
 	// callers must check the replica status information for errors
 	replicaStatus := queryReplicaStatus(t)
-	require.Equal(t, "Source command COM_REGISTER_REPLICA failed: unknown error: no binlog currently being recorded; make sure the server is started with @@log_bin enabled (Errno: 1105)", replicaStatus["Last_IO_Error"])
+	require.Equal(t, "Source command COM_REGISTER_REPLICA failed: unknown error: no binlog currently being recorded; "+
+		"make sure the server is started with @@log_bin enabled (Errno: 1105)", replicaStatus["Last_IO_Error"])
 
 	// Create a database and assert that it does not get replicated
 	primaryDatabase.MustExec("create database newDb;")
@@ -442,6 +446,8 @@ func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
 	requireReplicaResults(t, "select * from foobar1.table1;", [][]any{{"blue"}})
 }
 
+// TestBinlogPrimary_InsertUpdateDelete tests that insert, update, and delete statements can be executed correctly
+// in autocommit transactions, and also when they mixed together in the same explicit SQL transaction.
 func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
