@@ -200,7 +200,8 @@ func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collat
 }
 
 func (r nomsRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
-	panic("schemas not implemented for nomsRvStorage")
+	// stub implementation, used only for migration
+	return nil, nil
 }
 
 func (r nomsRvStorage) SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rootValueStorage, error) {
