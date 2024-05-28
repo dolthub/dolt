@@ -56,6 +56,7 @@ type footer struct {
 	formatVersion byte
 	fileSignature string
 	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
+	hash          hash.Hash
 }
 
 // dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
@@ -218,6 +219,11 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	f.metaCheckSum = sha512Sum(buf[afrMetaChkSumOffset : afrMetaChkSumOffset+sha512.Size])
 	f.fileSize = fileSize
 
+	// calculate the has of the footer. We don't currently verify that this is what was used to load the content.
+	sha := sha512.New()
+	sha.Write(buf)
+	f.hash = hash.New(sha.Sum(nil)[:hash.ByteLen])
+
 	return
 }
 
@@ -256,7 +262,12 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	if dict == nil {
 		result, err = gozstd.Decompress(nil, data)
 	} else {
-		dDict, e2 := gozstd.NewDDict(dict)
+		dcmpDict, e2 := gozstd.Decompress(nil, dict)
+		if e2 != nil {
+			return nil, e2
+		}
+
+		dDict, e2 := gozstd.NewDDict(dcmpDict)
 		if e2 != nil {
 			return nil, e2
 		}
@@ -266,6 +277,17 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (ai archiveReader) count() uint32 {
+	return ai.footer.chunkCount
+}
+
+func (ai archiveReader) close() error {
+	if closer, ok := ai.reader.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
