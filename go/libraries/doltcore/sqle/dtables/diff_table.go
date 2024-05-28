@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -90,11 +91,11 @@ const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom war
 func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	table, tblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
+	resolvedTableName, table, tableExists, err := resolve.Table(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if !tableExists {
 		return nil, sql.ErrTableNotFound.New(diffTblName)
 	}
 	sch, err := table.GetSchema(ctx)
@@ -113,7 +114,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, 
 	}
 
 	return &DiffTable{
-		name:             tblName,
+		name:             resolvedTableName.Name,
 		ddb:              ddb,
 		workingRoot:      root,
 		head:             head,
@@ -163,12 +164,11 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	t, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
+	exactName, t, exists, err := resolve.Table(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	}
-
-	if !ok {
+	if !exists {
 		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
@@ -281,7 +281,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 // TODO the structure of the diff iterator doesn't appear to accommodate
 // several children for a parent hash.
 func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	_, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
+	exactName, _, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -422,17 +422,17 @@ func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*d
 	}
 }
 
-func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
+func tableInfoForCommit(ctx *sql.Context, table string, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
 	r, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
 
-	tbl, exactName, ok, err := doltdb.GetTableInsensitive(ctx, r, table)
+	exactName, tbl, exists, err := resolve.Table(ctx, r, table)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
-	if !ok {
+	if !exists {
 		return TblInfoAtCommit{}, nil
 	}
 
@@ -454,7 +454,7 @@ func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs
 // commits. The structure of the iter requires we pre-populate the parents
 // of to_commit for diffing.
 func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	t, exactName, ok, err := doltdb.GetTableInsensitive(ctx, dt.workingRoot, dt.name)
+	exactName, t, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -647,6 +647,7 @@ func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, f
 }
 
 func (dp DiffPartition) Key() []byte {
+	// TODO: schema name
 	return []byte(dp.toName + dp.fromName)
 }
 
@@ -732,7 +733,7 @@ var _ sql.PartitionIter = &DiffPartitions{}
 
 // DiffPartitions a collection of partitions. Implements PartitionItr
 type DiffPartitions struct {
-	tblName         string
+	tblName         doltdb.TableName
 	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]TblInfoAtCommit
 	selectFunc      partitionSelectFunc

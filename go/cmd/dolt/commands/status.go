@@ -202,15 +202,15 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 			shouldIgnoreTable := false
 			if !isStaged {
 				// determine if the table should be ignored
-				ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+				ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 				if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 					ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
 				} else if err != nil {
 					return nil, err
 				} else if ignored == doltdb.DontIgnore {
-					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, doltdb.TableName{Name: tableName})
 				} else if ignored == doltdb.Ignore {
-					ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
+					ignoredTables.Ignore = append(ignoredTables.Ignore, doltdb.TableName{Name: tableName})
 				} else {
 					return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
 				}
@@ -267,7 +267,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 	// filter out ignored tables from untracked tables
 	filteredUntrackedTables := map[string]string{}
 	for tableName, status := range untrackedTables {
-		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+		ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 
 		if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 			continue

@@ -165,7 +165,9 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootVa
 	if err != nil {
 		return schemaConflict{}, err
 	}
-	baseFKs, _ := fkc.KeysForTable(table)
+
+	// TODO: schema name
+	baseFKs, _ := fkc.KeysForTable(doltdb.TableName{Name: table})
 
 	var base string
 	if baseSch != nil {

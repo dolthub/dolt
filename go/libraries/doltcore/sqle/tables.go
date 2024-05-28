@@ -596,7 +596,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWrit
 
 	setter := ds.SetWorkingRoot
 
-	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName}, t.db.RevisionQualifiedName(), setter)
+	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
 	}
@@ -1096,7 +1096,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 		return nil, err
 	}
 
-	declaredFks, _ := fkc.KeysForTable(t.tableName)
+	declaredFks, _ := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
 	for i, fk := range declaredFks {
@@ -1148,7 +1148,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 		return nil, err
 	}
 
-	_, referencedByFk := fkc.KeysForTable(t.tableName)
+	_, referencedByFk := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
 
 	for i, fk := range referencedByFk {
@@ -2512,7 +2512,9 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, sqlFk.ParentTable)
+		// TODO: the parent table can be in another schema
+
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2585,12 +2587,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+	tbl, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return sql.ErrTableNotFound.New(t.tableName)
 	}
 
 	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
@@ -2685,7 +2684,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
-		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}
@@ -2742,7 +2741,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, ret.NewTable)
+
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, ret.NewTable)
 	if err != nil {
 		return err
 	}

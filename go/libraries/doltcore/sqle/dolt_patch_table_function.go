@@ -29,6 +29,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -116,6 +117,7 @@ func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 
 // PartitionRows is a sql.Table interface function that takes a partition and returns all rows in that partition.
 // This table has a partition for just schema changes, one for just data changes, and one for both.
+// TODO: schema names
 func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
 	if err != nil {
@@ -138,16 +140,16 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 	}
 
 	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
+		return tableDeltas[i].ToName.Less(tableDeltas[j].ToName)
 	})
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
+		fromTblExists, err := fromRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
+		toTblExists, err := toRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
@@ -482,12 +484,12 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 	for _, td := range tableDeltas {
 		if td.FromTable == nil && td.ToTable == nil {
 			// no diff
-			if !strings.HasPrefix(td.FromName, diff.DBPrefix) || !strings.HasPrefix(td.ToName, diff.DBPrefix) {
+			if !strings.HasPrefix(td.FromName.Name, diff.DBPrefix) || !strings.HasPrefix(td.ToName.Name, diff.DBPrefix) {
 				continue
 			}
 
 			// db collation diff
-			dbName := strings.TrimPrefix(td.ToName, diff.DBPrefix)
+			dbName := strings.TrimPrefix(td.ToName.Name, diff.DBPrefix)
 			fromColl, cerr := fromRefDetails.root.GetCollation(ctx)
 			if cerr != nil {
 				return nil, cerr
@@ -498,7 +500,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
 			patches = append(patches, &patchNode{
-				tblName:          td.FromName,
+				tblName:          td.FromName.Name,
 				schemaPatchStmts: []string{alterDBCollStmt},
 				dataPatchStmts:   []string{},
 			})
@@ -527,7 +529,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 		}
 
-		patches = append(patches, &patchNode{tblName: tblName, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
+		patches = append(patches, &patchNode{tblName: tblName.Name, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
 	}
 
 	return patches, nil
@@ -558,12 +560,12 @@ func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.Table
 		return nil, err
 	}
 
-	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName, td.ToSch)
+	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName.Name, td.ToSch)
 	if err != nil {
 		return nil, err
 	}
 
-	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName, td.ToSch)
+	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName.Name, td.ToSch)
 }
 
 func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projections []sql.Expression, iter sql.RowIter, tn string, tsch schema.Schema) ([]string, error) {

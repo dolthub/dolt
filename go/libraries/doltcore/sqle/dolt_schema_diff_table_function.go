@@ -297,12 +297,13 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 	}
 
 	sort.Slice(deltas, func(i, j int) bool {
-		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+		return deltas[i].ToName.Less(deltas[j].ToName)
 	})
 
 	dataRows := []sql.Row{}
 	for _, delta := range deltas {
-		shouldInclude := tableName == "" || tableName == delta.ToName || tableName == delta.FromName
+		// TODO: schema name
+		shouldInclude := tableName == "" || tableName == delta.ToName.Name || tableName == delta.FromName.Name
 		if !shouldInclude {
 			continue
 		}
@@ -315,7 +316,7 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		if delta.FromTable != nil {
 			fromSqlDb := NewUserSpaceDatabase(fromRoot, editor.Options{})
 			fromSqlCtx, fromEngine, _ := PrepareCreateTableStmt(ctx, fromSqlDb)
-			fromCreate, err = GetCreateTableStmt(fromSqlCtx, fromEngine, delta.FromName)
+			fromCreate, err = GetCreateTableStmt(fromSqlCtx, fromEngine, delta.FromName.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -324,23 +325,23 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		if delta.ToTable != nil {
 			toSqlDb := NewUserSpaceDatabase(toRoot, editor.Options{})
 			toSqlCtx, toEngine, _ := PrepareCreateTableStmt(ctx, toSqlDb)
-			toCreate, err = GetCreateTableStmt(toSqlCtx, toEngine, delta.ToName)
+			toCreate, err = GetCreateTableStmt(toSqlCtx, toEngine, delta.ToName.Name)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		isDbCollationDiff := strings.HasPrefix(fromName, diff.DBPrefix) || strings.HasPrefix(toName, diff.DBPrefix)
+		isDbCollationDiff := strings.HasPrefix(fromName.Name, diff.DBPrefix) || strings.HasPrefix(toName.Name, diff.DBPrefix)
 		var schemasAreDifferent = fromCreate != toCreate || isDbCollationDiff
 		if !schemasAreDifferent {
 			continue
 		}
 
 		row := sql.Row{
-			fromName,   // 0
-			toName,     // 1
-			fromCreate, // 2
-			toCreate,   // 3
+			fromName.Name, // 0
+			toName.Name,   // 1
+			fromCreate,    // 2
+			toCreate,      // 3
 		}
 		dataRows = append(dataRows, row)
 	}

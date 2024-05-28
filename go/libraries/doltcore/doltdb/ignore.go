@@ -37,8 +37,8 @@ func NewIgnorePattern(pattern string, ignore bool) IgnorePattern {
 
 // IgnoredTables contains the results of comparing a series of tables to a set of dolt_ignore patterns.
 type IgnoredTables struct {
-	Ignore     []string
-	DontIgnore []string
+	Ignore     []TableName
+	DontIgnore []TableName
 	Conflicts  []DoltIgnoreConflictError
 }
 
@@ -112,12 +112,12 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 // ExcludeIgnoredTables takes a list of table names and removes any tables that should be ignored,
 // as determined by the patterns in the dolt_ignore table.
 // The ignore patterns are read from the dolt_ignore table in the working set.
-func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []string) ([]string, error) {
+func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []TableName) ([]TableName, error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
-	filteredTables := []string{}
+	filteredTables := []TableName{}
 	for _, tbl := range tables {
 		ignored, err := ignorePatterns.IsTableNameIgnored(tbl)
 		if err != nil {
@@ -176,7 +176,7 @@ func normalizePattern(pattern string) string {
 	return pattern
 }
 
-func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName string) (IgnoreResult, error) {
+func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName TableName) (IgnoreResult, error) {
 	trueMatchesToRemove := map[string]struct{}{}
 	falseMatchesToRemove := map[string]struct{}{}
 	for _, trueMatch := range trueMatches {
@@ -231,10 +231,10 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 	return IgnorePatternConflict, DoltIgnoreConflictError{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
 }
 
-func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (IgnoreResult, error) {
+func (ip *IgnorePatterns) IsTableNameIgnored(tableName TableName) (IgnoreResult, error) {
 	// The dolt_rebase table is automatically ignored by Dolt – it shouldn't ever
 	// be checked in to a Dolt database.
-	if strings.ToLower(tableName) == strings.ToLower(RebaseTableName) {
+	if strings.ToLower(tableName.Name) == strings.ToLower(RebaseTableName) {
 		return Ignore, nil
 	}
 
@@ -247,7 +247,7 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (IgnoreResult, er
 		if err != nil {
 			return ErrorOccurred, err
 		}
-		if patternRegExp.MatchString(tableName) {
+		if patternRegExp.MatchString(tableName.Name) {
 			if ignore {
 				trueMatches = append(trueMatches, pattern)
 			} else {

@@ -50,8 +50,8 @@ type TableInfo struct {
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
 type TableDelta struct {
-	FromName         string
-	ToName           string
+	FromName         doltdb.TableName
+	ToName           doltdb.TableName
 	FromTable        *doltdb.Table
 	ToTable          *doltdb.Table
 	FromNodeStore    tree.NodeStore
@@ -62,28 +62,28 @@ type TableDelta struct {
 	ToSch            schema.Schema
 	FromFks          []doltdb.ForeignKey
 	ToFks            []doltdb.ForeignKey
-	ToFksParentSch   map[string]schema.Schema
-	FromFksParentSch map[string]schema.Schema
+	ToFksParentSch   map[doltdb.TableName]schema.Schema
+	FromFksParentSch map[doltdb.TableName]schema.Schema
 }
 
 type TableDeltaSummary struct {
 	DiffType      string
 	DataChange    bool
 	SchemaChange  bool
-	TableName     string
-	FromTableName string
-	ToTableName   string
+	TableName     doltdb.TableName
+	FromTableName doltdb.TableName
+	ToTableName   doltdb.TableName
 	AlterStmts    []string
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (tds TableDeltaSummary) IsAdd() bool {
-	return tds.FromTableName == "" && tds.ToTableName != ""
+	return tds.FromTableName.Name == "" && tds.ToTableName.Name != ""
 }
 
 // IsDrop returns true if the table was dropped between the fromRoot and toRoot.
 func (tds TableDeltaSummary) IsDrop() bool {
-	return tds.FromTableName != "" && tds.ToTableName == ""
+	return tds.FromTableName.Name != "" && tds.ToTableName.Name == ""
 }
 
 // IsRename return true if the table was renamed between the fromRoot and toRoot.
@@ -118,7 +118,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	toNS := toRoot.NodeStore()
 
 	fromDeltas := make([]TableDelta, 0)
-	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	err = fromRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := fromRoot.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return true, err
@@ -148,7 +148,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 
 	toDeltas := make([]TableDelta, 0)
 
-	err = toRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	err = toRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := toRoot.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return true, err
@@ -196,8 +196,8 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 		if ok {
 			dbName := DBPrefix + sqlCtx.GetCurrentDatabase()
 			deltas = append(deltas, TableDelta{
-				FromName: dbName,
-				ToName:   dbName,
+				FromName: doltdb.TableName{Name: dbName},
+				ToName:   doltdb.TableName{Name: dbName},
 			})
 		}
 	}
@@ -205,18 +205,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	// Make sure we always return the same order of deltas
 	sort.Slice(deltas, func(i, j int) bool {
 		if deltas[i].FromName == deltas[j].FromName {
-			return deltas[i].ToName < deltas[j].ToName
+			return deltas[i].ToName.Less(deltas[j].ToName)
 		}
-		return deltas[i].FromName < deltas[j].FromName
+		return deltas[i].FromName.Less(deltas[j].FromName)
 	})
 
 	return deltas, nil
 }
 
-func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
-	schs := make(map[string]schema.Schema)
+func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.ForeignKey) (map[doltdb.TableName]schema.Schema, error) {
+	schs := make(map[doltdb.TableName]schema.Schema)
 	for _, toFk := range fks {
-		toRefTable, _, ok, err := doltdb.GetTableInsensitive(ctx, root, toFk.ReferencedTableName)
+		// TODO: schema
+		toRefTable, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: toFk.ReferencedTableName})
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +228,8 @@ func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.F
 		if err != nil {
 			return nil, err
 		}
-		schs[toFk.ReferencedTableName] = toRefSch
+		// TODO: schema name
+		schs[doltdb.TableName{Name: toFk.ReferencedTableName}] = toRefSch
 	}
 	return schs, nil
 }
@@ -256,13 +258,13 @@ func filterUnmodifiedTableDeltas(deltas []TableDelta) ([]TableDelta, error) {
 }
 
 func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
-	var matchedNames []string
-	from := make(map[string]TableDelta, len(fromDeltas))
+	var matchedNames []doltdb.TableName
+	from := make(map[doltdb.TableName]TableDelta, len(fromDeltas))
 	for _, f := range fromDeltas {
 		from[f.FromName] = f
 	}
 
-	to := make(map[string]TableDelta, len(toDeltas))
+	to := make(map[doltdb.TableName]TableDelta, len(toDeltas))
 	for _, t := range toDeltas {
 		to[t.ToName] = t
 		if _, ok := from[t.ToName]; ok {
@@ -443,10 +445,10 @@ func (td TableDelta) HasChanges() (bool, error) {
 
 // CurName returns the most recent name of the table.
 func (td TableDelta) CurName() string {
-	if td.ToName != "" {
-		return td.ToName
+	if td.ToName.Name != "" {
+		return td.ToName.Name
 	}
-	return td.FromName
+	return td.FromName.Name
 }
 
 func (td TableDelta) HasFKChanges() bool {

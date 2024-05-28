@@ -57,7 +57,7 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root doltdb.Roo
 		return nil, errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 	}
 
-	foreignKeys, _ := fkc.KeysForTable(tableName)
+	foreignKeys, _ := fkc.KeysForTable(doltdb.TableName{Name: tableName})
 
 	return &SqlExportWriter{
 		tableName:     tableName,

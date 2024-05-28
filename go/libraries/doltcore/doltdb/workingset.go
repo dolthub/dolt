@@ -61,8 +61,8 @@ type MergeState struct {
 	// the spec string that was used to specify |commit|
 	commitSpecStr    string
 	preMergeWorking  RootValue
-	unmergableTables []string
-	mergedTables     []string
+	unmergableTables []string // TODO: need schema name here
+	mergedTables     []string // TODO: need schema name here
 	// isCherryPick is set to true when the in-progress merge is a cherry-pick. This is needed so that
 	// commit knows to NOT create a commit with multiple parents when creating a commit for a cherry-pick.
 	isCherryPick bool
@@ -179,10 +179,10 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 			}
 		}
 
-		sc.ToFks, _ = toFKs.KeysForTable(name)
+		sc.ToFks, _ = toFKs.KeysForTable(TableName{Name: name})
 		sc.ToParentSchemas = toSchemas
 
-		sc.FromFks, _ = fromFKs.KeysForTable(name)
+		sc.FromFks, _ = fromFKs.KeysForTable(TableName{Name: name})
 		sc.FromParentSchemas = fromSchemas
 
 		if err = cb(name, sc); err != nil {

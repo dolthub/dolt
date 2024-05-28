@@ -80,7 +80,7 @@ func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.Part
 func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	tblName := string(part.Key())
 	var rows []sql.Row
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, totwv.root, tblName)
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, totwv.root, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}

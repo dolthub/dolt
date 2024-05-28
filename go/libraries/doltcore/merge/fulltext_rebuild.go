@@ -124,7 +124,8 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 		if _, doNotDelete := doNotDeleteTables[tblName]; doNotDelete || !doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, tblName)
+		// TODO: schema name
+		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
@@ -363,7 +364,7 @@ func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot
 func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, root doltdb.RootValue) (bool, error) {
 	// If `tbl` is nil, then we simply check if the table exists in the root
 	if tbl == nil {
-		return root.HasTable(ctx, tblName)
+		return root.HasTable(ctx, doltdb.TableName{Name: tblName})
 	}
 	fromTbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
