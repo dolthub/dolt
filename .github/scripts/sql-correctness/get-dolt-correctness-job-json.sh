@@ -75,7 +75,7 @@ echo '
               { "name": "DOLT_DEFAULT_BIN_FORMAT", "value": "'$NOMS_BIN_FORMAT'"}
             ],
             "args": [
-              "--schema=/correctness.sql",
+              "--schema=/app/correctness.sql",
               "--concurrent",
               "--output='$format'",
               "--version='$version'",
