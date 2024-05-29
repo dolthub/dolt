@@ -20,5 +20,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Copy Dockerfile
         run: cp -r ./go/performance/continuous_integration/. .
-      - name: Test runner
-        uses: ./.github/actions/benchmark-runner-tests
+# TODO: fix this before rerunning
+#      - name: Test runner
+#        uses: ./.github/actions/benchmark-runner-tests

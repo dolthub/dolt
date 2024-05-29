@@ -65,9 +65,51 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
+func validBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
+	for _, r := range refs {
+		headComm, err := ddb.ResolveCommitRef(ctx, r)
+		if err != nil {
+			return err
+		}
+		hRootVal, err := headComm.GetRootValue(ctx)
+		if err != nil {
+			return err
+		}
+		hHash, err := hRootVal.HashOf()
+		if err != nil {
+			return err
+		}
+		wsRef, err := ref.WorkingSetRefForHead(r)
+		if err != nil {
+			return err
+		}
+		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			return err
+		}
+		wHash, err := ws.WorkingRoot().HashOf()
+		if err != nil {
+			return err
+		}
+		sHash, err := ws.StagedRoot().HashOf()
+		if err != nil {
+			return err
+		}
+		if !hHash.Equal(wHash) || !hHash.Equal(sHash) {
+			return fmt.Errorf("local changes detected on branch %s, use dolt stash or commit changes before using filter-branch", r.String())
+		}
+	}
+	return nil
+}
+
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
 func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
 	if err != nil {
 		return err
 	}
@@ -86,6 +128,11 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 		return err
 	}
 
+	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
+	if err != nil {
+		return err
+	}
+
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, branches...)
 }
 
@@ -95,6 +142,12 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 	if err != nil {
 		return nil
 	}
+
+	err = validBranchRefs(ctx, dEnv.DbData().Ddb, headRef)
+	if err != nil {
+		return err
+	}
+
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
 }
 
@@ -118,7 +171,6 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		switch dRef := r.(type) {
 		case ref.BranchRef:
 			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i], nil)
-
 		case ref.TagRef:
 			// rewrite tag with new commit
 			var tag *doltdb.Tag
