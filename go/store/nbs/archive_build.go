@@ -277,7 +277,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex) (map[h
 		allChunks[h] = c
 	}, &stats)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 	if !allFound { // Unlikely to happen, given we got the list of chunks from this index.
 		return nil, nil, errors.New("missing chunks")
