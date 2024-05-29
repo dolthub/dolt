@@ -134,5 +134,4 @@ SQL
     run cat $DOLT_DATA_DIR/.dolt/config.json
     [ "$status" -eq 0 ]
     [[ "$output" =~ "\"sqlserver.global.log_bin\":\"1\"" ]] || false
-    [[ "$output" =~ "sqlserver.global.server_uuid" ]] || false
 }

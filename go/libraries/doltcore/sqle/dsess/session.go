@@ -1670,6 +1670,8 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 
 var initMu = sync.Mutex{}
 
+// InitPersistedSystemVars loads all persisted global variables from disk and initializes the corresponding
+// SQL system variables with their values.
 func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
@@ -1680,6 +1682,22 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 		return err
 	}
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+	return nil
+}
+
+// PersistSystemVarDefaults persists any SQL system variables that have non-deterministic default values, and
+// must have their generated default value persisted to disk. If the system variable is already persisted to disk,
+// then no changes are made. Currently, the only SQL system variable that requires persisting its default value
+// is @@server_uuid, since we need a consistent value used each time the server is started.
+func PersistSystemVarDefaults(dEnv *env.DoltEnv) error {
+	initMu.Lock()
+	defer initMu.Unlock()
+
+	// Find all the persisted global vars and load their values into sql.SystemVariables
+	persistedGlobalVars, err := findPersistedGlobalVars(dEnv)
+	if err != nil {
+		return err
+	}
 
 	// Ensure the @@server_uuid value is persisted
 	var globalConfig config.ReadWriteConfig

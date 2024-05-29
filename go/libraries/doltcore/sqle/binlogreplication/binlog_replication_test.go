@@ -930,18 +930,8 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 	adminUser := "admin"
 
 	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
-		// Set user.name and user.email
-		err = runDoltCommand(dir, goDirPath, "config", "--global", "--add", "user.name", "binlog-test")
-		if err != nil {
-			return -1, nil, err
-		}
-		err = runDoltCommand(dir, goDirPath, "config", "--global", "--add", "user.email", "binlog@test")
-		if err != nil {
-			return -1, nil, err
-		}
-
 		// Initialize the dolt directory first
-		err = runDoltCommand(dir, goDirPath, "init")
+		err = runDoltCommand(dir, goDirPath, "init", "--name=binlog-test", "--email=binlog@test")
 		if err != nil {
 			return -1, nil, err
 		}

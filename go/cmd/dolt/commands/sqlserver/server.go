@@ -172,6 +172,10 @@ func ConfigureServices(
 				if err != nil {
 					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
 				}
+				err = dsess.PersistSystemVarDefaults(dEnv)
+				if err != nil {
+					logrus.Errorf("failed to persist variable default value: %s\n", err.Error())
+				}
 			}
 			dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 			return nil
