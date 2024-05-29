@@ -1700,6 +1700,9 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	//       variable that requires this handling.
 	foundServerUuidSysVar := false
 	for _, persistedGlobalVar := range persistedGlobalVars {
+		if persistedGlobalVar == nil {
+			continue
+		}
 		if persistedGlobalVar.GetName() == "server_uuid" {
 			foundServerUuidSysVar = true
 		}
