@@ -328,6 +328,10 @@ func findParentDirectory(path string, targetDir string) string {
 	base := filepath.Base(path)
 	dir := filepath.Dir(path)
 
+	if base == "." || dir == "." {
+		return ""
+	}
+
 	switch base {
 	case "":
 		return base
