@@ -24,11 +24,9 @@ function no_stdout {
 }
 
 @test "config: make sure no dolt configuration for simulated fresh user" {
-    # Only the automatically persisted server_uuid should be present
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "server_uuid" ]] || false
-    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" = "" ]] || false
 }
 
 @test "config: try to initialize a repository with no configuration with correct hint" {
@@ -125,13 +123,13 @@ function no_stdout {
     dolt config --global --add metrics.disabled true
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     run dolt config --global --unset user.name user.email metrics.disabled
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.global.server_uuid" ]] || false
+    [[ "$output" = "" ]] || false
 }
 
 @test "config: set a user and email and init a repo" {
@@ -155,7 +153,7 @@ function no_stdout {
     [ -f .dolt/config.json ]
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "metrics.disabled = true" ]] || false
     run dolt config --get metrics.disabled
     [ "$status" -eq 0 ]
@@ -172,7 +170,7 @@ function no_stdout {
     [ -f .dolt/config.json ]
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "metrics.disabled = true" ]] || false
     run dolt config --get metrics.disabled
     [ "$status" -eq 0 ]
@@ -231,8 +229,8 @@ function no_stdout {
 
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
-    [[ $output =~ "server_uuid" ]] || false
+    [ "${#lines[@]}" -eq 0 ]
+    [[ $output = "" ]] || false
 
     dolt add .
     run dolt commit --author="John Doe <john@doe.com>" -m="Commit1"
