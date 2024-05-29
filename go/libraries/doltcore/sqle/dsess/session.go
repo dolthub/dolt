@@ -50,6 +50,7 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
+	DoltgresSessObj  any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
 	username         string
 	email            string
 	dbStates         map[string]*DatabaseSessionState

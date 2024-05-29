@@ -62,7 +62,7 @@ echo '
             ],
             "imagePullPolicy": "Always",
             "args": [
-              "--schema=/schema.sql",
+              "--schema=/app/schema.sql",
               "--useDoltHubLuaScriptsRepo",
               "--profile-version='"$version"'",
               "--future-version='"$futureVersion"'",
