@@ -721,7 +721,7 @@ func setupForDoltToMySqlReplication() {
 
 	// Reset binary logs and gtids on the replica, so that @@gtid_executed doesn't contain any
 	// executed GTIDs from the replica server.
-	replicaDatabase.MustExec("reset binary logs and gtids;")
+	replicaDatabase.MustExec("reset master;")
 }
 
 // outputReplicaApplierStatus prints out the replica applier status information from the
