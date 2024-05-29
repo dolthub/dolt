@@ -65,43 +65,6 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
-func validateBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
-	for _, r := range refs {
-		headComm, err := ddb.ResolveCommitRef(ctx, r)
-		if err != nil {
-			return err
-		}
-		hRootVal, err := headComm.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
-		hHash, err := hRootVal.HashOf()
-		if err != nil {
-			return err
-		}
-		wsRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return err
-		}
-		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
-			return err
-		}
-		wHash, err := ws.WorkingRoot().HashOf()
-		if err != nil {
-			return err
-		}
-		sHash, err := ws.StagedRoot().HashOf()
-		if err != nil {
-			return err
-		}
-		if !hHash.Equal(wHash) || !hHash.Equal(sHash) {
-			return fmt.Errorf("local changes detected on branch %s, use dolt stash or commit changes before using filter-branch", r.String())
-		}
-	}
-	return nil
-}
-
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
 func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, replayCommit ReplayCommitFn, replayRootVal ReplayRootFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
@@ -174,7 +137,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, r
 				return err
 			}
 			if !applyUncommitted && (!hHash.Equal(wHash) || !hHash.Equal(sHash)) {
-				return fmt.Errorf("local changes detected on branch %s, use dolt stash or commit changes before using filter-branch", dRef.String())
+				return fmt.Errorf("local changes detected on branch %s, clear uncommitted changes (dolt stash dolt commit) before using filter-branch, or use --apply-to-uncommitted", dRef.String())
 			}
 
 			if !hHash.Equal(wHash) {
