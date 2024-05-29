@@ -496,6 +496,7 @@ func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// No events should be generated when we're not updating the main branch
@@ -525,6 +526,7 @@ func TestBinlogPrimary_KeylessTables(t *testing.T) {
 
 	primaryDatabase.MustExec("create table db01.t (c1 varchar(100), c2 int, c3 int unsigned);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{})
 
 	// Test inserts
