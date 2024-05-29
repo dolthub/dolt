@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.3-labs
 FROM --platform=linux/amd64 golang:1.22-alpine as gobin
 FROM --platform=linux/amd64 ubuntu:22.04
 
@@ -39,6 +40,19 @@ RUN git clone https://github.com/dolthub/doltgresql.git
 RUN cd doltgresql/utils/doltgres_builder/cmd && go run . "$DOLTGRESQL_VERSION"
 ENV PATH="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION:${PATH}"
 RUN doltgres -version
+
+RUN cat <<EOF > /doltgres_config.yaml
+log_level: info
+
+behavior:
+  read_only: false
+
+listener:
+  host: 127.0.0.1
+  port: 4433
+  read_timeout_millis: 28800000
+  write_timeout_millis: 28800000
+EOF
 
 WORKDIR /mysql
 RUN apt install -y mysql-server
@@ -94,6 +108,7 @@ ENV BENCHMARK_RUNNER_MYSQL_EXEC="/usr/sbin/mysqld"
 ENV BENCHMARK_RUNNER_MYSQL_PROTOCOL="unix"
 ENV BENCHMARK_RUNNER_MYSQL_SOCKET="/home/tester/.mysql/mysqld.sock"
 ENV BENCHMARK_RUNNER_DOLTGRES_EXEC="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION/doltgres"
+ENV BENCHMARK_RUNNER_DOLTGRES_CONFIG_FILE_PATH="/doltgres_config.yaml"
 ENV BENCHMARK_RUNNER_POSTGRES_EXEC="/usr/lib/postgresql/15/bin/postgres"
 ENV BENCHMARK_RUNNER_POSTGRES_INIT_EXEC="/usr/lib/postgresql/15/bin/initdb"
 ENV BENCHMARK_RUNNER_SYSBENCH_LUA_SCRIPTS="/sysbench-lua-scripts"
