@@ -66,6 +66,7 @@ func newWriterSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName
 	if err != nil {
 		return nil, err
 	}
+	schState.PkKeyDesc, schState.PkValDesc = schState.DoltSchema.GetMapDescriptors()
 	schState.PkSchema, err = sqlutil.FromDoltSchema(dbName, tableName, schState.DoltSchema)
 	if err != nil {
 		return nil, err
