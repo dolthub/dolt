@@ -62,6 +62,7 @@ const (
 
 	doltSqlServerCommand = "sql-server"
 
+	configFlag                  = "--config"
 	userFlag                    = "--user"
 	hostFlag                    = "--host"
 	portFlag                    = "--port"
