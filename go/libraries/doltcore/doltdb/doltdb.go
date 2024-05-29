@@ -1231,7 +1231,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	var ws *WorkingSet
 	var currWsHash hash.Hash
 	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == ErrWorkingSetNotFound {
+	if errors.Is(err, ErrWorkingSetNotFound) {
 		ws = EmptyWorkingSet(wsRef)
 	} else if err != nil {
 		return err
@@ -1243,6 +1243,56 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	}
 
 	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
+	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
+}
+
+func (ddb *DoltDB) NewBranchAtCommitWithWorkingSet(ctx context.Context, branchRef ref.DoltRef, commit *Commit, ws *WorkingSet, replicationStatus *ReplicationStatusController) error {
+	if !IsValidBranchRef(branchRef) {
+		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", branchRef.String()))
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, branchRef.String())
+	if err != nil {
+		return err
+	}
+
+	addr, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	if ws == nil {
+		ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
+		if err != nil {
+			if !errors.Is(err, ErrWorkingSetNotFound) {
+				return err
+			}
+			ws = EmptyWorkingSet(wsRef)
+		}
+	}
+
+	commitRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+	if ws.WorkingRoot() == nil {
+		ws = ws.WithWorkingRoot(commitRoot)
+	}
+	if ws.StagedRoot() == nil {
+		ws = ws.WithStagedRoot(commitRoot)
+	}
+
+	currWsHash, err := ws.HashOf()
+	if err != nil {
+		return err
+	}
+
 	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
 }
 

@@ -66,7 +66,6 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 
 func validateBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
-	return nil
 	for _, r := range refs {
 		headComm, err := ddb.ResolveCommitRef(ctx, r)
 		if err != nil {
@@ -104,60 +103,37 @@ func validateBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.Dol
 }
 
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
-func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, replayCommit ReplayCommitFn, replayRootVal ReplayRootFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
-	if err != nil {
-		return err
-	}
-
-	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
-	if err != nil {
-		return err
-	}
-
 	tags, err := dEnv.DoltDB.GetTags(ctx)
 	if err != nil {
 		return err
 	}
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, append(branches, tags...)...)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, replayCommit, replayRootVal, nerf, append(branches, tags...)...)
 }
 
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
-func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func AllBranches(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, replayCommit ReplayCommitFn, replayRootVal ReplayRootFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
-	if err != nil {
-		return err
-	}
-
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, branches...)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, replayCommit, replayRootVal, nerf, branches...)
 }
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
-func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, replayCommit ReplayCommitFn, replayRootVal ReplayRootFn, nerf NeedsRebaseFn) error {
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		return nil
 	}
-
-	err = validateBranchRefs(ctx, dEnv.DbData().Ddb, headRef)
-	if err != nil {
-		return err
-	}
-
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, replayCommit, replayRootVal, nerf, headRef)
 }
 
-func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
+func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, replayCommit ReplayCommitFn, replayRootVal ReplayRootFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dbData.Ddb
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
@@ -168,7 +144,66 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		}
 	}
 
-	newHeads, err := rebase(ctx, ddb, replay, nerf, heads...)
+	newWorkingSets := make([]*doltdb.WorkingSet, len(refs))
+	for i, dRef := range refs {
+		switch dRef.(type) {
+		case ref.BranchRef:
+			hRootVal, err := heads[i].GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+			hHash, err := hRootVal.HashOf()
+			if err != nil {
+				return err
+			}
+
+			wsRef, err := ref.WorkingSetRefForHead(dRef)
+			if err != nil {
+				return err
+			}
+			ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+			wHash, err := ws.WorkingRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			sHash, err := ws.StagedRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			if !applyUncommitted && (!hHash.Equal(wHash) || !hHash.Equal(sHash)) {
+				return fmt.Errorf("local changes detected on branch %s, use dolt stash or commit changes before using filter-branch", dRef.String())
+			}
+
+			if !hHash.Equal(wHash) {
+				var newWRoot doltdb.RootValue
+				newWRoot, err = replayRootVal(ctx, ws.WorkingRoot(), nil, nil)
+				if err != nil {
+					return err
+				}
+				ws = ws.WithWorkingRoot(newWRoot)
+			} else {
+				ws = ws.WithWorkingRoot(nil)
+			}
+			if !hHash.Equal(sHash) {
+				var newSRoot doltdb.RootValue
+				newSRoot, err = replayRootVal(ctx, ws.StagedRoot(), nil, nil)
+				if err != nil {
+					return err
+				}
+				ws = ws.WithStagedRoot(newSRoot)
+			} else {
+				ws = ws.WithStagedRoot(nil)
+			}
+			newWorkingSets[i] = ws
+		default:
+			newWorkingSets[i] = nil
+		}
+	}
+
+	newHeads, err := rebase(ctx, ddb, replayCommit, nerf, heads...)
 	if err != nil {
 		return err
 	}
@@ -176,7 +211,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	for i, r := range refs {
 		switch dRef := r.(type) {
 		case ref.BranchRef:
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i], nil)
+			err = ddb.NewBranchAtCommitWithWorkingSet(ctx, dRef, newHeads[i], newWorkingSets[i], nil)
 		case ref.TagRef:
 			// rewrite tag with new commit
 			var tag *doltdb.Tag
@@ -187,7 +222,6 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 				return err
 			}
 			err = ddb.NewTagAtCommit(ctx, dRef, newHeads[i], tag.Meta)
-
 		default:
 			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
 		}
@@ -264,8 +298,6 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		allRebasedParents = append(allRebasedParents, rp)
 	}
 
-
-	// TODO: replace needs to work with rootvalue?
 	rebasedRoot, err := replay(ctx, commit, allParents[0], allRebasedParents[0])
 	if err != nil {
 		return nil, err

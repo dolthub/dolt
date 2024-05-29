@@ -43,6 +43,7 @@ import (
 const (
 	filterDbName = "filterDB"
 	branchesFlag = "branches"
+	uncommittedFlag = "apply-to-uncommitted"
 )
 
 var filterBranchDocs = cli.CommandDocumentationContent{
@@ -82,6 +83,7 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
+	ap.SupportsFlag(uncommittedFlag, "", "apply changes to uncommitted changes")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
 	ap.SupportsFlag(continueFlag, "c", "log a warning and continue if any errors occur executing statements")
 	ap.SupportsString(QueryFlag, "q", "queries", "Queries to run, separated by semicolons. If not provided, queries are read from STDIN.")
@@ -118,7 +120,41 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		queryString = string(queryStringBytes)
 	}
 
-	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
+	replayRootVal := func(ctx context.Context, root, _, _ doltdb.RootValue) (doltdb.RootValue, error) {
+    		rootHash, err := root.HashOf()
+    		if err != nil {
+    			return nil, err
+    		}
+    		rootHashStr := rootHash.String()
+    		if verbose {
+    			cli.Printf("processing commit %s\n", rootHashStr)
+    		}
+
+    		updatedRoot, err := processFilterQuery(ctx, dEnv, root, rootHashStr, queryString, verbose, continueOnErr)
+    		if err != nil {
+    			return nil, err
+    		}
+
+    		if verbose {
+    			var before, after hash.Hash
+    			before, err = root.HashOf()
+    			if err != nil {
+    				return nil, err
+    			}
+    			after, err = updatedRoot.HashOf()
+    			if err != nil {
+    				return nil, err
+    			}
+    			if before != after {
+    				cli.Printf("updated commit %s (root: %s -> %s)\n", rootHashStr, before.String(), after.String())
+    			} else {
+    				cli.Printf("no changes to commit %s", rootHashStr)
+    			}
+    		}
+    		return updatedRoot, nil
+    	}
+
+	replayCommit := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 		root, err := commit.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
@@ -127,31 +163,30 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		if err != nil {
 			return nil, err
 		}
-		var before hash.Hash
+		cmHashStr := cmHash.String()
 		if verbose {
-			before, err = root.HashOf()
-			if err != nil {
-				return nil, err
-			}
-			cli.Printf("processing commit %s\n", cmHash.String())
+			cli.Printf("processing commit %s\n", cmHashStr)
 		}
 
-		updatedRoot, err := processFilterQuery(ctx, dEnv, root, cmHash, queryString, verbose, continueOnErr)
-
+		updatedRoot, err := processFilterQuery(ctx, dEnv, root, cmHashStr, queryString, verbose, continueOnErr)
 		if err != nil {
 			return nil, err
 		}
 
 		if verbose {
-			after, err := updatedRoot.HashOf()
+			var before, after hash.Hash
+			before, err = root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			after, err = updatedRoot.HashOf()
 			if err != nil {
 				return nil, err
 			}
 			if before != after {
-				cli.Printf("updated commit %s (root: %s -> %s)\n",
-					cmHash.String(), before.String(), after.String())
+				cli.Printf("updated commit %s (root: %s -> %s)\n", cmHashStr, before.String(), after.String())
 			} else {
-				cli.Printf("no changes to commit %s", cmHash.String())
+				cli.Printf("no changes to commit %s", cmHashStr)
 			}
 		}
 		return updatedRoot, nil
@@ -162,13 +197,14 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	applyUncommitted := apr.Contains(uncommittedFlag)
 	switch {
 	case apr.Contains(branchesFlag):
-		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
+		err = rebase.AllBranches(ctx, dEnv, applyUncommitted, replayCommit, replayRootVal, nerf)
 	case apr.Contains(cli.AllFlag):
-		err = rebase.AllBranchesAndTags(ctx, dEnv, replay, nerf)
+		err = rebase.AllBranchesAndTags(ctx, dEnv, applyUncommitted, replayCommit, replayRootVal, nerf)
 	default:
-		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)
+		err = rebase.CurrentBranch(ctx, dEnv, applyUncommitted, replayCommit, replayRootVal, nerf)
 	}
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -204,7 +240,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, cmHash hash.Hash, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, cmHashStr string, query string, verbose bool, continueOnErr bool) (doltdb.RootValue, error) {
 	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, root)
 	if err != nil {
 		return nil, err
@@ -242,7 +278,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		if err != nil {
 			if continueOnErr {
 				if verbose {
-					cli.PrintErrf("error encountered processing commit %s (continuing): %s\n", cmHash.String(), err.Error())
+					cli.PrintErrf("error encountered processing commit %s (continuing): %s\n", cmHashStr, err.Error())
 				}
 			} else {
 				return nil, err
