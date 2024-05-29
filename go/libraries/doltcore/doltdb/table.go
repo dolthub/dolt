@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -488,6 +489,10 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
+}
+
+func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (durable.Index, error) {
+	return t.table.GetTableRowsWithDescriptors(ctx, kd, vd)
 }
 
 // GetRowDataHash returns the hash.Hash of the row data index.
