@@ -24,9 +24,11 @@ function no_stdout {
 }
 
 @test "config: make sure no dolt configuration for simulated fresh user" {
+    # Only the automatically persisted server_uuid should be present
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "server_uuid" ]] || false
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "config: try to initialize a repository with no configuration with correct hint" {
@@ -92,7 +94,7 @@ function no_stdout {
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "user.name = steph" ]
+    [[ "$output" =~ "user.name = steph" ]] || false
     run dolt config --get user.name
     [ "$status" -eq 0 ]
     [ "$output" = "steph" ]
@@ -111,7 +113,7 @@ function no_stdout {
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ ! "$output" =~ "steph" ]] || false
     run dolt config --get user.name
     [ "$status" -eq 1 ]
     [ "$output" = "" ]
