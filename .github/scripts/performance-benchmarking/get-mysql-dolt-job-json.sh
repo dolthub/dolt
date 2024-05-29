@@ -91,7 +91,7 @@ echo '
             ],
             "imagePullPolicy": "Always",
             "args": [
-              "--schema=/schema.sql",
+              "--schema=/app/schema.sql",
               "--useDoltHubLuaScriptsRepo",
               "--output='$format'",
               "--mysql-exec=/usr/sbin/mysqld",
