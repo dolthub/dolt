@@ -1674,31 +1674,74 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	var globals config.ReadWriteConfig
-	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
-		globals = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
-	} else if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
-		globals = config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
-	} else {
-		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
-		globals = config.NewMapConfig(make(map[string]string))
-	}
-
-	persistedGlobalVars, missingKeys, err := SystemVariablesInConfig(globals)
+	// Find all the persisted global vars and load their values into sql.SystemVariables
+	persistedGlobalVars, err := findPersistedGlobalVars(dEnv)
 	if err != nil {
 		return err
 	}
-	for _, k := range missingKeys {
-		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
-	}
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
 
-	// TODO: For now, we are explicitly handling the only system variable that requires us to
-	//       persist the default value – @@server_uuid. To clean up and generalize this, we
-	//       could add a "DefaultPersisted" property to the @@server_uuid system variable
-	//       definition, and then update this code to find the persisted system variables with
-	//       that property and do this more generically, but for now, there's only system
-	//       variable that requires this handling.
+	// Ensure the @@server_uuid value is persisted
+	var globalConfig config.ReadWriteConfig
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
+		globalConfig = config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+	} else if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
+		globalConfig = config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
+	} else {
+		return fmt.Errorf("unable to find local or global Dolt configuration")
+	}
+	return persistServerUuid(persistedGlobalVars, globalConfig)
+}
+
+// findPersistedGlobalVars searches the local and global configuration for the specified Dolt environment |dEnv| and
+// finds all global persisted system variables. Since global system vars can be persisted in either the local or
+// global configuration stores, this function searches both.
+func findPersistedGlobalVars(dEnv *env.DoltEnv) (persistedGlobalVars []sql.SystemVariable, err error) {
+	foundConfig := false
+	if localConf, ok := dEnv.Config.GetConfig(env.LocalConfig); ok {
+		foundConfig = true
+		localConfig := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
+		globalVars, missingKeys, err := SystemVariablesInConfig(localConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
+		for _, k := range missingKeys {
+			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+		}
+	}
+
+	if globalConf, ok := dEnv.Config.GetConfig(env.GlobalConfig); ok {
+		foundConfig = true
+		globalConfig := config.NewPrefixConfig(globalConf, env.SqlServerGlobalsPrefix)
+		globalVars, missingKeys, err := SystemVariablesInConfig(globalConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		persistedGlobalVars = append(persistedGlobalVars, globalVars...)
+		for _, k := range missingKeys {
+			cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
+		}
+	}
+
+	if !foundConfig {
+		cli.Println("warning: no local or global Dolt configuration found; session is not persistable")
+	}
+
+	return persistedGlobalVars, nil
+}
+
+// persistServerUuid searches the set of persisted global variables from |persistedGlobalVars| to see if the
+// global @@server_uuid variable has been persisted already. If not, it is persisted to the Dolt configuration
+// file specified by |globalConfig|.
+//
+// The @@server_uuid system variable is unique in that it has a non-deterministic default value, so unlike other
+// system variables, we need to persist the default so that the value is stable across invocations. This could
+// be generalized more in the GMS layer by adding a "DefaultPersisted" property to the @@server_uuid system var
+// definition, but since this is the only system variable that currently needs this, we just handle it here.
+func persistServerUuid(persistedGlobalVars []sql.SystemVariable, globalConfig config.ReadWriteConfig) error {
 	foundServerUuidSysVar := false
 	for _, persistedGlobalVar := range persistedGlobalVars {
 		if persistedGlobalVar == nil {
@@ -1715,7 +1758,7 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 		if !ok {
 			return fmt.Errorf("unable to find @@server_uuid system variable definition")
 		}
-		return setPersistedValue(globals, "server_uuid", value)
+		return setPersistedValue(globalConfig, "server_uuid", value)
 	}
 
 	return nil
