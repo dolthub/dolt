@@ -41,8 +41,8 @@ import (
 )
 
 const (
-	filterDbName = "filterDB"
-	branchesFlag = "branches"
+	filterDbName    = "filterDB"
+	branchesFlag    = "branches"
 	uncommittedFlag = "apply-to-uncommitted"
 )
 
@@ -121,38 +121,38 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	replayRootVal := func(ctx context.Context, root, _, _ doltdb.RootValue) (doltdb.RootValue, error) {
-    		rootHash, err := root.HashOf()
-    		if err != nil {
-    			return nil, err
-    		}
-    		rootHashStr := rootHash.String()
-    		if verbose {
-    			cli.Printf("processing commit %s\n", rootHashStr)
-    		}
+		rootHash, err := root.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		rootHashStr := rootHash.String()
+		if verbose {
+			cli.Printf("processing commit %s\n", rootHashStr)
+		}
 
-    		updatedRoot, err := processFilterQuery(ctx, dEnv, root, rootHashStr, queryString, verbose, continueOnErr)
-    		if err != nil {
-    			return nil, err
-    		}
+		updatedRoot, err := processFilterQuery(ctx, dEnv, root, rootHashStr, queryString, verbose, continueOnErr)
+		if err != nil {
+			return nil, err
+		}
 
-    		if verbose {
-    			var before, after hash.Hash
-    			before, err = root.HashOf()
-    			if err != nil {
-    				return nil, err
-    			}
-    			after, err = updatedRoot.HashOf()
-    			if err != nil {
-    				return nil, err
-    			}
-    			if before != after {
-    				cli.Printf("updated commit %s (root: %s -> %s)\n", rootHashStr, before.String(), after.String())
-    			} else {
-    				cli.Printf("no changes to commit %s", rootHashStr)
-    			}
-    		}
-    		return updatedRoot, nil
-    	}
+		if verbose {
+			var before, after hash.Hash
+			before, err = root.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			after, err = updatedRoot.HashOf()
+			if err != nil {
+				return nil, err
+			}
+			if before != after {
+				cli.Printf("updated commit %s (root: %s -> %s)\n", rootHashStr, before.String(), after.String())
+			} else {
+				cli.Printf("no changes to commit %s", rootHashStr)
+			}
+		}
+		return updatedRoot, nil
+	}
 
 	replayCommit := func(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 		root, err := commit.GetRootValue(ctx)
