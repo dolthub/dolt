@@ -41,7 +41,7 @@ RUN cd doltgresql/utils/doltgres_builder/cmd && go run . "$DOLTGRESQL_VERSION"
 ENV PATH="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION:${PATH}"
 RUN doltgres -version
 
-RUN << EOF > /doltgres/config.yaml
+RUN cat <<EOF > /doltgres_config.yaml
 log_level: info
 
 behavior:
@@ -108,7 +108,7 @@ ENV BENCHMARK_RUNNER_MYSQL_EXEC="/usr/sbin/mysqld"
 ENV BENCHMARK_RUNNER_MYSQL_PROTOCOL="unix"
 ENV BENCHMARK_RUNNER_MYSQL_SOCKET="/home/tester/.mysql/mysqld.sock"
 ENV BENCHMARK_RUNNER_DOLTGRES_EXEC="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION/doltgres"
-ENV BENCHMARK_RUNNER_DOLTGRES_CONFIG_FILE_PATH="/doltgres/config.yaml"
+ENV BENCHMARK_RUNNER_DOLTGRES_CONFIG_FILE_PATH="/doltgres_config.yaml"
 ENV BENCHMARK_RUNNER_POSTGRES_EXEC="/usr/lib/postgresql/15/bin/postgres"
 ENV BENCHMARK_RUNNER_POSTGRES_INIT_EXEC="/usr/lib/postgresql/15/bin/initdb"
 ENV BENCHMARK_RUNNER_SYSBENCH_LUA_SCRIPTS="/sysbench-lua-scripts"
