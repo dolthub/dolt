@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (

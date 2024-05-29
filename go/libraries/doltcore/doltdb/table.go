@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
