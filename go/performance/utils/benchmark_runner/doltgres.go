@@ -41,7 +41,7 @@ func NewDoltgresBenchmarker(dir string, config SysbenchConfig, serverConfig Serv
 }
 
 func (b *doltgresBenchmarkerImpl) checkInstallation(ctx context.Context) error {
-	version := ExecCommand(ctx, b.serverConfig.GetServerExec(), doltVersionCommand)
+	version := ExecCommand(ctx, b.serverConfig.GetServerExec(), doltgresVersionCommand)
 	return version.Run()
 }
 
