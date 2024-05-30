@@ -69,7 +69,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, validationErr
 	}
 
-	refSpecs, err := env.ParseRefSpecs(refSpecArgs, dbData.Rsr, remote)
+	refSpecs, defaultRefSpec, err := env.ParseRefSpecs(refSpecArgs, dbData.Rsr, remote)
 	if err != nil {
 		return cmdFailure, err
 	}
@@ -87,7 +87,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, &remote, mode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, defaultRefSpec, &remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}

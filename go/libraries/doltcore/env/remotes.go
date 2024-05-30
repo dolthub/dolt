@@ -416,12 +416,15 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 }
 
 // ParseRefSpecs returns the ref specs for the string arguments given for the remote provided, or the default ref
-// specs for that remote if no arguments are provided.
-func ParseRefSpecs(args []string, rsr RepoStateReader, remote Remote) ([]ref.RemoteRefSpec, error) {
+// specs for that remote if no arguments are provided. In the event that the default ref specs are returned, the
+// returned boolean value will be true.
+func ParseRefSpecs(args []string, rsr RepoStateReader, remote Remote) ([]ref.RemoteRefSpec, bool, error) {
 	if len(args) != 0 {
-		return ParseRSFromArgs(remote.Name, args)
+		specs, err := ParseRSFromArgs(remote.Name, args)
+		return specs, false, err
 	} else {
-		return GetRefSpecs(rsr, remote.Name)
+		specs, err := GetRefSpecs(rsr, remote.Name)
+		return specs, true, err
 	}
 }
 

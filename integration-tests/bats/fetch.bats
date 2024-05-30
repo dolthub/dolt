@@ -391,6 +391,19 @@ teardown() {
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false
 }
 
+@test "fetch: fetching from empty remote" {
+    cd repo2
+    dolt remote add empty file://../empty
+
+    setup_remote_server
+
+    dolt fetch empty
+
+    run dolt fetch empty main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no branches found in remote 'empty'" ]] || false
+}
+
 @test "fetch: fetch from remote host fails" {
     run dolt --host hostedHost --port 3306 --user root --password password fetch origin
     [ "$status" -eq 1 ]
