@@ -594,6 +594,12 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
+    # changes on other branch
+    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table_name,staged,status" ]] || false
+    [[ "$output" =~ "test,false,modified" ]] || false
+
     run dolt filter-branch --apply-to-uncommitted --branches -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
 
@@ -602,20 +608,27 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-
-    dolt checkout other
-    run dolt sql -r csv -q "select * from dolt_status"
+    # changes on other branch
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
     [[ "$output" =~ "test,false,modified" ]] || false
 
-    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,c0,filter" ]] || false
     [[ "$output" =~ "0,0," ]] || false
     [[ "$output" =~ "1,1," ]] || false
     [[ "$output" =~ "2,2," ]] || false
     [[ ! "$output" =~ "3,3," ]] || false
+
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
 }
 
 @test "filter-branch: --apply-to-uncommitted applies changes to staged tables on other branch" {
@@ -630,6 +643,12 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
+    # changes on other branch
+    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "table_name,staged,status" ]] || false
+    [[ "$output" =~ "test,true,modified" ]] || false
+
     run dolt filter-branch --apply-to-uncommitted --branches -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
 
@@ -638,18 +657,25 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-
-    dolt checkout other
-    run dolt sql -r csv -q "select * from dolt_status"
+    # changes on other branch
+    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
     [[ "$output" =~ "test,true,modified" ]] || false
 
-    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,c0,filter" ]] || false
     [[ "$output" =~ "0,0," ]] || false
     [[ "$output" =~ "1,1," ]] || false
     [[ "$output" =~ "2,2," ]] || false
     [[ ! "$output" =~ "3,3," ]] || false
+
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,c0,filter" ]] || false
+    [[ "$output" =~ "0,0," ]] || false
+    [[ "$output" =~ "1,1," ]] || false
+    [[ "$output" =~ "2,2," ]] || false
+    [[ "$output" =~ "3,3," ]] || false
 }
