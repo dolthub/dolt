@@ -476,7 +476,7 @@ func ShallowFetchRefSpec(
 		return fmt.Errorf("invalid depth: %d", depth)
 	}
 
-	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, remote, ref.ForceUpdate, depth, nil, nil)
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, false, remote, ref.ForceUpdate, depth, nil, nil)
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
@@ -487,12 +487,13 @@ func FetchRefSpecs(
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
+	defaultRefSpec bool,
 	remote *env.Remote,
 	mode ref.UpdateMode,
 	progStarter ProgStarter,
 	progStopper ProgStopper,
 ) error {
-	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, remote, mode, -1, progStarter, progStopper)
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, defaultRefSpec, remote, mode, -1, progStarter, progStopper)
 }
 
 func fetchRefSpecsWithDepth(
@@ -500,6 +501,7 @@ func fetchRefSpecsWithDepth(
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
+	defaultRefSpecs bool,
 	remote *env.Remote,
 	mode ref.UpdateMode,
 	depth int,
@@ -513,6 +515,14 @@ func fetchRefSpecsWithDepth(
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
+	}
+
+	if len(branchRefs) == 0 {
+		if defaultRefSpecs {
+			// The remote has no branches. Nothing to do. Git exits silently, so we do too.
+			return nil
+		}
+		return fmt.Errorf("no branches found in remote '%s'", remote.Name)
 	}
 
 	// We build up two structures:
