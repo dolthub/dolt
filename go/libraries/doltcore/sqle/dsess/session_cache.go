@@ -36,6 +36,8 @@ type SessionCache struct {
 
 	// writers is keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
+	// checks is keyed by table schema hash
+	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
 	mu sync.RWMutex
 }
@@ -207,6 +209,28 @@ func (c *SessionCache) CacheWriterState(key doltdb.DataCacheKey, state *WriterSt
 	}
 
 	c.writers[key] = state
+}
+
+func (c *SessionCache) GetCachedTableChecks(key doltdb.DataCacheKey) ([]sql.CheckDefinition, bool) {
+	checks, ok := c.checks[key]
+	return checks, ok
+}
+
+// CacheTableChecks caches sql.CheckConstraints for the table named
+func (c *SessionCache) CacheTableChecks(key doltdb.DataCacheKey, checks []sql.CheckDefinition) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.checks == nil {
+		c.checks = make(map[doltdb.DataCacheKey][]sql.CheckDefinition)
+	}
+	if len(c.checks) > maxCachedKeys {
+		for k := range c.checks {
+			delete(c.checks, k)
+		}
+	}
+
+	c.checks[key] = checks
 }
 
 // CacheViews caches all views in a database for the cache key given
