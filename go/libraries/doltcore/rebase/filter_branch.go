@@ -209,7 +209,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, c
 			}
 
 			var currWsHash hash.Hash
-			currWsHash, err = newWorkingSet.HashOf()
+			currWsHash, err = ws.HashOf()
 			if err != nil {
 				return err
 			}
