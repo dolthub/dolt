@@ -595,7 +595,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # changes on other branch
-    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
     [[ "$output" =~ "test,false,modified" ]] || false
@@ -644,7 +644,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # changes on other branch
-    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
     [[ "$output" =~ "test,true,modified" ]] || false
@@ -658,7 +658,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     # changes on other branch
-    run dolt sql -q "call dolt_checkout('other'); select * from dolt_status;"
+    run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
     [[ "$output" =~ "test,true,modified" ]] || false
