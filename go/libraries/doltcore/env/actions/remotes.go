@@ -496,6 +496,19 @@ func FetchRefSpecs(
 	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, defaultRefSpec, remote, mode, -1, progStarter, progStopper)
 }
 
+// fetchRefSpecsWithDepth fetches the remote refSpecs from the source database to the destination database. It fetches
+// the commits and all underlying data from the source database to the destination database.
+// Parameters:
+// - ctx: the context
+// - dbData: the env.DbData object for handling repoState read and write
+// - srcDB: the remote *doltdb.DoltDB object that is used to fetch remote branches from
+// - refSpecs: the list of refSpecs to fetch
+// - defaultRefSpecs: a boolean that indicates whether the refSpecs are the default refSpecs. False if the user specifies anything.
+// - remote: the remote object
+// - mode: the ref.UpdateMode object that specifies the update mode (force or not, prune or not)
+// - depth: the depth of the fetch. If depth is greater than 0, it is a shallow clone.
+// - progStarter: function that starts the progress reporting
+// - progStopper: function that stops the progress reporting
 func fetchRefSpecsWithDepth(
 	ctx context.Context,
 	dbData env.DbData,
