@@ -39,11 +39,6 @@ import (
 // BinlogBranch specifies the branch used for generating binlog events.
 var BinlogBranch = "main"
 
-// binlogFilename is the name of the filename used in binlog events. Note that
-// currently, this doesn't map to a real file on disk yet, but the filename is
-// still needed for binlog messages.
-var binlogFilename = "binlog-" + BinlogBranch + ".000001"
-
 // binlogProducer implements the doltdb.DatabaseUpdateListener interface so that it can listen for updates to Dolt
 // databases and generate binlog events describing them. Those binlog events are sent to the binlogStreamerManager,
 // which is responsible for delivering them to each connected replica.
@@ -80,6 +75,17 @@ func NewBinlogProducer(streamerManager *binlogStreamerManager) (*binlogProducer,
 		streamerManager: streamerManager,
 		mu:              &sync.Mutex{},
 	}, nil
+}
+
+func (b *binlogProducer) BinlogFormat() *mysql.BinlogFormat {
+	return b.binlogFormat
+}
+
+// TODO: It's kinda weird for us to expose BinlogStream here... This type doesn't seem fully necessary, and
+//
+//	stream seems like a bad name. Might be a better way to shape this in Vitess.
+func (b *binlogProducer) BinlogStream() mysql.BinlogEventMetadata {
+	return b.binlogEventMeta
 }
 
 // WorkingRootUpdated implements the doltdb.DatabaseUpdateListener interface. When a working root changes,
@@ -136,8 +142,7 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		binlogEvents = append(binlogEvents, b.newXIDEvent())
 	}
 
-	b.streamerManager.sendEvents(binlogEvents)
-	return nil
+	return b.streamerManager.logManager.WriteEvents(binlogEvents)
 }
 
 // DatabaseCreated implements the doltdb.DatabaseUpdateListener interface.
@@ -156,8 +161,7 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 	createDatabaseStatement := fmt.Sprintf("create database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, createDatabaseStatement))
 
-	b.streamerManager.sendEvents(binlogEvents)
-	return nil
+	return b.streamerManager.logManager.WriteEvents(binlogEvents)
 }
 
 // DatabaseDropped implements the doltdb.DatabaseUpdateListener interface.
@@ -172,8 +176,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 	dropDatabaseStatement := fmt.Sprintf("drop database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, dropDatabaseStatement))
 
-	b.streamerManager.sendEvents(binlogEvents)
-	return nil
+	return b.streamerManager.logManager.WriteEvents(binlogEvents)
 }
 
 // initializeGtidPosition loads the persisted GTID position from disk and initializes it

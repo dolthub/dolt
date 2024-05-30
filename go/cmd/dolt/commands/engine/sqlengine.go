@@ -352,37 +352,6 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 	primaryController := dblr.NewDoltBinlogPrimaryController()
 	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
 
-	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
-	if !ok {
-		return fmt.Errorf("unable to load @@log_bin system variable")
-	}
-	logBin, ok := logBinValue.(int8)
-	if !ok {
-		return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
-	}
-	if logBin == 1 {
-		logrus.Debug("Enabling binary logging")
-		binlogProducer, err := dblr.NewBinlogProducer(primaryController.StreamerManager())
-		if err != nil {
-			return err
-		}
-		doltdb.RegisterDatabaseUpdateListener(binlogProducer)
-		primaryController.BinlogProducer = binlogProducer
-	}
-
-	_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
-	if !ok {
-		return fmt.Errorf("unable to load @@log_bin_branch system variable")
-	}
-	logBinBranch, ok := logBinBranchValue.(string)
-	if !ok {
-		return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
-	}
-	if logBinBranch != "" {
-		logrus.Debugf("Setting binary logging branch to %s", logBinBranch)
-		dblr.BinlogBranch = logBinBranch
-	}
-
 	return nil
 }
 

@@ -285,21 +285,64 @@ func ConfigureServices(
 	}
 	controller.Register(InitSqlEngine)
 
-	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
-	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
-	// in the configuration files for a sql-server, and not global for the whole host.
-	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
-		InitF: func(ctx context.Context) error {
-			err := dsess.PersistSystemVarDefaults(dEnv)
-			if err != nil {
-				logrus.Errorf("unable to persist system variable defaults: %v", err)
+	InitBinlogging := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			primaryController1 := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
+
+			// TODO: rename to doltBinlogPrimaryController
+			primaryController, ok := primaryController1.(*binlogreplication.DoltBinlogPrimaryController)
+			if !ok {
+				panic("Found unexpected type of binlog controller!")
 			}
-			// Always return nil, because we don't want an invalid config value to prevent
-			// the server from starting up.
+
+			_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+			if !ok {
+				return fmt.Errorf("unable to load @@log_bin system variable")
+			}
+			logBin, ok := logBinValue.(int8)
+			if !ok {
+				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
+			}
+			if logBin == 1 {
+				logrus.Debug("Enabling binary logging")
+				binlogProducer, err := binlogreplication.NewBinlogProducer(primaryController.StreamerManager())
+				if err != nil {
+					return err
+				}
+				// NOTE: Hooks need to be applied AFTER this!
+				doltdb.RegisterDatabaseUpdateListener(binlogProducer)
+				primaryController.BinlogProducer = binlogProducer
+
+				// TODO: This is a mess! How to clean this up!
+				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
+				if doltProvider, ok := provider.(*sqle.DoltDatabaseProvider); ok {
+					doltProvider.InitDatabaseHooks = append(doltProvider.InitDatabaseHooks, binlogreplication.NewBinlogInitDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
+					doltProvider.DropDatabaseHooks = append(doltProvider.DropDatabaseHooks, binlogreplication.NewBinlogDropDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
+				}
+
+				// TODO: How do we feed the binlogStream and binlogFormat to the log manager?
+				//       Needs format to write the initial format event to the stream
+				//       Needs binlogStream to write the initial format event
+				logManager := binlogreplication.NewLogManager(fs, binlogProducer.BinlogFormat(), binlogProducer.BinlogStream())
+				primaryController.StreamerManager().LogManager(logManager)
+			}
+
+			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
+			if !ok {
+				return fmt.Errorf("unable to load @@log_bin_branch system variable")
+			}
+			logBinBranch, ok := logBinBranchValue.(string)
+			if !ok {
+				return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
+			}
+			if logBinBranch != "" {
+				logrus.Debugf("Setting binary logging branch to %s", logBinBranch)
+				binlogreplication.BinlogBranch = logBinBranch
+			}
 			return nil
 		},
 	}
-	controller.Register(PersistNondeterministicSystemVarDefaults)
+	controller.Register(InitBinlogging)
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	InitSuperUser := &svcs.AnonService{

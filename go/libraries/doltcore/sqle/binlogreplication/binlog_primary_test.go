@@ -187,7 +187,6 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 
 	// Make a change while the replica is stopped to test that the server
 	// doesn't error out when a registered replica is not available.
-	// NOTE: This won't be replicated until we start persisting the binlog to disk
 	primaryDatabase.MustExec("insert into db01.t1 values (1, 'one');")
 
 	// Restart the MySQL replica and reconnect to the Dolt primary
@@ -201,17 +200,12 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
-	// We can't use waitForReplicaToCatchUp here, because it won't get the statement
-	// that was executed while the replica was stopped. Once we support replaying binlog
-	// events from a log file, we can switch this to waitForReplicaToCatchUp(t)
 	waitForReplicaToHaveLatestGtid(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 
-	// Assert the executed GTID position now contains GTID #2 and GTID #4
-	// (#1 isn't present, because it was executed before we turned on replication,
-	// and #3 isn't present, because it was executed while the replica was stopped)
+	// Assert the executed GTID position now contains all GTIDs
 	status = queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":1-2:4", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-4", status["Executed_Gtid_Set"])
 }
 
 // TestBinlogPrimary_PrimaryRestart tests that a Dolt primary server can be restarted and that a replica
