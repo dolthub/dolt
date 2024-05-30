@@ -61,10 +61,12 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 	}
 }
 
+// RootReplayer is something that takes a root value and rebases it with changes.
 type RootReplayer interface {
 	ReplayRoot(ctx context.Context, root, parentRoot, rebasedParentRoot doltdb.RootValue) (rebaseRoot doltdb.RootValue, err error)
 }
 
+// CommitReplayer is something that takes a commit and rebases it with changes.
 type CommitReplayer interface {
 	ReplayCommit(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 }
@@ -214,7 +216,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, c
 				return err
 			}
 
-			err = ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, doltdb.TodoWorkingSetMeta(), nil)
+			err = ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, ws.Meta(), nil)
 		case ref.TagRef:
 			// rewrite tag with new commit
 			var tag *doltdb.Tag

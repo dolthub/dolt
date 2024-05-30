@@ -125,14 +125,14 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rootReplayer := &rootReplayerImpl{
+	rootReplayer := &workingSetReplayer{
 		dEnv:          dEnv,
 		queryString:   queryString,
 		verbose:       verbose,
 		continueOnErr: continueOnErr,
 	}
 
-	commitReplayer := &commitReplayerImpl{
+	commitReplayer := &commitReplayer{
 		dEnv:          dEnv,
 		queryString:   queryString,
 		verbose:       verbose,
@@ -155,16 +155,18 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	return 0
 }
 
-type rootReplayerImpl struct {
+// workingSetReplayer replays working set root values, rebasing them with a specific query, and returns the updated root value
+type workingSetReplayer struct {
 	dEnv          *env.DoltEnv
 	queryString   string
 	verbose       bool
 	continueOnErr bool
 }
 
-var _ rebase.RootReplayer = &rootReplayerImpl{}
+var _ rebase.RootReplayer = &workingSetReplayer{}
 
-func (r *rootReplayerImpl) ReplayRoot(ctx context.Context, root, _, _ doltdb.RootValue) (doltdb.RootValue, error) {
+// ReplayRoot implements the RootReplayer interface
+func (r *workingSetReplayer) ReplayRoot(ctx context.Context, root, _, _ doltdb.RootValue) (doltdb.RootValue, error) {
 	rootHash, err := root.HashOf()
 	if err != nil {
 		return nil, err
@@ -198,16 +200,18 @@ func (r *rootReplayerImpl) ReplayRoot(ctx context.Context, root, _, _ doltdb.Roo
 	return updatedRoot, nil
 }
 
-type commitReplayerImpl struct {
+// commitReplayer replays a specific commits, rebasing it with a specific query, and returns the updated root value
+type commitReplayer struct {
 	dEnv          *env.DoltEnv
 	queryString   string
 	verbose       bool
 	continueOnErr bool
 }
 
-var _ rebase.CommitReplayer = &commitReplayerImpl{}
+var _ rebase.CommitReplayer = &commitReplayer{}
 
-func (c *commitReplayerImpl) ReplayCommit(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
+// ReplayCommit implements the CommitReplayer interface
+func (c *commitReplayer) ReplayCommit(ctx context.Context, commit, _, _ *doltdb.Commit) (doltdb.RootValue, error) {
 	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
