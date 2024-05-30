@@ -83,7 +83,7 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
-	ap.SupportsFlag(uncommittedFlag, "", "apply changes to uncommitted changes")
+	ap.SupportsFlag(uncommittedFlag, "", "apply changes to uncommitted tables")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
 	ap.SupportsFlag(continueFlag, "c", "log a warning and continue if any errors occur executing statements")
 	ap.SupportsString(QueryFlag, "q", "queries", "Queries to run, separated by semicolons. If not provided, queries are read from STDIN.")
