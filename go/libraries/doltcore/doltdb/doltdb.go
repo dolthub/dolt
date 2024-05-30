@@ -1231,7 +1231,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	var ws *WorkingSet
 	var currWsHash hash.Hash
 	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == ErrWorkingSetNotFound {
+	if errors.Is(err, ErrWorkingSetNotFound) {
 		ws = EmptyWorkingSet(wsRef)
 	} else if err != nil {
 		return err
