@@ -87,6 +87,6 @@ func (d *doltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) ([]bi
 		Position:      uint(d.BinlogProducer.binlogStream.LogPosition),
 		DoDbs:         "",
 		IgnoreDbs:     "",
-		ExecutedGtids: d.BinlogProducer.gtidPosition.String(),
+		ExecutedGtids: d.BinlogProducer.currentGtidPosition(),
 	}}, nil
 }
