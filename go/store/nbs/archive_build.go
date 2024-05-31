@@ -38,6 +38,8 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		outPath, _ := gs.oldGen.Path()
 		oldgen := gs.oldGen.tables.upstream
 
+		swapMap := make(map[hash.Hash]hash.Hash)
+
 		for tf, ogcs := range oldgen {
 			// NM4 - We should probably provide a way to pick a particular table file to build an archive for.
 
@@ -58,22 +60,22 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				return err
 			}
 
-			// p("Verified table file: %s\n", archivePath)
+			swapMap[tf] = archiveName
+		}
 
-			//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
-			specs, err := gs.oldGen.tables.toSpecs()
-			newSpecs := make([]tableSpec, 0, len(specs))
-			for _, spec := range specs {
-				if spec.name != tf {
-					newSpecs = append(newSpecs, spec)
-				} else {
-					newSpecs = append(newSpecs, tableSpec{archiveName, spec.chunkCount})
-				}
+		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
+		specs, err := gs.oldGen.tables.toSpecs()
+		newSpecs := make([]tableSpec, 0, len(specs))
+		for _, spec := range specs {
+			if newSpec, exists := swapMap[spec.name]; exists {
+				newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
+			} else {
+				newSpecs = append(newSpecs, spec)
 			}
-			err = gs.oldGen.swapTables(ctx, newSpecs)
-			if err != nil {
-				return err
-			}
+		}
+		err = gs.oldGen.swapTables(ctx, newSpecs)
+		if err != nil {
+			return err
 		}
 	} else {
 		return errors.New("Modern DB Expected")
