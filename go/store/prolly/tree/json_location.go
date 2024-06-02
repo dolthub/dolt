@@ -147,37 +147,70 @@ func varIntLength(firstByte byte) int {
 	return int(firstByte - 246)
 }
 
+func isValidJsonPathKey(key []byte) bool {
+	if bytes.Equal(key, []byte("*")) {
+		return false
+	}
+	if bytes.Equal(key, []byte("**")) {
+		return false
+	}
+	return true
+}
+
 // jsonPathElementsFromMySQLJsonPath computes a jsonLocation from a MySQL JSON path (https://dev.mysql.com/doc/refman/8.0/en/json.html#json-path-syntax)
 func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (path jsonLocation, err error) {
 	path = newRootLocation()
 	originalPathBytes := pathBytes
 	// TODO: We need to account for escaped characters
 	if pathBytes[0] != '$' {
-		return path, fmt.Errorf("invalid JSON key %s", originalPathBytes)
+		return path, fmt.Errorf("Invalid JSON path expression. Path must start with '$'")
 	}
+	parsedCharacters := 1
 	pathBytes = pathBytes[1:]
+	validateAndAppendObjectKeyToPath := func(key []byte) error {
+		if !isValidJsonPathKey(key) {
+			return fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", parsedCharacters+1, originalPathBytes)
+		}
+		path.appendObjectKey(key)
+		return nil
+	}
 	for len(pathBytes) > 0 {
-		var lastIndex int
+		var endOffset int
 		if pathBytes[0] == '[' {
-			lastIndex = bytes.IndexByte(pathBytes, ']')
-			arrayIndex, err := strconv.Atoi(string(pathBytes[1:lastIndex]))
+			endOffset = bytes.IndexByte(pathBytes, ']')
+			arrayIndex, err := strconv.Atoi(string(pathBytes[1:endOffset]))
 			if err != nil {
 				return path, err
 			}
 			path.appendArrayIndex(uint64(arrayIndex))
+			pathBytes = pathBytes[endOffset+1:]
+			parsedCharacters += endOffset + 1
 		} else if pathBytes[0] == '.' {
+			// TODO: Also accept a double-quoted string.
 			pathBytes = pathBytes[1:]
-			lastIndex = min(bytes.IndexByte(pathBytes, '['),
-				bytes.IndexByte(pathBytes, '.'))
-			if lastIndex == -1 {
-				path.appendObjectKey(pathBytes)
+			nextIndex := bytes.IndexByte(pathBytes, '[')
+			nextKey := bytes.IndexByte(pathBytes, '.')
+			endOffset = nextIndex
+			if nextIndex == -1 || (nextKey != -1 && nextKey < nextIndex) {
+				endOffset = nextKey
+			}
+			if endOffset == -1 {
+				err = validateAndAppendObjectKeyToPath(pathBytes)
 				return path, err
 			}
-			path.appendObjectKey(pathBytes[:lastIndex])
+			if endOffset == 0 {
+				// Unquoted empty key is not allowed.
+				return path, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", parsedCharacters+1, originalPathBytes)
+			}
+			err = validateAndAppendObjectKeyToPath(pathBytes[:endOffset])
+			if err != nil {
+				return path, err
+			}
+			pathBytes = pathBytes[endOffset:]
+			parsedCharacters += endOffset + 1
 		} else {
-			return path, fmt.Errorf("invalid JSON key %s", originalPathBytes)
+			return path, fmt.Errorf("Invalid JSON path expression '%s'", originalPathBytes)
 		}
-		pathBytes = pathBytes[lastIndex:]
 	}
 	return path, nil
 }
