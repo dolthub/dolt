@@ -37,6 +37,10 @@ type DoltStats struct {
 	Hist   sql.Histogram
 }
 
+func (s *DoltStats) Clone() sql.JSONWrapper {
+	return s
+}
+
 var _ sql.Statistic = (*DoltStats)(nil)
 
 func (s *DoltStats) WithColSet(set sql.ColSet) sql.Statistic {

@@ -54,6 +54,10 @@ type UniqCVMeta struct {
 	Name    string   `json:"Name"`
 }
 
+func (m UniqCVMeta) Clone() sql.JSONWrapper {
+	return m
+}
+
 func (m UniqCVMeta) ToInterface() (interface{}, error) {
 	return map[string]interface{}{
 		"Columns": m.Columns,
@@ -136,6 +140,10 @@ type NullViolationMeta struct {
 	Columns []string `json:"Columns"`
 }
 
+func (m NullViolationMeta) Clone() sql.JSONWrapper {
+	return m
+}
+
 var _ sql.JSONWrapper = NullViolationMeta{}
 
 func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.ConstraintViolationMeta, error) {
@@ -163,6 +171,10 @@ func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument,
 type CheckCVMeta struct {
 	Name       string `json:"Name"`
 	Expression string `json:"Expression"`
+}
+
+func (m CheckCVMeta) Clone() sql.JSONWrapper {
+	return m
 }
 
 var _ sql.JSONWrapper = CheckCVMeta{}

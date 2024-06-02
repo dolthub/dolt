@@ -394,6 +394,10 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
+func (m FkCVMeta) Clone() sql.JSONWrapper {
+	return m
+}
+
 var _ sql.JSONWrapper = FkCVMeta{}
 
 func (m FkCVMeta) ToInterface() (interface{}, error) {

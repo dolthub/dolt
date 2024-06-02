@@ -61,11 +61,11 @@ func NewIndexedJsonDocument(root Node, ns NodeStore) IndexedJsonDocument {
 	}
 }
 
-// Clone implements types.MutableJSON. Mutating an IndexedJsonDocument always returns a new IndexedJsonDocument without
+// Clone implements sql.JSONWrapper. Mutating an IndexedJsonDocument always returns a new IndexedJsonDocument without
 // modifying the state of the original. But creating a new instance allows callers to modify the value returned by ToInterface()
 // on the "mutable" copy without affecting the value cached on the original.
-func (i IndexedJsonDocument) Clone() types.MutableJSON {
-	// TODO: Add context parameter to MutableJSON.Clone()
+func (i IndexedJsonDocument) Clone() sql.JSONWrapper {
+	// TODO: Add context parameter to JSONWrapper.Clone()
 	m := i.m
 	return IndexedJsonDocument{
 		m: m,

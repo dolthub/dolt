@@ -64,6 +64,10 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 	return NomsJSON(doc), nil
 }
 
+func (v NomsJSON) Clone() sql.JSONWrapper {
+	return v
+}
+
 func marshalJSON(ctx context.Context, vrw types.ValueReadWriter, val interface{}) (types.Value, error) {
 	if val == nil {
 		return types.NullValue, nil
