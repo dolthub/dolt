@@ -81,7 +81,7 @@ func (s JsonScanner) isParsingArray() bool {
 }
 
 func (s JsonScanner) firstElementOrEndOfEmptyValue() bool {
-	return s.firstElement
+	return s.currentPath.getScannerState() == objectInitialElement || s.currentPath.getScannerState() == arrayInitialElement
 }
 
 func (s JsonScanner) atEndOfChunk() bool {
@@ -90,10 +90,6 @@ func (s JsonScanner) atEndOfChunk() bool {
 
 func (s JsonScanner) atStartOfValue() bool {
 	return s.currentPath.getScannerState() == startOfValue
-}
-
-func (s JsonScanner) atEndOfValue() bool {
-	return s.currentPath.getScannerState() == endOfValue
 }
 
 // skipBytes advances the scanner some number of bytes without parsing. This is used by JsonChunker to write JSON whose
@@ -108,19 +104,30 @@ func (s *JsonScanner) AdvanceToNextLocation() error {
 	if s.atEndOfChunk() {
 		return io.EOF
 	}
-	if s.atStartOfValue() {
+	switch s.currentPath.getScannerState() {
+	case startOfValue:
 		s.acceptValue()
 		return nil
+	case objectInitialElement:
+		s.acceptKeyValue()
+		return nil
+	case arrayInitialElement:
+		s.acceptFirstArrayValue()
+		return nil
+	case endOfValue:
+		encodedIndex, isArray := s.currentPath.getLastPathElement()
+		s.currentPath.pop()
+		if isArray {
+			arrayIndex, _ := uvarint.Uvarint(encodedIndex)
+			s.acceptNextArrayValue(arrayIndex + 1)
+		} else {
+			s.acceptNextKeyValue()
+		}
+		return nil
+	default:
+		s.impossiblePanic()
+		return nil
 	}
-	encodedIndex, isArray := s.currentPath.getLastPathElement()
-	s.currentPath.pop()
-	if isArray {
-		arrayIndex, _ := uvarint.Uvarint(encodedIndex)
-		s.acceptNextArrayValue(arrayIndex + 1)
-	} else {
-		s.acceptNextKeyValue()
-	}
-	return nil
 }
 
 func (s *JsonScanner) acceptValue() {
@@ -132,13 +139,11 @@ func (s *JsonScanner) acceptValue() {
 		return
 	case '[':
 		s.valueOffset++
-		s.firstElement = true
-		s.acceptFirstArrayValue()
+		s.currentPath.setScannerState(arrayInitialElement)
 		return
 	case '{':
 		s.valueOffset++
-		s.firstElement = true
-		s.acceptKeyValue()
+		s.currentPath.setScannerState(objectInitialElement)
 		return
 	}
 	// The scanner doesn't understand numbers, but it doesn't have to, since the number will be followed by a special character.
@@ -232,7 +237,7 @@ func (s *JsonScanner) acceptFirstArrayValue() {
 		s.currentPath.setScannerState(endOfValue)
 		return
 	}
-	s.valueOffset++
+	s.currentPath.setScannerState(startOfValue)
 	s.currentPath.appendArrayIndex(0)
 }
 

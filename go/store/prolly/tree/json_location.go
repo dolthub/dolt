@@ -52,8 +52,10 @@ type jsonLocation struct {
 type scannerState byte
 
 const (
-	startOfValue scannerState = 0xFE
-	endOfValue   scannerState = 0xFF
+	startOfValue scannerState = iota
+	objectInitialElement
+	arrayInitialElement
+	endOfValue
 )
 
 const (
@@ -257,6 +259,13 @@ func (p *jsonLocation) size() int {
 }
 
 func (p *jsonLocation) getLastPathElement() (key []byte, isArray bool) {
+	state := p.getScannerState()
+	if state == arrayInitialElement {
+		return nil, true
+	}
+	if state == objectInitialElement {
+		return nil, false
+	}
 	return p.getPathElement(p.size() - 1)
 }
 
@@ -284,14 +293,14 @@ func compareJsonLocations(left, right jsonLocation) int {
 	}
 	if left.size() < right.size() {
 		// left is a parent of right
-		if left.getScannerState() == startOfValue {
+		if left.getScannerState() != endOfValue {
 			return -1
 		}
 		return 1
 	}
 	if left.size() > right.size() {
 		// right is a parent of left
-		if right.getScannerState() == startOfValue {
+		if right.getScannerState() != endOfValue {
 			return 1
 		}
 		return -1
