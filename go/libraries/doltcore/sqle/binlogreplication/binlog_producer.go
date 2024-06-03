@@ -51,8 +51,8 @@ var binlogFilename = "binlog-" + BinlogBranch + ".000001"
 // Note that the initial version of binlogProducer currently delivers the generated binlog events directly to the
 // connected replicas, without actually writing them to a real binlog file on disk.
 type binlogProducer struct {
-	binlogStream *mysql.BinlogStream
-	binlogFormat *mysql.BinlogFormat
+	binlogEventMeta mysql.BinlogEventMetadata
+	binlogFormat    *mysql.BinlogFormat
 
 	mu *sync.Mutex
 
@@ -69,13 +69,13 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // producing binlog events.
 func NewBinlogProducer(streamerManager *binlogStreamerManager) (*binlogProducer, error) {
 	binlogFormat := createBinlogFormat()
-	binlogStream, err := createBinlogStream()
+	binlogEventMeta, err := createBinlogEventMetadata()
 	if err != nil {
 		return nil, err
 	}
 
 	return &binlogProducer{
-		binlogStream:    binlogStream,
+		binlogEventMeta: *binlogEventMeta,
 		binlogFormat:    binlogFormat,
 		streamerManager: streamerManager,
 		mu:              &sync.Mutex{},
@@ -254,8 +254,8 @@ func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, e
 	defer b.mu.Unlock()
 
 	gtid := mysql.Mysql56GTID{Server: sid, Sequence: b.gtidSequence}
-	binlogEvent := mysql.NewMySQLGTIDEvent(*b.binlogFormat, b.binlogStream, gtid, false)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewMySQLGTIDEvent(*b.binlogFormat, b.binlogEventMeta, gtid, false)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	b.gtidSequence++
 
 	// Store the latest executed GTID to disk
@@ -518,14 +518,14 @@ func (b *binlogProducer) newQueryEvent(databaseName, query string) mysql.BinlogE
 	defer b.mu.Unlock()
 
 	// TODO: Charset and SQL_MODE support
-	binlogEvent := mysql.NewQueryEvent(*b.binlogFormat, b.binlogStream, mysql.Query{
+	binlogEvent := mysql.NewQueryEvent(*b.binlogFormat, b.binlogEventMeta, mysql.Query{
 		Database: databaseName,
 		Charset:  nil,
 		SQL:      query,
 		Options:  0,
 		SqlMode:  0,
 	})
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -534,8 +534,8 @@ func (b *binlogProducer) newXIDEvent() mysql.BinlogEvent {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	binlogEvent := mysql.NewXIDEvent(*b.binlogFormat, b.binlogStream)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewXIDEvent(*b.binlogFormat, b.binlogEventMeta)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -545,8 +545,8 @@ func (b *binlogProducer) newTableMapEvent(tableId uint64, tableMap *mysql.TableM
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	binlogEvent := mysql.NewTableMapEvent(*b.binlogFormat, b.binlogStream, tableId, tableMap)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewTableMapEvent(*b.binlogFormat, b.binlogEventMeta, tableId, tableMap)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -556,8 +556,8 @@ func (b *binlogProducer) newWriteRowsEvent(tableId uint64, rows mysql.Rows) mysq
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	binlogEvent := mysql.NewWriteRowsEvent(*b.binlogFormat, b.binlogStream, tableId, rows)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewWriteRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -567,8 +567,8 @@ func (b *binlogProducer) newDeleteRowsEvent(tableId uint64, rows mysql.Rows) mys
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	binlogEvent := mysql.NewDeleteRowsEvent(*b.binlogFormat, b.binlogStream, tableId, rows)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewDeleteRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -578,8 +578,8 @@ func (b *binlogProducer) newUpdateRowsEvent(tableId uint64, rows mysql.Rows) mys
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	binlogEvent := mysql.NewUpdateRowsEvent(*b.binlogFormat, b.binlogStream, tableId, rows)
-	b.binlogStream.LogPosition += binlogEvent.Length()
+	binlogEvent := mysql.NewUpdateRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+	b.binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return binlogEvent
 }
 
@@ -706,18 +706,18 @@ func createBinlogFormat() *mysql.BinlogFormat {
 	return &binlogFormat
 }
 
-// createBinlogStream returns a new BinlogStream instance, configured with this server's @@server_id, a zero value for
+// createBinlogEventMetadata returns a new BinlogStream instance, configured with this server's @@server_id, a zero value for
 // the log position, and the current time for the timestamp. If any errors are encountered while loading @@server_id,
 // this function will return an error.
-func createBinlogStream() (*mysql.BinlogStream, error) {
+func createBinlogEventMetadata() (*mysql.BinlogEventMetadata, error) {
 	serverId, err := getServerId()
 	if err != nil {
 		return nil, err
 	}
 
-	return &mysql.BinlogStream{
-		ServerID:    serverId,
-		LogPosition: 0,
-		Timestamp:   uint32(time.Now().Unix()),
+	return &mysql.BinlogEventMetadata{
+		ServerID:        serverId,
+		NextLogPosition: 0,
+		Timestamp:       uint32(time.Now().Unix()),
 	}, nil
 }

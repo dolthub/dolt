@@ -46,11 +46,11 @@ func newBinlogStreamer() *binlogStreamer {
 // startStream listens for new binlog events sent to this streamer over its binlog event
 // channel and sends them over |conn|. It also listens for ticker ticks to send hearbeats
 // over |conn|. The specified |binlogFormat| is used to define the format of binlog events
-// and |binlogStream| records the position of the stream. This method blocks until an error
+// and |binlogEventMeta| records the position of the stream. This method blocks until an error
 // is received over the stream (e.g. the connection closing) or the streamer is closed,
 // through it's quit channel.
-func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
-	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogStream); err != nil {
+func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogEventMeta); err != nil {
 		return err
 	}
 
@@ -65,7 +65,7 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 
 		case <-streamer.ticker.C:
 			logrus.StandardLogger().Trace("sending binlog heartbeat")
-			if err := sendHeartbeat(conn, binlogFormat, binlogStream); err != nil {
+			if err := sendHeartbeat(conn, binlogFormat, binlogEventMeta); err != nil {
 				return err
 			}
 			if err := conn.FlushBuffer(); err != nil {
@@ -133,12 +133,12 @@ func (m *binlogStreamerManager) copyStreamers() []*binlogStreamer {
 // is closed, the streamer is sent a quit signal over its quit channel, or the streamer receives
 // errors while sending events over the connection. Note that this method blocks until the
 // streamer exits.
-func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
+func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
 	streamer := newBinlogStreamer()
 	m.addStreamer(streamer)
 	defer m.removeStreamer(streamer)
 
-	return streamer.startStream(ctx, conn, binlogFormat, binlogStream)
+	return streamer.startStream(ctx, conn, binlogFormat, binlogEventMeta)
 }
 
 // sendEvents sends |binlogEvents| to all the streams managed by this instance.
@@ -170,23 +170,23 @@ func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
 	}
 }
 
-func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
-	binlogStream.Timestamp = uint32(0) // Timestamp is zero for a heartbeat event
-	logrus.WithField("log_position", binlogStream.LogPosition).Tracef("sending heartbeat")
+func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+	binlogEventMeta.Timestamp = uint32(0) // Timestamp is zero for a heartbeat event
+	logrus.WithField("log_position", binlogEventMeta.NextLogPosition).Tracef("sending heartbeat")
 
-	binlogEvent := mysql.NewHeartbeatEventWithLogFile(*binlogFormat, binlogStream, binlogFilename)
+	binlogEvent := mysql.NewHeartbeatEventWithLogFile(*binlogFormat, binlogEventMeta, binlogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
 
 // sendInitialEvents sends the initial binlog events (i.e. Rotate, FormatDescription) over a newly established binlog
 // streaming connection.
-func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
-	err := sendRotateEvent(conn, binlogFormat, binlogStream)
+func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+	err := sendRotateEvent(conn, binlogFormat, binlogEventMeta)
 	if err != nil {
 		return err
 	}
 
-	err = sendFormatDescription(conn, binlogFormat, binlogStream)
+	err = sendFormatDescription(conn, binlogFormat, binlogEventMeta)
 	if err != nil {
 		return err
 	}
@@ -194,16 +194,16 @@ func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.Bin
 	return conn.FlushBuffer()
 }
 
-func sendRotateEvent(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
+func sendRotateEvent(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
 	binlogFilePosition := uint64(0)
-	binlogStream.LogPosition = uint32(binlogFilePosition)
+	binlogEventMeta.NextLogPosition = uint32(binlogFilePosition)
 
-	binlogEvent := mysql.NewRotateEvent(*binlogFormat, binlogStream, binlogFilePosition, binlogFilename)
+	binlogEvent := mysql.NewRotateEvent(*binlogFormat, binlogEventMeta, binlogFilePosition, binlogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
 
-func sendFormatDescription(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
-	binlogEvent := mysql.NewFormatDescriptionEvent(*binlogFormat, binlogStream)
-	binlogStream.LogPosition += binlogEvent.Length()
+func sendFormatDescription(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+	binlogEvent := mysql.NewFormatDescriptionEvent(*binlogFormat, binlogEventMeta)
+	binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }

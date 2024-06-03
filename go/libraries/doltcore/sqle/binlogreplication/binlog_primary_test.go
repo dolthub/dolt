@@ -124,7 +124,7 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 
 	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{
-		{"binlog-main.000001", "2342", "", "", uuid + ":1-3"}})
+		{"binlog-main.000001", "2226", "", "", uuid + ":1-3"}})
 }
 
 // TestBinlogPrimary_ReplicaRestart tests that the Dolt primary server behaves correctly when the

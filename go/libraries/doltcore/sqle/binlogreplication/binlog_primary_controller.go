@@ -60,7 +60,7 @@ func (d *doltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mys
 		return fmt.Errorf("no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
 	}
 
-	err := d.streamerManager.StartStream(ctx, conn, d.BinlogProducer.binlogFormat, d.BinlogProducer.binlogStream)
+	err := d.streamerManager.StartStream(ctx, conn, d.BinlogProducer.binlogFormat, d.BinlogProducer.binlogEventMeta)
 	if err != nil {
 		logrus.Warnf("exiting binlog streamer due to error: %s", err.Error())
 	} else {
@@ -84,7 +84,7 @@ func (d *doltBinlogPrimaryController) ListBinaryLogs(ctx *sql.Context) error {
 func (d *doltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) ([]binlogreplication.BinaryLogStatus, error) {
 	return []binlogreplication.BinaryLogStatus{{
 		File:          binlogFilename,
-		Position:      uint(d.BinlogProducer.binlogStream.LogPosition),
+		Position:      uint(d.BinlogProducer.binlogEventMeta.NextLogPosition),
 		DoDbs:         "",
 		IgnoreDbs:     "",
 		ExecutedGtids: d.BinlogProducer.currentGtidPosition(),
