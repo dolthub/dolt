@@ -153,8 +153,8 @@ func NewSqlEngine(
 	if err := configureBinlogPrimaryController(engine); err != nil {
 		return nil, err
 	}
-	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
-	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+	pro.AddInitDatabaseHook(dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+	pro.AddDropDatabaseHook(dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)

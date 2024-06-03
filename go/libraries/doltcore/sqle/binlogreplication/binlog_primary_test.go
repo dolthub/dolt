@@ -369,6 +369,30 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	requireReplicaResults(t, "select * from t;", [][]any{{"1", "one", "foo"}})
 }
 
+// TestBinlogPrimary_Rollback asserts that rolled back transactions are not sent to replicas.
+func TestBinlogPrimary_Rollback(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+
+	// Create a test table
+	primaryDatabase.MustExec("set @@autocommit=0;")
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("create table t1 (pk int primary key, c1 varchar(100), c2 int);")
+	primaryDatabase.MustExec("commit;")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
+	requireReplicaResults(t, "select * from t1;", [][]any{})
+
+	// Insert data, but roll back the transaction
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("insert into t1 values (1, 'two', 3);")
+	primaryDatabase.MustExec("rollback;")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from t1;", [][]any{})
+}
+
 // TestBinlogPrimary_MultipleTablesManualCommit tests that binlog events are generated correctly
 // when multiple tables are changed in a single SQL commit.
 func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {

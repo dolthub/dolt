@@ -73,6 +73,10 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 			}
 
 		case events := <-streamer.eventChan:
+			// TODO: If an error occurs while sending an event, it would be nice to have a retry at this
+			//       level. Technically the replica should be abel to automatically reconnect and restart
+			//       the stream from the last GTID it executed successfully, but it would be better to
+			//       avoid the extra work for the reconnection and restart if possible.
 			logrus.StandardLogger().Tracef("streaming %d binlog events", len(events))
 			for _, event := range events {
 				if err := conn.WriteBinlogEvent(event, false); err != nil {

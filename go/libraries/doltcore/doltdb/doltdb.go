@@ -73,9 +73,15 @@ var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 type DoltDB struct {
-	db           hooksDatabase
-	vrw          types.ValueReadWriter
-	ns           tree.NodeStore
+	db  hooksDatabase
+	vrw types.ValueReadWriter
+	ns  tree.NodeStore
+
+	// databaseName holds the name of the database for this DoltDB instance. Note that this name may not be
+	// populated for all DoltDB instances. For filesystem based databases, the database name is determined
+	// by looking through the filepath in reverse, finding the first .dolt directory, and then taking the
+	// parent directory as the database name. For non-filesystem based databases, the database name will not
+	// currently be populated.
 	databaseName string
 }
 
@@ -123,7 +129,9 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
-	// Pull the database name out of the URL string
+	// Pull the database name out of the URL string. For filesystem-based databases (e.g. in-memory or disk-based
+	// filesystem implementations), we can determine the database name by looking at the filesystem path. This
+	// won't work for other storage schemes though.
 	name := findParentDirectory(urlStr, ".dolt")
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
@@ -1446,7 +1454,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	wsSpec, err := ddb.writeWorkingSetAndNotifyListeners(ctx, workingSetRef, workingSet, meta, ds)
+	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, ds)
 	if err != nil {
 		return err
 	}
@@ -1477,7 +1485,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	wsSpec, err := ddb.writeWorkingSetAndNotifyListeners(ctx, workingSetRef, workingSet, meta, wsDs)
+	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, wsDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1508,10 +1516,10 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
-// writeWorkingSetAndNotifyListeners writes the specified |workingSet| at the specified |workingSetRef| with the
+// writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
 // specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
 // encountered. If any listeners are registered for working root updates, then they will be notified as well.
-func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
+func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
 	var prevRoot RootValue
 	if wsDs.HasHead() {
 		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)

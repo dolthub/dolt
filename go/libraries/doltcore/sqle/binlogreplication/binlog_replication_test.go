@@ -475,12 +475,12 @@ func waitForReplicaToCatchUp(t *testing.T) {
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
 }
 
-// waitForReplicaToHaveLatestGtid waits (up to 60s) for the replica to contain the
+// waitForReplicaToHaveLatestGtid waits (up to 10s) for the replica to contain the
 // most recent GTID executed from the primary. Both the primary and replica are queried
 // for the value of @@gtid_executed to determine if the replica contains the most recent
 // transaction from the primary.
 func waitForReplicaToHaveLatestGtid(t *testing.T) {
-	timeLimit := 60 * time.Second
+	timeLimit := 10 * time.Second
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		replicaGtid := queryGtid(t, replicaDatabase)
