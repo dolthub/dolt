@@ -33,24 +33,28 @@ import (
 // provide information about the just-parsed segment.
 // |currentPath| will contain the path to the current location.
 // |valueOffset| will contain the offset into |jsonBuffer| containing the next byte to be parsed.
-// |previousValueOffset| contains the offset from the previous invocation, which is also the start of the last-parsed segment.
 // |firstElement| Whether an insertion at the beginning at the segment would be the first element of an object or array.
 // (This is necessary for determining whether to generate an extra comma.)
 type JsonScanner struct {
-	jsonBuffer          []byte
-	currentPath         jsonLocation
-	valueOffset         int
-	previousValueOffset int
-	firstElement        bool
+	jsonBuffer  []byte
+	currentPath jsonLocation
+	valueOffset int
+}
+
+func (j JsonScanner) Clone() JsonScanner {
+	return JsonScanner{
+		jsonBuffer:  j.jsonBuffer,
+		currentPath: j.currentPath.Clone(),
+		valueOffset: j.valueOffset,
+	}
 }
 
 // ScanJsonFromBeginning creates a new JsonScanner to parse the provided JSON document
 func ScanJsonFromBeginning(buf []byte) JsonScanner {
 	return JsonScanner{
-		jsonBuffer:          buf,
-		currentPath:         newRootLocation(),
-		valueOffset:         0,
-		previousValueOffset: 0,
+		jsonBuffer:  buf,
+		currentPath: newRootLocation(),
+		valueOffset: 0,
 	}
 }
 
@@ -68,10 +72,9 @@ func ScanJsonFromMiddleWithKey(buf []byte, pathBytes jsonLocationKey) JsonScanne
 // start of the fragment, represented as a jsonLocation
 func ScanJsonFromMiddle(buf []byte, path jsonLocation) JsonScanner {
 	return JsonScanner{
-		jsonBuffer:          buf,
-		currentPath:         path,
-		valueOffset:         0,
-		previousValueOffset: 0,
+		jsonBuffer:  buf,
+		currentPath: path,
+		valueOffset: 0,
 	}
 }
 
@@ -99,8 +102,6 @@ func (s *JsonScanner) skipBytes(i int) {
 }
 
 func (s *JsonScanner) AdvanceToNextLocation() error {
-	s.firstElement = false
-	s.previousValueOffset = s.valueOffset
 	if s.atEndOfChunk() {
 		return io.EOF
 	}

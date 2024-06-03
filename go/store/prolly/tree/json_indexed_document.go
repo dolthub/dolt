@@ -145,10 +145,12 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 
 	// The key is guaranteed to not exist in the source doc. The cursor is pointing to the start of the subsequent object,
 	// which will be the insertion point for the added value.
-	jsonChunker, err := newJsonChunker(ctx, jsonCursor, keyPath, i.m.NodeStore)
+	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 	if err != nil {
 		return nil, false, err
 	}
+
+	jsonChunker.writeKey(keyPath)
 
 	insertedValueBytes, err := types.MarshallJson(val)
 	if err != nil {

@@ -84,7 +84,7 @@ func newEmptyJsonChunker(ctx context.Context, ns NodeStore) (*JsonChunker, error
 // newJsonChunker creates a new JsonChunker based on an existing IndexedJsonDocument.
 // |jCur| is a cursor into the existing document, pointing to the location of the first change.
 // |nextKey| is the location in the document of the next value to be written.
-func newJsonChunker(ctx context.Context, jCur *JsonCursor, nextKey jsonLocation, ns NodeStore) (*JsonChunker, error) {
+func newJsonChunker(ctx context.Context, jCur *JsonCursor, ns NodeStore) (*JsonChunker, error) {
 	newChunkerFn := newChunker[message.AddressMapSerializer]
 	chunker, err := newChunkerFn(ctx, jCur.cur.parent, 1, ns, message.NewAddressMapSerializer(ns.Pool()))
 	if err != nil {
@@ -92,12 +92,11 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, nextKey jsonLocation,
 	}
 
 	// Copy the original bytes so that the JsonChunker's buffer doesn't point into JsonCursor's buffer.
-	initialBytes := bytes.Clone(jCur.jsonScanner.jsonBuffer[:jCur.jsonScanner.previousValueOffset])
+	initialBytes := bytes.Clone(jCur.jsonScanner.jsonBuffer[:jCur.jsonScanner.valueOffset])
 	scanner := JsonScanner{
-		jsonBuffer:   initialBytes,
-		currentPath:  nextKey.Clone(),
-		valueOffset:  len(initialBytes),
-		firstElement: jCur.jsonScanner.firstElement,
+		jsonBuffer:  initialBytes,
+		currentPath: jCur.jsonScanner.currentPath.Clone(),
+		valueOffset: len(initialBytes),
 	}
 
 	jChunker := JsonChunker{
@@ -106,8 +105,6 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, nextKey jsonLocation,
 		chunker:  chunker,
 		ns:       ns,
 	}
-
-	jChunker.writeKey(nextKey)
 
 	return &jChunker, nil
 }
