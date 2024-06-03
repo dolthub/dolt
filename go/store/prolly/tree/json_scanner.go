@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"fmt"
 	"github.com/mohae/uvarint"
 	"io"
 )
@@ -40,6 +41,8 @@ type JsonScanner struct {
 	currentPath jsonLocation
 	valueOffset int
 }
+
+var jsonParseError = fmt.Errorf("an error occurred while reading or writing JSON to/from the database. This is most likely a bug, but could indicate database corruption")
 
 func (j JsonScanner) Clone() JsonScanner {
 	return JsonScanner{
@@ -107,45 +110,43 @@ func (s *JsonScanner) AdvanceToNextLocation() error {
 	}
 	switch s.currentPath.getScannerState() {
 	case startOfValue:
-		s.acceptValue()
-		return nil
+		return s.acceptValue()
 	case objectInitialElement:
-		s.acceptKeyValue()
-		return nil
+		return s.acceptKeyValue()
 	case arrayInitialElement:
-		s.acceptFirstArrayValue()
-		return nil
+		return s.acceptFirstArrayValue()
 	case endOfValue:
 		encodedIndex, isArray := s.currentPath.getLastPathElement()
 		s.currentPath.pop()
 		if isArray {
 			arrayIndex, _ := uvarint.Uvarint(encodedIndex)
-			s.acceptNextArrayValue(arrayIndex + 1)
+			return s.acceptNextArrayValue(arrayIndex + 1)
 		} else {
-			s.acceptNextKeyValue()
+			return s.acceptNextKeyValue()
 		}
-		return nil
 	default:
-		s.impossiblePanic()
-		return nil
+		return jsonParseError
 	}
 }
 
-func (s *JsonScanner) acceptValue() {
+func (s *JsonScanner) acceptValue() error {
 	current := s.current()
 	switch current {
 	case '"':
-		s.acceptString()
+		_, err := s.acceptString()
+		if err != nil {
+			return err
+		}
 		s.currentPath.setScannerState(endOfValue)
-		return
+		return nil
 	case '[':
 		s.valueOffset++
 		s.currentPath.setScannerState(arrayInitialElement)
-		return
+		return nil
 	case '{':
 		s.valueOffset++
 		s.currentPath.setScannerState(objectInitialElement)
-		return
+		return nil
 	}
 	// The scanner doesn't understand numbers, but it doesn't have to, since the number will be followed by a special character.
 	// Thus, we simply scan until we reach a character the scanner understands, marking the end of the value (or the end of the doc).
@@ -155,7 +156,7 @@ func (s *JsonScanner) acceptValue() {
 		switch s.current() {
 		case '}', ']', ',', 255:
 			s.currentPath.setScannerState(endOfValue)
-			return
+			return nil
 		default:
 			s.valueOffset++
 		}
@@ -173,16 +174,20 @@ func (s JsonScanner) current() byte {
 	return s.jsonBuffer[s.valueOffset]
 }
 
-func (s *JsonScanner) accept(b byte) {
+func (s *JsonScanner) accept(b byte) error {
 	current := s.current()
 	if current != b {
-		s.impossiblePanic()
+		return jsonParseError
 	}
 	s.valueOffset++
+	return nil
 }
 
-func (s *JsonScanner) acceptString() []byte {
-	s.accept('"')
+func (s *JsonScanner) acceptString() ([]byte, error) {
+	err := s.accept('"')
+	if err != nil {
+		return nil, err
+	}
 	stringStart := s.valueOffset
 	for s.current() != '"' {
 		switch s.current() {
@@ -193,56 +198,67 @@ func (s *JsonScanner) acceptString() []byte {
 	}
 	result := s.jsonBuffer[stringStart:s.valueOffset]
 	s.valueOffset++
-	return result
+	return result, nil
 }
 
-func (s *JsonScanner) acceptKeyValue() {
+func (s *JsonScanner) acceptKeyValue() error {
 	current := s.current()
 	switch current {
 	case '"':
-		s.acceptObjectKey()
+		return s.acceptObjectKey()
 	case '}':
 		s.valueOffset++
 		s.currentPath.setScannerState(endOfValue)
+		return nil
 	default:
-		s.impossiblePanic()
+		return jsonParseError
 	}
 }
 
-func (s *JsonScanner) acceptNextKeyValue() {
+func (s *JsonScanner) acceptNextKeyValue() error {
 	current := s.current()
 	switch current {
 	case ',':
 		s.valueOffset++
 		if s.current() != '"' {
-			s.impossiblePanic()
+			return jsonParseError
 		}
-		s.acceptObjectKey()
+		return s.acceptObjectKey()
 	case '}':
 		s.valueOffset++
 		s.currentPath.setScannerState(endOfValue)
+		return nil
 	default:
-		s.impossiblePanic()
+		return jsonParseError
 	}
 }
 
-func (s *JsonScanner) acceptObjectKey() {
-	s.currentPath.appendObjectKey(s.acceptString())
-	s.accept(':')
+func (s *JsonScanner) acceptObjectKey() error {
+	objectKey, err := s.acceptString()
+	if err != nil {
+		return err
+	}
+	s.currentPath.appendObjectKey(objectKey)
+	err = s.accept(':')
+	if err != nil {
+		return err
+	}
 	s.currentPath.setScannerState(startOfValue)
+	return nil
 }
 
-func (s *JsonScanner) acceptFirstArrayValue() {
+func (s *JsonScanner) acceptFirstArrayValue() error {
 	if s.current() == ']' {
 		s.valueOffset++
 		s.currentPath.setScannerState(endOfValue)
-		return
+		return nil
 	}
 	s.currentPath.setScannerState(startOfValue)
 	s.currentPath.appendArrayIndex(0)
+	return nil
 }
 
-func (s *JsonScanner) acceptNextArrayValue(i uint64) {
+func (s *JsonScanner) acceptNextArrayValue(i uint64) error {
 	current := s.current()
 	switch current {
 	case ',':
@@ -253,10 +269,7 @@ func (s *JsonScanner) acceptNextArrayValue(i uint64) {
 		s.valueOffset++
 		s.currentPath.setScannerState(endOfValue)
 	default:
-		s.impossiblePanic()
+		return jsonParseError
 	}
-}
-
-func (JsonScanner) impossiblePanic() {
-	panic("Invalid JSON in JsonScanner. This is impossible.")
+	return nil
 }
