@@ -145,7 +145,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
 		// offers an escape hatch.
 		if dEnv != nil {
-			// NM4 I hate everything about this.
+			// TODO - This error handling is not great.
 			if !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
 				err := saveHeadBranch(dEnv.FS, branchName)
 				if err != nil {

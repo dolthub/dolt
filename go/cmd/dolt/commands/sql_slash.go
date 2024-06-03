@@ -70,7 +70,6 @@ func parseSlashCmd(cmd string) []string {
 func handleSlashCommand(sqlCtx *sql.Context, fullCmd string, cliCtx cli.CliContext) error {
 	cliCmd := parseSlashCmd(fullCmd)
 	if len(cliCmd) == 0 {
-		// Print help?? NM4
 		return fmt.Errorf("Empty command. Use `/help;` for help.")
 	}
 
@@ -82,7 +81,7 @@ func handleSlashCommand(sqlCtx *sql.Context, fullCmd string, cliCtx cli.CliConte
 	if ok {
 		status = subCmdInst.Exec(sqlCtx, subCmd, subCmdArgs, nil, cliCtx)
 	} else {
-		return fmt.Errorf("Unknown command: %s", subCmd) // NM4 - print help maybe?
+		return fmt.Errorf("Unknown command: %s. Use `/help;` for a list of command.", subCmd)
 	}
 
 	if status != 0 {
@@ -130,7 +129,8 @@ func (s SlashHelp) Exec(ctx context.Context, _ string, args []string, _ *env.Dol
 		defer closeFunc()
 	}
 	if err != nil {
-		return 1 // NM4 - better error handling
+		cli.Println(fmt.Sprintf("error getting query engine: %s", err))
+		return 1
 	}
 
 	prompt := generateHelpPrompt(sqlCtx, qryist)
