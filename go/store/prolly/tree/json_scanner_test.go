@@ -9,14 +9,14 @@ type indexedSegment struct {
 	path    [][]byte
 	segment string
 }
-type jsonDecodingTest struct {
+type jsonScannerTest struct {
 	name     string
 	json     string
 	segments []indexedSegment
 }
 
-func TestJsonDecoding(t *testing.T) {
-	tests := []jsonDecodingTest{
+func TestJsonScanner(t *testing.T) {
+	tests := []jsonScannerTest{
 		{
 			name: "simple string test",
 			json: `"Hello, world"`,
