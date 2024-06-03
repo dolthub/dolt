@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
@@ -488,6 +489,10 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
+}
+
+func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (durable.Index, error) {
+	return t.table.GetTableRowsWithDescriptors(ctx, kd, vd)
 }
 
 // GetRowDataHash returns the hash.Hash of the row data index.

@@ -33,6 +33,7 @@ var mysqlSocket = os.Getenv("BENCHMARK_RUNNER_MYSQL_SOCKET")
 var mysqlVersion = os.Getenv("BENCHMARK_RUNNER_MYSQL_VERSION")
 var doltgresExec = os.Getenv("BENCHMARK_RUNNER_DOLTGRES_EXEC")
 var doltgresVersion = os.Getenv("BENCHMARK_RUNNER_DOLTGRES_VERSION")
+var doltgresConfigFilePath = os.Getenv("BENCHMARK_RUNNER_DOLTGRES_CONFIG_FILE_PATH")
 var postgresExec = os.Getenv("BENCHMARK_RUNNER_POSTGRES_EXEC")
 var postgresInitExec = os.Getenv("BENCHMARK_RUNNER_POSTGRES_INIT_EXEC")
 var postgresVersion = os.Getenv("BENCHMARK_RUNNER_POSTGRES_VERSION")
@@ -147,6 +148,10 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 	if runTests == "" {
 		t.Skip()
 	}
+	if doltgresConfigFilePath == "" {
+		t.Skip("skipping doltgres/postgres benchmark runner tests, no config file specified")
+	}
+
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
@@ -170,12 +175,13 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 				ServerUser:    "root",
 			},
 			&doltgresServerConfigImpl{
-				Id:            "test-doltgres",
-				Port:          4433,
-				Host:          "127.0.0.1",
-				Version:       doltgresVersion,
-				ResultsFormat: CsvFormat,
-				ServerExec:    doltgresExec,
+				Id:             "test-doltgres",
+				Port:           4433,
+				Host:           "127.0.0.1",
+				ConfigFilePath: doltgresConfigFilePath,
+				Version:        doltgresVersion,
+				ResultsFormat:  CsvFormat,
+				ServerExec:     doltgresExec,
 			},
 		},
 		TestOptions: []string{

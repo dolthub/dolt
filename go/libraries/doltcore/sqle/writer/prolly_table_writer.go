@@ -63,7 +63,6 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 	if err != nil {
 		return nil, err
 	}
-	pkDesc, _ := schState.DoltSchema.GetMapDescriptors()
 
 	// check session cache based on schema hash argument
 	// we want to get or save the
@@ -92,7 +91,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			keyMap:        def.KeyMapping,
 			keyBld:        val.NewTupleBuilder(keyDesc),
 			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(pkDesc),
+			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc),
 		}
 	}
 

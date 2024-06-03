@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -71,8 +72,10 @@ type Table interface {
 	// SetSchema sets this table's schema.
 	SetSchema(ctx context.Context, sch schema.Schema) (Table, error)
 
-	// GetTableRows returns this tables rows.
+	// GetTableRows returns this table's rows.
 	GetTableRows(ctx context.Context) (Index, error)
+	// GetTableRowsWithDescriptors returns this table's rows with fewer deserialization calls
+	GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error)
 	// SetTableRows sets this table's rows.
 	SetTableRows(ctx context.Context, rows Index) (Table, error)
 
@@ -325,6 +328,10 @@ func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 	}
 
 	return indexFromRef(ctx, t.vrw, t.ns, sch, val.(types.Ref))
+}
+
+func (t nomsTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
+	return nil, fmt.Errorf("nomsTable does not implement GetTableRowsWithDescriptors")
 }
 
 // GetIndexes implements Table.
@@ -844,6 +851,15 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		return nil, err
 	}
 	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProllyMap(m), nil
+}
+
+func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
+	rowbytes := t.msg.PrimaryIndexBytes()
+	m, err := shim.MapFromValueWithDescriptors(types.SerialMessage(rowbytes), kd, vd, t.ns)
 	if err != nil {
 		return nil, err
 	}

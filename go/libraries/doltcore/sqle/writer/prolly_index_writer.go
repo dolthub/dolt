@@ -30,7 +30,7 @@ import (
 )
 
 func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dsess.WriterState) (prollyIndexWriter, error) {
-	idx, err := t.GetRowData(ctx)
+	idx, err := t.GetRowDataWithDescriptors(ctx, schState.PkKeyDesc, schState.PkValDesc)
 	if err != nil {
 		return prollyIndexWriter{}, err
 	}

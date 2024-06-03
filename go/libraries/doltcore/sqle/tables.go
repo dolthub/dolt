@@ -1051,12 +1051,43 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 		return nil, err
 	}
 
-	sch, err := table.GetSchema(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return checksInSchema(sch), nil
+	if !tableIsCacheable {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return checksInSchema(sch), nil
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+	}
+
+	checks, ok := dbState.SessionCache().GetCachedTableChecks(key)
+	if ok {
+		return checks, nil
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	checks = checksInSchema(sch)
+
+	dbState.SessionCache().CacheTableChecks(key, checks)
+	return checks, nil
 }
 
 func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
