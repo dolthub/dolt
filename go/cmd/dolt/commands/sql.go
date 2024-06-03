@@ -770,15 +770,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					shell.Println(color.RedString(err.Error()))
 				}
 
-				// NM4 - TODO: move this to a separate function
-				db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
-				if ok {
-					sqlCtx.SetCurrentDatabase(db)
-				}
-				if branch != "" {
-					dirty, _ = isDirty(sqlCtx, qryist)
-				}
-				nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
+				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
 			}()
 		} else {
 			closureFormat := format
@@ -829,14 +821,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					}
 				}
 
-				db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
-				if ok {
-					sqlCtx.SetCurrentDatabase(db) // NM4 - what exactly does this do
-				}
-				if branch != "" {
-					dirty, _ = isDirty(sqlCtx, qryist)
-				}
-				nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
+				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
 
 				return true
 			}()
@@ -856,69 +841,18 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	return nil
 }
 
-var slashCmds = []cli.Command{
-	StatusCmd{},
-	DiffCmd{},
-	LogCmd{},
-	AddCmd{},
-	CommitCmd{},
-	CheckoutCmd{},
-	ResetCmd{},
-	BranchCmd{},
-	MergeCmd{},
-	SlashHelp{},
-}
-
-// parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
-// double quotes. For example, the string `foo "bar baz"` would be parsed into the slice `[]string{"foo", "bar baz"}`.
-// This is quick and dirty for slash command prototype, and doesn't try and handle all the crazy edge cases that come
-// up with supporting many types of quotes. Also, pretty sure a dangling quote will break it. But it's a start.
-func parseSlashCmd(cmd string) []string {
-
-	// TODO: determine if we can get rid of the ";" as the terminator for cli commands.
-	cmd = strings.TrimSuffix(cmd, ";")
-	cmd = strings.TrimRight(cmd, " \t\n\r\v\f")
-	cmd = strings.TrimLeft(cmd, " \t\n\r\v\f")
-
-	r := regexp.MustCompile(`"[^"\\]*(?:\\.[^"\\]*)*"|\S+`)
-	cmdWords := r.FindAllString(cmd, -1)
-
-	for i := range cmdWords {
-		if cmdWords[i][0] == '"' {
-			cmdWords[i] = cmdWords[i][1 : len(cmdWords[i])-1]
-			cmdWords[i] = strings.ReplaceAll(cmdWords[i], `\"`, `"`)
-		}
-	}
-
-	if len(cmdWords) == 0 {
-		return []string{}
-	}
-
-	return cmdWords
-}
-
-func handleSlashCommand(sqlCtx *sql.Context, fullCmd string, cliCtx cli.CliContext) error {
-	cliCmd := parseSlashCmd(fullCmd)
-	if len(cliCmd) == 0 {
-		// Print help?? NM4
-		return fmt.Errorf("Empty command. Use `/help;` for help.")
-	}
-
-	subCmd := cliCmd[0]
-	subCmdArgs := cliCmd[1:]
-	status := 1
-
-	subCmdInst, ok := findSlashCmd(subCmd)
+// postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the the database
+// if needed, and generates new prompts for the shell (based on the branch and if the workspace is dirty).
+func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
+	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
 	if ok {
-		status = subCmdInst.Exec(sqlCtx, subCmd, subCmdArgs, nil, cliCtx)
-	} else {
-		return fmt.Errorf("Unknown command: %s", subCmd) // NM4 - print help maybe?
+		sqlCtx.SetCurrentDatabase(db)
 	}
-
-	if status != 0 {
-		return fmt.Errorf("error executing command: %s", cliCmd)
+	dirty := false
+	if branch != "" {
+		dirty, _ = isDirty(sqlCtx, qryist)
 	}
-	return nil
+	return formattedPrompts(db, branch, dirty)
 }
 
 // formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
@@ -1261,82 +1195,4 @@ func updateFileReadProgressOutput() {
 	fileReadProg.printed = fileReadProg.bytesRead
 	displayStr := fmt.Sprintf("Processed %.1f%% of the file", percent)
 	fileReadProg.displayStrLen = cli.DeleteAndPrint(fileReadProg.displayStrLen, displayStr)
-}
-
-type SlashHelp struct{}
-
-func (s SlashHelp) Name() string {
-	return "help"
-}
-
-func (s SlashHelp) Description() string {
-	return "What you see right now."
-}
-
-func (s SlashHelp) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if args != nil && len(args) > 0 {
-		subCmd := args[0]
-		subCmdInst, ok := findSlashCmd(subCmd)
-		if ok {
-			foo, _ := cli.HelpAndUsagePrinters(subCmdInst.Docs())
-			foo()
-
-		} else {
-			cli.Println(fmt.Sprintf("Unknown command: %s", subCmd))
-		}
-		return 0
-	}
-
-	qryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if closeFunc != nil {
-		defer closeFunc()
-	}
-	if err != nil {
-		return 1 // NM4 - better error handling
-	}
-
-	dbName, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
-
-	cli.Println("Dolt SQL Shell Help")
-	cli.Printf("Default behavior is to interpret SQL statements.     (e.g. '%s/%s> select * from my_table;')\n", dbName, branch)
-	cli.Printf("Dolt CLI commands can be invoked with a leading '/'. (e.g. '%s/%s> /status;')\n", dbName, branch)
-	cli.Println("All statements are terminated with a ';'.")
-	cli.Println("\nAvailable commands:")
-	for _, cmdInst := range slashCmds {
-		cli.Println(fmt.Sprintf("  %10s - %s", cmdInst.Name(), cmdInst.Description()))
-	}
-	cli.Printf("\nFor more information on a specific command, type '/help <command>;' (e.g. '%s/%s> /help status;')\n", dbName, branch)
-
-	moreWords := `
--+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-Still need assistance? Talk directly to Dolt developers on Discord! https://discord.gg/gqr7K4VNKe
-Found a bug? Want additional features? Please let us know! https://github.com/dolthub/dolt/issues
--+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-`
-
-	cli.Println(moreWords)
-
-	return 0
-}
-
-func findSlashCmd(cmd string) (cli.Command, bool) {
-	for _, cmdInst := range slashCmds {
-		if cmdInst.Name() == cmd {
-			return cmdInst, true
-		}
-	}
-	return nil, false
-}
-
-func (s SlashHelp) Docs() *cli.CommandDocumentation {
-	return &cli.CommandDocumentation{
-		CommandStr: "/help",
-		ShortDesc:  "What you see right now.",
-		LongDesc:   "It would seem that you are crying out for help. Please join us on Discord (https://discord.gg/gqr7K4VNKe)!",
-		Synopsis:   []string{},
-		ArgParser:  s.ArgParser(),
-	}
-}
-
-func (s SlashHelp) ArgParser() *argparser.ArgParser {
-	return &argparser.ArgParser{}
 }
