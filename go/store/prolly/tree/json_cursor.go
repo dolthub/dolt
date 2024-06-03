@@ -74,7 +74,8 @@ func (j *JsonCursor) NextValue(ctx context.Context) (result []byte, err error) {
 	if !j.jsonScanner.atStartOfValue() {
 		return nil, fmt.Errorf("JSON cursor in unexpected state. This is likely a bug")
 	}
-	path := j.jsonScanner.currentPath
+	path := j.jsonScanner.currentPath.Clone()
+	path.setScannerState(endOfValue)
 	jsonBuffer := j.jsonScanner.jsonBuffer
 	startPos := j.jsonScanner.valueOffset
 
@@ -106,31 +107,51 @@ func (j *JsonCursor) NextValue(ctx context.Context) (result []byte, err error) {
 	return
 }
 
-func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation) error {
-	// TODO: Intelligently determine whether the location exists in the current block, or whether we need to fetch a new block.
-	// Note for anyone debugging this: An infinite loop here means we're scanning the same block over and over again
-	// and not finding the requested location.
+func (j *JsonCursor) isKeyInChunk(path jsonLocation) bool {
+	if j.cur.parent == nil {
+		// This is the only chunk, so the path must refer to this chunk.
+		return true
+	}
+	nodeEndPosition := jsonPathFromKey(j.cur.parent.CurrentKey())
+	return compareJsonLocations(path, nodeEndPosition) <= 0
+}
 
-	for compareJsonLocations(j.jsonScanner.currentPath, path) < 0 {
+func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation) error {
+	if !j.isKeyInChunk(path) {
+		// Our destination is in another chunk, load it.
+		err := Seek(ctx, j.cur.parent, path.key, jsonLocationOrdering{})
+		if err != nil {
+			return err
+		}
+		j.cur.nd, err = fetchChild(ctx, j.cur.nrw, j.cur.parent.currentRef())
+		if err != nil {
+			return err
+		}
+		previousKey, err := getPreviousKey(ctx, j.cur)
+		if err != nil {
+			return err
+		}
+		j.jsonScanner = ScanJsonFromMiddleWithKey(j.cur.currentValue(), previousKey)
+	}
+
+	previousScanner := j.jsonScanner
+	cmp := compareJsonLocations(j.jsonScanner.currentPath, path)
+	for cmp < 0 {
+		previousScanner = j.jsonScanner.Clone()
 		err := j.jsonScanner.AdvanceToNextLocation()
 		if err == io.EOF {
-			// We reached the end of the chunk, advance the parent cursor.
-			err = Seek(ctx, j.cur.parent, path.key, jsonLocationOrdering{})
-			if err != nil {
-				return err
-			}
-			j.cur.nd, err = fetchChild(ctx, j.cur.nrw, j.cur.parent.currentRef())
-			if err != nil {
-				return err
-			}
-			previousKey, err := getPreviousKey(ctx, j.cur)
-			if err != nil {
-				return err
-			}
-			j.jsonScanner = ScanJsonFromMiddleWithKey(j.cur.currentValue(), previousKey)
+			// We reached the end of the document without finding the path. This shouldn't be possible, because
+			// there is no path greater than the end-of-document path, which is always the last key.
+			panic("Reached the end of the JSON document while advancing. This should not be possible. Is the document corrupt?")
 		} else if err != nil {
 			return err
 		}
+		cmp = compareJsonLocations(j.jsonScanner.currentPath, path)
+	}
+	// If the supplied path doesn't exist in the document, then we want to stop the cursor at the start of the point
+	// were it would appear. This may mean that we've gone too far and need to rewind one location.
+	if cmp > 0 {
+		j.jsonScanner = previousScanner
 	}
 	return nil
 }

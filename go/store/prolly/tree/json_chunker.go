@@ -124,26 +124,6 @@ func (j *JsonChunker) writeKey(keyPath jsonLocation) {
 	}
 }
 
-// writeValue adds a new value to end of the JsonChunker's buffer.
-func (j *JsonChunker) writeValue(ctx context.Context, keyPath jsonLocation, value []byte) {
-	isFirstValue := j.jScanner.firstElementOrEndOfEmptyValue()
-	var isLastValue bool
-	{
-		// We check this by computing the location of the end of the current object and comparing it to the cursor location.
-		currentObjectPath := keyPath.Clone()
-		currentObjectPath.pop()
-		currentObjectPath.setScannerState(endOfValue)
-		isLastValue = compareJsonLocations(j.jCur.GetCurrentPath(), currentObjectPath) >= 0
-	}
-
-	j.appendJsonToBuffer(value)
-	j.processBuffer(ctx)
-	// If there's another element in the current object/array, add a comma.
-	if !isLastValue && isFirstValue {
-		j.appendJsonToBuffer([]byte{','})
-	}
-}
-
 func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	var endOfDocumentKey = []byte{byte(endOfValue)}
 
@@ -157,7 +137,13 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	}
 	cur := j.jCur.cur
 	cursorDecoder := j.jCur.jsonScanner
-	jsonBytes := cursorDecoder.jsonBuffer[cursorDecoder.previousValueOffset:]
+	jsonBytes := cursorDecoder.jsonBuffer[cursorDecoder.valueOffset:]
+	// When inserting into the beginning of an object or array, we need to add an extra comma.
+	// We could track then in the chunker, but it's easier to just check the next part of JSON to determine
+	// whether we need the comma.
+	if jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
+		j.appendJsonToBuffer([]byte(","))
+	}
 	// Append the rest of the JsonCursor, then continue until we either exhaust the cursor, or we coincide with a boundary from the original tree.
 	for {
 		j.appendJsonToBuffer(jsonBytes)

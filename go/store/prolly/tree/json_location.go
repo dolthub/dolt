@@ -293,6 +293,17 @@ func compareJsonLocations(left, right jsonLocation) int {
 	}
 	if left.size() < right.size() {
 		// left is a parent of right
+		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
+		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
+		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
+		if right.size() == left.size()+1 {
+			if left.getScannerState() == objectInitialElement {
+				_, rightIsArray := right.getLastPathElement()
+				if rightIsArray {
+					return 1
+				}
+			}
+		}
 		if left.getScannerState() != endOfValue {
 			return -1
 		}
@@ -300,6 +311,18 @@ func compareJsonLocations(left, right jsonLocation) int {
 	}
 	if left.size() > right.size() {
 		// right is a parent of left
+		// there's a special case here: the user may be trying to treat a scalar or object as an array, which causes
+		// it to get implicitly wrapped in an array. In order for the cursor to return the correct location for
+		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
+		if left.size() == right.size()+1 {
+			if right.getScannerState() == objectInitialElement {
+				_, leftIsArray := left.getLastPathElement()
+				if leftIsArray {
+					return -1
+				}
+			}
+		}
+
 		if right.getScannerState() != endOfValue {
 			return 1
 		}
