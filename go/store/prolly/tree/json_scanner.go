@@ -16,7 +16,6 @@ package tree
 
 import (
 	"fmt"
-	"github.com/mohae/uvarint"
 	"io"
 )
 
@@ -82,8 +81,7 @@ func ScanJsonFromMiddle(buf []byte, path jsonLocation) JsonScanner {
 }
 
 func (s JsonScanner) isParsingArray() bool {
-	_, isArray := s.currentPath.getLastPathElement()
-	return isArray
+	return s.currentPath.getLastPathElement().isArrayIndex
 }
 
 func (s JsonScanner) firstElementOrEndOfEmptyValue() bool {
@@ -116,11 +114,10 @@ func (s *JsonScanner) AdvanceToNextLocation() error {
 	case arrayInitialElement:
 		return s.acceptFirstArrayValue()
 	case endOfValue:
-		encodedIndex, isArray := s.currentPath.getLastPathElement()
+		lastPathElement := s.currentPath.getLastPathElement()
 		s.currentPath.pop()
-		if isArray {
-			arrayIndex, _ := uvarint.Uvarint(encodedIndex)
-			return s.acceptNextArrayValue(arrayIndex + 1)
+		if lastPathElement.isArrayIndex {
+			return s.acceptNextArrayValue(lastPathElement.getArrayIndex() + 1)
 		} else {
 			return s.acceptNextKeyValue()
 		}

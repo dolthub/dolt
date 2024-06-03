@@ -174,8 +174,7 @@ type keySplitter struct {
 	count, size     uint32
 	crossedBoundary bool
 
-	salt            uint64
-	ignoreKeyLength bool
+	salt uint64
 }
 
 func newKeySplitter(level uint8) nodeSplitter {
@@ -187,10 +186,7 @@ func newKeySplitter(level uint8) nodeSplitter {
 var _ splitterFactory = newKeySplitter
 
 func (ks *keySplitter) Append(key, value Item) error {
-	thisSize := uint32(len(value))
-	if !ks.ignoreKeyLength {
-		thisSize += uint32(len(key))
-	}
+	thisSize := uint32(len(key) + len(value))
 	ks.size += thisSize
 
 	if ks.size < minChunkSize {

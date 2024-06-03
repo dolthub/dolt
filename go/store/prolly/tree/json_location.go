@@ -26,22 +26,30 @@ import (
 // jsonLocation is a representation of a path into a JSON document. It is designed for efficient in-place modification and fast
 // comparisons. The |offsets| field is redundant and can be generated from the |key| field using the jsonPathFromKey function.
 //
-// Every jsonLocation points to a specific byte offset in the JSON document, either the start or end of a value. This allows for
+// Every jsonLocation references a specific named value within the document, and points to a specific byte offset. This allows for
 // comparisons between paths that may refer to parent and child objects. For example:
 //
 // "start of $.a" < "start of $.a.b" < "end of $.a.b" < "end of $.a" < "start of $.c" < "end of $.c" < "end of $"
 //
-// |key| - The first byte is a scannerState which indicates whether this path marks the start of end of a value.
+// |key| - The first byte is a jsonPathType which indicates what part of the named object is being represented.
 //
-//			The remainder of |key| is a sequence of encoded path elements, each of which is either an object key or array index:
-//			    <path-element> ::= <object-key> | <array-index>
-//		        <object-key>   ::= 0xFF <UTF-8 encoded key>
-//		        <array-index>  ::= 0xFE <SQLite4 varint> (https://sqlite.org/src4/doc/trunk/www/varint.wiki)
-//	     SQLite4 varint encoding was chosen for the array index because it has the property that a lexographic ordering of
-//	     encoded values preserves order (if a < b, then encode(a) < encode(b)).
-//	     The bytes 0xFF and 0xFE were chosen as separators because they are the only bytes which are not valid UTF-8,
-//	     and thus there is no need to escape any characters in the encoded object key. While these bytes can appear in
-//	     a SQLite4 varint, the length of the varint can be determined by its first byte, so there's no ambiguity.
+//	        The possible values for this byte include:
+//	             - 0 / startOfValue         - The location points to the first character of the value.
+//	             - 1 / objectInitialElement - The location points to where a new value would be inserted at the start of an object.
+//	                                          This is always one byte past the start of the object.
+//	             - 2 / arrayInitialElement  - The location points to where a new value would be inserted at the start of an array.
+//	                                          This is always one byte past the start of the array.
+//	             - 3 / startOfValue         - The location points one byte past the end of the value.
+//
+//				The remainder of |key| is a sequence of encoded path elements, each of which is either an object key or array index:
+//				    <path-element> ::= <object-key> | <array-index>
+//			        <object-key>   ::= 0xFF <UTF-8 encoded key>
+//			        <array-index>  ::= 0xFE <SQLite4 varint> (https://sqlite.org/src4/doc/trunk/www/varint.wiki)
+//		     SQLite4 varint encoding was chosen for the array index because it has the property that a lexographic ordering of
+//		     encoded values preserves order (if a < b, then encode(a) < encode(b)).
+//		     The bytes 0xFF and 0xFE were chosen as separators because they are the only bytes which are not valid UTF-8,
+//		     and thus there is no need to escape any characters in the encoded object key. While these bytes can appear in
+//		     a SQLite4 varint, the length of the varint can be determined by its first byte, so there's no ambiguity.
 //
 // |offsets| - This field stores an offset to the start of each path element in |key|, plus an offset to the end of |key|
 type jsonLocation struct {
@@ -49,10 +57,11 @@ type jsonLocation struct {
 	offsets []int
 }
 
-type scannerState byte
+// Every
+type jsonPathType byte
 
 const (
-	startOfValue scannerState = iota
+	startOfValue jsonPathType = iota
 	objectInitialElement
 	arrayInitialElement
 	endOfValue
@@ -96,45 +105,24 @@ func newRootLocation() jsonLocation {
 
 // jsonPathFromKey creates a jsonLocation from a StaticJsonMap key.
 func jsonPathFromKey(pathKey []byte) (path jsonLocation) {
-	path = newRootLocation()
-	path.setScannerState(scannerState(pathKey[0]))
-	if len(pathKey) == 1 {
-		return path
+	ret := jsonLocation{
+		key:     bytes.Clone(pathKey),
+		offsets: []int{},
 	}
-	startIdx := 1
-	maxIdx := len(pathKey)
-	for {
-		if startIdx >= maxIdx {
-			return path
-		}
-		separatorByte := pathKey[startIdx]
-		startIdx++
-		switch separatorByte {
-		case beginObjectKey:
-			// scan until we encounter the next separator byte or the end of the key
-			endIdx := startIdx
-			for {
-				if endIdx >= maxIdx {
-					path.appendObjectKey(pathKey[startIdx:])
-					return path
-				}
-				current := pathKey[endIdx]
-				if current == beginArrayKey || current == beginObjectKey {
-					break
-				}
-				endIdx++
-			}
-			path.appendObjectKey(pathKey[startIdx:endIdx])
-			startIdx = endIdx
-			continue
-		case beginArrayKey:
-			size := varIntLength(pathKey[startIdx])
-			path.appendEncodedArrayIndex(pathKey[startIdx : startIdx+size])
-			startIdx += size
-		default:
-			panic(fmt.Sprintf("invalid varint in json path key %v. This is either a bug or database corruption.", pathKey))
+	i := 1
+	for i < len(pathKey) {
+		if pathKey[i] == beginObjectKey {
+			ret.offsets = append(ret.offsets, i)
+			i += 1
+		} else if pathKey[i] == beginArrayKey {
+			ret.offsets = append(ret.offsets, i)
+			i += varIntLength(pathKey[i])
+		} else {
+			i += 1
 		}
 	}
+	ret.offsets = append(ret.offsets, i)
+	return ret
 }
 
 // varIntLength returns the length of a SQLite4 varint in bytes, given the contents of the first byte.
@@ -159,62 +147,72 @@ func isValidJsonPathKey(key []byte) bool {
 	return true
 }
 
-// jsonPathElementsFromMySQLJsonPath computes a jsonLocation from a MySQL JSON path (https://dev.mysql.com/doc/refman/8.0/en/json.html#json-path-syntax)
-func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (path jsonLocation, err error) {
-	path = newRootLocation()
-	originalPathBytes := pathBytes
-	// TODO: We need to account for escaped characters
-	if pathBytes[0] != '$' {
-		return path, fmt.Errorf("Invalid JSON path expression. Path must start with '$'")
+type lexState int
+
+const (
+	lexStatePath lexState = 1
+	lexStateIdx  lexState = 2
+	lexStateKey  lexState = 3
+)
+
+func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
+	location := newRootLocation()
+	state := lexStatePath
+	// Start of the token.
+	tok := 0
+	// Current index into |pathBytes|.
+	if len(pathBytes) == 0 || pathBytes[0] != '$' {
+		return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Path must start with '$': %s", string(pathBytes))
 	}
-	parsedCharacters := 1
-	pathBytes = pathBytes[1:]
-	validateAndAppendObjectKeyToPath := func(key []byte) error {
-		if !isValidJsonPathKey(key) {
-			return fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", parsedCharacters+1, originalPathBytes)
+	i := 1
+	for i < len(pathBytes) {
+		switch state {
+		case lexStatePath:
+			if pathBytes[i] == '[' {
+				i += 1
+				tok = i
+				state = lexStateIdx
+			} else if pathBytes[i] == '.' {
+				i += 1
+				tok = i
+				state = lexStateKey
+			} else {
+				return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
+			}
+		case lexStateIdx:
+			if pathBytes[i] >= byte('0') && pathBytes[i] <= byte('9') {
+				i += 1
+			} else {
+				conv, err := strconv.Atoi(string(pathBytes[tok:i]))
+				if err != nil {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected array index name after '[' at character %v of %s", i, string(pathBytes))
+				}
+				location.appendArrayIndex(uint64(conv))
+				state = lexStatePath
+			}
+		case lexStateKey:
+			if pathBytes[i] == '.' || pathBytes[i] == '[' {
+				if tok == i {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
+				}
+				location.appendObjectKey(pathBytes[tok:i])
+				state = lexStatePath
+			} else {
+				i += 1
+			}
 		}
-		path.appendObjectKey(key)
-		return nil
 	}
-	for len(pathBytes) > 0 {
-		var endOffset int
-		if pathBytes[0] == '[' {
-			endOffset = bytes.IndexByte(pathBytes, ']')
-			arrayIndex, err := strconv.Atoi(string(pathBytes[1:endOffset]))
-			if err != nil {
-				return path, err
-			}
-			path.appendArrayIndex(uint64(arrayIndex))
-			pathBytes = pathBytes[endOffset+1:]
-			parsedCharacters += endOffset + 1
-		} else if pathBytes[0] == '.' {
-			// TODO: Also accept a double-quoted string.
-			pathBytes = pathBytes[1:]
-			nextIndex := bytes.IndexByte(pathBytes, '[')
-			nextKey := bytes.IndexByte(pathBytes, '.')
-			endOffset = nextIndex
-			if nextIndex == -1 || (nextKey != -1 && nextKey < nextIndex) {
-				endOffset = nextKey
-			}
-			if endOffset == -1 {
-				err = validateAndAppendObjectKeyToPath(pathBytes)
-				return path, err
-			}
-			if endOffset == 0 {
-				// Unquoted empty key is not allowed.
-				return path, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", parsedCharacters+1, originalPathBytes)
-			}
-			err = validateAndAppendObjectKeyToPath(pathBytes[:endOffset])
-			if err != nil {
-				return path, err
-			}
-			pathBytes = pathBytes[endOffset:]
-			parsedCharacters += endOffset + 1
-		} else {
-			return path, fmt.Errorf("Invalid JSON path expression '%s'", originalPathBytes)
+	if state == lexStateKey {
+		if tok == i {
+			return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 		}
+		location.appendObjectKey(pathBytes[tok:i])
+		state = lexStatePath
 	}
-	return path, nil
+	if state != lexStatePath {
+		return jsonLocation{}, fmt.Errorf("invalid JSON key %s", string(pathBytes))
+	}
+	return location, nil
 }
 
 func (p *jsonLocation) appendObjectKey(key []byte) {
@@ -238,33 +236,43 @@ func (p *jsonLocation) pop() {
 	p.key = p.key[:lastOffset]
 }
 
-func (p *jsonLocation) setScannerState(s scannerState) {
+func (p *jsonLocation) setScannerState(s jsonPathType) {
 	p.key[0] = byte(s)
 }
 
-func (p *jsonLocation) getScannerState() scannerState {
-	return scannerState(p.key[0])
+func (p *jsonLocation) getScannerState() jsonPathType {
+	return jsonPathType(p.key[0])
 }
 
-func (p *jsonLocation) getPathElement(i int) (key []byte, isArray bool) {
+type jsonPathElement struct {
+	key          []byte
+	isArrayIndex bool
+}
+
+func (e jsonPathElement) getArrayIndex() uint64 {
+	arrayIndex, _ := uvarint.Uvarint(e.key)
+	return arrayIndex
+}
+
+func (p *jsonLocation) getPathElement(i int) (result jsonPathElement) {
 	start := p.offsets[i]
 	end := p.offsets[i+1]
-	key = p.key[start+1 : end]
-	isArray = p.key[start] == beginArrayKey
-	return key, isArray
+	result.key = p.key[start+1 : end]
+	result.isArrayIndex = p.key[start] == beginArrayKey
+	return result
 }
 
 func (p *jsonLocation) size() int {
 	return len(p.offsets) - 1
 }
 
-func (p *jsonLocation) getLastPathElement() (key []byte, isArray bool) {
+func (p *jsonLocation) getLastPathElement() (result jsonPathElement) {
 	state := p.getScannerState()
 	if state == arrayInitialElement {
-		return nil, true
+		return jsonPathElement{nil, true}
 	}
 	if state == objectInitialElement {
-		return nil, false
+		return jsonPathElement{nil, false}
 	}
 	return p.getPathElement(p.size() - 1)
 }
@@ -281,9 +289,9 @@ func (p *jsonLocation) Clone() jsonLocation {
 func compareJsonLocations(left, right jsonLocation) int {
 	minLength := min(left.size(), right.size())
 	for i := 0; i < minLength; i++ {
-		l, _ := left.getPathElement(i)
-		r, _ := right.getPathElement(i)
-		c := bytes.Compare(l, r)
+		leftPathElement := left.getPathElement(i)
+		rightPathElement := right.getPathElement(i)
+		c := bytes.Compare(leftPathElement.key, rightPathElement.key)
 		if c < 0 {
 			return -1
 		}
@@ -298,7 +306,7 @@ func compareJsonLocations(left, right jsonLocation) int {
 		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
 		if right.size() == left.size()+1 {
 			if left.getScannerState() == objectInitialElement {
-				_, rightIsArray := right.getLastPathElement()
+				rightIsArray := right.getLastPathElement().isArrayIndex
 				if rightIsArray {
 					return 1
 				}
@@ -316,7 +324,7 @@ func compareJsonLocations(left, right jsonLocation) int {
 		// reading/modification, for any object b, b[N] must compare less than the initial element location of b.
 		if left.size() == right.size()+1 {
 			if right.getScannerState() == objectInitialElement {
-				_, leftIsArray := left.getLastPathElement()
+				leftIsArray := left.getLastPathElement().isArrayIndex
 				if leftIsArray {
 					return -1
 				}

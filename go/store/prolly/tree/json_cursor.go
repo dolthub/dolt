@@ -157,27 +157,25 @@ func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation) e
 }
 
 func (j *JsonCursor) AdvanceToNextLocation(ctx context.Context) (crossedBoundary bool, err error) {
-	for {
-		err = j.jsonScanner.AdvanceToNextLocation()
-		if err == io.EOF {
-			crossedBoundary = true
-			// We hit the end of the chunk, load the next one
-			err = j.cur.advance(ctx)
-			if err != nil {
-				return
-			}
-			if !j.cur.Valid() {
-				// We hit the end of the tree.
-				// TODO: What is the correct behavior here?
-				return crossedBoundary, io.EOF
-			}
-			j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), j.jsonScanner.currentPath)
-			continue
-		} else if err != nil {
+	err = j.jsonScanner.AdvanceToNextLocation()
+	if err == io.EOF {
+		crossedBoundary = true
+		// We hit the end of the chunk, load the next one
+		err = j.cur.advance(ctx)
+		if err != nil {
 			return
 		}
+		if !j.cur.Valid() {
+			// We hit the end of the tree. This shouldn't happen.
+			return true, io.EOF
+		}
+		j.jsonScanner = ScanJsonFromMiddle(j.cur.currentValue(), j.jsonScanner.currentPath)
+		return true, j.jsonScanner.AdvanceToNextLocation()
+	} else if err != nil {
 		return
 	}
+	return
+
 }
 
 func (j *JsonCursor) GetCurrentPath() jsonLocation {

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/mohae/uvarint"
 	"sync"
 )
 
@@ -44,7 +43,6 @@ type IndexedJsonDocument struct {
 
 var _ types.JSONBytes = IndexedJsonDocument{}
 var _ types.MutableJSON = IndexedJsonDocument{}
-var _ types.SearchableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
 var _ driver.Valuer = IndexedJsonDocument{}
 
@@ -139,23 +137,23 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 		return nil, false, err
 	}
 
-	currentPath := jsonCursor.GetCurrentPath()
-	cmp := compareJsonLocations(currentPath, keyPath)
+	cursorPath := jsonCursor.GetCurrentPath()
+	cmp := compareJsonLocations(cursorPath, keyPath)
 	if cmp == 0 {
 		// The key already exists in the document.
 		return i, false, nil
 	}
 
 	// If the inserted path is equivalent to "$" (which also includes "$[0]" on non-arrays), do nothing.
-	if currentPath.size() == 0 && currentPath.getScannerState() == startOfValue {
+	if cursorPath.size() == 0 && cursorPath.getScannerState() == startOfValue {
 		return i, false, nil
 	}
 
 	// Attempting to insert an object key into an array should result in no modification.
 	// TODO: These are terrible variable names, come up with better ones.
-	lastPathElementBytes, insertedKeyIsArray := keyPath.getLastPathElement()
-	_, modificationTargetIsArray := currentPath.getLastPathElement()
-	if modificationTargetIsArray && !insertedKeyIsArray {
+	keyLastPathElement := keyPath.getLastPathElement()
+	cursorLastPathElement := cursorPath.getLastPathElement()
+	if cursorLastPathElement.isArrayIndex && !keyLastPathElement.isArrayIndex {
 		return i, false, nil
 	}
 
@@ -164,12 +162,12 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 	// (For instance, attempting to insert into the document {"a": 1} at the path "$.b.c" should do nothing.)
 	// We can check this by comparing the insertion point with the provided key: if the user-supplied path ends in ".b.c",
 	// then the insertion point must be inside b (either be the initial location of b, or the start or end of one of b's children.)
-	switch currentPath.size() {
+	switch cursorPath.size() {
 	case keyPath.size() - 1:
 		// Attempting to treat a scalar or object like an array is unusual: inserting into index > 0 wraps the scalar or object
 		// in an array and appends to it.
-		if insertedKeyIsArray && !modificationTargetIsArray {
-			arrayIndex, _ := uvarint.Uvarint(lastPathElementBytes)
+		if keyLastPathElement.isArrayIndex && !cursorLastPathElement.isArrayIndex {
+			arrayIndex := keyLastPathElement.getArrayIndex()
 			if arrayIndex == 0 {
 				// Either the target path doesn't exist (and this is a no-op), or we're attempting to write to a
 				// location that already exists (and this is also a no-op)
@@ -203,7 +201,7 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 			return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
 
 		}
-		if currentPath.getScannerState() != arrayInitialElement && currentPath.getScannerState() != objectInitialElement {
+		if cursorPath.getScannerState() != arrayInitialElement && cursorPath.getScannerState() != objectInitialElement {
 			return i, false, nil
 		}
 	case keyPath.size():
@@ -215,7 +213,7 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 	// For example, attempting to insert into the path "$.a.b" in the document {"a": 1}
 	// We can detect this by checking to see if the insertion point in the original document comes before the inserted path.
 	// (For example, the insertion point occurs at $.a.START, which is before $.a.b)
-	if cmp < 0 && currentPath.getScannerState() == startOfValue {
+	if cmp < 0 && cursorPath.getScannerState() == startOfValue {
 		// We just attempted to insert into a scalar.
 		return i, false, nil
 	}

@@ -54,7 +54,10 @@ func SerializeJsonToAddr(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (
 		return Node{}, err
 	}
 	jsonChunker.appendJsonToBuffer(jsonBytes)
-	jsonChunker.processBuffer(ctx)
+	err = jsonChunker.processBuffer(ctx)
+	if err != nil {
+		return Node{}, err
+	}
 
 	node, err := jsonChunker.Done(ctx)
 	if err != nil {
@@ -112,15 +115,15 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, ns NodeStore) (*JsonC
 // writeKey adds a new key to end of the JsonChunker's buffer. If required, it also adds a comma before the key.
 // If the path points to an array, no key will be written, but the comma will still be written if required.
 func (j *JsonChunker) writeKey(keyPath jsonLocation) {
-	finalPathElement, isArray := keyPath.getLastPathElement()
+	finalPathElement := keyPath.getLastPathElement()
 
 	isFirstValue := j.jScanner.firstElementOrEndOfEmptyValue()
 
 	if !isFirstValue {
 		j.appendJsonWithoutSplitting([]byte{','})
 	}
-	if !isArray {
-		j.appendJsonWithoutSplitting([]byte(fmt.Sprintf(`"%s":`, finalPathElement)))
+	if !finalPathElement.isArrayIndex {
+		j.appendJsonWithoutSplitting([]byte(fmt.Sprintf(`"%s":`, finalPathElement.key)))
 	}
 }
 
@@ -147,13 +150,16 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	// Append the rest of the JsonCursor, then continue until we either exhaust the cursor, or we coincide with a boundary from the original tree.
 	for {
 		j.appendJsonToBuffer(jsonBytes)
-		j.processBuffer(ctx)
+		err := j.processBuffer(ctx)
+		if err != nil {
+			return Node{}, err
+		}
 		if j.jScanner.jsonBuffer == nil {
 			// Advance the cursor so that we don't re-insert the current key when finalizing the chunker.
 			j.jCur.cur.advance(ctx)
 			return j.chunker.Done(ctx)
 		}
-		err := cur.advance(ctx)
+		err = cur.advance(ctx)
 		if err != nil {
 			return Node{}, err
 		}
@@ -207,22 +213,20 @@ func (j *JsonChunker) appendJsonToBuffer(jsonBytes []byte) {
 // processBuffer reads all new additions added by appendJsonToBuffer, and determines any new chunk boundaries.
 // Do not call this method directly. It should only get called from within this file.
 func (j *JsonChunker) processBuffer(ctx context.Context) error {
+	startOffset := 0
 	for j.jScanner.AdvanceToNextLocation() != io.EOF {
 		key := j.jScanner.currentPath.key
-		value := j.jScanner.jsonBuffer[:j.jScanner.valueOffset]
+		value := j.jScanner.jsonBuffer[startOffset:j.jScanner.valueOffset]
 		if crossesBoundary(key, value) {
 			err := j.createNewLeafChunk(ctx, key, value)
 			if err != nil {
 				return err
 			}
-			var newBuffer []byte
-			if !j.jScanner.atEndOfChunk() {
-				newBuffer = j.jScanner.jsonBuffer[j.jScanner.valueOffset:]
-			}
-			newScanner := ScanJsonFromMiddle(newBuffer, j.jScanner.currentPath)
-			j.jScanner = &newScanner
+			startOffset = j.jScanner.valueOffset
 		}
 	}
+	newScanner := ScanJsonFromMiddle(j.jScanner.jsonBuffer[startOffset:], j.jScanner.currentPath)
+	j.jScanner = &newScanner
 	return nil
 }
 
