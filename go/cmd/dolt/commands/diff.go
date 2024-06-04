@@ -185,10 +185,12 @@ func (cmd DiffCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, diffDocs)
+	if terminate {
+		return status
+	}
 
 	verr := cmd.validateArgs(apr)
 	if verr != nil {
