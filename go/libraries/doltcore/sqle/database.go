@@ -683,7 +683,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	} else if !tblExists {
 		return nil, false, nil
 	}
-	
+
 	tableName = tblName.Name
 	// for remainder of this operation, all db operations will use the name resolved here
 	db.schemaName = tblName.Schema
@@ -717,14 +717,14 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	return table, true, nil
 }
 
-// resolveUserTable returns the table with the given name from the root given. The table name is resolved in a 
-// case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if 
+// resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
+// case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
 	var tbl *doltdb.Table
 	var tblName doltdb.TableName
 	var tblExists bool
-	
+
 	// TODO: dolt_schemas needs work to be compatible with multiple schemas
 	if resolve.UseSearchPath && db.schemaName == "" && !doltdb.HasDoltPrefix(tableName) {
 		var err error
@@ -743,9 +743,9 @@ func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tab
 	return tblName, tbl, tblExists, nil
 }
 
-// tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists. 
-// Name matching is applied in a case-insensitive manner, and the table's case-corrected name is returned as the 
-// first result.  
+// tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists.
+// Name matching is applied in a case-insensitive manner, and the table's case-corrected name is returned as the
+// first result.
 func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
 	tableNames, err := db.getAllTableNames(ctx, root)
 	if err != nil {
@@ -925,11 +925,11 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	} else if !tblExists {
 		return sql.ErrTableNotFound.New(tableName)
 	}
-	
+
 	tableName = tblName.Name
 	// for remainder of this operation, all db operations will use the name resolved here
 	db.schemaName = tblName.Schema
-	
+
 	newRoot, err := root.RemoveTables(ctx, true, false, tblName)
 	if err != nil {
 		return err
