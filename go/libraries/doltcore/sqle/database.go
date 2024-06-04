@@ -1275,8 +1275,29 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 
 // AllSchemas implements sql.SchemaDatabase
 func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
-	db.schemaName = "public"
-	return []sql.DatabaseSchema{db}, nil
+	if !resolve.UseSearchPath {
+		return []sql.DatabaseSchema{db}, nil
+	}
+
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	root := ws.WorkingRoot()
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dbSchemas := make([]sql.DatabaseSchema, len(schemas))
+	for i, schema := range schemas {
+		sdb := db
+		sdb.schemaName = schema.Name
+		dbSchemas[i] = sdb
+	}
+
+	return dbSchemas, nil
 }
 
 // RenameTable implements sql.TableRenamer
