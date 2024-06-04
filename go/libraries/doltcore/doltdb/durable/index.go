@@ -487,7 +487,7 @@ func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
 }
 
 func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
-	addr, err := is.am.Get(ctx, name)
+	addr, err := is.am.Get(ctx, strings.ToLower(name))
 	if err != nil {
 		return false, err
 	}
@@ -498,7 +498,7 @@ func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, erro
 }
 
 func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
-	addr, err := is.am.Get(ctx, name)
+	addr, err := is.am.Get(ctx, strings.ToLower(name))
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +522,7 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 	}
 
 	ae := is.am.Editor()
-	err = ae.Update(ctx, name, ref.TargetHash())
+	err = ae.Update(ctx, strings.ToLower(name), ref.TargetHash())
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +540,7 @@ func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx typ
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	ae := is.am.Editor()
-	err := ae.Delete(ctx, name)
+	err := ae.Delete(ctx, strings.ToLower(name))
 	if err != nil {
 		return nil, err
 	}
@@ -552,14 +552,17 @@ func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet,
 }
 
 func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
-	addr, err := is.am.Get(ctx, oldName)
+	lowerCaseOldName := strings.ToLower(oldName)
+	lowerCaseNewName := strings.ToLower(newName)
+
+	addr, err := is.am.Get(ctx, lowerCaseOldName)
 	if err != nil {
 		return nil, err
 	}
 	if addr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", oldName)
 	}
-	newaddr, err := is.am.Get(ctx, newName)
+	newaddr, err := is.am.Get(ctx, lowerCaseNewName)
 	if err != nil {
 		return nil, err
 	}
@@ -568,11 +571,11 @@ func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName stri
 	}
 
 	ae := is.am.Editor()
-	err = ae.Update(ctx, newName, addr)
+	err = ae.Update(ctx, lowerCaseNewName, addr)
 	if err != nil {
 		return nil, err
 	}
-	err = ae.Delete(ctx, oldName)
+	err = ae.Delete(ctx, lowerCaseOldName)
 	if err != nil {
 		return nil, err
 	}
