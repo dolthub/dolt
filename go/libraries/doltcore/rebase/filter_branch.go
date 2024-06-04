@@ -61,97 +61,48 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 	}
 }
 
-type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot doltdb.RootValue) (rebaseRoot doltdb.RootValue, err error)
+// RootReplayer is something that takes a root value and rebases it with changes.
+type RootReplayer interface {
+	ReplayRoot(ctx context.Context, root, parentRoot, rebasedParentRoot doltdb.RootValue) (rebaseRoot doltdb.RootValue, err error)
+}
 
-type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
-
-func validBranchRefs(ctx context.Context, ddb *doltdb.DoltDB, refs ...ref.DoltRef) error {
-	for _, r := range refs {
-		headComm, err := ddb.ResolveCommitRef(ctx, r)
-		if err != nil {
-			return err
-		}
-		hRootVal, err := headComm.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
-		hHash, err := hRootVal.HashOf()
-		if err != nil {
-			return err
-		}
-		wsRef, err := ref.WorkingSetRefForHead(r)
-		if err != nil {
-			return err
-		}
-		ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
-		if err != nil {
-			return err
-		}
-		wHash, err := ws.WorkingRoot().HashOf()
-		if err != nil {
-			return err
-		}
-		sHash, err := ws.StagedRoot().HashOf()
-		if err != nil {
-			return err
-		}
-		if !hHash.Equal(wHash) || !hHash.Equal(sHash) {
-			return fmt.Errorf("local changes detected on branch %s, use dolt stash or commit changes before using filter-branch", r.String())
-		}
-	}
-	return nil
+// CommitReplayer is something that takes a commit and rebases it with changes.
+type CommitReplayer interface {
+	ReplayCommit(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot doltdb.RootValue, err error)
 }
 
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
-func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
-	if err != nil {
-		return err
-	}
-
 	tags, err := dEnv.DoltDB.GetTags(ctx)
 	if err != nil {
 		return err
 	}
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, append(branches, tags...)...)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, append(branches, tags...)...)
 }
 
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
-func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func AllBranches(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, branches...)
-	if err != nil {
-		return err
-	}
-
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, branches...)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, branches...)
 }
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
-func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		return nil
 	}
-
-	err = validBranchRefs(ctx, dEnv.DbData().Ddb, headRef)
-	if err != nil {
-		return err
-	}
-
-	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
+	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, headRef)
 }
 
-func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
+func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dbData.Ddb
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
@@ -162,7 +113,66 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		}
 	}
 
-	newHeads, err := rebase(ctx, ddb, replay, nerf, heads...)
+	newWorkingSets := make([]*doltdb.WorkingSet, len(refs))
+	for i, dRef := range refs {
+		switch dRef.(type) {
+		case ref.BranchRef:
+			hRootVal, err := heads[i].GetRootValue(ctx)
+			if err != nil {
+				return err
+			}
+			hHash, err := hRootVal.HashOf()
+			if err != nil {
+				return err
+			}
+
+			wsRef, err := ref.WorkingSetRefForHead(dRef)
+			if err != nil {
+				return err
+			}
+			ws, err := ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+			wHash, err := ws.WorkingRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			sHash, err := ws.StagedRoot().HashOf()
+			if err != nil {
+				return err
+			}
+			if !applyUncommitted && (!hHash.Equal(wHash) || !hHash.Equal(sHash)) {
+				return fmt.Errorf("local changes detected on branch %s, clear uncommitted changes (dolt stash dolt commit) before using filter-branch, or use --apply-to-uncommitted", dRef.String())
+			}
+
+			if !hHash.Equal(wHash) {
+				var newWRoot doltdb.RootValue
+				newWRoot, err = rootReplayer.ReplayRoot(ctx, ws.WorkingRoot(), nil, nil)
+				if err != nil {
+					return err
+				}
+				ws = ws.WithWorkingRoot(newWRoot)
+			} else {
+				ws = ws.WithWorkingRoot(nil)
+			}
+			if !hHash.Equal(sHash) {
+				var newSRoot doltdb.RootValue
+				newSRoot, err = rootReplayer.ReplayRoot(ctx, ws.StagedRoot(), nil, nil)
+				if err != nil {
+					return err
+				}
+				ws = ws.WithStagedRoot(newSRoot)
+			} else {
+				ws = ws.WithStagedRoot(nil)
+			}
+			newWorkingSets[i] = ws
+		default:
+			newWorkingSets[i] = nil
+		}
+	}
+
+	newHeads, err := rebase(ctx, ddb, commitReplayer, nerf, heads...)
 	if err != nil {
 		return err
 	}
@@ -170,7 +180,43 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	for i, r := range refs {
 		switch dRef := r.(type) {
 		case ref.BranchRef:
-			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i], nil)
+			newHead := newHeads[i]
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHead, nil)
+			if err != nil {
+				return err
+			}
+
+			newWorkingSet := newWorkingSets[i]
+			if newWorkingSet == nil {
+				continue
+			}
+
+			var wsRef ref.WorkingSetRef
+			wsRef, err = ref.WorkingSetRefForHead(dRef)
+			if err != nil {
+				return err
+			}
+
+			var ws *doltdb.WorkingSet
+			ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
+			if err != nil {
+				return err
+			}
+
+			if newWorkingSet.WorkingRoot() != nil {
+				ws = ws.WithWorkingRoot(newWorkingSet.WorkingRoot())
+			}
+			if newWorkingSet.StagedRoot() != nil {
+				ws = ws.WithStagedRoot(newWorkingSet.StagedRoot())
+			}
+
+			var currWsHash hash.Hash
+			currWsHash, err = ws.HashOf()
+			if err != nil {
+				return err
+			}
+
+			err = ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, ws.Meta(), nil)
 		case ref.TagRef:
 			// rewrite tag with new commit
 			var tag *doltdb.Tag
@@ -181,7 +227,6 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 				return err
 			}
 			err = ddb.NewTagAtCommit(ctx, dRef, newHeads[i], tag.Meta)
-
 		default:
 			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
 		}
@@ -192,11 +237,11 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 	return nil
 }
 
-func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
+func rebase(ctx context.Context, ddb *doltdb.DoltDB, commitReplayer CommitReplayer, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	var rebasedCommits []*doltdb.Commit
 	vs := make(visitedSet)
 	for _, cm := range origins {
-		rc, err := rebaseRecursive(ctx, ddb, replay, nerf, vs, cm)
+		rc, err := rebaseRecursive(ctx, ddb, commitReplayer, nerf, vs, cm)
 
 		if err != nil {
 			return nil, err
@@ -208,7 +253,7 @@ func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf
 	return rebasedCommits, nil
 }
 
-func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
+func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commitReplayer CommitReplayer, nerf NeedsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
 	commitHash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -249,7 +294,7 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 
 	var allRebasedParents []*doltdb.Commit
 	for _, p := range allParents {
-		rp, err := rebaseRecursive(ctx, ddb, replay, nerf, vs, p)
+		rp, err := rebaseRecursive(ctx, ddb, commitReplayer, nerf, vs, p)
 
 		if err != nil {
 			return nil, err
@@ -258,7 +303,7 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		allRebasedParents = append(allRebasedParents, rp)
 	}
 
-	rebasedRoot, err := replay(ctx, commit, allParents[0], allRebasedParents[0])
+	rebasedRoot, err := commitReplayer.ReplayCommit(ctx, commit, allParents[0], allRebasedParents[0])
 	if err != nil {
 		return nil, err
 	}
