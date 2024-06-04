@@ -151,7 +151,7 @@ func (s *JsonScanner) acceptValue() error {
 	for {
 		current = s.current()
 		switch s.current() {
-		case '}', ']', ',', 255:
+		case '}', ']', ',', endOfFile:
 			s.currentPath.setScannerState(endOfValue)
 			return nil
 		default:
