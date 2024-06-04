@@ -444,16 +444,19 @@ func (ixc *indexCollectionImpl) RemoveIndex(indexName string) (Index, error) {
 }
 
 func (ixc *indexCollectionImpl) RenameIndex(oldName, newName string) (Index, error) {
-	if !ixc.Contains(oldName) {
+	lowerCaseOldName := strings.ToLower(oldName)
+	lowerCaseNewName := strings.ToLower(newName)
+
+	if !ixc.Contains(lowerCaseOldName) {
 		return nil, fmt.Errorf("`%s` does not exist as an index for this table", oldName)
 	}
-	if ixc.Contains(newName) {
+	if ixc.Contains(lowerCaseNewName) {
 		return nil, fmt.Errorf("`%s` already exists as an index for this table", newName)
 	}
-	index := ixc.indexes[oldName]
-	delete(ixc.indexes, oldName)
+	index := ixc.indexes[lowerCaseOldName]
+	delete(ixc.indexes, lowerCaseOldName)
 	index.name = newName
-	ixc.indexes[newName] = index
+	ixc.indexes[lowerCaseNewName] = index
 	return index, nil
 }
 
