@@ -23,7 +23,7 @@ const (
 	maxHeight  = 9
 	maxCount   = math.MaxInt32 - 1
 	sentinelId = nodeId(0)
-	initSize   = 8
+	initSize   = 2
 )
 
 // A KeyOrder determines the ordering of two keys |l| and |r|.
