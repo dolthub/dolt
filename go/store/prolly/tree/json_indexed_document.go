@@ -218,6 +218,11 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 		return i, false, nil
 	}
 
+	insertedValueBytes, err := types.MarshallJson(val)
+	if err != nil {
+		return nil, false, err
+	}
+
 	// The key is guaranteed to not exist in the source doc. The cursor is pointing to the start of the subsequent object,
 	// which will be the insertion point for the added value.
 	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
@@ -225,13 +230,18 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 		return nil, false, err
 	}
 
-	jsonChunker.writeKey(keyPath)
-
-	insertedValueBytes, err := types.MarshallJson(val)
-	if err != nil {
-		return nil, false, err
+	// If required, adds a comma before writing the value.
+	if !jsonChunker.jScanner.firstElementOrEndOfEmptyValue() {
+		jsonChunker.appendJsonToBuffer([]byte{','})
 	}
 
+	// If the value is a newly inserted key, write the key.
+	if !keyLastPathElement.isArrayIndex {
+		jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf(`"%s":`, keyLastPathElement.key)))
+	}
+
+	// Manually set the chunker's path and offset to the start of the value we're about to insert.
+	jsonChunker.jScanner.valueOffset = len(jsonChunker.jScanner.jsonBuffer)
 	jsonChunker.jScanner.currentPath = keyPath
 	jsonChunker.appendJsonToBuffer(insertedValueBytes)
 	jsonChunker.processBuffer(ctx)

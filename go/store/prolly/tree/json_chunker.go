@@ -17,7 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -112,21 +111,6 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, ns NodeStore) (*JsonC
 	return &jChunker, nil
 }
 
-// writeKey adds a new key to end of the JsonChunker's buffer. If required, it also adds a comma before the key.
-// If the path points to an array, no key will be written, but the comma will still be written if required.
-func (j *JsonChunker) writeKey(keyPath jsonLocation) {
-	finalPathElement := keyPath.getLastPathElement()
-
-	isFirstValue := j.jScanner.firstElementOrEndOfEmptyValue()
-
-	if !isFirstValue {
-		j.appendJsonWithoutSplitting([]byte{','})
-	}
-	if !finalPathElement.isArrayIndex {
-		j.appendJsonWithoutSplitting([]byte(fmt.Sprintf(`"%s":`, finalPathElement.key)))
-	}
-}
-
 func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	var endOfDocumentKey = []byte{byte(endOfValue)}
 
@@ -190,14 +174,6 @@ func (j *JsonChunker) createNewLeafChunk(ctx context.Context, key, value []byte)
 	}
 	// Copy the key when adding it to the chunker.
 	return j.chunker.AddPair(ctx, bytes.Clone(key), addr[:])
-}
-
-// appendJsonWithoutSplitting writes JSON to the buffer, but prevents the new JSON from later being scanned for chunk boundaries.
-// This is useful in situations where we know that crossing a boundary is not possible and know what the resulting scanner state will be.
-// Do not call this method directly. It should only get called from within this file.
-func (j *JsonChunker) appendJsonWithoutSplitting(jsonBytes []byte) {
-	j.appendJsonToBuffer(jsonBytes)
-	j.jScanner.skipBytes(len(jsonBytes))
 }
 
 // appendJsonToBuffer writes JSON to the buffer, which will be checked for chunk boundaries the next time processBuffer is called.
