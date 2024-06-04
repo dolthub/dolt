@@ -100,14 +100,11 @@ func (cmd StatusCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_STATUS
 }
 
-// Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
-	// parse arguments
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
-	apr, err := cli.ParseArgs(ap, args, help)
-	if err != nil {
-		return handleStatusVErr(err)
+	apr, _, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, statusDocs)
+	if terminate {
+		return status
 	}
 
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
@@ -660,7 +657,9 @@ and have %v and %v different commits each, respectively.
 }
 
 func handleStatusVErr(err error) int {
-	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	if err != argparser.ErrHelp {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	}
 	return 1
 }
 

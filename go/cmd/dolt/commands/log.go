@@ -99,10 +99,9 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, logDocs, ap))
-	apr, err := cli.ParseArgs(ap, args, help)
-	if err != nil {
-		return handleErrAndExit(err)
+	apr, _, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, logDocs)
+	if terminate {
+		return status
 	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)

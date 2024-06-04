@@ -86,15 +86,14 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCheckoutArgParser()
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkoutDocs, ap))
-	apr, err := cli.ParseArgs(ap, args, helpPrt)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, checkoutDocs)
+	if terminate {
+		return status
 	}
 
 	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if closeFunc != nil {
 		defer closeFunc()
@@ -113,7 +112,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// won't be as nice.
 	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.CreateResetBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
-		usagePrt()
+		usage()
 		return 1
 	}
 
@@ -125,7 +124,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		branchName, _ = apr.GetValue(cli.CreateResetBranch)
 	} else if apr.Contains(cli.TrackFlag) {
 		if apr.NArg() > 0 {
-			usagePrt()
+			usage()
 			return 1
 		}
 		remoteAndBranchName, _ := apr.GetValue(cli.TrackFlag)
@@ -136,7 +135,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	sqlQuery, err := generateCheckoutSql(args)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
@@ -155,20 +154,20 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 				return 0
 			}
 		}
-		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
+		return HandleVErrAndExitCode(handleErrors(branchName, err), usage)
 	}
 
 	if len(rows) != 1 {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usagePrt)
+		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usage)
 	}
 
 	if len(rows[0]) < 2 {
-		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usagePrt)
+		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usage)
 	}
 
 	var message string
 	if message, ok = rows[0][1].(string); !ok {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
+		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usage)
 	}
 
 	if message != "" {
