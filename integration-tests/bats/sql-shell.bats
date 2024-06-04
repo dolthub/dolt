@@ -70,6 +70,9 @@ teardown() {
 # bats test_tags=no_lambda
 @test "sql-shell: sql shell executes slash commands" {
     skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Current test setup results in remote calls having a clean branch, where this expect script expects dirty."
+    fi
     run $BATS_TEST_DIRNAME/sql-shell-slash-cmds.expect
     echo "$output"
 
