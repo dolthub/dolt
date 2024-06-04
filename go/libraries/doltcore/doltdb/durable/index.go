@@ -486,25 +486,20 @@ func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
 	return is.am.HashOf(), nil
 }
 
-func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
-	addr, err := is.am.Get(ctx, strings.ToLower(name))
-	if err != nil {
-		return false, err
-	}
-	if addr.IsEmpty() {
-		return false, nil
-	}
-	return true, nil
+func (is doltDevIndexSet) HasIndex(ctx context.Context, targetName string) (bool, error) {
+	addr, _, err := is.searchForCaseInsensitiveIndexName(ctx, targetName)
+	return addr != nil, err
 }
 
 func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
-	addr, err := is.am.Get(ctx, strings.ToLower(name))
+	foundAddr, _, err := is.searchForCaseInsensitiveIndexName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	if addr.IsEmpty() {
+	if foundAddr == nil {
 		return nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
+
 	idx := tableSch.Indexes().GetByName(name)
 	if idx == nil {
 		return nil, fmt.Errorf("index schema not found: %s", name)
@@ -512,7 +507,7 @@ func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, 
 	if idxSch == nil {
 		idxSch = idx.Schema()
 	}
-	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, addr)
+	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, *foundAddr)
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
@@ -522,7 +517,7 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 	}
 
 	ae := is.am.Editor()
-	err = ae.Update(ctx, strings.ToLower(name), ref.TargetHash())
+	err = ae.Update(ctx, name, ref.TargetHash())
 	if err != nil {
 		return nil, err
 	}
@@ -539,8 +534,16 @@ func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx typ
 }
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
+	foundAddr, foundName, err := is.searchForCaseInsensitiveIndexName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if foundAddr == nil {
+		return nil, fmt.Errorf("index %s not found in IndexSet", name)
+	}
+
 	ae := is.am.Editor()
-	err := ae.Delete(ctx, strings.ToLower(name))
+	err = ae.Delete(ctx, foundName)
 	if err != nil {
 		return nil, err
 	}
@@ -552,30 +555,28 @@ func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet,
 }
 
 func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
-	lowerCaseOldName := strings.ToLower(oldName)
-	lowerCaseNewName := strings.ToLower(newName)
-
-	addr, err := is.am.Get(ctx, lowerCaseOldName)
+	foundOldAddr, foundOldName, err := is.searchForCaseInsensitiveIndexName(ctx, oldName)
 	if err != nil {
 		return nil, err
 	}
-	if addr.IsEmpty() {
+	if foundOldAddr == nil {
 		return nil, fmt.Errorf("index %s not found in IndexSet", oldName)
 	}
-	newaddr, err := is.am.Get(ctx, lowerCaseNewName)
+
+	foundNewIndex, err := is.HasIndex(ctx, newName)
 	if err != nil {
 		return nil, err
 	}
-	if !newaddr.IsEmpty() {
+	if foundNewIndex {
 		return nil, fmt.Errorf("index %s found in IndexSet when attempting to rename index", newName)
 	}
 
 	ae := is.am.Editor()
-	err = ae.Update(ctx, lowerCaseNewName, addr)
+	err = ae.Update(ctx, newName, *foundOldAddr)
 	if err != nil {
 		return nil, err
 	}
-	err = ae.Delete(ctx, lowerCaseOldName)
+	err = ae.Delete(ctx, foundOldName)
 	if err != nil {
 		return nil, err
 	}
@@ -586,4 +587,23 @@ func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName stri
 	}
 
 	return doltDevIndexSet{is.vrw, is.ns, am}, nil
+}
+
+// searchForCaseInsensitiveIndexName searches through the index names in this index set looking for a case-insensitive
+// match against |targetName|. If found, the address is returned, along with the exact case name. If no match was
+// found, a nil address is returned, along with an empty string.
+func (is doltDevIndexSet) searchForCaseInsensitiveIndexName(ctx context.Context, targetName string) (foundAddr *hash.Hash, foundName string, err error) {
+	// Indexes are stored with their original case name, so we have to iterate over the index names and
+	// do a case-insensitive match to find a matching index
+	err = is.am.IterAll(ctx, func(name string, address hash.Hash) error {
+		if strings.EqualFold(name, targetName) {
+			foundAddr = &address
+			foundName = name
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return foundAddr, foundName, nil
 }
