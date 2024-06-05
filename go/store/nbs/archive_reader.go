@@ -24,6 +24,7 @@ import (
 	"math/bits"
 
 	"github.com/dolthub/gozstd"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -36,6 +37,7 @@ type archiveReader struct {
 	chunkRefs []chunkRef
 	suffixes  []suffix
 	footer    footer
+	dictCache *lru.TwoQueueCache[uint32, *gozstd.DDict]
 }
 
 type chunkRef struct {
@@ -178,6 +180,11 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		}
 	}
 
+	dictCache, err := lru.New2Q[uint32, *gozstd.DDict](256)
+	if err != nil {
+		return archiveReader{}, err
+	}
+
 	return archiveReader{
 		reader:    reader,
 		prefixes:  prefixes,
@@ -185,6 +192,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 		chunkRefs: chunks,
 		suffixes:  suffixes,
 		footer:    footer,
+		dictCache: dictCache,
 	}, nil
 }
 
@@ -260,16 +268,7 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	if dict == nil {
 		result, err = gozstd.Decompress(nil, data)
 	} else {
-		dcmpDict, e2 := gozstd.Decompress(nil, dict)
-		if e2 != nil {
-			return nil, e2
-		}
-
-		dDict, e2 := gozstd.NewDDict(dcmpDict)
-		if e2 != nil {
-			return nil, e2
-		}
-		result, err = gozstd.DecompressDict(nil, data, dDict)
+		result, err = gozstd.DecompressDict(nil, data, dict)
 	}
 	if err != nil {
 		return nil, err
@@ -301,7 +300,7 @@ func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 // no error is returned in this case. Errors will only be returned if there is an io error.
 //
 // The data returned is still compressed, regardless of the dictionary being present or not.
-func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
+func (ai archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte, err error) {
 	idx := ai.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
@@ -309,10 +308,26 @@ func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 
 	chunkRef := ai.chunkRefs[idx]
 	if chunkRef.dict != 0 {
-		byteSpan := ai.byteSpans[chunkRef.dict]
-		dict, err = ai.readByteSpan(byteSpan)
-		if err != nil {
-			return nil, nil, err
+		if cached, cacheHit := ai.dictCache.Get(chunkRef.dict); cacheHit {
+			dict = cached
+		} else {
+			byteSpan := ai.byteSpans[chunkRef.dict]
+			dictBytes, err := ai.readByteSpan(byteSpan)
+			if err != nil {
+				return nil, nil, err
+			}
+			// Dictionaries are compressed with no dictionary.
+			dcmpDict, e2 := gozstd.Decompress(nil, dictBytes)
+			if e2 != nil {
+				return nil, nil, e2
+			}
+
+			dict, e2 = gozstd.NewDDict(dcmpDict)
+			if e2 != nil {
+				return nil, nil, e2
+			}
+
+			ai.dictCache.Add(chunkRef.dict, dict)
 		}
 	}
 
