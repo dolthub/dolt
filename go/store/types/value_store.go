@@ -343,6 +343,8 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 		return Ref{}, err
 	}
 
+	lvs.decodedChunks.Add(c.Hash(), uint64(c.Size()), v)
+
 	return r, nil
 }
 
