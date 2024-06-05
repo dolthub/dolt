@@ -86,8 +86,16 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		if err != nil {
 			return "", false, fmt.Errorf(err.Error())
 		}
+		roots, err = actions.StageDatabase(ctx, roots)
+		if err != nil {
+			return "", false, fmt.Errorf(err.Error())
+		}
 	} else if apr.Contains(cli.AllFlag) {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
+		if err != nil {
+			return "", false, fmt.Errorf(err.Error())
+		}
+		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {
 			return "", false, fmt.Errorf(err.Error())
 		}

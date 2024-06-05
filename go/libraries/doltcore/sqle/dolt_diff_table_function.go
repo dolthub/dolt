@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -190,16 +191,17 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 
 // findMatchingDelta returns the best matching table delta for the table name
 // given, taking renames into account
+// TODO: schema name
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
-		if strings.ToLower(d.ToName) == tableName {
+		if strings.ToLower(d.ToName.Name) == tableName {
 			return d
 		}
 	}
 
 	for _, d := range deltas {
-		if strings.ToLower(d.FromName) == tableName {
+		if strings.ToLower(d.FromName.Name) == tableName {
 			return d
 		}
 	}
@@ -209,7 +211,7 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 }
 
 type refDetails struct {
-	root       *doltdb.RootValue
+	root       doltdb.RootValue
 	hashStr    string
 	commitTime *types.Timestamp
 }
@@ -484,12 +486,12 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		return diff.TableDelta{}, err
 	}
 
-	fromTable, _, fromTableExists, err := fromRefDetails.root.GetTableInsensitive(ctx, tableName)
+	fromTableName, fromTable, fromTableExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 
-	toTable, _, toTableExists, err := toRefDetails.root.GetTableInsensitive(ctx, tableName)
+	toTableName, toTable, toTableExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
@@ -510,9 +512,10 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	delta := findMatchingDelta(deltas, tableName)
 
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
+	// TODO: schema name
 	if delta.FromTable == nil && delta.ToTable == nil {
-		delta.FromName = tableName
-		delta.ToName = tableName
+		delta.FromName = fromTableName
+		delta.ToName = toTableName
 		delta.FromTable = fromTable
 		delta.ToTable = toTable
 

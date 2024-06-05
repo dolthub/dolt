@@ -15,6 +15,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,22 +23,16 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )
 
-type JwksConfig struct {
-	Name        string            `yaml:"name"`
-	LocationUrl string            `yaml:"location_url"`
-	Claims      map[string]string `yaml:"claims"`
-	FieldsToLog []string          `yaml:"fields_to_log"`
-}
-
 // authenticateDoltJWTPlugin is used to authenticate plaintext user plugins
 type authenticateDoltJWTPlugin struct {
-	jwksConfig []JwksConfig
+	jwksConfig []servercfg.JwksConfig
 }
 
-func NewAuthenticateDoltJWTPlugin(jwksConfig []JwksConfig) mysql_db.PlaintextAuthPlugin {
+func NewAuthenticateDoltJWTPlugin(jwksConfig []servercfg.JwksConfig) mysql_db.PlaintextAuthPlugin {
 	return &authenticateDoltJWTPlugin{jwksConfig: jwksConfig}
 }
 
@@ -45,15 +40,15 @@ func (p *authenticateDoltJWTPlugin) Authenticate(db *mysql_db.MySQLDb, user stri
 	return validateJWT(p.jwksConfig, user, userEntry.Identity, pass, time.Now())
 }
 
-func validateJWT(config []JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
+func validateJWT(config []servercfg.JwksConfig, username, identity, token string, reqTime time.Time) (bool, error) {
 	if len(config) == 0 {
-		return false, fmt.Errorf("ValidateJWT: JWKS server config not found")
+		return false, errors.New("ValidateJWT: JWKS server config not found")
 	}
 
 	expectedClaimsMap := parseUserIdentity(identity)
 	sub, ok := expectedClaimsMap["sub"]
 	if ok && sub != username {
-		return false, fmt.Errorf("ValidateJWT: Subjects do not match")
+		return false, errors.New("ValidateJWT: Subjects do not match")
 	}
 
 	jwksConfig, err := getMatchingJwksConfig(config, expectedClaimsMap["jwks"])
@@ -95,7 +90,7 @@ func getJWTProvider(expectedClaimsMap map[string]string, url string) (jwtauth.JW
 		case "jwks":
 			continue
 		default:
-			return pr, fmt.Errorf("ValidateJWT: Unexpected expected claim found in user identity")
+			return pr, errors.New("ValidateJWT: Unexpected expected claim found in user identity")
 		}
 	}
 	return pr, nil
@@ -115,13 +110,13 @@ func getClaimFromKey(claims *jwtauth.Claims, field string) string {
 	return ""
 }
 
-func getMatchingJwksConfig(config []JwksConfig, name string) (*JwksConfig, error) {
+func getMatchingJwksConfig(config []servercfg.JwksConfig, name string) (*servercfg.JwksConfig, error) {
 	for _, item := range config {
 		if item.Name == name {
 			return &item, nil
 		}
 	}
-	return nil, fmt.Errorf("ValidateJWT: Matching JWKS config not found")
+	return nil, errors.New("ValidateJWT: Matching JWKS config not found")
 }
 
 func parseUserIdentity(identity string) map[string]string {

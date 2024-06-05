@@ -76,7 +76,7 @@ func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 		})
 	}
 
-	cb := func(n string, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	cb := func(n doltdb.TableName, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		if sch == nil {
 			return true, fmt.Errorf("expected non-nil schema: %v", sch)
 		}
@@ -108,7 +108,7 @@ func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 // validateSecondaryIndexes checks that secondary index contents are consistent
 // with primary index contents.
 func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
-	cb := func(n string, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	cb := func(n doltdb.TableName, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		rows, err := t.GetRowData(ctx)
 		if err != nil {
 			return false, err
@@ -120,7 +120,7 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 			if err != nil {
 				return true, err
 			}
-			idx, err := set.GetIndex(ctx, sch, def.Name())
+			idx, err := set.GetIndex(ctx, sch, nil, def.Name())
 			if err != nil {
 				return true, err
 			}
@@ -153,13 +153,14 @@ func validateIndexConsistency(
 // index consistency issues.
 func printIndexContents(ctx context.Context, prollyMap prolly.Map) {
 	fmt.Printf("Secondary index contents:\n")
+	kd := prollyMap.KeyDesc()
 	iterAll, _ := prollyMap.IterAll(ctx)
 	for {
 		k, _, err := iterAll.Next(ctx)
 		if err == io.EOF {
 			break
 		}
-		fmt.Printf("  - k: %v \n", k)
+		fmt.Printf("  - k: %v \n", kd.Format(k))
 	}
 }
 
@@ -483,7 +484,7 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 func iterDatabaseTables(
 	ctx context.Context,
 	db sqle.Database,
-	cb func(name string, t *doltdb.Table, sch schema.Schema) (bool, error),
+	cb func(name doltdb.TableName, t *doltdb.Table, sch schema.Schema) (bool, error),
 ) error {
 	ddb := db.GetDoltDB()
 	branches, err := ddb.GetBranches(ctx)

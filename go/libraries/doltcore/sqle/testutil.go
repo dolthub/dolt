@@ -33,8 +33,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -43,7 +44,7 @@ import (
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
-func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
+func ExecuteSql(dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (doltdb.RootValue, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 }
 
 func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config2.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro)
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession)
 	if err != nil {
 		panic(err)
 	}
@@ -139,7 +140,7 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
-func ExecuteSelect(dEnv *env.DoltEnv, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+func ExecuteSelect(dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.Row, error) {
 	dbData := env.DbData{
 		Ddb: dEnv.DoltDB,
 		Rsw: dEnv.RepoStateWriter(),
@@ -400,8 +401,8 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		config2.UserNameKey:  name,
-		config2.UserEmailKey: email,
+		config.UserNameKey:  name,
+		config.UserEmailKey: email,
 	})
 
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
@@ -439,7 +440,7 @@ func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, tableName, tbl)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	if err != nil {
 		return err
 	}

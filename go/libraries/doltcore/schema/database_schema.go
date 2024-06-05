@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cluster
+package schema
 
-type Config interface {
-	StandbyRemotes() []StandbyRemoteConfig
-	BootstrapRole() string
-	BootstrapEpoch() int
-	RemotesAPIConfig() RemotesAPIConfig
-}
-
-type RemotesAPIConfig interface {
-	Address() string
-	Port() int
-	TLSKey() string
-	TLSCert() string
-	TLSCA() string
-	ServerNameURLMatches() []string
-	ServerNameDNSMatches() []string
-}
-
-type StandbyRemoteConfig interface {
-	Name() string
-	RemoteURLTemplate() string
+type DatabaseSchema struct {
+	Name string
 }

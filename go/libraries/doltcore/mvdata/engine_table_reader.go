@@ -66,7 +66,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	ret, err := planbuilder.Parse(sqlCtx, se.GetUnderlyingEngine().Analyzer.Catalog, fmt.Sprintf("show create table `%s`", tableName))
+	sqlEngine := se.GetUnderlyingEngine()
+	binder := planbuilder.New(sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+	ret, _, _, err := binder.Parse(fmt.Sprintf("show create table `%s`", tableName), false)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +103,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 }
 
 // Used by Dolthub API
-func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db dsqle.Database, root *doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
+func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db dsqle.Database, root doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err

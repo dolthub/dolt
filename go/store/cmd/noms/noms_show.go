@@ -149,6 +149,8 @@ func typeString(value types.Value) string {
 			typeString = "Commit"
 		case serial.RootValueFileID:
 			typeString = "RootValue"
+		case serial.DoltgresRootValueFileID:
+			typeString = "DoltgresRootValue"
 		case serial.TableFileID:
 			typeString = "Table"
 		case serial.ProllyTreeNodeFileID:

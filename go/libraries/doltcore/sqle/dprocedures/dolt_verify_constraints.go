@@ -64,7 +64,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 	verifyAll := apr.Contains(cli.AllFlag)
 	outputOnly := apr.Contains(cli.OutputOnlyFlag)
 
-	var comparingRoot *doltdb.RootValue
+	var comparingRoot doltdb.RootValue
 	if verifyAll {
 		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW(), workingRoot.NodeStore())
 		if err != nil {
@@ -89,7 +89,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if !outputOnly {
-		err = dSess.SetRoot(ctx, dbName, newRoot)
+		err = dSess.SetWorkingRoot(ctx, dbName, newRoot)
 		if err != nil {
 			return 1, err
 		}
@@ -111,7 +111,7 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 // tables in |tableSet|. Returns the new root with the violations, and a set of table names that have violations.
 // Note that constraint violations detected for ALL existing tables will be stored in the dolt_constraint_violations
 // tables, but the returned set of table names will be a subset of |tableSet|.
-func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.RootValue, tableSet *set.StrSet) (*doltdb.RootValue, *set.StrSet, error) {
+func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot doltdb.RootValue, tableSet *set.StrSet) (doltdb.RootValue, *set.StrSet, error) {
 	var recordViolationsForTables map[string]struct{} = nil
 	if tableSet.Size() > 0 {
 		recordViolationsForTables = make(map[string]struct{})
@@ -135,7 +135,7 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.Ro
 
 	tablesWithViolations := set.NewStrSet(nil)
 	for _, tableName := range tableSet.AsSlice() {
-		table, ok, err := mergeResults.Root.GetTable(ctx, tableName)
+		table, ok, err := mergeResults.Root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -160,10 +160,10 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.Ro
 
 // parseTablesToCheck returns a set of table names to check for constraint violations. If no tables are specified, then
 // all tables in the root are returned.
-func parseTablesToCheck(ctx *sql.Context, workingRoot *doltdb.RootValue, apr *argparser.ArgParseResults) (*set.StrSet, error) {
+func parseTablesToCheck(ctx *sql.Context, workingRoot doltdb.RootValue, apr *argparser.ArgParseResults) (*set.StrSet, error) {
 	tableSet := set.NewStrSet(nil)
 	for _, val := range apr.Args {
-		_, tableName, ok, err := workingRoot.GetTableInsensitive(ctx, val)
+		_, tableName, ok, err := doltdb.GetTableInsensitive(ctx, workingRoot, doltdb.TableName{Name: val})
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +175,7 @@ func parseTablesToCheck(ctx *sql.Context, workingRoot *doltdb.RootValue, apr *ar
 
 	// If no tables were explicitly specified, then check all tables
 	if tableSet.Size() == 0 {
-		names, err := workingRoot.GetTableNames(ctx)
+		names, err := workingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return nil, err
 		}

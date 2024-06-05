@@ -712,7 +712,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-			var parent1RV *doltdb.RootValue
+			var parent1RV doltdb.RootValue
 			if parent1Cm != nil {
 				parent1RV, err = parent1Cm.GetRootValue(ctx)
 				if err != nil {
@@ -807,19 +807,20 @@ func shouldDecorateWithRefs(decoration string) bool {
 }
 
 // didTableChangeBetweenRootValues checks if the given table changed between the two given root values.
-func didTableChangeBetweenRootValues(ctx *sql.Context, child, parent0, parent1 *doltdb.RootValue, tableName string) (bool, error) {
-	childHash, childOk, err := child.GetTableHash(ctx, tableName)
+func didTableChangeBetweenRootValues(ctx *sql.Context, child, parent0, parent1 doltdb.RootValue, tableName string) (bool, error) {
+	// TODO: schema
+	childHash, childOk, err := child.GetTableHash(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return false, err
 	}
-	parent0Hash, parent0Ok, err := parent0.GetTableHash(ctx, tableName)
+	parent0Hash, parent0Ok, err := parent0.GetTableHash(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return false, err
 	}
 	var parent1Hash hash.Hash
 	var parent1Ok bool
 	if parent1 != nil {
-		parent1Hash, parent1Ok, err = parent1.GetTableHash(ctx, tableName)
+		parent1Hash, parent1Ok, err = parent1.GetTableHash(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return false, err
 		}

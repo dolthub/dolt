@@ -1068,7 +1068,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
 			require.NoError(t, err)
 
-			dt, ok, err := root.GetTable(ctx, idx.Table())
+			dt, ok, err := root.GetTable(ctx, doltdb.TableName{Name: idx.Table()})
 			require.NoError(t, err)
 			require.True(t, ok)
 
@@ -1291,7 +1291,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 	assert.True(t, slice1.equals(slice2, s))
 }
 
-func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
+func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
 	builder := sql.NewIndexBuilder(idx)
@@ -1316,7 +1316,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
 
-	dt, ok, err := root.GetTable(ctx, idx.Table())
+	dt, ok, err := root.GetTable(ctx, doltdb.TableName{Name: idx.Table()})
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -1336,7 +1336,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
 }
 
-func doltIndexSetup(t *testing.T) (*doltdb.RootValue, map[string]index.DoltIndex) {
+func doltIndexSetup(t *testing.T) (doltdb.RootValue, map[string]index.DoltIndex) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(ctx)
@@ -1393,7 +1393,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 
 	dbname := "dolt"
 	for _, name := range []string{"onepk", "twopk", "types"} {
-		tbl, ok, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
 		require.NoError(t, err)
 		require.True(t, ok)
 

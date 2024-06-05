@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -51,6 +50,7 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
+	DoltgresSessObj  any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
 	username         string
 	email            string
 	dbStates         map[string]*DatabaseSessionState
@@ -62,6 +62,7 @@ type DoltSession struct {
 	statsProv        sql.StatsProvider
 	mu               *sync.Mutex
 	fs               filesys.Filesys
+	writeSessProv    WriteSessFunc
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -74,7 +75,7 @@ var _ sql.TransactionSession = (*DoltSession)(nil)
 var _ branch_control.Context = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
-func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
+func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
 	return &DoltSession{
 		Session:          sql.NewBaseSession(),
 		username:         "",
@@ -87,6 +88,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    sessFunc,
 	}
 }
 
@@ -97,6 +99,7 @@ func NewDoltSession(
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
+	writeSessProv WriteSessFunc,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -115,6 +118,7 @@ func NewDoltSession(
 		statsProv:        statsProvider,
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
+		writeSessProv:    writeSessProv,
 	}
 
 	return sess, nil
@@ -753,7 +757,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	roots := make(map[string]*doltdb.RootValue)
+	roots := make(map[string]doltdb.RootValue)
 	for _, db := range d.provider.DoltDatabases() {
 		branchState, ok, err := d.lookupDbState(ctx, db.Name())
 		if err != nil {
@@ -788,7 +792,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 	}
 
 	for dbName, root := range roots {
-		err := d.SetRoot(ctx, dbName, root)
+		err := d.SetWorkingRoot(ctx, dbName, root)
 		if err != nil {
 			return err
 		}
@@ -859,7 +863,7 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 // special identifiers |WORKING| or |STAGED|
 // Returns the root value associated with the identifier given, its commit time and its hash string. The hash string
 // for special identifiers |WORKING| or |STAGED| would be itself, 'WORKING' or 'STAGED', respectively.
-func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (*doltdb.RootValue, *types.Timestamp, string, error) {
+func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string) (doltdb.RootValue, *types.Timestamp, string, error) {
 	if refStr == doltdb.Working || refStr == doltdb.Staged {
 		// TODO: get from working set / staged update time
 		now := types.Timestamp(time.Now())
@@ -872,7 +876,7 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		}
 	}
 
-	var root *doltdb.RootValue
+	var root doltdb.RootValue
 	var commitTime *types.Timestamp
 	cs, err := doltdb.NewCommitSpec(refStr)
 	if err != nil {
@@ -921,13 +925,12 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	return root, commitTime, commitHash.String(), nil
 }
 
-// SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
+// SetWorkingRoot sets a new root value for the session for the database named. This is the primary mechanism by which data
 // changes are communicated to the engine and persisted back to disk. All data changes should be followed by a call to
 // update the session's root value via this method.
 // The dbName given should generally be a revision-qualified database name.
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
-// TODO: rename to SetWorkingRoot
-func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
 	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -949,7 +952,7 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 	return d.SetWorkingSet(ctx, dbName, branchState.WorkingSet())
 }
 
-// SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
+// SetRoots sets new roots for the session for the database named. Typically, clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
@@ -994,9 +997,11 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
-	if err != nil {
-		return err
+	if writeSess := branchState.WriteSession(); writeSess != nil {
+		err = writeSess.SetWorkingSet(ctx, ws)
+		if err != nil {
+			return err
+		}
 	}
 
 	branchState.dirty = true
@@ -1124,17 +1129,21 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	if intVal == 0 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = true
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = true
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else if intVal == 1 {
 		for _, dbState := range d.dbStates {
 			for _, branchState := range dbState.heads {
-				opts := branchState.WriteSession().GetOptions()
-				opts.ForeignKeyChecksDisabled = false
-				branchState.WriteSession().SetOptions(opts)
+				if ws := branchState.WriteSession(); ws != nil {
+					opts := ws.GetOptions()
+					opts.ForeignKeyChecksDisabled = false
+					ws.SetOptions(opts)
+				}
 			}
 		}
 	} else {
@@ -1248,7 +1257,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-		branchState.writeSession = writer.NewWriteSession(nbf, branchState.WorkingSet(), tracker, editOpts)
+		branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
 	}
 
 	// WorkingSet is nil in the case of a read only, detached head DB
@@ -1469,7 +1478,7 @@ func (d *DoltSession) RemoveAllPersistedGlobals() error {
 	return d.globalsConf.Unset(allVars)
 }
 
-// RemoveAllPersistedGlobals implements sql.PersistableSession
+// GetPersistedValue implements sql.PersistableSession
 func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
@@ -1737,3 +1746,8 @@ func DefaultHead(baseName string, db SqlDatabase) (string, error) {
 
 	return head, nil
 }
+
+// WriteSessFunc is a constructor that session builders use to
+// create fresh table editors.
+// The indirection avoids a writer/dsess package import cycle.
+type WriteSessFunc func(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession

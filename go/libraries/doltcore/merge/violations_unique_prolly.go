@@ -54,11 +54,11 @@ type UniqCVMeta struct {
 	Name    string   `json:"Name"`
 }
 
-func (m UniqCVMeta) ToInterface() interface{} {
+func (m UniqCVMeta) ToInterface() (interface{}, error) {
 	return map[string]interface{}{
 		"Columns": m.Columns,
 		"Name":    m.Name,
-	}
+	}, nil
 }
 
 var _ sql.JSONWrapper = UniqCVMeta{}
@@ -149,10 +149,10 @@ func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.Const
 	}, nil
 }
 
-func (m NullViolationMeta) ToInterface() interface{} {
+func (m NullViolationMeta) ToInterface() (interface{}, error) {
 	return map[string]interface{}{
 		"Columns": m.Columns,
-	}
+	}, nil
 }
 
 func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
@@ -193,9 +193,9 @@ func (m CheckCVMeta) Unmarshall(_ *sql.Context) (val types.JSONDocument, err err
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m CheckCVMeta) ToInterface() interface{} {
+func (m CheckCVMeta) ToInterface() (interface{}, error) {
 	return map[string]interface{}{
 		"Name":       m.Name,
 		"Expression": m.Expression,
-	}
+	}, nil
 }

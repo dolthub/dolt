@@ -30,7 +30,7 @@ to see what we're building next.
 
 # Video Introduction
 
-[![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/maxresdefault.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
+[![Dolt Explainer Video](https://img.youtube.com/vi/H2iZy0Cme10/maxresdefault.jpg)](https://www.youtube.com/watch?v=H2iZy0Cme10)
 
 # What's it for?
 
@@ -173,7 +173,7 @@ as CLI tool.
 
 ## From Source
 
-Make sure you have Go installed, and that `go` is in your path.
+Make sure you have Go installed, and that `go` is in your path. Dolt has a dependency on [cgo](https://pkg.go.dev/cmd/cgo), so you will need a working C compiler and toolchain as well.
 
 Clone this repository and cd into the `go` directory. Then run:
 

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
@@ -83,6 +84,11 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 		return nil, err
 	}
 	return &Table{table: dt}, nil
+}
+
+// NewTableFromDurable creates a table from the given durable object.
+func NewTableFromDurable(table durable.Table) *Table {
+	return &Table{table: table}
 }
 
 func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
@@ -330,7 +336,7 @@ func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.No
 	if err != nil {
 		return nil, false, err
 	}
-	tbl, ok, err := rv.GetTable(ctx, tblName)
+	tbl, ok, err := rv.GetTable(ctx, TableName{Name: tblName})
 	if err != nil {
 		return nil, false, err
 	}
@@ -485,6 +491,10 @@ func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
 }
 
+func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (durable.Index, error) {
+	return t.table.GetTableRowsWithDescriptors(ctx, kd, vd)
+}
+
 // GetRowDataHash returns the hash.Hash of the row data index.
 func (t *Table) GetRowDataHash(ctx context.Context) (hash.Hash, error) {
 	idx, err := t.table.GetTableRows(ctx)
@@ -572,7 +582,7 @@ func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, err
 	}
 
-	idx, err := indexes.GetIndex(ctx, sch, indexName)
+	idx, err := indexes.GetIndex(ctx, sch, nil, indexName)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -592,7 +602,7 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 		return nil, err
 	}
 
-	return indexes.GetIndex(ctx, sch, indexName)
+	return indexes.GetIndex(ctx, sch, nil, indexName)
 }
 
 // SetIndexRows replaces the current row data for the given index and returns an updated Table.

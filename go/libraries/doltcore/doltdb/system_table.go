@@ -62,6 +62,7 @@ func HasDoltPrefix(s string) bool {
 
 // IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
 // indexes.
+// TODO: Schema name
 func IsFullTextTable(name string) bool {
 	return HasDoltPrefix(name) && (strings.HasSuffix(name, "_fts_config") ||
 		strings.HasSuffix(name, "_fts_position") ||
@@ -83,8 +84,8 @@ func IsNonAlterableSystemTable(name string) bool {
 }
 
 // GetNonSystemTableNames gets non-system table names
-func GetNonSystemTableNames(ctx context.Context, root *RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx)
+func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func GetNonSystemTableNames(ctx context.Context, root *RootValue) ([]string, err
 }
 
 // GetSystemTableNames gets system table names
-func GetSystemTableNames(ctx context.Context, root *RootValue) ([]string, error) {
+func GetSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
 	p, err := GetPersistedSystemTables(ctx, root)
 	if err != nil {
 		return nil, err
@@ -114,8 +115,8 @@ func GetSystemTableNames(ctx context.Context, root *RootValue) ([]string, error)
 }
 
 // GetPersistedSystemTables returns table names of all persisted system tables.
-func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx)
+func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +125,10 @@ func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, e
 }
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
-func GetGeneratedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
+func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
 	s := set.NewStrSet(generatedSystemTables)
 
-	tn, err := root.GetTableNames(ctx)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,7 @@ func GetGeneratedSystemTables(ctx context.Context, root *RootValue) ([]string, e
 }
 
 // GetAllTableNames returns table names for all persisted and generated tables.
-func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
+func GetAllTableNames(ctx context.Context, root RootValue) ([]string, error) {
 	n, err := GetNonSystemTableNames(ctx, root)
 	if err != nil {
 		return nil, err

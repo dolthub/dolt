@@ -92,7 +92,7 @@ func TestRenameTable(t *testing.T) {
 			root, err = ExecuteSql(dEnv, root, setup)
 			require.NoError(t, err)
 
-			schemas, err := root.GetAllSchemas(ctx)
+			schemas, err := doltdb.GetAllSchemas(ctx, root)
 			require.NoError(t, err)
 			beforeSch := schemas[tt.oldName]
 
@@ -106,14 +106,14 @@ func TestRenameTable(t *testing.T) {
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
 
-			has, err := updatedRoot.HasTable(ctx, tt.oldName)
+			has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.oldName})
 			require.NoError(t, err)
 			assert.False(t, has)
-			has, err = updatedRoot.HasTable(ctx, tt.newName)
+			has, err = updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.newName})
 			require.NoError(t, err)
 			assert.True(t, has)
 
-			schemas, err = updatedRoot.GetAllSchemas(ctx)
+			schemas, err = doltdb.GetAllSchemas(ctx, updatedRoot)
 			require.NoError(t, err)
 			require.Equal(t, beforeSch, schemas[tt.newName])
 		})
@@ -233,7 +233,7 @@ func TestAddColumnToTable(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			tbl, ok, err := root.GetTable(ctx, tableName)
+			tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 			assert.True(t, ok)
 			assert.NoError(t, err)
 
@@ -281,7 +281,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	if err != nil {
 		return nil, err
 	}
-	root, err = root.PutTable(ctx, tableName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +477,7 @@ func TestDropPks(t *testing.T) {
 					assert.Equal(t, tt.fkIdxName, fk.ReferencedTableIndex)
 				}
 
-				parent, ok, err := root.GetTable(ctx, parentName)
+				parent, ok, err := root.GetTable(ctx, doltdb.TableName{Name: parentName})
 				assert.NoError(t, err)
 				assert.True(t, ok)
 
@@ -753,7 +753,7 @@ func TestModifyColumn(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			assert.NoError(t, err)
-			tbl, _, err := root.GetTable(ctx, tableName)
+			tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 			assert.NoError(t, err)
 			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {

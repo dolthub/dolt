@@ -163,9 +163,9 @@ func (m importOptions) FloatThreshold() float64 {
 	return 0.0
 }
 
-func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+func (m importOptions) checkOverwrite(ctx context.Context, root doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	if !m.force && m.operation == mvdata.CreateOp {
-		return root.HasTable(ctx, m.destTableName)
+		return root.HasTable(ctx, doltdb.TableName{Name: m.destTableName})
 	}
 	return false, nil
 }
@@ -258,7 +258,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
-		_, exists, err := root.GetTable(ctx, tableName)
+		_, exists, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -468,7 +468,7 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
 	var err error
 
 	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...

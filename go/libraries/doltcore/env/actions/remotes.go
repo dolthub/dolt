@@ -476,7 +476,7 @@ func ShallowFetchRefSpec(
 		return fmt.Errorf("invalid depth: %d", depth)
 	}
 
-	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, remote, ref.ForceUpdate, depth, nil, nil)
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, false, remote, ref.ForceUpdate, depth, nil, nil)
 }
 
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
@@ -487,19 +487,34 @@ func FetchRefSpecs(
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
+	defaultRefSpec bool,
 	remote *env.Remote,
 	mode ref.UpdateMode,
 	progStarter ProgStarter,
 	progStopper ProgStopper,
 ) error {
-	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, remote, mode, -1, progStarter, progStopper)
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, defaultRefSpec, remote, mode, -1, progStarter, progStopper)
 }
 
+// fetchRefSpecsWithDepth fetches the remote refSpecs from the source database to the destination database. It fetches
+// the commits and all underlying data from the source database to the destination database.
+// Parameters:
+// - ctx: the context
+// - dbData: the env.DbData object for handling repoState read and write
+// - srcDB: the remote *doltdb.DoltDB object that is used to fetch remote branches from
+// - refSpecs: the list of refSpecs to fetch
+// - defaultRefSpecs: a boolean that indicates whether the refSpecs are the default refSpecs. False if the user specifies anything.
+// - remote: the remote object
+// - mode: the ref.UpdateMode object that specifies the update mode (force or not, prune or not)
+// - depth: the depth of the fetch. If depth is greater than 0, it is a shallow clone.
+// - progStarter: function that starts the progress reporting
+// - progStopper: function that stops the progress reporting
 func fetchRefSpecsWithDepth(
 	ctx context.Context,
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
+	defaultRefSpecs bool,
 	remote *env.Remote,
 	mode ref.UpdateMode,
 	depth int,
@@ -513,6 +528,14 @@ func fetchRefSpecsWithDepth(
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
+	}
+
+	if len(branchRefs) == 0 {
+		if defaultRefSpecs {
+			// The remote has no branches. Nothing to do. Git exits silently, so we do too.
+			return nil
+		}
+		return fmt.Errorf("no branches found in remote '%s'", remote.Name)
 	}
 
 	// We build up two structures:

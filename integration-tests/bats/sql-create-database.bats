@@ -276,7 +276,11 @@ SQL
 @test "sql-create-database: sql drop database errors for info schema" {
     run dolt sql -q "DROP DATABASE information_schema"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "DROP DATABASE isn't supported for database information_schema" ]] || false
+    [[ "$output" =~ "unable to drop database: information_schema" ]] || false
+
+    run dolt sql -q "DROP DATABASE INFORMATION_SCHEMA"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unable to drop database: INFORMATION_SCHEMA" ]] || false
 }
 
 @test "sql-create-database: create new database via SCHEMA alias" {
@@ -352,4 +356,17 @@ SELECT DATABASE() AS a;
 SQL
     [ $status -eq 0 ]
     [[ $output =~ "|  test- db _   |" ]] || false
+}
+
+@test "sql-create-database: alter database collation" {
+    run dolt sql -q "create database tmpdb"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "show create database tmpdb"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin" ]] || false
+    run dolt sql -q "alter database tmpdb collate utf8mb4_spanish_ci"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "show create database tmpdb"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
 }

@@ -21,13 +21,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
-func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tblSet := set.NewStrSet(tbls)
+func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
+	tblSet := doltdb.NewTableNameSet(tbls)
 
 	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -60,16 +59,16 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 		for _, ftIndex := range ftIndexes {
 			props := ftIndex.FullTextProperties()
 			tblSet.Add(
-				props.ConfigTable,
-				props.PositionTable,
-				props.DocCountTable,
-				props.GlobalCountTable,
-				props.RowCountTable,
+				doltdb.TableName{Name: props.ConfigTable},
+				doltdb.TableName{Name: props.PositionTable},
+				doltdb.TableName{Name: props.DocCountTable},
+				doltdb.TableName{Name: props.GlobalCountTable},
+				doltdb.TableName{Name: props.RowCountTable},
 			)
 		}
 	}
 
-	tblsToDrop := set.NewStrSet(nil)
+	tblsToDrop := doltdb.NewTableNameSet(nil)
 
 	for _, td := range tblDeltas {
 		if td.IsDrop() {
@@ -123,8 +122,8 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	return dest, nil
 }
 
-func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
-	notExist := []string{}
+func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []doltdb.TableName) error {
+	var notExist []doltdb.TableName
 	for _, tbl := range unknown {
 		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
 			return err
@@ -134,7 +133,7 @@ func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknow
 	}
 
 	if len(notExist) > 0 {
-		return NewTblNotExistError(notExist)
+		return NewTblNotExistError(summarizeTableNames(notExist))
 	}
 
 	return nil

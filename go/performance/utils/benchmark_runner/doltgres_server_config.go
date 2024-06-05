@@ -33,6 +33,9 @@ type doltgresServerConfigImpl struct {
 	// Version is the server version
 	Version string
 
+	// ConfigFilePath is the path to a doltgres config file
+	ConfigFilePath string
+
 	// ResultsFormat is the format the results should be written in
 	ResultsFormat string
 
@@ -48,16 +51,17 @@ type doltgresServerConfigImpl struct {
 
 var _ ServerConfig = &doltgresServerConfigImpl{}
 
-func NewDoltgresServerConfig(version, serverExec, serverUser, host, resultsFormat string, port int, serverArgs []string) *doltgresServerConfigImpl {
+func NewDoltgresServerConfig(version, serverExec, serverUser, host, resultsFormat, configFilePath string, port int, serverArgs []string) *doltgresServerConfigImpl {
 	return &doltgresServerConfigImpl{
-		Id:            uuid.New().String(),
-		Host:          host,
-		Port:          port,
-		Version:       version,
-		ResultsFormat: resultsFormat,
-		ServerExec:    serverExec,
-		ServerUser:    serverUser,
-		ServerArgs:    serverArgs,
+		Id:             uuid.New().String(),
+		Host:           host,
+		Port:           port,
+		Version:        version,
+		ConfigFilePath: configFilePath,
+		ResultsFormat:  resultsFormat,
+		ServerExec:     serverExec,
+		ServerUser:     serverUser,
+		ServerArgs:     serverArgs,
 	}
 }
 
@@ -74,13 +78,20 @@ func (sc *doltgresServerConfigImpl) GetResultsFormat() string {
 }
 
 func (sc *doltgresServerConfigImpl) GetServerArgs() ([]string, error) {
+
 	params := make([]string, 0)
-	if sc.Host != "" {
-		params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
-	}
-	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
-	}
+
+	// TODO: doltgres removed support for command line flag configuration
+	// TODO: see https://github.com/dolthub/doltgresql/issues/321
+	params = append(params, fmt.Sprintf("%s=%s", configFlag, sc.ConfigFilePath))
+
+	//if sc.Host != "" {
+	//	params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
+	//}
+	//if sc.Port != 0 {
+	//	params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
+	//}
+
 	params = append(params, sc.ServerArgs...)
 	return params, nil
 }
@@ -109,6 +120,9 @@ func (sc *doltgresServerConfigImpl) Validate() error {
 	}
 	if sc.ServerExec == "" {
 		return getMustSupplyError("server exec")
+	}
+	if sc.ConfigFilePath == "" {
+		return getMustSupplyError("config file path")
 	}
 	return CheckExec(sc.ServerExec, "server exec")
 }

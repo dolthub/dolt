@@ -24,6 +24,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/shopspring/decimal"
 
@@ -127,7 +128,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetJSONAddr(i, tup)
 		if ok {
-			v, err = NewJSONDoc(h, ns).ToJSONDocument(ctx)
+			v, err = NewJSONDoc(h, ns).ToLazyJSONDocument(ctx)
 		}
 	case val.StringAddrEnc:
 		var h hash.Hash
@@ -396,6 +397,7 @@ func serializeGeometry(v interface{}) []byte {
 
 func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
 	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
 	bb.Init(dataSize)
 	_, addr, err := bb.Chunk(ctx, r)
 	if err != nil {
@@ -409,5 +411,5 @@ func convJson(v interface{}) (buf []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(v.(types.JSONDocument).Val)
+	return types.MarshallJson(v.(sql.JSONWrapper))
 }

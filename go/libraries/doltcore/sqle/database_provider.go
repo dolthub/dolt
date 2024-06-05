@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -52,8 +53,8 @@ type DoltDatabaseProvider struct {
 	functions          map[string]sql.Function
 	tableFunctions     map[string]sql.TableFunction
 	externalProcedures sql.ExternalStoredProcedureRegistry
-	InitDatabaseHook   InitDatabaseHook
-	DropDatabaseHook   DropDatabaseHook
+	InitDatabaseHooks  []InitDatabaseHook
+	DropDatabaseHooks  []DropDatabaseHook
 	mu                 *sync.RWMutex
 
 	droppedDatabaseManager *droppedDatabaseManager
@@ -65,6 +66,15 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl string
 	isStandby    *bool
 }
+
+var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.SchemaDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 func (p *DoltDatabaseProvider) DefaultBranch() string {
 	return p.defaultBranch
@@ -79,14 +89,6 @@ func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql
 	cp.tableFunctions = funcs
 	return &cp, nil
 }
-
-var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.ExternalStoredProcedureProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.TableFunctionProvider = (*DoltDatabaseProvider)(nil)
-var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
@@ -146,7 +148,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		fs:                     fs,
 		defaultBranch:          defaultBranch,
 		dbFactoryUrl:           dbFactoryUrl,
-		InitDatabaseHook:       ConfigureReplicationDatabaseHook,
+		InitDatabaseHooks:      []InitDatabaseHook{ConfigureReplicationDatabaseHook},
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 	}, nil
@@ -240,6 +242,32 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 	}
 
 	return database, nil
+}
+
+// SchemaDatabase is called to resolve a table when it's qualified with a single qualifer, e.g. `myDb.myTable`. We
+// resolve this differently depending on whether we are emulating the MySQL or the Postgres dialect. In MySQL, the
+// qualifier refers to a database name. In Postgres, it refers to a schema name.
+// TODO: this should live only on a Doltgres implementation of this provider, this is a shim to get something working.
+func (p *DoltDatabaseProvider) SchemaDatabase(ctx *sql.Context, dbName, schemaName string) (sql.DatabaseSchema, bool, error) {
+	// If search path isn't enabled, this becomes a simple DB lookup on the schema name, which is the qualifier specified
+	// in the query
+	if !resolve.UseSearchPath {
+		database, err := p.Database(ctx, schemaName)
+		return database, err == nil, err
+	}
+
+	db, err := p.Database(ctx, dbName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// We do have some database implementations that don't implement the SchemaDatabase interface, so we need to check
+	sdb, ok := db.(sql.SchemaDatabase)
+	if !ok {
+		return nil, false, nil
+	}
+
+	return sdb.GetSchema(ctx, schemaName)
 }
 
 func wrapForStandby(db dsess.SqlDatabase, standby bool) dsess.SqlDatabase {
@@ -455,13 +483,35 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
+	// If the search path is enabled, we need to create our initial schema object (public is available by default)
+	if resolve.UseSearchPath {
+		workingRoot, err := newEnv.WorkingRoot(ctx)
+		if err != nil {
+			return err
+		}
+
+		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+			Name: "public",
+		})
+		if err != nil {
+			return err
+		}
+
+		if err = newEnv.UpdateWorkingRoot(ctx, workingRoot); err != nil {
+			return err
+		}
+		if err = newEnv.UpdateStagedRoot(ctx, workingRoot); err != nil {
+			return err
+		}
+	}
+
 	return p.registerNewDatabase(ctx, name, newEnv)
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
-type DropDatabaseHook func(name string)
+type DropDatabaseHook func(ctx *sql.Context, name string)
 
-// ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
+// ConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
 // TODO: consider the replication heads / all heads setting
 func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
@@ -598,8 +648,14 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	ddb := db.(Database).ddb
-	err := ddb.Close()
+	var database *doltdb.DoltDB
+	if ddb, ok := db.(Database); ok {
+		database = ddb.ddb
+	} else {
+		return fmt.Errorf("unable to drop database: %s", name)
+	}
+
+	err := database.Close()
 	if err != nil {
 		return err
 	}
@@ -630,10 +686,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return err
 	}
 
-	if p.DropDatabaseHook != nil {
+	for _, dropHook := range p.DropDatabaseHooks {
 		// For symmetry with InitDatabaseHook and the names we see in
 		// MultiEnv initialization, we use `name` here, not `dbKey`.
-		p.DropDatabaseHook(name)
+		dropHook(ctx, name)
 	}
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative
@@ -707,16 +763,27 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		return err
 	}
 
-	// If we have an initialization hook, invoke it.  By default, this will
-	// be ConfigureReplicationDatabaseHook, which will setup replication
-	// for the new database if a remote url template is set.
-	err = p.InitDatabaseHook(ctx, p, name, newEnv, db)
+	// If we have any initialization hooks, invoke them, until any error is returned.
+	// By default, this will be ConfigureReplicationDatabaseHook, which will set up
+	// replication for the new database if a remote url template is set.
+	for _, initHook := range p.InitDatabaseHooks {
+		err = initHook(ctx, p, name, newEnv, db)
+		if err != nil {
+			return err
+		}
+	}
+
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, newEnv)
+	if err != nil {
+		return err
+	}
+	dbs, err := ApplyReplicationConfig(ctx, sql.NewBackgroundThreads(), mrEnv, cli.CliErr, db)
 	if err != nil {
 		return err
 	}
 
 	formattedName := formatDbMapKeyName(db.Name())
-	p.databases[formattedName] = db
+	p.databases[formattedName] = dbs[0]
 	p.dbLocations[formattedName] = newEnv.FS
 	return nil
 }

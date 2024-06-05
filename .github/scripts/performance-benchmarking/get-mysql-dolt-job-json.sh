@@ -49,9 +49,9 @@ meanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_
 
 meanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name != 'bulk_insert' group by f.test_name)"
 
-tpccLatencyQuery="select f.test_name as tpcc_latency, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
+tpccLatencyQuery="select f.test_name as tpcc_latency, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_p95, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_p95, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
 tpccTpsQuery="select f.test_name as tpcc_tps, f.server_name, f.server_version, avg(f.sql_transactions_per_second) as from_tps, t.test_name as test_name, t.server_name, t.server_version, avg(t.sql_transactions_per_second) as to_tps, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE 'tpcc%' group by f.test_name;"
-tpccTpsMultiplierQuery="select round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) as tpcc_tps_multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name like 'tpcc%' group by f.test_name"
+tpccTpsMultiplierQuery="select ROUND(avg(f.sql_transactions_per_second) / (avg(t.sql_transactions_per_second) + .000001), $precision) as tpcc_tps_multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name like 'tpcc%' group by f.test_name"
 
 echo '
 {
@@ -91,7 +91,7 @@ echo '
             ],
             "imagePullPolicy": "Always",
             "args": [
-              "--schema=/schema.sql",
+              "--schema=/app/schema.sql",
               "--useDoltHubLuaScriptsRepo",
               "--output='$format'",
               "--mysql-exec=/usr/sbin/mysqld",

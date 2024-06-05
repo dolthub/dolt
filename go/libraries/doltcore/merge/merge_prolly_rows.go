@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -374,7 +375,7 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 			continue
 		}
 
-		expr, err := index.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
+		expr, err := expranalysis.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
 		if err != nil {
 			return checkValidator{}, err
 		}
@@ -540,7 +541,7 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 			continue // todo: how do we validate in this case?
 		}
 
-		idx, err := indexes.GetIndex(ctx, sch, def.Name())
+		idx, err := indexes.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return uniqValidator{}, err
 		}
@@ -1192,7 +1193,7 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 		}
 
 		if col.Default != "" || col.Generated != "" || col.OnUpdate != "" {
-			expr, err := index.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
+			expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
 			if err != nil {
 				return true, err
 			}
@@ -1823,7 +1824,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 	if err != nil {
 		return false, err
 	}
-	if modifiedVD.Comparator().CompareValues(i, baseCol, modifiedCol, modifiedVD.Types[i]) == 0 {
+	if modifiedVD.Comparator().CompareValues(i, baseCol, modifiedCol, modifiedVD.Types[modifiedColIdx]) == 0 {
 		return false, nil
 	}
 	return true, nil
@@ -1998,7 +1999,11 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, nil
 	}
 
-	mergedBytes, err := json.Marshal(mergedDoc.ToInterface())
+	mergedVal, err := mergedDoc.ToInterface()
+	if err != nil {
+		return nil, true, err
+	}
+	mergedBytes, err := json.Marshal(mergedVal)
 	if err != nil {
 		return nil, true, err
 	}

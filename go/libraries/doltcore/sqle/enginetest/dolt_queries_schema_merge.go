@@ -17,6 +17,7 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -58,6 +59,17 @@ var SchemaChangeTestsForDataConflicts = []MergeScriptTest{
 						1, -1000, "100", "11",
 						1, -100, "-100", "11",
 					},
+				},
+			},
+			{
+				Query:    "update dolt_conflicts_t set our_col1 = their_col1, their_col2 = our_col2;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, -100, "100", "11"},
+					{2, 20, "200", "22"},
 				},
 			},
 		},
@@ -548,6 +560,63 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, -1000, nil}},
+			},
+		},
+	},
+	{
+		// Currently skipped bc of https://github.com/dolthub/dolt/issues/7767
+		Name: "ambiguous choice of ancestor column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 int);",
+			"INSERT into t values (1, 10, 100), (2, 20, 200);",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop column col2;",
+			"insert into t values (3, 30), (4, 40);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column col1;",
+			"alter table t rename column col2 to col1;",
+			"insert into t values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Skip:           true,
+				Query:          "call dolt_merge('right');",
+				ExpectedErrStr: "Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+			},
+		},
+	},
+	{
+		// One branch makes a new column, deletes the old one, and renames.
+		// The other just has a data change.
+		Name: "creating new column to replace ancestor column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10), (2, 20);",
+		},
+		RightSetUpScript: []string{
+			"insert into t values (3, 30), (4, 40);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int",
+			"update t set col2 = 10*col1",
+			"alter table t drop column col1;",
+			"alter table t rename column col2 to col1;",
+			"insert into t values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 100}, {2, 200},
+					{3, 30}, {4, 40},
+					{5, 50}, {6, 60},
+				},
 			},
 		},
 	},
@@ -2469,3 +2538,7 @@ var SchemaChangeTestsForJsonConflicts = []MergeScriptTest{
 		},
 	},
 }
+
+// These tests are not run because they cause panics during set-up.
+// Each one is labeled with a GitHub issue.
+var DisabledSchemaChangeTests = []MergeScriptTest{}

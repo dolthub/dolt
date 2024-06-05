@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -114,7 +113,7 @@ func (it *IgnoreTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newIgnoreWriter(it)
 }
 
-func (it *IgnoreTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
+func (it *IgnoreTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
 	if it.backingTable == nil {
 		return it, nil
 	}
@@ -145,7 +144,7 @@ type ignoreWriter struct {
 	it                      *IgnoreTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
-	tableWriter             writer.TableWriter
+	tableWriter             dsess.TableWriter
 }
 
 func newIgnoreWriter(it *IgnoreTable) *ignoreWriter {
@@ -206,7 +205,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.IgnoreTableName)
+	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
@@ -248,7 +247,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		}
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := roots.Working.CreateEmptyTable(ctx, doltdb.IgnoreTableName, newSchema)
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.IgnoreTableName}, newSchema)
 
 		if err != nil {
 			iw.errDuringStatementBegin = err
@@ -260,28 +259,29 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetRoot because we want to avoid modifying the root
+		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
 		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
 		// created table.
-		err = dbState.WriteSession().SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
+		if ws := dbState.WriteSession(); ws != nil {
+			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
+			if err != nil {
+				iw.errDuringStatementBegin = err
+				return
+			}
+		}
+
+		dSess.SetWorkingRoot(ctx, dbName, newRootValue)
+	}
+
+	if ws := dbState.WriteSession(); ws != nil {
+		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName}, dbName, dSess.SetWorkingRoot)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
 		}
-
-		dSess.SetRoot(ctx, dbName, newRootValue)
+		iw.tableWriter = tableWriter
+		tableWriter.StatementBegin(ctx)
 	}
-
-	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.IgnoreTableName, dbName, dSess.SetRoot)
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
-	}
-
-	iw.tableWriter = tableWriter
-
-	tableWriter.StatementBegin(ctx)
-
 }
 
 // DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning
@@ -296,7 +296,10 @@ func (iw *ignoreWriter) DiscardChanges(ctx *sql.Context, errorEncountered error)
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
 func (iw *ignoreWriter) StatementComplete(ctx *sql.Context) error {
-	return iw.tableWriter.StatementComplete(ctx)
+	if iw.tableWriter != nil {
+		return iw.tableWriter.StatementComplete(ctx)
+	}
+	return nil
 }
 
 // Close finalizes the delete operation, persisting the result.

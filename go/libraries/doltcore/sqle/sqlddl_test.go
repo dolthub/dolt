@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -280,7 +281,7 @@ func TestCreateTable(t *testing.T) {
 
 			require.NotNil(t, updatedRoot)
 
-			table, ok, err := updatedRoot.GetTable(ctx, tt.expectedTable)
+			table, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: tt.expectedTable})
 			require.True(t, ok)
 			require.NoError(t, err)
 
@@ -357,7 +358,7 @@ func TestDropTable(t *testing.T) {
 
 			require.NotNil(t, updatedRoot)
 			for _, tableName := range tt.tableNames {
-				has, err := updatedRoot.HasTable(ctx, tableName)
+				has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tableName})
 				assert.NoError(t, err)
 				assert.False(t, has)
 			}
@@ -532,7 +533,7 @@ func TestAddColumn(t *testing.T) {
 			}
 
 			assert.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			table, _, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: PeopleTableName})
 
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
@@ -543,7 +544,7 @@ func TestAddColumn(t *testing.T) {
 				return // todo: convert these to enginetests
 			}
 
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
 			require.True(t, ok)
 
@@ -653,7 +654,7 @@ func TestRenameColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			table, _, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: PeopleTableName})
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
 			require.NoError(t, err)
@@ -663,7 +664,7 @@ func TestRenameColumn(t *testing.T) {
 				return // todo: convert these to enginetests
 			}
 
-			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
 			require.True(t, ok)
 
@@ -769,11 +770,11 @@ func TestRenameTableStatements(t *testing.T) {
 			}
 			require.NotNil(t, updatedRoot)
 
-			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
+			has, err := updatedRoot.HasTable(ctx, doltdb.TableName{Name: tt.oldTableName})
 			require.NoError(t, err)
 			assert.False(t, has)
 
-			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
+			newTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: tt.newTableName})
 			require.NoError(t, err)
 			require.True(t, ok)
 
@@ -1113,7 +1114,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 		panic(err)
 	}
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), nil, nil)
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), nil, nil, writer.NewWriteSession)
 	if err != nil {
 		panic(err)
 	}

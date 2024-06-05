@@ -82,7 +82,7 @@ func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts edi
 }
 
 type Result struct {
-	Root            *doltdb.RootValue
+	Root            doltdb.RootValue
 	SchemaConflicts []SchemaConflict
 	Stats           map[string]*MergeStats
 }
@@ -162,7 +162,7 @@ func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
 // used to retrieve the base value for a conflict.
 func MergeRoots(
 	ctx *sql.Context,
-	ourRoot, theirRoot, ancRoot *doltdb.RootValue,
+	ourRoot, theirRoot, ancRoot doltdb.RootValue,
 	theirs, ancestor doltdb.Rootish,
 	opts editor.Options,
 	mergeOpts MergeOpts,
@@ -186,6 +186,39 @@ func MergeRoots(
 		}
 	}
 
+	// merge collations
+	oColl, err := ourRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tColl, err := theirRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	aColl, err := ancRoot.GetCollation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergedRoot := ourRoot
+
+	// there is a collation change
+	if oColl != tColl {
+		// both sides changed, and not the same, conflict
+		if oColl != aColl && tColl != aColl {
+			oCollName := sql.CollationID(oColl).Collation().Name
+			tCollName := sql.CollationID(tColl).Collation().Name
+			return nil, fmt.Errorf("database collation conflict, please resolve manually. ours: %s, theirs: %s", oCollName, tCollName)
+		}
+		// only their side changed, take their side
+		if oColl == aColl {
+			mergedRoot, err = mergedRoot.SetCollation(ctx, tColl)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// only our side changed, keep our side
+	}
+
 	// Make sure to pass in ourRoot as the first RootValue so that ourRoot's table names will be merged first.
 	// This helps to avoid non-deterministic error result for table rename cases. Renaming a table creates two changes:
 	// 1. dropping the old name table
@@ -200,8 +233,6 @@ func MergeRoots(
 
 	tblToStats := make(map[string]*MergeStats)
 
-	mergedRoot := ourRoot
-
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
@@ -214,18 +245,19 @@ func MergeRoots(
 	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
-		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName) {
+		// TODO: schema name
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName.Name, opts, mergeOpts)
+		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
 		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
-			tblToStats[tblName] = &MergeStats{
+			tblToStats[tblName.Name] = &MergeStats{
 				Operation:       TableModified,
 				SchemaConflicts: 1,
 			}
 			conflict := SchemaConflict{
-				TableName:            tblName,
+				TableName:            tblName.Name,
 				ModifyDeleteConflict: true,
 			}
 			if !mergeOpts.KeepSchemaConflicts {
@@ -238,9 +270,9 @@ func MergeRoots(
 		}
 		// If this table was visited during the merge, then we'll add it to the set
 		if stats.Operation != TableUnmodified {
-			visitedTables[tblName] = struct{}{}
+			visitedTables[tblName.Name] = struct{}{}
 		}
-		if doltdb.IsFullTextTable(tblName) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
+		if doltdb.IsFullTextTable(tblName.Name) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.
 			// We do not handle adding new tables, so we allow that to proceed.
 			continue
@@ -255,7 +287,7 @@ func MergeRoots(
 		}
 
 		if mergedTable.table != nil {
-			tblToStats[tblName] = stats
+			tblToStats[tblName.Name] = stats
 
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
 			if err != nil {
@@ -271,7 +303,7 @@ func MergeRoots(
 
 		if newRootHasTable {
 			// Merge root deleted this table
-			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
+			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
 
 			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
@@ -300,6 +332,11 @@ func MergeRoots(
 	}
 
 	mergedRoot, err = mergedRoot.PutForeignKeyCollection(ctx, mergedFKColl)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedRoot, err = mergedRoot.HandlePostMerge(ctx, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -364,10 +401,10 @@ func MergeRoots(
 
 // mergeCVsWithStash merges the table constraint violations in |stash| with |root|.
 // Returns an updated root with all the merged CVs.
-func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *violationStash) (*doltdb.RootValue, error) {
+func mergeCVsWithStash(ctx context.Context, root doltdb.RootValue, stash *violationStash) (doltdb.RootValue, error) {
 	updatedRoot := root
 	for name, stashed := range stash.Stash {
-		tbl, ok, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return nil, err
 		}
@@ -392,7 +429,7 @@ func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *viola
 		if err != nil {
 			return nil, err
 		}
-		updatedRoot, err = root.PutTable(ctx, name, tbl)
+		updatedRoot, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, err
 		}
@@ -411,9 +448,9 @@ func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 }
 
 // populates tblToStats with violation statistics
-func getConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+func getConstraintViolationStats(ctx context.Context, root doltdb.RootValue, tblToStats map[string]*MergeStats) error {
 	for tblName, stats := range tblToStats {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return err
 		}
@@ -432,12 +469,12 @@ func getConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tb
 // forward merge that does not involve any tables with foreign key constraints or check constraints will not be able
 // to generate constraint violations. Unique key constraint violations would be caught during the generation of the
 // merged root, therefore it is not a factor for this function.
-func MayHaveConstraintViolations(ctx context.Context, ancestor, merged *doltdb.RootValue) (bool, error) {
-	ancTables, err := ancestor.MapTableHashes(ctx)
+func MayHaveConstraintViolations(ctx context.Context, ancestor, merged doltdb.RootValue) (bool, error) {
+	ancTables, err := doltdb.MapTableHashes(ctx, ancestor)
 	if err != nil {
 		return false, err
 	}
-	mergedTables, err := merged.MapTableHashes(ctx)
+	mergedTables, err := doltdb.MapTableHashes(ctx, merged)
 	if err != nil {
 		return false, err
 	}
@@ -478,12 +515,12 @@ func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as
 		as.SchemaConflictsTables = working.MergeState().TablesWithSchemaConflicts()
 	}
 
-	as.DataConflictTables, err = working.WorkingRoot().TablesWithDataConflicts(ctx)
+	as.DataConflictTables, err = doltdb.TablesWithDataConflicts(ctx, working.WorkingRoot())
 	if err != nil {
 		return as, err
 	}
 
-	as.ConstraintViolationsTables, err = working.WorkingRoot().TablesWithConstraintViolations(ctx)
+	as.ConstraintViolationsTables, err = doltdb.TablesWithConstraintViolations(ctx, working.WorkingRoot())
 	if err != nil {
 		return as, err
 	}
@@ -497,17 +534,17 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 		return nil, nil, err
 	}
 
-	headTableHashes, err := roots.Head.MapTableHashes(ctx)
+	headTableHashes, err := doltdb.MapTableHashes(ctx, roots.Head)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingTableHashes, err := roots.Working.MapTableHashes(ctx)
+	workingTableHashes, err := doltdb.MapTableHashes(ctx, roots.Working)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeTableHashes, err := mergeRoot.MapTableHashes(ctx)
+	mergeTableHashes, err := doltdb.MapTableHashes(ctx, mergeRoot)
 	if err != nil {
 		return nil, nil, err
 	}

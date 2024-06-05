@@ -168,61 +168,15 @@ func BuildSecondaryProllyIndex(
 	idx schema.Index,
 	primary prolly.Map,
 ) (durable.Index, error) {
+	var uniqCb DupEntryCb
 	if idx.IsUnique() {
 		kd := idx.Schema().GetKeyDescriptor()
-		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, tableName, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
+		uniqCb = func(ctx context.Context, existingKey, newKey val.Tuple) error {
 			msg := FormatKeyForUniqKeyErr(newKey, kd)
 			return sql.NewUniqueKeyErr(msg, false, nil)
-		})
-	}
-
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
-	if err != nil {
-		return nil, err
-	}
-	if idx.IsFullText() {
-		return empty, nil
-	}
-	secondary := durable.ProllyMapFromIndex(empty)
-	if schema.IsKeyless(sch) {
-		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
-	}
-
-	p := primary.Pool()
-	mut := secondary.Mutate()
-	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
-	if err != nil {
-		return nil, err
-	}
-
-	iter, err := primary.IterAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		var k, v val.Tuple
-		k, v, err = iter.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
-		if err != nil {
-			return nil, err
-		}
-		if err = mut.Put(ctx, idxKey, val.EmptyTuple); err != nil {
-			return nil, err
 		}
 	}
-
-	secondary, err = mut.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return durable.IndexFromProllyMap(secondary), nil
+	return BuildProllyIndexExternal(ctx, vrw, ns, sch, tableName, idx, primary, uniqCb)
 }
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting

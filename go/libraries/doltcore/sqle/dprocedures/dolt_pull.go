@@ -152,7 +152,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 
 	mode := ref.UpdateMode{Force: true, Prune: false}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}
@@ -204,11 +204,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, "", err
 			}
-
-			err = sess.SetWorkingSet(ctx, dbName, ws)
-			if err != nil {
-				return conflicts, fastForward, "", err
-			}
 		}
 		if !rsSeen {
 			return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpec.GetRemRefToLocal())
@@ -230,14 +225,10 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 // TODO: remove this as it does not do anything useful
 func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	for {
-		if ctx.Err() != nil {
-			return
-		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-statsCh:
-		default:
 		}
 	}
 }

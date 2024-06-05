@@ -63,6 +63,19 @@ teardown() {
     [[ "$output" =~ "| 1" ]] || false
 }
 
+@test "commit: --all (-a) adds changed database collation" {
+    dolt sql -q "create database colldb"
+    cd colldb
+
+    dolt sql -q "alter database colldb collate utf8mb4_spanish_ci"
+    dolt commit -a -m "collation"
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "commit: -m sets commit message properly" {
     dolt sql -q "CREATE table t1 (pk int primary key);"
     dolt add t1

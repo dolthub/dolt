@@ -78,7 +78,12 @@ func (ftp *fsTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCo
 	if ftp.toKeep != nil {
 		ftp.toKeep[filepath.Join(ftp.dir, name.String())] = struct{}{}
 	}
-	return tableFileExists(ctx, ftp.dir, name)
+
+	exists, err := tableFileExists(ctx, ftp.dir, name)
+	if exists || err != nil {
+		return exists, err
+	}
+	return archiveFileExists(ctx, ftp.dir, name)
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {

@@ -130,7 +130,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.CloneCmd{},
-	commands.RemoteCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
@@ -466,7 +465,42 @@ func runMain() int {
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, doltversion.Version)
+	apr, _, err := globalArgParser.ParseGlobalArgs(args)
+	if err == argparser.ErrHelp {
+		doltCommand.PrintUsage("dolt")
+		cli.Println(globalSpecialMsg)
+		usage()
+		return 0
+	} else if err != nil {
+		cli.PrintErrln(color.RedString("Failure to parse global arguments: %v", err))
+		return 1
+	}
+
+	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
+	if hasDataDir {
+		// If a relative path was provided, this ensures we have an absolute path everywhere.
+		dataDir, err = fs.Abs(dataDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
+			return 1
+		}
+		if ok, dir := fs.Exists(dataDir); !ok || !dir {
+			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
+			return 1
+		}
+	}
+
+	// Current working directory is preserved to ensure that user provided path arguments are always calculated
+	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
+	// specified one.
+	cwdFS := fs
+	dataDirFS, err := fs.WithWorkingDir(dataDir)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
+		return 1
+	}
+
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -539,20 +573,6 @@ func runMain() int {
 
 	defer tempfiles.MovableTempFileProvider.Clean()
 
-	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
-	if hasDataDir {
-		// If a relative path was provided, this ensures we have an absolute path everywhere.
-		dataDir, err = fs.Abs(dataDir)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
-			return 1
-		}
-		if ok, dir := fs.Exists(dataDir); !ok || !dir {
-			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
-			return 1
-		}
-	}
-
 	// Find all database names and add global variables for them. This needs to
 	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
 	// specific persisted system vars will fail to load.
@@ -569,17 +589,6 @@ func runMain() int {
 	// will be lost. This is particularly confusing for database specific system
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
-
-	// Current working directory is preserved to ensure that user provided path arguments are always calculated
-	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
-	// specified one.
-	cwdFS := dEnv.FS
-	dataDirFS, err := dEnv.FS.WithWorkingDir(dataDir)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
-		return 1
-	}
-	dEnv.FS = dataDirFS
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
