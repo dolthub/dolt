@@ -700,7 +700,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	table, err := db.newDoltTable(tableName, sch, tbl)
+	table, err := NewDoltSqlTable(db, tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
@@ -770,8 +770,9 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tname, tbl, true, nil
 }
 
-// newDoltTable returns a sql.Table wrapping the given underlying dolt table
-func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+// NewDoltSqlTable returns a sql.Table wrapping the given underlying dolt table. This is modified by Doltgres, therefore
+// it is a variable function rather than a standard function.
+var NewDoltSqlTable = func(db Database, tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
 	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err

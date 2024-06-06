@@ -820,7 +820,7 @@ func emptyFulltextTable(
 		return nil, nil, err
 	}
 
-	newTable, err := parentTable.db.newDoltTable(fulltextTable.Name(), doltSchema, dt)
+	newTable, err := NewDoltSqlTable(parentTable.db, fulltextTable.Name(), doltSchema, dt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1656,7 +1656,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	} else {
 		// we need a temp version of a sql.Table here to get key columns
-		newTbl, err := t.db.newDoltTable(t.Name(), newSch, dt)
+		newTbl, err := NewDoltSqlTable(t.db, t.Name(), newSch, dt)
 		if err != nil {
 			return nil, err
 		}
@@ -1763,7 +1763,7 @@ func fullTextRewriteEditor(
 	workingRoot doltdb.RootValue,
 ) (sql.RowInserter, error) {
 
-	newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
+	newTable, err := NewDoltSqlTable(t.db, t.Name(), newSch, dt)
 	if err != nil {
 		return nil, err
 	}
