@@ -1924,3 +1924,36 @@ tests:
         columns: ["count(*)"]
         rows:
         - ["3"]
+- name: clusterdb doesn't panic for nil write session
+  multi_repos:
+    - name: server1
+      repos:
+        - name: repo1
+          with_remotes:
+            - name: standby
+              url: http://localhost:3852/repo1
+        - name: repo2
+          with_remotes:
+            - name: standby
+              url: http://localhost:3852/repo2
+      with_files:
+        - name: server.yaml
+          contents: |
+            log_level: trace
+            listener:
+              host: 0.0.0.0
+              port: 3309
+            cluster:
+              standby_remotes:
+              - name: standby
+                remote_url_template: http://localhost:3852/{database}
+              bootstrap_role: primary
+              remotesapi:
+                port: 3851
+      server:
+        args: ["--config", "server.yaml"]
+        port: 3309
+  connections:
+    - on: server1
+      queries:
+        - exec: "set foreign_key_checks=0"

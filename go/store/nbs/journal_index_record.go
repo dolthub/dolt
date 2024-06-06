@@ -16,12 +16,11 @@ package nbs
 
 import (
 	"bufio"
-	"bytes"
-	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
-	"sort"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -82,6 +81,8 @@ const (
 	indexRecLastRootSz = 20
 	indexRecOffsetSz   = 8
 	indexRecChecksumSz = 4
+	lookupSz           = 16 + uint64Size + uint32Size
+	lookupMetaSz       = uint64Size + uint64Size + uint32Size + hash.ByteLen
 )
 
 func journalIndexRecordSize(idx []byte) (recordSz uint32) {
@@ -97,6 +98,8 @@ func journalIndexRecordSize(idx []byte) (recordSz uint32) {
 }
 
 func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx []byte) (n uint32) {
+	//defer trace.StartRegion(ctx, "writeJournalIndexRecord").End()
+
 	// length
 	l := journalIndexRecordSize(idx)
 	writeUint32(buf[:indexRecLenSz], l)
@@ -179,94 +182,183 @@ func validateIndexRecord(buf []byte) bool {
 	return crc(buf[:off]) == readUint32(buf[off:])
 }
 
-// processIndexRecords reads a sequence of index records from |r| and passes them to the callback. While reading records
-// it makes some basic assertions that the sequence is well-formed and indexes a contiguous region for the journal file.
-func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func(o int64, r indexRec) error) (err error) {
-	var (
-		buf  []byte
-		off  int64
-		prev uint64
-	)
+type lookupMeta struct {
+	batchStart int64
+	batchEnd   int64
+	checkSum   uint32
+	latestHash hash.Hash
+}
 
-	rdr := bufio.NewReader(r)
+const indexRecTypeSize = 1
+const (
+	indexRecChunk byte = iota
+	indexRecMeta
+)
+
+// processIndexRecords reads batches of chunk index lookups into the journal.
+// An index batch looks like |lookup|lookup|...|meta|. The first byte of a record
+// indicates whether it is a |lookup| or |meta|. Only callback errors are returned.
+// The caller is expected to track the latest lookupMeta end offset and truncate
+// the index to compensate for partially written batches.
+func processIndexRecords(rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (off int64, err error) {
+	var batchCrc uint32
+	var batch []lookup
+	var batchOff int64
 	for off < sz {
-		// peek to read next record size
-		if buf, err = rdr.Peek(uint32Size); err != nil {
-			break
+		recTag, err := rd.ReadByte()
+		if err != nil {
+			return off, nil
 		}
+		batchOff += 1
 
-		l := readUint32(buf)
-		if int64(l) > sz {
-			return fmt.Errorf("invalid record size %d for index file of size %d", l, sz)
-		}
-		if len(buf) < int(l) {
-			buf = make([]byte, l)
-		}
-		if _, err = io.ReadFull(rdr, buf); err != nil {
-			break
-		}
+		switch recTag {
+		case indexRecChunk:
+			l, err := readIndexLookup(rd)
+			if err != nil {
+				return off, nil
+			}
+			batchOff += lookupSz
+			batch = append(batch, l)
+			batchCrc = crc32.Update(batchCrc, crcTable, l.a[:])
 
-		// we do not zero-fill the journal index and expect
-		// only complete records that will checksum
-		if !validateIndexRecord(buf) {
-			return fmt.Errorf("failed to checksum index record at %d", off)
+		case indexRecMeta:
+			m, err := readIndexMeta(rd)
+			if err != nil {
+				return off, nil
+			}
+			if err := cb(m, batch, batchCrc); err != nil {
+				return off, err
+			}
+			batch = nil
+			batchCrc = 0
+			off += batchOff + lookupMetaSz
+			batchOff = 0
+		default:
+			return off, ErrMalformedIndex
 		}
-
-		var rec indexRec
-		if rec, err = readJournalIndexRecord(buf); err != nil {
-			return err
-		} else if rec.start != prev {
-			return fmt.Errorf("index records do not cover contiguous region (%d != %d)", rec.end, prev)
-		}
-
-		if err = cb(off, rec); err != nil {
-			return err
-		}
-		prev = rec.end
-		off += int64(len(buf))
 	}
-	if err == nil && off != sz {
-		err = fmt.Errorf("failed to process entire journal index (%d < %d)", off, sz)
-	} else if err == io.EOF {
-		err = nil
+	return off, nil
+}
+
+var ErrMalformedIndex = errors.New("journal index is malformed")
+
+// readIndexLookup reads a sequence of |chunkAddress|journalOffset|chunkLength|
+// that is used to speed up |journal.ranges| initialization.
+func readIndexLookup(r *bufio.Reader) (lookup, error) {
+	addr := addr16{}
+	if _, err := io.ReadFull(r, addr[:]); err != nil {
+		return lookup{}, err
 	}
-	return
+
+	var offsetBuf [uint64Size]byte
+	if _, err := io.ReadFull(r, offsetBuf[:]); err != nil {
+		return lookup{}, err
+	}
+	offset := binary.BigEndian.Uint64(offsetBuf[:])
+
+	var lengthBuf [uint32Size]byte
+	if _, err := io.ReadFull(r, lengthBuf[:]); err != nil {
+		return lookup{}, err
+	}
+	length := binary.BigEndian.Uint32(lengthBuf[:])
+
+	return lookup{a: addr, r: Range{Offset: offset, Length: length}}, nil
+}
+
+// readIndexMeta reads a sequence of |journalStart|journalEnd|lastRootHash|checksum|
+// that is used to validate a range of lookups on read. A corrupted lookup in the
+// start-end range will cause the checksum/crc check to fail. The last root hash
+// is a duplicate sanity check.
+func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
+	var startBuf [offsetSize]byte
+	if _, err := io.ReadFull(r, startBuf[:]); err != nil {
+		return lookupMeta{}, err
+	}
+	startOff := binary.BigEndian.Uint64(startBuf[:])
+
+	var endBuf [offsetSize]byte
+	if _, err := io.ReadFull(r, endBuf[:]); err != nil {
+		return lookupMeta{}, err
+	}
+	endOff := binary.BigEndian.Uint64(endBuf[:])
+
+	var checksumBuf [checksumSize]byte
+	if _, err := io.ReadFull(r, checksumBuf[:]); err != nil {
+		return lookupMeta{}, err
+	}
+	checksum := binary.BigEndian.Uint32(checksumBuf[:])
+
+	addr := hash.Hash{}
+	if _, err := io.ReadFull(r, addr[:]); err != nil {
+		return lookupMeta{}, err
+	}
+
+	return lookupMeta{
+		batchStart: int64(startOff),
+		batchEnd:   int64(endOff),
+		checkSum:   checksum,
+		latestHash: addr,
+	}, nil
+}
+
+func writeIndexLookup(w *bufio.Writer, l lookup) error {
+	w.WriteByte(indexRecChunk)
+
+	if _, err := w.Write(l.a[:]); err != nil {
+		return err
+	}
+
+	var offsetBuf [offsetSize]byte
+	binary.BigEndian.PutUint64(offsetBuf[:], l.r.Offset)
+	if _, err := w.Write(offsetBuf[:]); err != nil {
+		return err
+	}
+
+	var lengthBuf [lengthSize]byte
+	binary.BigEndian.PutUint32(lengthBuf[:], l.r.Length)
+	if _, err := w.Write(lengthBuf[:]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writeJournalIndexMeta writes a metadata record for an index range to verify
+// index bootstrapping integrity. Includes the range of index lookups, a CRC
+// checksum, and the latest root hash before |end|.
+func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, checksum uint32) error {
+	// |journal start|journal end|last root hash|range checkSum|
+
+	if err := w.WriteByte(indexRecMeta); err != nil {
+		return err
+	}
+
+	startBuf := make([]byte, offsetSize)
+	binary.BigEndian.PutUint64(startBuf, uint64(start))
+	if _, err := w.Write(startBuf); err != nil {
+		return err
+	}
+
+	endBuf := make([]byte, offsetSize)
+	binary.BigEndian.PutUint64(endBuf, uint64(end))
+	if _, err := w.Write(endBuf); err != nil {
+		return err
+	}
+
+	checksumBuf := make([]byte, checksumSize)
+	binary.BigEndian.PutUint32(checksumBuf, checksum)
+	if _, err := w.Write(checksumBuf); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(root[:]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type lookup struct {
-	a hash.Hash
+	a addr16
 	r Range
-}
-
-const lookupSize = hash.ByteLen + offsetSize + lengthSize
-
-// serializeLookups serializes |lookups| using the table file chunk index format.
-func serializeLookups(lookups []lookup) (index []byte) {
-	index = make([]byte, len(lookups)*lookupSize)
-	sort.Slice(lookups, func(i, j int) bool { // sort by addr
-		return bytes.Compare(lookups[i].a[:], lookups[j].a[:]) < 0
-	})
-	buf := index
-	for _, l := range lookups {
-		copy(buf, l.a[:])
-		buf = buf[hash.ByteLen:]
-		binary.BigEndian.PutUint64(buf, l.r.Offset)
-		buf = buf[offsetSize:]
-		binary.BigEndian.PutUint32(buf, l.r.Length)
-		buf = buf[lengthSize:]
-	}
-	return
-}
-
-func deserializeLookups(index []byte) (lookups []lookup) {
-	lookups = make([]lookup, len(index)/lookupSize)
-	for i := range lookups {
-		copy(lookups[i].a[:], index)
-		index = index[hash.ByteLen:]
-		lookups[i].r.Offset = binary.BigEndian.Uint64(index)
-		index = index[offsetSize:]
-		lookups[i].r.Length = binary.BigEndian.Uint32(index)
-		index = index[lengthSize:]
-	}
-	return
 }

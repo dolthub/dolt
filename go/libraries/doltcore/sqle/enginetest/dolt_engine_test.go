@@ -38,6 +38,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -137,22 +138,48 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "physical columns added after virtual one",
+			Name: "test hashof",
 			SetUpScript: []string{
-				"create table t (pk int primary key, col1 int as (pk + 1));",
-				"insert into t (pk) values (1), (3)",
-				"alter table t add index idx1 (col1, pk);",
-				"alter table t add index idx2 (col1);",
-				"alter table t add column col2 int;",
-				"alter table t add column col3 int;",
-				"insert into t (pk, col2, col3) values (2, 4, 5);",
+				"CREATE TABLE hashof_test (pk int primary key, c1 int)",
+				"INSERT INTO hashof_test values (1,1), (2,2), (3,3)",
+				"CALL DOLT_ADD('hashof_test')",
+				"CALL DOLT_COMMIT('-a', '-m', 'first commit')",
+				"SET @Commit1 = (SELECT commit_hash FROM DOLT_LOG() LIMIT 1)",
+				"INSERT INTO hashof_test values (4,4), (5,5), (6,6)",
+				"CALL DOLT_COMMIT('-a', '-m', 'second commit')",
+				"SET @Commit2 = (SELECT commit_hash from DOLT_LOG() LIMIT 1)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select * from t where col1 = 2",
+					Query:    "SELECT (hashof(@Commit1) = hashof(@Commit2))",
+					Expected: []sql.Row{{false}},
+				},
+				{
+					Query: "SELECT (hashof(@Commit1) = hashof('HEAD~1'))",
 					Expected: []sql.Row{
-						{1, 2, nil, nil},
+						{true},
 					},
+				},
+				{
+					Query: "SELECT (hashof(@Commit2) = hashof('HEAD'))",
+					Expected: []sql.Row{
+						{true},
+					},
+				},
+				{
+					Query: "SELECT (hashof(@Commit2) = hashof('main'))",
+					Expected: []sql.Row{
+						{true},
+					},
+				},
+				{
+					Query:          "SELECT hashof('non_branch')",
+					ExpectedErrStr: "invalid ref spec",
+				},
+				{
+					// Test that a short commit is invalid. This may change in the future.
+					Query:          "SELECT hashof(left(@Commit2,30))",
+					ExpectedErrStr: "invalid ref spec",
 				},
 			},
 		},
@@ -543,7 +570,18 @@ func TestSingleScriptPrepared(t *testing.T) {
 func TestVersionedQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueries(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEngine(t, e, h, tt)
+	}
 }
 
 func TestAnsiQuotesSqlMode(t *testing.T) {
@@ -614,11 +652,8 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	require.NoError(t, err)
 	defer e.Close()
 
-	for _, tt := range DoltDiffPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
-	}
-	for _, tt := range DoltCommitPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
+	for _, tt := range append(DoltDiffPlanTests, DoltCommitPlanTests...) {
+		enginetest.TestQueryPlanWithName(t, tt.Query, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
 	}
 }
 
@@ -1329,7 +1364,17 @@ func TestBranchViewsPrepared(t *testing.T) {
 func TestVersionedViews(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedViews(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, testCase := range queries.VersionedViewTests {
+		t.Run(testCase.Query, func(t *testing.T) {
+			ctx := enginetest.NewContext(h)
+			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil)
+		})
+	}
 }
 
 func TestWindowFunctions(t *testing.T) {
@@ -2522,6 +2567,18 @@ func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
 	}
 }
 
+func TestDoltDatabaseCollationDiffs(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range DoltDatabaseCollationScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestQueryDiff(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
@@ -2799,10 +2856,20 @@ func TestPreparedStatistics(t *testing.T) {
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueriesPrepared(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestPreparedQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEnginePrepared(t, e, h, tt)
+	}
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {
@@ -3011,7 +3078,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3067,7 +3134,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3143,7 +3210,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3257,12 +3324,14 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, e)
 
-	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
-		if name == "cannot_create" {
-			return fmt.Errorf("there was an error initializing this database. abort!")
-		}
-		return nil
-	}
+	doltDatabaseProvider := dh.provider.(*sqle.DoltDatabaseProvider)
+	doltDatabaseProvider.InitDatabaseHooks = append(doltDatabaseProvider.InitDatabaseHooks,
+		func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
+			if name == "cannot_create" {
+				return fmt.Errorf("there was an error initializing this database. abort!")
+			}
+			return nil
+		})
 
 	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "can_create")
 	require.NoError(t, err)

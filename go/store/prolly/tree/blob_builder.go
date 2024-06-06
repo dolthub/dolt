@@ -20,11 +20,13 @@ import (
 	"errors"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/goccy/go-json"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const DefaultFixedChunkLength = 4000
@@ -82,12 +84,15 @@ func (b *BlobBuilder) SetNodeStore(ns NodeStore) {
 func (b *BlobBuilder) Reset() {
 	b.wr = nil
 	b.topLevel = 0
+	b.buf = nil
+	b.vals = nil
+	b.subtrees = nil
+	b.lastN = Node{}
+	b.levelCap = 0
 }
 
 // Init calculates tree dimensions for a given blob.
 func (b *BlobBuilder) Init(dataSize int) {
-	b.Reset()
-
 	if dataSize == 0 {
 		return
 	}
@@ -272,17 +277,26 @@ func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
 	return &JSONDoc{ImmutableTree{Addr: addr, ns: ns}}
 }
 
-func (b *JSONDoc) ToJSONDocument(ctx context.Context) (types.JSONDocument, error) {
+func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sqltypes.JSONDocument, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
-		return types.JSONDocument{}, err
+		return sqltypes.JSONDocument{}, err
 	}
-	var doc types.JSONDocument
+	var doc sqltypes.JSONDocument
 	err = json.Unmarshal(buf, &doc.Val)
 	if err != nil {
-		return types.JSONDocument{}, err
+		return sqltypes.JSONDocument{}, err
 	}
 	return doc, err
+}
+
+func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return sqltypes.JSONDocument{}, err
+	}
+	buf = types.UnescapeHTMLCodepoints(buf)
+	return sqltypes.NewLazyJSONDocument(buf), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {

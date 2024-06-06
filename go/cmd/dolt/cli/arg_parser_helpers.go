@@ -67,7 +67,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
-	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables (including new tables) in the working set to the staged set.")
+	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
 	return ap
 }
@@ -82,7 +82,7 @@ func CreateConflictsResolveArgParser() *argparser.ArgParser {
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
-		return fmt.Errorf("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
+		return errors.New("Error: Dolt does not support merging from multiple commits. You probably meant to checkout one and then merge from the other.")
 	}
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	ap.SupportsFlag(SquashParam, "", "Merge changes to the working set without updating the commit history")
@@ -99,7 +99,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 func CreateRebaseArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
-		return fmt.Errorf("rebase takes at most one positional argument.")
+		return errors.New("rebase takes at most one positional argument.")
 	}
 	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
 	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
@@ -173,7 +173,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
 	ap.SupportsFlag(AbortParam, "", "Abort the current conflict resolution process, and revert all changes from the in-process cherry-pick operation.")
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
-		return fmt.Errorf("cherry-picking multiple commits is not supported yet.")
+		return errors.New("cherry-picking multiple commits is not supported yet.")
 	}
 	return ap
 }
@@ -398,7 +398,7 @@ func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
 // if any validation problems were encountered.
 func VerifyCommitArgs(apr *argparser.ArgParseResults) error {
 	if apr.Contains(AllowEmptyFlag) && apr.Contains(SkipEmptyFlag) {
-		return fmt.Errorf("error: cannot use both --allow-empty and --skip-empty")
+		return errors.New("error: cannot use both --allow-empty and --skip-empty")
 	}
 
 	return nil

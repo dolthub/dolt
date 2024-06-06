@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
@@ -43,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -72,7 +74,7 @@ type SqlEngineConfig struct {
 	Autocommit              bool
 	DoltTransactionCommit   bool
 	Bulk                    bool
-	JwksConfig              []JwksConfig
+	JwksConfig              []servercfg.JwksConfig
 	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
@@ -133,12 +135,13 @@ func NewSqlEngine(
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	config.ClusterController.RegisterStoredProcedures(pro)
-	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	if config.ClusterController != nil {
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, cluster.NewInitDatabaseHook(config.ClusterController, bThreads))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.ClusterController.DropDatabaseHook())
+		config.ClusterController.SetDropDatabase(pro.DropDatabase)
+	}
 
 	sqlEngine := &SqlEngine{}
-
-	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
-	config.ClusterController.SetDropDatabase(pro.DropDatabase)
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -395,7 +398,7 @@ func sqlContextFactory() contextFactory {
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
 func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession)
 		if err != nil {
 			return nil, err
 		}

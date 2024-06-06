@@ -44,6 +44,10 @@ func (database) Name() string {
 	return DoltClusterDbName
 }
 
+func (db database) Schema() string {
+	return ""
+}
+
 func (db database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	tblName = strings.ToLower(tblName)
 	if tblName == StatusTableName {
@@ -125,7 +129,7 @@ func (db database) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
 
-func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
+func (db database) GetRoot(context *sql.Context) (doltdb.RootValue, error) {
 	return nil, errors.New("unimplemented")
 }
 

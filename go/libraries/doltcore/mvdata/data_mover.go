@@ -124,7 +124,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, dEnv *env.DoltEnv
 	}
 }
 
-func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.ReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
+func InferSchema(ctx context.Context, root doltdb.RootValue, rd table.ReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
 	var err error
 
 	infCols, err := actions.InferColumnTypesFromTableReader(ctx, rd, args)
@@ -158,7 +158,7 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.ReadClose
 		}
 	}
 
-	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
+	newCols, err = doltdb.GenerateTagsForNewColColl(ctx, root, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}

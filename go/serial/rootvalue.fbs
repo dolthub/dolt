@@ -25,6 +25,13 @@ table RootValue {
   foreign_key_addr:[ubyte];
 
   collation:Collation;
+  
+  // schemas records the schemas in this database, which may be empty for a database with a single default schema
+  schemas:[DatabaseSchema];
+}
+
+table DatabaseSchema {
+  name:string;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

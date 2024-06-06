@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-func setupEditorFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
+func setupEditorFkTest(t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
@@ -651,8 +651,8 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	}
 }
 
-func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.Row, tableName string) {
-	tbl, ok, err := root.GetTable(context.Background(), tableName)
+func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.Row, tableName string) {
+	tbl, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -741,7 +741,7 @@ func sortInt64Rows(rows []sql.Row) []sql.Row {
 	return rows
 }
 
-func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, *doltdb.RootValue) {
+func setupEditorKeylessFkTest(t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {

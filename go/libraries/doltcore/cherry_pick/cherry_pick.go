@@ -66,7 +66,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	}
 
 	newWorkingRoot := mergeResult.Root
-	err = doltSession.SetRoot(ctx, dbName, newWorkingRoot)
+	err = doltSession.SetWorkingRoot(ctx, dbName, newWorkingRoot)
 	if err != nil {
 		return "", nil, err
 	}
@@ -323,7 +323,8 @@ func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.Merg
 		return fmt.Errorf("unable to get roots for database '%s' from session", dbName)
 	}
 
-	roots, err = actions.StageTables(ctx, roots, tablesToAdd, true)
+	// TODO: schema name
+	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(tablesToAdd, doltdb.DefaultSchemaName), true)
 	if err != nil {
 		return err
 	}

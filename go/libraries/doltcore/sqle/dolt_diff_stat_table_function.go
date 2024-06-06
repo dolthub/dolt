@@ -306,15 +306,16 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	var diffStats []diffStatNode
 	for _, delta := range deltas {
 		tblName := delta.ToName
-		if tblName == "" {
+		if tblName.Name == "" {
 			tblName = delta.FromName
 		}
-		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName)
+		// TODO: schema name
+		diffStat, hasDiff, err := getDiffStatNodeFromDelta(ctx, delta, fromRefDetails.root, toRefDetails.root, tblName.Name)
 		if err != nil {
 			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))
 				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName})
+				diffStats = append(diffStats, diffStatNode{tblName: tblName.Name})
 				continue
 			}
 			return nil, err
@@ -368,10 +369,10 @@ func (ds *DiffStatTableFunction) evaluateArguments() (interface{}, interface{}, 
 
 // getDiffStatNodeFromDelta returns diffStatNode object and whether there is data diff or not. It gets tables
 // from roots and diff stat if there is a valid table exists in both fromRoot and toRoot.
-func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot *doltdb.RootValue, tableName string) (diffStatNode, bool, error) {
+func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot, toRoot doltdb.RootValue, tableName string) (diffStatNode, bool, error) {
 	var oldColLen int
 	var newColLen int
-	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
+	fromTable, _, fromTableExists, err := doltdb.GetTableInsensitive(ctx, fromRoot, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return diffStatNode{}, false, err
 	}
@@ -384,7 +385,7 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 		oldColLen = len(fromSch.GetAllCols().GetColumns())
 	}
 
-	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
+	toTable, _, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRoot, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return diffStatNode{}, false, err
 	}

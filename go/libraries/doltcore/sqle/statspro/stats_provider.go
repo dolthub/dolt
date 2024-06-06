@@ -128,14 +128,15 @@ func (p *Provider) ThreadStatus(dbName string) string {
 	return "no active stats thread"
 }
 
-func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
+func (p *Provider) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return nil, nil
 	}
 
-	return p.GetTableDoltStats(ctx, branch, db, table)
+	// TODO: schema name
+	return p.GetTableDoltStats(ctx, branch, db, table.Name())
 }
 
 func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error) {
@@ -279,7 +280,7 @@ func (p *Provider) UpdateStatus(db string, msg string) {
 	p.status[db] = msg
 }
 
-func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {
+func (p *Provider) RowCount(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -294,7 +295,8 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 		return 0, err
 	}
 
-	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table, "primary"))
+	// TODO: schema name
+	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table.Name(), "primary"))
 	if !ok {
 		return 0, nil
 	}
@@ -302,7 +304,7 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 	return priStats.RowCount(), nil
 }
 
-func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error) {
+func (p *Provider) DataLength(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -317,7 +319,8 @@ func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error
 		return 0, err
 	}
 
-	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table, "primary"))
+	// TODO: schema name
+	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table.Name(), "primary"))
 	if !ok {
 		return 0, nil
 	}

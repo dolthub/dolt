@@ -98,9 +98,9 @@ func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
 }
 
 type RootMerger struct {
-	left  *doltdb.RootValue
-	right *doltdb.RootValue
-	anc   *doltdb.RootValue
+	left  doltdb.RootValue
+	right doltdb.RootValue
+	anc   doltdb.RootValue
 
 	rightSrc doltdb.Rootish
 	ancSrc   doltdb.Rootish
@@ -111,7 +111,7 @@ type RootMerger struct {
 
 // NewMerger creates a new merger utility object.
 func NewMerger(
-	left, right, anc *doltdb.RootValue,
+	left, right, anc doltdb.RootValue,
 	rightSrc, ancestorSrc doltdb.Rootish,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
@@ -199,7 +199,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 	var err error
 	var leftSideTableExists, rightSideTableExists, ancTableExists bool
 
-	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, tblName)
+	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
+	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, tblName)
+	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}

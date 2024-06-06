@@ -61,7 +61,7 @@ type IndexSet interface {
 	HashOf() (hash.Hash, error)
 
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
+	GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error)
 
 	// HasIndex returns true if an index with the specified name exists in the set.
 	HasIndex(ctx context.Context, name string) (bool, error)
@@ -160,7 +160,7 @@ func IterAllIndexes(
 	cb func(name string, idx Index) error,
 ) error {
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := set.GetIndex(ctx, sch, def.Name())
+		idx, err := set.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return err
 		}
@@ -405,7 +405,7 @@ func (s nomsIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
 }
 
 // GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+func (s nomsIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
@@ -414,15 +414,15 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 		return nil, err
 	}
 
-	idx := sch.Indexes().GetByName(name)
+	idx := tableSch.Indexes().GetByName(name)
 	if idx == nil {
 		return nil, fmt.Errorf("index not found: %s", name)
 	}
 
-	return indexFromRef(ctx, s.vrw, s.ns, idx.Schema(), v.(types.Ref))
+	return indexFromRef(ctx, s.vrw, s.ns, idxSch, v.(types.Ref))
 }
 
-// PutIndex implements IndexSet.
+// PutNomsIndex implements IndexSet.
 func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
 	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw, s.ns))
 }
@@ -497,7 +497,7 @@ func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, erro
 	return true, nil
 }
 
-func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
 	addr, err := is.am.Get(ctx, name)
 	if err != nil {
 		return nil, err
@@ -505,11 +505,14 @@ func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name 
 	if addr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
-	idx := sch.Indexes().GetByName(name)
+	idx := tableSch.Indexes().GetByName(name)
 	if idx == nil {
 		return nil, fmt.Errorf("index schema not found: %s", name)
 	}
-	return indexFromAddr(ctx, is.vrw, is.ns, idx.Schema(), addr)
+	if idxSch == nil {
+		idxSch = idx.Schema()
+	}
+	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, addr)
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {

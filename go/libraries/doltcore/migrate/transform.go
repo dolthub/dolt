@@ -224,7 +224,6 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	if err != nil {
 		return err
 	}
-	nv := doltdb.HackNomsValuesFromRootValues(rv)
 
 	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
@@ -237,7 +236,7 @@ func migrateInitCommit(ctx context.Context, cm *doltdb.Commit, new *doltdb.DoltD
 	if err != nil {
 		return err
 	}
-	ds, err = datasDB.Commit(ctx, ds, nv, datas.CommitOptions{Meta: meta})
+	ds, err = datasDB.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
 	if err != nil {
 		return err
 	}
@@ -282,7 +281,7 @@ func migrateCommitOptions(ctx context.Context, oldCm *doltdb.Commit, prog *progr
 	}, nil
 }
 
-func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent *doltdb.RootValue) (*doltdb.RootValue, error) {
+func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newParent doltdb.RootValue) (doltdb.RootValue, error) {
 	migrated := newParent
 
 	fkc, err := oldRoot.GetForeignKeyCollection(ctx)
@@ -300,12 +299,12 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		return nil, err
 	}
 
-	migrated, err = migrated.RemoveTables(ctx, true, false, removedTables...)
+	migrated, err = migrated.RemoveTables(ctx, true, false, doltdb.ToTableNames(removedTables, doltdb.DefaultSchemaName)...)
 	if err != nil {
 		return nil, err
 	}
 
-	err = oldRoot.IterTables(ctx, func(name string, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
+	err = oldRoot.IterTables(ctx, func(name doltdb.TableName, oldTbl *doltdb.Table, sch schema.Schema) (bool, error) {
 		ok, err := oldTbl.HasConflicts(ctx)
 		if err != nil {
 			return true, err
@@ -313,7 +312,8 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			return true, fmt.Errorf("cannot migrate table with conflicts (%s)", name)
 		}
 
-		newSch, err := migrateSchema(ctx, name, sch)
+		// TODO: schema names
+		newSch, err := migrateSchema(ctx, name.Name, sch)
 		if err != nil {
 			return true, err
 		}
@@ -374,13 +374,13 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 }
 
 // renames also get returned here
-func getRemovedTableNames(ctx context.Context, prev, curr *doltdb.RootValue) ([]string, error) {
-	prevNames, err := prev.GetTableNames(ctx)
+func getRemovedTableNames(ctx context.Context, prev, curr doltdb.RootValue) ([]string, error) {
+	prevNames, err := prev.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 	tblNameSet := set.NewStrSet(prevNames)
-	currNames, err := curr.GetTableNames(ctx)
+	currNames, err := curr.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -566,19 +566,19 @@ func migrateIndexSet(
 		return nil, err
 	}
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := oldParentSet.GetIndex(ctx, sch, def.Name())
+		idx, err := oldParentSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}
 		oldParent := durable.NomsMapFromIndex(idx)
 
-		idx, err = oldSet.GetIndex(ctx, sch, def.Name())
+		idx, err = oldSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}
 		old := durable.NomsMapFromIndex(idx)
 
-		idx, err = newParentSet.GetIndex(ctx, sch, def.Name())
+		idx, err = newParentSet.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return nil, err
 		}

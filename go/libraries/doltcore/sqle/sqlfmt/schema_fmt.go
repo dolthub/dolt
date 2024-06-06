@@ -20,9 +20,176 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
+
+// GenerateDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
+func GenerateDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
+	if len(row) != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	}
+
+	switch rowDiffType {
+	case diff.Added:
+		return SqlRowAsInsertStmt(row, tableName, sch)
+	case diff.Removed:
+		return SqlRowAsDeleteStmt(row, tableName, sch, 0)
+	case diff.ModifiedNew:
+		updatedCols := set.NewEmptyStrSet()
+		for i, diffType := range colDiffTypes {
+			if diffType != diff.None {
+				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
+			}
+		}
+		if updatedCols.Size() == 0 {
+			return "", nil
+		}
+		return SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+	case diff.ModifiedOld:
+		// do nothing, we only issue UPDATE for ModifiedNew
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected row diff type: %v", rowDiffType)
+	}
+}
+
+// GenerateSqlPatchSchemaStatements examines the table schema changes in the specified TableDelta |td| and returns
+// a slice of SQL path statements that represent the equivalent SQL DDL statements for those schema changes. The
+// specified RootValue, |toRoot|, must be the RootValue that was used as the "To" root when computing the specified
+// TableDelta.
+func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue, td diff.TableDelta) ([]string, error) {
+	toSchemas, err := doltdb.GetAllSchemas(ctx, toRoot)
+	if err != nil {
+		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
+	}
+
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
+	}
+
+	var ddlStatements []string
+	if td.IsDrop() {
+		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName.Name))
+	} else if td.IsAdd() {
+		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		ddlStatements = append(ddlStatements, stmt)
+	} else {
+		stmts, err := generateNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		if err != nil {
+			return nil, err
+		}
+		ddlStatements = append(ddlStatements, stmts...)
+	}
+
+	return ddlStatements, nil
+}
+
+func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
+	nameMap := make(map[string]schema.Schema)
+	for name := range tableNameMap {
+		nameMap[name.Name] = tableNameMap[name]
+	}
+	return nameMap
+}
+
+// generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
+// TODO: schema names
+func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+	if td.IsAdd() || td.IsDrop() {
+		// use add and drop specific methods
+		return nil, nil
+	}
+
+	var ddlStatements []string
+	if td.FromName != td.ToName {
+		ddlStatements = append(ddlStatements, RenameTableStmt(td.FromName.Name, td.ToName.Name))
+	}
+
+	eq := schema.SchemasAreEqual(fromSch, toSch)
+	if eq && !td.HasFKChanges() {
+		return ddlStatements, nil
+	}
+
+	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		switch cd.DiffType {
+		case diff.SchDiffNone:
+		case diff.SchDiffAdded:
+			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+		case diff.SchDiffRemoved:
+			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
+		case diff.SchDiffModified:
+			// Ignore any primary key set changes here
+			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+				continue
+			}
+			if cd.Old.Name != cd.New.Name {
+				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
+			}
+			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
+				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
+					GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			}
+		}
+	}
+
+	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		ddlStatements = append(ddlStatements, AlterTableDropPks(td.ToName.Name))
+		if toSch.GetPKCols().Size() > 0 {
+			ddlStatements = append(ddlStatements, AlterTableAddPrimaryKeys(td.ToName.Name, toSch.GetPKCols().GetColumnNames()))
+		}
+	}
+
+	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
+		switch idxDiff.DiffType {
+		case diff.SchDiffNone:
+		case diff.SchDiffAdded:
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
+		case diff.SchDiffRemoved:
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
+		case diff.SchDiffModified:
+			ddlStatements = append(ddlStatements, AlterTableDropIndexStmt(td.FromName.Name, idxDiff.From))
+			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
+		}
+	}
+
+	for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
+		switch fkDiff.DiffType {
+		case diff.SchDiffNone:
+		case diff.SchDiffAdded:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		case diff.SchDiffRemoved:
+			from := fkDiff.From
+			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(from.TableName, from.Name))
+		case diff.SchDiffModified:
+			from := fkDiff.From
+			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(from.TableName, from.Name))
+
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+		}
+	}
+
+	// Handle charset/collation changes
+	toCollation := toSch.GetCollation()
+	fromCollation := fromSch.GetCollation()
+	if toCollation != fromCollation {
+		ddlStatements = append(ddlStatements, AlterTableCollateStmt(td.ToName.Name, fromCollation, toCollation))
+	}
+
+	return ddlStatements, nil
+}
 
 // GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
@@ -231,6 +398,15 @@ func AlterTableCollateStmt(tableName string, fromCollation, toCollation schema.C
 	return b.String()
 }
 
+func AlterDatabaseCollateStmt(dbName string, fromCollation, toCollation schema.Collation) string {
+	var b strings.Builder
+	b.WriteString("ALTER DATABASE ")
+	b.WriteString(QuoteIdentifier(dbName))
+	toCollationId := sql.CollationID(toCollation)
+	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
+	return b.String()
+}
+
 func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
@@ -268,7 +444,13 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 // GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
 // `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
-func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+// TODO: schema names
+func GenerateCreateTableStatement(
+	tblName string,
+	sch schema.Schema,
+	fks []doltdb.ForeignKey,
+	fksParentSch map[string]schema.Schema,
+) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 
 	// Statement creation parts for each column

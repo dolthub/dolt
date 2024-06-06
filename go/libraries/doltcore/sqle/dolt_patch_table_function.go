@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"golang.org/x/exp/slices"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -118,6 +117,7 @@ func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 
 // PartitionRows is a sql.Table interface function that takes a partition and returns all rows in that partition.
 // This table has a partition for just schema changes, one for just data changes, and one for both.
+// TODO: schema names
 func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
 	if err != nil {
@@ -140,16 +140,16 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 	}
 
 	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
+		return tableDeltas[i].ToName.Less(tableDeltas[j].ToName)
 	})
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
+		fromTblExists, err := fromRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
+		toTblExists, err := toRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
@@ -482,9 +482,28 @@ type patchNode struct {
 
 func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails, includeSchemaDiff, includeDataDiff bool) (patches []*patchNode, err error) {
 	for _, td := range tableDeltas {
-		// no diff
 		if td.FromTable == nil && td.ToTable == nil {
-			continue
+			// no diff
+			if !strings.HasPrefix(td.FromName.Name, diff.DBPrefix) || !strings.HasPrefix(td.ToName.Name, diff.DBPrefix) {
+				continue
+			}
+
+			// db collation diff
+			dbName := strings.TrimPrefix(td.ToName.Name, diff.DBPrefix)
+			fromColl, cerr := fromRefDetails.root.GetCollation(ctx)
+			if cerr != nil {
+				return nil, cerr
+			}
+			toColl, cerr := toRefDetails.root.GetCollation(ctx)
+			if cerr != nil {
+				return nil, cerr
+			}
+			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
+			patches = append(patches, &patchNode{
+				tblName:          td.FromName.Name,
+				schemaPatchStmts: []string{alterDBCollStmt},
+				dataPatchStmts:   []string{},
+			})
 		}
 
 		tblName := td.ToName
@@ -495,8 +514,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-
-			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
+			schemaStmts, err = sqlfmt.GenerateSqlPatchSchemaStatements(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
 			}
@@ -511,41 +529,10 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 		}
 
-		patches = append(patches, &patchNode{tblName: tblName, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
+		patches = append(patches, &patchNode{tblName: tblName.Name, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
 	}
 
 	return patches, nil
-}
-
-func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.TableDelta) ([]string, error) {
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("could not read schemas from toRoot, cause: %s", err.Error())
-	}
-
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
-	}
-
-	var ddlStatements []string
-	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
-	} else if td.IsAdd() {
-		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName, td.ToSch, td.ToFks, td.ToFksParentSch)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		ddlStatements = append(ddlStatements, stmt)
-	} else {
-		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
-		if err != nil {
-			return nil, err
-		}
-		ddlStatements = append(ddlStatements, stmts...)
-	}
-
-	return ddlStatements, nil
 }
 
 func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
@@ -573,12 +560,12 @@ func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.Table
 		return nil, err
 	}
 
-	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName, td.ToSch)
+	targetPkSch, err := sqlutil.FromDoltSchema("", td.ToName.Name, td.ToSch)
 	if err != nil {
 		return nil, err
 	}
 
-	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName, td.ToSch)
+	return getDataSqlPatchResults(ctx, diffSch, targetPkSch.Schema, projections, ri, td.ToName.Name, td.ToSch)
 }
 
 func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema, projections []sql.Expression, iter sql.RowIter, tn string, tsch schema.Schema) ([]string, error) {
@@ -608,14 +595,14 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = diff.GetDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
@@ -625,92 +612,6 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 			res = append(res, stmt)
 		}
 	}
-}
-
-// GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
-func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
-	if td.IsAdd() || td.IsDrop() {
-		// use add and drop specific methods
-		return nil, nil
-	}
-
-	var ddlStatements []string
-	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
-	}
-
-	eq := schema.SchemasAreEqual(fromSch, toSch)
-	if eq && !td.HasFKChanges() {
-		return ddlStatements, nil
-	}
-
-	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
-	for _, tag := range unionTags {
-		cd := colDiffs[tag]
-		switch cd.DiffType {
-		case diff.SchDiffNone:
-		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
-		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
-		case diff.SchDiffModified:
-			// Ignore any primary key set changes here
-			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
-				continue
-			}
-			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
-			}
-		}
-	}
-
-	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
-		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols().GetColumnNames()))
-		}
-	}
-
-	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
-		switch idxDiff.DiffType {
-		case diff.SchDiffNone:
-		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-		case diff.SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-		case diff.SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-		}
-	}
-
-	for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
-		switch fkDiff.DiffType {
-		case diff.SchDiffNone:
-		case diff.SchDiffAdded:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-		case diff.SchDiffRemoved:
-			from := fkDiff.From
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(from.TableName, from.Name))
-		case diff.SchDiffModified:
-			from := fkDiff.From
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(from.TableName, from.Name))
-
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-		}
-	}
-
-	// Handle charset/collation changes
-	toCollation := toSch.GetCollation()
-	fromCollation := fromSch.GetCollation()
-	if toCollation != fromCollation {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableCollateStmt(td.ToName, fromCollation, toCollation))
-	}
-
-	return ddlStatements, nil
 }
 
 // getDiffQuery returns diff schema for specified columns and array of sql.Expression as projection to be used

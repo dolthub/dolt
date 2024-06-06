@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package servercfg
 
 import (
 	"fmt"
@@ -23,14 +23,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
-
-func strPtr(s string) *string {
-	return &s
-}
 
 func nillableStrPtr(s string) *string {
 	if s == "" {
@@ -46,22 +40,10 @@ func nillableBoolPtr(b bool) *bool {
 	return &b
 }
 
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func uint64Ptr(n uint64) *uint64 {
-	return &n
-}
-
 func nillableIntPtr(n int) *int {
 	if n == 0 {
 		return nil
 	}
-	return &n
-}
-
-func intPtr(n int) *int {
 	return &n
 }
 
@@ -156,14 +138,14 @@ type YAMLConfig struct {
 	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
-	Vars            []UserSessionVars       `yaml:"user_session_vars"`
-	SystemVars_     *engine.SystemVariables `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []engine.JwksConfig     `yaml:"jwks"`
-	GoldenMysqlConn *string                 `yaml:"golden_mysql_conn,omitempty"`
+	Vars            []UserSessionVars      `yaml:"user_session_vars"`
+	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
+	Jwks            []JwksConfig           `yaml:"jwks"`
+	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 }
 
 var _ ServerConfig = YAMLConfig{}
-var _ validatingServerConfig = YAMLConfig{}
+var _ ValidatingServerConfig = YAMLConfig{}
 var _ WritableServerConfig = &YAMLConfig{}
 
 func NewYamlConfig(configFileData []byte) (*YAMLConfig, error) {
@@ -192,29 +174,29 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
-	systemVars := cfg.SystemVars()
+	systemVars := map[string]interface{}(cfg.SystemVars())
 	return &YAMLConfig{
-		LogLevelStr:       strPtr(string(cfg.LogLevel())),
+		LogLevelStr:       ptr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
-			boolPtr(cfg.ReadOnly()),
-			boolPtr(cfg.AutoCommit()),
-			strPtr(cfg.PersistenceBehavior()),
-			boolPtr(cfg.DisableClientMultiStatements()),
-			boolPtr(cfg.DoltTransactionCommit()),
-			strPtr(cfg.EventSchedulerStatus()),
+			ptr(cfg.ReadOnly()),
+			ptr(cfg.AutoCommit()),
+			ptr(cfg.PersistenceBehavior()),
+			ptr(cfg.DisableClientMultiStatements()),
+			ptr(cfg.DoltTransactionCommit()),
+			ptr(cfg.EventSchedulerStatus()),
 		},
 		UserConfig: UserYAMLConfig{
-			Name:     strPtr(cfg.User()),
-			Password: strPtr(cfg.Password()),
+			Name:     ptr(cfg.User()),
+			Password: ptr(cfg.Password()),
 		},
 		ListenerConfig: ListenerYAMLConfig{
-			strPtr(cfg.Host()),
-			intPtr(cfg.Port()),
-			uint64Ptr(cfg.MaxConnections()),
-			uint64Ptr(cfg.ReadTimeout()),
-			uint64Ptr(cfg.WriteTimeout()),
+			ptr(cfg.Host()),
+			ptr(cfg.Port()),
+			ptr(cfg.MaxConnections()),
+			ptr(cfg.ReadTimeout()),
+			ptr(cfg.WriteTimeout()),
 			nillableStrPtr(cfg.TLSKey()),
 			nillableStrPtr(cfg.TLSCert()),
 			nillableBoolPtr(cfg.RequireSecureTransport()),
@@ -224,27 +206,27 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		PerformanceConfig: PerformanceYAMLConfig{
 			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
 		},
-		DataDirStr: strPtr(cfg.DataDir()),
-		CfgDirStr:  strPtr(cfg.CfgDir()),
+		DataDirStr: ptr(cfg.DataDir()),
+		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
 			Labels: cfg.MetricsLabels(),
 			Host:   nillableStrPtr(cfg.MetricsHost()),
-			Port:   intPtr(cfg.MetricsPort()),
+			Port:   ptr(cfg.MetricsPort()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
 			ReadOnly_: cfg.RemotesapiReadOnly(),
 		},
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
-		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
-		BranchControlFile: strPtr(cfg.BranchControlFilePath()),
-		SystemVars_:       &systemVars,
+		PrivilegeFile:     ptr(cfg.PrivilegeFilePath()),
+		BranchControlFile: ptr(cfg.BranchControlFilePath()),
+		SystemVars_:       systemVars,
 		Vars:              cfg.UserVars(),
 		Jwks:              cfg.JwksConfig(),
 	}
 }
 
-func clusterConfigAsYAMLConfig(config cluster.Config) *ClusterYAMLConfig {
+func clusterConfigAsYAMLConfig(config ClusterConfig) *ClusterYAMLConfig {
 	if config == nil {
 		return nil
 	}
@@ -300,7 +282,7 @@ func (cfg YAMLConfig) String() string {
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
 func (cfg YAMLConfig) Host() string {
 	if cfg.ListenerConfig.HostStr == nil {
-		return defaultHost
+		return DefaultHost
 	}
 
 	return *cfg.ListenerConfig.HostStr
@@ -309,7 +291,7 @@ func (cfg YAMLConfig) Host() string {
 // Port returns the port that the server will run on. The valid range is [1024, 65535].
 func (cfg YAMLConfig) Port() int {
 	if cfg.ListenerConfig.PortNumber == nil {
-		return defaultPort
+		return DefaultPort
 	}
 
 	return *cfg.ListenerConfig.PortNumber
@@ -318,7 +300,7 @@ func (cfg YAMLConfig) Port() int {
 // ReadTimeout returns the read timeout in milliseconds.
 func (cfg YAMLConfig) ReadTimeout() uint64 {
 	if cfg.ListenerConfig.ReadTimeoutMillis == nil {
-		return defaultTimeout
+		return DefaultTimeout
 	}
 
 	return *cfg.ListenerConfig.ReadTimeoutMillis
@@ -327,7 +309,7 @@ func (cfg YAMLConfig) ReadTimeout() uint64 {
 // WriteTimeout returns the write timeout in milliseconds.
 func (cfg YAMLConfig) WriteTimeout() uint64 {
 	if cfg.ListenerConfig.WriteTimeoutMillis == nil {
-		return defaultTimeout
+		return DefaultTimeout
 	}
 
 	return *cfg.ListenerConfig.WriteTimeoutMillis
@@ -336,7 +318,7 @@ func (cfg YAMLConfig) WriteTimeout() uint64 {
 // User returns the username that connecting clients must use.
 func (cfg YAMLConfig) User() string {
 	if cfg.UserConfig.Name == nil {
-		return defaultUser
+		return DefaultUser
 	}
 
 	return *cfg.UserConfig.Name
@@ -353,7 +335,7 @@ func (cfg *YAMLConfig) SetPassword(s string) {
 // Password returns the password that connecting clients must use.
 func (cfg YAMLConfig) Password() string {
 	if cfg.UserConfig.Password == nil {
-		return defaultPass
+		return DefaultPass
 	}
 
 	return *cfg.UserConfig.Password
@@ -362,7 +344,7 @@ func (cfg YAMLConfig) Password() string {
 // ReadOnly returns whether the server will only accept read statements or all statements.
 func (cfg YAMLConfig) ReadOnly() bool {
 	if cfg.BehaviorConfig.ReadOnly == nil {
-		return defaultReadOnly
+		return DefaultReadOnly
 	}
 
 	return *cfg.BehaviorConfig.ReadOnly
@@ -371,7 +353,7 @@ func (cfg YAMLConfig) ReadOnly() bool {
 // AutoCommit defines the value of the @@autocommit session variable used on every connection
 func (cfg YAMLConfig) AutoCommit() bool {
 	if cfg.BehaviorConfig.AutoCommit == nil {
-		return defaultAutoCommit
+		return DefaultAutoCommit
 	}
 
 	return *cfg.BehaviorConfig.AutoCommit
@@ -381,7 +363,7 @@ func (cfg YAMLConfig) AutoCommit() bool {
 // commits to be automatically created when a SQL transaction is committed.
 func (cfg YAMLConfig) DoltTransactionCommit() bool {
 	if cfg.BehaviorConfig.DoltTransactionCommit == nil {
-		return defaultDoltTransactionCommit
+		return DefaultDoltTransactionCommit
 	}
 
 	return *cfg.BehaviorConfig.DoltTransactionCommit
@@ -390,7 +372,7 @@ func (cfg YAMLConfig) DoltTransactionCommit() bool {
 // LogLevel returns the level of logging that the server will use.
 func (cfg YAMLConfig) LogLevel() LogLevel {
 	if cfg.LogLevelStr == nil {
-		return defaultLogLevel
+		return DefaultLogLevel
 	}
 
 	return LogLevel(*cfg.LogLevelStr)
@@ -399,7 +381,7 @@ func (cfg YAMLConfig) LogLevel() LogLevel {
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg YAMLConfig) MaxConnections() uint64 {
 	if cfg.ListenerConfig.MaxConnections == nil {
-		return defaultMaxConnections
+		return DefaultMaxConnections
 	}
 
 	return *cfg.ListenerConfig.MaxConnections
@@ -423,7 +405,7 @@ func (cfg YAMLConfig) MetricsLabels() map[string]string {
 
 func (cfg YAMLConfig) MetricsHost() string {
 	if cfg.MetricsConfig.Host == nil {
-		return defaultMetricsHost
+		return DefaultMetricsHost
 	}
 
 	return *cfg.MetricsConfig.Host
@@ -431,7 +413,7 @@ func (cfg YAMLConfig) MetricsHost() string {
 
 func (cfg YAMLConfig) MetricsPort() int {
 	if cfg.MetricsConfig.Host == nil {
-		return defaultMetricsPort
+		return DefaultMetricsPort
 	}
 
 	return *cfg.MetricsConfig.Port
@@ -451,7 +433,7 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 	if cfg.PrivilegeFile != nil {
 		return *cfg.PrivilegeFile
 	}
-	return filepath.Join(cfg.CfgDir(), defaultPrivilegeFilePath)
+	return filepath.Join(cfg.CfgDir(), DefaultPrivilegeFilePath)
 }
 
 // BranchControlFilePath returns the path to the file which contains the branch control permissions.
@@ -459,7 +441,7 @@ func (cfg YAMLConfig) BranchControlFilePath() string {
 	if cfg.BranchControlFile != nil {
 		return *cfg.BranchControlFile
 	}
-	return filepath.Join(cfg.CfgDir(), defaultBranchControlFilePath)
+	return filepath.Join(cfg.CfgDir(), DefaultBranchControlFilePath)
 }
 
 // UserVars is an array containing user specific session variables
@@ -471,16 +453,16 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	return nil
 }
 
-func (cfg YAMLConfig) SystemVars() engine.SystemVariables {
+func (cfg YAMLConfig) SystemVars() map[string]interface{} {
 	if cfg.SystemVars_ == nil {
-		return engine.SystemVariables{}
+		return map[string]interface{}{}
 	}
 
-	return *cfg.SystemVars_
+	return cfg.SystemVars_
 }
 
-// JwksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
-func (cfg YAMLConfig) JwksConfig() []engine.JwksConfig {
+// wksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
+func (cfg YAMLConfig) JwksConfig() []JwksConfig {
 	if cfg.Jwks != nil {
 		return cfg.Jwks
 	}
@@ -489,7 +471,7 @@ func (cfg YAMLConfig) JwksConfig() []engine.JwksConfig {
 
 func (cfg YAMLConfig) AllowCleartextPasswords() bool {
 	if cfg.ListenerConfig.AllowCleartextPasswords == nil {
-		return defaultAllowCleartextPasswords
+		return DefaultAllowCleartextPasswords
 	}
 	return *cfg.ListenerConfig.AllowCleartextPasswords
 }
@@ -497,7 +479,7 @@ func (cfg YAMLConfig) AllowCleartextPasswords() bool {
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {
-		return defaultQueryParallelism
+		return DefaultQueryParallelism
 	}
 
 	return *cfg.PerformanceConfig.QueryParallelism
@@ -532,7 +514,7 @@ func (cfg YAMLConfig) RequireSecureTransport() bool {
 // is less than 0 then the queries will be omitted from the logs completely
 func (cfg YAMLConfig) MaxLoggedQueryLen() int {
 	if cfg.MaxQueryLenInLogs == nil {
-		return defaultMaxLoggedQueryLen
+		return DefaultMaxLoggedQueryLen
 	}
 
 	return *cfg.MaxQueryLenInLogs
@@ -540,7 +522,7 @@ func (cfg YAMLConfig) MaxLoggedQueryLen() int {
 
 func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
 	if cfg.EncodeLoggedQuery == nil {
-		return defaultEncodeLoggedQuery
+		return DefaultEncodeLoggedQuery
 	}
 
 	return *cfg.EncodeLoggedQuery
@@ -549,7 +531,7 @@ func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
 // PersistenceBehavior is "load" if we include persisted system globals on server init
 func (cfg YAMLConfig) PersistenceBehavior() string {
 	if cfg.BehaviorConfig.PersistenceBehavior == nil {
-		return loadPerisistentGlobals
+		return LoadPerisistentGlobals
 	}
 	return *cfg.BehaviorConfig.PersistenceBehavior
 }
@@ -559,7 +541,7 @@ func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
 		return *cfg.DataDirStr
 	}
-	return defaultDataDir
+	return DefaultDataDir
 }
 
 // CfgDir is the path to a directory to use to store the dolt configuration files.
@@ -567,7 +549,7 @@ func (cfg YAMLConfig) CfgDir() string {
 	if cfg.CfgDirStr != nil {
 		return *cfg.CfgDirStr
 	}
-	return filepath.Join(cfg.DataDir(), defaultCfgDir)
+	return filepath.Join(cfg.DataDir(), DefaultCfgDir)
 }
 
 // Socket is a path to the unix socket file
@@ -577,19 +559,19 @@ func (cfg YAMLConfig) Socket() string {
 	}
 	// if defined but empty -> default
 	if *cfg.ListenerConfig.Socket == "" {
-		return defaultUnixSocketFilePath
+		return DefaultUnixSocketFilePath
 	}
 	return *cfg.ListenerConfig.Socket
 }
 
-func (cfg YAMLConfig) goldenMysqlConnectionString() (s string) {
+func (cfg YAMLConfig) GoldenMysqlConnectionString() (s string) {
 	if cfg.GoldenMysqlConn != nil {
 		s = *cfg.GoldenMysqlConn
 	}
 	return
 }
 
-func (cfg YAMLConfig) ClusterConfig() cluster.Config {
+func (cfg YAMLConfig) ClusterConfig() ClusterConfig {
 	if cfg.ClusterCfg == nil {
 		return nil
 	}
@@ -630,8 +612,8 @@ func (c StandbyRemoteYAMLConfig) RemoteURLTemplate() string {
 	return c.RemoteURLTemplate_
 }
 
-func (c *ClusterYAMLConfig) StandbyRemotes() []cluster.StandbyRemoteConfig {
-	ret := make([]cluster.StandbyRemoteConfig, len(c.StandbyRemotes_))
+func (c *ClusterYAMLConfig) StandbyRemotes() []ClusterStandbyRemoteConfig {
+	ret := make([]ClusterStandbyRemoteConfig, len(c.StandbyRemotes_))
 	for i := range c.StandbyRemotes_ {
 		ret[i] = c.StandbyRemotes_[i]
 	}
@@ -646,7 +628,7 @@ func (c *ClusterYAMLConfig) BootstrapEpoch() int {
 	return c.BootstrapEpoch_
 }
 
-func (c *ClusterYAMLConfig) RemotesAPIConfig() cluster.RemotesAPIConfig {
+func (c *ClusterYAMLConfig) RemotesAPIConfig() ClusterRemotesAPIConfig {
 	return c.RemotesAPI
 }
 
@@ -690,13 +672,13 @@ func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 
 func (cfg YAMLConfig) ValueSet(value string) bool {
 	switch value {
-	case readTimeoutKey:
+	case ReadTimeoutKey:
 		return cfg.ListenerConfig.ReadTimeoutMillis != nil
-	case writeTimeoutKey:
+	case WriteTimeoutKey:
 		return cfg.ListenerConfig.WriteTimeoutMillis != nil
-	case maxConnectionsKey:
+	case MaxConnectionsKey:
 		return cfg.ListenerConfig.MaxConnections != nil
-	case eventSchedulerKey:
+	case EventSchedulerKey:
 		return cfg.BehaviorConfig.EventSchedulerStatus != nil
 	}
 	return false

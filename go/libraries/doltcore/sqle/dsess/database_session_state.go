@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
@@ -38,7 +37,7 @@ type InitialDbState struct {
 	// RootValue must be set.
 	HeadCommit *doltdb.Commit
 	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
-	HeadRoot *doltdb.RootValue
+	HeadRoot doltdb.RootValue
 	ReadOnly bool
 	DbData   env.DbData
 	Remotes  *concurrentmap.Map[string, env.Remote]
@@ -95,8 +94,8 @@ func newEmptyDatabaseSessionState() *DatabaseSessionState {
 // branch-specific.
 type SessionState interface {
 	WorkingSet() *doltdb.WorkingSet
-	WorkingRoot() *doltdb.RootValue
-	WriteSession() writer.WriteSession
+	WorkingRoot() doltdb.RootValue
+	WriteSession() WriteSession
 	EditOpts() editor.Options
 	SessionCache() *SessionCache
 }
@@ -113,14 +112,14 @@ type branchState struct {
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
 	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
-	headRoot *doltdb.RootValue
+	headRoot doltdb.RootValue
 	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
 	// case headCommit must be set
 	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
 	dbData env.DbData
 	// writeSession is this head's write session
-	writeSession writer.WriteSession
+	writeSession WriteSession
 	// readOnly is true if this database is read only
 	readOnly bool
 	// dirty is true if this branch state has uncommitted changes
@@ -151,7 +150,7 @@ func (bs *branchState) RevisionDbName() string {
 	return RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
-func (bs *branchState) WorkingRoot() *doltdb.RootValue {
+func (bs *branchState) WorkingRoot() doltdb.RootValue {
 	return bs.roots().Working
 }
 
@@ -161,7 +160,7 @@ func (bs *branchState) WorkingSet() *doltdb.WorkingSet {
 	return bs.workingSet
 }
 
-func (bs *branchState) WriteSession() writer.WriteSession {
+func (bs *branchState) WriteSession() WriteSession {
 	return bs.writeSession
 }
 
@@ -170,6 +169,9 @@ func (bs *branchState) SessionCache() *SessionCache {
 }
 
 func (bs branchState) EditOpts() editor.Options {
+	if bs.writeSession == nil {
+		return editor.Options{}
+	}
 	return bs.WriteSession().GetOptions()
 }
 

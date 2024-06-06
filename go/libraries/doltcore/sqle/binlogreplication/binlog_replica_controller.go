@@ -253,6 +253,14 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 				return err
 			}
 			replicaSourceInfo.ConnectRetryCount = uint64(intValue)
+		case "SOURCE_AUTO_POSITION":
+			intValue, err := getOptionValueAsInt(option)
+			if err != nil {
+				return err
+			}
+			if intValue < 1 {
+				return fmt.Errorf("SOURCE_AUTO_POSITION cannot be disabled")
+			}
 		default:
 			return fmt.Errorf("unknown replication source option: %s", option.Name)
 		}

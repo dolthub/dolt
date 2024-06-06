@@ -175,7 +175,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 
 	for _, fk := range test.fks {
 		// verify parent index
-		pt, _, ok, err := root.GetTableInsensitive(ctx, fk.ReferencedTableName)
+		pt, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: fk.ReferencedTableName})
 		require.NoError(t, err)
 		require.True(t, ok)
 		ps, err := pt.GetSchema(ctx)
@@ -185,7 +185,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 		require.Equal(t, fk.ReferencedTableColumns, pi.IndexedColumnTags())
 
 		// verify child index
-		ct, _, ok, err := root.GetTableInsensitive(ctx, fk.TableName)
+		ct, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: fk.TableName})
 		require.NoError(t, err)
 		require.True(t, ok)
 		cs, err := ct.GetSchema(ctx)

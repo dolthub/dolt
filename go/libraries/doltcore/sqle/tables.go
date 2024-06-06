@@ -82,7 +82,7 @@ type DoltTable struct {
 	tableName    string
 	sqlSch       sql.PrimaryKeySchema
 	db           dsess.SqlDatabase
-	lockedToRoot *doltdb.RootValue
+	lockedToRoot doltdb.RootValue
 	nbf          *types.NomsBinFormat
 	sch          schema.Schema
 	autoIncCol   schema.Column
@@ -127,8 +127,8 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will
 // not change as the session's root value changes. Appropriate for AS OF queries, or other use cases where the table's
 // values should not change throughout execution of a session.
-func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
-	tbl, ok, err := root.GetTable(ctx, t.tableName)
+func (t *DoltTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -195,7 +195,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 		return nil, err
 	}
 
-	table, ok, err := root.GetTable(ctx, t.tableName)
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,21 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return key, true, nil
 }
 
-func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
+	tab, err := t.DoltTable(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	key, err := tab.GetSchemaHash(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	return doltdb.DataCacheKey{Hash: key}, true, nil
+}
+
+func (t *DoltTable) workingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	root := t.lockedToRoot
 	if root == nil {
 		return t.getRoot(ctx)
@@ -237,7 +251,7 @@ func (t *DoltTable) workingRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 }
 
 // getRoot returns the current root value for this session, to be used for all table data access.
-func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
+func (t *DoltTable) getRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	return t.db.GetRoot(ctx)
 }
 
@@ -250,7 +264,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, nil
 	}
 
-	key, tableIsCacheable, err := t.DataCacheKey(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +531,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db                 Database
-	pinnedWriteSession writer.WriteSession
+	pinnedWriteSession dsess.WriteSession
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -538,7 +552,7 @@ func (t *WritableDoltTable) Database() string {
 	return t.db.baseName
 }
 
-func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot doltdb.RootValue) error {
 	return t.db.SetRoot(ctx, newRoot)
 }
 
@@ -566,10 +580,10 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWriter, err error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 
-	var writeSession writer.WriteSession
+	var writeSession dsess.WriteSession
 	if t.pinnedWriteSession != nil {
 		writeSession = t.pinnedWriteSession
 	} else {
@@ -580,8 +594,9 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		writeSession = state.WriteSession()
 	}
 
-	setter := ds.SetRoot
-	ed, err = writeSession.GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
+	setter := ds.SetWorkingRoot
+
+	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +610,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		if err != nil {
 			return nil, err
 		}
-		return multiEditor.(writer.TableWriter), nil
+		return multiEditor.(dsess.TableWriter), nil
 	} else {
 		return ed, nil
 	}
@@ -617,7 +632,7 @@ func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableE
 	return fulltext.CreateEditor(ctx, t, configTable, sets...)
 }
 
-func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *doltdb.RootValue) (fulltext.EditableTable, []fulltext.TableSet, error) {
+func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot doltdb.RootValue) (fulltext.EditableTable, []fulltext.TableSet, error) {
 	var configTable fulltext.EditableTable
 	var sets []fulltext.TableSet
 	for _, idx := range t.sch.Indexes().AllIndexes() {
@@ -683,8 +698,8 @@ func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *dol
 // truncated value.
 func (t *WritableDoltTable) tableSetsForRewrite(
 	ctx *sql.Context,
-	workingRoot *doltdb.RootValue,
-) (*doltdb.RootValue, fulltext.EditableTable, []fulltext.TableSet, error) {
+	workingRoot doltdb.RootValue,
+) (doltdb.RootValue, fulltext.EditableTable, []fulltext.TableSet, error) {
 	configTable, sets, err := t.fulltextTableSets(ctx, workingRoot)
 	if err != nil {
 		return nil, nil, nil, err
@@ -745,22 +760,22 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 		set.GlobalCount = gcTable
 		set.RowCount = rcTable
 
-		workingRoot, err = workingRoot.PutTable(ctx, posTable.Name(), posTableDolt)
+		workingRoot, err = workingRoot.PutTable(ctx, doltdb.TableName{Name: posTable.Name()}, posTableDolt)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		workingRoot, err = workingRoot.PutTable(ctx, dcTable.Name(), dcTableDolt)
+		workingRoot, err = workingRoot.PutTable(ctx, doltdb.TableName{Name: dcTable.Name()}, dcTableDolt)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		workingRoot, err = workingRoot.PutTable(ctx, gcTable.Name(), gcTableDolt)
+		workingRoot, err = workingRoot.PutTable(ctx, doltdb.TableName{Name: gcTable.Name()}, gcTableDolt)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		workingRoot, err = workingRoot.PutTable(ctx, rcTable.Name(), rcTableDolt)
+		workingRoot, err = workingRoot.PutTable(ctx, doltdb.TableName{Name: rcTable.Name()}, rcTableDolt)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -775,7 +790,7 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 func emptyFulltextTable(
 	ctx *sql.Context,
 	parentTable *WritableDoltTable,
-	workingRoot *doltdb.RootValue,
+	workingRoot doltdb.RootValue,
 	fulltextTable fulltext.EditableTable,
 	fulltextSch sql.Schema,
 ) (*doltdb.Table, fulltext.EditableTable, error) {
@@ -872,7 +887,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return 0, err
 	}
@@ -1036,12 +1051,43 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 		return nil, err
 	}
 
-	sch, err := table.GetSchema(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return checksInSchema(sch), nil
+	if !tableIsCacheable {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return checksInSchema(sch), nil
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+	}
+
+	checks, ok := dbState.SessionCache().GetCachedTableChecks(key)
+	if ok {
+		return checks, nil
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	checks = checksInSchema(sch)
+
+	dbState.SessionCache().CacheTableChecks(key, checks)
+	return checks, nil
 }
 
 func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
@@ -1081,7 +1127,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 		return nil, err
 	}
 
-	declaredFks, _ := fkc.KeysForTable(t.tableName)
+	declaredFks, _ := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
 	for i, fk := range declaredFks {
@@ -1101,7 +1147,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			}
 			continue
 		}
-		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+		parent, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})
 		if err != nil {
 			return nil, err
 		}
@@ -1133,7 +1179,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 		return nil, err
 	}
 
-	_, referencedByFk := fkc.KeysForTable(t.tableName)
+	_, referencedByFk := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
 
 	for i, fk := range referencedByFk {
@@ -1153,7 +1199,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 			}
 			continue
 		}
-		child, ok, err := root.GetTable(ctx, fk.TableName)
+		child, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.TableName})
 		if err != nil {
 			return nil, err
 		}
@@ -1417,7 +1463,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	table, _, err := root.GetTable(ctx, t.tableName)
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -1426,7 +1472,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	if err != nil {
 		return err
 	}
-	tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
 	if err != nil {
 		return err
 	}
@@ -1458,7 +1504,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		ait.AddNewTable(t.tableName)
 	}
 
-	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, updatedTable)
 	if err != nil {
 		return err
 	}
@@ -1591,7 +1637,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch, err := t.getNewSch(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
+	newSch, err := t.createSchemaForColumnChange(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1654,7 +1700,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: t.Name()}, dt)
 	if err != nil {
 		return nil, err
 	}
@@ -1690,11 +1736,15 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	}
 
+	if ws := dbState.WriteSession(); ws == nil {
+		return nil, fmt.Errorf("cannot rebuild index on a headless branch")
+	}
+
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
 
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
+	ed, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.Name(), Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), sess.SetWorkingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1710,7 +1760,7 @@ func fullTextRewriteEditor(
 	ws *doltdb.WorkingSet,
 	sess *dsess.DoltSession,
 	dbState dsess.SessionState,
-	workingRoot *doltdb.RootValue,
+	workingRoot doltdb.RootValue,
 ) (sql.RowInserter, error) {
 
 	newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
@@ -1735,11 +1785,15 @@ func fullTextRewriteEditor(
 	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
 	// session with the rewritten table.
+	if ws := dbState.WriteSession(); ws == nil {
+		return nil, fmt.Errorf("cannot rebuild index on read only database %s", t.Name())
+	}
+
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
 
-	parentEditor, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
+	parentEditor, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.Name(), Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), sess.SetWorkingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1925,9 +1979,13 @@ func validateFullTextColumnChange(ctx *sql.Context, idx schema.Index, oldColumn 
 	return nil
 }
 
-func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
+// createSchemaForColumnChange creates a new Dolt schema based on the old Dolt schema (|oldSch|) changing to the new
+// SQL schema (|newSchema|) from the SQL column |oldColumn| changing to the SQL column |newColumn|. The working root
+// is provided in |root| and the branch head root is provided in |headRoot|. If any problems are encountered, a nil
+// Dolt schema is returned along with an error.
+func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot doltdb.RootValue) (schema.Schema, error) {
+	// Adding or dropping a column
 	if oldColumn == nil || newColumn == nil {
-		// Adding or dropping a column
 		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
@@ -1935,80 +1993,35 @@ func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn
 		return newSch, err
 	}
 
-	oldTi, err := typeinfo.FromSqlType(oldColumn.Type)
-	if err != nil {
-		return nil, err
-	}
-	newTi, err := typeinfo.FromSqlType(newColumn.Type)
-	if err != nil {
-		return nil, err
-	}
-
-	if oldTi.NomsKind() != newTi.NomsKind() {
-		oldCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
-		if !ok {
-			return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
-		}
-		// Remove the old column from |root| so that its kind will not seed the
-		// new tag.
-		root, err = filterColumnFromRoot(ctx, root, oldCol.Tag)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+	// Modifying a column
 	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}
 
-	return newSch, nil
+	oldDoltCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
+	if !ok {
+		return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+	}
+
+	newColCollection := replaceColumnTagInCollection(newSch.GetAllCols(), oldDoltCol.Name, oldDoltCol.Tag)
+	newPkColCollection := replaceColumnTagInCollection(newSch.GetPKCols(), oldDoltCol.Name, oldDoltCol.Tag)
+	return schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
+		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
 }
 
-// filterColumnFromRoot removes any columns matching |colTag| from a |root|. Returns the updated root.
-func filterColumnFromRoot(ctx context.Context, root *doltdb.RootValue, colTag uint64) (*doltdb.RootValue, error) {
-	newRoot := root
-	err := root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		_, ok := sch.GetAllCols().GetByTag(colTag)
-		if !ok {
-			return false, nil
+// replaceColumnTagInCollection returns a new ColCollection, based on |cc|, with the column named |name| updated
+// to have the specified column tag |tag|. If the column is not found, no changes are made, no errors are returned,
+// and the returned ColCollection will be identical to |cc|.
+func replaceColumnTagInCollection(cc *schema.ColCollection, name string, tag uint64) *schema.ColCollection {
+	newColumns := cc.GetColumns()
+	for i := range newColumns {
+		if newColumns[i].Name == name {
+			newColumns[i].Tag = tag
+			break
 		}
-
-		newSch, err := filterColumnFromSch(sch, colTag)
-		if err != nil {
-			return true, err
-		}
-		t, err := table.UpdateSchema(ctx, newSch)
-		if err != nil {
-			return true, err
-		}
-		newRoot, err = newRoot.PutTable(ctx, name, t)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return newRoot, nil
-}
-
-func filterColumnFromSch(sch schema.Schema, colTag uint64) (schema.Schema, error) {
-	var cols []schema.Column
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if tag == colTag {
-			return false, nil
-		}
-		cols = append(cols, col)
-		return false, nil
-	})
-	colCol := schema.NewColCollection(cols...)
-	newSch, err := schema.SchemaFromCols(colCol)
-	if err != nil {
-		return nil, err
-	}
-	return newSch, nil
+	return schema.NewColCollection(newColumns...)
 }
 
 // validateSchemaChange returns an error if the schema change given is not legal
@@ -2044,7 +2057,7 @@ func validateSchemaChange(
 	return nil
 }
 
-func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl string, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl string, root doltdb.RootValue) (doltdb.RootValue, error) {
 	err := sql.ValidatePrimaryKeyDrop(ctx, t, t.PrimaryKeySchema())
 	if err != nil {
 		return nil, err
@@ -2150,7 +2163,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 	root := ws.WorkingRoot()
 
-	table, _, err := root.GetTable(ctx, t.tableName)
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -2221,7 +2234,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, updatedTable)
 	if err != nil {
 		return err
 	}
@@ -2341,7 +2354,7 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -2381,7 +2394,7 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -2476,7 +2489,7 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 			return err
 		}
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, ret.NewTable)
 	if err != nil {
 		return err
 	}
@@ -2490,9 +2503,9 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 }
 
 // createForeignKey creates a doltdb.ForeignKey from a sql.ForeignKeyConstraint
-func (t *AlterableDoltTable) createForeignKey(
+func (t *WritableDoltTable) createForeignKey(
 	ctx *sql.Context,
-	root *doltdb.RootValue,
+	root doltdb.RootValue,
 	tbl *doltdb.Table,
 	sqlFk sql.ForeignKeyConstraint,
 	onUpdateRefAction, onDeleteRefAction doltdb.ForeignKeyReferentialAction) (doltdb.ForeignKey, error) {
@@ -2530,7 +2543,9 @@ func (t *AlterableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		refTbl, _, ok, err = root.GetTableInsensitive(ctx, sqlFk.ParentTable)
+		// TODO: the parent table can be in another schema
+
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2603,12 +2618,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
-	tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+	tbl, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return sql.ErrTableNotFound.New(t.tableName)
 	}
 
 	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
@@ -2674,7 +2686,13 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 }
 
 // UpdateForeignKey implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
+// This interface really belongs on AlterableDoltTable (which embeds WritableDoltTable), but it's here because we
+// actually have a WritableDoltTable at runtime in some cases when we want to update a foreign key. This happens in the
+// case when a foreign key is created without foreign key checks on, which causes its IsResolved flag to become enabled
+// the first time it is referenced in a statement with foreign keys enabled. This is kind of terrible, as means that
+// an update statement (including a no-op write statement) has the side-effect of causing a schema change.
+// TODO: get rid of explicit IsResolved tracking
+func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -2697,7 +2715,7 @@ func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, s
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
-		tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}
@@ -2754,7 +2772,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
+
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, ret.NewTable)
 	if err != nil {
 		return err
 	}
@@ -2918,7 +2937,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 // statements that take place in multiple steps (e.g. adding a foreign key may create an index, then add a constraint).
 // We can't update the session's working set until the statement boundary, so we have to do it here.
 // TODO: eliminate this pattern, store all table data and schema in the session rather than in these objects.
-func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
+func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root doltdb.RootValue) error {
 	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
 	if err != nil {
 		return err
@@ -2932,7 +2951,7 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	} else {
 		updatedTable = updatedTableSql.(*AlterableDoltTable)
 	}
-	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
+	t.DoltTable = updatedTable.WritableDoltTable.DoltTable
 
 	// When we update this table we need to also clear any cached versions of the object, since they may now have
 	// incorrect schema information
@@ -2956,7 +2975,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	updatedTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -2990,7 +3009,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -3012,7 +3031,7 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	updatedTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -3037,7 +3056,7 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -3062,7 +3081,7 @@ func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation 
 	if err != nil {
 		return err
 	}
-	currentTable, _, err := root.GetTable(ctx, t.tableName)
+	currentTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -3081,7 +3100,7 @@ func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation 
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, t.tableName, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -3151,7 +3170,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return fmt.Errorf("not implemented: AlterableDoltTable.DropPrimaryKey()")
 }
 
-func (t *WritableDoltTable) SetWriteSession(session writer.WriteSession) {
+func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
 }
 

@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"encoding/base32"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -209,11 +210,12 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	data := randomCompressedChunks(1024)
 	var last hash.Hash
 	for _, cc := range data {
-		err := j.writeCompressedChunk(ctx, cc)
+		err := j.writeCompressedChunk(context.Background(), cc)
 		require.NoError(t, err)
 		last = cc.Hash()
 	}
-	require.NoError(t, j.commitRootHash(ctx, last))
+	require.NoError(t, j.commitRootHash(context.Background(), last))
+	require.NoError(t, j.Close())
 
 	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
@@ -290,7 +292,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 
 	makeEpoch := func() (e epoch) {
-		e.records = randomCompressedChunks(64)
+		e.records = randomCompressedChunks(8)
 		for h := range e.records {
 			e.last = hash.Hash(h)
 			break
@@ -334,21 +336,25 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			path := newTestFilePath(t)
 			j := newTestJournalWriter(t, path)
 			// setup
+			var recordCnt int
 			epochs := append(test.epochs, test.novel)
 			for i, e := range epochs {
 				for _, cc := range e.records {
-					assert.NoError(t, j.writeCompressedChunk(ctx, cc))
+					recordCnt++
+					assert.NoError(t, j.writeCompressedChunk(context.Background(), cc))
 					if rand.Int()%10 == 0 { // periodic commits
-						assert.NoError(t, j.commitRootHash(ctx, cc.H))
+						assert.NoError(t, j.commitRootHash(context.Background(), cc.H))
 					}
 				}
-				o := j.offset()                                  // precommit offset
-				assert.NoError(t, j.commitRootHash(ctx, e.last)) // commit |e.last|
-				if i == len(epochs)-1 {
+				o := j.offset()                                                   // precommit offset
+				assert.NoError(t, j.commitRootHash(context.Background(), e.last)) // commit |e.last|
+				if i == len(epochs) {
 					break // don't index |test.novel|
 				}
-				assert.NoError(t, j.flushIndexRecord(ctx, e.last, o)) // write index record
+				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
 			}
+			err := j.Close()
+			require.NoError(t, err)
 
 			validateJournal := func(p string, expected []epoch) {
 				journal, ok, err := openJournalWriter(ctx, p)
@@ -366,17 +372,17 @@ func TestJournalIndexBootstrap(t *testing.T) {
 					}
 				}
 				assert.Equal(t, expected[len(expected)-1].last, last)
+				assert.NoError(t, journal.Close())
 			}
 
 			idxPath := filepath.Join(filepath.Dir(path), journalIndexFileName)
 
 			before, err := os.Stat(idxPath)
 			require.NoError(t, err)
-			if len(test.epochs) > 0 { // expect index
-				assert.True(t, before.Size() > 0)
-			} else {
-				assert.Equal(t, int64(0), before.Size())
-			}
+
+			lookupSize := int64(recordCnt * (1 + lookupSz))
+			metaSize := int64(len(epochs)) * (1 + lookupMetaSz)
+			assert.Equal(t, lookupSize+metaSize, before.Size())
 
 			// bootstrap journal using index
 			validateJournal(path, epochs)
@@ -394,6 +400,13 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
+
+// encode returns the base32 encoding in the Dolt alphabet.
+func encode(data []byte) string {
+	return encoding.EncodeToString(data)
 }
 
 func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) {

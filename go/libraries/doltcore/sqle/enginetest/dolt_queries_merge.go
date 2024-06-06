@@ -2347,6 +2347,57 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "merge when schemas are equal, but column tags are different",
+		SetUpScript: []string{
+			// Create a branch where t doesn't exist yet
+			"call dolt_branch('branch1');",
+			// Create t on main, but change column types so that the tag won't match branch1
+			"CREATE TABLE t (pk INT PRIMARY KEY, col1 int);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"ALTER TABLE t modify column col1 varchar(255);",
+			"call dolt_commit('-am', 'modifying table t on main');",
+			"INSERT INTO t values (1, 'one'), (2, 'two');",
+			"call dolt_commit('-am', 'inserting two rows into t on main');",
+
+			// Create t on branch1, without an intermediate type change, so that the tag doesn't match main
+			"call dolt_checkout('branch1');",
+			"CREATE TABLE t (pk INT PRIMARY KEY, col1 varchar(255));",
+			"call dolt_commit('-Am', 'creating table t on branch1');",
+			"INSERT INTO t values (3, 'three');",
+			"call dolt_commit('-am', 'inserting one row into t on branch1');",
+			"SET @PreMergeBranch1Commit = dolt_hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// We can merge from main -> branch1, even though the column tags are not identical
+				Query:    "call dolt_merge('main')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+			},
+			{
+				// Reset branch1 to the pre-merge commit, so we can test merging branch1 -> main
+				Query:    "CALL dolt_reset('--hard', @PreMergeBranch1Commit);",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				// We can merge from branch1 -> main, even though the column tags are not identical
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -2899,12 +2950,30 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:        "Updating our cols when our, their, and base schemas are not the equal errors",
+		Name:        "Updating our cols after schema change",
 		SetUpScript: append(createConflictsSetupScript, "ALTER TABLE t add column col2 int FIRST;"),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
-				ExpectedErrStr: "the source table cannot be automatically updated through the conflict table since the base, our, and their schemas are not equal",
+				Query:    "show create table dolt_conflicts_t;",
+				Expected: []sql.Row{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(1023),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(1023),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(1023),\n  `dolt_conflict_id` varchar(1023)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, our_col2, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, nil, 1, 100},
+					{nil, nil, 2, -200, nil, 2, 200},
+				},
+			},
+			{
+				Query:    "update dolt_conflicts_t set our_col2 = their_col1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, -100, 100},
+					{2, -200, 200},
+				},
 			},
 		},
 	},

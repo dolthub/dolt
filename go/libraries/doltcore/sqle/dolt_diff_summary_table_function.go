@@ -280,7 +280,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	}
 
 	sort.Slice(deltas, func(i, j int) bool {
-		return strings.Compare(deltas[i].ToName, deltas[j].ToName) < 0
+		return deltas[i].ToName.Less(deltas[j].ToName)
 	})
 
 	// If tableNameExpr defined, return a single table diff summary result
@@ -316,7 +316,14 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
 	if delta.FromTable == nil && delta.ToTable == nil {
-		return nil, nil
+		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
+			return nil, nil
+		}
+		summ, err := delta.GetSummary(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return summ, nil
 	}
 
 	if !schema.ArePrimaryKeySetsDiffable(delta.Format(), delta.FromSch, delta.ToSch) {
@@ -420,10 +427,10 @@ func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 
 func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 	return sql.Row{
-		ds.FromTableName, // from_table_name
-		ds.ToTableName,   // to_table_name
-		ds.DiffType,      // diff_type
-		ds.DataChange,    // data_change
-		ds.SchemaChange,  // schema_change
+		ds.FromTableName.Name, // from_table_name
+		ds.ToTableName.Name,   // to_table_name
+		ds.DiffType,           // diff_type
+		ds.DataChange,         // data_change
+		ds.SchemaChange,       // schema_change
 	}
 }

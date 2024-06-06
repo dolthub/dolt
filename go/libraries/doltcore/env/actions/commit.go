@@ -52,7 +52,7 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	var stagedTblNames []string
+	var stagedTblNames []doltdb.TableName
 	for _, td := range staged {
 		n := td.ToName
 		if td.IsDrop() {
@@ -72,14 +72,14 @@ func GetCommitStaged(
 	}
 
 	if !props.Force {
-		inConflict, err := roots.Working.TablesWithDataConflicts(ctx)
+		inConflict, err := doltdb.TablesWithDataConflicts(ctx, roots.Working)
 		if err != nil {
 			return nil, err
 		}
 		if len(inConflict) > 0 {
 			return nil, NewTblInConflictError(inConflict)
 		}
-		violatesConstraints, err := roots.Working.TablesWithConstraintViolations(ctx)
+		violatesConstraints, err := doltdb.TablesWithConstraintViolations(ctx, roots.Working)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func GetCommitStaged(
 	}
 
 	if !props.Force {
-		roots.Staged, err = roots.Staged.ValidateForeignKeysOnSchemas(ctx)
+		roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, roots.Staged)
 		if err != nil {
 			return nil, err
 		}

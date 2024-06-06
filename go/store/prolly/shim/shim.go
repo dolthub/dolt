@@ -19,6 +19,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func NodeFromValue(v types.Value) (tree.Node, error) {
@@ -40,5 +41,13 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) (prolly.M
 	}
 	kd := sch.GetKeyDescriptor()
 	vd := sch.GetValueDescriptor()
+	return prolly.NewMap(root, ns, kd, vd), nil
+}
+
+func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.Map, error) {
+	root, err := NodeFromValue(v)
+	if err != nil {
+		return prolly.Map{}, err
+	}
 	return prolly.NewMap(root, ns, kd, vd), nil
 }

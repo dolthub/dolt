@@ -223,14 +223,14 @@ func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore,
 				w.Write([]byte(", "))
 			}
 
-			isAddr := val.IsAddrEncoding(kd.Types[i].Enc)
+			isAddr := val.IsAddrEncoding(kd.Types[j].Enc)
 			if isAddr {
 				w.Write([]byte("#"))
 			}
 			w.Write([]byte(hex.EncodeToString(kd.GetField(j, kt))))
 			if isAddr {
 				w.Write([]byte(" ("))
-				key, err := GetField(ctx, kd, i, kt, ns)
+				key, err := GetField(ctx, kd, j, kt, ns)
 				if err != nil {
 					return err
 				}

@@ -124,7 +124,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return 0
 }
 
-func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb.RootValue, idx int) (bool, error) {
+func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.RootValue, idx int) (bool, error) {
 	stashRoot, headCommit, meta, err := dEnv.DoltDB.GetStashRootAndHeadCommitAtIdx(ctx, idx)
 	if err != nil {
 		return false, err
@@ -196,7 +196,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb
 
 	// added tables need to be staged
 	// since these tables are coming from a stash, don't filter for ignored table names.
-	roots, err = actions.StageTables(ctx, roots, meta.TablesToStage, false)
+	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(meta.TablesToStage, doltdb.DefaultSchemaName), false)
 	if err != nil {
 		return false, err
 	}

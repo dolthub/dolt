@@ -247,6 +247,8 @@ func translateStringField(ctx context.Context, ns tree.NodeStore, value types.St
 		// note: previously, TEXT fields were serialized as types.String
 		rd := strings.NewReader(string(value))
 		bb := ns.BlobBuilder()
+		defer ns.PutBlobBuilder(bb)
+
 		bb.Init(len(value))
 		_, addr, err := bb.Chunk(ctx, rd)
 		if err != nil {
@@ -316,6 +318,8 @@ func translateJSONField(ctx context.Context, ns tree.NodeStore, value types.JSON
 	buf := bytes.NewBuffer([]byte(s))
 
 	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
+
 	bb.Init(len(s))
 	_, addr, err := bb.Chunk(ctx, buf)
 	if err != nil {
@@ -346,6 +350,8 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 	}
 
 	bb := ns.BlobBuilder()
+	defer ns.PutBlobBuilder(bb)
+
 	bb.Init(int(value.Len()))
 	_, addr, err := bb.Chunk(ctx, bytes.NewReader(buf))
 	if err != nil {

@@ -277,6 +277,27 @@ teardown() {
     [[ $output =~ "commit dolt" ]] || [[ $output =~ "commit do1t" ]] || [[ $output =~ "commit d0lt" ]] || [[ $output =~ "commit d01t" ]] || false
 }
 
+@test "init: initialize a non-working directory with --data-dir" {
+    baseDir=$(pwd)
+    mkdir not_a_repo
+    mkdir repo_dir
+    cd not_a_repo
+    dolt --data-dir $baseDir/repo_dir init
+
+    # Assert that the current directory has NOT been initialized
+    run dolt status
+    [ $status -eq 1 ]
+    [[ $output =~ "The current directory is not a valid dolt repository" ]] || false
+    [ ! -d "$baseDir/not_a_repo/.dolt" ]
+
+    # Assert that ../repo_dir HAS been initialized
+    cd $baseDir/repo_dir
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "On branch main" ]] || false
+    [ -d "$baseDir/repo_dir/.dolt" ]
+}
+
 assert_valid_repository () {
   run dolt log
   [ "$status" -eq 0 ]

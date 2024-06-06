@@ -93,7 +93,7 @@ func getStashHashAtIdx(ctx context.Context, ds datas.Dataset, ns tree.NodeStore,
 }
 
 // getStashAtIdx returns stash root value and head commit of a stash entry at given index.
-func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
+func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (RootValue, *Commit, *datas.StashMeta, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {
 		return nil, nil, nil, errors.New("stashes not found")
@@ -131,7 +131,7 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	stashRoot, err := newRootValue(vrw, ns, stashRootVal)
+	stashRoot, err := NewRootValue(ctx, vrw, ns, stashRootVal)
 	if err != nil {
 		return nil, nil, nil, err
 	}

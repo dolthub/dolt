@@ -62,6 +62,7 @@ const (
 
 	doltSqlServerCommand = "sql-server"
 
+	configFlag                  = "--config"
 	userFlag                    = "--user"
 	hostFlag                    = "--host"
 	portFlag                    = "--port"
@@ -125,6 +126,7 @@ const (
 	doltDataDir            = ".dolt"
 	createDatabaseTemplate = "create database %s;"
 	psqlDsnTemplate        = "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable"
+	doltgresVersionCommand = "-version"
 
 	expectedServerKilledErrorMessage     = "signal: killed"
 	expectedServerTerminatedErrorMessage = "signal: terminated"

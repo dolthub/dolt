@@ -53,7 +53,7 @@ var rowMap = []map[string]interface{}{
 	{"b": []string{"1", "2", "3"}},
 }
 
-func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
+func createRootAndFS() (*doltdb.DoltDB, doltdb.RootValue, filesys.Filesys) {
 
 	testHomeDir := "/user/bheni"
 	workingDir := "/user/bheni/datasets/states"
