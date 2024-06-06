@@ -78,6 +78,7 @@ type ValueStore struct {
 	decodedChunks       *sizecache.SizeCache
 	nbf                 *NomsBinFormat
 	versOnce            sync.Once
+	skipWriteCaching    bool
 
 	gcMu       sync.Mutex
 	gcCond     *sync.Cond
@@ -343,7 +344,9 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 		return Ref{}, err
 	}
 
-	lvs.decodedChunks.Add(c.Hash(), uint64(c.Size()), v)
+	if !lvs.skipWriteCaching {
+		lvs.decodedChunks.Add(c.Hash(), uint64(c.Size()), v)
+	}
 
 	return r, nil
 }
