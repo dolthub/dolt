@@ -15,8 +15,9 @@
 package prolly
 
 import (
-	"github.com/dolthub/dolt/go/store/pool"
 	"sort"
+
+	"github.com/dolthub/dolt/go/store/pool"
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
