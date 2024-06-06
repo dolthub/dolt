@@ -2709,6 +2709,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	fkc.RemoveKeyByName(doltFk.Name)
+	doltFk.Name = sqlFk.Name
 	doltFk.TableName = sqlFk.Table
 	doltFk.ReferencedTableName = sqlFk.ParentTable
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
