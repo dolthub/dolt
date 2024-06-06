@@ -909,7 +909,11 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, 
 	common, _ = doltdb.NewForeignKeyCollection()
 	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
 
-		theirs, ok := theirFKs.GetMatchingKey(ours, ancSchs)
+		// Since we aren't using an ancestor root here, pass true for the
+		// matchUnresolvedKeyToResolvedKey parameter. This allows us to match
+		// resolved FKs with both resolved and unresolved FKs in theirFKs.
+		// See GetMatchingKey's documentation for more info.
+		theirs, ok := theirFKs.GetMatchingKey(ours, ancSchs, true)
 		if !ok {
 			return false, nil
 		}
@@ -919,7 +923,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, 
 			return false, err
 		}
 
-		anc, ok := ancFKs.GetMatchingKey(ours, ancSchs)
+		anc, ok := ancFKs.GetMatchingKey(ours, ancSchs, false)
 		if !ok {
 			// FKs added on both branch with different defs
 			conflicts = append(conflicts, FKConflict{
@@ -981,7 +985,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, 
 func fkCollSetDifference(fkColl, ancestorFkColl *doltdb.ForeignKeyCollection, ancSchs map[string]schema.Schema) (d *doltdb.ForeignKeyCollection, err error) {
 	d, _ = doltdb.NewForeignKeyCollection()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
-		_, ok := ancestorFkColl.GetMatchingKey(fk, ancSchs)
+		_, ok := ancestorFkColl.GetMatchingKey(fk, ancSchs, false)
 		if !ok {
 			err = d.AddKeys(fk)
 		}

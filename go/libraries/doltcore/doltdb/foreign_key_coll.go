@@ -470,25 +470,33 @@ OuterLoop:
 }
 
 // GetMatchingKey gets the ForeignKey defined over the parent and child columns. If the given foreign key is resolved,
-// then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then ONLY
-// unresolved keys may be found.
+// then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then it
+// will match with unresolved keys, and may also match with resolved keys if |matchUnresolvedKeyToResolvedKey| is
+// set to true.
 //
-// This discrepancy is due to the primary uses for this function. It is assumed that the ForeignKeyCollection is an
+// When |matchUnresolvedKeyToResolvedKey| is false, it is assumed that the ForeignKeyCollection is an
 // ancestor collection compared to the collection that the given key comes from. Therefore, the key found in the
 // ancestor will usually be the unresolved version of the given key, hence the comparison is valid. However, if the
 // given key is unresolved, it is treated as a new key, which cannot be matched to a resolved key that previously
 // existed.
 //
-// The given schema map is keyed by table name, and is used in the event that the given key is resolved and any keys in
-// the collection are unresolved. A "dirty resolution" is performed, which matches the column names to tags, and then a
-// standard tag comparison is performed. If a table or column is not in the map, then the foreign key is ignored.
-func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema) (ForeignKey, bool) {
+// When the ForeignKeyCollection is NOT an ancestor collection, |matchUnresolvedKeyToResolvedKey| can be set to true
+// to enable |fk| to match against both resolved and unresolved keys in the ForeignKeyCollection. This is necessary
+// when one session commits a table with resolved foreign keys, but another open session still has an unresolved
+// version of the foreign key. When the open session commits, it needs to merge it's root with the root that has
+// the resolved foreign key, so it's unresolved foreign key needs to be able to match a resolved key in this case.
+//
+// The given schema map, |allSchemas|, is keyed by table name, and is used in the event that the given key is resolved
+// and any keys in the collection are unresolved. A "dirty resolution" is performed, which matches the column names to
+// tags, and then a standard tag comparison is performed. If a table or column is not in the map, then the foreign key
+// is ignored.
+func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema, matchUnresolvedKeyToResolvedKey bool) (ForeignKey, bool) {
 	if !fk.IsResolved() {
 		// The given foreign key is unresolved, so we only look for matches on unresolved keys
 	OuterLoopUnresolved:
 		for _, existingFk := range fkc.foreignKeys {
 			// For unresolved keys, the table name is important (column tags are globally unique, column names are not)
-			if existingFk.IsResolved() ||
+			if (!matchUnresolvedKeyToResolvedKey && existingFk.IsResolved()) ||
 				fk.TableName != existingFk.TableName ||
 				fk.ReferencedTableName != existingFk.ReferencedTableName ||
 				len(fk.UnresolvedFKDetails.TableColumns) != len(existingFk.UnresolvedFKDetails.TableColumns) ||
