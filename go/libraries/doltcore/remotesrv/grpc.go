@@ -337,10 +337,20 @@ func (rs *RemoteChunkStore) getHost(md metadata.MD) string {
 	return host
 }
 
+func (rs *RemoteChunkStore) getScheme(md metadata.MD) string {
+	scheme := rs.httpScheme
+	forwardedSchemes := md.Get("x-forwarded-proto")
+	if len(forwardedSchemes) > 0 {
+		scheme = forwardedSchemes[0]
+	}
+	return scheme
+}
+
 func (rs *RemoteChunkStore) getDownloadUrl(md metadata.MD, path string) *url.URL {
 	host := rs.getHost(md)
+	scheme := rs.getScheme(md)
 	return &url.URL{
-		Scheme: rs.httpScheme,
+		Scheme: scheme,
 		Host:   host,
 		Path:   path,
 	}
