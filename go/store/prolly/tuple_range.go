@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"github.com/dolthub/dolt/go/store/pool"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -177,6 +178,91 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 		}
 	}
 	return true
+}
+
+// KeyRangeLookup will return a stop key and true if the range can be scanned
+// from a start to stop tuple. Otherwise, return a nil key and false. A range
+// can be key range scanned if the prefix is exact, and the final field is
+// numeric (we can increment by one to get an exclusive upper bound).
+// TODO: support non-exact final field, and use range upper bound?
+func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
+	n := len(r.Fields)
+	for i := range r.Fields {
+		if !r.Fields[i].Exact {
+			return nil, false
+		}
+	}
+
+	tb := val.NewTupleBuilder(r.Desc)
+	for i := 0; i < r.Desc.Count()-1; i++ {
+		tb.PutRaw(i, r.Tup.GetField(i))
+	}
+
+	switch r.Desc.Types[n-1].Enc {
+	case val.Int8Enc:
+		v, ok := r.Desc.GetInt8(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt8(n-1, v+1)
+	case val.Uint8Enc:
+		v, ok := r.Desc.GetUint8(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint8(n-1, v+1)
+	case val.Int16Enc:
+		v, ok := r.Desc.GetInt16(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt16(n-1, v+1)
+	case val.Uint16Enc:
+		v, ok := r.Desc.GetUint16(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint16(n-1, v+1)
+	case val.Int32Enc:
+		v, ok := r.Desc.GetInt32(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt32(n-1, v+1)
+	case val.Uint32Enc:
+		v, ok := r.Desc.GetUint32(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint32(n-1, v+1)
+	case val.Int64Enc:
+		v, ok := r.Desc.GetInt64(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt64(n-1, v+1)
+	case val.Uint64Enc:
+		v, ok := r.Desc.GetUint64(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint64(n-1, v+1)
+	case val.Float32Enc:
+		v, ok := r.Desc.GetFloat32(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutFloat32(n-1, v+1)
+	case val.Float64Enc:
+		v, ok := r.Desc.GetFloat64(n-1, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutFloat64(n-1, v+1)
+	default:
+		return nil, false
+	}
+	return tb.Build(pool), true
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
