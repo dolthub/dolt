@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -192,11 +193,33 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}
 
-			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
+			roots, err = actions.ClearFeatureVersion(context.Background(), roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}
-			if uncommittedChanges {
+
+			headHash, err := roots.Head.HashOf()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			stagedHash, err := roots.Staged.HashOf()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			if headHash != stagedHash {
+				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+			}
+
+			// We allow changes to ignored tables. If this causes a conflict because the remote also modified these tables,
+			// we will detect that during the pull.
+			workingSetClean, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			if !workingSetClean {
 				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
 			}
 
