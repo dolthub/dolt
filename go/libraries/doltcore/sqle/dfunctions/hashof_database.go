@@ -67,12 +67,12 @@ func (t *HashOfDatabase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error
 	if len(args) != 0 {
 		refStr = strings.TrimSpace(args[0])
 
-		for refStr[0] == '\'' || refStr[0] == '"' {
-			refStr = refStr[1:]
-		}
-
-		for refStr[len(refStr)-1] == '\'' || refStr[len(refStr)-1] == '"' {
-			refStr = refStr[:len(refStr)-1]
+		// Remove quotes if they are present at the beginning and end of the string
+		for _, quote := range []rune{'\'', '"', '`'} {
+			if rune(refStr[0]) == quote && rune(refStr[len(refStr)-1]) == quote {
+				refStr = refStr[1 : len(refStr)-1]
+				break
+			}
 		}
 	}
 
