@@ -755,6 +755,64 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/7956
+		Name: "Merge unresolved FKs after resolved FKs were committed",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ SET @@foreign_key_checks=0;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ SET @@autocommit=0;",
+				SkipResultsCheck: true,
+			},
+			{
+				// Create a table for the FK to reference
+				Query:    "/* client a */ CREATE TABLE ref (id varchar(100) PRIMARY KEY, status int);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// Create a table with an FK
+				Query:    "/* client a */ CREATE TABLE t (id int, ref_id varchar(100), FOREIGN KEY (ref_id) REFERENCES ref(id));",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				// Turn @@foreign_key_checks back on in client a
+				Query:    "/* client a */ SET @@foreign_key_checks=1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				// Reference the table with an unresolved FK, so that it gets loaded and resolved
+				Query:    "/* client a */ UPDATE t SET ref_id = 42 where ref_id > 100000;",
+				Expected: []sql.Row{{types.OkResult{Info: plan.UpdateInfo{}}}},
+			},
+			{
+				// Make any change in client b's session
+				Query:    "/* client b */ create table foo (i int);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+			},
+			{
+				// Client a still has an unresolved FK at this point
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				// Assert that client a can see the schema with the foreign key constraints still present
+				Query:    "/* client a */ show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				// Assert that client b can see the schema with the foreign key constraints still present
+				Query:    "/* client b */ show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
