@@ -953,6 +953,7 @@ SQL
     dolt sql <<SQL
 ALTER TABLE parent ADD INDEX v1v2 (v1,v2);
 ALTER TABLE child DROP FOREIGN KEY fk_name;
+ALTER TABLE child DROP KEY fk_name;
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2)
 SQL
     run dolt schema show child
@@ -1456,13 +1457,15 @@ SQL
     dolt schema show child
     run dolt schema show child
     [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "fk_v1" ]] || false
+    [[ "$output" =~ "KEY `fk_v1`" ]] || false
+    [[ ! "$output" =~ "CONSTRAINT `fk_v1`" ]] || false
 
     dolt checkout main
     
     run dolt schema show child
     [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "fk_v1" ]] || false
+    [[ "$output" =~ "KEY `fk_v1`" ]] || false
+    [[ ! "$output" =~ "CONSTRAINT `fk_v1`" ]] || false
 }
 
 @test "foreign-keys: non-overlapping changes in working set and target branch during checkout" {
