@@ -60,6 +60,7 @@ type Range struct {
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
 	Lo, Hi Bound
+	Unique bool //
 	Exact  bool // Lo.Value == Hi.Value
 }
 
@@ -88,7 +89,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Exact && cmp == 0 {
+		if r.Fields[i].Unique && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -120,7 +121,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Exact && cmp == 0 {
+		if r.Fields[i].Unique && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -141,7 +142,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Exact {
+		if r.Fields[i].Unique {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -173,7 +174,7 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 		return false
 	}
 	for i := range r.Fields {
-		if !r.Fields[i].Exact {
+		if !r.Fields[i].Unique {
 			return false
 		}
 	}
@@ -186,79 +187,98 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 // numeric (we can increment by one to get an exclusive upper bound).
 // TODO: support non-exact final field, and use range upper bound?
 func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
-	n := len(r.Fields)
+	n := len(r.Fields) - 1
 	for i := range r.Fields {
+		if r.Fields[i].Lo.Value == nil {
+			n = i - 1
+			break
+		}
 		if !r.Fields[i].Exact {
 			return nil, false
 		}
 	}
 
-	tb := val.NewTupleBuilder(r.Desc)
-	for i := 0; i < r.Desc.Count()-1; i++ {
-		tb.PutRaw(i, r.Tup.GetField(i))
+	if n < 0 {
+		return nil, false
 	}
 
-	switch r.Desc.Types[n-1].Enc {
+	for _, typ := range r.Desc.Types[n+1:] {
+		if !typ.Nullable {
+			return nil, false
+		}
+	}
+
+	tb := val.NewTupleBuilder(r.Desc)
+	for i := 0; i < n; i++ {
+		if i != n {
+			tb.PutRaw(i, r.Tup.GetField(i))
+		}
+	}
+
+	switch r.Desc.Types[n].Enc {
+	case val.StringEnc:
+		v := r.Fields[n].Lo.Value
+		tb.PutString(n, string(v)+"0")
 	case val.Int8Enc:
 		v, ok := r.Desc.GetInt8(n-1, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutInt8(n-1, v+1)
+		tb.PutInt8(n, v+1)
 	case val.Uint8Enc:
-		v, ok := r.Desc.GetUint8(n-1, r.Tup)
+		v, ok := r.Desc.GetUint8(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutUint8(n-1, v+1)
+		tb.PutUint8(n, v+1)
 	case val.Int16Enc:
-		v, ok := r.Desc.GetInt16(n-1, r.Tup)
+		v, ok := r.Desc.GetInt16(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutInt16(n-1, v+1)
+		tb.PutInt16(n, v+1)
 	case val.Uint16Enc:
-		v, ok := r.Desc.GetUint16(n-1, r.Tup)
+		v, ok := r.Desc.GetUint16(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutUint16(n-1, v+1)
+		tb.PutUint16(n, v+1)
 	case val.Int32Enc:
-		v, ok := r.Desc.GetInt32(n-1, r.Tup)
+		v, ok := r.Desc.GetInt32(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutInt32(n-1, v+1)
+		tb.PutInt32(n, v+1)
 	case val.Uint32Enc:
-		v, ok := r.Desc.GetUint32(n-1, r.Tup)
+		v, ok := r.Desc.GetUint32(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutUint32(n-1, v+1)
+		tb.PutUint32(n, v+1)
 	case val.Int64Enc:
-		v, ok := r.Desc.GetInt64(n-1, r.Tup)
+		v, ok := r.Desc.GetInt64(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutInt64(n-1, v+1)
+		tb.PutInt64(n, v+1)
 	case val.Uint64Enc:
-		v, ok := r.Desc.GetUint64(n-1, r.Tup)
+		v, ok := r.Desc.GetUint64(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutUint64(n-1, v+1)
+		tb.PutUint64(n, v+1)
 	case val.Float32Enc:
-		v, ok := r.Desc.GetFloat32(n-1, r.Tup)
+		v, ok := r.Desc.GetFloat32(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutFloat32(n-1, v+1)
+		tb.PutFloat32(n, v+1)
 	case val.Float64Enc:
-		v, ok := r.Desc.GetFloat64(n-1, r.Tup)
+		v, ok := r.Desc.GetFloat64(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
-		tb.PutFloat64(n-1, v+1)
+		tb.PutFloat64(n, v+1)
 	default:
 		return nil, false
 	}
@@ -296,14 +316,15 @@ func closedRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 		Desc:   desc,
 	}
 	order := desc.Comparator()
-
 	for i := range rng.Fields {
 		lo := desc.GetField(i, start)
 		hi := desc.GetField(i, stop)
+		isEq := order.CompareValues(i, lo, hi, desc.Types[i]) == 0
 		rng.Fields[i] = RangeField{
-			Lo:    Bound{Binding: true, Inclusive: true, Value: lo},
-			Hi:    Bound{Binding: true, Inclusive: true, Value: hi},
-			Exact: order.CompareValues(i, lo, hi, desc.Types[i]) == 0,
+			Lo:     Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:     Bound{Binding: true, Inclusive: true, Value: hi},
+			Unique: isEq,
+			Exact:  isEq,
 		}
 	}
 	return
@@ -314,7 +335,7 @@ func openStartRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].Unique = false
 	return rng
 }
 
@@ -323,7 +344,7 @@ func openStopRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].Unique = false
 	return
 }
 
@@ -333,7 +354,7 @@ func openRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].Unique = false
 	return
 }
 

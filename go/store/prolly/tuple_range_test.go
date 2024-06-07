@@ -124,9 +124,9 @@ func TestRangeSearch(t *testing.T) {
 			testRange: Range{
 				Fields: []RangeField{
 					{
-						Lo:    Bound{Binding: true, Inclusive: true, Value: nil},
-						Hi:    Bound{Binding: true, Inclusive: true, Value: nil},
-						Exact: true,
+						Lo:     Bound{Binding: true, Inclusive: true, Value: nil},
+						Hi:     Bound{Binding: true, Inclusive: true, Value: nil},
+						Unique: true,
 					},
 				},
 				Desc: twoCol,
@@ -144,9 +144,9 @@ func TestRangeSearch(t *testing.T) {
 						Lo: Bound{Binding: true, Inclusive: false, Value: nil},
 					},
 					{
-						Lo:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
-						Hi:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
-						Exact: true,
+						Lo:     Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Hi:     Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Unique: true,
 					},
 				},
 				Desc: twoCol,

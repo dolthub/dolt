@@ -1129,7 +1129,7 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 			prevMinCell = minCell
 			prevMaxCell = maxCell
 			field := prolly.RangeField{
-				Exact: false,
+				Unique: false,
 				Lo: prolly.Bound{
 					Binding:   true,
 					Inclusive: true,
@@ -1230,17 +1230,19 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		order := di.keyBld.Desc.Comparator()
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
-			if !di.unique {
-				fields[i].Exact = false
-				continue
-			}
-			if !field.Hi.Binding || !field.Lo.Binding {
-				fields[i].Exact = false
-				continue
-			}
 			typ := di.keyBld.Desc.Types[i]
 			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
 			fields[i].Exact = cmp == 0
+
+			if !di.unique {
+				fields[i].Unique = false
+				continue
+			}
+			if !field.Hi.Binding || !field.Lo.Binding {
+				fields[i].Unique = false
+				continue
+			}
+			fields[i].Unique = cmp == 0
 		}
 		pranges[k] = prolly.Range{
 			Fields: fields,
