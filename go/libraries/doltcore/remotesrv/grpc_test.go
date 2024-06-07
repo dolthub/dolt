@@ -12,9 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// dolt is the command line tool for working with Dolt databases.
-package doltversion
+package remotesrv
 
-const (
-	Version = "1.39.3"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/metadata"
 )
+
+func TestGRPCSchemeSelection(t *testing.T) {
+	rs := &RemoteChunkStore{
+		httpScheme: "http",
+	}
+
+	md := metadata.New(nil)
+	scheme := rs.getScheme(md)
+	assert.Equal(t, scheme, "http")
+
+	md.Append("x-forwarded-proto", "https")
+	scheme = rs.getScheme(md)
+	assert.Equal(t, scheme, "https")
+}

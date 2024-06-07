@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240605185746-64bbdea8d8a4
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240607170936-56d5eb06351e
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
