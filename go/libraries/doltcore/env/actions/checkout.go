@@ -492,12 +492,12 @@ func CheckoutWouldStompWorkingSetChanges(ctx context.Context, sourceRoots, destR
 
 	// In some cases, a working set differs from its head only by the feature version.
 	// If this is the case, moving the working set is safe.
-	modifiedSourceRoots, err := clearFeatureVersion(ctx, sourceRoots)
+	modifiedSourceRoots, err := ClearFeatureVersion(ctx, sourceRoots)
 	if err != nil {
 		return true, err
 	}
 
-	modifiedDestRoots, err := clearFeatureVersion(ctx, destRoots)
+	modifiedDestRoots, err := ClearFeatureVersion(ctx, destRoots)
 	if err != nil {
 		return true, err
 	}
@@ -521,10 +521,10 @@ func doRootsHaveIncompatibleChanges(sourceRoots, destRoots doltdb.Roots) bool {
 	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
 }
 
-// clearFeatureVersion creates a new version of the provided roots where all three roots have the same
+// ClearFeatureVersion creates a new version of the provided roots where all three roots have the same
 // feature version. By hashing these new roots, we can easily determine whether the roots differ only by
 // their feature version.
-func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+func ClearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	currentBranchFeatureVersion, _, err := roots.Head.GetFeatureVersion(ctx)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -551,7 +551,7 @@ func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots,
 // the working and staged roots are identical. This function will ignore any difference in feature
 // versions between the root values.
 func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
-	roots, err = clearFeatureVersion(context.Background(), roots)
+	roots, err = ClearFeatureVersion(context.Background(), roots)
 	if err != nil {
 		return false, hash.Hash{}, hash.Hash{}, err
 	}
