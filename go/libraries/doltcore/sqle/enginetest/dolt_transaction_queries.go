@@ -2124,7 +2124,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"\tForeignKey: fk_name,\n" +
 					"\tTable: child,\n" +
 					"\tReferencedTable: v1,\n" +
-					"\tIndex: v1,\n" +
+					"\tIndex: fk_name,\n" +
 					"\tReferencedIndex: v1",
 			},
 		},

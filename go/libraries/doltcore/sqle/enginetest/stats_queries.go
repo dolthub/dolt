@@ -312,7 +312,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
 				Expected: []sql.Row{
 					{"mydb", "xy", "primary", "x", "bigint"},
-					{"mydb", "xy", "yz", "y,z", "int,varchar(500)"},
+					{"mydb", "xy", "y", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
@@ -350,7 +350,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 				Query: "select database_name, table_name, index_name, columns, types  from dolt_statistics where table_name = 'xy'",
 				Expected: []sql.Row{
 					{"mydb", "xy", "primary", "x", "bigint"},
-					{"mydb", "xy", "yz", "y,z", "int,varchar(500)"},
+					{"mydb", "xy", "y", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
@@ -361,16 +361,16 @@ var DoltStatsIOTests = []queries.ScriptTest{
 				Query: "select `table_name`, `index_name` from dolt_statistics",
 				Expected: []sql.Row{
 					{"ab", "primary"},
-					{"ab", "bc"},
+					{"ab", "b"},
 					{"xy", "primary"},
-					{"xy", "yz"},
+					{"xy", "y"},
 				},
 			},
 			{
 				Query: "select database_name, table_name, index_name, columns, types  from dolt_statistics where table_name = 'ab'",
 				Expected: []sql.Row{
 					{"mydb", "ab", "primary", "a", "bigint"},
-					{"mydb", "ab", "bc", "b,c", "int,int"},
+					{"mydb", "ab", "b", "b,c", "int,int"},
 				},
 			},
 			{
@@ -481,23 +481,23 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "select table_name, index_name, row_count from dolt_statistics",
 				Expected: []sql.Row{
 					{"xy", "primary", uint64(6)},
-					{"xy", "yz", uint64(6)},
+					{"xy", "y", uint64(6)},
 				},
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
 				Expected: []sql.Row{
 					{"ab", "primary", uint64(6)},
-					{"ab", "bc", uint64(6)},
+					{"ab", "b", uint64(6)},
 					{"xy", "primary", uint64(6)},
-					{"xy", "yz", uint64(6)},
+					{"xy", "y", uint64(6)},
 				},
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
 				Expected: []sql.Row{
 					{"xy", "primary", uint64(6)},
-					{"xy", "yz", uint64(6)},
+					{"xy", "y", uint64(6)},
 				},
 			},
 			{
@@ -516,16 +516,16 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
 				Expected: []sql.Row{
 					{"ab", "primary", uint64(6)},
-					{"ab", "bc", uint64(6)},
+					{"ab", "b", uint64(6)},
 					{"xy", "primary", uint64(7)},
-					{"xy", "yz", uint64(7)},
+					{"xy", "y", uint64(7)},
 				},
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
 				Expected: []sql.Row{
 					{"xy", "primary", uint64(6)},
-					{"xy", "yz", uint64(6)},
+					{"xy", "y", uint64(6)},
 				},
 			},
 			{
@@ -546,7 +546,7 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
 				Expected: []sql.Row{
 					{"xy", "primary", uint64(6)},
-					{"xy", "yz", uint64(6)},
+					{"xy", "y", uint64(6)},
 				},
 			},
 		},
