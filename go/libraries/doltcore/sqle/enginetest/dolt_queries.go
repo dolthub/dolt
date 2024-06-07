@@ -741,6 +741,7 @@ var DoltScripts = []queries.ScriptTest{
 			"CREATE TABLE t1 (pk int primary key);",
 			"CREATE TABLE t2 (pk int primary key);",
 			"CREATE TABLE t3 (pk int primary key);",
+			"call dolt_commit('-Am','table creation commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -756,7 +757,27 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{}},
 			},
 			{
-				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "CALL dolt_checkout('-b','new');",
+				Expected: []sql.Row{{0, "Switched to branch 'new'"}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
 				Expected: []sql.Row{{true}},
 			},
 			{
@@ -767,11 +788,68 @@ var DoltScripts = []queries.ScriptTest{
 				Query:    "SELECT @hashofdb = dolt_hashof_db();",
 				Expected: []sql.Row{{false}},
 			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
 
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
 				Expected: []sql.Row{{}},
 			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "CALL dolt_add('t1');",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:            "CALL dolt_commit('-m', 'added some rows to branch `new`');",
+				SkipResultsCheck: true, // returned hash is not deterministic
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{false}},
+			},
+
 			{
 				Query:    "INSERT INTO t2 VALUES (1);",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},

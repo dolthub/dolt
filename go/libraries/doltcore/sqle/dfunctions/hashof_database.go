@@ -16,6 +16,9 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/hash"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -25,30 +28,93 @@ import (
 
 const HashOfDatabaseFuncName = "dolt_hashof_db"
 
-type HashOfDatabase struct{}
+type HashOfDatabase struct {
+	children []sql.Expression
+}
 
 // NewHashOfDatabase creates a new HashOfDatabase expression.
-func NewHashOfDatabase() sql.Expression {
-	return &HashOfDatabase{}
+func NewHashOfDatabase(args ...sql.Expression) (sql.Expression, error) {
+	if len(args) > 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(HashOfDatabaseFuncName, "0 or 1", len(args))
+	}
+
+	return &HashOfDatabase{
+		children: args,
+	}, nil
 }
 
 // Children implements the Expression interface.
 func (t *HashOfDatabase) Children() []sql.Expression {
-	return nil
+	return t.children
 }
 
 // Eval implements the Expression interface.
 func (t *HashOfDatabase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	var args []string
+	for _, child := range t.children {
+		args = append(args, child.String())
+	}
+
 	dbName := ctx.GetCurrentDatabase()
 	ds := dsess.DSessFromSess(ctx.Session)
+
 	roots, ok := ds.GetRoots(ctx, dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	h, err := roots.Working.HashOf()
+	refStr := "WORKING"
+	if len(args) != 0 {
+		refStr = strings.TrimSpace(args[0])
+
+		for refStr[0] == '\'' || refStr[0] == '"' {
+			refStr = refStr[1:]
+		}
+
+		for refStr[len(refStr)-1] == '\'' || refStr[len(refStr)-1] == '"' {
+			refStr = refStr[:len(refStr)-1]
+		}
+	}
+
+	var h hash.Hash
+	var err error
+	switch {
+	case len(refStr) == 0 || strings.EqualFold(refStr, doltdb.Working):
+		h, err = roots.Working.HashOf()
+
+	case strings.EqualFold(refStr, doltdb.Staged):
+		h, err = roots.Staged.HashOf()
+
+	case strings.EqualFold(refStr, "HEAD"):
+		h, err = roots.Head.HashOf()
+
+	default:
+		dbData, ok := ds.GetDbData(ctx, dbName)
+		if !ok {
+			return nil, sql.ErrDatabaseNotFound.New(dbName)
+		}
+
+		ddb := dbData.Ddb
+		r, err := ddb.GetRefByNameInsensitive(ctx, refStr)
+		if err != nil {
+			return nil, fmt.Errorf("error getting ref '%s' from database '%s': %w", refStr, dbName, err)
+		}
+
+		cm, err := ddb.ResolveCommitRef(ctx, r)
+		if err != nil {
+			return nil, fmt.Errorf("error resolving ref '%s' from database '%s': %w", refStr, dbName, err)
+		}
+
+		root, err := cm.GetRootValue(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting root value for commit '%s' in database '%s': %w", refStr, dbName, err)
+		}
+
+		h, err = root.HashOf()
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("error getting hash of the database '%s': %w", dbName, err)
+		return nil, fmt.Errorf("error getting dolt_hashof_db('%s'): %w", refStr, err)
 	}
 
 	return h.String(), nil
@@ -56,7 +122,13 @@ func (t *HashOfDatabase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error
 
 // String implements the Stringer interface.
 func (t *HashOfDatabase) String() string {
-	return fmt.Sprintf("%s()", HashOfDatabaseFuncName)
+	args := make([]string, 0, len(t.children))
+	for _, child := range t.children {
+		args = append(args, child.String())
+	}
+
+	argStr := strings.Join(args, ", ")
+	return fmt.Sprintf("%s(%s)", HashOfDatabaseFuncName, argStr)
 }
 
 // Description implements the FunctionExpression interface
@@ -76,10 +148,7 @@ func (*HashOfDatabase) Resolved() bool {
 
 // WithChildren implements the Expression interface.
 func (t *HashOfDatabase) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	if len(children) != 0 {
-		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
-	}
-	return NewHashOfDatabase(), nil
+	return NewHashOfDatabase(children...)
 }
 
 // Type implements the Expression interface.
