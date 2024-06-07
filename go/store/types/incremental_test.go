@@ -58,6 +58,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	ts := &chunks.TestStorage{}
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
+	vs.skipWriteCaching = true
 
 	expected, err := NewList(context.Background(), vs, getTestVals(vs)...)
 	require.NoError(t, err)
