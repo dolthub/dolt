@@ -221,7 +221,7 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 		v := r.Fields[n].Lo.Value
 		tb.PutString(n, string(v)+"0")
 	case val.Int8Enc:
-		v, ok := r.Desc.GetInt8(n-1, r.Tup)
+		v, ok := r.Desc.GetInt8(n, r.Tup)
 		if !ok {
 			return nil, false
 		}
