@@ -61,7 +61,7 @@ func (t *HashOfDatabase) String() string {
 
 // Description implements the FunctionExpression interface
 func (t *HashOfDatabase) Description() string {
-	return "returns a hash of the contents of the current database, typically used for detecting if a database has changed"
+	return "returns a hash of the contents of the current branch and database, typically used for detecting if a database has changed"
 }
 
 // IsNullable implements the Expression interface.
