@@ -736,6 +736,144 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_hashof_db tests",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int primary key);",
+			"CREATE TABLE t2 (pk int primary key);",
+			"CREATE TABLE t3 (pk int primary key);",
+			"call dolt_commit('-Am','table creation commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"t1"},
+					{"t2"},
+					{"t3"},
+				},
+			},
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "CALL dolt_checkout('-b','new');",
+				Expected: []sql.Row{{0, "Switched to branch 'new'"}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "INSERT INTO t1 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "CALL dolt_add('t1');",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:            "CALL dolt_commit('-m', 'added some rows to branch `new`');",
+				SkipResultsCheck: true, // returned hash is not deterministic
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{false}},
+			},
+
+			{
+				Query:    "INSERT INTO t2 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
+			},
+
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "create procedure proc1() SELECT * FROM t3;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
+			},
+		},
+	},
+	{
 		// https://github.com/dolthub/dolt/issues/7384
 		Name: "multiple unresolved foreign keys can be created on the same table",
 		SetUpScript: []string{

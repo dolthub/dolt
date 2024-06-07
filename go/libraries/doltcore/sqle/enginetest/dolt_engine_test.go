@@ -1667,10 +1667,12 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
 	for _, script := range DoltScripts {
-		enginetest.TestScript(t, harness, script)
+		go func() {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
 	}
 }
 
