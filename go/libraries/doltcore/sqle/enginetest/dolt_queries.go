@@ -736,6 +736,62 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_hashof_db tests",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int primary key);",
+			"CREATE TABLE t2 (pk int primary key);",
+			"CREATE TABLE t3 (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"t1"},
+					{"t2"},
+					{"t3"},
+				},
+			},
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"8s7m7m4djgi775km2e9iegrcjaqibq3a"}},
+			},
+			{
+				Query:    "INSERT INTO t1 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"vm5tdcu609k8ocjpvf2mttqnog68jf8g"}},
+			},
+
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"vm5tdcu609k8ocjpvf2mttqnog68jf8g"}},
+			},
+			{
+				Query:    "INSERT INTO t2 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"ceip16r8mongns5t454huj3pj0hgtgeo"}},
+			},
+
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"ceip16r8mongns5t454huj3pj0hgtgeo"}},
+			},
+			{
+				Query:    "create procedure proc1() SELECT * FROM t3;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "SELECT dolt_hashof_db();",
+				Expected: []sql.Row{{"nes9a42uqmoin7i56lmdg4qo7ad79tk5"}},
+			},
+		},
+	},
+	{
 		// https://github.com/dolthub/dolt/issues/7384
 		Name: "multiple unresolved foreign keys can be created on the same table",
 		SetUpScript: []string{
