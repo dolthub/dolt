@@ -48,7 +48,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
 					"  PRIMARY KEY (`id`),\n" +
-					"  KEY `v1` (`v1`),\n" +
+					"  KEY `fk_named` (`v1`),\n" +
 					"  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
@@ -98,7 +98,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
 					"  PRIMARY KEY (`id`),\n" +
-					"  KEY `v1` (`v1`),\n" +
+					"  KEY `fk_named` (`v1`),\n" +
 					"  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
