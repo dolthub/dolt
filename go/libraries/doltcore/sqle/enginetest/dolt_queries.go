@@ -752,42 +752,46 @@ var DoltScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"8s7m7m4djgi775km2e9iegrcjaqibq3a"}},
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{true}},
 			},
 			{
 				Query:    "INSERT INTO t1 VALUES (1);",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"vm5tdcu609k8ocjpvf2mttqnog68jf8g"}},
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
 			},
 
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"vm5tdcu609k8ocjpvf2mttqnog68jf8g"}},
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "INSERT INTO t2 VALUES (1);",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"ceip16r8mongns5t454huj3pj0hgtgeo"}},
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
 			},
 
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"ceip16r8mongns5t454huj3pj0hgtgeo"}},
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "create procedure proc1() SELECT * FROM t3;",
 				Expected: []sql.Row{{types.OkResult{}}},
 			},
 			{
-				Query:    "SELECT dolt_hashof_db();",
-				Expected: []sql.Row{{"nes9a42uqmoin7i56lmdg4qo7ad79tk5"}},
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
 			},
 		},
 	},
