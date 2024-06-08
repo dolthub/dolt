@@ -188,9 +188,15 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 // numeric (we can increment by one to get an exclusive upper bound).
 // TODO: support non-exact final field, and use range upper bound?
 func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
+	if r.Tup == nil {
+		return nil, false
+	}
 	n := len(r.Fields) - 1
 	for i := range r.Fields {
 		if r.Fields[i].Lo.Value == nil {
+			if r.Fields[i].Hi.Value != nil {
+				return nil, false
+			}
 			n = i - 1
 			break
 		}
