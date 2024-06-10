@@ -473,7 +473,7 @@ func (t *TempTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error)
 }
 
 func (t *TempTable) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	autoIncEditor, ok  := t.ed.(writer.AutoIncrementGetter)
+	autoIncEditor, ok := t.ed.(writer.AutoIncrementGetter)
 	if !ok {
 		return 0, sql.ErrNoAutoIncrementCol
 	}
