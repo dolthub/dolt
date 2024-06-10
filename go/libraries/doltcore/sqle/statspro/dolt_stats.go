@@ -15,6 +15,7 @@
 package statspro
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -35,6 +36,10 @@ type DoltStats struct {
 	// field on disk
 	Active map[hash.Hash]int
 	Hist   sql.Histogram
+}
+
+func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {
+	return s
 }
 
 var _ sql.Statistic = (*DoltStats)(nil)

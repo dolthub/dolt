@@ -485,7 +485,7 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 		fkColl: fkCollection(doltdb.ForeignKey{
 			Name:                   "q1_fk",
 			TableName:              "quiz",
-			TableIndex:             "q1",
+			TableIndex:             "q1_fk",
 			TableColumns:           []uint64{13001},
 			ReferencedTableName:    "test",
 			ReferencedTableIndex:   "t1_idx",

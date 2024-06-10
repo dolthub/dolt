@@ -94,8 +94,10 @@ func (cmd MergeCmd) RequiresRepo() bool {
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateMergeArgParser()
 	ap.SupportsFlag(cli.NoJsonMergeFlag, "", "Do not attempt to automatically resolve multiple changes to the same JSON value, report a conflict instead.")
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, mergeDocs)
+	if terminate {
+		return status
+	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {

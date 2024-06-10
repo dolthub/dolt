@@ -3475,7 +3475,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'WORKING')",
 				Expected: []sql.Row{
-					{1, "child", "schema", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{1, "child", "schema", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `fk_named` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "parent", "schema", "CREATE TABLE `parent` (\n  `id` int NOT NULL,\n  `id_ext` int NOT NULL,\n  `v1` int,\n  `v2` text COMMENT 'tag:1',\n  PRIMARY KEY (`id`,`id_ext`),\n  KEY `v1` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{3, "parent", "data", "INSERT INTO `parent` (`id`,`id_ext`,`v1`,`v2`) VALUES (0,1,2,NULL);"},
 				},
@@ -3483,7 +3483,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT statement_order, to_commit_hash, table_name, diff_type, statement FROM dolt_patch('HEAD', 'STAGED')",
 				Expected: []sql.Row{
-					{1, "STAGED", "child", "schema", "ALTER TABLE `child` ADD INDEX `v1`(`v1`);"},
+					{1, "STAGED", "child", "schema", "ALTER TABLE `child` ADD INDEX `fk_named`(`v1`);"},
 					{2, "STAGED", "child", "schema", "ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
 					{3, "STAGED", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
 					{4, "STAGED", "parent", "schema", "ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"},

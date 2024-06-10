@@ -264,7 +264,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 						"  `c1` int,\n" +
 						"  `c3` int,\n" +
 						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `c1` (`c1`),\n" +
+						"  KEY `fk1` (`c1`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`pv1`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
@@ -279,8 +279,8 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 						"  `c3` int,\n" +
 						"  `c2` varchar(20),\n" +
 						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `c1` (`c1`),\n" +
-						"  KEY `c2` (`c2`),\n" +
+						"  KEY `fk1` (`c1`),\n" +
+						"  KEY `fk2` (`c2`),\n" +
 						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
@@ -732,6 +732,144 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query:          "SELECT dolt_hashof_table('noexist');",
 				ExpectedErrStr: "table not found: noexist",
+			},
+		},
+	},
+	{
+		Name: "dolt_hashof_db tests",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int primary key);",
+			"CREATE TABLE t2 (pk int primary key);",
+			"CREATE TABLE t3 (pk int primary key);",
+			"call dolt_commit('-Am','table creation commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"t1"},
+					{"t2"},
+					{"t3"},
+				},
+			},
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "CALL dolt_checkout('-b','new');",
+				Expected: []sql.Row{{0, "Switched to branch 'new'"}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "INSERT INTO t1 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "CALL dolt_add('t1');",
+				Expected: []sql.Row{{int64(0)}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{false}},
+			},
+			{
+				Query:            "CALL dolt_commit('-m', 'added some rows to branch `new`');",
+				SkipResultsCheck: true, // returned hash is not deterministic
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
+				Expected: []sql.Row{{false}},
+			},
+
+			{
+				Query:    "INSERT INTO t2 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
+			},
+
+			{
+				Query:    "SET @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "create procedure proc1() SELECT * FROM t3;",
+				Expected: []sql.Row{{types.OkResult{}}},
+			},
+			{
+				Query:    "SELECT @hashofdb = dolt_hashof_db();",
+				Expected: []sql.Row{{false}},
 			},
 		},
 	},
@@ -6373,7 +6511,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10),\n  `v2` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1v2` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10),\n  `v2` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
 			},
 			{
 				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
@@ -6513,7 +6651,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` varchar(100),\n  `j` int,\n  KEY `ij` (`i`(10),`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` varchar(100),\n  `j` int,\n  KEY `i` (`i`(10),`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
