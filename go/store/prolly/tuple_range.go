@@ -60,9 +60,9 @@ type Range struct {
 
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
-	Lo, Hi Bound
-	Exact  bool // Lo.Value == Hi.Value
-	Unique bool // At most one key has this value
+	Lo, Hi    Bound
+	Equality  bool // Lo.Value == Hi.Value
+	StrictKey bool // At most one key has this value
 }
 
 type Bound struct {
@@ -90,7 +90,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Unique && cmp == 0 {
+		if r.Fields[i].StrictKey && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -122,7 +122,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Unique && cmp == 0 {
+		if r.Fields[i].StrictKey && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -143,7 +143,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Unique {
+		if r.Fields[i].StrictKey {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -175,7 +175,7 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 		return false
 	}
 	for i := range r.Fields {
-		if !r.Fields[i].Unique {
+		if !r.Fields[i].StrictKey {
 			return false
 		}
 	}
@@ -201,28 +201,39 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 			n = i - 1
 			break
 		}
-		if !r.Fields[i].Exact {
+		if !r.Fields[i].Equality {
 			return nil, false
 		}
 	}
 
 	if n < 0 {
+		// ex: range scan
 		return nil, false
 	}
 
-	for _, typ := range r.Desc.Types[n+1:] {
-		if !typ.Nullable {
+	for i := n + 1; i < len(r.Fields); i++ {
+		if !r.Desc.Types[i].Nullable ||
+			r.Fields[i].Lo.Value != nil ||
+			r.Fields[i].Hi.Value != nil {
+			// these shouldn't be possible with regular index semantics,
+			// but we manually inline indexes sometimes on the Dolt side,
+			// and it's possible we'd change analyzer indexing semantics
+			// in the future
 			return nil, false
 		}
+
 	}
 
 	tb := val.NewTupleBuilder(r.Desc)
 	for i := 0; i < n; i++ {
 		if i != n {
+			// direct copy all but the last field
 			tb.PutRaw(i, r.Tup.GetField(i))
 		}
 	}
 
+	// last field will be incremented by one to get the exclusive key
+	// range [key, key+1)
 	switch r.Desc.Types[n].Enc {
 	case val.StringEnc:
 		v := r.Fields[n].Lo.Value
@@ -329,10 +340,10 @@ func closedRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 		hi := desc.GetField(i, stop)
 		isEq := order.CompareValues(i, lo, hi, desc.Types[i]) == 0
 		rng.Fields[i] = RangeField{
-			Lo:     Bound{Binding: true, Inclusive: true, Value: lo},
-			Hi:     Bound{Binding: true, Inclusive: true, Value: hi},
-			Unique: isEq,
-			Exact:  isEq,
+			Lo:        Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:        Bound{Binding: true, Inclusive: true, Value: hi},
+			StrictKey: isEq,
+			Equality:  isEq,
 		}
 	}
 	return
@@ -343,7 +354,7 @@ func openStartRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
-	rng.Fields[last].Unique = false
+	rng.Fields[last].StrictKey = false
 	return rng
 }
 
@@ -352,7 +363,7 @@ func openStopRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Unique = false
+	rng.Fields[last].StrictKey = false
 	return
 }
 
@@ -362,7 +373,7 @@ func openRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Unique = false
+	rng.Fields[last].StrictKey = false
 	return
 }
 
