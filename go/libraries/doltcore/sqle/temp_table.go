@@ -57,6 +57,7 @@ var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
+var _ sql.AutoIncrementTable = &TempTable{}
 
 func NewTempTable(
 	ctx *sql.Context,
@@ -465,4 +466,20 @@ func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collat
 	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
+}
+
+func (t *TempTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
+	return t.table.GetAutoIncrementValue(ctx)
+}
+
+func (t *TempTable) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	autoIncEditor, ok := t.ed.(writer.AutoIncrementGetter)
+	if !ok {
+		return 0, sql.ErrNoAutoIncrementCol
+	}
+	return autoIncEditor.GetNextAutoIncrementValue(ctx, insertVal)
+}
+
+func (t *TempTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
+	return t.ed
 }
