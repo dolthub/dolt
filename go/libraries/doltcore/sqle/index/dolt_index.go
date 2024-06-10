@@ -1239,7 +1239,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				continue
 			}
 			if !field.Hi.Binding || !field.Lo.Binding {
+				// infinity bound
 				fields[i].Unique = false
+				fields[i].Exact = false
 				continue
 			}
 			fields[i].Unique = cmp == 0

@@ -61,12 +61,12 @@ type Range struct {
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
 	Lo, Hi Bound
-	Unique bool //
 	Exact  bool // Lo.Value == Hi.Value
+	Unique bool // At most one key has this value
 }
 
 type Bound struct {
-	Binding   bool
+	Binding   bool // positive or negative infinity
 	Inclusive bool
 	Value     []byte
 }
@@ -185,7 +185,8 @@ func (r Range) IsPointLookup(desc val.TupleDesc) bool {
 // KeyRangeLookup will return a stop key and true if the range can be scanned
 // from a start to stop tuple. Otherwise, return a nil key and false. A range
 // can be key range scanned if the prefix is exact, and the final field is
-// numeric (we can increment by one to get an exclusive upper bound).
+// numeric or string. The stop key adds +1 to a numeric final field, and appends
+// '0' to a string final field.
 // TODO: support non-exact final field, and use range upper bound?
 func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 	if r.Tup == nil {
