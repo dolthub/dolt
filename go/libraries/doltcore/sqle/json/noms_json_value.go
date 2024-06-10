@@ -64,7 +64,7 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 	return NomsJSON(doc), nil
 }
 
-func (v NomsJSON) Clone() sql.JSONWrapper {
+func (v NomsJSON) Clone(_ context.Context) sql.JSONWrapper {
 	return v
 }
 

@@ -394,7 +394,7 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
-func (m FkCVMeta) Clone() sql.JSONWrapper {
+func (m FkCVMeta) Clone(_ context.Context) sql.JSONWrapper {
 	return m
 }
 

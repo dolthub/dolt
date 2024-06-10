@@ -301,7 +301,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 	if err != nil {
 		return nil, err
 	}
-	return NewIndexedJsonDocument(root, b.ns), nil
+	return NewIndexedJsonDocument(ctx, root, b.ns), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {

@@ -54,7 +54,7 @@ type UniqCVMeta struct {
 	Name    string   `json:"Name"`
 }
 
-func (m UniqCVMeta) Clone() sql.JSONWrapper {
+func (m UniqCVMeta) Clone(_ context.Context) sql.JSONWrapper {
 	return m
 }
 
@@ -140,7 +140,7 @@ type NullViolationMeta struct {
 	Columns []string `json:"Columns"`
 }
 
-func (m NullViolationMeta) Clone() sql.JSONWrapper {
+func (m NullViolationMeta) Clone(_ context.Context) sql.JSONWrapper {
 	return m
 }
 
@@ -173,7 +173,7 @@ type CheckCVMeta struct {
 	Expression string `json:"Expression"`
 }
 
-func (m CheckCVMeta) Clone() sql.JSONWrapper {
+func (m CheckCVMeta) Clone(_ context.Context) sql.JSONWrapper {
 	return m
 }
 

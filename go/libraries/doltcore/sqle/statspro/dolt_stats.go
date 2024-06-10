@@ -15,6 +15,7 @@
 package statspro
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -37,7 +38,7 @@ type DoltStats struct {
 	Hist   sql.Histogram
 }
 
-func (s *DoltStats) Clone() sql.JSONWrapper {
+func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {
 	return s
 }
 
