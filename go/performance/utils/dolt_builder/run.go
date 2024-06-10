@@ -177,6 +177,7 @@ func goBuild(ctx context.Context, source, dest, profilePath string) (string, err
 
 	build := ExecCommand(ctx, "go", args...)
 	build.Dir = goDir
+	build.Stderr = os.Stderr
 	err := build.Run()
 	if err != nil {
 		return "", err
