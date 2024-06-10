@@ -472,6 +472,8 @@ func waitForReplicaToCatchUp(t *testing.T) {
 		}
 	}
 
+	// Log some status of the replica, before failing the test
+	outputShowReplicaStatus(t)
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
 }
 
