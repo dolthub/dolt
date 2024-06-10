@@ -23,7 +23,8 @@ echo '
     "template": {
       "metadata": {
         "labels": {
-          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config",
+          "app": "fuzzer"
         }
       },
       "spec": {
