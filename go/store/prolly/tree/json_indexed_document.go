@@ -114,6 +114,13 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql
 		return nil, err
 	}
 
+	cursorPath := jCur.GetCurrentPath()
+	cmp := compareJsonLocations(cursorPath, path)
+	if cmp != 0 {
+		// The key doesn't exist in the document.
+		return nil, nil
+	}
+
 	valueBytes, err := jCur.NextValue(ctx)
 	if err != nil {
 		return nil, err
