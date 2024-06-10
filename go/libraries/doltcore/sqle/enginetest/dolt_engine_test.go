@@ -1676,6 +1676,14 @@ func TestDoltScripts(t *testing.T) {
 	}
 }
 
+func TestDoltTempTableScripts(t *testing.T) {
+	for _, script := range DoltTempTableScripts {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+	}
+}
+
 func TestDoltRevisionDbScripts(t *testing.T) {
 	for _, script := range DoltRevisionDbScripts {
 		func() {
