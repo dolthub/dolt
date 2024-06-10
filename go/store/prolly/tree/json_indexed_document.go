@@ -46,7 +46,7 @@ var _ types.MutableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
 var _ driver.Valuer = IndexedJsonDocument{}
 
-func NewIndexedJsonDocument(root Node, ns NodeStore) IndexedJsonDocument {
+func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) IndexedJsonDocument {
 	m := StaticMap[jsonLocationKey, address, jsonLocationOrdering]{
 		Root:      root,
 		NodeStore: ns,
@@ -55,7 +55,7 @@ func NewIndexedJsonDocument(root Node, ns NodeStore) IndexedJsonDocument {
 	return IndexedJsonDocument{
 		m: m,
 		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
-			return getInterfaceFromIndexedJsonMap(m)
+			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
 	}
 }
@@ -63,13 +63,12 @@ func NewIndexedJsonDocument(root Node, ns NodeStore) IndexedJsonDocument {
 // Clone implements sql.JSONWrapper. Mutating an IndexedJsonDocument always returns a new IndexedJsonDocument without
 // modifying the state of the original. But creating a new instance allows callers to modify the value returned by ToInterface()
 // on the "mutable" copy without affecting the value cached on the original.
-func (i IndexedJsonDocument) Clone() sql.JSONWrapper {
-	// TODO: Add context parameter to JSONWrapper.Clone()
+func (i IndexedJsonDocument) Clone(ctx context.Context) sql.JSONWrapper {
 	m := i.m
 	return IndexedJsonDocument{
 		m: m,
 		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
-			return getInterfaceFromIndexedJsonMap(m)
+			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
 	}
 }
@@ -80,8 +79,7 @@ func (i IndexedJsonDocument) ToInterface() (interface{}, error) {
 }
 
 // getInterfaceFromIndexedJsonMap extracts the JSON document from a StaticJsonMap and converts it into an interface{}
-func getInterfaceFromIndexedJsonMap(m StaticJsonMap) (val interface{}, err error) {
-	ctx := context.Background()
+func getInterfaceFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (val interface{}, err error) {
 	jsonBytes, err := getBytesFromIndexedJsonMap(ctx, m)
 	if err != nil {
 		return nil, err
@@ -198,7 +196,7 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 				return nil, false, err
 			}
 
-			return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
+			return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 
 		}
 		if cursorPath.getScannerState() != arrayInitialElement && cursorPath.getScannerState() != objectInitialElement {
@@ -251,7 +249,7 @@ func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.Mut
 		return nil, false, err
 	}
 
-	return NewIndexedJsonDocument(newRoot, i.m.NodeStore), true, nil
+	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
 // Remove is not yet implemented, so we call it on a types.JSONDocument instead.

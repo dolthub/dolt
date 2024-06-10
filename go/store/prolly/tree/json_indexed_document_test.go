@@ -15,7 +15,7 @@ func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns NodeS
 	require.NoError(t, err)
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
-	return NewIndexedJsonDocument(root, ns)
+	return NewIndexedJsonDocument(ctx, root, ns)
 }
 
 func TestIndexedJsonDocument_Insert(t *testing.T) {
