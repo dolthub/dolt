@@ -3,7 +3,7 @@ package tree
 import (
 	"context"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/json/jsontests"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -25,6 +25,6 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
 	}
 
-	testCases := json.JsonInsertTestCases(t, convertStringToIndexedJsonDocument)
+	testCases := jsontests.JsonInsertTestCases(t, convertStringToIndexedJsonDocument)
 	json.RunJsonTests(t, testCases)
 }
