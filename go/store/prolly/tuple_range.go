@@ -211,9 +211,16 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 		return nil, false
 	}
 
+	for _, typ := range r.Desc.Types[n+1:] {
+		if !typ.Nullable {
+			// this is checked separately because fulltext descriptors
+			// do not match field lengths for some reason
+			return nil, false
+		}
+
+	}
 	for i := n + 1; i < len(r.Fields); i++ {
-		if !r.Desc.Types[i].Nullable ||
-			r.Fields[i].Lo.Value != nil ||
+		if r.Fields[i].Lo.Value != nil ||
 			r.Fields[i].Hi.Value != nil {
 			// these shouldn't be possible with regular index semantics,
 			// but we manually inline indexes sometimes on the Dolt side,
