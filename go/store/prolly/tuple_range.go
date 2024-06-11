@@ -178,7 +178,7 @@ func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
 		return false
 	}
 	for i := range r.Fields {
-		if !r.Fields[i].TargetIsUnique || !r.Fields[i].BoundsAreEqual || r.Fields[i].Lo.Value == nil {
+		if !r.Fields[i].BoundsAreEqual {
 			return false
 		}
 	}
