@@ -21,6 +21,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -29,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -90,7 +93,9 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 			return statusErr, fmt.Errorf("error removing backup: %w", err)
 		}
 	case cli.RestoreBackupId:
-		return statusErr, fmt.Errorf("restoring backup endpoint in sql is unimplemented.")
+		if err = restoreBackup(ctx, dbData, apr); err != nil {
+			return statusErr, fmt.Errorf("error restoring backup: %w", err)
+		}
 	case cli.SyncBackupUrlId:
 		err = syncBackupViaUrl(ctx, dbData, sess, apr)
 		if err != nil {
@@ -147,9 +152,64 @@ func addBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResul
 	}
 }
 
+func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResults) error {
+	if apr.NArg() != 3 {
+		return fmt.Errorf("usage: dolt_backup('restore', 'backup_url', 'database_name')")
+	}
+
+	backupUrl := strings.TrimSpace(apr.Arg(1))
+	dbName := strings.TrimSpace(apr.Arg(2))
+	force := apr.Contains(cli.ForceFlag)
+
+	remoteParams := map[string]string{}
+	r := env.NewRemote("", backupUrl, remoteParams)
+	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, nil)
+	if err != nil {
+		return err
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	existingDbData, restoringExistingDb := sess.GetDbData(ctx, dbName)
+	if restoringExistingDb {
+		if !force {
+			return fmt.Errorf("error: cannot restore backup into %s. "+
+				"A database with that name already exists. Did you mean to supply --force?", dbName)
+		}
+
+		return syncRootsFromBackup(ctx, existingDbData, sess, r)
+	} else {
+		// Track whether the db directory existed before we tried to create it, so we can clean up on errors
+		userDirExisted, _ := sess.Provider().FileSystem().Exists(dbName)
+
+		// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
+		clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, dbName,
+			sess.Provider().FileSystem(), doltversion.Version, env.GetCurrentUserHomeDir)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		// make empty repo state
+		_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
+		if err != nil {
+			return err
+		}
+
+		if err = syncRootsFromBackup(ctx, clonedEnv.DbData(), sess, r); err != nil {
+			// If we're cloning into a directory that already exists do not erase it.
+			// Otherwise, make a best effort to delete any directory we created.
+			if userDirExisted {
+				_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
+			} else {
+				_ = clonedEnv.FS.Delete(".", true)
+			}
+		}
+		return err
+	}
+}
+
 func removeBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('remove', 'backup_name'")
+		return fmt.Errorf("usage: dolt_backup('remove', 'backup_name')")
 	}
 
 	backupName := strings.TrimSpace(apr.Arg(1))
@@ -210,7 +270,7 @@ func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSessi
 
 	b := env.NewRemote("__temp__", backupUrl, params)
 
-	return syncRoots(ctx, dbData, sess, b)
+	return syncRootsToBackup(ctx, dbData, sess, b)
 }
 
 func syncBackupViaName(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
@@ -229,10 +289,11 @@ func syncBackupViaName(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSess
 		return fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
 	}
 
-	return syncRoots(ctx, dbData, sess, b)
+	return syncRootsToBackup(ctx, dbData, sess, b)
 }
 
-func syncRoots(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, backup env.Remote) error {
+// syncRootsToBackup syncs the roots from |dbData| to the backup specified by |backup|.
+func syncRootsToBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, backup env.Remote) error {
 	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
 	if err != nil {
 		return fmt.Errorf("error loading backup destination: %w", err)
@@ -244,6 +305,26 @@ func syncRoots(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, bac
 	}
 
 	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, tmpDir, runProgFuncs, stopProgFuncs)
+	if err != nil && err != pull.ErrDBUpToDate {
+		return fmt.Errorf("error syncing backup: %w", err)
+	}
+
+	return nil
+}
+
+// syncRootsFromBackup syncs the roots from the backup specified by |backup| to |dbData|.
+func syncRootsFromBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, backup env.Remote) error {
+	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
+	if err != nil {
+		return fmt.Errorf("error loading backup destination: %w", err)
+	}
+
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return err
+	}
+
+	err = actions.SyncRoots(ctx, destDb, dbData.Ddb, tmpDir, runProgFuncs, stopProgFuncs)
 	if err != nil && err != pull.ErrDBUpToDate {
 		return fmt.Errorf("error syncing backup: %w", err)
 	}
