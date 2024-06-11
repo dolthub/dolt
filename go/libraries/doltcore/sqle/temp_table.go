@@ -17,7 +17,9 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+"math/rand"
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,8 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+		"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
@@ -83,7 +84,23 @@ func NewTempTable(
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
+	colNames := make([]string, len(pkSch.Schema))
+	colKinds := make([]types.NomsKind, len(pkSch.Schema))
+	for i, col := range pkSch.Schema {
+		colNames[i] = col.Name
+		ti, err := typeinfo.FromSqlType(col.Type)
+		if err != nil {
+			return nil, err
+		}
+		colKinds[i] = ti.NomsKind()
+	}
+
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, ws.WorkingRoot(), name, colNames, colKinds, ws.WorkingRoot())
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := temporaryDoltSchema(ctx, pkSch, tags, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -444,11 +461,10 @@ func (t *TempTable) Close(ctx *sql.Context) error {
 	return err
 }
 
-func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collation sql.CollationID) (sch schema.Schema, err error) {
+func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, tags []uint64, collation sql.CollationID) (sch schema.Schema, err error) {
 	cols := make([]schema.Column, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
-		tag := uint64(i)
-		cols[i], err = sqlutil.ToDoltCol(tag, col)
+		cols[i], err = sqlutil.ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
