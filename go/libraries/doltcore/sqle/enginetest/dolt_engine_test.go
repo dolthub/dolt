@@ -148,7 +148,7 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "",
+			Name:        "",
 			SetUpScript: []string{},
 			Assertions: []queries.ScriptTestAssertion{
 			},
