@@ -60,9 +60,11 @@ type Range struct {
 
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
-	Lo, Hi    Bound
-	Equality  bool // Lo.Value == Hi.Value
-	StrictKey bool // At most one key has this value
+	Lo, Hi Bound
+	// BoundsAreEqual is |true| when |Lo.Value| == |Hi.Value|
+	BoundsAreEqual bool
+	// TargetIsUnique is |true| when the associated index is unique
+	TargetIsUnique bool
 }
 
 type Bound struct {
@@ -90,7 +92,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].StrictKey && cmp == 0 {
+		if r.Fields[i].BoundsAreEqual && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -122,7 +124,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].StrictKey && cmp == 0 {
+		if r.Fields[i].BoundsAreEqual && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -143,7 +145,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].StrictKey {
+		if r.Fields[i].BoundsAreEqual {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -170,12 +172,13 @@ func (r Range) Matches(t val.Tuple) bool {
 	return true
 }
 
-func (r Range) IsPointLookup(desc val.TupleDesc) bool {
+func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
+	// a strict key is a set of non-nil equality restrictions covering every field of a unique index
 	if len(r.Fields) < len(desc.Types) {
 		return false
 	}
 	for i := range r.Fields {
-		if !r.Fields[i].StrictKey {
+		if !r.Fields[i].TargetIsUnique || !r.Fields[i].BoundsAreEqual || r.Fields[i].Lo.Value == nil {
 			return false
 		}
 	}
@@ -201,7 +204,7 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 			n = i - 1
 			break
 		}
-		if !r.Fields[i].Equality {
+		if !r.Fields[i].BoundsAreEqual {
 			return nil, false
 		}
 	}
@@ -214,11 +217,12 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 	for _, typ := range r.Desc.Types[n+1:] {
 		if !typ.Nullable {
 			// this is checked separately because fulltext descriptors
-			// do not match field lengths for some reason
+			// do not match field lengths sometimes
+			// todo: why?
 			return nil, false
 		}
-
 	}
+
 	for i := n + 1; i < len(r.Fields); i++ {
 		if r.Fields[i].Lo.Value != nil ||
 			r.Fields[i].Hi.Value != nil {
@@ -347,10 +351,9 @@ func closedRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 		hi := desc.GetField(i, stop)
 		isEq := order.CompareValues(i, lo, hi, desc.Types[i]) == 0
 		rng.Fields[i] = RangeField{
-			Lo:        Bound{Binding: true, Inclusive: true, Value: lo},
-			Hi:        Bound{Binding: true, Inclusive: true, Value: hi},
-			StrictKey: isEq,
-			Equality:  isEq,
+			Lo:             Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:             Bound{Binding: true, Inclusive: true, Value: hi},
+			BoundsAreEqual: isEq,
 		}
 	}
 	return
@@ -361,7 +364,7 @@ func openStartRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
-	rng.Fields[last].StrictKey = false
+	rng.Fields[last].BoundsAreEqual = false
 	return rng
 }
 
@@ -370,7 +373,7 @@ func openStopRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].StrictKey = false
+	rng.Fields[last].BoundsAreEqual = false
 	return
 }
 
@@ -380,7 +383,7 @@ func openRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].StrictKey = false
+	rng.Fields[last].BoundsAreEqual = false
 	return
 }
 
