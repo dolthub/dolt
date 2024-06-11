@@ -7140,7 +7140,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query:    "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
 				Expected: []sql.Row{
-					{gmstypes.NewOkResult(0)},
+					{types.NewOkResult(0)},
 				},
 			},
 		},
