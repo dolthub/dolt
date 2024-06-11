@@ -148,15 +148,9 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "temporary table tag collision",
+			Name: "",
 			SetUpScript: []string{},
 			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
-					Expected: []sql.Row{
-						{gmstypes.NewOkResult(0)},
-					},
-				},
 			},
 		},
 	}
