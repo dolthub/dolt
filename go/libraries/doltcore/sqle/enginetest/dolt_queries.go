@@ -7131,4 +7131,18 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "temporary table tag collision",
+		SetUpScript: []string{
+			"CREATE TABLE note(a int, b int, userid int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
+				Expected: []sql.Row{
+					{gmstypes.NewOkResult(0)},
+				},
+			},
+		},
+	},
 }
