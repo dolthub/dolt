@@ -26,17 +26,19 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/dolthub/vitess/go/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 var mySqlPort, doltPort int
@@ -470,7 +472,48 @@ func waitForReplicaToCatchUp(t *testing.T) {
 		}
 	}
 
+	// Log some status of the replica, before failing the test
+	outputShowReplicaStatus(t)
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
+}
+
+// waitForReplicaToHaveLatestGtid waits (up to 10s) for the replica to contain the
+// most recent GTID executed from the primary. Both the primary and replica are queried
+// for the value of @@gtid_executed to determine if the replica contains the most recent
+// transaction from the primary.
+func waitForReplicaToHaveLatestGtid(t *testing.T) {
+	timeLimit := 10 * time.Second
+	endTime := time.Now().Add(timeLimit)
+	for time.Now().Before(endTime) {
+		replicaGtid := queryGtid(t, replicaDatabase)
+		primaryGtid := queryGtid(t, primaryDatabase)
+
+		replicaGtidSet, err := mysql.ParseMysql56GTIDSet(replicaGtid)
+		require.NoError(t, err)
+
+		idx := strings.Index(primaryGtid, ":")
+		require.True(t, idx > 0)
+		uuid := primaryGtid[:idx]
+		sequencePortion := primaryGtid[idx+1:]
+		if strings.Contains(sequencePortion, ":") {
+			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, ":")+1:]
+		}
+		if strings.Contains(sequencePortion, "-") {
+			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, "-")+1:]
+		}
+
+		latestGtid, err := mysql.ParseGTID("MySQL56", uuid+":"+sequencePortion)
+		require.NoError(t, err)
+
+		if replicaGtidSet.ContainsGTID(latestGtid) {
+			return
+		} else {
+			fmt.Printf("replica does not contain latest GTID from the primary yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	t.Fatal("replica did not synchronize the latest GTID from the primary within " + timeLimit.String())
 }
 
 // waitForReplicaToReachGtid waits (up to 10s) for the replica's @@gtid_executed sys var to show that
@@ -638,7 +681,7 @@ func stopDoltSqlServer(t *testing.T) {
 	}
 }
 
-func startReplication(_ *testing.T, port int) {
+func startReplication(t *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
@@ -646,6 +689,19 @@ func startReplication(_ *testing.T, port int) {
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
+	time.Sleep(100 * time.Millisecond)
+
+	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to
+	// replicate to the replica. Note that when re-starting replication in certain tests, we can't rely on
+	// the replica to contain all GTIDs (i.e. Dolt -> MySQL replication when restarting the replica, since
+	// Dolt doesn't yet resend events that occurred while the replica wasn't connected).
+	dbNames := mustListDatabases(t, primaryDatabase)
+	if !slices.Contains(dbNames, "db01") {
+		primaryDatabase.MustExec("create database db01;")
+		waitForReplicaToCatchUp(t)
+	}
+	primaryDatabase.MustExec("use db01;")
+	_, _ = replicaDatabase.Exec("use db01;")
 }
 
 func assertCreateTableStatement(t *testing.T, database *sqlx.DB, table string, expectedStatement string) {
@@ -675,13 +731,17 @@ func findFreePort() int {
 	if err != nil {
 		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
-	mySqlPort := listener.Addr().(*net.TCPAddr).Port
+	freePort := listener.Addr().(*net.TCPAddr).Port
 	err = listener.Close()
 	if err != nil {
 		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
 	}
 
-	return mySqlPort
+	if freePort < 0 {
+		panic(fmt.Sprintf("unable to find available TCP port; found port %v", freePort))
+	}
+
+	return freePort
 }
 
 // startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
@@ -777,14 +837,13 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	// Create the initial database and replication user on the MySQL server if this is the first launch
+	// Ensure the replication user exists with the right grants when we initialize
+	// the MySQL server for the first time
 	if !initialized {
-		primaryDatabase.MustExec("create database db01;")
-		primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
-		primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
+		mustCreateReplicatorUser(primaryDatabase)
 	}
 
-	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/db01", mySqlPort)
+	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
 	os.Chdir(originalCwd)
@@ -848,7 +907,7 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 
 	// If we already assigned a port, re-use it. This is useful when testing restarting a primary, since
 	// we want the primary to come back up on the same port, so the replica can reconnect.
-	if doltPort == 0 {
+	if doltPort < 1 {
 		doltPort = findFreePort()
 	}
 	fmt.Printf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
@@ -874,7 +933,7 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 
 	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
 		// Initialize the dolt directory first
-		err = runDoltCommand(dir, goDirPath, "init")
+		err = runDoltCommand(dir, goDirPath, "init", "--name=binlog-test", "--email=binlog@test")
 		if err != nil {
 			return -1, nil, err
 		}
@@ -944,9 +1003,16 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 		return -1, nil, err
 	}
 
+	mustCreateReplicatorUser(replicaDatabase)
 	fmt.Printf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil
+}
+
+// mustCreateReplicatorUser creates the replicator user on the specified |db| and grants them replication slave privs.
+func mustCreateReplicatorUser(db *sqlx.DB) {
+	db.MustExec("CREATE USER if not exists 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
+	db.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 }
 
 // runDoltCommand runs a short-lived dolt CLI command with the specified arguments from |doltArgs|. The Dolt data
@@ -1058,4 +1124,17 @@ func queryReplicaStatus(t *testing.T) map[string]any {
 	status := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.NoError(t, rows.Close())
 	return status
+}
+
+// mustListDatabases returns a string slice of the databases (i.e. schemas) available on the specified |db|. If
+// any errors are encountered, this function will fail the current test.
+func mustListDatabases(t *testing.T, db *sqlx.DB) []string {
+	rows, err := db.Queryx("show databases;")
+	require.NoError(t, err)
+	allRows := readAllRowsIntoSlices(t, rows)
+	dbNames := make([]string, len(allRows))
+	for i, row := range allRows {
+		dbNames[i] = row[0].(string)
+	}
+	return dbNames
 }
