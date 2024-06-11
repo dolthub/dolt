@@ -150,8 +150,7 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name:        "",
 			SetUpScript: []string{},
-			Assertions: []queries.ScriptTestAssertion{
-			},
+			Assertions:  []queries.ScriptTestAssertion{},
 		},
 	}
 
