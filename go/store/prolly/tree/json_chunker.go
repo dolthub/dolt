@@ -189,20 +189,24 @@ func (j *JsonChunker) appendJsonToBuffer(jsonBytes []byte) {
 // processBuffer reads all new additions added by appendJsonToBuffer, and determines any new chunk boundaries.
 // Do not call this method directly. It should only get called from within this file.
 func (j *JsonChunker) processBuffer(ctx context.Context) error {
-	startOffset := 0
+	chunkStart := 0
 	for j.jScanner.AdvanceToNextLocation() != io.EOF {
 		key := j.jScanner.currentPath.key
-		value := j.jScanner.jsonBuffer[startOffset:j.jScanner.valueOffset]
+		value := j.jScanner.jsonBuffer[chunkStart:j.jScanner.valueOffset]
 		if crossesBoundary(key, value) {
 			err := j.createNewLeafChunk(ctx, key, value)
 			if err != nil {
 				return err
 			}
-			startOffset = j.jScanner.valueOffset
+			chunkStart = j.jScanner.valueOffset
 		}
 	}
-	newScanner := ScanJsonFromMiddle(j.jScanner.jsonBuffer[startOffset:], j.jScanner.currentPath)
-	j.jScanner = &newScanner
+	if chunkStart > 0 {
+		newValueOffset := j.jScanner.valueOffset - chunkStart
+		newScanner := ScanJsonFromMiddle(j.jScanner.jsonBuffer[chunkStart:], j.jScanner.currentPath)
+		newScanner.valueOffset = newValueOffset
+		j.jScanner = &newScanner
+	}
 	return nil
 }
 
