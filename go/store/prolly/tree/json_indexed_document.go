@@ -104,6 +104,16 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 
 // Lookup implements types.SearchableJSON
 func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql.JSONWrapper, error) {
+	if strings.Contains(pathString, "*") {
+		// Optimized lookup doesn't currently support wildcards. Fall back on an unoptimized approach.
+		// TODO: Optimized lookup on wildcards.
+		val, err := i.ToInterface()
+		if err != nil {
+			return nil, err
+		}
+		nonIndexedDoc := types.JSONDocument{Val: val}
+		return nonIndexedDoc.Lookup(ctx, pathString)
+	}
 	path, err := jsonPathElementsFromMySQLJsonPath([]byte(pathString))
 	if err != nil {
 		return nil, err
