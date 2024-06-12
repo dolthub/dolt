@@ -150,10 +150,16 @@ func isValidJsonPathKey(key []byte) bool {
 type lexState int
 
 const (
-	lexStatePath lexState = 1
-	lexStateIdx  lexState = 2
-	lexStateKey  lexState = 3
+	lexStatePath             lexState = 1
+	lexStateIdx              lexState = 2
+	lexStateKey              lexState = 3
+	lexStateQuotedKey        lexState = 4
+	lexStateEscapedQuotedKey lexState = 5
 )
+
+func unescapeKey(key []byte) []byte {
+	return bytes.Replace(key, []byte(`\"`), []byte(`"`), -1)
+}
 
 func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 	location := newRootLocation()
@@ -162,7 +168,7 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 	tok := 0
 	// Current index into |pathBytes|.
 	if len(pathBytes) == 0 || pathBytes[0] != '$' {
-		return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Path must start with '$': %s", string(pathBytes))
+		return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Path must start with '$', but received: '%s'", pathBytes)
 	}
 	i := 1
 	for i < len(pathBytes) {
@@ -183,34 +189,68 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 			if pathBytes[i] >= byte('0') && pathBytes[i] <= byte('9') {
 				i += 1
 			} else {
+				if pathBytes[i] != ']' {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression %s.", string(pathBytes))
+				}
 				conv, err := strconv.Atoi(string(pathBytes[tok:i]))
 				if err != nil {
 					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected array index name after '[' at character %v of %s", i, string(pathBytes))
 				}
+				i++
 				location.appendArrayIndex(uint64(conv))
 				state = lexStatePath
 			}
 		case lexStateKey:
-			if pathBytes[i] == '.' || pathBytes[i] == '[' {
+			if pathBytes[i] == '"' {
+				state = lexStateQuotedKey
+				i += 1
+			} else if pathBytes[i] == '.' || pathBytes[i] == '[' {
 				if tok == i {
 					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
+				}
+				if !isValidJsonPathKey(pathBytes[tok:i]) {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
 				}
 				location.appendObjectKey(pathBytes[tok:i])
 				state = lexStatePath
 			} else {
 				i += 1
 			}
+		case lexStateQuotedKey:
+			if pathBytes[i] == '"' {
+				if tok+1 == i-1 {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
+				}
+				pathKey := unescapeKey(pathBytes[tok+1 : i])
+				if !isValidJsonPathKey(pathKey) {
+					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
+				}
+				location.appendObjectKey(pathKey)
+				state = lexStatePath
+				i += 1
+			} else if pathBytes[i] == '\\' {
+				state = lexStateEscapedQuotedKey
+				i += 1
+			} else {
+				i += 1
+			}
+		case lexStateEscapedQuotedKey:
+			state = lexStateQuotedKey
+			i += 1
 		}
 	}
 	if state == lexStateKey {
 		if tok == i {
 			return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 		}
+		if !isValidJsonPathKey(pathBytes[tok:i]) {
+			return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
+		}
 		location.appendObjectKey(pathBytes[tok:i])
 		state = lexStatePath
 	}
 	if state != lexStatePath {
-		return jsonLocation{}, fmt.Errorf("invalid JSON key %s", string(pathBytes))
+		return jsonLocation{}, fmt.Errorf("invalid JSON path expression %s", string(pathBytes))
 	}
 	return location, nil
 }

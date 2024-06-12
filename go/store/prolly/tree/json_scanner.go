@@ -235,7 +235,7 @@ func (s *JsonScanner) acceptObjectKey() error {
 	if err != nil {
 		return err
 	}
-	s.currentPath.appendObjectKey(objectKey)
+	s.currentPath.appendObjectKey(unescapeKey(objectKey))
 	err = s.accept(':')
 	if err != nil {
 		return err
