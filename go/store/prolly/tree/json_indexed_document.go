@@ -135,7 +135,7 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql
 	if err != nil {
 		return nil, err
 	}
-	return &types.LazyJSONDocument{Bytes: valueBytes}, nil
+	return types.NewLazyJSONDocument(valueBytes), nil
 }
 
 // Insert implements types.MutableJSON
