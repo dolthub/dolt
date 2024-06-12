@@ -140,7 +140,7 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 		if err != nil {
 			return Node{}, err
 		}
-		if j.jScanner.jsonBuffer == nil {
+		if len(j.jScanner.jsonBuffer) == 0 {
 			// Advance the cursor so that we don't re-insert the current key when finalizing the chunker.
 			j.jCur.cur.advance(ctx)
 			return j.chunker.Done(ctx)
