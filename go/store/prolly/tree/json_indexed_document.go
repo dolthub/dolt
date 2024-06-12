@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"strings"
 	"sync"
 )
 
@@ -39,6 +40,7 @@ type StaticJsonMap = StaticMap[jsonLocationKey, address, jsonLocationOrdering]
 type IndexedJsonDocument struct {
 	m             StaticJsonMap
 	interfaceFunc func() (interface{}, error)
+	ctx           context.Context
 }
 
 var _ types.JSONBytes = IndexedJsonDocument{}
@@ -57,6 +59,7 @@ func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) Indexe
 		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
 			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
+		ctx: ctx,
 	}
 }
 
@@ -70,6 +73,7 @@ func (i IndexedJsonDocument) Clone(ctx context.Context) sql.JSONWrapper {
 		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
 			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
+		ctx: ctx,
 	}
 }
 
@@ -139,9 +143,7 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql
 }
 
 // Insert implements types.MutableJSON
-func (i IndexedJsonDocument) Insert(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	// TODO: Add context parameter to MutableJSON.Insert
-	ctx := context.Background()
+func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
 	if err != nil {
 		return nil, false, err
@@ -331,6 +333,5 @@ func (i IndexedJsonDocument) String() string {
 // GetBytes implements the JSONBytes interface.
 func (i IndexedJsonDocument) GetBytes() (bytes []byte, err error) {
 	// TODO: Add context parameter to JSONBytes.GetBytes
-	ctx := context.Background()
-	return getBytesFromIndexedJsonMap(ctx, i.m)
+	return getBytesFromIndexedJsonMap(i.ctx, i.m)
 }
