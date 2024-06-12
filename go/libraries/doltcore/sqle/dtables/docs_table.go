@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -154,7 +153,7 @@ type docsWriter struct {
 	it                      *DocsTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
-	tableWriter             writer.TableWriter
+	tableWriter             dsess.TableWriter
 }
 
 func newDocsWriter(it *DocsTable) *docsWriter {
@@ -215,7 +214,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.DocTableName)
+	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.DocTableName})
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
@@ -281,7 +280,10 @@ func (iw *docsWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) e
 // StatementComplete is called after the last operation of the statement, indicating that it has successfully completed.
 // The mark set in StatementBegin may be removed, and a new one should be created on the next StatementBegin.
 func (iw *docsWriter) StatementComplete(ctx *sql.Context) error {
-	return iw.tableWriter.StatementComplete(ctx)
+	if iw.tableWriter != nil {
+		return iw.tableWriter.StatementComplete(ctx)
+	}
+	return nil
 }
 
 // Close finalizes the delete operation, persisting the result.

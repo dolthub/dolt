@@ -68,22 +68,24 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 			return &AutoIncrementTracker{}, err
 		}
 
-		err = root.IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
+		err = root.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
 			ok := schema.HasAutoIncrement(sch)
 			if !ok {
 				return false, nil
 			}
 
-			tableName = strings.ToLower(tableName)
+			tableName = tableName.ToLower()
 
 			seq, err := table.GetAutoIncrementValue(ctx)
 			if err != nil {
 				return true, err
 			}
 
-			oldValue, loaded := ait.sequences.LoadOrStore(tableName, seq)
+			// TODO: support schema name as part of the key
+			tableNameStr := tableName.Name
+			oldValue, loaded := ait.sequences.LoadOrStore(tableNameStr, seq)
 			if loaded && seq > oldValue.(uint64) {
-				ait.sequences.Store(tableName, seq)
+				ait.sequences.Store(tableNameStr, seq)
 			}
 
 			return false, nil
@@ -216,7 +218,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 			return nil, err
 		}
 
-		indexData, err = indexes.GetIndex(ctx, sch, aiIndex.Name())
+		indexData, err = indexes.GetIndex(ctx, sch, nil, aiIndex.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +302,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 				return nil, err
 			}
 
-			table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, tableName)
+			table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tableName})
 			if err != nil {
 				return nil, err
 			}
@@ -388,7 +390,7 @@ func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses
 
 	// Get the new highest value from all tables in the working sets given
 	for _, ws := range wses {
-		table, _, exists, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), tableName)
+		table, _, exists, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tableName})
 		if err != nil {
 			return err
 		}

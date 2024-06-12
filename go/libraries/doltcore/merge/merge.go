@@ -245,18 +245,19 @@ func MergeRoots(
 	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
-		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName) {
+		// TODO: schema name
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName.Name, opts, mergeOpts)
+		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
 		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
-			tblToStats[tblName] = &MergeStats{
+			tblToStats[tblName.Name] = &MergeStats{
 				Operation:       TableModified,
 				SchemaConflicts: 1,
 			}
 			conflict := SchemaConflict{
-				TableName:            tblName,
+				TableName:            tblName.Name,
 				ModifyDeleteConflict: true,
 			}
 			if !mergeOpts.KeepSchemaConflicts {
@@ -269,9 +270,9 @@ func MergeRoots(
 		}
 		// If this table was visited during the merge, then we'll add it to the set
 		if stats.Operation != TableUnmodified {
-			visitedTables[tblName] = struct{}{}
+			visitedTables[tblName.Name] = struct{}{}
 		}
-		if doltdb.IsFullTextTable(tblName) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
+		if doltdb.IsFullTextTable(tblName.Name) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.
 			// We do not handle adding new tables, so we allow that to proceed.
 			continue
@@ -286,9 +287,9 @@ func MergeRoots(
 		}
 
 		if mergedTable.table != nil {
-			tblToStats[tblName] = stats
+			tblToStats[tblName.Name] = stats
 
-			mergedRoot, err = mergedRoot.PutTable(ctx, doltdb.TableName{Name: tblName}, mergedTable.table)
+			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
 			if err != nil {
 				return nil, err
 			}
@@ -302,7 +303,7 @@ func MergeRoots(
 
 		if newRootHasTable {
 			// Merge root deleted this table
-			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
+			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
 
 			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
@@ -331,6 +332,11 @@ func MergeRoots(
 	}
 
 	mergedRoot, err = mergedRoot.PutForeignKeyCollection(ctx, mergedFKColl)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedRoot, err = mergedRoot.HandlePostMerge(ctx, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, err
 	}

@@ -229,7 +229,7 @@ func (k *keyMem) flush(f *os.File, cmp func(val.Tuple, val.Tuple) bool) (*keyFil
 	return kf, nil
 }
 
-func (f *keyMem) IterAll(_ context.Context) (keyIter, error) {
+func (f *keyMem) IterAll(_ context.Context) (KeyIter, error) {
 	return &keyMemIter{keys: f.keys}, nil
 }
 
@@ -276,7 +276,7 @@ type keyFile struct {
 	batchSize int
 }
 
-func (f *keyFile) IterAll(ctx context.Context) (keyIter, error) {
+func (f *keyFile) IterAll(ctx context.Context) (KeyIter, error) {
 	if f.batchSize == 0 {
 		return nil, fmt.Errorf("invalid zero batch size")
 	}
@@ -352,11 +352,11 @@ func (r *keyFileReader) Close() {
 }
 
 type keyIterable interface {
-	IterAll(context.Context) (keyIter, error)
+	IterAll(context.Context) (KeyIter, error)
 	Close()
 }
 
-type keyIter interface {
+type KeyIter interface {
 	Next(ctx context.Context) (val.Tuple, error)
 	Close()
 }
@@ -364,7 +364,7 @@ type keyIter interface {
 // mergeFileReader is the heap object for a k-way merge.
 type mergeFileReader struct {
 	// iter abstracts file or in-memory sorted tuples
-	iter keyIter
+	iter KeyIter
 	// head is the next tuple in the sorted list
 	head val.Tuple
 }
@@ -381,7 +381,7 @@ func (r *mergeFileReader) next(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func newMergeFileReader(ctx context.Context, iter keyIter) (*mergeFileReader, error) {
+func newMergeFileReader(ctx context.Context, iter KeyIter) (*mergeFileReader, error) {
 	root, err := iter.Next(ctx)
 	if err != nil {
 		return nil, err

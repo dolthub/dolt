@@ -47,6 +47,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
@@ -310,7 +311,6 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	default:
 		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
-
 }
 
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
@@ -677,24 +677,16 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root)
+	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, tableName)
 	if err != nil {
-		return nil, true, err
-	}
-
-	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
-	if !ok {
+		return nil, false, err
+	} else if !tblExists {
 		return nil, false, nil
 	}
 
-	// TODO: should we short-circuit the schema name for system tables?
-	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName})
-	if err != nil {
-		return nil, false, err
-	} else if !ok {
-		// Should be impossible
-		return nil, false, doltdb.ErrTableNotFound
-	}
+	tableName = tblName.Name
+	// for remainder of this operation, all db operations will use the name resolved here
+	db.schemaName = tblName.Schema
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -723,6 +715,59 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 	}
 
 	return table, true, nil
+}
+
+// resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
+// case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
+// no such table exists.
+func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
+	var tbl *doltdb.Table
+	var tblName doltdb.TableName
+	var tblExists bool
+
+	// TODO: dolt_schemas needs work to be compatible with multiple schemas
+	if resolve.UseSearchPath && db.schemaName == "" && !doltdb.HasDoltPrefix(tableName) {
+		var err error
+		tblName, tbl, tblExists, err = resolve.TableWithSearchPath(ctx, root, tableName)
+		if err != nil {
+			return doltdb.TableName{}, nil, false, err
+		}
+	} else {
+		var err error
+		tblName, tbl, tblExists, err = db.tableInsensitive(ctx, root, tableName)
+		if err != nil {
+			return doltdb.TableName{}, nil, false, err
+		}
+	}
+
+	return tblName, tbl, tblExists, nil
+}
+
+// tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists.
+// Name matching is applied in a case-insensitive manner, and the table's case-corrected name is returned as the
+// first result.
+func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
+	tableNames, err := db.getAllTableNames(ctx, root)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+
+	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
+	if !ok {
+		return doltdb.TableName{}, nil, false, nil
+	}
+
+	// TODO: should we short-circuit the schema name for system tables?
+	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
+	tbl, ok, err := root.GetTable(ctx, tname)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	} else if !ok {
+		// Should be impossible
+		return doltdb.TableName{}, nil, false, doltdb.ErrTableNotFound
+	}
+
+	return tname, tbl, true, nil
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table
@@ -874,16 +919,18 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	root := ws.WorkingRoot()
-	tbl, tableExists, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
+	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, tableName)
 	if err != nil {
 		return err
-	}
-
-	if !tableExists {
+	} else if !tblExists {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, true, false, tableName)
+	tableName = tblName.Name
+	// for remainder of this operation, all db operations will use the name resolved here
+	db.schemaName = tblName.Schema
+
+	newRoot, err := root.RemoveTables(ctx, true, false, tblName)
 	if err != nil {
 		return err
 	}
@@ -1031,9 +1078,15 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	}
 	root := ws.WorkingRoot()
 
-	// TODO: enforce that schema exists (redundant with other checks)
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return err
+		}
+		db.schemaName = schemaName
+	}
 
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
+	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -1068,21 +1121,6 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
 }
 
-func hasDatabaseSchema(ctx context.Context, root doltdb.RootValue, schemaName string) (bool, error) {
-	schemas, err := root.GetDatabaseSchemas(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, schema := range schemas {
-		if strings.EqualFold(schema.Name, schemaName) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
 func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
@@ -1091,7 +1129,15 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 	root := ws.WorkingRoot()
 
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return err
+		}
+		db.schemaName = schemaName
+	}
+
+	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -1133,7 +1179,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
 func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
+	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -1145,8 +1191,8 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		if err != nil {
 			return true, err
 		}
-		if exists && oldTableName != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName).Error()
+		if exists && oldTableName.Name != tableName {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
 		return false, nil
@@ -1198,6 +1244,15 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 		return err
 	}
 
+	_, exists, err := doltdb.ResolveDatabaseSchema(ctx, root, schemaName)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return sql.ErrDatabaseSchemaExists.New(schemaName)
+	}
+
 	root, err = root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 		Name: schemaName,
 	})
@@ -1229,7 +1284,7 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	}
 
 	// For a temporary backwards compatibility solution, always pretend the public schema exists.
-	// Should create it explicitly when we create a new db in future.
+	// We create it explicitly for new databases.
 	if strings.EqualFold(schemaName, "public") {
 		db.schemaName = "public"
 		return db, true, nil
@@ -1240,8 +1295,29 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 
 // AllSchemas implements sql.SchemaDatabase
 func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
-	db.schemaName = "public"
-	return []sql.DatabaseSchema{db}, nil
+	if !resolve.UseSearchPath {
+		return []sql.DatabaseSchema{db}, nil
+	}
+
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	root := ws.WorkingRoot()
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dbSchemas := make([]sql.DatabaseSchema, len(schemas))
+	for i, schema := range schemas {
+		sdb := db
+		sdb.schemaName = schema.Name
+		dbSchemas[i] = sdb
+	}
+
+	return dbSchemas, nil
 }
 
 // RenameTable implements sql.TableRenamer
@@ -1411,6 +1487,32 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	key, err := doltdb.NewDataCacheKey(root)
+	if err != nil {
+		return nil, err
+	}
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return nil, nil
+	}
+
+	var triggers []sql.TriggerDefinition
+	var ok bool
+	if triggers, ok = dbState.SessionCache().GetCachedTriggers(key, db.schemaName); ok {
+		return triggers, nil
+	}
+
+	defer func() {
+		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
+	}()
+
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
@@ -1424,7 +1526,6 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, err
 	}
 
-	var triggers []sql.TriggerDefinition
 	for _, frag := range frags {
 		triggers = append(triggers, sql.TriggerDefinition{
 			Name:            frag.name,
@@ -1548,7 +1649,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 		return hash.Hash{}, err
 	}
 
-	tableHash, _, err := root.GetTableHash(ctx, doltdb.SchemasTableName)
+	tableHash, _, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	return tableHash, err
 }
 

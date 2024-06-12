@@ -284,15 +284,19 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
-	buf := make([]byte, 1024) // assumes len(rec) < 1024
-	_, err = journal.ReadAt(buf, offset)
+	expSz := rootHashRecordSize()
+	buf := make([]byte, expSz) // assumes len(rec) is exactly rootHashRecordSize
+	n, err := journal.ReadAt(buf, offset)
 	if errors.Is(err, io.EOF) {
 		err = nil // EOF is expected for last record
 	} else if err != nil {
 		return
+	} else if n != expSz {
+		err = fmt.Errorf("invalid root hash record at %d: %d", offset, n)
+		return
 	}
 	sz := readUint32(buf)
-	if sz > journalRecMaxSz {
+	if sz > uint32(expSz) {
 		err = fmt.Errorf("invalid root hash record size at %d", offset)
 		return
 	}

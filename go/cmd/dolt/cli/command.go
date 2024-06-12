@@ -254,7 +254,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 // CheckEnvIsValid validates that a DoltEnv has been initialized properly and no errors occur during load, and prints
 // error messages to the user if there are issues with the environment or if errors were encountered while loading it.
 func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
-	if !dEnv.HasDoltDir() {
+	if !dEnv.HasDoltDataDir() {
 		PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
 		PrintErrln("run: dolt init before trying to run this command")
 		return false

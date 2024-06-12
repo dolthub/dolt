@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,26 +28,12 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func CheckoutAllTables(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return MoveTablesFromHeadToWorking(ctx, roots, tbls)
-}
-
-// CheckoutTables takes in a set of tables and docs and checks them out to another branch.
-func CheckoutTables(ctx context.Context, roots doltdb.Roots, tables []string) (doltdb.Roots, error) {
-	return MoveTablesFromHeadToWorking(ctx, roots, tables)
-}
-
 // MoveTablesFromHeadToWorking replaces the tables named from the given head to the given working root, overwriting any
 // working changes, and returns the new resulting roots
-func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	var unknownTbls []string
+func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName) (doltdb.Roots, error) {
+	var unknownTbls []doltdb.TableName
 	for _, tblName := range tbls {
-		tbl, ok, err := roots.Staged.GetTable(ctx, doltdb.TableName{Name: tblName})
+		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -56,7 +43,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		if !ok {
-			tbl, ok, err = roots.Head.GetTable(ctx, doltdb.TableName{Name: tblName})
+			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
 			if err != nil {
 				return doltdb.Roots{}, err
 			}
@@ -72,7 +59,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 			}
 		}
 
-		roots.Working, err = roots.Working.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
+		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -258,23 +245,24 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (dolt
 // in this case, we throw a conflict and error (as per Git).
 func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltdb.RootValue, conflicts *set.StrSet, force bool) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
+	// TODO: schema name
 	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tblName := range tblNames {
-		oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+		oldHash, _, err := oldRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
 
-		newHash, _, err := newRoot.GetTableHash(ctx, tblName)
+		newHash, _, err := newRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
 
-		changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+		changedHash, _, err := changedRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
@@ -290,6 +278,7 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 		}
 	}
 
+	// TODO: schema names
 	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
@@ -297,12 +286,12 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 
 	for _, tblName := range tblNames {
 		if _, exists := resultMap[tblName]; !exists {
-			oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+			oldHash, _, err := oldRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return nil, err
 			}
 
-			changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+			changedHash, _, err := changedRoot.GetTableHash(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return nil, err
 			}
@@ -375,30 +364,26 @@ func mergeForeignKeyChanges(
 	changedFks *doltdb.ForeignKeyCollection,
 	force bool,
 ) (*doltdb.ForeignKeyCollection, error) {
-	fksByTable := make(map[string][]doltdb.ForeignKey)
+	fksByTable := make(map[doltdb.TableName][]doltdb.ForeignKey)
 
-	conflicts := set.NewEmptyStrSet()
-	tblNames, err := newRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
+	conflicts := doltdb.NewTableNameSet(nil)
 
-	for _, tblName := range tblNames {
+	err := newRoot.IterTables(ctx, func(tblName doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		oldFksForTable, _ := oldFks.KeysForTable(tblName)
 		newFksForTable, _ := newFks.KeysForTable(tblName)
 		changedFksForTable, _ := changedFks.KeysForTable(tblName)
 
 		oldHash, err := doltdb.CombinedHash(oldFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 		newHash, err := doltdb.CombinedHash(newFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 		changedHash, err := doltdb.CombinedHash(changedFksForTable)
 		if err != nil {
-			return nil, err
+			return true, err
 		}
 
 		if oldHash == changedHash {
@@ -410,25 +395,25 @@ func mergeForeignKeyChanges(
 		} else {
 			conflicts.Add(tblName)
 		}
-	}
 
-	tblNames, err = changedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
+		return false, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	for _, tblName := range tblNames {
+	err = changedRoot.IterTables(ctx, func(tblName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		if _, exists := fksByTable[tblName]; !exists {
 			oldKeys, _ := oldFks.KeysForTable(tblName)
 			oldHash, err := doltdb.CombinedHash(oldKeys)
 			if err != nil {
-				return nil, err
+				return true, err
 			}
 
 			changedKeys, _ := changedFks.KeysForTable(tblName)
 			changedHash, err := doltdb.CombinedHash(changedKeys)
 			if err != nil {
-				return nil, err
+				return true, err
 			}
 
 			if oldHash == emptyHash {
@@ -439,10 +424,15 @@ func mergeForeignKeyChanges(
 				conflicts.Add(tblName)
 			}
 		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if conflicts.Size() > 0 {
-		return nil, ErrCheckoutWouldOverwrite{conflicts.AsSlice()}
+		return nil, ErrCheckoutWouldOverwrite{conflicts.AsStringSlice()}
 	}
 
 	fks := make([]doltdb.ForeignKey, 0)
@@ -461,10 +451,11 @@ func writeTableHashes(ctx context.Context, head doltdb.RootValue, tblHashes map[
 		return nil, err
 	}
 
-	var toDrop []string
+	var toDrop []doltdb.TableName
 	for _, name := range names {
 		if _, ok := tblHashes[name]; !ok {
-			toDrop = append(toDrop, name)
+			// TODO: schema support
+			toDrop = append(toDrop, doltdb.TableName{Name: name})
 		}
 	}
 
@@ -501,12 +492,12 @@ func CheckoutWouldStompWorkingSetChanges(ctx context.Context, sourceRoots, destR
 
 	// In some cases, a working set differs from its head only by the feature version.
 	// If this is the case, moving the working set is safe.
-	modifiedSourceRoots, err := clearFeatureVersion(ctx, sourceRoots)
+	modifiedSourceRoots, err := ClearFeatureVersion(ctx, sourceRoots)
 	if err != nil {
 		return true, err
 	}
 
-	modifiedDestRoots, err := clearFeatureVersion(ctx, destRoots)
+	modifiedDestRoots, err := ClearFeatureVersion(ctx, destRoots)
 	if err != nil {
 		return true, err
 	}
@@ -530,10 +521,10 @@ func doRootsHaveIncompatibleChanges(sourceRoots, destRoots doltdb.Roots) bool {
 	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
 }
 
-// clearFeatureVersion creates a new version of the provided roots where all three roots have the same
+// ClearFeatureVersion creates a new version of the provided roots where all three roots have the same
 // feature version. By hashing these new roots, we can easily determine whether the roots differ only by
 // their feature version.
-func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+func ClearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
 	currentBranchFeatureVersion, _, err := roots.Head.GetFeatureVersion(ctx)
 	if err != nil {
 		return doltdb.Roots{}, err
@@ -560,7 +551,7 @@ func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots,
 // the working and staged roots are identical. This function will ignore any difference in feature
 // versions between the root values.
 func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
-	roots, err = clearFeatureVersion(context.Background(), roots)
+	roots, err = ClearFeatureVersion(context.Background(), roots)
 	if err != nil {
 		return false, hash.Hash{}, hash.Hash{}, err
 	}

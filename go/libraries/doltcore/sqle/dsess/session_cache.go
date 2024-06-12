@@ -25,9 +25,19 @@ import (
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
 type SessionCache struct {
+	// indexes is keyed by table schema hash
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
-	tables  map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
-	views   map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	// tables is keyed by table root value
+	tables map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
+
+	// TODO: cache views/triggers by schema fragment hash
+	views    map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
+	triggers map[TableSchemaKey][]sql.TriggerDefinition
+
+	// writers is keyed by table schema hash
+	writers map[doltdb.DataCacheKey]*WriterState
+	// checks is keyed by table schema hash
+	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
 	mu sync.RWMutex
 }
@@ -176,6 +186,53 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 	return table, ok
 }
 
+// GetCachedWriterState returns the cached WriterState for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedWriterState(key doltdb.DataCacheKey) (*WriterState, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	schemaState, ok := c.writers[key]
+	return schemaState, ok
+}
+
+// CacheWriterState caches a WriterState implementation for the table named
+func (c *SessionCache) CacheWriterState(key doltdb.DataCacheKey, state *WriterState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.writers == nil {
+		c.writers = make(map[doltdb.DataCacheKey]*WriterState)
+	}
+	if len(c.writers) > maxCachedKeys {
+		for k := range c.writers {
+			delete(c.writers, k)
+		}
+	}
+
+	c.writers[key] = state
+}
+
+func (c *SessionCache) GetCachedTableChecks(key doltdb.DataCacheKey) ([]sql.CheckDefinition, bool) {
+	checks, ok := c.checks[key]
+	return checks, ok
+}
+
+// CacheTableChecks caches sql.CheckConstraints for the table named
+func (c *SessionCache) CacheTableChecks(key doltdb.DataCacheKey, checks []sql.CheckDefinition) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.checks == nil {
+		c.checks = make(map[doltdb.DataCacheKey][]sql.CheckDefinition)
+	}
+	if len(c.checks) > maxCachedKeys {
+		for k := range c.checks {
+			delete(c.checks, k)
+		}
+	}
+
+	c.checks[key] = checks
+}
+
 // CacheViews caches all views in a database for the cache key given
 func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefinition, schema string) {
 	c.mu.Lock()
@@ -234,6 +291,46 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 
 	table, ok := viewsForKey[viewName.ToLower()]
 	return table, ok
+}
+
+type TableSchemaKey struct {
+	key    doltdb.DataCacheKey
+	schema string
+}
+
+// CacheTriggers caches all views in a database for the cache key given
+func (c *SessionCache) CacheTriggers(key doltdb.DataCacheKey, triggers []sql.TriggerDefinition, schema string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.triggers == nil {
+		c.triggers = make(map[TableSchemaKey][]sql.TriggerDefinition)
+	}
+	if len(c.triggers) > maxCachedKeys {
+		for k := range c.triggers {
+			delete(c.triggers, k)
+		}
+	}
+
+	schKey := TableSchemaKey{key: key, schema: schema}
+	_, ok := c.triggers[schKey]
+	if !ok {
+		// create backing array to differentiate no triggers/no cache
+		c.triggers[schKey] = make([]sql.TriggerDefinition, 0)
+	}
+
+	c.triggers[schKey] = append(c.triggers[schKey], triggers...)
+}
+
+// GetCachedTriggers returns the cached view named, and whether the cache was present
+func (c *SessionCache) GetCachedTriggers(key doltdb.DataCacheKey, schema string) ([]sql.TriggerDefinition, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	schKey := TableSchemaKey{key: key, schema: schema}
+
+	triggers, ok := c.triggers[schKey]
+	return triggers, ok
 }
 
 // GetCachedRevisionDb returns the cached revision database named, and whether the cache was present

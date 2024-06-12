@@ -199,7 +199,7 @@ func ResetHard(
 }
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
-	tables, err := getUnionedTables(ctx, apr.Args, roots.Staged, roots.Head)
+	tables, err := getUnionedTables(ctx, tableNamesFromArgs(apr.Args), roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -217,18 +217,12 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return roots, nil
 }
 
-// ResetSoft resets the staged value from HEAD for the tables given and returns the updated roots.
-func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, roots doltdb.Roots) (doltdb.Roots, error) {
-	tables, err := getUnionedTables(ctx, tables, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
+func tableNamesFromArgs(args []string) []doltdb.TableName {
+	tbls := make([]doltdb.TableName, len(args))
+	for i, arg := range args {
+		tbls[i] = doltdb.TableName{Name: arg}
 	}
-
-	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-	return resetStaged(ctx, roots, tables)
+	return tbls
 }
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
@@ -268,8 +262,8 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	}, err
 }
 
-func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot doltdb.RootValue) ([]string, error) {
-	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
+func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot, headRoot doltdb.RootValue) ([]doltdb.TableName, error) {
+	if len(tables) == 0 || (len(tables) == 1 && tables[0].Name == ".") {
 		var err error
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
 
@@ -281,48 +275,10 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 	return tables, nil
 }
 
-func resetStaged(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
-	newStaged, err := MoveTablesBetweenRoots(ctx, tbls, roots.Head, roots.Staged)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	roots.Staged = newStaged
-	return roots, nil
-}
-
-// IsValidRef validates whether the input parameter is a valid cString
-// TODO: this doesn't belong in this package
-func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
-	// The error return value is only for propagating unhandled errors from rsr.CWBHeadRef()
-	// All other errors merely indicate an invalid ref spec.
-	// TODO: It's much better to enumerate the expected errors, to make sure we don't suppress any unexpected ones.
-	cs, err := doltdb.NewCommitSpec(cSpecStr)
-	if err != nil {
-		return false, nil
-	}
-
-	headRef, err := rsr.CWBHeadRef()
-	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-		// This is safe because ddb.Resolve checks if headRef is nil, but only when the value is actually needed.
-		// Basically, this guarantees that resolving "HEAD" or similar will return an error but other resolves will work.
-		headRef = nil
-	} else if err != nil {
-		return false, err
-	}
-
-	_, err = ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return false, nil
-	}
-
-	return true, nil
-}
-
 // CleanUntracked deletes untracked tables from the working root.
 // Evaluates untracked tables as: all working tables - all staged tables.
 func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
-	untrackedTables := make(map[string]struct{})
+	untrackedTables := make(map[doltdb.TableName]struct{})
 
 	var err error
 	if len(tables) == 0 {
@@ -338,7 +294,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
-		untrackedTables[name] = struct{}{}
+		untrackedTables[doltdb.TableName{Name: name}] = struct{}{}
 	}
 
 	// untracked tables = working tables - staged tables
@@ -348,11 +304,11 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 	}
 
 	for _, name := range headTblNames {
-		delete(untrackedTables, name)
+		delete(untrackedTables, doltdb.TableName{Name: name})
 	}
 
 	newRoot := roots.Working
-	var toDelete []string
+	var toDelete []doltdb.TableName
 	for t := range untrackedTables {
 		toDelete = append(toDelete, t)
 	}

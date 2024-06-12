@@ -21,8 +21,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -67,7 +69,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 
-		roots, err = actions.StageDatabase(ctx, roots, !apr.Contains(cli.ForceFlag))
+		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {
 			return 1, err
 		}
@@ -84,13 +86,42 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			}
 			// remove from slice
 			apr.Args = append(apr.Args[:i], apr.Args[i+1:]...)
-			roots, err = actions.StageDatabase(ctx, roots, !apr.Contains(cli.ForceFlag))
+			roots, err = actions.StageDatabase(ctx, roots)
 			if err != nil {
 				return 1, err
 			}
 		}
 
-		roots, err = actions.StageTables(ctx, roots, apr.Args, !apr.Contains(cli.ForceFlag))
+		// If we are using the search path, we need to resolve the table names to their fully qualified names. This code
+		// doesn't belong in Dolt, but because we resolve table names out of band at execution time like this, we don't
+		// have much of a choice.
+		unqualifiedTableNames := apr.Args
+		var tableNames []doltdb.TableName
+		if resolve.UseSearchPath {
+			var missingTables []string
+			tableNames = make([]doltdb.TableName, len(unqualifiedTableNames))
+			for i, name := range unqualifiedTableNames {
+				tblName, _, ok, err := resolve.TableWithSearchPath(ctx, roots.Working, name)
+				if err != nil {
+					return 1, err
+				}
+				if !ok {
+					missingTables = append(missingTables, name)
+					continue
+				}
+
+				tableNames[i] = tblName
+			}
+
+			// This mirrors the logic in actions.StageTables
+			if len(missingTables) > 0 {
+				return 1, actions.NewTblNotExistError(missingTables)
+			}
+		} else {
+			tableNames = doltdb.ToTableNames(unqualifiedTableNames, doltdb.DefaultSchemaName)
+		}
+
+		roots, err = actions.StageTables(ctx, roots, tableNames, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err
 		}

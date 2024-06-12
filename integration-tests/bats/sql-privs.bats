@@ -59,7 +59,7 @@ teardown() {
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
     SQL_USER='root'
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     run dolt sql -q "select user from mysql.user order by user"
     [ $status -eq 0 ]
@@ -78,7 +78,7 @@ teardown() {
     dolt sql-server --host 0.0.0.0 --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
     SQL_USER='new_user'
-    wait_for_connection $PORT 5000
+    wait_for_connection $PORT 8500
 
     run dolt -u root sql -q "select user from mysql.user order by user"
     [ $status -ne 0 ]

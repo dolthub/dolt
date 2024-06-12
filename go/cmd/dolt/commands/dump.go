@@ -254,7 +254,7 @@ func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) err
 }
 
 func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.ProceduresTableName)
+	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.ProceduresTableName})
 	if err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 }
 
 func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.SchemasTableName)
+	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 }
 
 func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.SchemasTableName)
+	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
 	}

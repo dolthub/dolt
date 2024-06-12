@@ -123,3 +123,15 @@ SQL
     [[ ! "$output" =~ "2" ]] || false
     [[ "$output" =~ "3" ]] || false
 }
+
+# Tests that using the --data-dir flag from outside a repository correctly configures
+# the Dolt directory's local configuration file.
+@test "global-args: using --data-dir configures the correct local config file" {
+    DOLT_DATA_DIR=$(pwd)
+    cd /tmp
+    dolt --data-dir=$DOLT_DATA_DIR sql -q "SET @@PERSIST.log_bin=1;"
+
+    run cat $DOLT_DATA_DIR/.dolt/config.json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\"sqlserver.global.log_bin\":\"1\"" ]] || false
+}

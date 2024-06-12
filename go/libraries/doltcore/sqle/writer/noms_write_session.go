@@ -24,39 +24,13 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-// WriteSession encapsulates writes made within a SQL session.
-// It's responsible for creating and managing the lifecycle of TableWriter's.
-type WriteSession interface {
-	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error)
-
-	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
-	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
-
-	// GetOptions returns the editor.Options for this session.
-	GetOptions() editor.Options
-
-	// SetOptions sets the editor.Options for this session.
-	SetOptions(opts editor.Options)
-
-	WriteSessionFlusher
-}
-
-// WriteSessionFlusher is responsible for flushing any pending edits to the session
-type WriteSessionFlusher interface {
-	// Flush flushes the pending writes in the session.
-	Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
-	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
-	// for any tables provided in the map
-	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
-}
 
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.
@@ -68,12 +42,12 @@ type nomsWriteSession struct {
 	opts       editor.Options
 }
 
-var _ WriteSession = &nomsWriteSession{}
+var _ dsess.WriteSession = &nomsWriteSession{}
 
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetWorkingRoot before any
 // table editors are returned.
-func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
+func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) dsess.WriteSession {
 	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
@@ -92,7 +66,11 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *nomsWriteSession) GetWorkingSet() *doltdb.WorkingSet {
+	return s.workingSet
+}
+
+func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 

@@ -310,7 +310,8 @@ func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds
 		targetSch = fromTableInfo.Sch
 	}
 
-	return sqlexport.NewSqlDiffWriter(tds.ToTableName, targetSch, iohelp.NopWrCloser(cli.CliOut)), nil
+	// TOOD: schema names
+	return sqlexport.NewSqlDiffWriter(tds.ToTableName.Name, targetSch, iohelp.NopWrCloser(cli.CliOut)), nil
 }
 
 type jsonDiffWriter struct {

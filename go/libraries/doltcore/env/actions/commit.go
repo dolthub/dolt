@@ -52,7 +52,7 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	var stagedTblNames []string
+	var stagedTblNames []doltdb.TableName
 	for _, td := range staged {
 		n := td.ToName
 		if td.IsDrop() {

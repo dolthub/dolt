@@ -228,6 +228,20 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 	return key, true, nil
 }
 
+func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
+	tab, err := t.DoltTable(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	key, err := tab.GetSchemaHash(ctx)
+	if err != nil {
+		return doltdb.DataCacheKey{}, false, err
+	}
+
+	return doltdb.DataCacheKey{Hash: key}, true, nil
+}
+
 func (t *DoltTable) workingRoot(ctx *sql.Context) (doltdb.RootValue, error) {
 	root := t.lockedToRoot
 	if root == nil {
@@ -250,7 +264,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, nil
 	}
 
-	key, tableIsCacheable, err := t.DataCacheKey(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +531,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db                 Database
-	pinnedWriteSession writer.WriteSession
+	pinnedWriteSession dsess.WriteSession
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -566,10 +580,10 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed dsess.TableWriter, err error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 
-	var writeSession writer.WriteSession
+	var writeSession dsess.WriteSession
 	if t.pinnedWriteSession != nil {
 		writeSession = t.pinnedWriteSession
 	} else {
@@ -581,6 +595,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	}
 
 	setter := ds.SetWorkingRoot
+
 	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
@@ -595,7 +610,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		if err != nil {
 			return nil, err
 		}
-		return multiEditor.(writer.TableWriter), nil
+		return multiEditor.(dsess.TableWriter), nil
 	} else {
 		return ed, nil
 	}
@@ -1036,12 +1051,43 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 		return nil, err
 	}
 
-	sch, err := table.GetSchema(ctx)
+	key, tableIsCacheable, err := t.IndexCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return checksInSchema(sch), nil
+	if !tableIsCacheable {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return checksInSchema(sch), nil
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.RevisionQualifiedName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("couldn't find db state for database %s", t.db.Name())
+	}
+
+	checks, ok := dbState.SessionCache().GetCachedTableChecks(key)
+	if ok {
+		return checks, nil
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	checks = checksInSchema(sch)
+
+	dbState.SessionCache().CacheTableChecks(key, checks)
+	return checks, nil
 }
 
 func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
@@ -1081,7 +1127,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 		return nil, err
 	}
 
-	declaredFks, _ := fkc.KeysForTable(t.tableName)
+	declaredFks, _ := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
 	for i, fk := range declaredFks {
@@ -1133,7 +1179,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 		return nil, err
 	}
 
-	_, referencedByFk := fkc.KeysForTable(t.tableName)
+	_, referencedByFk := fkc.KeysForTable(doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
 
 	for i, fk := range referencedByFk {
@@ -2497,7 +2543,9 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, sqlFk.ParentTable)
+		// TODO: the parent table can be in another schema
+
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2570,12 +2618,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+	tbl, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
-	}
-	if !ok {
-		return sql.ErrTableNotFound.New(t.tableName)
 	}
 
 	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
@@ -2664,13 +2709,14 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	fkc.RemoveKeyByName(doltFk.Name)
+	doltFk.Name = sqlFk.Name
 	doltFk.TableName = sqlFk.Table
 	doltFk.ReferencedTableName = sqlFk.ParentTable
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
 	if !doltFk.IsResolved() || !sqlFk.IsResolved {
-		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, t.tableName)
+		tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: t.tableName})
 		if err != nil {
 			return err
 		}
@@ -2727,7 +2773,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, ret.NewTable)
+
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, ret.NewTable)
 	if err != nil {
 		return err
 	}
@@ -3124,7 +3171,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	return fmt.Errorf("not implemented: AlterableDoltTable.DropPrimaryKey()")
 }
 
-func (t *WritableDoltTable) SetWriteSession(session writer.WriteSession) {
+func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
 }
 

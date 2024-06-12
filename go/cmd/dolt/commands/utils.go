@@ -535,7 +535,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 			stagedChangedTables[tableName] = true
 		} else {
 			// filter out ignored tables from untracked tables
-			ignored, err := ignoredPatterns.IsTableNameIgnored(tableName)
+			ignored, err := ignoredPatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 			if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 				continue
 			} else if err != nil {
@@ -772,6 +772,23 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 		return "", fmt.Errorf("no commits found for ref %s", ref)
 	}
 	return rows[0][0].(string), nil
+}
+
+func ParseArgsAndPrintHelp(
+	ap *argparser.ArgParser,
+	commandStr string,
+	args []string,
+	docs cli.CommandDocumentationContent) (apr *argparser.ArgParseResults, usage cli.UsagePrinter, terminate bool, exitStatus int) {
+	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
+	var err error
+	apr, err = cli.ParseArgs(ap, args, helpPrt)
+	if err != nil {
+		if err == argparser.ErrHelp {
+			return nil, usagePrt, true, 0
+		}
+		return nil, usagePrt, true, HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+	}
+	return apr, usagePrt, false, 0
 }
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {

@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
@@ -96,7 +95,7 @@ func newEmptyDatabaseSessionState() *DatabaseSessionState {
 type SessionState interface {
 	WorkingSet() *doltdb.WorkingSet
 	WorkingRoot() doltdb.RootValue
-	WriteSession() writer.WriteSession
+	WriteSession() WriteSession
 	EditOpts() editor.Options
 	SessionCache() *SessionCache
 }
@@ -120,7 +119,7 @@ type branchState struct {
 	// dbData is an accessor for the underlying doltDb
 	dbData env.DbData
 	// writeSession is this head's write session
-	writeSession writer.WriteSession
+	writeSession WriteSession
 	// readOnly is true if this database is read only
 	readOnly bool
 	// dirty is true if this branch state has uncommitted changes
@@ -161,7 +160,7 @@ func (bs *branchState) WorkingSet() *doltdb.WorkingSet {
 	return bs.workingSet
 }
 
-func (bs *branchState) WriteSession() writer.WriteSession {
+func (bs *branchState) WriteSession() WriteSession {
 	return bs.writeSession
 }
 

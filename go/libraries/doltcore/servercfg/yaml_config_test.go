@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqlserver
+package servercfg
 
 import (
 	"testing"
@@ -20,8 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 )
 
 var trueValue = true
@@ -92,19 +90,19 @@ jwks:
 
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
 	expected.CfgDirStr = nillableStrPtr("")
-	expected.PrivilegeFile = strPtr("some other nonsense")
-	expected.BranchControlFile = strPtr("third nonsense")
+	expected.PrivilegeFile = ptr("some other nonsense")
+	expected.BranchControlFile = ptr("third nonsense")
 
 	expected.MetricsConfig = MetricsYAMLConfig{
-		Host: strPtr("123.45.67.89"),
-		Port: intPtr(9091),
+		Host: ptr("123.45.67.89"),
+		Port: ptr(9091),
 		Labels: map[string]string{
 			"label1": "value1",
 			"label2": "2",
 			"label3": "true",
 		},
 	}
-	expected.DataDirStr = strPtr("some nonsense")
+	expected.DataDirStr = ptr("some nonsense")
 	expected.SystemVars_ = nil
 	expected.Vars = []UserSessionVars{
 		{
@@ -124,7 +122,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = []engine.JwksConfig{
+	expected.Jwks = []JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",
@@ -325,26 +323,26 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	err := yaml.Unmarshal([]byte{}, &cfg)
 	require.NoError(t, err)
 
-	assert.Equal(t, defaultHost, cfg.Host())
-	assert.Equal(t, defaultPort, cfg.Port())
-	assert.Equal(t, defaultUser, cfg.User())
-	assert.Equal(t, defaultPass, cfg.Password())
-	assert.Equal(t, uint64(defaultTimeout), cfg.WriteTimeout())
-	assert.Equal(t, uint64(defaultTimeout), cfg.ReadTimeout())
-	assert.Equal(t, defaultReadOnly, cfg.ReadOnly())
-	assert.Equal(t, defaultLogLevel, cfg.LogLevel())
-	assert.Equal(t, defaultAutoCommit, cfg.AutoCommit())
-	assert.Equal(t, defaultDoltTransactionCommit, cfg.DoltTransactionCommit())
-	assert.Equal(t, uint64(defaultMaxConnections), cfg.MaxConnections())
+	assert.Equal(t, DefaultHost, cfg.Host())
+	assert.Equal(t, DefaultPort, cfg.Port())
+	assert.Equal(t, DefaultUser, cfg.User())
+	assert.Equal(t, DefaultPass, cfg.Password())
+	assert.Equal(t, uint64(DefaultTimeout), cfg.WriteTimeout())
+	assert.Equal(t, uint64(DefaultTimeout), cfg.ReadTimeout())
+	assert.Equal(t, DefaultReadOnly, cfg.ReadOnly())
+	assert.Equal(t, DefaultLogLevel, cfg.LogLevel())
+	assert.Equal(t, DefaultAutoCommit, cfg.AutoCommit())
+	assert.Equal(t, DefaultDoltTransactionCommit, cfg.DoltTransactionCommit())
+	assert.Equal(t, uint64(DefaultMaxConnections), cfg.MaxConnections())
 	assert.Equal(t, "", cfg.TLSKey())
 	assert.Equal(t, "", cfg.TLSCert())
 	assert.Equal(t, false, cfg.RequireSecureTransport())
 	assert.Equal(t, false, cfg.AllowCleartextPasswords())
 	assert.Equal(t, false, cfg.DisableClientMultiStatements())
-	assert.Equal(t, defaultMetricsHost, cfg.MetricsHost())
-	assert.Equal(t, defaultMetricsPort, cfg.MetricsPort())
+	assert.Equal(t, DefaultMetricsHost, cfg.MetricsHost())
+	assert.Equal(t, DefaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
-	assert.Equal(t, defaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
+	assert.Equal(t, DefaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
 	assert.Nil(t, cfg.RemotesapiPort())
 
 	c, err := LoadTLSConfig(cfg)

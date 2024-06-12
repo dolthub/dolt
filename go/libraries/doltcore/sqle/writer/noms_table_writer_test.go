@@ -25,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -35,7 +35,7 @@ type tableEditorTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	name string
 	// Test setup to run
-	setup func(ctx *sql.Context, t *testing.T, ed writer.TableWriter)
+	setup func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter)
 	// The select query to run to verify the results
 	selectQuery string
 	// The rows this query should return, nil if an error is expected
@@ -61,7 +61,7 @@ func TestTableEditor(t *testing.T) {
 	testCases := []tableEditorTest{
 		{
 			name: "all inserts",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(smithers, sqle.PeopleTestSchema)))
@@ -78,7 +78,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and deletes",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(edna, sqle.PeopleTestSchema)))
@@ -90,7 +90,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and deletes 2",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(edna, sqle.PeopleTestSchema)))
@@ -104,7 +104,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and updates",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, sqle.PeopleTestSchema), r(sqle.MutateRow(sqle.PeopleTestSchema, edna, sqle.AgeTag, 1), sqle.PeopleTestSchema)))
@@ -117,7 +117,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts updates and deletes",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, sqle.PeopleTestSchema), r(sqle.MutateRow(sqle.PeopleTestSchema, edna, sqle.AgeTag, 1), sqle.PeopleTestSchema)))
@@ -139,7 +139,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and updates to primary key",
-			setup: func(ctx *sql.Context, t *testing.T, ed writer.TableWriter) {
+			setup: func(ctx *sql.Context, t *testing.T, ed dsess.TableWriter) {
 				require.NoError(t, ed.Insert(ctx, r(edna, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, sqle.PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, sqle.PeopleTestSchema), r(sqle.MutateRow(sqle.PeopleTestSchema, edna, sqle.IdTag, 30), sqle.PeopleTestSchema)))
@@ -170,7 +170,7 @@ func TestTableEditor(t *testing.T) {
 			require.NoError(t, err)
 
 			dt := peopleTable.(sql.UpdatableTable)
-			ed := dt.Updater(ctx).(writer.TableWriter)
+			ed := dt.Updater(ctx).(dsess.TableWriter)
 
 			test.setup(ctx, t, ed)
 			require.NoError(t, ed.Close(ctx))

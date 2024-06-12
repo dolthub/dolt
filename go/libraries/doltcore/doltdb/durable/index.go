@@ -61,7 +61,7 @@ type IndexSet interface {
 	HashOf() (hash.Hash, error)
 
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
+	GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error)
 
 	// HasIndex returns true if an index with the specified name exists in the set.
 	HasIndex(ctx context.Context, name string) (bool, error)
@@ -160,7 +160,7 @@ func IterAllIndexes(
 	cb func(name string, idx Index) error,
 ) error {
 	for _, def := range sch.Indexes().AllIndexes() {
-		idx, err := set.GetIndex(ctx, sch, def.Name())
+		idx, err := set.GetIndex(ctx, sch, nil, def.Name())
 		if err != nil {
 			return err
 		}
@@ -405,7 +405,7 @@ func (s nomsIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
 }
 
 // GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+func (s nomsIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
@@ -414,12 +414,12 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 		return nil, err
 	}
 
-	idx := sch.Indexes().GetByName(name)
+	idx := tableSch.Indexes().GetByName(name)
 	if idx == nil {
 		return nil, fmt.Errorf("index not found: %s", name)
 	}
 
-	return indexFromRef(ctx, s.vrw, s.ns, idx.Schema(), v.(types.Ref))
+	return indexFromRef(ctx, s.vrw, s.ns, idxSch, v.(types.Ref))
 }
 
 // PutNomsIndex implements IndexSet.
@@ -486,30 +486,28 @@ func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
 	return is.am.HashOf(), nil
 }
 
-func (is doltDevIndexSet) HasIndex(ctx context.Context, name string) (bool, error) {
-	addr, err := is.am.Get(ctx, name)
-	if err != nil {
-		return false, err
-	}
-	if addr.IsEmpty() {
-		return false, nil
-	}
-	return true, nil
+func (is doltDevIndexSet) HasIndex(ctx context.Context, targetName string) (bool, error) {
+	addr, _, err := is.searchForCaseInsensitiveIndexName(ctx, targetName)
+	return !addr.IsEmpty(), err
 }
 
-func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
-	addr, err := is.am.Get(ctx, name)
+func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, idxSch schema.Schema, name string) (Index, error) {
+	foundAddr, _, err := is.searchForCaseInsensitiveIndexName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	if addr.IsEmpty() {
+	if foundAddr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
-	idx := sch.Indexes().GetByName(name)
+
+	idx := tableSch.Indexes().GetByName(name)
 	if idx == nil {
 		return nil, fmt.Errorf("index schema not found: %s", name)
 	}
-	return indexFromAddr(ctx, is.vrw, is.ns, idx.Schema(), addr)
+	if idxSch == nil {
+		idxSch = idx.Schema()
+	}
+	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, foundAddr)
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
@@ -536,8 +534,16 @@ func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx typ
 }
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
+	foundAddr, foundName, err := is.searchForCaseInsensitiveIndexName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if foundAddr.IsEmpty() {
+		return nil, fmt.Errorf("index %s not found in IndexSet", name)
+	}
+
 	ae := is.am.Editor()
-	err := ae.Delete(ctx, name)
+	err = ae.Delete(ctx, foundName)
 	if err != nil {
 		return nil, err
 	}
@@ -549,27 +555,28 @@ func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet,
 }
 
 func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
-	addr, err := is.am.Get(ctx, oldName)
+	foundOldAddr, foundOldName, err := is.searchForCaseInsensitiveIndexName(ctx, oldName)
 	if err != nil {
 		return nil, err
 	}
-	if addr.IsEmpty() {
+	if foundOldAddr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", oldName)
 	}
-	newaddr, err := is.am.Get(ctx, newName)
+
+	foundNewIndex, err := is.HasIndex(ctx, newName)
 	if err != nil {
 		return nil, err
 	}
-	if !newaddr.IsEmpty() {
+	if foundNewIndex {
 		return nil, fmt.Errorf("index %s found in IndexSet when attempting to rename index", newName)
 	}
 
 	ae := is.am.Editor()
-	err = ae.Update(ctx, newName, addr)
+	err = ae.Update(ctx, newName, foundOldAddr)
 	if err != nil {
 		return nil, err
 	}
-	err = ae.Delete(ctx, oldName)
+	err = ae.Delete(ctx, foundOldName)
 	if err != nil {
 		return nil, err
 	}
@@ -580,4 +587,23 @@ func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName stri
 	}
 
 	return doltDevIndexSet{is.vrw, is.ns, am}, nil
+}
+
+// searchForCaseInsensitiveIndexName searches through the index names in this index set looking for a case-insensitive
+// match against |targetName|. If found, the address is returned, along with the exact case name. If no match was
+// found, a nil address is returned, along with an empty string.
+func (is doltDevIndexSet) searchForCaseInsensitiveIndexName(ctx context.Context, targetName string) (foundAddr hash.Hash, foundName string, err error) {
+	// Indexes are stored with their original case name, so we have to iterate over the index names and
+	// do a case-insensitive match to find a matching index
+	err = is.am.IterAll(ctx, func(name string, address hash.Hash) error {
+		if strings.EqualFold(name, targetName) {
+			foundAddr = address
+			foundName = name
+		}
+		return nil
+	})
+	if err != nil {
+		return hash.Hash{}, "", err
+	}
+	return foundAddr, foundName, nil
 }

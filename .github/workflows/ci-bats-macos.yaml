@@ -94,7 +94,7 @@ jobs:
         run: |
           curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
           tar zxvf apache-parquet-1.12.3.tar.gz
-          cd parquet-mr-apache-parquet-1.12.3/parquet-cli
+          cd parquet-java-apache-parquet-1.12.3/parquet-cli
           mvn clean install -DskipTests
           runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT

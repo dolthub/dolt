@@ -37,6 +37,7 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
+	vs.skipWriteCaching = true
 	assert.Nil(vs.ReadValue(context.Background(), mustHash(s.Hash(vs.Format())))) // nil
 	h := mustRef(vs.WriteValue(context.Background(), s)).TargetHash()
 	rt, err := vs.Root(context.Background())
@@ -55,6 +56,7 @@ func TestReadWriteCache(t *testing.T) {
 	storage := &chunks.TestStorage{}
 	ts := storage.NewView()
 	vs := NewValueStore(ts)
+	vs.skipWriteCaching = true
 
 	var v Value = Bool(true)
 	r, err := vs.WriteValue(context.Background(), v)
@@ -82,6 +84,7 @@ func TestValueReadMany(t *testing.T) {
 
 	vals := ValueSlice{String("hello"), Bool(true), Float(42)}
 	vs := newTestValueStore()
+	vs.skipWriteCaching = true
 	hashes := hash.HashSlice{}
 	for _, v := range vals {
 		h := mustRef(vs.WriteValue(context.Background(), v)).TargetHash()
@@ -149,6 +152,7 @@ func TestPanicOnBadVersion(t *testing.T) {
 func TestErrorIfDangling(t *testing.T) {
 	t.Skip("WriteValue errors with dangling ref error")
 	vs := newTestValueStore()
+	vs.skipWriteCaching = true
 
 	r, err := NewRef(Bool(true), vs.Format())
 	require.NoError(t, err)
@@ -168,6 +172,7 @@ func TestGC(t *testing.T) {
 
 	ctx := context.Background()
 	vs := newTestValueStore()
+	vs.skipWriteCaching = true
 	r1 := mustRef(vs.WriteValue(ctx, String("committed")))
 	r2 := mustRef(vs.WriteValue(ctx, String("unreferenced")))
 	set1 := mustSet(NewSet(ctx, vs, r1))

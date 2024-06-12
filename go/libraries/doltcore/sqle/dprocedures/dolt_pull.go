@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -152,7 +153,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 
 	mode := ref.UpdateMode{Force: true, Prune: false}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}
@@ -192,21 +193,38 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}
 
-			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
+			roots, err = actions.ClearFeatureVersion(context.Background(), roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}
-			if uncommittedChanges {
+
+			headHash, err := roots.Head.HashOf()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			stagedHash, err := roots.Staged.HashOf()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			if headHash != stagedHash {
+				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
+			}
+
+			// We allow changes to ignored tables. If this causes a conflict because the remote also modified these tables,
+			// we will detect that during the pull.
+			workingSetClean, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, "", err
+			}
+
+			if !workingSetClean {
 				return noConflictsOrViolations, threeWayMerge, "", ErrUncommittedChanges.New()
 			}
 
 			ws, _, conflicts, fastForward, message, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
-				return conflicts, fastForward, "", err
-			}
-
-			err = sess.SetWorkingSet(ctx, dbName, ws)
-			if err != nil {
 				return conflicts, fastForward, "", err
 			}
 		}

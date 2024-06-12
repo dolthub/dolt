@@ -100,12 +100,13 @@ func (cmd StatusCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_STATUS
 }
 
-// Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
-	// parse arguments
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, _, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, statusDocs)
+	if terminate {
+		return status
+	}
+
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
 
 	// configure SQL engine
@@ -202,15 +203,15 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 			shouldIgnoreTable := false
 			if !isStaged {
 				// determine if the table should be ignored
-				ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+				ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 				if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 					ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
 				} else if err != nil {
 					return nil, err
 				} else if ignored == doltdb.DontIgnore {
-					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+					ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, doltdb.TableName{Name: tableName})
 				} else if ignored == doltdb.Ignore {
-					ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
+					ignoredTables.Ignore = append(ignoredTables.Ignore, doltdb.TableName{Name: tableName})
 				} else {
 					return nil, fmt.Errorf("unrecognized ignore result value: %v", ignored)
 				}
@@ -267,7 +268,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 	// filter out ignored tables from untracked tables
 	filteredUntrackedTables := map[string]string{}
 	for tableName, status := range untrackedTables {
-		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+		ignored, err := ignorePatterns.IsTableNameIgnored(doltdb.TableName{Name: tableName})
 
 		if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
 			continue
@@ -656,7 +657,9 @@ and have %v and %v different commits each, respectively.
 }
 
 func handleStatusVErr(err error) int {
-	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	if err != argparser.ErrHelp {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	}
 	return 1
 }
 

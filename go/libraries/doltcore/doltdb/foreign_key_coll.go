@@ -133,7 +133,7 @@ func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 // column names to column tags, which is why |fkSchemasByName| and |otherSchemasByName| are passed in. Each of these
 // is a map of table schemas for |fk| and |other|, where the child table and every parent table referenced in the
 // foreign key is present in the map.
-func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[string]schema.Schema) bool {
+func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByName map[TableName]schema.Schema) bool {
 	// If both FKs are resolved or unresolved, we can just deeply compare them
 	if fk.IsResolved() == other.IsResolved() {
 		return fk.DeepEquals(other)
@@ -154,7 +154,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 
 	// Sort out which FK is resolved and which is not
 	var resolvedFK, unresolvedFK ForeignKey
-	var resolvedSchemasByName map[string]schema.Schema
+	var resolvedSchemasByName map[TableName]schema.Schema
 	if fk.IsResolved() {
 		resolvedFK, unresolvedFK, resolvedSchemasByName = fk, other, fkSchemasByName
 	} else {
@@ -167,7 +167,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.TableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.TableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[resolvedFK.TableName]
+		resolvedSch, ok := resolvedSchemasByName[TableName{Name: resolvedFK.TableName}]
 		if !ok {
 			return false
 		}
@@ -186,7 +186,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.ReferencedTableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.ReferencedTableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[unresolvedFK.ReferencedTableName]
+		resolvedSch, ok := resolvedSchemasByName[TableName{Name: unresolvedFK.ReferencedTableName}]
 		if !ok {
 			return false
 		}
@@ -470,25 +470,33 @@ OuterLoop:
 }
 
 // GetMatchingKey gets the ForeignKey defined over the parent and child columns. If the given foreign key is resolved,
-// then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then ONLY
-// unresolved keys may be found.
+// then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then it
+// will match with unresolved keys, and may also match with resolved keys if |matchUnresolvedKeyToResolvedKey| is
+// set to true.
 //
-// This discrepancy is due to the primary uses for this function. It is assumed that the ForeignKeyCollection is an
+// When |matchUnresolvedKeyToResolvedKey| is false, it is assumed that the ForeignKeyCollection is an
 // ancestor collection compared to the collection that the given key comes from. Therefore, the key found in the
 // ancestor will usually be the unresolved version of the given key, hence the comparison is valid. However, if the
 // given key is unresolved, it is treated as a new key, which cannot be matched to a resolved key that previously
 // existed.
 //
-// The given schema map is keyed by table name, and is used in the event that the given key is resolved and any keys in
-// the collection are unresolved. A "dirty resolution" is performed, which matches the column names to tags, and then a
-// standard tag comparison is performed. If a table or column is not in the map, then the foreign key is ignored.
-func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema) (ForeignKey, bool) {
+// When the ForeignKeyCollection is NOT an ancestor collection, |matchUnresolvedKeyToResolvedKey| can be set to true
+// to enable |fk| to match against both resolved and unresolved keys in the ForeignKeyCollection. This is necessary
+// when one session commits a table with resolved foreign keys, but another open session still has an unresolved
+// version of the foreign key. When the open session commits, it needs to merge it's root with the root that has
+// the resolved foreign key, so it's unresolved foreign key needs to be able to match a resolved key in this case.
+//
+// The given schema map, |allSchemas|, is keyed by table name, and is used in the event that the given key is resolved
+// and any keys in the collection are unresolved. A "dirty resolution" is performed, which matches the column names to
+// tags, and then a standard tag comparison is performed. If a table or column is not in the map, then the foreign key
+// is ignored.
+func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema, matchUnresolvedKeyToResolvedKey bool) (ForeignKey, bool) {
 	if !fk.IsResolved() {
 		// The given foreign key is unresolved, so we only look for matches on unresolved keys
 	OuterLoopUnresolved:
 		for _, existingFk := range fkc.foreignKeys {
 			// For unresolved keys, the table name is important (column tags are globally unique, column names are not)
-			if existingFk.IsResolved() ||
+			if (!matchUnresolvedKeyToResolvedKey && existingFk.IsResolved()) ||
 				fk.TableName != existingFk.TableName ||
 				fk.ReferencedTableName != existingFk.ReferencedTableName ||
 				len(fk.UnresolvedFKDetails.TableColumns) != len(existingFk.UnresolvedFKDetails.TableColumns) ||
@@ -578,13 +586,13 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // declaredFk contains all foreign keys in which this table declared the foreign key. The array referencedByFk contains
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
-func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, referencedByFk []ForeignKey) {
-	lowercaseTblName := strings.ToLower(tableName)
+func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
+	lowercaseTblName := tableName.ToLower()
 	for _, foreignKey := range fkc.foreignKeys {
-		if strings.ToLower(foreignKey.TableName) == lowercaseTblName {
+		if strings.ToLower(foreignKey.TableName) == lowercaseTblName.Name {
 			declaredFk = append(declaredFk, foreignKey)
 		}
-		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName {
+		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName.Name {
 			referencedByFk = append(referencedByFk, foreignKey)
 		}
 	}
@@ -631,11 +639,12 @@ func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...string) error {
-	outgoing := set.NewStrSet(tables)
+func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...TableName) error {
+	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(fk.TableName)
-		dropParent := outgoing.Contains(fk.ReferencedTableName)
+		// TODO: schema names
+		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
+		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
 		if dropParent && !dropChild {
 			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
@@ -653,11 +662,11 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...str
 // RemoveAndUnresolveTables removes all foreign keys associated with the given tables. If a parent is dropped without
 // its child, then the foreign key goes to an unresolved state. The operation assumes that ALL tables to be removed are
 // in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...string) error {
-	outgoing := set.NewStrSet(tables)
+func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...TableName) error {
+	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(fk.TableName)
-		dropParent := outgoing.Contains(fk.ReferencedTableName)
+		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
+		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
 		if dropParent && !dropChild {
 			if !fk.IsResolved() {
 				continue

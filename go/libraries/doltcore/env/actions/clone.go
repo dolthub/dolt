@@ -320,7 +320,7 @@ func shallowCloneDataPull(ctx context.Context, destData env.DbData, srcDB *doltd
 		return nil, fmt.Errorf("remote %s not found", remoteName)
 	}
 
-	specs, err := env.ParseRefSpecs([]string{branch}, destData.Rsr, remote)
+	specs, _, err := env.ParseRefSpecs([]string{branch}, destData.Rsr, remote)
 	if err != nil {
 		return nil, err
 	}

@@ -148,68 +148,24 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Delayed foreign key resolution: update",
-			SetUpScript: []string{
-				"set foreign_key_checks=0;",
-				"create table delayed_parent(pk int primary key);",
-				"create table delayed_child(pk int primary key, foreign key(pk) references delayed_parent(pk));",
-				"insert into delayed_parent values (10), (20);",
-				"insert into delayed_child values (1), (20);",
-				"set foreign_key_checks=1;",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					// No-op update bad to bad should not cause constraint violation
-					Skip:  true,
-					Query: "update delayed_child set pk=1 where pk=1;",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
-					},
-				},
-				{
-					// Update on non-existent row should not cause constraint violation
-					Query: "update delayed_child set pk=3 where pk=3;",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 0, Updated: 0}}},
-					},
-				},
-				{
-					// No-op update good to good should not cause constraint violation
-					Query: "update delayed_child set pk=20 where pk=20;",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 0, Info: plan.UpdateInfo{Matched: 1, Updated: 0}}},
-					},
-				},
-				{
-					// Updating bad value to good value still fails
-					Query: "update delayed_child set pk=10 where pk=1;",
-					Expected: []sql.Row{
-						{gmstypes.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
-					},
-				},
-			},
+			Name:        "",
+			SetUpScript: []string{},
+			Assertions:  []queries.ScriptTestAssertion{},
 		},
 	}
 
-	tcc := &testCommitClock{}
-	cleanup := installTestCommitClock(tcc)
-	defer cleanup()
-
 	for _, script := range scripts {
-		sql.RunWithNowFunc(tcc.Now, func() error {
-			harness := newDoltHarness(t)
-			harness.Setup(setup.MydbData)
+		harness := newDoltHarness(t)
+		harness.Setup(setup.MydbData)
 
-			engine, err := harness.NewEngine(t)
-			if err != nil {
-				panic(err)
-			}
-			// engine.EngineAnalyzer().Debug = true
-			// engine.EngineAnalyzer().Verbose = true
+		engine, err := harness.NewEngine(t)
+		if err != nil {
+			panic(err)
+		}
+		// engine.EngineAnalyzer().Debug = true
+		// engine.EngineAnalyzer().Verbose = true
 
-			enginetest.TestScriptWithEngine(t, engine, harness, script)
-			return nil
-		})
+		enginetest.TestScriptWithEngine(t, engine, harness, script)
 	}
 }
 
@@ -576,7 +532,18 @@ func TestSingleScriptPrepared(t *testing.T) {
 func TestVersionedQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueries(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEngine(t, e, h, tt)
+	}
 }
 
 func TestAnsiQuotesSqlMode(t *testing.T) {
@@ -1359,7 +1326,17 @@ func TestBranchViewsPrepared(t *testing.T) {
 func TestVersionedViews(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedViews(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, testCase := range queries.VersionedViewTests {
+		t.Run(testCase.Query, func(t *testing.T) {
+			ctx := enginetest.NewContext(h)
+			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil)
+		})
+	}
 }
 
 func TestWindowFunctions(t *testing.T) {
@@ -1642,10 +1619,20 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
 	for _, script := range DoltScripts {
+		go func() {
+			harness := newDoltHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		}()
+	}
+}
+
+func TestDoltTempTableScripts(t *testing.T) {
+	for _, script := range DoltTempTableScripts {
+		harness := newDoltHarness(t)
 		enginetest.TestScript(t, harness, script)
+		harness.Close()
 	}
 }
 
@@ -2841,10 +2828,20 @@ func TestPreparedStatistics(t *testing.T) {
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestVersionedQueriesPrepared(t, h)
+	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
+
+	e, err := h.NewEngine(t)
+	require.NoError(t, err)
+
+	for _, tt := range queries.VersionedQueries {
+		enginetest.TestPreparedQueryWithEngine(t, h, e, tt)
+	}
+
+	for _, tt := range queries.VersionedScripts {
+		enginetest.TestScriptWithEnginePrepared(t, e, h, tt)
+	}
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {

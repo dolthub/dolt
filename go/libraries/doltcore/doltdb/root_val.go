@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -74,13 +75,17 @@ type RootValue interface {
 	// GetTable will retrieve a table by its case-sensitive name.
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
-	GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error)
+	GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error)
 	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
+	// HandlePostMerge handles merging for any root elements that are not handled by the standard merge workflow. This
+	// is called at the end of the standard merge workflow. The calling root is the merged root, so it is valid to
+	// return it if no further merge work needs to be done. This is primarily used by Doltgres.
+	HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name.
-	HasTable(ctx context.Context, tName string) (bool, error)
+	HasTable(ctx context.Context, tName TableName) (bool, error)
 	// IterTables calls the callback function cb on each table in this RootValue.
-	IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error
+	IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error
 	// NodeStore returns this root's NodeStore.
 	NodeStore() tree.NodeStore
 	// NomsValue returns this root's storage as a noms value.
@@ -90,13 +95,13 @@ type RootValue interface {
 	// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 	PutTable(ctx context.Context, tName TableName, table *Table) (RootValue, error)
 	// RemoveTables removes the given case-sensitive tables from the root, and returns a new root.
-	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error)
+	RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...TableName) (RootValue, error)
 	// RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 	// column tag information, use this method instead of a table drop + add.
-	RenameTable(ctx context.Context, oldName string, newName string) (RootValue, error)
+	RenameTable(ctx context.Context, oldName, newName TableName) (RootValue, error)
 	// ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 	// name was found.
-	ResolveTableName(ctx context.Context, tName string) (string, bool, error)
+	ResolveTableName(ctx context.Context, tName TableName) (string, bool, error)
 	// SetCollation sets the given database collation and returns a new root.
 	SetCollation(ctx context.Context, collation schema.Collation) (RootValue, error)
 	// SetFeatureVersion sets the feature version and returns a new root.
@@ -113,7 +118,7 @@ type rootValue struct {
 	ns   tree.NodeStore
 	st   rootValueStorage
 	fkc  *ForeignKeyCollection // cache the first load
-	hash hash.Hash             // cache first load
+	hash hash.Hash             // cache the first load
 }
 
 var _ RootValue = (*rootValue)(nil)
@@ -123,7 +128,7 @@ type tableEdit struct {
 	ref  *types.Ref
 
 	// Used for rename.
-	old_name string
+	old_name TableName
 }
 
 // NewRootValue returns a new RootValue. This is a variable as it's changed in Doltgres.
@@ -277,12 +282,16 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 	return root.withStorage(newStorage), nil
 }
 
-func (root *rootValue) HasTable(ctx context.Context, tName string) (bool, error) {
-	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, DefaultSchemaName)
+func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error) {
+	return root, nil
+}
+
+func (root *rootValue) HasTable(ctx context.Context, tName TableName) (bool, error) {
+	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, tName.Schema)
 	if err != nil {
 		return false, err
 	}
-	a, err := tableMap.Get(ctx, tName)
+	a, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return false, err
 	}
@@ -418,8 +427,9 @@ func GetExistingColumns(
 
 func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schema, error) {
 	m := make(map[string]schema.Schema)
-	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-		m[name] = sch
+	err := root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
+		// TODO: schema name
+		m[name.Name] = sch
 		return false, nil
 	})
 
@@ -430,14 +440,13 @@ func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schem
 	return m, nil
 }
 
-func (root *rootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
-	// TODO: schema
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error) {
+	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
-	tVal, err := tableMap.Get(ctx, tName)
+	tVal, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
@@ -464,33 +473,33 @@ func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 // name was found.
-func (root *rootValue) ResolveTableName(ctx context.Context, tName string) (string, bool, error) {
-	// TODO: schema name
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) ResolveTableName(ctx context.Context, tName TableName) (string, bool, error) {
+	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
 		return "", false, err
 	}
 
-	a, err := tableMap.Get(ctx, tName)
+	a, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return "", false, err
 	}
 	if !a.IsEmpty() {
-		return tName, true, nil
+		return tName.Name, true, nil
 	}
 
 	found := false
-	lwrName := strings.ToLower(tName)
+	lwrName := strings.ToLower(tName.Name)
+	resolvedName := tName.Name
 	err = tmIterAll(ctx, tableMap, func(name string, addr hash.Hash) {
 		if found == false && lwrName == strings.ToLower(name) {
-			tName = name
+			resolvedName = name
 			found = true
 		}
 	})
 	if err != nil {
 		return "", false, nil
 	}
-	return tName, found, nil
+	return resolvedName, found, nil
 }
 
 // GetTable will retrieve a table by its case-sensitive name.
@@ -520,7 +529,7 @@ func GetTable(ctx context.Context, root RootValue, addr hash.Hash) (*Table, bool
 }
 
 // GetTableInsensitive will retrieve a table by its case-insensitive name.
-func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Table, string, bool, error) {
+func GetTableInsensitive(ctx context.Context, root RootValue, tName TableName) (*Table, string, bool, error) {
 	resolvedName, ok, err := root.ResolveTableName(ctx, tName)
 	if err != nil {
 		return nil, "", false, err
@@ -528,7 +537,7 @@ func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Ta
 	if !ok {
 		return nil, "", false, nil
 	}
-	tbl, ok, err := root.GetTable(ctx, TableName{Name: resolvedName})
+	tbl, ok, err := root.GetTable(ctx, TableName{Name: resolvedName, Schema: tName.Schema})
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -536,8 +545,8 @@ func GetTableInsensitive(ctx context.Context, root RootValue, tName string) (*Ta
 }
 
 // GetTableByColTag looks for the table containing the given column tag.
-func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name string, found bool, err error) {
-	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
+func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name TableName, found bool, err error) {
+	err = root.IterTables(ctx, func(tn TableName, t *Table, s schema.Schema) (bool, error) {
 		_, found = s.GetAllCols().GetByTag(tag)
 		if found {
 			name, tbl = tn, t
@@ -547,7 +556,7 @@ func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Tab
 	})
 
 	if err != nil {
-		return nil, "", false, err
+		return nil, TableName{}, false, err
 	}
 
 	return tbl, name, found, nil
@@ -651,27 +660,38 @@ func HasConstraintViolations(ctx context.Context, root RootValue) (bool, error) 
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
-func (root *rootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
-	// TODO: schema name
-	tm, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error {
+	schemaNames, err := schemaNames(ctx, root)
 	if err != nil {
 		return err
 	}
 
-	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
-		nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
+	for _, schemaName := range schemaNames {
+		tm, err := root.getTableMap(ctx, schemaName)
 		if err != nil {
-			return true, err
-		}
-		tbl := &Table{table: nt}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return true, err
+			return err
 		}
 
-		return cb(name, tbl, sch)
-	})
+		err = tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
+			nt, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
+			if err != nil {
+				return true, err
+			}
+			tbl := &Table{table: nt}
+
+			sch, err := tbl.GetSchema(ctx)
+			if err != nil {
+				return true, err
+			}
+
+			return cb(TableName{Name: name, Schema: schemaName}, tbl, sch)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
@@ -688,6 +708,46 @@ type TableName struct {
 	Name string
 	// Schema is the name of the schema that the table belongs to, empty in the case of the default schema.
 	Schema string
+}
+
+func (tn TableName) ToLower() TableName {
+	return TableName{
+		Name:   strings.ToLower(tn.Name),
+		Schema: strings.ToLower(tn.Schema),
+	}
+}
+
+func (tn TableName) Less(o TableName) bool {
+	if tn.Schema < o.Schema {
+		return true
+	}
+	return tn.Name < o.Name
+}
+
+func (tn TableName) String() string {
+	if tn.Schema == "" {
+		return tn.Name
+	}
+	return tn.Schema + "." + tn.Name
+}
+
+// ToTableNames is a migration helper function that converts a slice of table names to a slice of TableName structs.
+func ToTableNames(names []string, schemaName string) []TableName {
+	tbls := make([]TableName, len(names))
+	for i, name := range names {
+		tbls[i] = TableName{Name: name, Schema: schemaName}
+	}
+	return tbls
+}
+
+// FlattenTableNames is a migration helper function that converts a slice of table names to a slice of strings by
+// stripping off any schema elements.
+func FlattenTableNames(names []TableName) []string {
+	tbls := make([]string, len(names))
+	for i, name := range names {
+		tbls[i] = name.Name
+	}
+	return tbls
 }
 
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
@@ -809,33 +869,35 @@ func (root *rootValue) HashOf() (hash.Hash, error) {
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
-func (root *rootValue) RenameTable(ctx context.Context, oldName, newName string) (RootValue, error) {
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: TableName{Name: newName}}})
+func (root *rootValue) RenameTable(ctx context.Context, oldName, newName TableName) (RootValue, error) {
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
 	return root.withStorage(newStorage), nil
 }
 
-func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (RootValue, error) {
-	// TODO: schema name
-	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
+func (root *rootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...TableName) (RootValue, error) {
+	if len(tables) == 0 {
+		return root, nil
+	}
+
+	// TODO: support multiple schemas in same operation, or make an error
+	tableMap, err := root.getTableMap(ctx, tables[0].Schema)
 	if err != nil {
 		return nil, err
 	}
 
 	edits := make([]tableEdit, len(tables))
 	for i, name := range tables {
-		a, err := tableMap.Get(ctx, name)
+		a, err := tableMap.Get(ctx, name.Name)
 		if err != nil {
 			return nil, err
 		}
 		if a.IsEmpty() {
 			return nil, fmt.Errorf("%w: '%s'", ErrTableNotFound, name)
 		}
-		edits[i].name = TableName{
-			Name: name,
-		}
+		edits[i].name = name
 	}
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits)
@@ -964,9 +1026,10 @@ func GetAllTagsForRoots(ctx context.Context, roots ...RootValue) (tags schema.Ta
 		if root == nil {
 			continue
 		}
-		err = root.IterTables(ctx, func(tblName string, _ *Table, sch schema.Schema) (stop bool, err error) {
+		err = root.IterTables(ctx, func(tblName TableName, _ *Table, sch schema.Schema) (stop bool, err error) {
 			for _, t := range sch.GetAllCols().Tags {
-				tags.Add(t, tblName)
+				// TODO: schema names
+				tags.Add(t, tblName.Name)
 			}
 			return
 		})
@@ -979,19 +1042,27 @@ func GetAllTagsForRoots(ctx context.Context, roots ...RootValue) (tags schema.Ta
 
 // UnionTableNames returns an array of all table names in all roots passed as params.
 // The table names are in order of the RootValues passed in.
-func UnionTableNames(ctx context.Context, roots ...RootValue) ([]string, error) {
-	seenTblNamesMap := make(map[string]bool)
-	tblNames := []string{}
+func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, error) {
+	seenTblNamesMap := make(map[TableName]bool)
+	var tblNames []TableName
+
 	for _, root := range roots {
-		// TODO: schema name
-		rootTblNames, err := root.GetTableNames(ctx, DefaultSchemaName)
+		schemaNames, err := schemaNames(ctx, root)
 		if err != nil {
 			return nil, err
 		}
-		for _, tn := range rootTblNames {
-			if _, ok := seenTblNamesMap[tn]; !ok {
-				seenTblNamesMap[tn] = true
-				tblNames = append(tblNames, tn)
+
+		for _, schemaName := range schemaNames {
+			rootTblNames, err := root.GetTableNames(ctx, schemaName)
+			if err != nil {
+				return nil, err
+			}
+			for _, tn := range rootTblNames {
+				tn := TableName{Name: tn, Schema: schemaName}
+				if _, ok := seenTblNamesMap[tn]; !ok {
+					seenTblNamesMap[tn] = true
+					tblNames = append(tblNames, tn)
+				}
 			}
 		}
 	}
@@ -999,8 +1070,23 @@ func UnionTableNames(ctx context.Context, roots ...RootValue) ([]string, error) 
 	return tblNames, nil
 }
 
+// schemaNames returns all names of all schemas which may have tables
+func schemaNames(ctx context.Context, root RootValue) ([]string, error) {
+	dbSchemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaNames := make([]string, len(dbSchemas)+1)
+	for i, dbSchema := range dbSchemas {
+		schemaNames[i] = dbSchema.Name
+	}
+	schemaNames[len(dbSchemas)] = DefaultSchemaName
+	return schemaNames, nil
+}
+
 // FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
-func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ignoredTables IgnoredTables, err error) {
+func FilterIgnoredTables(ctx context.Context, tables []TableName, roots Roots) (ignoredTables IgnoredTables, err error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
 		return ignoredTables, err
@@ -1078,9 +1164,9 @@ func (root *rootValue) DebugString(ctx context.Context, transitive bool) string 
 
 	if transitive {
 		buf.WriteString("\nTables:")
-		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
+		root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
-			buf.WriteString(name)
+			buf.WriteString(name.Name)
 			buf.WriteString(":\n")
 
 			buf.WriteString(table.DebugString(ctx, root.ns))
@@ -1101,7 +1187,7 @@ func MapTableHashes(ctx context.Context, root RootValue) (map[string]hash.Hash, 
 	}
 	nameToHash := make(map[string]hash.Hash)
 	for _, name := range names {
-		h, ok, err := root.GetTableHash(ctx, name)
+		h, ok, err := root.GetTableHash(ctx, TableName{Name: name})
 		if err != nil {
 			return nil, err
 		} else if !ok {
@@ -1124,4 +1210,21 @@ func NewDataCacheKey(rv RootValue) (DataCacheKey, error) {
 	}
 
 	return DataCacheKey{hash}, nil
+}
+
+// ResolveDatabaseSchema returns the case-sensitive name for the schema requested, if it exists, and an error if
+// schemas could not be loaded.
+func ResolveDatabaseSchema(ctx *sql.Context, root RootValue, schemaName string) (string, bool, error) {
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return "", false, err
+	}
+
+	for _, databaseSchema := range schemas {
+		if strings.EqualFold(databaseSchema.Name, schemaName) {
+			return databaseSchema.Name, true, nil
+		}
+	}
+
+	return "", false, nil
 }

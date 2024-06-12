@@ -30,7 +30,7 @@ to see what we're building next.
 
 # Video Introduction
 
-[![Dolt Explainer Video](https://img.youtube.com/vi/3F6LwZt6e-A/maxresdefault.jpg)](https://www.youtube.com/watch?v=3F6LwZt6e-A)
+[![Dolt Explainer Video](https://img.youtube.com/vi/H2iZy0Cme10/maxresdefault.jpg)](https://www.youtube.com/watch?v=H2iZy0Cme10)
 
 # What's it for?
 
