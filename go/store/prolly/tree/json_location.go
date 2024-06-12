@@ -41,6 +41,9 @@ import (
 //	             - 2 / arrayInitialElement  - The location points to where a new value would be inserted at the start of an array.
 //	                                          This is always one byte past the start of the array.
 //	             - 3 / startOfValue         - The location points one byte past the end of the value.
+//	        In the event this format changes, the upper bits can be used to indicate the version. Currently, if these bits are not
+//	        all 0, the engine should emit a warning, and then fall back on a naive implementation of the current operation that
+//	        does not require these keys.
 //
 //				The remainder of |key| is a sequence of encoded path elements, each of which is either an object key or array index:
 //				    <path-element> ::= <object-key> | <array-index>
@@ -67,6 +70,8 @@ const (
 	arrayInitialElement
 	endOfValue
 )
+
+var unknownLocationKeyError = fmt.Errorf("A JSON document was written with a future version of Dolt, and the index metadata cannot be read. This will impact performance for large documents.")
 
 const (
 	beginObjectKey byte = 0xFF
@@ -146,6 +151,13 @@ func isValidJsonPathKey(key []byte) bool {
 		return false
 	}
 	return true
+}
+
+func errorIfNotSupportedLocation(key []byte) error {
+	if jsonPathType(key[0]) > endOfValue {
+		return unknownLocationKeyError
+	}
+	return nil
 }
 
 type lexState int

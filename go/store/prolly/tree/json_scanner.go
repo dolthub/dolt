@@ -19,9 +19,6 @@ import (
 	"io"
 )
 
-// TODO: JsonScanner currently assumes that there are no escaped characters in strings. This can be fixed by escaping/unescaping
-// strings as they are read from the document, before they are used in any comparisons.
-
 // JsonScanner is a state machine that parses already-normalized JSON while keeping track of the path to the current value.
 // It is not a general-purpose JSON parser. In particular, it makes the following assumptions about the JSON:
 // - All whitespace has been removed

@@ -36,10 +36,16 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cur2.Valid() {
-		return cur2.parent.CurrentKey(), nil
+	// If we're at the start of the tree, return nil.
+	if !cur2.Valid() {
+		return nil, nil
 	}
-	return nil, nil
+	key := cur2.parent.CurrentKey()
+	err = errorIfNotSupportedLocation(key)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // newJsonCursor takes the root node of a prolly tree representing a JSON document, and creates a new JsonCursor for reading

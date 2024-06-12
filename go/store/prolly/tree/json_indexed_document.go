@@ -119,6 +119,22 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql
 		nonIndexedDoc := types.JSONDocument{Val: val}
 		return nonIndexedDoc.Lookup(ctx, pathString)
 	}
+	result, err := i.tryLookup(ctx, pathString)
+	if err == unknownLocationKeyError {
+		if sqlCtx, ok := ctx.(*sql.Context); ok {
+			sqlCtx.GetLogger().Warn(err)
+		}
+		v, err := i.ToInterface()
+		if err != nil {
+			return nil, err
+		}
+		return types.JSONDocument{Val: v}.Lookup(ctx, pathString)
+	}
+	return result, err
+}
+
+func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (sql.JSONWrapper, error) {
+
 	path, err := jsonPathElementsFromMySQLJsonPath([]byte(pathString))
 	if err != nil {
 		return nil, err
@@ -145,6 +161,21 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql
 
 // Insert implements types.MutableJSON
 func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	result, changed, err := i.tryInsert(ctx, path, val)
+	if err == unknownLocationKeyError {
+		if sqlCtx, ok := ctx.(*sql.Context); ok {
+			sqlCtx.GetLogger().Warn(err)
+		}
+		v, err := i.ToInterface()
+		if err != nil {
+			return nil, false, err
+		}
+		return types.JSONDocument{Val: v}.Insert(ctx, path, val)
+	}
+	return result, changed, err
+}
+
+func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
 	if err != nil {
 		return nil, false, err
