@@ -47,7 +47,7 @@ type chunker[S message.Serializer] struct {
 	ns NodeStore
 }
 
-//var _ Chunker = &chunker[]{}
+var _ Chunker = &chunker[message.Serializer]{}
 
 func NewEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, serializer S) (Chunker, error) {
 	return newEmptyChunker(ctx, ns, serializer)

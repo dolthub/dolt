@@ -53,3 +53,7 @@ func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
 		return buf[start:stop]
 	}
 }
+
+func (acc ItemAccess) IsEmpty() bool {
+	return acc.bufLen == 0
+}

@@ -765,16 +765,8 @@ func (j jsonSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val
 		return nil, err
 	}
 	if json != nil {
-		var jsonDoc gmstypes.JSONDocument
-		if lazyJsonDoc, ok := json.(*gmstypes.LazyJSONDocument); ok {
-			i, err := lazyJsonDoc.ToInterface()
-			if err != nil {
-				return nil, err
-			}
-			jsonDoc = gmstypes.JSONDocument{Val: i}
-		} else if _, ok := json.(gmstypes.JSONDocument); ok {
-			jsonDoc = json.(gmstypes.JSONDocument)
-		} else {
+		jsonDoc, ok := json.(sql.JSONWrapper)
+		if !ok {
 			return nil, fmt.Errorf("unsupported JSON type: %T", json)
 		}
 

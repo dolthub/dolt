@@ -217,6 +217,11 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 // searchForKey returns a SearchFn for |key|.
 func searchForKey[K ~[]byte, O Ordering[K]](key K, order O) SearchFn {
 	return func(nd Node) (idx int) {
+		// A flattened leaf node contains 1 value and 0 keys. We check for this and return the index of the only value,
+		// in order to prevent a comparison against the nonexistent key.
+		if nd.keys.IsEmpty() {
+			return 0
+		}
 		n := int(nd.Count())
 		// Define f(-1) == false and f(n) == true.
 		// Invariant: f(i-1) == false, f(j) == true.
@@ -311,7 +316,14 @@ func recursiveFetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node,
 }
 
 func currentCursorItems(cur *cursor) (key, value Item) {
-	key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	// The BLOB node type contains no keys, and a single value in each leaf node.
+	// Some trees (such as the trees for storing JSON) use BLOB leaf nodes but indexed non-leaf nodes.
+	// When advancing a cursor through such a tree, the leaf nodes won't contain keys, but their parents will.
+	if cur.nd.keys.IsEmpty() {
+		key = cur.parent.CurrentKey()
+	} else {
+		key = cur.nd.keys.GetItem(cur.idx, cur.nd.msg)
+	}
 	value = cur.nd.values.GetItem(cur.idx, cur.nd.msg)
 	return
 }
