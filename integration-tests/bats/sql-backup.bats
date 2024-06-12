@@ -80,15 +80,80 @@ teardown() {
     [[ ! "$output" =~ "bac1" ]] || false
 }
 
+@test "sql-backup: dolt_backup restore invalid arguments" {
+    # Not enough arguments
+    run dolt sql -q "call dolt_backup('restore')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+
+    # Not enough arguments
+    run dolt sql -q "call dolt_backup('restore', 'file:///some_directory')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+
+    # Too many arguments
+    run dolt sql -q "call dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory', 'too many')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+}
+
 @test "sql-backup: dolt_backup restore" {
-    run dolt sql -q "call dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "CALL dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "call dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
-    run dolt sql -q "CALL dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory')"
-    [ "$status" -ne 0 ]
+    backupsDir="$PWD/backups"
+    mkdir backupsDir
+
+    # Created a nested database, back it up, drop it, then restore it with a new name
+    dolt sql -q "create database db1;"
+    cd db1
+    dolt sql -q "create table t1 (pk int primary key); insert into t1 values (42); call dolt_commit('-Am', 'creating table t1');"
+    dolt sql -q "call dolt_backup('add', 'backups', 'file://$backupsDir');"
+    dolt sql -q "call dolt_backup('sync', 'backups');"
+    cd ..
+    dolt sql -q "drop database db1;"
+    dolt sql -q "call dolt_backup('restore', 'file://$backupsDir', 'db2');"
+
+    # Assert that db2 is present, and db1 is not
+    run dolt sql -q "show databases;"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "db1" ]] || false
+    [[ "$output" =~ "db2" ]] || false
+
+    # Sanity check some data in the database
+    run dolt sql -q "use db2; select * from t1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
+
+    # Assert that db2 doesn't have any remotes
+    cd db2
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+}
+
+@test "sql-backup: dolt_backup restore --force" {
+    backupsDir="$PWD/backups"
+    mkdir backupsDir
+
+    # Created a nested database, and back it up
+    dolt sql -q "create database db1;"
+    cd db1
+    dolt sql -q "create table t1 (pk int primary key); insert into t1 values (42); call dolt_commit('-Am', 'creating table t1');"
+    dolt sql -q "call dolt_backup('add', 'backups', 'file://$backupsDir');"
+    dolt sql -q "call dolt_backup('sync', 'backups');"
+
+    # Make a new commit in db1, but don't push it to the backup
+    dolt sql -q "update t1 set pk=100; call dolt_commit('-Am', 'updating table t1');"
+
+    # Assert that without --force, we can't update an existing db from a backup
+    run dolt sql -q "call dolt_backup('restore', 'file://$backupsDir', 'db1');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot restore backup into db1. A database with that name already exists." ]] || false
+
+    # Use --force to overwrite the existing database and sanity check the data
+    run dolt sql -q "call dolt_backup('restore', '--force', 'file://$backupsDir', 'db1');"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "use db1; select * from t1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "42" ]] || false
 }
 
 @test "sql-backup: dolt_backup unrecognized" {
