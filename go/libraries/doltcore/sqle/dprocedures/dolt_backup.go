@@ -157,6 +157,11 @@ func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResult
 		return fmt.Errorf("usage: dolt_backup('restore', 'backup_url', 'database_name')")
 	}
 
+	// Only allow admins to restore a database
+	if err := checkBackupRestorePrivs(ctx); err != nil {
+		return err
+	}
+
 	backupUrl := strings.TrimSpace(apr.Arg(1))
 	dbName := strings.TrimSpace(apr.Arg(2))
 	force := apr.Contains(cli.ForceFlag)
@@ -327,6 +332,21 @@ func syncRootsFromBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSe
 	err = actions.SyncRoots(ctx, destDb, dbData.Ddb, tmpDir, runProgFuncs, stopProgFuncs)
 	if err != nil && err != pull.ErrDBUpToDate {
 		return fmt.Errorf("error syncing backup: %w", err)
+	}
+
+	return nil
+}
+
+// checkBackupRestorePrivs returns an error if the user requesting to restore a database
+// does not have SUPER access. Since this is a potentially destructive operation, we restrict it to admins,
+// even though the SUPER privilege has been deprecated, since there isn't another appropriate global privilege.
+func checkBackupRestorePrivs(ctx *sql.Context) error {
+	privs, counter := ctx.GetPrivilegeSet()
+	if counter == 0 {
+		return fmt.Errorf("unable to check user privileges for dolt_backup() restore subcommand")
+	}
+	if privs.Has(sql.PrivilegeType_Super) == false {
+		return sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
 	}
 
 	return nil
