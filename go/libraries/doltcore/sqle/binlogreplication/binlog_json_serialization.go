@@ -17,9 +17,10 @@ package binlogreplication
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"sort"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const jsonTypeSmallObject = byte(0x00)

@@ -16,11 +16,12 @@ package tree
 
 import (
 	"context"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json/jsontests"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 // NewIndexedJsonDocumentFromBytes creates an IndexedJsonDocument from a byte sequence, which has already been validated and normalized

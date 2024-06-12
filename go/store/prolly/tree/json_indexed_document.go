@@ -19,10 +19,11 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type jsonLocationKey = []byte

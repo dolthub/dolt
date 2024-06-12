@@ -18,9 +18,10 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
-	"github.com/mohae/uvarint"
 	"slices"
 	"strconv"
+
+	"github.com/mohae/uvarint"
 )
 
 // jsonLocation is a representation of a path into a JSON document. It is designed for efficient in-place modification and fast

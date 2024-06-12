@@ -17,10 +17,12 @@ package tree
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly/message"
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"io"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // JsonChunker writes a prolly tree containing a JSON document.
