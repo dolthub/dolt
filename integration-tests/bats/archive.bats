@@ -5,7 +5,7 @@ setup() {
     setup_common
 
     dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
-    dolt commit -A -m "crate tbl"
+    dolt commit -A -m "create tbl"
 
     make_inserts
 }
