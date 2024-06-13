@@ -57,7 +57,8 @@ make_updates() {
   [ "$files" -eq "1" ]
 }
 
-
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
 @test "archive: multiple archives" {
   # We need at least 25 chunks to create an archive.
   for ((j=1; j<=10; j++))
