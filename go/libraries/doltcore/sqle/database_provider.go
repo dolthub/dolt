@@ -495,7 +495,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
-	// If the search path is enabled, we need to create our initial schema object (public is available by default)
+	// If the search path is enabled, we need to create our initial schema object (public and pg_catalog are available
+	// by default)
 	if resolve.UseSearchPath {
 		workingRoot, err := newEnv.WorkingRoot(ctx)
 		if err != nil {
@@ -504,6 +505,12 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 
 		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 			Name: "public",
+		})
+		if err != nil {
+			return err
+		}
+		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+			Name: "pg_catalog",
 		})
 		if err != nil {
 			return err
