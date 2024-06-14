@@ -198,6 +198,7 @@ func (db Database) Name() string {
 	return db.RequestedName()
 }
 
+// Schema returns the name of the schema that this database represents.
 func (db Database) Schema() string {
 	return db.schemaName
 }
@@ -770,7 +771,6 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tname, tbl, true, nil
 }
 
-// newDoltTable returns a sql.Table wrapping the given underlying dolt table
 func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
 	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
@@ -1279,7 +1279,11 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			db.schemaName = schema.Name
-			return db, true, nil
+			handledSchema, err := HandleSchema(ctx, schemaName, db)
+			if err != nil {
+				return nil, false, err
+			}
+			return handledSchema, true, nil
 		}
 	}
 
@@ -1291,6 +1295,12 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 	}
 
 	return nil, false, nil
+}
+
+// HandleSchema is used by Doltgres to intercept a database for the purposes of system tables. In Dolt, this just
+// returns the given database.
+var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.DatabaseSchema, error) {
+	return db, nil
 }
 
 // AllSchemas implements sql.SchemaDatabase
@@ -1314,7 +1324,11 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
-		dbSchemas[i] = sdb
+		handledDb, err := HandleSchema(ctx, schema.Name, sdb)
+		if err != nil {
+			return nil, err
+		}
+		dbSchemas[i] = handledDb
 	}
 
 	return dbSchemas, nil
