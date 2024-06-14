@@ -309,7 +309,7 @@ func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleD
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error) {
 	stop, ok := rng.KeyRangeLookup(m.Pool())
-	if ok {
+	if ok && rng.Desc.Compare(rng.Tup, stop) != 0 {
 		iter, err = m.IterKeyRange(ctx, rng.Tup, stop)
 	} else {
 		iter, err = treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
