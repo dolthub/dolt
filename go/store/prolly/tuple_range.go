@@ -297,18 +297,6 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 			return nil, false
 		}
 		tb.PutUint64(n, v+1)
-	case val.Float32Enc:
-		v, ok := r.Desc.GetFloat32(n, r.Tup)
-		if !ok {
-			return nil, false
-		}
-		tb.PutFloat32(n, v+1)
-	case val.Float64Enc:
-		v, ok := r.Desc.GetFloat64(n, r.Tup)
-		if !ok {
-			return nil, false
-		}
-		tb.PutFloat64(n, v+1)
 	default:
 		return nil, false
 	}

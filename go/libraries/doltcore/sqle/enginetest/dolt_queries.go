@@ -736,6 +736,19 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "range key float fuzzer fail",
+		SetUpScript: []string{
+			"CREATE TABLE `khNVtTWRat` (`xAShyV` SMALLINT UNSIGNED, `VZ_7G2` DECIMAL(38,19), `PO5tFR` TINYINT, `tXLcRR` DOUBLE, PRIMARY KEY (`xAShyV`, `VZ_7G2`, `PO5tFR`, `tXLcRR`));",
+			"INSERT INTO `khNVtTWRat` VALUES (460,'3103267612325796683.7065177779488149262',-67,'-4.357715639933331e+212');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DELETE FROM `khNVtTWRat` WHERE `xAShyV` = 460 AND `VZ_7G2` = '3103267612325796683.7065177779488149262' AND `PO5tFR` = -67 AND `tXLcRR` = '-4.357715639933331e+212';",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
 		Name: "dolt_hashof_db tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",
