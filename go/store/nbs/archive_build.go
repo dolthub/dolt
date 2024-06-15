@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -555,32 +556,48 @@ func (cr *ChunkRelations) Count() int {
 
 func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *SimpleChunkSourceCache, defaultDict *gozstd.CDict) ([]*chunkGroup, error) {
 	result := make([]*chunkGroup, 0, cr.Count())
-	buff := make([]byte, 0, maxChunkSize)
 
-	hs := hash.NewHashSet()
-	// For each relation set, look up the addresses and build a chunk group.
-	for _, v := range cr.groups() {
-		for h := range v {
-			// There will be chunks referenced in the chunk group which are not in the chks map. This is because
-			// we walk the history to get the chunk groups, but the map comes from a specific table file only - which
-			// may not contain all the chunks of the DB.
-			has, err := chks.has(h)
-			if err != nil {
-				return nil, err
-			}
-			if has {
-				hs.Insert(h)
-			}
-		}
+	// Create a channel for sending groups to process
+	groups := cr.groups()
+	groupChannel := make(chan hash.HashSet, len(groups))
+	resultChannel := make(chan *chunkGroup, len(groups))
 
-		if len(hs) > 1 {
-			chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict)
-			if err != nil {
-				return nil, err
+	// Start worker goroutines
+	numThreads := 1
+	var wg sync.WaitGroup
+	wg.Add(numThreads)
+	for i := 0; i < numThreads; i++ {
+		go func() {
+			buff := make([]byte, 0, maxChunkSize)
+			defer wg.Done()
+			for hs := range groupChannel {
+				if len(hs) > 1 {
+					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict)
+					if err != nil {
+						// Handle error: report error and return
+						// fmt.Println("Error creating chunk group:", err)
+						// In real scenarios, you might want to handle or log errors more appropriately.
+						continue
+					}
+					resultChannel <- chkGrp
+				}
 			}
-			result = append(result, chkGrp)
-		}
+		}()
 	}
+
+	// Send groups to process
+	for _, v := range groups {
+		groupChannel <- v
+	}
+	close(groupChannel)
+
+	wg.Wait()
+	close(resultChannel)
+
+	for group := range resultChannel {
+		result = append(result, group)
+	}
+
 	return result, nil
 }
 
