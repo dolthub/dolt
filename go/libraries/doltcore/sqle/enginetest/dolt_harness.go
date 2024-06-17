@@ -61,6 +61,12 @@ type DoltHarness struct {
 	setupTestProcedures bool
 }
 
+func (d *DoltHarness) WithConfigureStats(configureStats bool) DoltEnginetestHarness {
+	nd := *d
+	nd.configureStats = configureStats
+	return &nd
+}
+
 func (d *DoltHarness) NewHarness(t *testing.T) DoltEnginetestHarness {
 	return newDoltHarness(t)
 }
@@ -78,6 +84,12 @@ type DoltEnginetestHarness interface {
 	
 	// NewHarness returns a new uninitialized harness of the same type
 	NewHarness(t *testing.T) DoltEnginetestHarness
+	
+	// WithSkippedQueries returns a copy of the harness with the given queries skipped
+	WithSkippedQueries(skipped []string) DoltEnginetestHarness
+	
+	// WithConfigureStats returns a copy of the harness with the given configureStats value
+	WithConfigureStats(configureStats bool) DoltEnginetestHarness
 	
 	// Close closes the harness, freeing up any resources it may have allocated
 	Close() 
@@ -306,7 +318,7 @@ func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
 }
 
 // WithSkippedQueries returns a copy of the harness with the given queries skipped
-func (d *DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
+func (d *DoltHarness) WithSkippedQueries(queries []string) DoltEnginetestHarness {
 	nd := *d
 	nd.skippedQueries = append(d.skippedQueries, queries...)
 	return &nd

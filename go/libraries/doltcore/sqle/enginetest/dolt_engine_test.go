@@ -569,6 +569,11 @@ func TestAnsiQuotesSqlModePrepared(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunQueryTestPlans(t, harness)
+}
+
+func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
 	skipped := []string{
@@ -582,8 +587,7 @@ func TestQueryPlans(t *testing.T) {
 	}
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
-	harness := newDoltHarness(t).WithSkippedQueries(skipped)
-	harness.configureStats = true
+	harness = harness.NewHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		// only new format supports reverse IndexTableAccess
 		reverseIndexSkip := []string{
@@ -738,7 +742,7 @@ func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
 }
 
 func TestInsertIntoErrors(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	h = h.WithSkippedQueries([]string{
 		"create table bad (vb varbinary(65535))",
@@ -2942,7 +2946,7 @@ func TestInsertIgnoreScriptsPrepared(t *testing.T) {
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	h = h.WithSkippedQueries([]string{
 		"create table bad (vb varbinary(65535))",
