@@ -61,12 +61,12 @@ func (d *DoltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql
 }
 
 // BinlogDumpGtid implements the BinlogPrimaryController interface.
-func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, gtidSet mysql.GTIDSet) error {
+func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, replicaExecutedGtids mysql.GTIDSet) error {
 	if d.BinlogProducer == nil {
 		return fmt.Errorf("no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
 	}
 
-	err := d.streamerManager.StartStream(ctx, conn, d.BinlogProducer.binlogFormat, d.BinlogProducer.binlogEventMeta)
+	err := d.streamerManager.StartStream(ctx, conn, replicaExecutedGtids, d.BinlogProducer.binlogFormat, d.BinlogProducer.binlogEventMeta)
 	if err != nil {
 		logrus.Warnf("exiting binlog streamer due to error: %s", err.Error())
 	} else {
@@ -91,7 +91,7 @@ func (d *DoltBinlogPrimaryController) ListBinaryLogs(_ *sql.Context) ([]binlogre
 func (d *DoltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) ([]binlogreplication.BinaryLogStatus, error) {
 	return []binlogreplication.BinaryLogStatus{{
 		File:          d.streamerManager.logManager.currentBinlogFileName,
-		Position:      uint(d.BinlogProducer.binlogEventMeta.NextLogPosition),
+		Position:      uint(d.streamerManager.logManager.currentPosition),
 		ExecutedGtids: d.BinlogProducer.currentGtidPosition(),
 	}}, nil
 }

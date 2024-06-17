@@ -124,7 +124,33 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 
 	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{
-		{"binlog-main.000001", "2226", "", "", uuid + ":1-3"}})
+		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
+}
+
+// TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
+// size threshold is reached.
+func TestBinlogPrimary_Rotation(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+
+	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB)
+	primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
+
+	// Generate enough data to trigger a logfile rotation
+	primaryDatabase.MustExec("create table t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "SELECT MAX(n) FROM t;", [][]any{{"99"}})
+
+	// Check the binary log file status and ensure the file has been rotated
+	uuid := queryPrimaryServerUuid(t)
+	requirePrimaryResults(t, "show binary log status", [][]any{
+		{"binlog-main.000003", "1027", "", "", uuid + ":1-102"},
+	})
 }
 
 // TestBinlogPrimary_Heartbeats tests that heartbeats sent from the primary to the replica are well-formed and

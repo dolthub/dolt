@@ -455,10 +455,11 @@ func TestCharsetsAndCollations(t *testing.T) {
 // Test Helper Functions
 //
 
-// waitForReplicaToCatchUp waits (up to 60s) for the replica to catch up with the primary database. The
+// waitForReplicaToCatchUp waits (up to 30s) for the replica to catch up with the primary database. The
 // lag is measured by checking that gtid_executed is the same on the primary and replica.
 func waitForReplicaToCatchUp(t *testing.T) {
-	timeLimit := 60 * time.Second
+	timeLimit := 30 * time.Second
+
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		replicaGtid := queryGtid(t, replicaDatabase)
@@ -474,6 +475,7 @@ func waitForReplicaToCatchUp(t *testing.T) {
 
 	// Log some status of the replica, before failing the test
 	outputShowReplicaStatus(t)
+	//outputReplicaApplierStatus(t) // NOTE: This can only run aginst MySQL, not Dolt
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
 }
 
