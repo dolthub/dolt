@@ -382,7 +382,7 @@ type chunkCmpScore struct {
 }
 
 // newChunkGroup creates a new chunkGroup from a set of chunks.
-func newChunkGroup(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, chks hash.HashSet, defaultDict *gozstd.CDict) (*chunkGroup, error) {
+func newChunkGroup(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, chks hash.HashSet, defaultDict *gozstd.CDict, progress chan interface{}) (*chunkGroup, error) {
 	scored := make([]chunkCmpScore, len(chks))
 	i := 0
 	for h := range chks {
@@ -391,7 +391,7 @@ func newChunkGroup(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpB
 	}
 
 	result := chunkGroup{dict: nil, cDict: nil, chks: scored}
-	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict)
+	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, progress)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +415,7 @@ func padSamples(chks []*chunks.Chunk) []*chunks.Chunk {
 // use testChunk to determine if this chunk should be added.
 //
 // The chunkGroup will be recalculated after this chunk is added.
-func (cg *chunkGroup) addChunk(ctx context.Context, chunkChache *SimpleChunkSourceCache, cmpBuff []byte, c *chunks.Chunk, defaultDict *gozstd.CDict) error {
+func (cg *chunkGroup) addChunk(ctx context.Context, chunkChache *SimpleChunkSourceCache, cmpBuff []byte, c *chunks.Chunk, defaultDict *gozstd.CDict, progress chan interface{}) error {
 	scored := chunkCmpScore{
 		chunkId:     c.Hash(),
 		score:       0.0,
@@ -423,7 +423,7 @@ func (cg *chunkGroup) addChunk(ctx context.Context, chunkChache *SimpleChunkSour
 	}
 
 	cg.chks = append(cg.chks, scored)
-	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict)
+	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, progress)
 }
 
 // worstZScore returns the z-score of the worst chunk in the group. The z-score is a measure of how many standard
@@ -455,7 +455,7 @@ func (cg *chunkGroup) worstZScore() float64 {
 
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
-func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict) error {
+func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, progress chan interface{}) error {
 	chks := make([]*chunks.Chunk, len(cg.chks))
 
 	for i, cs := range cg.chks {
@@ -465,6 +465,12 @@ func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSource
 		}
 		chks[i] = chk
 	}
+
+	totalBytes := 0
+	for _, c := range chks {
+		totalBytes += len(c.Data())
+	}
+	progress <- fmt.Sprintf("Rebuilding group with %d chunks (%d bytes)\n", len(chks), totalBytes)
 
 	dct := buildDictionary(padSamples(chks))
 
@@ -581,7 +587,7 @@ func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *Simple
 			for hs := range groupChannel {
 				progress <- fmt.Sprintf("Worker (%d) taking group of size %d", i, len(hs))
 				if len(hs) > 1 {
-					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict)
+					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, progress)
 					if err != nil {
 						progress <- err
 						continue

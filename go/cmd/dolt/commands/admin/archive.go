@@ -144,21 +144,20 @@ func handleProgress(progress chan interface{}) {
 					if v.FinishedOne {
 						finishedGroupCount++
 					}
-
-					if now := time.Now(); now.Sub(lastUpdateTime) > 3*time.Second {
-						percentDone := 0.0
-						if totalGroupCount > 0 {
-							percentDone = float64(finishedGroupCount) / float64(totalGroupCount)
-						}
-
-						cli.Printf("Groups: %d/%d (%f)\n", finishedGroupCount, totalGroupCount, percentDone)
-						lastUpdateTime = now
-					}
 				default:
 					cli.Printf("Unexpected Message: %v\n", v)
 				}
 			case <-time.After(3 * time.Second):
-				cli.Println("tick")
+			}
+
+			if now := time.Now(); now.Sub(lastUpdateTime) > 3*time.Second {
+				percentDone := 0.0
+				if totalGroupCount > 0 {
+					percentDone = float64(finishedGroupCount) / float64(totalGroupCount)
+				}
+
+				cli.Printf("Groups: %d/%d (%f)\n", finishedGroupCount, totalGroupCount, percentDone)
+				lastUpdateTime = now
 			}
 		}
 	}()
