@@ -639,9 +639,14 @@ func RunDoltDiffQueryPlansTest(t *testing.T, harness DoltEnginetestHarness) {
 }
 
 func TestBranchPlans(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchPlanTests(t, harness)
+}
+
+func RunBranchPlanTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range BranchPlanTests {
 		t.Run(script.Name, func(t *testing.T) {
-			harness := newDoltHarness(t)
+			harness = harness.NewHarness(t)
 			defer harness.Close()
 
 			e := mustNewEngine(t, harness)
@@ -667,15 +672,19 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
+	RunInfoSchemaTests(t, h)
+}
+
+func RunInfoSchemaTests(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	enginetest.TestInfoSchema(t, h)
 
 	for _, script := range DoltInfoSchemaScripts {
 		func() {
-			harness := newDoltHarness(t)
-			defer harness.Close()
-			enginetest.TestScript(t, harness, script)
+			h = h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
 		}()
 	}
 }
@@ -746,22 +755,32 @@ func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
 
 func TestInsertIntoErrors(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
-	defer h.Close()
+	RunInsertIntoErrorsTest(t, h)
+}
+
+func RunInsertIntoErrorsTest(t *testing.T, h DoltEnginetestHarness) {
 	h = h.WithSkippedQueries([]string{
 		"create table bad (vb varbinary(65535))",
 		"insert into bad values (repeat('0', 65536))",
 	})
+	defer h.Close()
 	enginetest.TestInsertIntoErrors(t, h)
 }
 
 func TestGeneratedColumns(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunGeneratedColumnTests(t, harness)
+}
+
+func RunGeneratedColumnTests(t *testing.T, harness DoltEnginetestHarness) {
+	defer harness.Close()
 	enginetest.TestGeneratedColumns(t,
 		// virtual indexes are failing for certain lookups on this test
-		newDoltHarness(t).WithSkippedQueries([]string{"create table t (pk int primary key, col1 int as (pk + 1));"}))
+		harness.WithSkippedQueries([]string{"create table t (pk int primary key, col1 int as (pk + 1));"}))
 
 	for _, script := range GeneratedColumnMergeTestScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := harness.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -964,8 +983,7 @@ func TestJoinPlanning(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
-	h := newDoltHarness(t)
-	h.configureStats = true
+	h := newDoltEnginetestHarness(t).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -1044,9 +1062,14 @@ func TestRowLimit(t *testing.T) {
 }
 
 func TestBranchDdl(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunBranchDdlTest(t, h)
+}
+
+func RunBranchDdlTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DdlBranchTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1054,9 +1077,14 @@ func TestBranchDdl(t *testing.T) {
 }
 
 func TestBranchDdlPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunBranchDdlTestPrepared(t, h)
+}
+
+func RunBranchDdlTestPrepared(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DdlBranchTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1133,6 +1161,10 @@ func TestIndexes(t *testing.T) {
 func TestIndexPrefix(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
+	RunIndexPrefixTest(t, harness)
+}
+
+func RunIndexPrefixTest(t *testing.T, harness *DoltHarness) {
 	defer harness.Close()
 	enginetest.TestIndexPrefix(t, harness)
 	for _, script := range DoltIndexPrefixScripts {
@@ -1144,6 +1176,10 @@ func TestBigBlobs(t *testing.T) {
 	skipOldFormat(t)
 
 	h := newDoltHarness(t)
+	RunBigBlobsTest(t, h)
+}
+
+func RunBigBlobsTest(t *testing.T, h *DoltHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, setup.BlobData)
 	for _, tt := range BigBlobQueries {
