@@ -1286,6 +1286,11 @@ func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func TestForeignKeyBranchesPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunForeignKeyBranchesPreparedTest(t, h)
+}
+
+func RunForeignKeyBranchesPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	setupPrefix := []string{
 		"call dolt_branch('b1')",
 		"use mydb/b1",
@@ -1298,7 +1303,7 @@ func TestForeignKeyBranchesPrepared(t *testing.T) {
 	}
 	for _, script := range queries.ForeignKeyTests {
 		// New harness for every script because we create branches
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
 		modifiedScript := script
 		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
@@ -1308,7 +1313,7 @@ func TestForeignKeyBranchesPrepared(t *testing.T) {
 
 	for _, script := range ForeignKeyBranchTests {
 		// New harness for every script because we create branches
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
 		enginetest.TestScriptPrepared(t, h, script)
 	}
@@ -1369,9 +1374,14 @@ func TestViews(t *testing.T) {
 }
 
 func TestBranchViews(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunBranchViewsTest(t, h)
+}
+
+func RunBranchViewsTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range ViewBranchTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1379,9 +1389,14 @@ func TestBranchViews(t *testing.T) {
 }
 
 func TestBranchViewsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunBranchViewsPreparedTest(t, h)
+}
+
+func RunBranchViewsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range ViewBranchTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1389,7 +1404,11 @@ func TestBranchViewsPrepared(t *testing.T) {
 }
 
 func TestVersionedViews(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
+	RunVersionedViewsTest(t, h)
+}
+
+func RunVersionedViewsTest(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
 
