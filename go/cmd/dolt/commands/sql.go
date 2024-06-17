@@ -97,7 +97,7 @@ const (
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
-# "exit" or "quit" (or Ctrl-D) to exit. "/help;" for help.`
+# "exit" or "quit" (or Ctrl-D) to exit. "\help;" for help.`
 )
 
 // TODO: get rid of me, use a real integration point to define system variables
@@ -755,7 +755,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		var nextPrompt string
 		var multiPrompt string
 
-		re := regexp.MustCompile(`\s*/(.*)`)
+		re := regexp.MustCompile(`\s*\\(.*)`)
 		matches := re.FindStringSubmatch(query)
 		// If the query starts with a slash, it's a shell command. We don't want to print the query in that case.
 		if len(matches) > 1 {

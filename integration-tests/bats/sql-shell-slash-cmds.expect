@@ -53,15 +53,15 @@ proc expect_with_defaults_2 {patternA patternB action} {
 
 spawn dolt sql
 
-expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "/commit -A -m \"sql-shell-slash-cmds commit\";\r"; }
+expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"sql-shell-slash-cmds commit\";\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "/log -n 1;\r"; }
+expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "\\log -n 1;\r"; }
 
-expect_with_defaults_2 {sql-shell-slash-cmds commit} {dolt-repo-[0-9]+/main> } { send "/status;\r"; }
+expect_with_defaults_2 {sql-shell-slash-cmds commit} {dolt-repo-[0-9]+/main> } { send "\\status;\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "/reset HEAD~1;\r"; }
+expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "\\reset HEAD~1;\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "/diff;\r"; }
+expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "\\diff;\r"; }
 
 expect_with_defaults_2 {diff --dolt a/tbl b/tbl} {dolt-repo-[0-9]+/main\*> } {send "quit\r";}
 

@@ -103,7 +103,7 @@ func (s SlashHelp) Description() string {
 
 func (s SlashHelp) Docs() *cli.CommandDocumentation {
 	return &cli.CommandDocumentation{
-		CommandStr: "/help",
+		CommandStr: "\\help",
 		ShortDesc:  "What you see right now.",
 		LongDesc:   "It would seem that you are crying out for help. Please join us on Discord (https://discord.gg/gqr7K4VNKe)!",
 		Synopsis:   []string{},
@@ -138,13 +138,13 @@ func (s SlashHelp) Exec(ctx context.Context, _ string, args []string, _ *env.Dol
 
 	cli.Println("Dolt SQL Shell Help")
 	cli.Printf("Default behavior is to interpret SQL statements.     (e.g. '%sselect * from my_table;')\n", prompt)
-	cli.Printf("Dolt CLI commands can be invoked with a leading '/'. (e.g. '%s/status;')\n", prompt)
+	cli.Printf("Dolt CLI commands can be invoked with a leading '\\'. (e.g. '%s\\status;')\n", prompt)
 	cli.Println("All statements are terminated with a ';'.")
 	cli.Println("\nAvailable commands:")
 	for _, cmdInst := range slashCmds {
 		cli.Println(fmt.Sprintf("  %10s - %s", cmdInst.Name(), cmdInst.Description()))
 	}
-	cli.Printf("\nFor more information on a specific command, type '/help <command>;' (e.g. '%s/help status;')\n", prompt)
+	cli.Printf("\nFor more information on a specific command, type '\\help <command>;' (e.g. '%s\\help status;')\n", prompt)
 
 	moreWords := `
 -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
