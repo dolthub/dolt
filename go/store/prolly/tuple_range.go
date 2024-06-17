@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"github.com/shopspring/decimal"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -309,10 +310,22 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 			return nil, false
 		}
 		tb.PutFloat64(n, v+1)
+	case val.DecimalEnc:
+		v, ok := r.Desc.GetDecimal(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutDecimal(n, v.Add(decimal.New(1, 0)))
 	default:
 		return nil, false
 	}
-	return tb.Build(pool), true
+	stop := tb.Build(pool)
+	if r.Desc.Compare(r.Tup, stop) >= 0 {
+		// |stop| has to be strictly greater than |start|
+		// for this optimization to be valid
+		return nil, false
+	}
+	return stop, true
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
