@@ -17,6 +17,7 @@ package admin
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -109,13 +110,58 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		cli.Printf("Found %d possible relations by walking history\n", groupings.Count())
 	}
 
-	err = nbs.BuildArchive(ctx, cs, &groupings)
+	progress := make(chan interface{})
+	handleProgress(progress)
+
+	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
 	}
 
 	return 0
+}
+
+func handleProgress(progress chan interface{}) {
+	go func() {
+		totalGroupCount := 0
+		finishedGroupCount := 0
+		lastUpdateTime := time.Now()
+		for {
+			select {
+			case msg, ok := <-progress:
+				if !ok {
+					cli.Println("Channel closed. Exiting.")
+					return
+				}
+				switch v := msg.(type) {
+				case string:
+					cli.Printf("Archive Progress: %s\n", v)
+				case nbs.ArchiveConvertToChunkGroupsMsg:
+					if v.GroupCount > 0 {
+						totalGroupCount += v.GroupCount
+					}
+					if v.FinishedOne {
+						finishedGroupCount++
+					}
+
+					if now := time.Now(); now.Sub(lastUpdateTime) > 3*time.Second {
+						percentDone := 0.0
+						if totalGroupCount > 0 {
+							percentDone = float64(finishedGroupCount) / float64(totalGroupCount)
+						}
+
+						cli.Printf("Groups: %d/%d (%f)\n", finishedGroupCount, totalGroupCount, percentDone)
+						lastUpdateTime = now
+					}
+				default:
+					cli.Printf("Unexpected Message: %v\n", v)
+				}
+			case <-time.After(3 * time.Second):
+				cli.Println("tick")
+			}
+		}
+	}()
 }
 
 func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {

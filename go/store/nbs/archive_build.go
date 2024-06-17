@@ -34,7 +34,7 @@ const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chu
 const maxSamples = 1000
 const minSamples = 25
 
-func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations) (err error) {
+func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, progress chan interface{}) (err error) {
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		outPath, _ := gs.oldGen.Path()
 		oldgen := gs.oldGen.tables.upstream
@@ -51,7 +51,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 
 			archivePath := ""
 			archiveName := hash.Hash{}
-			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath)
+			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress)
 			if err != nil {
 				return err
 			}
@@ -84,7 +84,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	return nil
 }
 
-func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string) (string, hash.Hash, error) {
+func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string, progress chan interface{}) (string, hash.Hash, error) {
 	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx)
 	if err != nil {
 		return "", hash.Hash{}, err
@@ -103,7 +103,7 @@ func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableInd
 		return "", hash.Hash{}, err
 	}
 
-	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict)
+	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict, progress)
 	sort.Slice(cgList, func(i, j int) bool {
 		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
 	})
@@ -554,11 +554,19 @@ func (cr *ChunkRelations) Count() int {
 	return len(cr.manyToGroup)
 }
 
-func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *SimpleChunkSourceCache, defaultDict *gozstd.CDict) ([]*chunkGroup, error) {
+type ArchiveConvertToChunkGroupsMsg struct {
+	GroupCount  int
+	FinishedOne bool
+	Done        bool
+}
+
+func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *SimpleChunkSourceCache, defaultDict *gozstd.CDict, progress chan interface{}) ([]*chunkGroup, error) {
 	result := make([]*chunkGroup, 0, cr.Count())
 
 	// Create a channel for sending groups to process
 	groups := cr.groups()
+	progress <- ArchiveConvertToChunkGroupsMsg{GroupCount: len(groups)}
+
 	groupChannel := make(chan hash.HashSet, len(groups))
 	resultChannel := make(chan *chunkGroup, len(groups))
 
@@ -568,17 +576,18 @@ func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *Simple
 	wg.Add(numThreads)
 	for i := 0; i < numThreads; i++ {
 		go func() {
+			progress <- "Starting group converter goroutine."
 			buff := make([]byte, 0, maxChunkSize)
 			defer wg.Done()
 			for hs := range groupChannel {
+				progress <- fmt.Sprintf("Worker (%d) taking group of size %d", i, len(hs))
 				if len(hs) > 1 {
 					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict)
 					if err != nil {
-						// Handle error: report error and return
-						// fmt.Println("Error creating chunk group:", err)
-						// In real scenarios, you might want to handle or log errors more appropriately.
+						progress <- err
 						continue
 					}
+					progress <- ArchiveConvertToChunkGroupsMsg{FinishedOne: true}
 					resultChannel <- chkGrp
 				}
 			}
@@ -597,6 +606,8 @@ func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *Simple
 	for group := range resultChannel {
 		result = append(result, group)
 	}
+
+	progress <- ArchiveConvertToChunkGroupsMsg{Done: true}
 
 	return result, nil
 }
