@@ -377,7 +377,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	// test point lookup
 	for _, kv := range tuples {
 		rng := pointRangeFromTuple(kv[0], desc)
-		require.True(t, rng.IsStrictKeyLookup(desc))
+		require.True(t, rng.IsPointLookup(desc))
 
 		iter, err := om.IterRange(ctx, rng)
 		require.NoError(t, err)
