@@ -1491,7 +1491,11 @@ func TestAlterTable(t *testing.T) {
 }
 
 func TestVariables(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
+	RunVariableTest(t, h)
+}
+
+func RunVariableTest(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	enginetest.TestVariables(t, h)
 	for _, script := range DoltSystemVariables {
@@ -1539,6 +1543,7 @@ func TestJsonScripts(t *testing.T) {
 	skippedTests := []string{
 		"round-trip into table", // The current Dolt JSON format does not preserve decimals and unsigneds in JSON.
 	}
+	// TODO: fix this, use a skipping harness
 	enginetest.TestJsonScripts(t, h, skippedTests)
 }
 
@@ -1555,24 +1560,33 @@ func TestRollbackTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunStoredProceduresTest(t, h)
+}
+
+func RunStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	tests := make([]queries.ScriptTest, 0, len(queries.ProcedureLogicTests))
 	for _, test := range queries.ProcedureLogicTests {
-		//TODO: this passes locally but SOMETIMES fails tests on GitHub, no clue why
+		// TODO: this passes locally but SOMETIMES fails tests on GitHub, no clue why
 		if test.Name != "ITERATE and LEAVE loops" {
 			tests = append(tests, test)
 		}
 	}
 	queries.ProcedureLogicTests = tests
 
-	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestStoredProcedures(t, h)
 }
 
 func TestDoltStoredProcedures(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltStoredProceduresTest(t, h)
+}
+
+func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltProcedureTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1580,9 +1594,14 @@ func TestDoltStoredProcedures(t *testing.T) {
 }
 
 func TestDoltStoredProceduresPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltStoredProceduresPreparedTest(t, h)
+}
+
+func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltProcedureTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
