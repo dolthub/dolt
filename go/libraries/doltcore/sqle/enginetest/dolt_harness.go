@@ -88,11 +88,18 @@ type DoltEnginetestHarness interface {
 	// WithSkippedQueries returns a copy of the harness with the given queries skipped
 	WithSkippedQueries(skipped []string) DoltEnginetestHarness
 	
+	// WithParallelism returns a copy of the harness with parallelism set to the given number of threads
+	WithParallelism(parallelism int) DoltEnginetestHarness
+	
 	// WithConfigureStats returns a copy of the harness with the given configureStats value
 	WithConfigureStats(configureStats bool) DoltEnginetestHarness
-	
+
+	// SkipSetupCommit configures to harness to skip the commit after setup scripts are run
+	SkipSetupCommit()
+
 	// Close closes the harness, freeing up any resources it may have allocated
-	Close() 
+	Close()
+
 }
 
 var _ DoltEnginetestHarness = &DoltHarness{}
@@ -311,7 +318,7 @@ func filterStatsOnlyQueries(scripts []setup.SetupScript) []setup.SetupScript {
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
-func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+func (d *DoltHarness) WithParallelism(parallelism int) DoltEnginetestHarness {
 	nd := *d
 	nd.parallelism = parallelism
 	return &nd

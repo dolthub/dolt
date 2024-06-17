@@ -612,8 +612,7 @@ func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.configureStats = true
+	harness := newDoltEnginetestHarness(t).WithConfigureStats(true)
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
@@ -623,7 +622,11 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 		t.Skip("only new format support system table indexing")
 	}
 
-	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
+	harness := newDoltEnginetestHarness(t).WithParallelism(2) // want Exchange nodes
+	RunDoltDiffQueryPlansTest(t, harness)
+}
+
+func RunDoltDiffQueryPlansTest(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
@@ -2209,10 +2212,9 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 
 func TestHistorySystemTable(t *testing.T) {
 	harness := newDoltHarness(t).WithParallelism(2)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
-		harness.engine = nil
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -2220,11 +2222,9 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(2)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
-		harness.engine = nil
+		harness := newDoltHarness(t).WithParallelism(2)
+		harness.Setup(setup.MydbData)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
