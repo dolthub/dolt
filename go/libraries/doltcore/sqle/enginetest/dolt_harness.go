@@ -61,15 +61,28 @@ type DoltHarness struct {
 	setupTestProcedures bool
 }
 
-var _ enginetest.Harness = (*DoltHarness)(nil)
-var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
-var _ enginetest.ClientHarness = (*DoltHarness)(nil)
-var _ enginetest.IndexHarness = (*DoltHarness)(nil)
-var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
-var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
-var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
-var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
-var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
+func (d *DoltHarness) NewHarness(t *testing.T) DoltEnginetestHarness {
+	return newDoltHarness(t)
+}
+
+type DoltEnginetestHarness interface {
+	enginetest.Harness
+	enginetest.SkippingHarness
+	enginetest.ClientHarness
+	enginetest.IndexHarness
+	enginetest.VersionedDBHarness
+	enginetest.ForeignKeyHarness
+	enginetest.KeylessTableHarness
+	enginetest.ReadOnlyDatabaseHarness
+	enginetest.ValidatingHarness
+	
+	// NewHarness returns a new harness of the same type
+	NewHarness(t *testing.T) DoltEnginetestHarness
+}
+
+var _ DoltEnginetestHarness = &DoltHarness{}
+
+// Next: define an interface that can be shared with doltgres
 
 // newDoltHarness creates a new harness for testing Dolt, using an in-memory filesystem and an in-memory blob store.
 func newDoltHarness(t *testing.T) *DoltHarness {
@@ -80,6 +93,10 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	}
 
 	return dh
+}
+
+func newDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
+	return newDoltHarness(t)
 }
 
 // newDoltHarnessForLocalFilesystem creates a new harness for testing Dolt, using

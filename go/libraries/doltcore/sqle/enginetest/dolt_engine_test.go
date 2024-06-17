@@ -120,21 +120,24 @@ func TestSingleQuery(t *testing.T) {
 }
 
 func TestSchemaOverrides(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunSchemaOverridesTest(t, harness)
+}
+
+func RunSchemaOverridesTest(t *testing.T, harness DoltEnginetestHarness) {
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
 	for _, script := range SchemaOverrideTests {
 		sql.RunWithNowFunc(tcc.Now, func() error {
-			harness := newDoltHarness(t)
+			harness = harness.NewHarness(t)
 			harness.Setup(setup.MydbData)
 
 			engine, err := harness.NewEngine(t)
 			if err != nil {
 				panic(err)
 			}
-			// engine.EngineAnalyzer().Debug = true
-			// engine.EngineAnalyzer().Verbose = true
 
 			enginetest.TestScriptWithEngine(t, engine, harness, script)
 			return nil
