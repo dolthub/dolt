@@ -104,8 +104,6 @@ type DoltEnginetestHarness interface {
 
 var _ DoltEnginetestHarness = &DoltHarness{}
 
-// Next: define an interface that can be shared with doltgres
-
 // newDoltHarness creates a new harness for testing Dolt, using an in-memory filesystem and an in-memory blob store.
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dh := &DoltHarness{

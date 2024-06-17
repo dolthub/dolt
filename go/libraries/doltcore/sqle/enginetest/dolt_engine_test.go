@@ -1188,8 +1188,13 @@ func RunBigBlobsTest(t *testing.T, h *DoltHarness) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDropEngineTest(t, h)
+}
+
+func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 	func() {
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		defer h.Close()
 		enginetest.TestScript(t, h, queries.ScriptTest{
 			Name: "Drop database engine tests for Dolt only",
@@ -1223,7 +1228,7 @@ func TestDropDatabase(t *testing.T) {
 	}()
 
 	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
-	h := newDoltHarness(t)
+	h = h.NewHarness(t)
 	defer h.Close()
 	enginetest.TestDropDatabase(t, h)
 }
@@ -1247,6 +1252,11 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeyBranches(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunForeignKeyBranchesTest(t, h)
+}
+
+func RunForeignKeyBranchesTest(t *testing.T, h DoltEnginetestHarness) {
 	setupPrefix := []string{
 		"call dolt_branch('b1')",
 		"use mydb/b1",
@@ -1259,7 +1269,7 @@ func TestForeignKeyBranches(t *testing.T) {
 	}
 	for _, script := range queries.ForeignKeyTests {
 		// New harness for every script because we create branches
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
 		modifiedScript := script
 		modifiedScript.SetUpScript = append(setupPrefix, modifiedScript.SetUpScript...)
@@ -1269,7 +1279,7 @@ func TestForeignKeyBranches(t *testing.T) {
 
 	for _, script := range ForeignKeyBranchTests {
 		// New harness for every script because we create branches
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		h.Setup(setup.MydbData, setup.Parent_childData)
 		enginetest.TestScript(t, h, script)
 	}
