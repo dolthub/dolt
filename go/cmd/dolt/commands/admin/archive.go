@@ -110,7 +110,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		cli.Printf("Found %d possible relations by walking history\n", groupings.Count())
 	}
 
-	progress := make(chan interface{})
+	progress := make(chan interface{}, 32)
 	handleProgress(progress)
 
 	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
