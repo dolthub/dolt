@@ -180,9 +180,14 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 }
 
 func TestAutoIncrementTrackerLockMode(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunAutoIncrementTrackerLockModeTest(t, harness)
+}
+
+func RunAutoIncrementTrackerLockModeTest(t *testing.T, harness DoltEnginetestHarness) {
 	for _, lockMode := range []int64{0, 1, 2} {
 		t.Run(fmt.Sprintf("lock mode %d", lockMode), func(t *testing.T) {
-			testAutoIncrementTrackerWithLockMode(t, lockMode)
+			testAutoIncrementTrackerWithLockMode(t, harness, lockMode)
 		})
 	}
 }
@@ -190,8 +195,7 @@ func TestAutoIncrementTrackerLockMode(t *testing.T) {
 // testAutoIncrementTrackerWithLockMode tests that interleaved inserts don't cause deadlocks, regardless of the value of innodb_autoinc_lock_mode.
 // In a real use case, these interleaved operations would be happening in different sessions on different threads.
 // In order to make the test behave predictably, we manually interleave the two iterators.
-func testAutoIncrementTrackerWithLockMode(t *testing.T, lockMode int64) {
-
+func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHarness, lockMode int64) {
 	err := sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
 	require.NoError(t, err)
 
@@ -205,7 +209,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, lockMode int64) {
 		"CREATE VIEW sequence5bit AS SELECT b1.v + 2*b2.v + 4*b3.v + 8*b4.v + 16*b5.v AS v from bin b1, bin b2, bin b3, bin b4, bin b5;",
 	}}
 
-	harness := newDoltHarness(t)
+	harness = harness.NewHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData, setupScripts)
 	e := mustNewEngine(t, harness)
@@ -533,8 +537,13 @@ func TestSingleScriptPrepared(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
+
+	RunVersionedQueriesTest(t, h)
+}
+
+func RunVersionedQueriesTest(t *testing.T, h DoltEnginetestHarness) {
 	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
 
 	e, err := h.NewEngine(t)

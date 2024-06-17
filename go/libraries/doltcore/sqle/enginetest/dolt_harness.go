@@ -76,8 +76,11 @@ type DoltEnginetestHarness interface {
 	enginetest.ReadOnlyDatabaseHarness
 	enginetest.ValidatingHarness
 	
-	// NewHarness returns a new harness of the same type
+	// NewHarness returns a new uninitialized harness of the same type
 	NewHarness(t *testing.T) DoltEnginetestHarness
+	
+	// Close closes the harness, freeing up any resources it may have allocated
+	Close() 
 }
 
 var _ DoltEnginetestHarness = &DoltHarness{}
