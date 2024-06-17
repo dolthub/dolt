@@ -1615,9 +1615,14 @@ func TestEvents(t *testing.T) {
 }
 
 func TestCallAsOf(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunCallAsOfTest(t, h)
+}
+
+func RunCallAsOfTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltCallAsOf {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1625,8 +1630,12 @@ func TestCallAsOf(t *testing.T) {
 }
 
 func TestLargeJsonObjects(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunLargeJsonObjectsTest(t, harness)
+}
+
+func RunLargeJsonObjectsTest(t *testing.T, harness DoltEnginetestHarness) {
 	SkipByDefaultInCI(t)
-	harness := newDoltHarness(t)
 	defer harness.Close()
 	for _, script := range LargeJsonObjectScriptTests {
 		enginetest.TestScript(t, harness, script)
@@ -1640,37 +1649,42 @@ func SkipByDefaultInCI(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunTransactionTests(t, h)
+}
+
+func RunTransactionTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range queries.TransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
 	for _, script := range DoltTransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
 	for _, script := range DoltStoredProcedureTransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
 	for _, script := range DoltConflictHandlingTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
@@ -1678,9 +1692,14 @@ func TestTransactions(t *testing.T) {
 }
 
 func TestBranchTransactions(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunBranchTransactionTest(t, h)
+}
+
+func RunBranchTransactionTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range BranchIsolationTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
@@ -1688,9 +1707,14 @@ func TestBranchTransactions(t *testing.T) {
 }
 
 func TestMultiDbTransactions(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunMultiDbTransactionsTest(t, h)
+}
+
+func RunMultiDbTransactionsTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MultiDbTransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1698,7 +1722,7 @@ func TestMultiDbTransactions(t *testing.T) {
 
 	for _, script := range MultiDbSavepointTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestTransactionScript(t, h, script)
 		}()
@@ -1706,9 +1730,14 @@ func TestMultiDbTransactions(t *testing.T) {
 }
 
 func TestMultiDbTransactionsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunMultiDbTransactionsPreparedTest(t, h)
+}
+
+func RunMultiDbTransactionsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MultiDbTransactionTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1722,9 +1751,14 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltScriptsTest(t, harness)
+}
+
+func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltScripts {
 		go func() {
-			harness := newDoltHarness(t)
+			harness := harness.NewHarness(t)
 			defer harness.Close()
 			enginetest.TestScript(t, harness, script)
 		}()
@@ -1732,8 +1766,13 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDoltTempTableScripts(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltTempTableScripts(t, harness)
+}
+
+func RunDoltTempTableScripts(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltTempTableScripts {
-		harness := newDoltHarness(t)
+		harness := harness.NewHarness(t)
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
 	}
