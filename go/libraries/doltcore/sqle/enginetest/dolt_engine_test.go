@@ -2717,26 +2717,34 @@ func RunDoltPatchTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetest
 }
 
 func TestLogTableFunction(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunLogTableFunctionTests(t, harness)
+}
+
+func RunLogTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range LogTableFunctionScriptTests {
-		harness.engine = nil
-		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
+			harness.SkipSetupCommit()
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestLogTableFunctionPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunLogTableFunctionTestsPrepared(t, harness)
+}
+
+func RunLogTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range LogTableFunctionScriptTests {
-		harness.engine = nil
-		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
+			harness.SkipSetupCommit()
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
@@ -2761,49 +2769,62 @@ func TestDoltReflogPrepared(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunCommitDiffSystemTableTests(t, harness)
+}
+
+func RunCommitDiffSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range CommitDiffSystemTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestCommitDiffSystemTablePrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunCommitDiffSystemTableTestsPrepared(t, harness)
+}
+
+func RunCommitDiffSystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range CommitDiffSystemTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltDiffSystemTableTests(t, h)
+}
+
+func RunDoltDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
 	}
 
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, test)
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, test)
 		})
 	}
 
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			func() {
-				h := newDoltHarness(t)
+				h = h.NewHarness(t)
 				defer h.Close()
+				h.Setup(setup.MydbData)
 				enginetest.TestScript(t, h, test)
 			}()
 		}
@@ -2811,25 +2832,30 @@ func TestDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltDiffSystemTableTestsPrepared(t, h)
+}
+
+func RunDoltDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
 	}
 
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptPrepared(t, harness, test)
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, test)
 		})
 	}
 
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, test := range Dolt1DiffSystemTableScripts {
 			func() {
-				h := newDoltHarness(t)
+				h = h.NewHarness(t)
 				defer h.Close()
+				h.Setup(setup.MydbData)
 				enginetest.TestScriptPrepared(t, h, test)
 			}()
 		}
@@ -2837,36 +2863,48 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestSchemaDiffTableFunction(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunSchemaDiffTableFunctionTests(t, harness)
+}
+
+func RunSchemaDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range SchemaDiffTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunSchemaDiffTableFunctionTestsPrepared(t, harness)
+}
+
+func RunSchemaDiffTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range SchemaDiffTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
 }
 
 func TestDoltDatabaseCollationDiffs(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDatabaseCollationDiffsTests(t, harness)
+}
+
+func RunDoltDatabaseCollationDiffsTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DoltDatabaseCollationScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
