@@ -3627,9 +3627,14 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 }
 
 func TestDoltVerifyConstraints(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltVerifyConstraintsTests(t, harness)
+}
+
+func RunDoltVerifyConstraintsTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltVerifyConstraintsTestScripts {
 		func() {
-			harness := newDoltHarness(t)
+			harness = harness.NewHarness(t)
 			defer harness.Close()
 			enginetest.TestScript(t, harness, script)
 		}()
@@ -3637,6 +3642,11 @@ func TestDoltVerifyConstraints(t *testing.T) {
 }
 
 func TestDoltStorageFormat(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltStorageFormatTests(t, h)
+}
+
+func RunDoltStorageFormatTests(t *testing.T, h DoltEnginetestHarness) {
 	var expectedFormatString string
 	if types.IsFormat_DOLT(types.Format_Default) {
 		expectedFormatString = "NEW ( __DOLT__ )"
@@ -3652,7 +3662,6 @@ func TestDoltStorageFormat(t *testing.T) {
 			},
 		},
 	}
-	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestScript(t, h, script)
 }
@@ -3670,6 +3679,12 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 }
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+
+	RunThreeWayMergeWithSchemaChangeScripts(t, h)
+}
+
+func RunThreeWayMergeWithSchemaChangeScripts(t *testing.T, h DoltEnginetestHarness) {
 	skipOldFormat(t)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
@@ -3684,7 +3699,7 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 		for _, script := range SchemaChangeTestsTypeChanges {
 			// run in a func() so we can cleanly defer closing the harness
 			func() {
-				h := newDoltHarness(t)
+				h := h.NewHarness(t)
 				defer h.Close()
 				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
 			}()
@@ -3693,28 +3708,33 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+
+	RunThreeWayMergeWithSchemaChangeScriptsPrepared(t, h)
+}
+
+func RunThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T, h DoltEnginetestHarness) {
 	skipOldFormat(t)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForJsonConflicts, "json merge", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForJsonConflicts, "json merge", false)
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {
 		for _, script := range SchemaChangeTestsTypeChanges {
 			// run in a func() so we can cleanly defer closing the harness
 			func() {
-				h := newDoltHarness(t)
+				h := h.NewHarness(t)
 				defer h.Close()
 				enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, false))
 			}()
 		}
 	})
 }
-
 // If CREATE DATABASE has an error within the DatabaseProvider, it should not
 // leave behind intermediate filesystem state.
 func TestCreateDatabaseErrorCleansUp(t *testing.T) {
