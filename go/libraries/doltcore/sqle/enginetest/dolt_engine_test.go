@@ -2625,10 +2625,14 @@ func RunDiffTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarne
 }
 
 func TestDiffStatTableFunction(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDiffStatTableFunctionTests(t, harness)
+}
+
+func RunDiffStatTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffStatTableFunctionScriptTests {
-		harness.engine = nil
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -2636,10 +2640,14 @@ func TestDiffStatTableFunction(t *testing.T) {
 }
 
 func TestDiffStatTableFunctionPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDiffStatTableFunctionTestsPrepared(t, harness)
+}
+
+func RunDiffStatTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffStatTableFunctionScriptTests {
-		harness.engine = nil
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
@@ -2647,46 +2655,62 @@ func TestDiffStatTableFunctionPrepared(t *testing.T) {
 }
 
 func TestDiffSummaryTableFunction(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDiffSummaryTableFunctionTests(t, harness)
+}
+
+func RunDiffSummaryTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffSummaryTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDiffSummaryTableFunctionTestsPrepared(t, harness)
+}
+
+func RunDiffSummaryTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffSummaryTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
 }
 
 func TestPatchTableFunction(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltPatchTableFunctionTests(t, harness)
+}
+
+func RunDoltPatchTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range PatchTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestPatchTableFunctionPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltPatchTableFunctionTestsPrepared(t, harness)
+}
+
+func RunDoltPatchTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range PatchTableFunctionScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
