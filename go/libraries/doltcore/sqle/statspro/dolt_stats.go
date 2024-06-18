@@ -56,25 +56,25 @@ func (s *DoltStats) WithFuncDeps(set *sql.FuncDepSet) sql.Statistic {
 	return &ret
 }
 
-func (s *DoltStats) WithDistinctCount(u uint64) sql.Statistic {
+func (s *DoltStats) WithDistinctCount(u float64) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithDistinctCount(u).(*stats.Statistic)
 	return &ret
 }
 
-func (s *DoltStats) WithRowCount(u uint64) sql.Statistic {
+func (s *DoltStats) WithRowCount(u float64) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithRowCount(u).(*stats.Statistic)
 	return &ret
 }
 
-func (s *DoltStats) WithNullCount(u uint64) sql.Statistic {
+func (s *DoltStats) WithNullCount(u float64) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithNullCount(u).(*stats.Statistic)
 	return &ret
 }
 
-func (s *DoltStats) WithAvgSize(u uint64) sql.Statistic {
+func (s *DoltStats) WithAvgSize(u float64) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithAvgSize(u).(*stats.Statistic)
 	return &ret
@@ -86,20 +86,20 @@ func (s *DoltStats) WithLowerBound(row sql.Row) sql.Statistic {
 	return &ret
 }
 
-func (s *DoltStats) RowCount() uint64 {
+func (s *DoltStats) RowCount() float64 {
 	return s.Statistic.RowCount()
 }
 
-func (s *DoltStats) DistinctCount() uint64 {
+func (s *DoltStats) DistinctCount() float64 {
 	return s.Statistic.DistinctCount()
 }
 
-func (s *DoltStats) NullCount() uint64 {
+func (s *DoltStats) NullCount() float64 {
 	return s.Statistic.NullCount()
 
 }
 
-func (s *DoltStats) AvgSize() uint64 {
+func (s *DoltStats) AvgSize() float64 {
 	return s.Statistic.AvgSize()
 
 }

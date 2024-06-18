@@ -33,7 +33,7 @@ import (
 func TestMcvHeap(t *testing.T) {
 	h := new(mcvHeap)
 	for i := 0; i < 10; i++ {
-		heap.Push(h, mcv{val.Tuple{byte(i)}, i})
+		heap.Push(h, mcv{val.Tuple{byte(i)}, float64(i)})
 		if i > 2 {
 			heap.Pop(h)
 		}
@@ -51,7 +51,7 @@ func TestMcvHeap(t *testing.T) {
 	var res []int
 	for i := 0; h.Len() > 0; i++ {
 		next := heap.Pop(h)
-		res = append(res, next.(mcv).cnt)
+		res = append(res, int(next.(mcv).cnt))
 	}
 	require.Equal(t, cmp, res)
 }
@@ -71,7 +71,7 @@ func TestBucketBuilder(t *testing.T) {
 				RowCnt:      15,
 				DistinctCnt: 5,
 				McvVals:     []sql.Row{{int64(4)}, {int64(2)}, {int64(3)}},
-				McvsCnt:     []uint64{3, 4, 3},
+				McvsCnt:     []float64{3, 4, 3},
 				BoundVal:    sql.Row{int64(5)},
 				BoundCnt:    2,
 			}},
@@ -86,7 +86,7 @@ func TestBucketBuilder(t *testing.T) {
 				DistinctCnt: 6,
 				NullCnt:     3,
 				McvVals:     []sql.Row{{int64(4)}, {int64(2)}, {nil}},
-				McvsCnt:     []uint64{3, 4, 3},
+				McvsCnt:     []float64{3, 4, 3},
 				BoundVal:    sql.Row{int64(5)},
 				BoundCnt:    2,
 			}},
@@ -100,7 +100,7 @@ func TestBucketBuilder(t *testing.T) {
 				DistinctCnt: 6,
 				NullCnt:     2,
 				McvVals:     []sql.Row{{int64(3)}, {int64(4)}, {int64(2)}},
-				McvsCnt:     []uint64{3, 3, 4},
+				McvsCnt:     []float64{3, 3, 4},
 				BoundVal:    sql.Row{int64(5)},
 				BoundCnt:    2,
 			}},
@@ -114,7 +114,7 @@ func TestBucketBuilder(t *testing.T) {
 				DistinctCnt: 7,
 				BoundCnt:    1,
 				McvVals:     []sql.Row{{int64(2)}, {int64(6)}, {int64(5)}},
-				McvsCnt:     []uint64{4, 4, 4},
+				McvsCnt:     []float64{4, 4, 4},
 				BoundVal:    sql.Row{int64(7)},
 			}},
 		},
@@ -126,7 +126,7 @@ func TestBucketBuilder(t *testing.T) {
 				RowCnt:      15,
 				DistinctCnt: 11,
 				McvVals:     []sql.Row{{int64(1), int64(1)}, {int64(4), int64(1)}, {int64(2), int64(3)}},
-				McvsCnt:     []uint64{2, 3, 2},
+				McvsCnt:     []float64{2, 3, 2},
 				BoundVal:    sql.Row{int64(5), int64(2)},
 				BoundCnt:    1,
 			}},
@@ -140,7 +140,7 @@ func TestBucketBuilder(t *testing.T) {
 				DistinctCnt: 5,
 				NullCnt:     3,
 				McvVals:     []sql.Row{{int64(2), int64(2)}, {int64(1), nil}, {int64(1), int64(2)}},
-				McvsCnt:     []uint64{1, 1, 1},
+				McvsCnt:     []float64{1, 1, 1},
 				BoundVal:    sql.Row{int64(2), int64(2)},
 				BoundCnt:    1},
 			},
@@ -153,7 +153,7 @@ func TestBucketBuilder(t *testing.T) {
 				RowCnt:      15,
 				DistinctCnt: 9,
 				McvVals:     []sql.Row{{"i"}, {"h"}, {"g"}},
-				McvsCnt:     []uint64{2, 3, 3},
+				McvsCnt:     []float64{2, 3, 3},
 				BoundVal:    sql.Row{"i"},
 				BoundCnt:    2,
 			}},
@@ -166,7 +166,7 @@ func TestBucketBuilder(t *testing.T) {
 				RowCnt:      15,
 				DistinctCnt: 12,
 				McvVals:     []sql.Row{{"i", int64(1)}, {"g", int64(2)}, {"h", int64(1)}},
-				McvsCnt:     []uint64{2, 2, 2},
+				McvsCnt:     []float64{2, 2, 2},
 				BoundVal:    sql.Row{"i", int64(1)},
 				BoundCnt:    2,
 			}},

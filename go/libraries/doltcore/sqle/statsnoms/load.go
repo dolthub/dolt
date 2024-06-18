@@ -76,13 +76,16 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
 
 		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
-		mcvCnts := make([]uint64, numMcvs)
+		mcvCnts := make([]float64, numMcvs)
 		for i, v := range mcvCountsStr {
+			if v == "" {
+				continue
+			}
 			val, err := strconv.Atoi(v)
 			if err != nil {
 				return nil, err
 			}
-			mcvCnts[i] = uint64(val)
+			mcvCnts[i] = float64(val)
 		}
 
 		mcvs := make([]sql.Row, numMcvs)
@@ -144,20 +147,20 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			Chunk:   commit,
 			Created: createdAt,
 			Bucket: &stats.Bucket{
-				RowCnt:      uint64(rowCount),
-				DistinctCnt: uint64(distinctCount),
-				NullCnt:     uint64(nullCount),
+				RowCnt:      float64(rowCount),
+				DistinctCnt: float64(distinctCount),
+				NullCnt:     float64(nullCount),
 				McvVals:     mcvs,
 				McvsCnt:     mcvCnts,
-				BoundCnt:    upperBoundCnt,
+				BoundCnt:    float64(upperBoundCnt),
 				BoundVal:    boundRow,
 			},
 		}
 
 		currentStat.Hist = append(currentStat.Hist, bucket)
-		currentStat.Statistic.RowCnt += uint64(rowCount)
-		currentStat.Statistic.DistinctCnt += uint64(distinctCount)
-		currentStat.Statistic.NullCnt += uint64(rowCount)
+		currentStat.Statistic.RowCnt += float64(rowCount)
+		currentStat.Statistic.DistinctCnt += float64(distinctCount)
+		currentStat.Statistic.NullCnt += float64(rowCount)
 		if currentStat.Statistic.Created.Before(createdAt) {
 			currentStat.Statistic.Created = createdAt
 		}

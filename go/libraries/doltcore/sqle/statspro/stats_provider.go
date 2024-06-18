@@ -301,7 +301,7 @@ func (p *Provider) RowCount(ctx *sql.Context, db string, table sql.Table) (uint6
 		return 0, nil
 	}
 
-	return priStats.RowCount(), nil
+	return uint64(priStats.RowCount()), nil
 }
 
 func (p *Provider) DataLength(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
@@ -325,5 +325,5 @@ func (p *Provider) DataLength(ctx *sql.Context, db string, table sql.Table) (uin
 		return 0, nil
 	}
 
-	return priStats.AvgSize(), nil
+	return uint64(priStats.AvgSize()), nil
 }

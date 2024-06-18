@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -143,8 +144,8 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 			ret[updater.qual].Hist = append(ret[updater.qual].Hist, bucket)
 		}
 
-		ret[updater.qual].Statistic.DistinctCnt = uint64(updater.globalDistinct)
-		ret[updater.qual].Statistic.RowCnt = uint64(updater.globalCount)
+		ret[updater.qual].Statistic.DistinctCnt = float64(updater.globalDistinct)
+		ret[updater.qual].Statistic.RowCnt = float64(updater.globalCount)
 		ret[updater.qual].Statistic.LowerBnd = firstRow
 		ret[updater.qual].Statistic.Fds = fds
 		ret[updater.qual].Statistic.Colset = colSet
@@ -232,13 +233,13 @@ type bucketBuilder struct {
 	tupleDesc val.TupleDesc
 	prefixLen int
 
-	count    int
-	distinct int
-	nulls    int
+	count    float64
+	distinct float64
+	nulls    float64
 	mcvs     *mcvHeap
 
 	currentKey val.Tuple
-	currentCnt int
+	currentCnt float64
 
 	globalDistinct int
 	globalCount    int
@@ -266,6 +267,9 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	// update MCV in case we've ended on a run of many identical keys
 	u.updateMcv()
 	// convert the MCV tuples into SQL rows (most efficient to only do this once)
+	u.mcvs.Sort()
+	u.mcvs.Truncate(2 * u.count / u.distinct) // only keep MCVs that are > twice as common as average
+
 	mcvRows, err := u.mcvs.Values(ctx, u.tupleDesc, ns, u.prefixLen)
 	if err != nil {
 		return DoltBucket{}, err
@@ -281,13 +285,13 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	}
 	return DoltBucket{
 		Bucket: &stats.Bucket{
-			RowCnt:      uint64(u.count),
-			DistinctCnt: uint64(u.distinct),
-			BoundCnt:    uint64(u.currentCnt),
+			RowCnt:      u.count,
+			DistinctCnt: u.distinct,
+			BoundCnt:    u.currentCnt,
 			McvVals:     mcvRows,
 			McvsCnt:     u.mcvs.Counts(),
 			BoundVal:    upperBound,
-			NullCnt:     uint64(u.nulls),
+			NullCnt:     u.nulls,
 		},
 	}, nil
 }
@@ -343,7 +347,7 @@ func (u *bucketBuilder) updateMcv() {
 
 type mcv struct {
 	val val.Tuple
-	cnt int
+	cnt float64
 }
 
 type mcvHeap []mcv
@@ -357,12 +361,27 @@ func (m *mcvHeap) Add(i mcv) {
 	}
 }
 
-func (m mcvHeap) Counts() []uint64 {
-	ret := make([]uint64, len(m))
+func (m mcvHeap) Counts() []float64 {
+	ret := make([]float64, len(m))
 	for i, mcv := range m {
-		ret[i] = uint64(mcv.cnt)
+		ret[i] = float64(mcv.cnt)
 	}
 	return ret
+}
+
+func (m mcvHeap) Sort() {
+	sort.Slice(m, m.Less)
+}
+
+func (m *mcvHeap) Truncate(cutoff float64) {
+	start := m.Len()
+	for i, v := range *m {
+		if v.cnt >= cutoff {
+			start = i
+		}
+	}
+	old := *m
+	*m = old[start:]
 }
 
 func (m mcvHeap) Values(ctx context.Context, keyDesc val.TupleDesc, ns tree.NodeStore, prefixLen int) ([]sql.Row, error) {
