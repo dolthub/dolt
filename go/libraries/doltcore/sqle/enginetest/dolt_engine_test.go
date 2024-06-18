@@ -2448,7 +2448,11 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(2)
+	harness := newDoltEnginetestHarness(t).WithParallelism(2)
+	RunHistorySystemTableTests(t, harness)
+}
+
+func RunHistorySystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range HistorySystemTableScriptTests {
 		harness = harness.NewHarness(t)
 		harness.Setup(setup.MydbData)
@@ -2459,8 +2463,13 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t).WithParallelism(2)
+	RunHistorySystemTableTestsPrepared(t, harness)
+}
+
+func RunHistorySystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range HistorySystemTableScriptTests {
-		harness := newDoltHarness(t).WithParallelism(2)
+		harness = harness.NewHarness(t)
 		harness.Setup(setup.MydbData)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -2482,9 +2491,14 @@ func TestBrokenHistorySystemTablePrepared(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunUnscopedDiffSystemTableTests(t, h)
+}
+
+func RunUnscopedDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, test)
 		})
@@ -2492,9 +2506,14 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunUnscopedDiffSystemTableTestsPrepared(t, h)
+}
+
+func RunUnscopedDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, test)
 		})
@@ -2502,23 +2521,33 @@ func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
 }
 
 func TestColumnDiffSystemTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunColumnDiffSystemTableTests(t, h)
+}
+
+func RunColumnDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
 	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, newDoltHarness(t), test)
+			enginetest.TestScript(t, h.NewHarness(t), test)
 		})
 	}
 }
 
 func TestColumnDiffSystemTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunColumnDiffSystemTableTestsPrepared(t, h)
+}
+
+func RunColumnDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("correct behavior of dolt_column_diff only guaranteed on new format")
 	}
 	for _, test := range ColumnDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptPrepared(t, newDoltHarness(t), test)
+			enginetest.TestScriptPrepared(t, h.NewHarness(t), test)
 		})
 	}
 }
