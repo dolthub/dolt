@@ -2014,6 +2014,23 @@ func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func TestDoltMergePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergePreparedTests(t, h)
+}
+
+func RunDoltMergePreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range MergeScripts {
+		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
+		// each script
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestDoltRebase(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltRebaseTests(t, h)
@@ -2048,23 +2065,16 @@ func RunDoltRebasePreparedTests(t *testing.T, h *DoltHarness) {
 	}
 }
 
-func TestDoltMergePrepared(t *testing.T) {
-	for _, script := range MergeScripts {
-		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
-		// each script
-		func() {
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		}()
-	}
+func TestDoltRevert(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRevertTests(t, h)
 }
 
-func TestDoltRevert(t *testing.T) {
+func RunDoltRevertTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range RevertScripts {
 		// harness can't reset effectively. Use a new harness for each script
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2072,21 +2082,31 @@ func TestDoltRevert(t *testing.T) {
 }
 
 func TestDoltRevertPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRevertPreparedTests(t, h)
+}
+
+func RunDoltRevertPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range RevertScripts {
 		// harness can't reset effectively. Use a new harness for each script
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
+			enginetest.TestScript(t, h, script)
 		}()
 	}
 }
 
 func TestDoltAutoIncrement(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltAutoIncrementTests(t, h)
+}
+
+func RunDoltAutoIncrementTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltAutoIncrementTests {
 		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2094,20 +2114,30 @@ func TestDoltAutoIncrement(t *testing.T) {
 }
 
 func TestDoltAutoIncrementPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltAutoIncrementPreparedTests(t, h)
+}
+
+func RunDoltAutoIncrementPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltAutoIncrementTests {
 		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
+			enginetest.TestScript(t, h, script)
 		}()
 	}
 }
 
 func TestDoltConflictsTableNameTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltConflictsTableNameTableTests(t, h)
+}
+
+func RunDoltConflictsTableNameTableTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltConflictTableNameTableTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2116,7 +2146,7 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		for _, script := range Dolt1ConflictTableNameTableTests {
 			func() {
-				h := newDoltHarness(t)
+				h := h.NewHarness(t)
 				defer h.Close()
 				enginetest.TestScript(t, h, script)
 			}()
@@ -2126,12 +2156,17 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunKelyessDoltMergeCVsAndConflictsTests(t, h)
+}
+
+func RunKelyessDoltMergeCVsAndConflictsTests(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}
 	for _, script := range KeylessMergeCVsAndConflictsScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2140,15 +2175,20 @@ func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeArtifacts(t, h)
+}
+
+func RunDoltMergeArtifacts(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MergeArtifactsScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
 	}
 	for _, script := range SchemaConflictScripts {
-		h := newDoltHarness(t)
+		h := h.NewHarness(t)
 		enginetest.TestScript(t, h, script)
 		h.Close()
 	}
