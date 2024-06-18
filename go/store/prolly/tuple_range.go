@@ -15,11 +15,11 @@
 package prolly
 
 import (
-	"github.com/shopspring/decimal"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -321,8 +321,10 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 	}
 	stop := tb.Build(pool)
 	if r.Desc.Compare(r.Tup, stop) >= 0 {
+		// If cmp == 0, we lost precision serializing.
+		// If cmp > 0, we overflowed and |stop| < |start|.
 		// |stop| has to be strictly greater than |start|
-		// for this optimization to be valid
+		// for this optimization to be valid.
 		return nil, false
 	}
 	return stop, true
