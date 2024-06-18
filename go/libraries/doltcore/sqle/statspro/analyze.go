@@ -30,11 +30,17 @@ import (
 )
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return err
 	}
+	return p.RefreshTableStatsWithBranch(ctx, table, db, branch)
+}
+
+func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
 	if err != nil {
@@ -134,6 +140,9 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 // branchQualifiedDatabase returns a branch qualified database. If the database
 // is already branch suffixed no duplication is applied.
 func (p *Provider) branchQualifiedDatabase(db, branch string) string {
+	if branch == "" {
+		return db
+	}
 	suffix := fmt.Sprintf("/%s", branch)
 	if !strings.HasSuffix(db, suffix) {
 		return fmt.Sprintf("%s%s", db, suffix)

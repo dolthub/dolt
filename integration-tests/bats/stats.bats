@@ -41,6 +41,9 @@ teardown() {
 @test "stats: empty initial stats" {
     cd repo2
 
+    # disable bootstrap, can only make stats with ANALYZE or background thread
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
+
     dolt sql -q "insert into xy values (0,0), (1,1)"
 
     start_sql_server
@@ -86,6 +89,16 @@ teardown() {
     dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
+}
+
+@test "stats: bootrap on engine startup" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 1;"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
 }
 
 @test "stats: deletes refresh" {
@@ -239,20 +252,15 @@ teardown() {
 
 @test "stats: multi db" {
     cd repo1
+
     dolt sql -q "insert into ab values (0,0), (1,1)"
 
     cd ../repo2
+
     dolt sql -q "insert into ab values (0,0), (1,1)"
     dolt sql -q "insert into xy values (0,0), (1,1)"
 
     cd ..
-    start_sql_server
-    sleep 1
-    stop_sql_server
-
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "0" ]
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"

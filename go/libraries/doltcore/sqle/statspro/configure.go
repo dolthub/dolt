@@ -43,6 +43,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	branches := p.getStatsBranches(loadCtx)
 
 	var autoEnabled bool
+	var startupEnabled bool
 	var intervalSec time.Duration
 	var thresholdf64 float64
 	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
@@ -55,6 +56,8 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 
 		p.pro.InitDatabaseHooks = append(p.pro.InitDatabaseHooks, NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
 		p.pro.DropDatabaseHooks = append(p.pro.DropDatabaseHooks, NewStatsDropDatabaseHook(p))
+	} else if _, startupStats, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBootstrapEnabled); startupStats == int8(1) {
+		startupEnabled = true
 	}
 
 	eg, ctx := loadCtx.NewErrgroup()
@@ -84,6 +87,28 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 			}
 			if autoEnabled {
 				return p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches)
+			} else if startupEnabled {
+				tables, err := db.GetTableNames(loadCtx)
+				if err != nil {
+					return err
+				}
+				for _, table := range tables {
+					sqlTable, _, err := GetLatestTable(loadCtx, table, db)
+					if err != nil {
+						return err
+					}
+
+					branch := "main"
+					if _, defBranch, _ := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name())); defBranch != "" {
+						if br, ok := defBranch.(string); ok {
+							branch = br
+						}
+					}
+
+					if err := p.RefreshTableStatsWithBranch(loadCtx, sqlTable, db.Name(), branch); err != nil {
+						return err
+					}
+				}
 			}
 			return nil
 		})
