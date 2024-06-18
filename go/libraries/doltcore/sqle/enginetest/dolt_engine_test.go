@@ -1779,9 +1779,14 @@ func RunDoltTempTableScripts(t *testing.T, harness DoltEnginetestHarness) {
 }
 
 func TestDoltRevisionDbScripts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRevisionDbScriptsTest(t, h)
+}
+
+func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltRevisionDbScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1789,12 +1794,12 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 
 	// Testing a commit-qualified database revision spec requires
 	// a little extra work to get the generated commit hash
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	e, err := harness.NewEngine(t)
+	h = h.NewHarness(t)
+	defer h.Close()
+	e, err := h.NewEngine(t)
 	require.NoError(t, err)
 	defer e.Close()
-	ctx := harness.NewContext()
+	ctx := h.NewContext()
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},
@@ -1805,10 +1810,10 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 		{"insert into t01 values (3, 3);"},
 		{"call dolt_commit('-am', 'adding another row to table t01 on main');"},
 	}
-	_, err = enginetest.RunSetupScripts(ctx, harness.engine, setupScripts, true)
+	_, err = enginetest.RunSetupScripts(ctx, h.Engine(), setupScripts, true)
 	require.NoError(t, err)
 
-	_, iter, err := harness.engine.Query(ctx, "select hashof('HEAD~2');")
+	_, iter, err := h.Engine().Query(ctx, "select hashof('HEAD~2');")
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
@@ -1875,13 +1880,18 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 		},
 	}
 
-	enginetest.TestScript(t, harness, scriptTest)
+	enginetest.TestScript(t, h, scriptTest)
 }
 
 func TestDoltRevisionDbScriptsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRevisionDbScriptsPreparedTest(t, h)
+}
+
+func RunDoltRevisionDbScriptsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltRevisionDbScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()

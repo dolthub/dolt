@@ -100,6 +100,9 @@ type DoltEnginetestHarness interface {
 	// Close closes the harness, freeing up any resources it may have allocated
 	Close()
 
+	
+	Engine() *gms.Engine
+
 }
 
 var _ DoltEnginetestHarness = &DoltHarness{}
@@ -327,6 +330,10 @@ func (d *DoltHarness) WithSkippedQueries(queries []string) DoltEnginetestHarness
 	nd := *d
 	nd.skippedQueries = append(d.skippedQueries, queries...)
 	return &nd
+}
+
+func (d *DoltHarness) Engine() *gms.Engine {
+	return d.engine
 }
 
 // SkipQueryTest returns whether to skip a query
