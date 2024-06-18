@@ -338,10 +338,7 @@ func (u *bucketBuilder) updateMcv() {
 	}
 	key := u.currentKey
 	cnt := u.currentCnt
-	heap.Push(u.mcvs, mcv{key, cnt})
-	if u.mcvs.Len() > mcvCnt {
-		heap.Pop(u.mcvs)
-	}
+	u.mcvs.Add(mcv{key, cnt})
 }
 
 type mcv struct {
@@ -352,6 +349,13 @@ type mcv struct {
 type mcvHeap []mcv
 
 var _ heap.Interface = (*mcvHeap)(nil)
+
+func (m *mcvHeap) Add(i mcv) {
+	heap.Push(m, i)
+	if m.Len() > mcvCnt {
+		heap.Pop(m)
+	}
+}
 
 func (m mcvHeap) Counts() []uint64 {
 	ret := make([]uint64, len(m))
