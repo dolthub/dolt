@@ -1899,7 +1899,11 @@ func RunDoltRevisionDbScriptsPreparedTest(t *testing.T, h DoltEnginetestHarness)
 }
 
 func TestDoltDdlScripts(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltDdlScripts(t, harness)
+}
+
+func RunDoltDdlScripts(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	harness.Setup()
 
@@ -1950,9 +1954,14 @@ func TestDescribeTableAsOf(t *testing.T) {
 }
 
 func TestShowCreateTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunShowCreateTableTests(t, h)
+}
+
+func RunShowCreateTableTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range ShowCreateTableScriptTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1960,9 +1969,14 @@ func TestShowCreateTable(t *testing.T) {
 }
 
 func TestShowCreateTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunShowCreateTablePreparedTests(t, h)
+}
+
+func RunShowCreateTablePreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range ShowCreateTableScriptTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1983,11 +1997,16 @@ func TestViewsWithAsOfPrepared(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltMergeTests(t, h)
+}
+
+func RunDoltMergeTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MergeScripts {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
 		// each script
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
@@ -1996,11 +2015,16 @@ func TestDoltMerge(t *testing.T) {
 }
 
 func TestDoltRebase(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRebaseTests(t, h)
+}
+
+func RunDoltRebaseTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltRebaseScriptTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
-			h.skipSetupCommit = true
+			h.SkipSetupCommit()
 			enginetest.TestScript(t, h, script)
 		}()
 	}
@@ -2009,11 +2033,16 @@ func TestDoltRebase(t *testing.T) {
 }
 
 func TestDoltRebasePrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	RunDoltRebasePreparedTests(t, h)
+}
+
+func RunDoltRebasePreparedTests(t *testing.T, h *DoltHarness) {
 	for _, script := range DoltRebaseScriptTests {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
-			h.skipSetupCommit = true
+			h.SkipSetupCommit()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
