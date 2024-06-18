@@ -61,6 +61,10 @@ type DoltHarness struct {
 	setupTestProcedures bool
 }
 
+func (d *DoltHarness) UseLocalFileSystem() {
+	d.useLocalFilesystem = true
+}
+
 func (d *DoltHarness) WithConfigureStats(configureStats bool) DoltEnginetestHarness {
 	nd := *d
 	nd.configureStats = configureStats
@@ -96,6 +100,9 @@ type DoltEnginetestHarness interface {
 
 	// SkipSetupCommit configures to harness to skip the commit after setup scripts are run
 	SkipSetupCommit()
+	
+	// UseLocalFileSystem configures the harness to use the local filesystem for all storage, instead of in-memory versions
+	UseLocalFileSystem()
 
 	// Close closes the harness, freeing up any resources it may have allocated
 	Close()

@@ -2210,10 +2210,15 @@ func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 }
 
 func TestDoltReset(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltResetTest(t, h)
+}
+
+func RunDoltResetTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltReset {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2232,15 +2237,20 @@ func TestDoltGC(t *testing.T) {
 }
 
 func TestDoltCheckout(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltCheckoutTests(t, h)
+}
+
+func RunDoltCheckoutTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltCheckoutScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
 	}
 
-	h := newDoltHarness(t)
+	h = h.NewHarness(t)
 	defer h.Close()
 	engine, err := h.NewEngine(t)
 	require.NoError(t, err)
@@ -2253,15 +2263,20 @@ func TestDoltCheckout(t *testing.T) {
 }
 
 func TestDoltCheckoutPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltCheckoutPreparedTests(t, h)
+}
+
+func RunDoltCheckoutPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltCheckoutScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
+			enginetest.TestScript(t, h, script)
 		}()
 	}
 
-	h := newDoltHarness(t)
+	h = h.NewHarness(t)
 	defer h.Close()
 	engine, err := h.NewEngine(t)
 	require.NoError(t, err)
@@ -2274,9 +2289,14 @@ func TestDoltCheckoutPrepared(t *testing.T) {
 }
 
 func TestDoltBranch(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltBranchTests(t, h)
+}
+
+func RunDoltBranchTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltBranchScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2284,9 +2304,14 @@ func TestDoltBranch(t *testing.T) {
 }
 
 func TestDoltTag(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltTagTests(t, h)
+}
+
+func RunDoltTagTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltTagTestScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2294,9 +2319,14 @@ func TestDoltTag(t *testing.T) {
 }
 
 func TestDoltRemote(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltRemoteTests(t, h)
+}
+
+func RunDoltRemoteTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltRemoteTestScripts {
 		func() {
-			h := newDoltHarness(t)
+			h := h.NewHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -2304,7 +2334,12 @@ func TestDoltRemote(t *testing.T) {
 }
 
 func TestDoltUndrop(t *testing.T) {
-	h := newDoltHarnessForLocalFilesystem(t)
+	h := newDoltEnginetestHarness(t)
+	RunDoltUndropTests(t, h)
+}
+
+func RunDoltUndropTests(t *testing.T, h DoltEnginetestHarness) {
+	h.UseLocalFileSystem()
 	defer h.Close()
 	for _, script := range DoltUndropTestScripts {
 		enginetest.TestScript(t, h, script)
