@@ -65,6 +65,10 @@ func (d *DoltHarness) UseLocalFileSystem() {
 	d.useLocalFilesystem = true
 }
 
+func (d *DoltHarness) Session() *dsess.DoltSession {
+	return d.session
+}
+
 func (d *DoltHarness) WithConfigureStats(configureStats bool) DoltEnginetestHarness {
 	nd := *d
 	nd.configureStats = configureStats
@@ -106,10 +110,10 @@ type DoltEnginetestHarness interface {
 
 	// Close closes the harness, freeing up any resources it may have allocated
 	Close()
-
 	
 	Engine() *gms.Engine
 
+	Session() *dsess.DoltSession
 }
 
 var _ DoltEnginetestHarness = &DoltHarness{}

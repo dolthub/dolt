@@ -2911,12 +2911,16 @@ func RunDoltDatabaseCollationDiffsTests(t *testing.T, harness DoltEnginetestHarn
 }
 
 func TestQueryDiff(t *testing.T) {
-	harness := newDoltHarness(t)
-	defer harness.Close()
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunQueryDiffTests(t, harness)
+}
+
+func RunQueryDiffTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range QueryDiffTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
@@ -2938,12 +2942,17 @@ var biasedCosters = []memo.Coster{
 }
 
 func TestSystemTableIndexes(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunSystemTableIndexesTests(t, harness)
+}
+
+func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
 	}
 
 	for _, stt := range SystemTableIndexTests {
-		harness := newDoltHarness(t).WithParallelism(2)
+		harness = harness.NewHarness(t).WithParallelism(2)
 		defer harness.Close()
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
@@ -2981,12 +2990,17 @@ func TestSystemTableIndexes(t *testing.T) {
 }
 
 func TestSystemTableIndexesPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunSystemTableIndexesTestsPrepared(t, harness)
+}
+
+func RunSystemTableIndexesTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("only new format support system table indexing")
 	}
 
 	for _, stt := range SystemTableIndexTests {
-		harness := newDoltHarness(t).WithParallelism(2)
+		harness = harness.NewHarness(t).WithParallelism(2)
 		defer harness.Close()
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
@@ -3013,22 +3027,30 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 }
 
 func TestSystemTableFunctionIndexes(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunSystemTableFunctionIndexesTests(t, harness)
+}
+
+func RunSystemTableFunctionIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range SystemTableFunctionIndexTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			harness.Setup(setup.MydbData)
 			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestSystemTableFunctionIndexesPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
+	harness := newDoltEnginetestHarness(t)
+	RunSystemTableFunctionIndexesTestsPrepared(t, harness)
+}
+
+func RunSystemTableFunctionIndexesTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range SystemTableFunctionIndexTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			harness.Setup(setup.MydbData)
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
@@ -3047,9 +3069,12 @@ func TestAddDropPks(t *testing.T) {
 }
 
 func TestAddAutoIncrementColumn(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
+	h := newDoltEnginetestHarness(t)
+	RunAddAutoIncrementColumnTests(t, h)
+}
 
+func RunAddAutoIncrementColumnTests(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
 	for _, script := range queries.AlterTableAddAutoIncrementScripts {
 		enginetest.TestScript(t, h, script)
 	}
@@ -3086,23 +3111,37 @@ func TestTypesOverWire(t *testing.T) {
 }
 
 func TestDoltCherryPick(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltCherryPickTests(t, harness)
+}
+
+func RunDoltCherryPickTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltCherryPickTests {
-		harness := newDoltHarness(t)
+		harness = harness.NewHarness(t)
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
 	}
 }
 
 func TestDoltCherryPickPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltCherryPickTestsPrepared(t, harness)
+}
+
+func RunDoltCherryPickTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltCherryPickTests {
-		harness := newDoltHarness(t)
+		harness = harness.NewHarness(t)
 		enginetest.TestScriptPrepared(t, harness, script)
 		harness.Close()
 	}
 }
 
 func TestDoltCommit(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltCommitTests(t, harness)
+}
+
+func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScript(t, harness, script)
@@ -3110,7 +3149,11 @@ func TestDoltCommit(t *testing.T) {
 }
 
 func TestDoltCommitPrepared(t *testing.T) {
-	harness := newDoltHarness(t)
+	harness := newDoltEnginetestHarness(t)
+	RunDoltCommitTestsPrepared(t, harness)
+}
+
+func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
 		enginetest.TestScriptPrepared(t, harness, script)
@@ -3124,24 +3167,32 @@ func TestQueriesPrepared(t *testing.T) {
 }
 
 func TestStatsHistograms(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	h.configureStats = true
+	h := newDoltEnginetestHarness(t)
+	RunStatsHistogramTests(t, h)
+}
+
+func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltHistogramTests {
-		h.engine = nil
-		enginetest.TestScript(t, h, script)
+		func() {
+			h = h.NewHarness(t).WithConfigureStats(true)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
 	}
 }
 
 // TestStatsIO force a provider reload in-between setup and assertions that
 // forces a round trip of the statistics table before inspecting values.
 func TestStatsIO(t *testing.T) {
-	h := newDoltHarness(t)
-	h.configureStats = true
-	defer h.Close()
+	h := newDoltEnginetestHarness(t)
+	RunStatsIOTests(t, h)
+}
+
+func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
-		h.engine = nil
 		func() {
+			h = h.NewHarness(t).WithConfigureStats(true)
+			defer h.Close()
 			e := mustNewEngine(t, h)
 			if enginetest.IsServerEngine(e) {
 				return
@@ -3153,12 +3204,16 @@ func TestStatsIO(t *testing.T) {
 }
 
 func TestJoinStats(t *testing.T) {
-	// these are sensitive to cardinality estimates,
-	// particularly the join-filter tests that trade-off
-	// smallest table first vs smallest join first
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
+	RunJoinStatsTests(t, h)
+}
+
+// these are sensitive to cardinality estimates,
+// particularly the join-filter tests that trade-off
+// smallest table first vs smallest join first
+func RunJoinStatsTests(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
-	h.configureStats = true
+	h = h.WithConfigureStats(true)
 	enginetest.TestJoinStats(t, h)
 }
 
@@ -3177,17 +3232,26 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 }
 
 func TestPreparedStatistics(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	h.configureStats = true
+	h := newDoltEnginetestHarness(t)
+	RunPreparedStatisticsTests(t, h)
+}
+
+func RunPreparedStatisticsTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltHistogramTests {
-		h.engine = nil
-		enginetest.TestScriptPrepared(t, h, script)
+		func() {
+			h := h.NewHarness(t).WithConfigureStats(true)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	h := newDoltHarness(t)
+	h := newDoltEnginetestHarness(t)
+	RunVersionedQueriesPreparedTests(t, h)
+}
+
+func RunVersionedQueriesPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, []setup.SetupScript{VersionedQuerySetup, VersionedQueryViews})
 
@@ -3370,8 +3434,13 @@ func TestDatabaseCollationWire(t *testing.T) {
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunAddDropPrimaryKeysTests(t, harness)
+}
+
+func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
-		harness := newDoltHarness(t)
+		harness = harness.NewHarness(t)
 		defer harness.Close()
 		addPkScript := queries.ScriptTest{
 			Name: "add primary keys",
@@ -3392,11 +3461,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-							"  `id` int NOT NULL,\n" +
-							"  `c1` int,\n" +
-							"  PRIMARY KEY (`id`),\n" +
-							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  PRIMARY KEY (`id`),\n" +
+								"  KEY `c1_idx` (`c1`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -3405,8 +3474,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		enginetest.TestScript(t, harness, addPkScript)
 
 		// make sure there is only one NOT NULL constraint after all those mutations
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
-		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
 		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
@@ -3426,7 +3495,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 
 	t.Run("Add primary key to table with index", func(t *testing.T) {
-		harness := newDoltHarness(t)
+		harness := harness.NewHarness(t)
 		defer harness.Close()
 		script := queries.ScriptTest{
 			Name: "add primary keys to table with index",
@@ -3442,12 +3511,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-							"  `id` int NOT NULL,\n" +
-							"  `c1` int,\n" +
-							"  PRIMARY KEY (`id`),\n" +
-							"  KEY `c1_idx` (`c1`),\n" +
-							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  PRIMARY KEY (`id`),\n" +
+								"  KEY `c1_idx` (`c1`),\n" +
+								"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
@@ -3461,8 +3530,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		}
 		enginetest.TestScript(t, harness, script)
 
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
-		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
 		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
@@ -3481,7 +3550,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 
 	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
-		harness := newDoltHarness(t)
+		harness := harness.NewHarness(t)
 		defer harness.Close()
 		script := queries.ScriptTest{
 			Name: "Add primary key when one more cells contain NULL",
@@ -3504,7 +3573,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 
 	t.Run("Drop primary key from table with index", func(t *testing.T) {
-		harness := newDoltHarness(t)
+		harness := harness.NewHarness(t)
 		defer harness.Close()
 		script := queries.ScriptTest{
 			Name: "Drop primary key from table with index",
@@ -3519,10 +3588,10 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-							"  `id` int NOT NULL,\n" +
-							"  `c1` int,\n" +
-							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  KEY `c1_idx` (`c1`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
@@ -3537,8 +3606,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 
 		enginetest.TestScript(t, harness, script)
 
-		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
-		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.Session()))
+		ws, err := harness.Session().WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
 		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
