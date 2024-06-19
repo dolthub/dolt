@@ -51,14 +51,15 @@ func newBinlogStreamer() *binlogStreamer {
 // and |binlogEventMeta| records the position of the stream. This method blocks until an error
 // is received over the stream (e.g. the connection closing) or the streamer is closed,
 // through it's quit channel.
-func (streamer *binlogStreamer) startStream(_ *sql.Context, conn *mysql.Conn, executedGtids mysql.GTIDSet, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata, logfile string) error {
-	logrus.Tracef("Starting binlog stream... (connection ID: %d)", conn.ConnectionID)
+func (streamer *binlogStreamer) startStream(ctxs *sql.Context, conn *mysql.Conn, executedGtids mysql.GTIDSet, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata, logfile string) error {
+	logrus.WithField("connection_id", conn.ConnectionID).
+		WithField("executed_gtids", executedGtids.String()).
+		Trace("starting binlog stream")
 
 	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogEventMeta); err != nil {
 		return err
 	}
 
-	// TODO: Maybe we should just ask the LogManager to give us the file for reading?
 	file, err := openBinlogFileForReading(logfile)
 	if err != nil {
 		return err
@@ -95,82 +96,62 @@ func (streamer *binlogStreamer) startStream(_ *sql.Context, conn *mysql.Conn, ex
 
 		default:
 			logrus.Debug("checking file for new data...")
-			eof := false
 			skippingGtids := false
-			for !eof {
-				headerBuffer := make([]byte, 4+1+4+4+4+2)
-				bytesRead, err := file.Read(headerBuffer)
-				if err != nil && err != io.EOF {
-					return err
-				}
+			// TODO: This for loop is nested in side a select block, inside another for loop
+			//       We should be able to get rid of this inner for loop, otherwise the select
+			//       block won't ever let us read from ticker or quitChan
+			for {
+				binlogEvent, err := readBinlogEventFromFile(file)
 				if err == io.EOF {
 					logrus.Tracef("End of binlog file! Waiting for new events...")
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(250 * time.Millisecond)
+					continue
+				} else if err != nil {
+					return err
+				}
+
+				if binlogEvent.IsRotate() {
+					bytes := binlogEvent.Bytes()
+					newLogfile := string(bytes[19+8 : (len(bytes) - 4)])
+					logrus.Errorf("Rotatating to new binlog file: %s", newLogfile)
+
+					dir := filepath.Dir(logfile)
+					newLogfile = filepath.Join(dir, newLogfile)
+
+					if err = file.Close(); err != nil {
+						logrus.Errorf("unable to close previous binlog file: %s", err.Error())
+					}
+
+					if file, err = openBinlogFileForReading(newLogfile); err != nil {
+						return err
+					}
+
 					continue
 				}
 
-				// Event Header:
-				//timestamp := headerBuffer[0:4]
-				//eventType := headerBuffer[4]
-				//serverId := binary.LittleEndian.Uint32(headerBuffer[5:5+4])
-				eventSize := binary.LittleEndian.Uint32(headerBuffer[9 : 9+4])
+				if binlogEvent.IsGTID() {
+					gtid, _, err := binlogEvent.GTID(*binlogFormat)
+					if err != nil {
+						return err
+					}
 
-				payloadBuffer := make([]byte, eventSize-uint32(len(headerBuffer)))
-				bytesRead, err = file.Read(payloadBuffer)
-				if err != nil && err != io.EOF {
-					return err
+					// If the replica has already executed this GTID, then skip it.
+					if executedGtids.ContainsGTID(gtid) {
+						skippingGtids = true
+					} else {
+						skippingGtids = false
+					}
 				}
-				if err == io.EOF {
-					logrus.Tracef("End of binlog file! Waiting for new events...")
-					time.Sleep(100 * time.Millisecond)
+
+				if skippingGtids {
 					continue
 				}
 
-				if bytesRead > 0 {
-					binlogEvent := mysql.NewMysql56BinlogEvent(append(headerBuffer, payloadBuffer...))
-
-					if binlogEvent.IsRotate() {
-						newLogfile := string(payloadBuffer[8:(len(payloadBuffer) - 4)])
-						logrus.Errorf("Rotatating to new binlog file: %s", newLogfile)
-
-						dir := filepath.Dir(logfile)
-						newLogfile = filepath.Join(dir, newLogfile)
-
-						if err = file.Close(); err != nil {
-							logrus.Errorf("unable to close previous binlog file: %s", err.Error())
-						}
-
-						if file, err = openBinlogFileForReading(newLogfile); err != nil {
-							return err
-						}
-
-						continue
-					}
-
-					if binlogEvent.IsGTID() {
-						gtid, _, err := binlogEvent.GTID(*binlogFormat)
-						if err != nil {
-							return err
-						}
-
-						// If the replica has already executed this GTID, then skip it.
-						if executedGtids.ContainsGTID(gtid) {
-							skippingGtids = true
-						} else {
-							skippingGtids = false
-						}
-					}
-
-					if skippingGtids {
-						continue
-					}
-
-					if err := conn.WriteBinlogEvent(binlogEvent, false); err != nil {
-						return err
-					}
-					if err = conn.FlushBuffer(); err != nil {
-						return err
-					}
+				if err := conn.WriteBinlogEvent(binlogEvent, false); err != nil {
+					return err
+				}
+				if err = conn.FlushBuffer(); err != nil {
+					return err
 				}
 			}
 			time.Sleep(500 * time.Millisecond)
@@ -182,8 +163,6 @@ func (streamer *binlogStreamer) startStream(_ *sql.Context, conn *mysql.Conn, ex
 // are the expected binlog file magic numbers. If any problems are encountered opening the file or reading the first
 // four bytes, an error is returned.
 func openBinlogFileForReading(logfile string) (*os.File, error) {
-	logrus.Errorf("Opening binlog file: %s", logfile)
-
 	file, err := os.Open(logfile)
 	if err != nil {
 		return nil, err
@@ -253,14 +232,104 @@ func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, 
 	m.addStreamer(streamer)
 	defer m.removeStreamer(streamer)
 
-	return streamer.startStream(ctx, conn, executedGtids, binlogFormat, &binlogEventMeta, m.logManager.currentBinlogFilepath())
+	// TODO: This may be a little tricky with branch switching... perhaps we should destroy the index when we
+	//       switch branches and rebuild it as we create more logs?
+	//       It seems like part of the contract with switching branches for replication is that the primary will
+	//       invalidate/destroy all the previous binlog files? It doesn't seem safe to rely on them being
+	//       correct after changing the branch back and forth.
+
+	file, err := m.findLogFileForPosition(executedGtids)
+	if err != nil {
+		return err
+	}
+
+	// TODO: We also need to handle cases where we are missing GTIDs that the replica doesn't have yet. In these
+	//       cases we need to send errors back to the replica.
+	return streamer.startStream(ctx, conn, executedGtids, binlogFormat, binlogEventMeta, file)
 }
 
-// sendEvents sends |binlogEvents| to all the streams managed by this instance.
-func (m *binlogStreamerManager) sendEvents(binlogEvents []mysql.BinlogEvent) {
-	for _, streamer := range m.copyStreamers() {
-		logrus.StandardLogger().Tracef("queuing %d binlog events\n", len(binlogEvents))
-		streamer.eventChan <- binlogEvents
+// findLogFileForPosition searches through the binlog files on disk for the first log file that contains GTIDs that
+// are not present in |executedGtids|. This is determined by reading the first GTID event from each log file and
+// selecting the previous file when the first GTID not in |executedGtids| is found.
+func (m *binlogStreamerManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (string, error) {
+	files, err := m.logManager.logFilesOnDiskForBranch(BinlogBranch)
+	if err != nil {
+		return "", err
+	}
+
+	for i, f := range files {
+		file, err := openBinlogFileForReading(filepath.Join(m.logManager.binlogDirectory, f))
+		if err != nil {
+			return "", err
+		}
+
+		binlogEvent, err := readFirstGtidEventFromFile(file)
+		file.Close()
+		if err == io.EOF {
+			continue
+		} else if err != nil {
+			return "", err
+		}
+
+		if binlogEvent.IsGTID() {
+			gtid, _, err := binlogEvent.GTID(m.logManager.binlogFormat)
+			if err != nil {
+				return "", err
+			}
+			// If the first GTID in this file is contained in the set of GTIDs that the replica
+			// has already executed, then move on to check the next file.
+			if executedGtids.ContainsGTID(gtid) {
+				continue
+			}
+
+			if i == 0 {
+				return m.logManager.currentBinlogFilepath(), nil
+			}
+			return filepath.Join(m.logManager.binlogDirectory, files[i-1]), nil
+		}
+	}
+
+	// TODO: If we didn't find an unexecuted GTID in any of the files, just return
+	//       the current log file. This is a bit of a hack, but it's enough to
+	//       keep the following tests passing:
+	//         TestBinlogPrimary_ChangeReplicationBranch
+	//         TestBinlogPrimary_PrimaryRestart
+	//       It might actually be better to just return the first available log file?
+	return m.logManager.currentBinlogFilepath(), nil
+}
+
+func readBinlogEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
+	headerBuffer := make([]byte, 4+1+4+4+4+2)
+	_, err := file.Read(headerBuffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Event Header:
+	//timestamp := headerBuffer[0:4]
+	//eventType := headerBuffer[4]
+	//serverId := binary.LittleEndian.Uint32(headerBuffer[5:5+4])
+	eventSize := binary.LittleEndian.Uint32(headerBuffer[9 : 9+4])
+
+	payloadBuffer := make([]byte, eventSize-uint32(len(headerBuffer)))
+	_, err = file.Read(payloadBuffer)
+	if err != nil {
+		return nil, err
+	}
+
+	return mysql.NewMysql56BinlogEvent(append(headerBuffer, payloadBuffer...)), nil
+}
+
+func readFirstGtidEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
+	for {
+		binlogEvent, err := readBinlogEventFromFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		if binlogEvent.IsGTID() {
+			return binlogEvent, nil
+		}
 	}
 }
 
@@ -276,6 +345,10 @@ func (m *binlogStreamerManager) addStreamer(streamer *binlogStreamer) {
 func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
 	m.streamersMutex.Lock()
 	defer m.streamersMutex.Unlock()
+
+	if len(m.streamers) == 0 {
+		return
+	}
 
 	m.streamers = make([]*binlogStreamer, len(m.streamers)-1, 0)
 	for _, element := range m.streamers {

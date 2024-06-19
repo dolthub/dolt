@@ -47,14 +47,13 @@ type LogManager struct {
 	fs                    filesys.Filesys
 	binlogFormat          mysql.BinlogFormat
 	binlogEventMeta       mysql.BinlogEventMetadata
+	binlogDirectory       string
 }
 
 // NewLogManager creates a new LogManager instance where binlog files are stored in the .dolt/binlog directory
 // underneath the specified |fs| filesystem. The |binlogFormat| and |binlogStream| are used to initialize the
 // new binlog file.
 func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) (*LogManager, error) {
-	// TODO: On server startup, we need to find the most recent binlog file, add a rotate event at the end (if necessary?), and start a new file. Documentation seems to indicate that a rotate event is added at the end of a binlog file, so that the streamer can jump to the next file, but I don't see this in our MySQL sample binlog files. Need to do more testing here.
-
 	lm := &LogManager{
 		mu:              &sync.Mutex{},
 		fs:              fs,
@@ -64,24 +63,71 @@ func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEv
 
 	// TODO: Could resolve the base dir for the binlog file directory here; would it help us avoid returning errors in other APIs?
 
-	// Initialize binlog file storage (extract to function!)
-	err := fs.MkDirs(binlogDirectory)
+	// Initialize binlog file storage directory
+	if err := fs.MkDirs(binlogDirectory); err != nil {
+		return nil, err
+	}
+	abs, err := fs.Abs(binlogDirectory)
 	if err != nil {
 		return nil, err
 	}
+	lm.binlogDirectory = abs
 
-	// Initialize current binlog file
-	nextLogFilename, err := lm.nextLogFile()
-	if err != nil {
+	// Ensure the previous log file has a Rotate event that points to the new log file
+	if err := lm.addRotateEventToPreviousLogFile(); err != nil {
 		return nil, err
 	}
-	lm.currentBinlogFileName = nextLogFilename
 
-	if err = lm.initializeCurrentLogFile(binlogFormat, binlogEventMeta); err != nil {
+	// Initialize the new binlog file
+	if err := lm.createNewBinlogFile(); err != nil {
 		return nil, err
 	}
 
 	return lm, nil
+}
+
+// addRotateEventToPreviousLogFile finds the previous binlog file and appends a Rotate event that points to the
+// next binlog file. This is necessary so that as streamers are reading from the binlog files, they have a pointer
+// to follow to the next binlog file.
+func (lm *LogManager) addRotateEventToPreviousLogFile() error {
+	// Find the most recent log file for the binlog branch
+	mostRecentLogfile, err := lm.mostRecentLogFileForBranch(BinlogBranch)
+	if err != nil {
+		return err
+	}
+
+	// If there isn't a most recent log file, then there's nothing to do
+	if mostRecentLogfile == "" {
+		return nil
+	}
+
+	// Open the log file and append a Rotate event
+	previousLogFile, err := os.OpenFile(filepath.Join(lm.binlogDirectory, mostRecentLogfile), os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer previousLogFile.Close()
+
+	nextLogFilename, err := lm.nextLogFile()
+	if err != nil {
+		return err
+	}
+
+	rotateEvent := mysql.NewRotateEvent(lm.binlogFormat, lm.binlogEventMeta, 0, nextLogFilename)
+	_, err = previousLogFile.Write(rotateEvent.Bytes())
+	return err
+}
+
+// createNewBinlogFile creates a new binlog file and initializes it with the binlog magic number, a Format Description
+// event, and a Previous GTIDs event. The new binlog file is opened for append only writing.
+func (lm *LogManager) createNewBinlogFile() error {
+	nextLogFilename, err := lm.nextLogFile()
+	if err != nil {
+		return err
+	}
+	lm.currentBinlogFileName = nextLogFilename
+
+	return lm.initializeCurrentLogFile(lm.binlogFormat, lm.binlogEventMeta)
 }
 
 // nextLogFile returns the filename of the next bin log file in the current sequence. For example, if the
@@ -307,24 +353,13 @@ func (lm *LogManager) writeEventsHelper(binlogEvents ...mysql.BinlogEvent) error
 	return nil
 }
 
-func (lm *LogManager) resolveLogFile(filename string) (string, error) {
-	binlogBaseDir, err := lm.fs.Abs(binlogDirectory)
-	if err != nil {
-		return "", err
-	}
-
+func (lm *LogManager) resolveLogFile(filename string) string {
 	// TODO: Should we make sure it exists?
-	return filepath.Join(binlogBaseDir, filename), nil
+	return filepath.Join(lm.binlogDirectory, filename)
 }
 
 func (lm *LogManager) currentBinlogFilepath() string {
-	logFile, err := lm.resolveLogFile(lm.currentBinlogFileName)
-	if err != nil {
-		// TODO: return an error, or handle this err somewhere else where we do return an error
-		panic(err)
-	}
-
-	return logFile
+	return lm.resolveLogFile(lm.currentBinlogFileName)
 }
 
 // formatBinlogFilename formats a binlog filename using the specified |branch| and |sequence| number. The

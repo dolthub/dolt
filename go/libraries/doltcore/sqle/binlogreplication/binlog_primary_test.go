@@ -153,6 +153,71 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_ReplicaAndPrimaryRestart tests that a replica can disconnect and reconnect to the primary to
+// restart the replication stream, even when the primary has been restarted and log files have rotated.
+func TestBinlogPrimary_ReplicaAndPrimaryRestart(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+
+	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB) so
+	// that log files will rotate more often
+	primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
+
+	// Create a table on the primary and assert that it gets replicated
+	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
+
+	// Assert that the executed GTID position on the replica contains GTIDs 1 and 2
+	serverUuid := queryPrimaryServerUuid(t)
+	status := queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":1-2", status["Executed_Gtid_Set"])
+
+	// Stop the MySQL replica server and wait for a few seconds
+	stopMySqlServer(t)
+	time.Sleep(2_000 * time.Millisecond)
+
+	// Generate enough data to trigger a logfile rotation
+	primaryDatabase.MustExec("create table t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+
+	// Stop the primary and restart it to test that it creates a new log file and
+	// applies a rotate event to the last log file
+	stopDoltSqlServer(t)
+
+	// Restart the Dolt primary server
+	var err error
+	prevReplicaDatabase := replicaDatabase
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+	primaryDatabase = replicaDatabase
+	replicaDatabase = prevReplicaDatabase
+
+	// Generate more data on the primary after restarting
+	primaryDatabase.MustExec("use db01;")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i+100))
+	}
+
+	// Restart the MySQL replica and reconnect to the Dolt primary
+	prevPrimaryDatabase := primaryDatabase
+	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	require.NoError(t, err)
+	replicaDatabase = primaryDatabase
+	primaryDatabase = prevPrimaryDatabase
+	startReplication(t, doltPort)
+	waitForReplicaToCatchUp(t)
+
+	// Assert the executed GTID position now contains all GTIDs
+	status = queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":1-203", status["Executed_Gtid_Set"])
+	requireReplicaResults(t, "SELECT MAX(n) FROM t;", [][]any{{"199"}})
+}
+
 // TestBinlogPrimary_Heartbeats tests that heartbeats sent from the primary to the replica are well-formed and
 // don't cause the replica to close the stream. For example, if the nextLogPosition field in the heartbeat event
 // doesn't match up with the nextLogPosition from the previous event, then the replica will quit the connection.
