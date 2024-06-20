@@ -17,12 +17,13 @@ package benchmark_runner
 import (
 	"context"
 	"fmt"
-	"github.com/jmoiron/sqlx"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 
 	"github.com/google/uuid"
 )
