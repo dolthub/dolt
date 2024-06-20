@@ -44,6 +44,10 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 	for _, branch := range branches {
 		sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
 		if err != nil {
+			if sql.ErrDatabaseNotFound.Is(err) {
+				// default branch is not valid
+				continue
+			}
 			return err
 		}
 		tables, err := sqlDb.GetTableNames(ctx)
