@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -265,6 +266,10 @@ func (u *bucketBuilder) newBucket() {
 func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBucket, error) {
 	// update MCV in case we've ended on a run of many identical keys
 	u.updateMcv()
+	
+	u.mcvs.Sort()
+	u.mcvs.Truncate(2 * float64(u.count) / float64(u.distinct)) // only keep MCVs that are > twice as common as average
+
 	// convert the MCV tuples into SQL rows (most efficient to only do this once)
 	mcvRows, err := u.mcvs.Values(ctx, u.tupleDesc, ns, u.prefixLen)
 	if err != nil {
@@ -363,6 +368,21 @@ func (m mcvHeap) Counts() []uint64 {
 		ret[i] = uint64(mcv.cnt)
 	}
 	return ret
+}
+
+func (m mcvHeap) Sort() {
+	sort.Slice(m, m.Less)
+}
+
+func (m *mcvHeap) Truncate(cutoff float64) {
+	start := m.Len()
+	for i, v := range *m {
+		if float64(v.cnt) >= cutoff {
+			start = i
+		}
+	}
+	old := *m
+	*m = old[start:]
 }
 
 func (m mcvHeap) Values(ctx context.Context, keyDesc val.TupleDesc, ns tree.NodeStore, prefixLen int) ([]sql.Row, error) {
