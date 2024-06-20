@@ -55,7 +55,7 @@ func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 }
 
 func (t *tpccTesterImpl) collectStats(ctx context.Context) error {
-	if !strings.Contains(t.serverConfig.GetServerExec(), "dolt") {
+	if !strings.EqualFold(t.serverConfig.GetServerExec(), "dolt") {
 		return nil
 	}
 	db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/sbt", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
