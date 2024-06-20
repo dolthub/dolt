@@ -266,7 +266,7 @@ func (u *bucketBuilder) newBucket() {
 func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBucket, error) {
 	// update MCV in case we've ended on a run of many identical keys
 	u.updateMcv()
-	
+
 	u.mcvs.Sort()
 	u.mcvs.Truncate(2 * float64(u.count) / float64(u.distinct)) // only keep MCVs that are > twice as common as average
 
