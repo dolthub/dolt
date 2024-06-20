@@ -115,7 +115,10 @@ func (p *Provider) getStatsBranches(ctx *sql.Context) []string {
 	}
 
 	if branches == nil {
-		branches = []string{p.pro.DefaultBranch()}
+		_, ok, _ := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase()+"/"+p.pro.DefaultBranch())
+		if ok {
+			branches = append(branches, p.pro.DefaultBranch())
+		}
 	}
 	return branches
 }
