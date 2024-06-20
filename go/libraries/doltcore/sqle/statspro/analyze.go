@@ -180,7 +180,16 @@ func (p *Provider) branchQualifiedDatabase(db, branch string) string {
 
 // GetLatestTable will get the WORKING root table for the current database/branch
 func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
-	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitive(ctx, tableName)
+	var db sqle.Database
+	switch d := sqlDb.(type) {
+	case sqle.Database:
+		db = d
+	case sqle.ReadReplicaDatabase:
+		db = d.Database
+	default:
+		return nil, nil, fmt.Errorf("expected sqle.Database, found %T", sqlDb)
+	}
+	sqlTable, ok, err := db.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err
 	}
