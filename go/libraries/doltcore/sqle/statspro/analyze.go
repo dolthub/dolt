@@ -30,13 +30,37 @@ import (
 )
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
-
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return err
 	}
 	return p.RefreshTableStatsWithBranch(ctx, table, db, branch)
+}
+
+func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	branches := p.getStatsBranches(ctx)
+	for _, branch := range branches {
+		sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
+		if err != nil {
+			return err
+		}
+		tables, err := sqlDb.GetTableNames(ctx)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			sqlTable, _, err := GetLatestTable(ctx, table, sqlDb)
+			if err != nil {
+				return err
+			}
+			if err := p.RefreshTableStatsWithBranch(ctx, sqlTable, db, branch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {

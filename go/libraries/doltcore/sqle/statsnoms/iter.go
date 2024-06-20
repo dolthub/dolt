@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	"github.com/dolthub/go-mysql-server/sql/stats"
 	"gopkg.in/errgo.v2/errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -114,7 +113,7 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 	upperBoundCnt := row[schema.StatsUpperBoundCntTag].(int64)
 	createdAt := row[schema.StatsCreatedAtTag].(time.Time)
 
-	typs := strings.Split(typesStr, ",")
+	typs := strings.Split(typesStr, "\n")
 	for i, t := range typs {
 		typs[i] = strings.TrimSpace(t)
 	}
@@ -122,7 +121,7 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 	qual := sql.NewStatQualifier(dbName, tableName, indexName)
 	if curQual := qual.String(); !strings.EqualFold(curQual, s.currentQual) {
 		s.currentQual = curQual
-		s.currentTypes, err = stats.ParseTypeStrings(typs)
+		s.currentTypes, err = parseTypeStrings(typs)
 		if err != nil {
 			return nil, err
 		}

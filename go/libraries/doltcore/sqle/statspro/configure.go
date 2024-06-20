@@ -72,7 +72,6 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 					} else {
 						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
 					}
-
 					return
 				}
 			}()
@@ -88,26 +87,8 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 			if autoEnabled {
 				return p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches)
 			} else if startupEnabled {
-				tables, err := db.GetTableNames(loadCtx)
-				if err != nil {
+				if err := p.BootstrapDatabaseStats(loadCtx, db.Name()); err != nil {
 					return err
-				}
-				for _, table := range tables {
-					sqlTable, _, err := GetLatestTable(loadCtx, table, db)
-					if err != nil {
-						return err
-					}
-
-					branch := "main"
-					if _, defBranch, _ := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name())); defBranch != "" {
-						if br, ok := defBranch.(string); ok {
-							branch = br
-						}
-					}
-
-					if err := p.RefreshTableStatsWithBranch(loadCtx, sqlTable, db.Name(), branch); err != nil {
-						return err
-					}
 				}
 			}
 			return nil
