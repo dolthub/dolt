@@ -82,4 +82,5 @@ func TestBranchName(t *testing.T) {
 	assert.False(t, IsValidBranchName("user.lock/working/mybranch"))
 	assert.False(t, IsValidBranchName("HEAD"))
 	assert.False(t, IsValidBranchName("-"))
+	assert.False(t, IsValidBranchName("-test"))
 }

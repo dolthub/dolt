@@ -24,8 +24,8 @@ import (
 // InvalidBranchNameRegex is a list of patterns forbidden in a branch name.
 // For additional constraints on ref names, see datas.ValidateDatasetId
 var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
-	// An exact name of "", "HEAD" or "-"
-	`\A\z`, `\AHEAD\z`, `\A-\z`,
+	// An exact name of "", "HEAD" or starts with "-"
+	`\A\z`, `\AHEAD\z`, `^-.{0,}`,
 	// A name that looks exactly like a commit id
 	`\A[0-9a-v]{32}\z`,
 	// Any empty component; that is, starting or ending with "/" or any appearance of "//"
