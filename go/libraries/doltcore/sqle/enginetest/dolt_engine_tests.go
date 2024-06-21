@@ -1927,7 +1927,6 @@ func RunDoltReflogTests(t *testing.T, h DoltEnginetestHarness) {
 			h.UseLocalFileSystem()
 			h.SkipSetupCommit()
 			enginetest.TestScript(t, h, script)
-			h.Close()
 		}()
 	}
 }
@@ -1940,7 +1939,6 @@ func RunDoltReflogTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 			h.UseLocalFileSystem()
 			h.SkipSetupCommit()
 			enginetest.TestScriptPrepared(t, h, script)
-			h.Close()
 		}()
 	}
 }
