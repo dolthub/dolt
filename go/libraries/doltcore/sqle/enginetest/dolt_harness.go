@@ -89,28 +89,28 @@ type DoltEnginetestHarness interface {
 	enginetest.KeylessTableHarness
 	enginetest.ReadOnlyDatabaseHarness
 	enginetest.ValidatingHarness
-	
+
 	// NewHarness returns a new uninitialized harness of the same type
 	NewHarness(t *testing.T) DoltEnginetestHarness
-	
+
 	// WithSkippedQueries returns a copy of the harness with the given queries skipped
 	WithSkippedQueries(skipped []string) DoltEnginetestHarness
-	
+
 	// WithParallelism returns a copy of the harness with parallelism set to the given number of threads
 	WithParallelism(parallelism int) DoltEnginetestHarness
-	
+
 	// WithConfigureStats returns a copy of the harness with the given configureStats value
 	WithConfigureStats(configureStats bool) DoltEnginetestHarness
 
 	// SkipSetupCommit configures to harness to skip the commit after setup scripts are run
 	SkipSetupCommit()
-	
+
 	// UseLocalFileSystem configures the harness to use the local filesystem for all storage, instead of in-memory versions
 	UseLocalFileSystem()
 
 	// Close closes the harness, freeing up any resources it may have allocated
 	Close()
-	
+
 	Engine() *gms.Engine
 
 	Session() *dsess.DoltSession
