@@ -359,7 +359,7 @@ func RunBranchDdlTestPrepared(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunIndexPrefixTest(t *testing.T, harness *DoltHarness) {
+func RunIndexPrefixTest(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	enginetest.TestIndexPrefix(t, harness)
 	for _, script := range DoltIndexPrefixScripts {
@@ -367,7 +367,7 @@ func RunIndexPrefixTest(t *testing.T, harness *DoltHarness) {
 	}
 }
 
-func RunBigBlobsTest(t *testing.T, h *DoltHarness) {
+func RunBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, setup.BlobData)
 	for _, tt := range BigBlobQueries {
@@ -869,7 +869,7 @@ func RunDoltRebaseTests(t *testing.T, h DoltEnginetestHarness) {
 	testMultiSessionScriptTests(t, DoltRebaseMultiSessionScriptTests)
 }
 
-func RunDoltRebasePreparedTests(t *testing.T, h *DoltHarness) {
+func RunDoltRebasePreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltRebaseScriptTests {
 		func() {
 			h := h.NewHarness(t)
@@ -1918,3 +1918,30 @@ func newSessionBuilder(harness *DoltHarness) server.SessionBuilder {
 		return newCtx.Session, nil
 	}
 }
+
+func RunDoltReflogTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltReflogTestScripts {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.UseLocalFileSystem()
+			h.SkipSetupCommit()
+			enginetest.TestScript(t, h, script)
+			h.Close()
+		}()
+	}
+}
+
+func RunDoltReflogTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltReflogTestScripts {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.UseLocalFileSystem()
+			h.SkipSetupCommit()
+			enginetest.TestScriptPrepared(t, h, script)
+			h.Close()
+		}()
+	}
+}
+

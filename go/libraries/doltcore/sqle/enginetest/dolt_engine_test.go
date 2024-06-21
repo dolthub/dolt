@@ -1515,21 +1515,13 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 }
 
 func TestDoltReflog(t *testing.T) {
-	for _, script := range DoltReflogTestScripts {
-		h := newDoltHarnessForLocalFilesystem(t)
-		h.SkipSetupCommit()
-		enginetest.TestScript(t, h, script)
-		h.Close()
-	}
+	h := newDoltEnginetestHarness(t)
+	RunDoltReflogTests(t, h)
 }
 
 func TestDoltReflogPrepared(t *testing.T) {
-	for _, script := range DoltReflogTestScripts {
-		h := newDoltHarnessForLocalFilesystem(t)
-		h.SkipSetupCommit()
-		enginetest.TestScriptPrepared(t, h, script)
-		h.Close()
-	}
+	h := newDoltEnginetestHarness(t)
+	RunDoltReflogTestsPrepared(t, h)
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
