@@ -124,9 +124,9 @@ func TestRangeSearch(t *testing.T) {
 			testRange: Range{
 				Fields: []RangeField{
 					{
-						Lo:    Bound{Binding: true, Inclusive: true, Value: nil},
-						Hi:    Bound{Binding: true, Inclusive: true, Value: nil},
-						Exact: true,
+						Lo:             Bound{Binding: true, Inclusive: true, Value: nil},
+						Hi:             Bound{Binding: true, Inclusive: true, Value: nil},
+						BoundsAreEqual: true,
 					},
 				},
 				Desc: twoCol,
@@ -144,9 +144,9 @@ func TestRangeSearch(t *testing.T) {
 						Lo: Bound{Binding: true, Inclusive: false, Value: nil},
 					},
 					{
-						Lo:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
-						Hi:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
-						Exact: true,
+						Lo:             Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Hi:             Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						BoundsAreEqual: true,
 					},
 				},
 				Desc: twoCol,
@@ -156,12 +156,14 @@ func TestRangeSearch(t *testing.T) {
 		},
 	}
 
+	ns := tree.NewTestNodeStore()
+
 	values := make([]val.Tuple, len(rangeTuples))
 	for i := range values {
 		values[i] = make(val.Tuple, 2)
 	}
 	testNode := tree.NewTupleLeafNode(rangeTuples, values)
-	tm := NewMap(testNode, nil, twoCol, val.TupleDesc{})
+	tm := NewMap(testNode, ns, twoCol, val.TupleDesc{})
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -178,7 +180,7 @@ func TestRangeSearch(t *testing.T) {
 			assert.Equal(t, hi, idx, "range should stop before index %d", hi)
 
 			// validate physical range (unfiltered iter)
-			iter, err := treeIterFromRange(ctx, testNode, nil, test.testRange)
+			iter, err := treeIterFromRange(ctx, testNode, ns, test.testRange)
 			require.NoError(t, err)
 			expected := rangeTuples[lo:hi]
 

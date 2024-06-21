@@ -17,6 +17,9 @@ package prolly
 import (
 	"sort"
 
+	"github.com/shopspring/decimal"
+
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -59,11 +62,14 @@ type Range struct {
 // RangeField bounds one dimension of a Range.
 type RangeField struct {
 	Lo, Hi Bound
-	Exact  bool // Lo.Value == Hi.Value
+	// BoundsAreEqual is |true| when |Lo.Value| == |Hi.Value|
+	BoundsAreEqual bool
+	// TargetIsUnique is |true| when the associated index is unique
+	TargetIsUnique bool
 }
 
 type Bound struct {
-	Binding   bool
+	Binding   bool // positive or negative infinity
 	Inclusive bool
 	Value     []byte
 }
@@ -87,7 +93,7 @@ func (r Range) aboveStart(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Exact && cmp == 0 {
+		if r.Fields[i].BoundsAreEqual && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -119,7 +125,7 @@ func (r Range) belowStop(t val.Tuple) bool {
 			return false
 		}
 
-		if r.Fields[i].Exact && cmp == 0 {
+		if r.Fields[i].BoundsAreEqual && cmp == 0 {
 			// for exact bounds (operators '=' and 'IS')
 			// we can use subsequent columns to narrow
 			// physical index scans.
@@ -140,7 +146,7 @@ func (r Range) Matches(t val.Tuple) bool {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
 
-		if r.Fields[i].Exact {
+		if r.Fields[i].BoundsAreEqual {
 			v := r.Fields[i].Lo.Value
 			if order.CompareValues(i, field, v, typ) == 0 {
 				continue
@@ -167,16 +173,161 @@ func (r Range) Matches(t val.Tuple) bool {
 	return true
 }
 
-func (r Range) IsPointLookup(desc val.TupleDesc) bool {
+func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
+	// a strict key is a set of non-nil equality restrictions covering every field of a unique index
 	if len(r.Fields) < len(desc.Types) {
 		return false
 	}
 	for i := range r.Fields {
-		if !r.Fields[i].Exact {
+		if !r.Fields[i].BoundsAreEqual {
 			return false
 		}
 	}
 	return true
+}
+
+// KeyRangeLookup will return a stop key and true if the range can be scanned
+// from a start to stop tuple. Otherwise, return a nil key and false. A range
+// can be key range scanned if the prefix is exact, and the final field is
+// numeric or string. The stop key adds +1 to a numeric final field, and appends
+// '0' to a string final field.
+// TODO: support non-exact final field, and use range upper bound?
+func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
+	if r.Tup == nil {
+		return nil, false
+	}
+	n := len(r.Fields) - 1
+	for i := range r.Fields {
+		if r.Fields[i].Lo.Value == nil {
+			if r.Fields[i].Hi.Value != nil {
+				return nil, false
+			}
+			n = i - 1
+			break
+		}
+		if !r.Fields[i].BoundsAreEqual {
+			return nil, false
+		}
+	}
+
+	if n < 0 {
+		// ex: range scan
+		return nil, false
+	}
+
+	for _, typ := range r.Desc.Types[n+1:] {
+		if !typ.Nullable {
+			// this is checked separately because fulltext descriptors
+			// do not match field lengths sometimes
+			// todo: why?
+			return nil, false
+		}
+	}
+
+	for i := n + 1; i < len(r.Fields); i++ {
+		if r.Fields[i].Lo.Value != nil ||
+			r.Fields[i].Hi.Value != nil {
+			// these shouldn't be possible with regular index semantics,
+			// but we manually inline indexes sometimes on the Dolt side,
+			// and it's possible we'd change analyzer indexing semantics
+			// in the future
+			return nil, false
+		}
+
+	}
+
+	tb := val.NewTupleBuilder(r.Desc)
+	for i := 0; i < n; i++ {
+		if i != n {
+			// direct copy all but the last field
+			tb.PutRaw(i, r.Tup.GetField(i))
+		}
+	}
+
+	// last field will be incremented by one to get the exclusive key
+	// range [key, key+1)
+	switch r.Desc.Types[n].Enc {
+	case val.StringEnc:
+		v := r.Fields[n].Lo.Value
+		tb.PutString(n, string(v)+"0")
+	case val.Int8Enc:
+		v, ok := r.Desc.GetInt8(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt8(n, v+1)
+	case val.Uint8Enc:
+		v, ok := r.Desc.GetUint8(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint8(n, v+1)
+	case val.Int16Enc:
+		v, ok := r.Desc.GetInt16(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt16(n, v+1)
+	case val.Uint16Enc:
+		v, ok := r.Desc.GetUint16(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint16(n, v+1)
+	case val.Int32Enc:
+		v, ok := r.Desc.GetInt32(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt32(n, v+1)
+	case val.Uint32Enc:
+		v, ok := r.Desc.GetUint32(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint32(n, v+1)
+	case val.Int64Enc:
+		v, ok := r.Desc.GetInt64(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutInt64(n, v+1)
+	case val.Uint64Enc:
+		v, ok := r.Desc.GetUint64(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutUint64(n, v+1)
+	case val.Float32Enc:
+		v, ok := r.Desc.GetFloat32(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutFloat32(n, v+1)
+	case val.Float64Enc:
+		v, ok := r.Desc.GetFloat64(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutFloat64(n, v+1)
+	case val.DecimalEnc:
+		v, ok := r.Desc.GetDecimal(n, r.Tup)
+		if !ok {
+			return nil, false
+		}
+		tb.PutDecimal(n, v.Add(decimal.New(1, 0)))
+	default:
+		return nil, false
+	}
+	stop := tb.Build(pool)
+	if r.Desc.Compare(r.Tup, stop) >= 0 {
+		// If cmp == 0, we lost precision serializing.
+		// If cmp > 0, we overflowed and |stop| < |start|.
+		// |stop| has to be strictly greater than |start|
+		// for this optimization to be valid.
+		return nil, false
+	}
+	return stop, true
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
@@ -210,14 +361,14 @@ func closedRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 		Desc:   desc,
 	}
 	order := desc.Comparator()
-
 	for i := range rng.Fields {
 		lo := desc.GetField(i, start)
 		hi := desc.GetField(i, stop)
+		isEq := order.CompareValues(i, lo, hi, desc.Types[i]) == 0
 		rng.Fields[i] = RangeField{
-			Lo:    Bound{Binding: true, Inclusive: true, Value: lo},
-			Hi:    Bound{Binding: true, Inclusive: true, Value: hi},
-			Exact: order.CompareValues(i, lo, hi, desc.Types[i]) == 0,
+			Lo:             Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:             Bound{Binding: true, Inclusive: true, Value: hi},
+			BoundsAreEqual: isEq,
 		}
 	}
 	return
@@ -228,7 +379,7 @@ func openStartRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].BoundsAreEqual = false
 	return rng
 }
 
@@ -237,7 +388,7 @@ func openStopRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	rng = closedRange(start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].BoundsAreEqual = false
 	return
 }
 
@@ -247,7 +398,7 @@ func openRange(start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
 	rng.Fields[last].Hi.Inclusive = false
-	rng.Fields[last].Exact = false
+	rng.Fields[last].BoundsAreEqual = false
 	return
 }
 

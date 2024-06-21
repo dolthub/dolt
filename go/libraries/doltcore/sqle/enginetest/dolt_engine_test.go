@@ -619,6 +619,12 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, h)
 }
 
+func TestNumericErrorScripts(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestNumericErrorScripts(t, h)
+}
+
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
 	harness := newDoltHarness(t)
