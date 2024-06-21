@@ -21,7 +21,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -56,75 +55,14 @@ func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 }
 
 func (t *tpccTesterImpl) collectStats(ctx context.Context) error {
-	if !strings.Contains(t.serverConfig.GetServerExec(), "dolt") {
+	if !strings.EqualFold(t.serverConfig.GetServerExec(), "dolt") {
 		return nil
 	}
 	db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/sbt", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
 	if err != nil {
 		return err
 	}
-	c, err := db.Connx(ctx)
-	if err != nil {
-		return err
-	}
-
-	{
-		// configuration, restart, and check needs to be in the same session
-		tx, err := c.BeginTxx(ctx, nil)
-		if err != nil {
-			return err
-		}
-
-		if _, err := tx.Exec("set @@GLOBAL.dolt_stats_auto_refresh_enabled = 1;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@GLOBAL.dolt_stats_auto_refresh_interval = 0;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@PERSIST.dolt_stats_auto_refresh_interval = 0;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("use sbt;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("call dolt_stats_restart();"); err != nil {
-			return err
-		}
-
-		rows := map[string]interface{}{"cnt": 0}
-		tick := time.NewTicker(5 * time.Second)
-		for {
-			if rows["cnt"] != 0 {
-				fmt.Printf("collected %d histogram buckets\n", rows["cnt"])
-				break
-			}
-			select {
-			case <-tick.C:
-				res, err := tx.Queryx("select count(*) as cnt from dolt_statistics;")
-				if err != nil {
-					return err
-				}
-				if !res.Next() {
-					return fmt.Errorf("failed to set statistics")
-				}
-				if err := res.MapScan(rows); err != nil {
-					return err
-				}
-				if err := res.Close(); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if _, err := c.QueryContext(ctx, "call dolt_stats_stop();"); err != nil {
-		return err
-	}
-
-	return nil
+	return collectStats(ctx, db)
 }
 
 func (t *tpccTesterImpl) prepare(ctx context.Context) error {
