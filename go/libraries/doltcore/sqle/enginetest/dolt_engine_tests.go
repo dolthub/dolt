@@ -22,12 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -40,6 +34,13 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
@@ -1611,11 +1612,11 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1661,12 +1662,12 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`),\n" +
-								"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`),\n" +
+							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
@@ -1738,10 +1739,10 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 				{
@@ -1944,4 +1945,3 @@ func RunDoltReflogTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 		}()
 	}
 }
-
