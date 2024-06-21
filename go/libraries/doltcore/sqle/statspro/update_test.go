@@ -178,8 +178,8 @@ func TestBucketBuilder(t *testing.T) {
 			bucket: DoltBucket{Bucket: &stats.Bucket{
 				RowCnt:      23,
 				DistinctCnt: 18,
-				McvVals:     []sql.Row{{int64(7)}},
-				McvsCnt:     []uint64{4},
+				McvVals:     []sql.Row{{int64(10)}, {int64(7)}},
+				McvsCnt:     []uint64{3, 4},
 				BoundVal:    sql.Row{int64(22)},
 				BoundCnt:    1,
 			}},
