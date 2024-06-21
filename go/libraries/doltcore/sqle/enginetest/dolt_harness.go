@@ -61,15 +61,62 @@ type DoltHarness struct {
 	setupTestProcedures bool
 }
 
-var _ enginetest.Harness = (*DoltHarness)(nil)
-var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
-var _ enginetest.ClientHarness = (*DoltHarness)(nil)
-var _ enginetest.IndexHarness = (*DoltHarness)(nil)
-var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
-var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
-var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
-var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
-var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
+func (d *DoltHarness) UseLocalFileSystem() {
+	d.useLocalFilesystem = true
+}
+
+func (d *DoltHarness) Session() *dsess.DoltSession {
+	return d.session
+}
+
+func (d *DoltHarness) WithConfigureStats(configureStats bool) DoltEnginetestHarness {
+	nd := *d
+	nd.configureStats = configureStats
+	return &nd
+}
+
+func (d *DoltHarness) NewHarness(t *testing.T) DoltEnginetestHarness {
+	return newDoltHarness(t)
+}
+
+type DoltEnginetestHarness interface {
+	enginetest.Harness
+	enginetest.SkippingHarness
+	enginetest.ClientHarness
+	enginetest.IndexHarness
+	enginetest.VersionedDBHarness
+	enginetest.ForeignKeyHarness
+	enginetest.KeylessTableHarness
+	enginetest.ReadOnlyDatabaseHarness
+	enginetest.ValidatingHarness
+
+	// NewHarness returns a new uninitialized harness of the same type
+	NewHarness(t *testing.T) DoltEnginetestHarness
+
+	// WithSkippedQueries returns a copy of the harness with the given queries skipped
+	WithSkippedQueries(skipped []string) DoltEnginetestHarness
+
+	// WithParallelism returns a copy of the harness with parallelism set to the given number of threads
+	WithParallelism(parallelism int) DoltEnginetestHarness
+
+	// WithConfigureStats returns a copy of the harness with the given configureStats value
+	WithConfigureStats(configureStats bool) DoltEnginetestHarness
+
+	// SkipSetupCommit configures to harness to skip the commit after setup scripts are run
+	SkipSetupCommit()
+
+	// UseLocalFileSystem configures the harness to use the local filesystem for all storage, instead of in-memory versions
+	UseLocalFileSystem()
+
+	// Close closes the harness, freeing up any resources it may have allocated
+	Close()
+
+	Engine() *gms.Engine
+
+	Session() *dsess.DoltSession
+}
+
+var _ DoltEnginetestHarness = &DoltHarness{}
 
 // newDoltHarness creates a new harness for testing Dolt, using an in-memory filesystem and an in-memory blob store.
 func newDoltHarness(t *testing.T) *DoltHarness {
@@ -80,6 +127,10 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	}
 
 	return dh
+}
+
+func newDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
+	return newDoltHarness(t)
 }
 
 // newDoltHarnessForLocalFilesystem creates a new harness for testing Dolt, using
@@ -279,17 +330,21 @@ func filterStatsOnlyQueries(scripts []setup.SetupScript) []setup.SetupScript {
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
-func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+func (d *DoltHarness) WithParallelism(parallelism int) DoltEnginetestHarness {
 	nd := *d
 	nd.parallelism = parallelism
 	return &nd
 }
 
 // WithSkippedQueries returns a copy of the harness with the given queries skipped
-func (d *DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
+func (d *DoltHarness) WithSkippedQueries(queries []string) DoltEnginetestHarness {
 	nd := *d
 	nd.skippedQueries = append(d.skippedQueries, queries...)
 	return &nd
+}
+
+func (d *DoltHarness) Engine() *gms.Engine {
+	return d.engine
 }
 
 // SkipQueryTest returns whether to skip a query
