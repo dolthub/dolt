@@ -184,9 +184,6 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 // branchQualifiedDatabase returns a branch qualified database. If the database
 // is already branch suffixed no duplication is applied.
 func (p *Provider) branchQualifiedDatabase(db, branch string) string {
-	if branch == "" {
-		return db
-	}
 	suffix := fmt.Sprintf("/%s", branch)
 	if !strings.HasSuffix(db, suffix) {
 		return fmt.Sprintf("%s%s", db, suffix)
