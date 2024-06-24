@@ -228,6 +228,7 @@ tests:
         rows:
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
         - ["repo1"]
 - name: LOAD DATA LOCAL INFILE works
   repos:

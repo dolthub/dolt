@@ -169,7 +169,7 @@ func (d *DoltHarness) SkipSetupCommit() {
 // included.
 func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	ctx := enginetest.NewContext(d)
-	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema', 'performance_schema');")
 	var dbs []string
 	for i := range res {
 		dbs = append(dbs, res[i][0].(string))
