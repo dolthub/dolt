@@ -1306,7 +1306,7 @@ var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.D
 // AllSchemas implements sql.SchemaDatabase
 func (db Database) AllSchemas(ctx *sql.Context) (map[string]sql.DatabaseSchema, error) {
 	if !resolve.UseSearchPath {
-		return map[string]sql.DatabaseSchema{db.Schema(): db}, nil
+		return map[string]sql.DatabaseSchema{db.Name(): db}, nil
 	}
 
 	ws, err := db.GetWorkingSet(ctx)
