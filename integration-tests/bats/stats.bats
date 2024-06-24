@@ -208,13 +208,13 @@ teardown() {
     cd repo2
 
     dolt sql -q "alter table xy add index y2 (y)"
-    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,2), (8,3), (9,4)"
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,1), (8,1), (9,1),(10,3),(11,4),(12,5),(13,6),(14,7),(15,8),(16,9),(17,10),(18,11)"
 
     dolt sql -q "analyze table xy"
 
-    run dolt sql -r csv -q "select mcv1 from dolt_statistics where index_name = 'y2'"
+    run dolt sql -r csv -q "select mcv1, mcv2 from dolt_statistics where index_name = 'y2'"
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "0" ]
+    [ "${lines[1]}" = "1,0" ]
 }
 
 @test "stats: multi db" {
