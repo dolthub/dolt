@@ -774,23 +774,6 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	return rows[0][0].(string), nil
 }
 
-func ParseArgsAndPrintHelp(
-	ap *argparser.ArgParser,
-	commandStr string,
-	args []string,
-	docs cli.CommandDocumentationContent) (apr *argparser.ArgParseResults, usage cli.UsagePrinter, terminate bool, exitStatus int) {
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
-	var err error
-	apr, err = cli.ParseArgs(ap, args, helpPrt)
-	if err != nil {
-		if err == argparser.ErrHelp {
-			return nil, usagePrt, true, 0
-		}
-		return nil, usagePrt, true, HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
-	}
-	return apr, usagePrt, false, 0
-}
-
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
 		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {

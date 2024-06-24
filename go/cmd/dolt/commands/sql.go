@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -97,7 +96,7 @@ const (
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
-# "exit" or "quit" (or Ctrl-D) to exit. "/help;" for help.`
+# "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
 // TODO: get rid of me, use a real integration point to define system variables
@@ -261,7 +260,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			err := execShell(sqlCtx, queryist, format, cliCtx)
+			err := execShell(sqlCtx, queryist, format)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -686,7 +685,7 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, cliCtx cli.CliContext) error {
+func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
@@ -751,85 +750,65 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			return
 		}
 
-		cont := true
+		closureFormat := format
+
+		// TODO: there's a bug in the readline library when editing multi-line history entries.
+		// Longer term we need to switch to a new readline library, like in this bug:
+		// https://github.com/cockroachdb/cockroach/issues/15460
+		// For now, we store all history entries as single-line strings to avoid the issue.
+		singleLine := strings.ReplaceAll(query, "\n", " ")
+
+		if err := shell.AddHistory(singleLine); err != nil {
+			// TODO: handle better, like by turning off history writing for the rest of the session
+			shell.Println(color.RedString(err.Error()))
+		}
+
+		query = strings.TrimSuffix(query, shell.LineTerminator())
+
+		// TODO: it would be better to build this into the statement parser rather than special case it here
+		for _, terminator := range verticalOutputLineTerminators {
+			if strings.HasSuffix(query, terminator) {
+				closureFormat = engine.FormatVertical
+			}
+			query = strings.TrimSuffix(query, terminator)
+		}
+
 		var nextPrompt string
 		var multiPrompt string
+		var sqlSch sql.Schema
+		var rowIter sql.RowIter
 
-		re := regexp.MustCompile(`\s*/(.*)`)
-		matches := re.FindStringSubmatch(query)
-		// If the query starts with a slash, it's a shell command. We don't want to print the query in that case.
-		if len(matches) > 1 {
-			func() {
-				subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
-				defer stop()
-				sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
+		func() {
+			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
 
-				slashCmd := matches[1]
-				err := handleSlashCommand(sqlCtx, slashCmd, cliCtx)
+			sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
+
+			if sqlSch, rowIter, err = processQuery(sqlCtx, query, qryist); err != nil {
+				verr := formatQueryError("", err)
+				shell.Println(verr.Verbose())
+			} else if rowIter != nil {
+				switch closureFormat {
+				case engine.FormatTabular, engine.FormatVertical:
+					err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter)
+				default:
+					err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter)
+				}
+
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
-
-				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
-			}()
-		} else {
-			closureFormat := format
-
-			// TODO: there's a bug in the readline library when editing multi-line history entries.
-			// Longer term we need to switch to a new readline library, like in this bug:
-			// https://github.com/cockroachdb/cockroach/issues/15460
-			// For now, we store all history entries as single-line strings to avoid the issue.
-			singleLine := strings.ReplaceAll(query, "\n", " ")
-
-			if err := shell.AddHistory(singleLine); err != nil {
-				// TODO: handle better, like by turning off history writing for the rest of the session
-				shell.Println(color.RedString(err.Error()))
 			}
 
-			query = strings.TrimSuffix(query, shell.LineTerminator())
-
-			// TODO: it would be better to build this into the statement parser rather than special case it here
-			for _, terminator := range verticalOutputLineTerminators {
-				if strings.HasSuffix(query, terminator) {
-					closureFormat = engine.FormatVertical
-				}
-				query = strings.TrimSuffix(query, terminator)
+			db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
+			if ok {
+				sqlCtx.SetCurrentDatabase(db)
 			}
-
-			var sqlSch sql.Schema
-			var rowIter sql.RowIter
-
-			cont = func() bool {
-				subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
-				defer stop()
-
-				sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
-
-				if sqlSch, rowIter, err = processQuery(sqlCtx, query, qryist); err != nil {
-					verr := formatQueryError("", err)
-					shell.Println(verr.Verbose())
-				} else if rowIter != nil {
-					switch closureFormat {
-					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter)
-					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter)
-					}
-
-					if err != nil {
-						shell.Println(color.RedString(err.Error()))
-					}
-				}
-
-				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
-
-				return true
-			}()
-		}
-
-		if !cont {
-			return
-		}
+			if branch != "" {
+				dirty, _ = isDirty(sqlCtx, qryist)
+			}
+			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
+		}()
 
 		shell.SetPrompt(nextPrompt)
 		shell.SetMultiPrompt(multiPrompt)
@@ -839,20 +818,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
 	return nil
-}
-
-// postCommandUpdate is a helper function that is run after the shell has completed a command. It updates the the database
-// if needed, and generates new prompts for the shell (based on the branch and if the workspace is dirty).
-func postCommandUpdate(sqlCtx *sql.Context, qryist cli.Queryist) (string, string) {
-	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
-	if ok {
-		sqlCtx.SetCurrentDatabase(db)
-	}
-	dirty := false
-	if branch != "" {
-		dirty, _ = isDirty(sqlCtx, qryist)
-	}
-	return formattedPrompts(db, branch, dirty)
 }
 
 // formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
@@ -927,7 +892,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 // isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
 // with a branch. If you are not, you will get an error.
 func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
-	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
+	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_Status")
 
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
