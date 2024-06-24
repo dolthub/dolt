@@ -89,12 +89,10 @@ func (cmd ResetCmd) RequiresRepo() bool {
 }
 
 // Exec executes the command
-func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateResetArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, resetDocContent)
-	if terminate {
-		return status
-	}
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
