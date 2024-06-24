@@ -29,6 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
+const (
+	boostrapRowLimit = 2e6
+)
+
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
@@ -41,6 +45,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branches := p.getStatsBranches(ctx)
+	var rows uint64
 	for _, branch := range branches {
 		sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
 		if err != nil {
@@ -59,6 +64,17 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 			if err != nil {
 				return err
 			}
+
+			if st, ok := sqlTable.(sql.StatisticsTable); ok {
+				cnt, ok, err := st.RowCount(ctx)
+				if ok && err == nil {
+					rows += cnt
+				}
+			}
+			if rows >= boostrapRowLimit {
+				return fmt.Errorf("stats bootstrap aborted because %s exceeds the default row limit; manually run \"ANALYZE <table>\" or \"call dolt_stats_restart()\" to collect statistics", db)
+			}
+
 			if err := p.RefreshTableStatsWithBranch(ctx, sqlTable, db, branch); err != nil {
 				return err
 			}

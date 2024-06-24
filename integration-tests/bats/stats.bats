@@ -355,3 +355,40 @@ SQL
     [ "${lines[2]}" = "2" ]
 }
 
+@test "stats: boostrap abort over 1mm rows" {
+    cat <<EOF > data.py
+import random
+import os
+
+rows = 2*1000*1000+1
+
+def main():
+    f = open("data.csv","w+")
+    f.write("id,hostname\n")
+
+    for i in range(rows):
+        hostname = random.getrandbits(100)
+        f.write(f"{i},{hostname}\n")
+        if i % (500*1000) == 0:
+            print("row :", i)
+            f.flush()
+
+    f.close()
+
+if __name__ == "__main__":
+    main()
+EOF
+
+    mkdir repo3
+    cd repo3
+    python3 ../data.py
+
+    dolt init
+    dolt sql -q "create table f (id int primary key, hostname int)"
+    dolt table import -u --continue f data.csv
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "stats bootstrap aborted" ]] || false
+    [ "${lines[2]}" = "0" ]
+}
