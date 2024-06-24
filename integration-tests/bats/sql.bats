@@ -1459,7 +1459,7 @@ SQL
 
     run dolt sql -r csv -q "set dolt_show_branch_databases = 1; show databases"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ] # 2 base dbs, 3 branch dbs each, 2 mysql dbs, 1 header line
+    [ "${#lines[@]}" -eq 12 ] # 2 base dbs, 3 branch dbs each, 3 mysql dbs, 1 header line
     [[ "$output" =~ "db1/b1" ]] || false
     [[ "$output" =~ "db1/b2" ]] || false
     [[ "$output" =~ "db1/main" ]] || false
@@ -1476,13 +1476,13 @@ SQL
     dolt sql -q "set @@persist.dolt_show_branch_databases = 1"
     run dolt sql -r csv -q "show databases"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
+    [ "${#lines[@]}" -eq 12 ]
 
     # make sure we aren't double-counting revision dbs
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Database changed" ]] || false
-    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
+    [ "${#lines[@]}" -eq 13 ] # one line for above output, 12 dbs
 }
 
 @test "sql: run outside a dolt directory" {

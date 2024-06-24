@@ -23,6 +23,7 @@ export const databaseTests = [
       { Database: `${dbName}/main` },
       { Database: "information_schema" },
       { Database: "mysql" },
+      { Database: "performance_schema" },
     ],
   },
   {
@@ -46,6 +47,7 @@ export const databaseTests = [
       { Database: "information_schema" },
       { Database: "mysql" },
       { Database: "new_db" },
+      { Database: "performance_schema" },
     ],
   },
   {

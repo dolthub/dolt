@@ -393,7 +393,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "use `mydb/tag1~`;",
@@ -406,7 +406,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				// The branch is nil in the case of a non-branch revision DB
@@ -475,7 +475,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "use mydb/tag1;",
@@ -493,7 +493,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -525,7 +525,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 		},
 	},
@@ -548,7 +548,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				// The database name is always the requested name
@@ -572,7 +572,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				//  base database name. But we should also consider the connection string: if you connect to a revision
 				//  database, that database should always be visible.
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "select database();",
@@ -592,7 +592,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				// Create a table in the working set to verify the main db
@@ -679,7 +679,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "use `mydb/main`;",
@@ -4654,7 +4654,7 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"performance_schema"}, {"two"}},
 			},
 			{
 				Query:    "drop database one;",
@@ -4662,7 +4662,7 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"performance_schema"}, {"two"}},
 			},
 			{
 				Query:    "call dolt_undrop('one');",
@@ -4670,7 +4670,7 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"performance_schema"}, {"two"}},
 			},
 			{
 				Query:    "use one;",
@@ -4698,7 +4698,7 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}, {"performance_schema"}},
 			},
 			{
 				Query:          "call dolt_undrop;",

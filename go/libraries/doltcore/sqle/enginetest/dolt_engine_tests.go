@@ -707,7 +707,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "use mydb/" + commithash,
@@ -725,7 +725,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "select * from t01",
@@ -757,7 +757,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 		},
 	}

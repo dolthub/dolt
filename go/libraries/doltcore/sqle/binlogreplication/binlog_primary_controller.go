@@ -82,8 +82,9 @@ func (d *doltBinlogPrimaryController) ListReplicas(ctx *sql.Context) error {
 }
 
 // ListBinaryLogs implements the BinlogPrimaryController interface.
-func (d *doltBinlogPrimaryController) ListBinaryLogs(ctx *sql.Context) error {
-	return fmt.Errorf("ListBinaryLogs not implemented in Dolt yet")
+func (d *doltBinlogPrimaryController) ListBinaryLogs(_ *sql.Context) ([]binlogreplication.BinaryLogFileMetadata, error) {
+	// TODO: No log file support yet, so just return an empty list
+	return nil, nil
 }
 
 // GetBinaryLogStatus implements the BinlogPrimaryController interface.
