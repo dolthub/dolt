@@ -266,6 +266,7 @@ func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
 	}
 
 	defer harness.Close()
+	sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 0)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
