@@ -1304,9 +1304,9 @@ var HandleSchema = func(ctx *sql.Context, schemaName string, db Database) (sql.D
 }
 
 // AllSchemas implements sql.SchemaDatabase
-func (db Database) AllSchemas(ctx *sql.Context) (map[string]sql.DatabaseSchema, error) {
+func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	if !resolve.UseSearchPath {
-		return map[string]sql.DatabaseSchema{db.Name(): db}, nil
+		return []sql.DatabaseSchema{db}, nil
 	}
 
 	ws, err := db.GetWorkingSet(ctx)
@@ -1320,15 +1320,15 @@ func (db Database) AllSchemas(ctx *sql.Context) (map[string]sql.DatabaseSchema, 
 		return nil, err
 	}
 
-	dbSchemas := make(map[string]sql.DatabaseSchema)
-	for _, sch := range schemas {
+	dbSchemas := make([]sql.DatabaseSchema, len(schemas))
+	for i, schema := range schemas {
 		sdb := db
-		sdb.schemaName = sch.Name
-		handledDb, err := HandleSchema(ctx, sch.Name, sdb)
+		sdb.schemaName = schema.Name
+		handledDb, err := HandleSchema(ctx, schema.Name, sdb)
 		if err != nil {
 			return nil, err
 		}
-		dbSchemas[sch.Name] = handledDb
+		dbSchemas[i] = handledDb
 	}
 
 	return dbSchemas, nil
