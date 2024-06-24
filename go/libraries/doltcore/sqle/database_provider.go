@@ -68,7 +68,6 @@ type DoltDatabaseProvider struct {
 }
 
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ sql.SchemaDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.CollatedDatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -254,32 +253,6 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 	}
 
 	return database, nil
-}
-
-// SchemaDatabase is called to resolve a table when it's qualified with a single qualifer, e.g. `myDb.myTable`. We
-// resolve this differently depending on whether we are emulating the MySQL or the Postgres dialect. In MySQL, the
-// qualifier refers to a database name. In Postgres, it refers to a schema name.
-// TODO: this should live only on a Doltgres implementation of this provider, this is a shim to get something working.
-func (p *DoltDatabaseProvider) SchemaDatabase(ctx *sql.Context, dbName, schemaName string) (sql.DatabaseSchema, bool, error) {
-	// If search path isn't enabled, this becomes a simple DB lookup on the schema name, which is the qualifier specified
-	// in the query
-	if !resolve.UseSearchPath {
-		database, err := p.Database(ctx, schemaName)
-		return database, err == nil, err
-	}
-
-	db, err := p.Database(ctx, dbName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// We do have some database implementations that don't implement the SchemaDatabase interface, so we need to check
-	sdb, ok := db.(sql.SchemaDatabase)
-	if !ok {
-		return nil, false, nil
-	}
-
-	return sdb.GetSchema(ctx, schemaName)
 }
 
 func wrapForStandby(db dsess.SqlDatabase, standby bool) dsess.SqlDatabase {
