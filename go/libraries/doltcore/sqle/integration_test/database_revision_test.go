@@ -73,6 +73,7 @@ func TestDbRevision(t *testing.T) {
 					rows: []sql.Row{
 						{"dolt"},
 						{"information_schema"},
+						{"performance_schema"},
 					},
 				},
 				{
