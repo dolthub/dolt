@@ -79,6 +79,9 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
 		mcvCnts := make([]uint64, numMcvs)
 		for i, v := range mcvCountsStr {
+			if v == "" {
+				continue
+			}
 			val, err := strconv.Atoi(v)
 			if err != nil {
 				return nil, err

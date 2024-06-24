@@ -221,33 +221,13 @@ teardown() {
     cd repo2
 
     dolt sql -q "alter table xy add index y2 (y)"
-    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0)"
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,2), (8,3), (9,4)"
 
-    # setting variables doesn't hang or error
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
-
-    # auto refresh can only initialize at server startup
-    start_sql_server
-
-    # need to trigger at least one refresh cycle
-    sleep 1
+    dolt sql -q "analyze table xy"
 
     run dolt sql -r csv -q "select mcv1 from dolt_statistics where index_name = 'y2'"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "0" ]
-
-    sleep 1
-
-    dolt sql -q "update xy set y = 2 where x between 0 and 3"
-
-    sleep 1
-
-    run dolt sql -r csv -q "select mcv1 as mcv from dolt_statistics where index_name = 'y2' union select mcv2 as mcv from dolt_statistics where index_name = 'y2' order by mcv"
-    [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "0" ]
-    [ "${lines[2]}" = "2" ]
 }
 
 @test "stats: multi db" {

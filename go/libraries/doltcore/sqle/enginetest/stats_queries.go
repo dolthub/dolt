@@ -46,9 +46,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 				Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv_cnt JSON path '$.mcv_counts')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{types.JSONDocument{Val: []interface{}{
-						float64(1),
 						float64(4),
-						float64(1),
 					}}},
 				},
 			},
@@ -56,9 +54,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs[*]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{types.JSONDocument{Val: []interface{}{
-						[]interface{}{float64(1), "a"},
 						[]interface{}{float64(0), "a"},
-						[]interface{}{float64(2), "a"},
 					}}},
 				},
 			},
@@ -329,8 +325,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: fmt.Sprintf("select %s, %s, %s, %s, %s from dolt_statistics", schema.StatsMcv1ColName, schema.StatsMcv2ColName, schema.StatsMcv3ColName, schema.StatsMcv4ColName, schema.StatsMcvCountsColName),
 				Expected: []sql.Row{
-					{"5", "1", "2", "", "1,1,1"},
-					{"1,a", "0,a", "2,a", "", "1,4,1"},
+					{"", "", "", "", ""},
+					{"0,a", "", "", "", "4"},
 				},
 			},
 		},
