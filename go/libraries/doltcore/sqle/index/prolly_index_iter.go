@@ -192,7 +192,7 @@ func newProllyCoveringIndexIter(
 
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(idx, pkSch, projections)
+		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(idx, projections)
 	}
@@ -265,8 +265,8 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping) {
-	return projectionMappingsForIndex(idx.Schema(), projections)
+func primaryIndexMapping(idx DoltIndex, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping) {
+	return ProjectionMappingsForIndex(idx.Schema(), projections)
 }
 
 type prollyKeylessIndexIter struct {

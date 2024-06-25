@@ -46,6 +46,10 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
 
+func (idt *IndexedDoltTable) Index() index.DoltIndex {
+	return idt.idx
+}
+
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, idt.DoltTable, lookup, idt.isDoltFormat)
 }
