@@ -425,9 +425,16 @@ DELIM
     [[ ! "$output" =~ "test" ]] || false
 }
 
-@test "import-create-tables: import a table with non UTF-8 characters in it" {
+@test "import-create-tables: import and create table with non UTF-8 characters in it" {
     skiponwindows "windows can't find bad-characters.csv"
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
+    [ "$status" -eq 1 ]
+}
+
+@test "import-create-tables: import and update table with non UTF-8 characters in it" {
+    skiponwindows "windows can't find bad-characters.csv"
+    dolt sql -q "create table test (pk int primary key, c1 blob);"
+    run dolt table import -u --pk=pk test `batshelper bad-characters.csv`
     [ "$status" -eq 0 ]
     dolt sql -q 'select * from test'
     dolt sql -r csv -q 'select * from test' > compare.csv

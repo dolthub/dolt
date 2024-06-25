@@ -787,9 +787,9 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 				}
 
 				if assertion.ExpectedErr != nil {
-					enginetest.AssertErr(t, e, harness, assertion.Query, assertion.ExpectedErr)
+					enginetest.AssertErr(t, e, harness, assertion.Query, nil, assertion.ExpectedErr)
 				} else if assertion.ExpectedErrStr != "" {
-					enginetest.AssertErrWithCtx(t, e, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+					enginetest.AssertErrWithCtx(t, e, harness, ctx, assertion.Query, nil, nil, assertion.ExpectedErrStr)
 				} else if assertion.ExpectedWarning != 0 {
 					enginetest.AssertWarningAndTestQuery(t, e, nil, harness, assertion.Query,
 						assertion.Expected, nil, assertion.ExpectedWarning, assertion.ExpectedWarningsCount,
