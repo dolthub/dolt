@@ -905,7 +905,7 @@ func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
 	userDatabaseNames := make([]string, 0, len(allDatabases))
 	for _, database := range allDatabases {
 		switch database.Name() {
-		case "information_schema", "mysql", "performance_schema":
+		case "information_schema", "mysql":
 		default:
 			userDatabaseNames = append(userDatabaseNames, database.Name())
 		}
