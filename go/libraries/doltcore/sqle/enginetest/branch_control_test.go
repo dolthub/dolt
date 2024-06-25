@@ -1400,11 +1400,11 @@ func TestBranchControl(t *testing.T) {
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, assertion.ExpectedErr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErr)
 					})
 				} else if assertion.ExpectedErrStr != "" {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, nil, assertion.ExpectedErrStr)
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
@@ -1446,7 +1446,7 @@ func TestBranchControlBlocks(t *testing.T) {
 				User:    "testuser",
 				Address: "localhost",
 			})
-			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
+			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, nil, test.ExpectedErr)
 
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
@@ -1494,7 +1494,7 @@ func TestBranchControlBlocks(t *testing.T) {
 				User:    "testuser",
 				Address: "localhost",
 			})
-			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, test.ExpectedErr)
+			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, nil, test.ExpectedErr)
 
 			addUserQuery = "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults = []sql.Row{{types.NewOkResult(1)}}
