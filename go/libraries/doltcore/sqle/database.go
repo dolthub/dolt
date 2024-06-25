@@ -809,11 +809,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 }
 
 func (db Database) SchemaName() string {
-	if db.schemaName == "" {
-		return db.Name()
-	} else {
-		return db.schemaName
-	}
+	return db.schemaName
 }
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
