@@ -44,21 +44,17 @@ func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, l
 		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, and latebind must be non nil."))
 	}
 
-	return LateBindCliContext{globalArgs: args, config: config, activeContext: &QueryistContext{}, bind: latebind}, nil
-}
-
-type QueryistContext struct {
-	sqlCtx *sql.Context
-	qryist *Queryist
+	return LateBindCliContext{globalArgs: args, config: config, bind: latebind}, nil
 }
 
 // LateBindCliContext is a struct that implements CliContext. Its primary purpose is to wrap the global arguments and
 // provide an implementation of the QueryEngine function. This instance is stateful to ensure that the Queryist is only
 // created once.
 type LateBindCliContext struct {
-	globalArgs    *argparser.ArgParseResults
-	config        *env.DoltCliConfig
-	activeContext *QueryistContext
+	globalArgs *argparser.ArgParseResults
+	queryist   Queryist
+	sqlCtx     *sql.Context
+	config     *env.DoltCliConfig
 
 	bind LateBindQueryist
 }
@@ -72,8 +68,8 @@ func (lbc LateBindCliContext) GlobalArgs() *argparser.ArgParseResults {
 // LateBindQueryist is made, and caches the result. Note that if this is called twice, the closer function returns will
 // be nil, callers should check if is nil.
 func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error) {
-	if lbc.activeContext != nil && lbc.activeContext.qryist != nil && lbc.activeContext.sqlCtx != nil {
-		return *lbc.activeContext.qryist, lbc.activeContext.sqlCtx, nil, nil
+	if lbc.queryist != nil {
+		return lbc.queryist, lbc.sqlCtx, nil, nil
 	}
 
 	qryist, sqlCtx, closer, err := lbc.bind(ctx)
@@ -81,8 +77,8 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.C
 		return nil, nil, nil, err
 	}
 
-	lbc.activeContext.qryist = &qryist
-	lbc.activeContext.sqlCtx = sqlCtx
+	lbc.queryist = qryist
+	lbc.sqlCtx = sqlCtx
 
 	return qryist, sqlCtx, closer, nil
 }

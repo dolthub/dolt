@@ -41,6 +41,9 @@ teardown() {
 @test "stats: empty initial stats" {
     cd repo2
 
+    # disable bootstrap, can only make stats with ANALYZE or background thread
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
+
     dolt sql -q "insert into xy values (0,0), (1,1)"
 
     start_sql_server
@@ -86,6 +89,16 @@ teardown() {
     dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
+}
+
+@test "stats: bootrap on engine startup" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 1;"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
 }
 
 @test "stats: deletes refresh" {
@@ -208,31 +221,26 @@ teardown() {
     cd repo2
 
     dolt sql -q "alter table xy add index y2 (y)"
-    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,2), (8,3), (9,4)"
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,1), (8,1), (9,1),(10,3),(11,4),(12,5),(13,6),(14,7),(15,8),(16,9),(17,10),(18,11)"
 
     dolt sql -q "analyze table xy"
 
-    run dolt sql -r csv -q "select mcv1 from dolt_statistics where index_name = 'y2'"
+    run dolt sql -r csv -q "select mcv1, mcv2 from dolt_statistics where index_name = 'y2'"
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "0" ]
+    [ "${lines[1]}" = "1,0" ]
 }
 
 @test "stats: multi db" {
     cd repo1
+
     dolt sql -q "insert into ab values (0,0), (1,1)"
 
     cd ../repo2
+
     dolt sql -q "insert into ab values (0,0), (1,1)"
     dolt sql -q "insert into xy values (0,0), (1,1)"
 
     cd ..
-    start_sql_server
-    sleep 1
-    stop_sql_server
-
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "0" ]
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"
@@ -327,3 +335,40 @@ SQL
     [ "${lines[2]}" = "2" ]
 }
 
+@test "stats: boostrap abort over 1mm rows" {
+    cat <<EOF > data.py
+import random
+import os
+
+rows = 2*1000*1000+1
+
+def main():
+    f = open("data.csv","w+")
+    f.write("id,hostname\n")
+
+    for i in range(rows):
+        hostname = random.getrandbits(100)
+        f.write(f"{i},{hostname}\n")
+        if i % (500*1000) == 0:
+            print("row :", i)
+            f.flush()
+
+    f.close()
+
+if __name__ == "__main__":
+    main()
+EOF
+
+    mkdir repo3
+    cd repo3
+    python3 ../data.py
+
+    dolt init
+    dolt sql -q "create table f (id int primary key, hostname int)"
+    dolt table import -u --continue f data.csv
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "stats bootstrap aborted" ]] || false
+    [ "${lines[2]}" = "0" ]
+}

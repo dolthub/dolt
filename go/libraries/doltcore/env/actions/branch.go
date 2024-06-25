@@ -63,6 +63,8 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 		}
 	}
 
+	// todo: update default branch variable
+
 	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true, AllowDeletingCurrentBranch: true}, remoteDbPro, rsc)
 }
 

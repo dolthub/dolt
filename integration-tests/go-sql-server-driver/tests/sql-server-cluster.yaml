@@ -1567,6 +1567,7 @@ tests:
         - ["dolt_cluster"]
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
         - ["repo1"]
     - query: "select `database`, standby_remote, role, epoch, replication_lag_millis is not null as `replication_lag_millis`, current_error from dolt_cluster.dolt_cluster_status"
       result:
@@ -1582,6 +1583,7 @@ tests:
         - ["dolt_cluster"]
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
         - ["repo1"]
       retry_attempts: 100
     - query: "select `database`, standby_remote, role, epoch from dolt_cluster.dolt_cluster_status"
@@ -1730,6 +1732,7 @@ tests:
         - ["dolt_cluster"]
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
       retry_attempts: 100
     - query: "select `database`, standby_remote, role, epoch from dolt_cluster.dolt_cluster_status"
       result:
@@ -1749,6 +1752,7 @@ tests:
         - ["dolt_cluster"]
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
         - ["repo1"]
     - exec: 'use repo1'
     - query: "select d from vals"
@@ -1807,6 +1811,7 @@ tests:
         - ["dolt_cluster"]
         - ["information_schema"]
         - ["mysql"]
+        - ["performance_schema"]
     - exec: "call dolt_cluster_transition_to_standby('2', '1')"
   - on: server2
     queries:

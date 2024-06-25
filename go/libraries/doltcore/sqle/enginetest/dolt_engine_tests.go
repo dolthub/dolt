@@ -266,6 +266,7 @@ func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
 	}
 
 	defer harness.Close()
+	sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 0)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
@@ -706,7 +707,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "use mydb/" + commithash,
@@ -724,7 +725,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 			{
 				Query:    "select * from t01",
@@ -756,7 +757,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}, {"performance_schema"}},
 			},
 		},
 	}

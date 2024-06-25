@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -68,7 +69,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		upperBoundCnt := row[schema.StatsUpperBoundCntTag].(uint64)
 		createdAt := row[schema.StatsCreatedAtTag].(time.Time)
 
-		typs := strings.Split(typesStr, ",")
+		typs := strings.Split(typesStr, "\n")
 		for i, t := range typs {
 			typs[i] = strings.TrimSpace(t)
 		}
@@ -90,7 +91,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 
 		mcvs := make([]sql.Row, numMcvs)
 		for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
-			if v != nil {
+			if v != nil && v != "" {
 				row, err := iter.ParseRow(v.(string))
 				if err != nil {
 					return nil, err
@@ -136,7 +137,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		}
 
 		if currentStat.Statistic.Hist == nil {
-			currentStat.Statistic.Typs, err = stats.ParseTypeStrings(typs)
+			currentStat.Statistic.Typs, err = parseTypeStrings(typs)
 			if err != nil {
 				return nil, err
 			}
@@ -180,6 +181,18 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 	return qualToStats, nil
 }
 
+func parseTypeStrings(typs []string) ([]sql.Type, error) {
+	var ret []sql.Type
+	for _, typ := range typs {
+		ct, err := planbuilder.ParseColumnTypeString(typ)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, ct)
+	}
+	return ret, nil
+}
+
 func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	roots, ok := dSess.GetRoots(ctx, qual.Db())
@@ -216,7 +229,7 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	}
 
 	firstKey := keyBuilder.Build(buffPool)
-	var firstRow sql.Row
+	firstRow := make(sql.Row, keyBuilder.Desc.Count())
 	for i := 0; i < keyBuilder.Desc.Count(); i++ {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {
