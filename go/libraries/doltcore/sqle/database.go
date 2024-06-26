@@ -722,26 +722,12 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
-	var tbl *doltdb.Table
-	var tblName doltdb.TableName
-	var tblExists bool
-
 	// TODO: dolt_schemas needs work to be compatible with multiple schemas
 	if resolve.UseSearchPath && db.schemaName == "" && !doltdb.HasDoltPrefix(tableName) {
-		var err error
-		tblName, tbl, tblExists, err = resolve.TableWithSearchPath(ctx, root, tableName)
-		if err != nil {
-			return doltdb.TableName{}, nil, false, err
-		}
+		return resolve.TableWithSearchPath(ctx, root, tableName)
 	} else {
-		var err error
-		tblName, tbl, tblExists, err = db.tableInsensitive(ctx, root, tableName)
-		if err != nil {
-			return doltdb.TableName{}, nil, false, err
-		}
+		return db.tableInsensitive(ctx, root, tableName)
 	}
-
-	return tblName, tbl, tblExists, nil
 }
 
 // tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists.
