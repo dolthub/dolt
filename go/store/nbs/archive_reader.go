@@ -21,9 +21,10 @@ import (
 	"io"
 	"math/bits"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
