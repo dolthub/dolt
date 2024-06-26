@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	rowexec2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"os"
 	"runtime"
 	"strconv"
@@ -194,7 +195,7 @@ func NewSqlEngine(
 	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
-	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
+	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(rowexec2.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()

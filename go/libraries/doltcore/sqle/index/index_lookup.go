@@ -287,7 +287,7 @@ func NewLookupBuilder(
 func newCoveringLookupBuilder(b *baseLookupBuilder) *coveringLookupBuilder {
 	var keyMap, valMap, ordMap val.OrdinalMapping
 	if b.idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.sch, b.projections)
+		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.projections)
 	} else {
 		keyMap, ordMap = coveringIndexMapping(b.idx, b.projections)
 	}

@@ -17,6 +17,8 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	rowexec2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"runtime"
 	"strings"
 	"testing"
@@ -27,7 +29,6 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -251,7 +252,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.DefaultBuilder
+		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(rowexec2.Builder{})
 		d.engine = e
 
 		ctx := enginetest.NewContext(d)
