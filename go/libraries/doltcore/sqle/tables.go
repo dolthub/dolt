@@ -887,7 +887,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return 0, err
 	}
@@ -1504,7 +1504,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		ait.AddNewTable(t.tableName)
 	}
 
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, updatedTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, updatedTable)
 	if err != nil {
 		return err
 	}
@@ -1700,7 +1700,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newRoot, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: t.Name()}, dt)
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: t.Name(), Schema: t.db.schemaName}, dt)
 	if err != nil {
 		return nil, err
 	}
@@ -2234,7 +2234,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, updatedTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, updatedTable)
 	if err != nil {
 		return err
 	}
@@ -2354,7 +2354,7 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -2394,7 +2394,7 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -2489,13 +2489,12 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 			return err
 		}
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, ret.NewTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, ret.NewTable)
 	if err != nil {
 		return err
 	}
 
 	err = t.setRoot(ctx, newRoot)
-
 	if err != nil {
 		return err
 	}
@@ -3010,7 +3009,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -3057,7 +3056,7 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return err
 	}
@@ -3101,7 +3100,7 @@ func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation 
 	if err != nil {
 		return err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName}, newTable)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, newTable)
 	if err != nil {
 		return err
 	}
