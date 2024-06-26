@@ -100,7 +100,7 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 	sep := ""
 	for _, t := range dStats.Statistic.Typs {
 		typesB.WriteString(sep + t.String())
-		sep = ","
+		sep = "\n"
 	}
 	typesStr := typesB.String()
 

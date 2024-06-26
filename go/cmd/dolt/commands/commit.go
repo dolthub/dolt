@@ -104,13 +104,11 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // (e.g. because --skip-empty was specified as an argument).
 func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporaryDEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, commitDocs)
-	if terminate {
-		return status, false
-	}
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if err := cli.VerifyCommitArgs(apr); err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage), false
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), help), false
 	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
