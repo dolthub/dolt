@@ -668,7 +668,7 @@ func (tr tableReader) reader(ctx context.Context) (io.ReadCloser, uint64, error)
 	return r, sz, nil
 }
 
-func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+func (tr tableReader) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
 	// findOffsets sets getRecord.found
 	recs, _, err := tr.findOffsets(requests)
 	if err != nil {

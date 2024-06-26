@@ -31,7 +31,7 @@ type RemoteSrvStore interface {
 	chunks.TableFileStore
 
 	Path() (string, bool)
-	GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
+	GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]nbs.Range, error)
 }
 
 var _ RemoteSrvStore = &nbs.NomsBlockStore{}

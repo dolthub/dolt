@@ -123,7 +123,7 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	return nil, errors.New("Archive chunk source does not support clone")
 }
 
-func (acs archiveChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord) (map[hash.Hash]Range, error) {
 	return nil, errors.New("Archive chunk source does not support getRecordRanges")
 }
 

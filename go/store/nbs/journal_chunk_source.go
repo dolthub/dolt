@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/trace"
 	"sort"
 	"sync"
 
@@ -54,11 +55,14 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 	return
 }
 
-func (s journalChunkSource) getCompressed(_ context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
+func (s journalChunkSource) getCompressed(ctx context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.getCompressed").End()
 	return s.journal.getCompressedChunk(h)
 }
 
-func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+func (s journalChunkSource) get(ctx context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.get").End()
+
 	cc, err := s.journal.getCompressedChunk(h)
 	if err != nil {
 		return nil, err
@@ -100,6 +104,8 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 // lock after returning when all reads are completed, which can be after the
 // function returns.
 func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.getManyCompressed").End()
+
 	var remaining bool
 	var jReqs []journalRecord
 	var wg sync.WaitGroup
@@ -160,18 +166,18 @@ func (s journalChunkSource) hash() hash.Hash {
 }
 
 // reader implements chunkSource.
-func (s journalChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
-	rdr, sz, err := s.journal.snapshot()
+func (s journalChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+	rdr, sz, err := s.journal.snapshot(ctx)
 	return rdr, uint64(sz), err
 }
 
-func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+func (s journalChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
 	ranges := make(map[hash.Hash]Range, len(requests))
 	for _, req := range requests {
 		if req.found {
 			continue
 		}
-		rng, ok, err := s.journal.getRange(*req.a)
+		rng, ok, err := s.journal.getRange(ctx, *req.a)
 		if err != nil {
 			return nil, err
 		} else if !ok {

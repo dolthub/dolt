@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/trace"
 	"sync"
 
 	"github.com/dolthub/swiss"
@@ -286,7 +287,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		if err := wr.truncateIndex(safeIndexOffset); err != nil {
 			return hash.Hash{}, err
 		}
-		wr.ranges = wr.ranges.flatten()
+		wr.ranges = wr.ranges.flatten(ctx)
 	}
 
 	var lastOffset int64
@@ -331,7 +332,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 
 	if wr.ranges.novelCount() > wr.maxNovel {
 		// save bootstrap progress
-		if err := wr.flushIndexRecord(last, lastOffset); err != nil {
+		if err := wr.flushIndexRecord(ctx, last, lastOffset); err != nil {
 			return hash.Hash{}, err
 		}
 	}
@@ -397,10 +398,10 @@ func (wr *journalWriter) getCompressedChunkAtRange(r Range, h hash.Hash) (Compre
 }
 
 // getRange returns a Range for the chunk with addr |h|.
-func (wr *journalWriter) getRange(h hash.Hash) (rng Range, ok bool, err error) {
+func (wr *journalWriter) getRange(ctx context.Context, h hash.Hash) (rng Range, ok bool, err error) {
 	// callers will use |rng| to read directly from the
 	// journal file, so we must flush here
-	if err = wr.maybeFlush(); err != nil {
+	if err = wr.maybeFlush(ctx); err != nil {
 		return
 	}
 	wr.lock.RLock()
@@ -410,7 +411,7 @@ func (wr *journalWriter) getRange(h hash.Hash) (rng Range, ok bool, err error) {
 }
 
 // writeCompressedChunk writes |cc| to the journal.
-func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
+func (wr *journalWriter) writeCompressedChunk(ctx context.Context, cc CompressedChunk) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	recordLen, payloadOff := chunkRecordSize(cc)
@@ -418,7 +419,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 		Offset: uint64(wr.offset()) + uint64(payloadOff),
 		Length: uint32(len(cc.FullCompressedChunk)),
 	}
-	buf, err := wr.getBytes(int(recordLen))
+	buf, err := wr.getBytes(ctx, int(recordLen))
 	if err != nil {
 		return err
 	}
@@ -448,37 +449,44 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	// write index records out. It's perfectly fine to reuse the current
 	// root hash, and this will also take care of the |Sync|.
 	if wr.unsyncd > journalMaybeSyncThreshold && !wr.currentRoot.IsEmpty() {
-		return wr.commitRootHashUnlocked(wr.currentRoot)
+		return wr.commitRootHashUnlocked(ctx, wr.currentRoot)
 	}
 
 	return nil
 }
 
 // commitRootHash commits |root| to the journal and syncs the file to disk.
-func (wr *journalWriter) commitRootHash(root hash.Hash) error {
+func (wr *journalWriter) commitRootHash(ctx context.Context, root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	return wr.commitRootHashUnlocked(root)
+	return wr.commitRootHashUnlocked(ctx, root)
 }
 
-func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
-	buf, err := wr.getBytes(rootHashRecordSize())
+func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, root hash.Hash) error {
+	defer trace.StartRegion(ctx, "commit-root").End()
+
+	buf, err := wr.getBytes(ctx, rootHashRecordSize())
 	if err != nil {
 		return err
 	}
 	wr.currentRoot = root
 	n := writeRootHashRecord(buf, root)
-	if err = wr.flush(); err != nil {
+	if err = wr.flush(ctx); err != nil {
 		return err
 	}
-	if err = wr.journal.Sync(); err != nil {
+	func() {
+		defer trace.StartRegion(ctx, "sync").End()
+
+		err = wr.journal.Sync()
+	}()
+	if err != nil {
 		return err
 	}
 
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		if err := wr.flushIndexRecord(root, o); err != nil {
+		if err := wr.flushIndexRecord(ctx, root, o); err != nil {
 			return err
 		}
 	}
@@ -488,12 +496,13 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes metadata for a range of index lookups to the
 // out-of-band journal index file. Index records accelerate journal
 // bootstrapping by reducing the amount of the journal that must be processed.
-func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
+func (wr *journalWriter) flushIndexRecord(ctx context.Context, root hash.Hash, end int64) (err error) {
+	defer trace.StartRegion(ctx, "flushIndexRecord").End()
 	if err := writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc); err != nil {
 		return err
 	}
 	wr.batchCrc = 0
-	wr.ranges = wr.ranges.flatten()
+	wr.ranges = wr.ranges.flatten(ctx)
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end
 	return
@@ -524,13 +533,13 @@ func (wr *journalWriter) readAt(p []byte, off int64) (n int, err error) {
 }
 
 // getBytes returns a buffer for writers to copy data into.
-func (wr *journalWriter) getBytes(n int) (buf []byte, err error) {
+func (wr *journalWriter) getBytes(ctx context.Context, n int) (buf []byte, err error) {
 	c, l := cap(wr.buf), len(wr.buf)
 	if n > c {
 		err = fmt.Errorf("requested bytes (%d) exceeds capacity (%d)", n, c)
 		return
 	} else if n > c-l {
-		if err = wr.flush(); err != nil {
+		if err = wr.flush(ctx); err != nil {
 			return
 		}
 	}
@@ -541,7 +550,8 @@ func (wr *journalWriter) getBytes(n int) (buf []byte, err error) {
 }
 
 // flush writes buffered data into the journal file.
-func (wr *journalWriter) flush() (err error) {
+func (wr *journalWriter) flush(ctx context.Context) (err error) {
+	defer trace.StartRegion(ctx, "flush journal").End()
 	if _, err = wr.journal.WriteAt(wr.buf, wr.off); err != nil {
 		return err
 	}
@@ -551,7 +561,7 @@ func (wr *journalWriter) flush() (err error) {
 }
 
 // maybeFlush flushes buffered data, if any exists.
-func (wr *journalWriter) maybeFlush() (err error) {
+func (wr *journalWriter) maybeFlush(ctx context.Context) (err error) {
 	wr.lock.RLock()
 	empty := len(wr.buf) == 0
 	wr.lock.RUnlock()
@@ -560,7 +570,7 @@ func (wr *journalWriter) maybeFlush() (err error) {
 	}
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	return wr.flush()
+	return wr.flush(ctx)
 }
 
 type journalWriterSnapshot struct {
@@ -574,10 +584,10 @@ func (s journalWriterSnapshot) Close() error {
 
 // snapshot returns an io.Reader with a consistent view of
 // the current state of the journal file.
-func (wr *journalWriter) snapshot() (io.ReadCloser, int64, error) {
+func (wr *journalWriter) snapshot(ctx context.Context) (io.ReadCloser, int64, error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
-	if err := wr.flush(); err != nil {
+	if err := wr.flush(ctx); err != nil {
 		return nil, 0, err
 	}
 	// open a new file descriptor with an
@@ -625,7 +635,7 @@ func (wr *journalWriter) Close() (err error) {
 		return nil
 	}
 
-	if err = wr.flush(); err != nil {
+	if err = wr.flush(context.Background()); err != nil {
 		return err
 	}
 	if wr.index != nil {
@@ -709,7 +719,10 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 	return
 }
 
-func (idx rangeIndex) flatten() rangeIndex {
+func (idx rangeIndex) flatten(ctx context.Context) rangeIndex {
+	defer trace.StartRegion(ctx, "flatten journal index").End()
+	trace.Logf(ctx, "swiss map current count", "%d", idx.cached.Count())
+	trace.Logf(ctx, "swiss map add count", "%d", idx.novel.Count())
 	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
 		idx.cached.Put(toAddr16(a), r)
 		return

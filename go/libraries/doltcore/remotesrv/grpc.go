@@ -172,7 +172,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	numHashes := len(hashes)
 
-	locations, err := cs.GetChunkLocationsWithPaths(hashes)
+	locations, err := cs.GetChunkLocationsWithPaths(ctx, hashes)
 	if err != nil {
 		logger.WithError(err).Error("error getting chunk locations for hashes")
 		return nil, err
@@ -277,7 +277,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			return err
 		}
 		numHashes += len(hashes)
-		locations, err := cs.GetChunkLocationsWithPaths(hashes)
+		locations, err := cs.GetChunkLocationsWithPaths(context.Background(), hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
