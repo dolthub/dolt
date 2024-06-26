@@ -21,14 +21,14 @@ import (
 // todo batched version runs a fixed set of workers on kv ranges in parallel
 // need filters and projections in this version for it to be worth it
 
-func rowIterTableLookupJoin(ctx *sql.Context, srcMap, dstMap prolly.Map, srcSch, dstSch schema.Schema, srcProj, dstProj []uint64, keyExprs []sql.Expression, srcFilter, dstFilter sql.Expression) (sql.RowIter, error) {
+func rowIterTableLookupJoin(ctx *sql.Context, srcIter prolly.MapIter, srcMap, dstMap prolly.Map, srcSch, dstSch schema.Schema, srcProj, dstProj []uint64, keyExprs []sql.Expression, srcFilter, dstFilter sql.Expression) (sql.RowIter, error) {
 	split := len(srcProj)
 
 	projections := append(srcProj, dstProj...)
 
 	rowJoiner := getPrimaryLookupRowJoiner(srcSch, dstSch, split, projections)
 
-	return newPrimaryLookupKvIter(ctx, srcMap, dstMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter)
+	return newPrimaryLookupKvIter(ctx, srcIter, srcMap, dstMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter)
 }
 
 type primaryLookupJoinKvIter struct {
@@ -62,7 +62,7 @@ func (l primaryLookupJoinKvIter) Close(c *sql.Context) error {
 var _ sql.RowIter = (*primaryLookupJoinKvIter)(nil)
 
 // TODO: lookup into primary can do a |map.Get|, but secondary has to do |map.PrefixGet|
-func newPrimaryLookupKvIter(ctx context.Context, source, target prolly.Map, keyExprs []sql.Expression, sourceSch schema.Schema, joiner *sqlRowJoiner, srcFilter, dstFilter sql.Expression) (*primaryLookupJoinKvIter, error) {
+func newPrimaryLookupKvIter(ctx context.Context, srcIter prolly.MapIter, source, target prolly.Map, keyExprs []sql.Expression, sourceSch schema.Schema, joiner *sqlRowJoiner, srcFilter, dstFilter sql.Expression) (*primaryLookupJoinKvIter, error) {
 	// if original source not covering, need extra lookup
 	// lookup primary mapping
 	// mappings from source->target
@@ -86,10 +86,6 @@ func newPrimaryLookupKvIter(ctx context.Context, source, target prolly.Map, keyE
 
 	keyLookupMapper := newLookupKeyMapping(ctx, sourceSch, source, target, keyExprs)
 
-	srcIter, err := source.IterAll(ctx)
-	if err != nil {
-		return nil, err
-	}
 	return &primaryLookupJoinKvIter{
 		source:         srcIter,
 		target:         target,

@@ -117,6 +117,23 @@ type WritableIndexedDoltTable struct {
 	mu           *sync.Mutex
 }
 
+func (t *WritableIndexedDoltTable) Index() index.DoltIndex {
+	return t.idx
+}
+
+func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.LookupBuilder, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		return index.NewLookupBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch, t.isDoltFormat)
+	}
+	return t.lb, nil
+}
+
 func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, t.DoltTable, lookup, t.isDoltFormat)
 }

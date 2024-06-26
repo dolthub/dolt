@@ -3,10 +3,12 @@ package rowexec
 import (
 	"context"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -23,9 +25,9 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	case *plan.JoinNode:
 		if n.Op.IsLookup() {
 			if ita, ok := getIta(n.Right()); ok {
-				if dstIter, dstSchema, dstTags, dstFilter, err := getSourceKvIter(ctx, n.Right()); err == nil && dstSchema != nil {
-					if srcIter, srcSchema, srcTags, srcFilter, err := getSourceKvIter(ctx, n.Left()); err == nil && dstSchema != nil {
-						return rowIterTableLookupJoin(ctx, srcIter, dstIter, srcSchema, dstSchema, srcTags, dstTags, ita.Expressions(), srcFilter, dstFilter)
+				if dstMap, _, dstSchema, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstSchema != nil {
+					if srcMap, srcIter, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
+						return rowIterTableLookupJoin(ctx, srcIter, srcMap, dstMap, srcSchema, dstSchema, srcTags, dstTags, ita.Expressions(), srcFilter, dstFilter)
 					}
 				}
 			}
@@ -174,28 +176,77 @@ func getMap(ctx *sql.Context, dt *sqle.DoltTable) (prolly.Map, schema.Schema, er
 	return durable.ProllyMapFromIndex(priIndex), sch, nil
 }
 
-func getSourceKvIter(ctx *sql.Context, n sql.Node) (prolly.Map, schema.Schema, []uint64, sql.Expression, error) {
+func getSourceKv(ctx *sql.Context, n sql.Node, iter bool) (prolly.Map, prolly.MapIter, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
 	var err error
+	var indexMap prolly.Map
+	var mapIter prolly.MapIter
 	switch n := n.(type) {
 	case *plan.TableAlias:
-		return getSourceKvIter(ctx, n.Child)
+		return getSourceKv(ctx, n.Child, iter)
 	case *plan.Filter:
-		m, s, t, _, err := getSourceKvIter(ctx, n.Child)
+		m, mIter, s, t, _, err := getSourceKv(ctx, n.Child, iter)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, err
+			return prolly.Map{}, nil, nil, nil, nil, err
 		}
-		return m, s, t, n.Expression, nil
-	case *plan.ResolvedTable, *plan.IndexedTableAccess:
-		switch dt := n.(sql.TableNode).UnderlyingTable().(type) {
-		case *sqle.WritableDoltTable:
-			tags = dt.ProjectedTags()
-			table, err = dt.DoltTable.DoltTable(ctx)
+		return m, mIter, s, t, n.Expression, nil
+	case *plan.IndexedTableAccess:
+		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable.DoltTable(ctx)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, err
+			}
+
+			var rowData durable.Index
+			switch strings.ToLower(dt.Index().ID()) {
+			case "primary":
+				rowData, err = table.GetRowData(ctx)
+			default:
+				rowData, err = table.GetIndexRowData(ctx, dt.Index().ID())
+			}
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, err
+			}
+			indexMap = durable.ProllyMapFromIndex(rowData)
+			if iter {
+				l, err := n.GetLookup(ctx, nil)
+				if err != nil {
+					return prolly.Map{}, nil, nil, nil, nil, err
+				}
+				prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
+				if err != nil {
+					return prolly.Map{}, nil, nil, nil, nil, err
+				}
+
+				lb, err := dt.LookupBuilder(ctx)
+				if err != nil {
+					return prolly.Map{}, nil, nil, nil, nil, err
+				}
+
+				mapIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
+				if err != nil {
+					return prolly.Map{}, nil, nil, nil, nil, err
+				}
+			}
+
 		case *sqle.IndexedDoltTable:
+			tags = dt.ProjectedTags()
+			table, err = dt.DoltTable.DoltTable(ctx)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, err
+			}
+			rowData, err := table.GetIndexRowData(ctx, dt.Index().ID())
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, err
+			}
+			indexMap = durable.ProllyMapFromIndex(rowData)
+		}
+	case *plan.ResolvedTable:
+		switch dt := n.UnderlyingTable().(type) {
+		case *sqle.WritableDoltTable:
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable.DoltTable(ctx)
 		case *sqle.AlterableDoltTable:
@@ -205,25 +256,34 @@ func getSourceKvIter(ctx *sql.Context, n sql.Node) (prolly.Map, schema.Schema, [
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable(ctx)
 		default:
-			return prolly.Map{}, nil, nil, nil, nil
+			return prolly.Map{}, nil, nil, nil, nil, nil
+		}
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, err
+		}
+		priIndex, err := table.GetRowData(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, err
+		}
+		indexMap = durable.ProllyMapFromIndex(priIndex)
+
+		if iter {
+			mapIter, err = indexMap.IterAll(ctx)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, err
+			}
 		}
 	default:
-		return prolly.Map{}, nil, nil, nil, nil
+		return prolly.Map{}, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return prolly.Map{}, nil, nil, nil, err
+		return prolly.Map{}, nil, nil, nil, nil, err
 	}
 
-	priIndex, err := table.GetRowData(ctx)
-	if err != nil {
-		return prolly.Map{}, nil, nil, nil, err
-	}
-
-	m := durable.ProllyMapFromIndex(priIndex)
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
-		return prolly.Map{}, nil, nil, nil, err
+		return prolly.Map{}, nil, nil, nil, nil, err
 	}
 
-	return m, sch, tags, nil, nil
+	return indexMap, mapIter, sch, tags, nil, nil
 }
