@@ -102,8 +102,8 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
 				Expected: []sql.Row{
-					{doltCommit, "unique index", "5A1ED8633E1842FCA8EE529E4F1C5944", 1, 2, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
-					{doltCommit, "unique index", "A922BFBF4E5489501A3808BC5CD702C0", 1, 3, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
+					{doltCommit, "unique index", "5A1ED8633E1842FCA8EE529E4F1C5944", 1, 2, `{"Name": "aColumn_UNIQUE", "Columns": ["aColumn"]}`},
+					{doltCommit, "unique index", "A922BFBF4E5489501A3808BC5CD702C0", 1, 3, `{"Name": "aColumn_UNIQUE", "Columns": ["aColumn"]}`},
 				},
 			},
 			{
@@ -176,7 +176,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
 				Expected: []sql.Row{
-					{doltCommit, "foreign key", "13F8480978D0556FA9AE6DF5745A7ACA", 2, -1, `{"Columns":["bColumn"],"ForeignKey":"atable_ibfk_1","Index":"bColumn","OnDelete":"RESTRICT","OnUpdate":"RESTRICT","ReferencedColumns":["pk"],"ReferencedIndex":"","ReferencedTable":"parent","Table":"aTable"}`},
+					{doltCommit, "foreign key", "13F8480978D0556FA9AE6DF5745A7ACA", 2, -1, `{"Index": "bColumn", "Table": "aTable", "Columns": ["bColumn"], "OnDelete": "RESTRICT", "OnUpdate": "RESTRICT", "ForeignKey": "atable_ibfk_1", "ReferencedIndex": "", "ReferencedTable": "parent", "ReferencedColumns": ["pk"]}`},
 				},
 			},
 			{

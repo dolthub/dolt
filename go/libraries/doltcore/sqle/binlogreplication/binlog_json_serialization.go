@@ -20,7 +20,7 @@ import (
 	"math"
 	"sort"
 
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const jsonTypeSmallObject = byte(0x00)
@@ -54,8 +54,12 @@ const maxOffsetSize = uint32(65_535)
 //
 // And a third-party description is here:
 // https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
-func encodeJsonDoc(jsonDoc gmstypes.JSONDocument) (buffer []byte, err error) {
-	typeId, encodedValue, err := encodeJsonValue(jsonDoc.Val)
+func encodeJsonDoc(jsonDoc sql.JSONWrapper) (buffer []byte, err error) {
+	val, err := jsonDoc.ToInterface()
+	if err != nil {
+		return nil, err
+	}
+	typeId, encodedValue, err := encodeJsonValue(val)
 	if err != nil {
 		return nil, err
 	}

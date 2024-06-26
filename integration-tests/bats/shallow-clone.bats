@@ -10,17 +10,18 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 remotesrv_pid=""
 setup() {
     skiponwindows "tests are flaky on Windows"
-    setup_common
+    setup_no_dolt_init
 }
 
 teardown() {
-    teardown_common
     stop_remotesrv
+    teardown_common
 }
 
 stop_remotesrv() {
     if [ -n "$remotesrv_pid" ]; then
-        kill $remotesrv_pid || :
+        kill "$remotesrv_pid"
+        wait "$remotesrv_pid" || :
         remotesrv_pid=""
     fi
 }

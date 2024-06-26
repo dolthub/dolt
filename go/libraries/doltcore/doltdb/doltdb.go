@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -71,12 +72,17 @@ var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
-// Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
-// errors in many cases.
 type DoltDB struct {
 	db  hooksDatabase
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
+
+	// databaseName holds the name of the database for this DoltDB instance. Note that this name may not be
+	// populated for all DoltDB instances. For filesystem based databases, the database name is determined
+	// by looking through the filepath in reverse, finding the first .dolt directory, and then taking the
+	// parent directory as the database name. For non-filesystem based databases, the database name will not
+	// currently be populated.
+	databaseName string
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -85,7 +91,7 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns}
 }
 
 // HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
@@ -123,11 +129,16 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
+	// Pull the database name out of the URL string. For filesystem-based databases (e.g. in-memory or disk-based
+	// filesystem implementations), we can determine the database name by looking at the filesystem path. This
+	// won't work for other storage schemes though.
+	name := findParentDirectory(urlStr, ".dolt")
+
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}, nil
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map
@@ -315,6 +326,30 @@ func getCommitValForRefStrByNomsRoot(ctx context.Context, ddb *DoltDB, ref strin
 	}
 
 	return datas.LoadCommitAddr(ctx, ddb.vrw, *commitHash)
+}
+
+// findParentDirectory searches the components of the specified |path| looking for a directory
+// named |targetDir| and returns the name of the parent directory for |targetDir|. The search
+// starts from the deepest component of |path|, so if |path| contains |targetDir| multiple times,
+// the parent directory of the last occurrence in |path| is returned.
+func findParentDirectory(path string, targetDir string) string {
+	base := filepath.Base(path)
+	dir := filepath.Dir(path)
+
+	if base == "." || dir == "." {
+		return ""
+	}
+
+	switch base {
+	case "":
+		return base
+
+	case targetDir:
+		return filepath.Base(dir)
+
+	default:
+		return findParentDirectory(dir, targetDir)
+	}
 }
 
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
@@ -1380,6 +1415,30 @@ type ReplicationStatusController struct {
 	NotifyWaitFailed []func()
 }
 
+// DatabaseUpdateListener allows callbacks on a registered listener when a database is created, dropped, or when
+// the working root is updated new changes are visible to other sessions.
+type DatabaseUpdateListener interface {
+	// WorkingRootUpdated is called when a branch working root is updated on a database and other sessions are
+	// given visibility to the changes. |ctx| provides the current session information, |databaseName| indicates
+	// the database being updated, and |before| and |after| are the previous and new RootValues for the working root.
+	// If callers encounter any errors while processing a root update notification, they can return an error, which
+	// will be logged.
+	WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before RootValue, after RootValue) error
+
+	// DatabaseCreated is called when a new database, named |databaseName|, has been created.
+	DatabaseCreated(ctx *sql.Context, databaseName string) error
+
+	// DatabaseDropped is called with the database named |databaseName| has been dropped.
+	DatabaseDropped(ctx *sql.Context, databaseName string) error
+}
+
+var DatabaseUpdateListeners = make([]DatabaseUpdateListener, 0)
+
+// RegisterDatabaseUpdateListener registers |listener| to receive callbacks when databases are updated.
+func RegisterDatabaseUpdateListener(listener DatabaseUpdateListener) {
+	DatabaseUpdateListeners = append(DatabaseUpdateListeners, listener)
+}
+
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) UpdateWorkingSet(
@@ -1395,7 +1454,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, ds)
 	if err != nil {
 		return err
 	}
@@ -1426,7 +1485,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err := ddb.writeWorkingSet(ctx, workingSetRef, workingSet, meta, wsDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1455,6 +1514,57 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
+}
+
+// writeWorkingSet writes the specified |workingSet| at the specified |workingSetRef| with the
+// specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
+// encountered. If any listeners are registered for working root updates, then they will be notified as well.
+func (ddb *DoltDB) writeWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
+	var prevRoot RootValue
+	if wsDs.HasHead() {
+		prevWorkingSet, err := newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+		if err != nil {
+			return nil, err
+		}
+		prevRoot = prevWorkingSet.workingRoot
+	} else {
+		// If the working set dataset doesn't have a head, then there isn't a previous root value for us to use
+		// for the database update, so instead we pass in an EmptyRootValue so that implementations of
+		// DatabaseUpdateListener don't have to do nil checking. This can happen when a new database is created
+		// or when a new branch is created.
+		prevRoot, err = EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var branchName string
+	if strings.HasPrefix(workingSet.Name, "heads/") {
+		branchName = workingSet.Name[len("heads/"):]
+	}
+
+	wsSpec, err = workingSet.writeValues(ctx, ddb, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	if branchName != "" {
+		for _, listener := range DatabaseUpdateListeners {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if ok {
+				err := listener.WorkingRootUpdated(sqlCtx,
+					ddb.databaseName,
+					branchName,
+					prevRoot,
+					workingSet.WorkingRoot())
+				if err != nil {
+					logrus.Errorf("error notifying working root listener of update: %s", err.Error())
+				}
+			}
+		}
+	}
+
+	return wsSpec, nil
 }
 
 // DeleteWorkingSet deletes the working set given

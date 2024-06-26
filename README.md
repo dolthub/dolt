@@ -153,7 +153,7 @@ Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
 it.
 
-For information on running on Windows, see [here](./docs/windows.md).
+For information on running on Windows, see [here](https://docs.dolthub.com/introduction/installation/windows).
 
 #### Chocolatey
 

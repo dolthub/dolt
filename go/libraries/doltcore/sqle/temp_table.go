@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -57,6 +58,7 @@ var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
+var _ sql.AutoIncrementTable = &TempTable{}
 
 func NewTempTable(
 	ctx *sql.Context,
@@ -82,7 +84,23 @@ func NewTempTable(
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	sch, err := temporaryDoltSchema(ctx, pkSch, collation)
+	colNames := make([]string, len(pkSch.Schema))
+	colKinds := make([]types.NomsKind, len(pkSch.Schema))
+	for i, col := range pkSch.Schema {
+		colNames[i] = col.Name
+		ti, err := typeinfo.FromSqlType(col.Type)
+		if err != nil {
+			return nil, err
+		}
+		colKinds[i] = ti.NomsKind()
+	}
+
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, ws.WorkingRoot(), name, colNames, colKinds, ws.WorkingRoot())
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := temporaryDoltSchema(ctx, pkSch, tags, collation)
 	if err != nil {
 		return nil, err
 	}
@@ -443,11 +461,10 @@ func (t *TempTable) Close(ctx *sql.Context) error {
 	return err
 }
 
-func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collation sql.CollationID) (sch schema.Schema, err error) {
+func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, tags []uint64, collation sql.CollationID) (sch schema.Schema, err error) {
 	cols := make([]schema.Column, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
-		tag := uint64(i)
-		cols[i], err = sqlutil.ToDoltCol(tag, col)
+		cols[i], err = sqlutil.ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
@@ -465,4 +482,20 @@ func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema, collat
 	sch.SetCollation(schema.Collation(collation))
 
 	return sch, nil
+}
+
+func (t *TempTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
+	return t.table.GetAutoIncrementValue(ctx)
+}
+
+func (t *TempTable) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	autoIncEditor, ok := t.ed.(writer.AutoIncrementGetter)
+	if !ok {
+		return 0, sql.ErrNoAutoIncrementCol
+	}
+	return autoIncEditor.GetNextAutoIncrementValue(ctx, insertVal)
+}
+
+func (t *TempTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
+	return t.ed
 }

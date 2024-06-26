@@ -351,6 +351,11 @@ SQL
     dolt sql -q "set @@persist.dolt_replication_remote_url_template = 'file://$TMPDIRS/rem1/{database}'"
     start_multi_db_server information_schema
 
+    # Unset the global config so that the other databases don't pick up
+    # these values when we use them.
+    dolt config --global --unset sqlserver.global.dolt_read_replica_remote
+    dolt config --global --unset sqlserver.global.dolt_replicate_heads
+
     # Assert that no databases are synced to the read replica server yet
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "show databases"
     [ $status -eq 0 ]

@@ -181,6 +181,18 @@ func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvi
 	return &cp
 }
 
+// AddInitDatabaseHook adds an InitDatabaseHook to this provider. The hook will be invoked
+// whenever this provider creates a new database.
+func (p *DoltDatabaseProvider) AddInitDatabaseHook(hook InitDatabaseHook) {
+	p.InitDatabaseHooks = append(p.InitDatabaseHooks, hook)
+}
+
+// AddDropDatabaseHook adds a DropDatabaseHook to this provider. The hook will be invoked
+// whenever this provider drops a database.
+func (p *DoltDatabaseProvider) AddDropDatabaseHook(hook DropDatabaseHook) {
+	p.DropDatabaseHooks = append(p.DropDatabaseHooks, hook)
+}
+
 func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
 }
@@ -483,7 +495,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
-	// If the search path is enabled, we need to create our initial schema object (public is available by default)
+	// If the search path is enabled, we need to create our initial schema object (public and pg_catalog are available
+	// by default)
 	if resolve.UseSearchPath {
 		workingRoot, err := newEnv.WorkingRoot(ctx)
 		if err != nil {
@@ -492,6 +505,12 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 
 		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 			Name: "public",
+		})
+		if err != nil {
+			return err
+		}
+		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+			Name: "pg_catalog",
 		})
 		if err != nil {
 			return err

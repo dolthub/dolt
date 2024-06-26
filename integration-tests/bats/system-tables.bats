@@ -10,7 +10,6 @@ teardown() {
     skiponwindows "tests are flaky on Windows"
     assert_feature_version
     teardown_common
-    kill $remotesrv_pid
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 

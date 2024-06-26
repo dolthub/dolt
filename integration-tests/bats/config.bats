@@ -26,7 +26,7 @@ function no_stdout {
 @test "config: make sure no dolt configuration for simulated fresh user" {
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" = "" ]] || false
 }
 
 @test "config: try to initialize a repository with no configuration with correct hint" {
@@ -92,7 +92,7 @@ function no_stdout {
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "user.name = steph" ]
+    [[ "$output" =~ "user.name = steph" ]] || false
     run dolt config --get user.name
     [ "$status" -eq 0 ]
     [ "$output" = "steph" ]
@@ -111,7 +111,7 @@ function no_stdout {
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ ! "$output" =~ "steph" ]] || false
     run dolt config --get user.name
     [ "$status" -eq 1 ]
     [ "$output" = "" ]
@@ -129,7 +129,7 @@ function no_stdout {
     [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" = "" ]] || false
 }
 
 @test "config: set a user and email and init a repo" {
@@ -230,6 +230,7 @@ function no_stdout {
     run dolt config --list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
+    [[ $output = "" ]] || false
 
     dolt add .
     run dolt commit --author="John Doe <john@doe.com>" -m="Commit1"

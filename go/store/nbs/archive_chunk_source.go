@@ -81,7 +81,7 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 	foundAll := true
 	for _, req := range reqs {
 		data, err := acs.aRdr.get(*req.a)
-		if err != nil {
+		if err != nil || data == nil {
 			foundAll = false
 		} else {
 			chunk := chunks.NewChunk(data)
@@ -89,7 +89,7 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 			req.found = true
 		}
 	}
-	return foundAll, nil
+	return !foundAll, nil
 }
 
 func (acs archiveChunkSource) count() (uint32, error) {

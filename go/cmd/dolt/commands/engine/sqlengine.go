@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -149,10 +150,16 @@ func NewSqlEngine(
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
+	if err := configureBinlogPrimaryController(engine); err != nil {
+		return nil, err
+	}
+	pro.AddInitDatabaseHook(dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+	pro.AddDropDatabaseHook(dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
+
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
 
-		// Standbys are read only, primarys are not.
+		// Standbys are read only, primaries are not.
 		// We only change this here if the server was not forced read
 		// only by its startup config.
 		if !config.IsReadOnly {
@@ -330,6 +337,50 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	}
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
+
+	return nil
+}
+
+// configureBinlogPrimaryController configures the |engine| to use the default Dolt binlog primary controller, as well
+// as enabling the binlog producer if @@log_bin has been set to 1.
+//
+// NOTE: By default, binary logging for Dolt is not enabled, which differs from MySQL's @@log_bin default. Dolt's
+// binary logging is initially an opt-in feature, but we may change that after measuring and tuning the
+// performance hit that binary logging adds.
+func configureBinlogPrimaryController(engine *gms.Engine) error {
+	primaryController := dblr.NewDoltBinlogPrimaryController()
+	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
+
+	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+	if !ok {
+		return fmt.Errorf("unable to load @@log_bin system variable")
+	}
+	logBin, ok := logBinValue.(int8)
+	if !ok {
+		return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
+	}
+	if logBin == 1 {
+		logrus.Debug("Enabling binary logging")
+		binlogProducer, err := dblr.NewBinlogProducer(primaryController.StreamerManager())
+		if err != nil {
+			return err
+		}
+		doltdb.RegisterDatabaseUpdateListener(binlogProducer)
+		primaryController.BinlogProducer = binlogProducer
+	}
+
+	_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
+	if !ok {
+		return fmt.Errorf("unable to load @@log_bin_branch system variable")
+	}
+	logBinBranch, ok := logBinBranchValue.(string)
+	if !ok {
+		return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
+	}
+	if logBinBranch != "" {
+		logrus.Debugf("Setting binary logging branch to %s", logBinBranch)
+		dblr.BinlogBranch = logBinBranch
+	}
 
 	return nil
 }

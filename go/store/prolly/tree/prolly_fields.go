@@ -128,7 +128,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetJSONAddr(i, tup)
 		if ok {
-			v, err = NewJSONDoc(h, ns).ToLazyJSONDocument(ctx)
+			v, err = NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
 		}
 	case val.StringAddrEnc:
 		var h hash.Hash
@@ -249,14 +249,15 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutGeometryAddr(i, h)
 	case val.JSONAddrEnc:
-		buf, err := convJson(v)
+		j, err := convJson(v)
 		if err != nil {
 			return err
 		}
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
+		root, err := SerializeJsonToAddr(ctx, ns, j)
 		if err != nil {
 			return err
 		}
+		h := root.HashOf()
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
 		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
@@ -406,10 +407,10 @@ func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSi
 	return addr, nil
 }
 
-func convJson(v interface{}) (buf []byte, err error) {
+func convJson(v interface{}) (res sql.JSONWrapper, err error) {
 	v, _, err = types.JSON.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return types.MarshallJson(v.(sql.JSONWrapper))
+	return v.(sql.JSONWrapper), nil
 }

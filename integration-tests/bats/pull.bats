@@ -510,3 +510,35 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Pulling..." ]] || false
 }
+
+@test "pull: pull when there are changes to ignored tables" {
+    cd repo1
+
+    dolt sql -q "create table ignore_this (id int primary key, words varchar(100))"
+    dolt sql -q "INSERT INTO dolt_ignore VALUES ('ignore_*', true)"
+
+    dolt commit -Am "Added ignore_this table and added a rule in dolt_ignore"
+
+    dolt push origin main
+
+    cd ../repo2
+
+    dolt pull origin main
+
+    dolt sql -q "create table testTable (id int primary key, words varchar(100))"
+    dolt sql -q "INSERT INTO testTable VALUES (1, 'hello')"
+
+    dolt commit -Am "Added test table"
+
+    dolt push origin main
+
+    cd ../repo1
+
+    dolt sql -q "INSERT INTO ignore_this VALUES (2, 'world')"
+
+    dolt pull origin main
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "testTable" ]] || false
+}

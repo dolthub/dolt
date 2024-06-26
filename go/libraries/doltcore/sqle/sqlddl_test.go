@@ -1199,7 +1199,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.Equal(t, "abc_unq", fkChildUnq.TableIndex)
 	fkChildNonUnq, ok := fkc.GetByNameCaseInsensitive("fk_child_non_unq")
 	require.True(t, ok)
-	require.Equal(t, "parent_value", fkChildNonUnq.TableIndex)
+	require.Equal(t, "fk_child_non_unq", fkChildNonUnq.TableIndex)
 
 	// insert tests against index
 	root, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('6', 5)")
@@ -1253,7 +1253,7 @@ func TestDropPrimaryKey(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok := fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "xy", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "ij", fkChild.ReferencedTableIndex)
 
 		// add primary key
@@ -1269,7 +1269,7 @@ func TestDropPrimaryKey(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "xy", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "ijk", fkChild.ReferencedTableIndex)
 
 		// dropping secondary index ijk, should switch to primary key
@@ -1281,7 +1281,7 @@ func TestDropPrimaryKey(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "xy", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "", fkChild.ReferencedTableIndex)
 
 		// no viable secondary indexes left, should be unable to drop primary key
@@ -1316,7 +1316,7 @@ func TestDropIndex(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok := fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "j", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "idx1", fkChild.ReferencedTableIndex)
 
 		// dropping secondary index, should switch to existing index
@@ -1326,7 +1326,7 @@ func TestDropIndex(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "j", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "idx2", fkChild.ReferencedTableIndex)
 
 		// dropping secondary index, should switch to existing index
@@ -1336,7 +1336,7 @@ func TestDropIndex(t *testing.T) {
 		require.NoError(t, err)
 		fkChild, ok = fkc.GetByNameCaseInsensitive("fk_child")
 		require.True(t, ok)
-		require.Equal(t, "j", fkChild.TableIndex)
+		require.Equal(t, "fk_child", fkChild.TableIndex)
 		require.Equal(t, "idx3", fkChild.ReferencedTableIndex)
 
 		// dropping secondary index, should fail since there are no indexes to replace it
