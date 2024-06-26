@@ -16,6 +16,8 @@ package binlogreplication
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
@@ -83,8 +85,24 @@ func (d *DoltBinlogPrimaryController) ListReplicas(ctx *sql.Context) error {
 
 // ListBinaryLogs implements the BinlogPrimaryController interface.
 func (d *DoltBinlogPrimaryController) ListBinaryLogs(_ *sql.Context) ([]binlogreplication.BinaryLogFileMetadata, error) {
-	// TODO: No log file support yet, so just return an empty list
-	return nil, nil
+	logManager := d.streamerManager.logManager
+	logFiles, err := logManager.logFilesOnDiskForBranch(BinlogBranch)
+	if err != nil {
+		return nil, err
+	}
+
+	logFileMetadata := make([]binlogreplication.BinaryLogFileMetadata, len(logFiles))
+	for i, logFile := range logFiles {
+		fileStats, err := os.Stat(filepath.Join(logManager.binlogDirectory, logFile))
+		if err != nil {
+			return nil, err
+		}
+		logFileMetadata[i] = binlogreplication.BinaryLogFileMetadata{
+			Name: logFile,
+			Size: uint64(fileStats.Size()),
+		}
+	}
+	return logFileMetadata, nil
 }
 
 // GetBinaryLogStatus implements the BinlogPrimaryController interface.

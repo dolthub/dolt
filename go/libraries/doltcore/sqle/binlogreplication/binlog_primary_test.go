@@ -148,8 +148,14 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 
 	// Check the binary log file status and ensure the file has been rotated
 	uuid := queryPrimaryServerUuid(t)
-	requirePrimaryResults(t, "show binary log status", [][]any{
+	requirePrimaryResults(t, "show binary log status;", [][]any{
 		{"binlog-main.000003", "1027", "", "", uuid + ":1-102"},
+	})
+
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "10318", "No"},
+		{"binlog-main.000002", "10481", "No"},
+		{"binlog-main.000003", "1027", "No"},
 	})
 }
 
