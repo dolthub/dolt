@@ -626,7 +626,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 
 		sqlMode := sql.LoadSqlMode(ctx)
 
-		sqlStatement, err := sqlparser.ParseWithOptions(query, sqlMode.ParserOptions())
+		sqlStatement, err := sqlparser.ParseWithOptions(ctx, query, sqlMode.ParserOptions())
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
