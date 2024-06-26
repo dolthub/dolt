@@ -53,7 +53,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	harness := newDoltHarness(t)
 	harness.Setup(setup.SimpleSetup...)
@@ -63,8 +63,8 @@ func TestSingleQuery(t *testing.T) {
 	}
 
 	setupQueries := []string{
-		"create table t1 (pk int primary key, c int);",
-		"insert into t1 values (1,9), (3,8), (5,6), (7,7), (9,2)",
+		// "create table t1 (pk int primary key, c int);",
+		// "insert into t1 values (1,2), (3,4)",
 		// "call dolt_add('.')",
 		// "set @Commit1 = dolt_commit('-am', 'initial table');",
 		// "insert into t1 values (5,6), (7,8)",
@@ -80,8 +80,18 @@ func TestSingleQuery(t *testing.T) {
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query:    `alter table t1 add index (c)`,
-		Expected: []sql.Row{},
+		Query: `show create table mytable`,
+		Expected: []sql.Row{
+			{"mytable",
+				"CREATE TABLE `mytable` (\n" +
+					"  `i` bigint NOT NULL,\n" +
+					"  `s` varchar(20) NOT NULL COMMENT 'column s',\n" +
+					"  PRIMARY KEY (`i`),\n" +
+					"  KEY `idx_si` (`s`,`i`),\n" +
+					"  KEY `mytable_i_s` (`i`,`s`),\n" +
+					"  UNIQUE KEY `mytable_s` (`s`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+		},
 	}
 
 	enginetest.TestQueryWithEngine(t, harness, engine, test)

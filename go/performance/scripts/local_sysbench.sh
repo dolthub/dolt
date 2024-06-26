@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_read_write"
+SYSBENCH_TEST="oltp_point_select"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -101,8 +101,6 @@ sysbench \
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
 
-dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;"
-
 # maybe run with pprof
 if [ "$PPROF" -eq 1 ]; then
   dolt --prof cpu sql-server --config="dolt-config.yaml" 2> run.log &
@@ -111,6 +109,7 @@ else
 fi
 SERVER_PID="$!"
 sleep 1
+
 
 # run benchmark
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
