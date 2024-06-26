@@ -351,7 +351,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				if i == len(epochs) {
 					break // don't index |test.novel|
 				}
-				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
+				assert.NoError(t, j.flushIndexRecord(ctx, e.last, o)) // write index record
 			}
 			err := j.Close()
 			require.NoError(t, err)
