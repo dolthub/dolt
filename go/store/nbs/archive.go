@@ -60,15 +60,28 @@ Index:
    +--------------+------------+-----------------+----------+
    | ByteSpan Map | Prefix Map | ChunkReferences | Suffixes |
    +--------------+------------+-----------------+----------+
-   - The Index is a concatenation of 4 sections, the first three of which are compressed as one stream. The Suffixes are
-     are not compressed because they won't compress well. For this reason there are two methods on the footer to get the
+   - The Index is a concatenation of 4 sections, the first three of which are compressed as one stream. The Suffixes
+     are not compressed because they won't compress well. For this reason there are two methods on the footer to get
      the two spans individually.
 
    ByteSpan Map:
        +------------------+------------------+-----+------------------+
-       | ByteSpanLength 1 | ByteSpanLength 2 | ... | ByteSpanLength N |
+       | ByteSpanOffset 1 | ByteSpanOffset 2 | ... | ByteSpanOffset N |
        +------------------+------------------+-----+------------------+
-       - The Length of each ByteSpan is recorded as a varuint, and as we read them we will calculate the offset of each.
+       - The ByteSpanMap is effectively the offset and length of each data block to read from disk. In a series of Uint64s,
+         we record the _end_ of each ByteSpan. This allows for reading the data quickly at index load time, and then
+         quick calculation of the length based on the previous ByteSpan.
+
+       An example:
+       +-------------------+-------------------+-------------------+-------------------+
+       | ByteSpan 1, len 7 | ByteSpan 2, len 3 | ByteSpan 3, len 5 | ByteSpan 4, len 9 |
+       +-------------------+-------------------+-------------------+-------------------+
+
+       Written as the following Uint64 on disk: [7, 10, 15, 24]
+         - The first ByteSpan is 7 bytes long, and starts at offset 0.
+         - The second ByteSpan is 3 bytes long, and starts at offset 7.
+         - The third ByteSpan is 5 bytes long, and starts at offset 10.
+         - The fourth ByteSpan is 9 bytes long, and starts at offset 15.
 
        The ByteSpan Map contains N ByteSpan Records. The index in the map is considered the ByteSpan's ID, and
        is used to reference the ByteSpan in the ChunkRefs. Note that the ByteSpan ID is 1-based, as 0 is reserved to indicate
@@ -88,12 +101,11 @@ Index:
        | ChunkRef 0 | ChunkRef 1 | ... | ChunkRef M-1 |
        +------------+------------+-----+--------------+
        ChunkRef:
-           +-------------------------------+--------------------------+
-           | (uvarint) Dictionary ByteSpan | (uvarint) Chunk ByteSpan |
-           +-------------------------------+--------------------------+
+           +------------------------------+-------------------------+
+           | (Uint32) Dictionary ByteSpan | (Uint32) Chunk ByteSpan |
+           +------------------------------+-------------------------+
         - Dictionary: ID for a ByteSpan to be used as zstd dictionary. 0 refers to the empty ByteSpan, which indicates no dictionary.
         - Chunk: ID for the ByteSpan containing the Chunk data. Never 0.
-        - Dictionary and Chunk ByteSpans are constrained to be uint32, which is plenty. Varints can exceed this value, but we constrain them.
 
    Suffixes:
        +--------------------+--------------------+-----+----------------------+
