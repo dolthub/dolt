@@ -379,6 +379,7 @@ func (m *mcvHeap) Truncate(cutoff float64) {
 	for i, v := range *m {
 		if float64(v.cnt) >= cutoff {
 			start = i
+			break
 		}
 	}
 	old := *m

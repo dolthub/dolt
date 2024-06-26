@@ -29,12 +29,62 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
+const (
+	boostrapRowLimit = 2e6
+)
+
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return err
 	}
+	return p.RefreshTableStatsWithBranch(ctx, table, db, branch)
+}
+
+func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	branches := p.getStatsBranches(ctx)
+	var rows uint64
+	for _, branch := range branches {
+		sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
+		if err != nil {
+			if sql.ErrDatabaseNotFound.Is(err) {
+				// default branch is not valid
+				continue
+			}
+			return err
+		}
+		tables, err := sqlDb.GetTableNames(ctx)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			sqlTable, _, err := GetLatestTable(ctx, table, sqlDb)
+			if err != nil {
+				return err
+			}
+
+			if st, ok := sqlTable.(sql.StatisticsTable); ok {
+				cnt, ok, err := st.RowCount(ctx)
+				if ok && err == nil {
+					rows += cnt
+				}
+			}
+			if rows >= boostrapRowLimit {
+				return fmt.Errorf("stats bootstrap aborted because %s exceeds the default row limit; manually run \"ANALYZE <table>\" or \"call dolt_stats_restart()\" to collect statistics", db)
+			}
+
+			if err := p.RefreshTableStatsWithBranch(ctx, sqlTable, db, branch); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
 
 	sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
 	if err != nil {
@@ -143,7 +193,16 @@ func (p *Provider) branchQualifiedDatabase(db, branch string) string {
 
 // GetLatestTable will get the WORKING root table for the current database/branch
 func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
-	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitive(ctx, tableName)
+	var db sqle.Database
+	switch d := sqlDb.(type) {
+	case sqle.Database:
+		db = d
+	case sqle.ReadReplicaDatabase:
+		db = d.Database
+	default:
+		return nil, nil, fmt.Errorf("expected sqle.Database, found %T", sqlDb)
+	}
+	sqlTable, ok, err := db.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err
 	}

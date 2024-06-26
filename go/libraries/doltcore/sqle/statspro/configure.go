@@ -43,6 +43,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	branches := p.getStatsBranches(loadCtx)
 
 	var autoEnabled bool
+	var startupEnabled bool
 	var intervalSec time.Duration
 	var thresholdf64 float64
 	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
@@ -55,6 +56,8 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 
 		p.pro.InitDatabaseHooks = append(p.pro.InitDatabaseHooks, NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
 		p.pro.DropDatabaseHooks = append(p.pro.DropDatabaseHooks, NewStatsDropDatabaseHook(p))
+	} else if _, startupStats, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBootstrapEnabled); startupStats == int8(1) {
+		startupEnabled = true
 	}
 
 	eg, ctx := loadCtx.NewErrgroup()
@@ -69,7 +72,6 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 					} else {
 						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
 					}
-
 					return
 				}
 			}()
@@ -84,6 +86,10 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 			}
 			if autoEnabled {
 				return p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches)
+			} else if startupEnabled {
+				if err := p.BootstrapDatabaseStats(loadCtx, db.Name()); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -109,7 +115,7 @@ func (p *Provider) getStatsBranches(ctx *sql.Context) []string {
 	}
 
 	if branches == nil {
-		branches = []string{p.pro.DefaultBranch()}
+		branches = append(branches, p.pro.DefaultBranch())
 	}
 	return branches
 }

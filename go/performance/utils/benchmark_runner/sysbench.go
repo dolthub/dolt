@@ -164,14 +164,14 @@ func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
 }
 
 func (t *sysbenchTesterImpl) collectStats(ctx context.Context) error {
-	if !strings.EqualFold(t.serverConfig.GetServerExec(), "dolt") {
-		return nil
+	if strings.Contains(t.serverConfig.GetServerExec(), "dolt") && !strings.Contains(t.serverConfig.GetServerExec(), "doltgres") {
+		db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/test", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
+		if err != nil {
+			return err
+		}
+		return collectStats(ctx, db)
 	}
-	db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/test", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
-	if err != nil {
-		return err
-	}
-	return collectStats(ctx, db)
+	return nil
 }
 
 func collectStats(ctx context.Context, db *sqlx.DB) error {

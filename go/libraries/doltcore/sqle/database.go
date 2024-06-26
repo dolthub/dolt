@@ -807,6 +807,10 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 }
 
+func (db Database) SchemaName() string {
+	return db.schemaName
+}
+
 // GetAllTableNames returns all user-space tables, including system tables in user space
 // (e.g. dolt_docs, dolt_query_catalog).
 func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
