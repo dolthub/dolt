@@ -16,6 +16,7 @@ package merge
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 
@@ -46,7 +47,7 @@ type ThreeWayJsonDiff struct {
 	Base, Left, Right, Merged *types.JSONDocument
 }
 
-func (differ *ThreeWayJsonDiffer) Next() (ThreeWayJsonDiff, error) {
+func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, error) {
 	for {
 		err := differ.loadNextDiff()
 		if err != nil {
@@ -119,7 +120,7 @@ func (differ *ThreeWayJsonDiffer) Next() (ThreeWayJsonDiff, error) {
 			// If the key existed at base, we can do a recursive three-way merge to resolve
 			// changes to the values.
 			// This shouldn't be necessary: if its an object on all three branches, the original diff is recursive.
-			mergedValue, conflict, err := mergeJSON(*differ.leftCurrentDiff.From,
+			mergedValue, conflict, err := mergeJSON(ctx, *differ.leftCurrentDiff.From,
 				*differ.leftCurrentDiff.To,
 				*differ.rightCurrentDiff.To)
 			if err != nil {
