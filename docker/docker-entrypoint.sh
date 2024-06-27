@@ -36,20 +36,6 @@ check_for_dolt() {
     fi
 }
 
-# check arguments for an option that would cause mysqld to stop
-# return true if there is one
-_mysql_want_help() {
-	local arg
-	for arg; do
-		case "$arg" in
-			-'?'|-h|--help)
-				return 0
-				;;
-		esac
-	done
-	return 1
-}
-
 # arg $1 is the directory to search in
 # arg $2 is the type file to search for
 get_config_file_path_if_exists() {
@@ -117,38 +103,29 @@ _main() {
     # check for dolt binary executable
     check_for_dolt
 
-    if [ "${1:0:1}" = '-' ]; then
-        # if there is any command line argument defined we use
-        # them with default command `dolt sql-server --host=0.0.0.0 --port=3306`
-        # why we use fixed host=0.0.0.0 and port=3306 in README
-        set -- dolt sql-server --host=0.0.0.0 --port=3306 "$@"
+    local dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
+    mysql_note "Entrypoint script for Dolt Server $dolt_version starting."
+
+    declare -g CONFIG_PROVIDED
+
+    # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
+    # It will overwrite config_global.json file in $HOME/.dolt
+    set_dolt_config_if_defined
+
+    # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
+    # it will be used to start the server with --config flag
+    get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
+    if [ ! -z $CONFIG_PROVIDED ]; then
+        set -- "$@" --config=$CONFIG_PROVIDED
     fi
 
-    if [ "$1" = 'dolt' ] && [ "$2" = 'sql-server' ] && ! _mysql_want_help "$@"; then
-        local dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
-        mysql_note "Entrypoint script for Dolt Server $dolt_version starting."
-
-        declare -g CONFIG_PROVIDED
-
-        # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
-        # It will overwrite config_global.json file in $HOME/.dolt
-        set_dolt_config_if_defined
-
-        # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
-        # it will be used to start the server with --config flag
-        get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-        if [ ! -z $CONFIG_PROVIDED ]; then
-            set -- "$@" --config=$CONFIG_PROVIDED
-        fi
-
-        if [[ ! -f $INIT_COMPLETED ]]; then
-            # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
-            docker_process_init_files /docker-entrypoint-initdb.d/*
-            touch $INIT_COMPLETED
-        fi
+    if [[ ! -f $INIT_COMPLETED ]]; then
+        # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
+        docker_process_init_files /docker-entrypoint-initdb.d/*
+        touch $INIT_COMPLETED
     fi
 
-    exec "$@"
+    exec dolt sql-server --host=0.0.0.0 --port=3306 "$@"
 }
 
 _main "$@"
