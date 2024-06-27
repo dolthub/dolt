@@ -72,6 +72,7 @@ const (
 )
 
 var unknownLocationKeyError = fmt.Errorf("A JSON document was written with a future version of Dolt, and the index metadata cannot be read. This will impact performance for large documents.")
+var unsupportedPathError = fmt.Errorf("The supplied JSON path is not supported for optimized lookup, falling back on unoptimized implementation.")
 
 const (
 	beginObjectKey byte = 0xFF
@@ -143,14 +144,24 @@ func varIntLength(firstByte byte) int {
 	return int(firstByte - 246)
 }
 
-func isValidJsonPathKey(key []byte) bool {
+func isUnsupportedJsonPathKey(key []byte) bool {
 	if bytes.Equal(key, []byte("*")) {
-		return false
+		return true
 	}
 	if bytes.Equal(key, []byte("**")) {
-		return false
+		return true
 	}
-	return true
+	return false
+}
+
+func isUnsupportedJsonArrayIndex(index []byte) bool {
+	if bytes.Equal(index, []byte("*")) {
+		return true
+	}
+	if bytes.Equal(index, []byte("last")) {
+		return true
+	}
+	return false
 }
 
 func errorIfNotSupportedLocation(key []byte) error {
@@ -199,11 +210,12 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 				return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 			}
 		case lexStateIdx:
-			if pathBytes[i] >= byte('0') && pathBytes[i] <= byte('9') {
+			if pathBytes[i] != byte(']') {
 				i += 1
 			} else {
-				if pathBytes[i] != ']' {
-					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression %s.", string(pathBytes))
+				indexBytes := pathBytes[tok:i]
+				if isUnsupportedJsonArrayIndex(indexBytes) {
+					return jsonLocation{}, unsupportedPathError
 				}
 				conv, err := strconv.Atoi(string(pathBytes[tok:i]))
 				if err != nil {
@@ -219,10 +231,11 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 				i += 1
 			} else if pathBytes[i] == '.' || pathBytes[i] == '[' {
 				if tok == i {
-					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
+					// This could be a .[*] expression. Let the original implementation take a stab at it.
+					return jsonLocation{}, unsupportedPathError
 				}
-				if !isValidJsonPathKey(pathBytes[tok:i]) {
-					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
+				if isUnsupportedJsonPathKey(pathBytes[tok:i]) {
+					return jsonLocation{}, unsupportedPathError
 				}
 				location.appendObjectKey(pathBytes[tok:i])
 				state = lexStatePath
@@ -235,8 +248,8 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 				}
 				pathKey := unescapeKey(pathBytes[tok+1 : i])
-				if !isValidJsonPathKey(pathKey) {
-					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
+				if isUnsupportedJsonPathKey(pathKey) {
+					return jsonLocation{}, unsupportedPathError
 				}
 				location.appendObjectKey(pathKey)
 				state = lexStatePath
@@ -256,8 +269,8 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 		if tok == i {
 			return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 		}
-		if !isValidJsonPathKey(pathBytes[tok:i]) {
-			return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", tok, string(pathBytes))
+		if isUnsupportedJsonPathKey(pathBytes[tok:i]) {
+			return jsonLocation{}, unsupportedPathError
 		}
 		location.appendObjectKey(pathBytes[tok:i])
 		state = lexStatePath
