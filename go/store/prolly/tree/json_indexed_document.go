@@ -304,12 +304,12 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 }
 
 // Remove is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Remove(path string) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) Remove(ctx context.Context, path string) (types.MutableJSON, bool, error) {
 	v, err := i.ToInterface()
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Remove(path)
+	return types.JSONDocument{Val: v}.Remove(ctx, path)
 }
 
 // Set is not yet implemented, so we call it on a types.JSONDocument instead.

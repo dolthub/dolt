@@ -1991,7 +1991,7 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, err
 	}
 
-	mergedDoc, conflict, err := mergeJSON(baseDoc, leftDoc, rightDoc)
+	mergedDoc, conflict, err := mergeJSON(ctx, baseDoc, leftDoc, rightDoc)
 	if err != nil {
 		return nil, true, err
 	}
@@ -2015,7 +2015,7 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 
 }
 
-func mergeJSON(base types.JSONDocument, left types.JSONDocument, right types.JSONDocument) (resultDoc types.JSONDocument, conflict bool, err error) {
+func mergeJSON(ctx context.Context, base types.JSONDocument, left types.JSONDocument, right types.JSONDocument) (resultDoc types.JSONDocument, conflict bool, err error) {
 	// First, deserialize each value into JSON.
 	// We can only merge if the value at all three commits is a JSON object.
 
@@ -2046,7 +2046,7 @@ func mergeJSON(base types.JSONDocument, left types.JSONDocument, right types.JSO
 
 	// Compute the merged object by applying diffs to the left object as needed.
 	for {
-		threeWayDiff, err := threeWayDiffer.Next()
+		threeWayDiff, err := threeWayDiffer.Next(ctx)
 		if err == io.EOF {
 			return merged, false, nil
 		}
@@ -2058,7 +2058,7 @@ func mergeJSON(base types.JSONDocument, left types.JSONDocument, right types.JSO
 				return types.JSONDocument{}, true, err
 			}
 		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
-			_, _, err := merged.Remove(threeWayDiff.Key)
+			_, _, err := merged.Remove(ctx, threeWayDiff.Key)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}
