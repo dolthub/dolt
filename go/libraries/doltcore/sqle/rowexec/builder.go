@@ -212,6 +212,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, iter bool) (prolly.Map, prolly.Ma
 			}
 			indexMap = durable.ProllyMapFromIndex(rowData)
 			if iter {
+				// LOOKUP_BUILDER was intended for join-left, but we can abuse it for
 				l, err := n.GetLookup(ctx, nil)
 				if err != nil {
 					return prolly.Map{}, nil, nil, nil, nil, err
