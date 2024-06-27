@@ -47,9 +47,9 @@ func TestArchiveSingleChunk(t *testing.T) {
 
 	err = aw.writeIndex()
 	assert.NoError(t, err)
-	// The 'uncompressed' size of the index is 23 bytes. Compressing such small data is not worth it, but we do verify
-	// that the index is 35 bytes in this situation.
-	assert.Equal(t, uint32(35), aw.indexLen)
+	// Index size is not deterministic from the number of chunks, but when no dictionaries are in play, 36 bytes is correct
+	// because: 8 (uint64,prefix) + 8 (uint64,offset) + 4 (uint32,dict) + 4 (uint32,data) + 12 (hash.Suffix) = 36
+	assert.Equal(t, uint32(36), aw.indexLen)
 
 	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
@@ -57,7 +57,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.writeFooter()
 	assert.NoError(t, err)
 
-	assert.Equal(t, 10+35+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 35 index bytes + footer
+	assert.Equal(t, 10+36+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 36 index bytes + footer
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))

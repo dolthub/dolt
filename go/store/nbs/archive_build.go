@@ -84,7 +84,6 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 }
 
 func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string) (string, hash.Hash, error) {
-
 	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx)
 	if err != nil {
 		return "", hash.Hash{}, err
@@ -153,7 +152,7 @@ func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableInd
 }
 
 // indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
-// to the directory provided. The name is calculate from the footer, and can be obtained by calling getName on the archive.
+// to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
 func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string) error {
 	err := arcW.finalizeByteSpans()
 	if err != nil {
