@@ -21,11 +21,14 @@ import (
 
 /*
 A Dolt Archive is a file format for storing a collection of Chunks in a single file. The archive is essentially many
-byte spans concatenated together, with an index at the end of the file. Chunk Addresses are used to lookup and retrieve
+ByteSpans concatenated together, with an index at the end of the file. Chunk Addresses are used to lookup and retrieve
 Chunks from the Archive.
 
-There are byte spans with in the archive which are not addressable by a Chunk Address. These are used as internal data
-to aid in the compression of the Chunks.
+ByteSpans are arbitrary offset/lengths into the file which store (1) zstd dictionary data, and (2) compressed chunk
+data. Each Chunk is stored as a pair of ByteSpans (dict,data). Dictionary ByteSpans can (should) be used by multiple
+Chunks, so there are more ByteSpans than Chunks. The Index is used to map Chunks to ByteSpan pairs. These pairs are
+called  ChunkRefs, and were store them as [uint32,uint32] on disk. This allows us to quickly find the ByteSpans for a
+given Chunk with minimal processing at load time.
 
 A Dolt Archive file follows the following format:
    +------------+------------+-----+------------+-------+----------+--------+
@@ -57,20 +60,19 @@ Footer:
      parts, and ensure we can verify the integrity of each part.
 
 Index:
-   +--------------+------------+-----------------+----------+
-   | ByteSpan Map | Prefix Map | ChunkReferences | Suffixes |
-   +--------------+------------+-----------------+----------+
-   - The Index is a concatenation of 4 sections, the first three of which are compressed as one stream. The Suffixes
-     are not compressed because they won't compress well. For this reason there are two methods on the footer to get
-     the two spans individually.
+   The Index is a concatenation of 4 sections, all of which are stored in raw form on disk.
+   +-----------+------------+-----------------+----------+
+   | SpanIndex | Prefix Map | ChunkReferences | Suffixes |
+   +-----------+------------+-----------------+----------+
 
-   ByteSpan Map:
+   SpanIndex:
+       SpanIndex contains information required to lookup N ByteSpan Records. ByteSpan IDs are 1-based, where a 0 ID
+       indicates an empty ByteSpan. The SpanIndex is a list of Uint64s, where each Uint64 is the offset of the _end_ of
+       each ByteSpan. This allows for quick calculation of the offset/length of each ByteSpan.
+
        +------------------+------------------+-----+------------------+
        | ByteSpanOffset 1 | ByteSpanOffset 2 | ... | ByteSpanOffset N |
        +------------------+------------------+-----+------------------+
-       - The ByteSpanMap is effectively the offset and length of each data block to read from disk. In a series of Uint64s,
-         we record the _end_ of each ByteSpan. This allows for reading the data quickly at index load time, and then
-         quick calculation of the length based on the previous ByteSpan.
 
        An example:
        +-------------------+-------------------+-------------------+-------------------+
@@ -82,10 +84,6 @@ Index:
          - The second ByteSpan is 3 bytes long, and starts at offset 7.
          - The third ByteSpan is 5 bytes long, and starts at offset 10.
          - The fourth ByteSpan is 9 bytes long, and starts at offset 15.
-
-       The ByteSpan Map contains N ByteSpan Records. The index in the map is considered the ByteSpan's ID, and
-       is used to reference the ByteSpan in the ChunkRefs. Note that the ByteSpan ID is 1-based, as 0 is reserved to indicate
-       an empty ByteSpan.
 
    Prefix Map:
        +-------------------+-------------------+-----+---------------------------+
@@ -101,9 +99,9 @@ Index:
        | ChunkRef 0 | ChunkRef 1 | ... | ChunkRef M-1 |
        +------------+------------+-----+--------------+
        ChunkRef:
-           +------------------------------+-------------------------+
-           | (Uint32) Dictionary ByteSpan | (Uint32) Chunk ByteSpan |
-           +------------------------------+-------------------------+
+           +--------------------------------+---------------------------+
+           | (Uint32) Dictionary ByteSpanId | (Uint32) Chunk ByteSpanId |
+           +--------------------------------+---------------------------+
         - Dictionary: ID for a ByteSpan to be used as zstd dictionary. 0 refers to the empty ByteSpan, which indicates no dictionary.
         - Chunk: ID for the ByteSpan containing the Chunk data. Never 0.
 

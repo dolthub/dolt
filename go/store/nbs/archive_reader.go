@@ -30,13 +30,13 @@ import (
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
-	reader       io.ReaderAt
-	prefixes     []uint64
-	byteOffSpans []uint64
-	chunkRefs    []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
-	suffixes     []byte
-	footer       footer
-	dictCache    *lru.TwoQueueCache[uint32, *gozstd.DDict]
+	reader    io.ReaderAt
+	prefixes  []uint64
+	spanIndex []uint64
+	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
+	suffixes  []byte
+	footer    footer
+	dictCache *lru.TwoQueueCache[uint32, *gozstd.DDict]
 }
 
 type suffix [hash.SuffixLen]byte
@@ -145,13 +145,13 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	}
 
 	return archiveReader{
-		reader:       reader,
-		prefixes:     prefixes,
-		byteOffSpans: byteSpans,
-		chunkRefs:    chunks,
-		suffixes:     suffixes,
-		footer:       footer,
-		dictCache:    dictCache,
+		reader:    reader,
+		prefixes:  prefixes,
+		spanIndex: byteSpans,
+		chunkRefs: chunks,
+		suffixes:  suffixes,
+		footer:    footer,
+		dictCache: dictCache,
 	}, nil
 }
 
@@ -312,8 +312,8 @@ func (ai archiveReader) getByteSpanByID(id uint32) byteSpan {
 		return byteSpan{}
 	}
 	// This works because byteOffSpan[0] == 0. See initialization.
-	offset := ai.byteOffSpans[id-1]
-	length := ai.byteOffSpans[id] - offset
+	offset := ai.spanIndex[id-1]
+	length := ai.spanIndex[id] - offset
 	return byteSpan{offset: offset, length: length}
 }
 
