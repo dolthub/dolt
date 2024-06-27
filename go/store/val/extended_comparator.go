@@ -71,7 +71,13 @@ func (c ExtendedTupleComparator) Suffix(n int) TupleComparator {
 
 // Validated implements the TupleComparator interface.
 func (c ExtendedTupleComparator) Validated(types []Type) TupleComparator {
-	innerCmp := c.innerCmp.Validated(types)
+	// If our inner comparator is an ExtendedTupleComparator, then we should use its inner comparator to reduce redundancy.
+	var innerCmp TupleComparator
+	if extendedInner, ok := c.innerCmp.(ExtendedTupleComparator); ok {
+		innerCmp = extendedInner.innerCmp.Validated(types)
+	} else {
+		innerCmp = c.innerCmp.Validated(types)
+	}
 	if len(c.handlers) == 0 {
 		c.handlers = make([]TupleTypeHandler, len(types))
 	} else if len(c.handlers) != len(types) {
