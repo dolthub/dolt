@@ -311,7 +311,7 @@ func (ai archiveReader) getByteSpanByID(id uint32) byteSpan {
 	if id == 0 {
 		return byteSpan{}
 	}
-	// This works because bytePffSpan[0] == 0. See initialization.
+	// This works because byteOffSpan[0] == 0. See initialization.
 	offset := ai.byteOffSpans[id-1]
 	length := ai.byteOffSpans[id] - offset
 	return byteSpan{offset: offset, length: length}
