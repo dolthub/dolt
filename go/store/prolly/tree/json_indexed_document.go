@@ -107,29 +107,40 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 	return bytes, err
 }
 
-// Lookup implements types.SearchableJSON
-func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql.JSONWrapper, error) {
-	if strings.Contains(pathString, "*") {
-		// Optimized lookup doesn't currently support wildcards. Fall back on an unoptimized approach.
-		// TODO: Optimized lookup on wildcards.
-		val, err := i.ToInterface()
-		if err != nil {
-			return nil, err
-		}
-		nonIndexedDoc := types.JSONDocument{Val: val}
-		return nonIndexedDoc.Lookup(ctx, pathString)
-	}
-	result, err := i.tryLookup(ctx, pathString)
-	if err == unknownLocationKeyError {
-		if sqlCtx, ok := ctx.(*sql.Context); ok {
-			sqlCtx.GetLogger().Warn(err)
+func tryWithFallback(
+	ctx context.Context,
+	i IndexedJsonDocument,
+	tryFunc func() error,
+	fallbackFunc func(document types.JSONDocument) error) error {
+	err := tryFunc()
+	if err == unknownLocationKeyError || err == unsupportedPathError {
+		if err == unknownLocationKeyError {
+			if sqlCtx, ok := ctx.(*sql.Context); ok {
+				sqlCtx.GetLogger().Warn(err)
+			}
 		}
 		v, err := i.ToInterface()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return types.JSONDocument{Val: v}.Lookup(ctx, pathString)
+		return fallbackFunc(types.JSONDocument{Val: v})
 	}
+	return err
+}
+
+// Lookup implements types.SearchableJSON
+func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (result sql.JSONWrapper, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, err = i.tryLookup(ctx, pathString)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, err = jsonDocument.Lookup(ctx, pathString)
+			return err
+		})
 	return result, err
 }
 
@@ -160,18 +171,18 @@ func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (
 }
 
 // Insert implements types.MutableJSON
-func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	result, changed, err := i.tryInsert(ctx, path, val)
-	if err == unknownLocationKeyError {
-		if sqlCtx, ok := ctx.(*sql.Context); ok {
-			sqlCtx.GetLogger().Warn(err)
-		}
-		v, err := i.ToInterface()
-		if err != nil {
-			return nil, false, err
-		}
-		return types.JSONDocument{Val: v}.Insert(ctx, path, val)
-	}
+func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (result types.MutableJSON, changed bool, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.tryInsert(ctx, path, val)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Insert(ctx, path, val)
+			return err
+		})
 	return result, changed, err
 }
 
