@@ -43,7 +43,7 @@ seed_and_start_serial_remote() {
 
     dolt tag nonheadtag HEAD~2
 
-    remotesrv --http-port 1234 --repo-mode &
+    remotesrv --http-port 12345 --repo-mode &> ./remotesrv.log 3>&- &
     remotesrv_pid=$!
 
     cd ..
