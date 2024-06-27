@@ -63,18 +63,16 @@ var defaultDoltLuaScripts = map[string]string{
 	sysbenchTypesTableScanLuaTestName:    sysbenchTypesTableScanLuaTestName,
 }
 
-// todo: check expressions need to be supported in doltgres for these
-// todo: postgres does not have geometry types also
 var defaultDoltgresLuaScripts = map[string]string{
-	//sysbenchCoveringIndexScanPostgresLuaTestName: sysbenchCoveringIndexScanPostgresLuaTestName,
-	//sysbenchGroupByScanPostgresLuaTestName:       sysbenchGroupByScanPostgresLuaTestName,
-	//sysbenchIndexJoinPostgresLuaTestName:         sysbenchIndexJoinPostgresLuaTestName,
-	//sysbenchIndexJoinScanPostgresLuaTestName:     sysbenchIndexJoinScanPostgresLuaTestName,
-	//sysbenchIndexScanPostgresLuaTestName:         sysbenchIndexScanPostgresLuaTestName,
-	//sysbenchOltpDeleteInsertPostgresLuaTestName:  sysbenchOltpDeleteInsertPostgresLuaTestName,
-	//sysbenchTableScanPostgresLuaTestName:         sysbenchTableScanPostgresLuaTestName,
-	//sysbenchTypesDeleteInsertPostgresLuaTestName: sysbenchTypesDeleteInsertPostgresLuaTestName,
-	//sysbenchTypesTableScanPostgresLuaTestName:    sysbenchTypesTableScanPostgresLuaTestName,
+	sysbenchCoveringIndexScanPostgresLuaTestName: sysbenchCoveringIndexScanPostgresLuaTestName,
+	sysbenchGroupByScanPostgresLuaTestName:       sysbenchGroupByScanPostgresLuaTestName,
+	sysbenchIndexJoinPostgresLuaTestName:         sysbenchIndexJoinPostgresLuaTestName,
+	sysbenchIndexJoinScanPostgresLuaTestName:     sysbenchIndexJoinScanPostgresLuaTestName,
+	sysbenchIndexScanPostgresLuaTestName:         sysbenchIndexScanPostgresLuaTestName,
+	sysbenchTableScanPostgresLuaTestName:         sysbenchTableScanPostgresLuaTestName,
+	sysbenchTypesTableScanPostgresLuaTestName:    sysbenchTypesTableScanPostgresLuaTestName,
+	sysbenchOltpDeleteInsertPostgresLuaTestName:  sysbenchOltpDeleteInsertPostgresLuaTestName,
+	sysbenchTypesDeleteInsertPostgresLuaTestName: sysbenchTypesDeleteInsertPostgresLuaTestName,
 }
 
 // sysbenchRunnerConfigImpl is the configuration for a benchmarking run
