@@ -127,6 +127,39 @@ func TestBinlogPrimary(t *testing.T) {
 		{"binlog-main.000001", "2226", "", "", uuid + ":1-3"}})
 }
 
+// TestBinlogPrimary_Heartbeats tests that heartbeats sent from the primary to the replica are well-formed and
+// don't cause the replica to close the stream. For example, if the nextLogPosition field in the heartbeat event
+// doesn't match up with the nextLogPosition from the previous event, then the replica will quit the connection.
+func TestBinlogPrimary_Heartbeats(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+
+	primaryDatabase.MustExec("create table db01.heartbeatTest(pk int);")
+
+	// Insert a row every second, for 70s, which gives the server a chance to send two heartbeats
+	endTime := time.Now().Add(70 * time.Second)
+	maxInsertValue := 0
+	for time.Now().Before(endTime) {
+		maxInsertValue += 1
+		primaryDatabase.MustExec(fmt.Sprintf("insert into db01.heartbeatTest values (%d);", maxInsertValue))
+		time.Sleep(1 * time.Second)
+	}
+
+	// Ensure the replica is still in sync
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select count(*) from db01.heartbeatTest;",
+		[][]any{{fmt.Sprintf("%d", maxInsertValue)}})
+
+	// Make sure no errors have occurred
+	status := queryReplicaStatus(t)
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "", status["Last_IO_Error"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "0", status["Last_IO_Errno"])
+}
+
 // TestBinlogPrimary_ReplicaRestart tests that the Dolt primary server behaves correctly when the
 // replica server is stopped, and then later reconnects.
 func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
