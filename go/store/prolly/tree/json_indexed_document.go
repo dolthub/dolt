@@ -150,14 +150,12 @@ func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (
 		return nil, err
 	}
 
-	jCur, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, path)
+	jCur, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, path, false)
 	if err != nil {
 		return nil, err
 	}
 
-	cursorPath := jCur.GetCurrentPath()
-	cmp := compareJsonLocations(cursorPath, path)
-	if cmp != 0 {
+	if !found {
 		// The key doesn't exist in the document.
 		return nil, nil
 	}
@@ -191,14 +189,13 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 		return nil, false, err
 	}
 
-	jsonCursor, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath)
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
 	if err != nil {
 		return nil, false, err
 	}
 
 	cursorPath := jsonCursor.GetCurrentPath()
-	cmp := compareJsonLocations(cursorPath, keyPath)
-	if cmp == 0 {
+	if found {
 		// The key already exists in the document.
 		return i, false, nil
 	}
@@ -272,6 +269,7 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 	// For example, attempting to insert into the path "$.a.b" in the document {"a": 1}
 	// We can detect this by checking to see if the insertion point in the original document comes before the inserted path.
 	// (For example, the insertion point occurs at $.a.START, which is before $.a.b)
+	cmp := compareJsonLocations(cursorPath, keyPath)
 	if cmp < 0 && cursorPath.getScannerState() == startOfValue {
 		// We just attempted to insert into a scalar.
 		return i, false, nil
@@ -313,13 +311,71 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
-// Remove is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Remove(ctx context.Context, path string) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
+// Remove implements types.MutableJSON
+func (i IndexedJsonDocument) Remove(ctx context.Context, path string) (result types.MutableJSON, changed bool, err error) {
+	if path == "$" {
+		return nil, false, fmt.Errorf("The path expression '$' is not allowed in this context.")
+	}
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.tryRemove(ctx, path)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Remove(ctx, path)
+			return err
+		})
+	return result, changed, err
+}
+
+func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.MutableJSON, bool, error) {
+	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Remove(ctx, path)
+
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, true)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		// The key does not exist in the document.
+		return i, false, nil
+	}
+
+	// The cursor is now pointing to the end of the value prior to the one being removed. But if it's an object, we need to remove
+	// the key too. So we rescan the current block.
+	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
+	if err != nil {
+		return nil, false, err
+	}
+
+	startofRemovedLocation := jsonCursor.GetCurrentPath()
+	startofRemovedLocation = startofRemovedLocation.Clone()
+	isInitialElement := startofRemovedLocation.getScannerState().isInitialElement()
+
+	// Advance the cursor to the end of the value being removed.
+	keyPath.setScannerState(endOfValue)
+	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// If removing the first element of an object/array, skip past the comma, and set the chunker as if it's
+	// at the start of the object/array.
+	if isInitialElement && jsonCursor.jsonScanner.current() == ',' {
+		jsonCursor.jsonScanner.valueOffset++
+		jsonChunker.jScanner.currentPath = startofRemovedLocation
+	}
+
+	newRoot, err := jsonChunker.Done(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
 // Set is not yet implemented, so we call it on a types.JSONDocument instead.
