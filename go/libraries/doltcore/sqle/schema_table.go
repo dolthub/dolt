@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 )
 
 const (
@@ -69,6 +70,20 @@ var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
 // getOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
 // Also migrates data to the correct format if necessary.
 func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *WritableDoltTable, retErr error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaName := db.schemaName
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		db.schemaName = schemaName
+	}
+
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
@@ -84,13 +99,8 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		}
 	}
 
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create new empty table
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, schemaTableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, schemaName, root, schemaTableSchema)
 	if err != nil {
 		return nil, err
 	}
