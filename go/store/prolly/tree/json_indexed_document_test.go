@@ -44,6 +44,17 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 	jsontests.RunJsonTests(t, testCases)
 }
 
+func TestIndexedJsonDocument_Remove(t *testing.T) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	convertToIndexedJsonDocument := func(t *testing.T, s interface{}) interface{} {
+		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
+	}
+
+	testCases := jsontests.JsonRemoveTestCases(t, convertToIndexedJsonDocument)
+	jsontests.RunJsonTests(t, testCases)
+}
+
 func TestIndexedJsonDocument_Extract(t *testing.T) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()

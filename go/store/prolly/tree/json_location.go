@@ -71,6 +71,10 @@ const (
 	endOfValue
 )
 
+func (t jsonPathType) isInitialElement() bool {
+	return t == objectInitialElement || t == arrayInitialElement
+}
+
 var unknownLocationKeyError = fmt.Errorf("A JSON document was written with a future version of Dolt, and the index metadata cannot be read. This will impact performance for large documents.")
 var unsupportedPathError = fmt.Errorf("The supplied JSON path is not supported for optimized lookup, falling back on unoptimized implementation.")
 
