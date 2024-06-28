@@ -1,0 +1,69 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+
+proc expect_with_defaults {pattern action} {
+    expect {
+        -re $pattern {
+#            puts "Matched pattern: $pattern"
+            eval $action
+        }
+        timeout {
+            puts "<<Timeout>>";
+            exit 1
+        }
+        eof {
+            puts "<<End of File reached>>";
+            exit 1
+        }
+        failed {
+            puts "<<Failed>>";
+            exit 1
+        }
+    }
+}
+proc expect_with_defaults_2 {patternA patternB action} {
+    expect {
+        -re $patternA {
+#            puts "Matched pattern: $patternA"
+            exp_continue
+        }
+        -re $patternB {
+#            puts "Matched pattern: $patternB"
+            eval $action
+        }
+        timeout {
+            puts "<<Timeout>>";
+            exit 1
+        }
+        eof {
+            puts "<<End of File reached>>";
+            exit 1
+        }
+        failed {
+            puts "<<Failed>>";
+            exit 1
+        }
+    }
+}
+
+
+
+spawn dolt sql
+
+expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "/commit -A -m \"sql-shell-slash-cmds commit\";\r"; }
+
+expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "/log -n 1;\r"; }
+
+expect_with_defaults_2 {sql-shell-slash-cmds commit} {dolt-repo-[0-9]+/main> } { send "/status;\r"; }
+
+expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "/reset HEAD~1;\r"; }
+
+expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "/diff;\r"; }
+
+expect_with_defaults_2 {diff --dolt a/tbl b/tbl} {dolt-repo-[0-9]+/main\*> } {send "quit\r";}
+
+expect eof
+exit

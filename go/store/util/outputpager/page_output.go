@@ -72,7 +72,8 @@ func Start() *Pager {
 		// -S ... Chop (truncate) long lines rather than wrapping.
 		// -R ... Output "raw" control characters.
 		// -X ... Don't use termcap init/deinit strings.
-		cmd = exec.Command(lessPath, "-FSRX")
+		// -d ... Don't complain about dumb terminals.
+		cmd = exec.Command(lessPath, "-FSRXd")
 	}
 
 	stdin, stdout, err := os.Pipe()
