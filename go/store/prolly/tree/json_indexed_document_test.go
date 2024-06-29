@@ -167,7 +167,7 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 }
 
 func TestIndexedJsonDocument_Remove(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	convertToIndexedJsonDocument := func(t *testing.T, s interface{}) interface{} {
 		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
@@ -175,6 +175,35 @@ func TestIndexedJsonDocument_Remove(t *testing.T) {
 
 	testCases := jsontests.JsonRemoveTestCases(t, convertToIndexedJsonDocument)
 	jsontests.RunJsonTests(t, testCases)
+
+	t.Run("large document removals", func(t *testing.T) {
+
+		largeDoc := createLargeDocumentForTesting(t, ctx, ns)
+
+		for _, chunkBoundary := range largeDocumentChunkBoundaries {
+			t.Run(jsonPathTypeNames[chunkBoundary.pathType], func(t *testing.T) {
+				removalPoint := chunkBoundary.path[:strings.LastIndex(chunkBoundary.path, ".")]
+				// Test that the value exists prior to removal
+
+				result, err := largeDoc.Lookup(ctx, removalPoint)
+				require.NoError(t, err)
+				require.NotNil(t, result)
+
+				newDoc, changed, err := largeDoc.Remove(ctx, removalPoint)
+				require.NoError(t, err)
+				require.True(t, changed)
+
+				// test that new value is valid by calling ToInterface
+				v, err := newDoc.ToInterface()
+				require.NoError(t, err)
+
+				newJsonDocument := types.JSONDocument{Val: v}
+				result, err = newJsonDocument.Lookup(ctx, removalPoint)
+				require.NoError(t, err)
+				require.NotNil(t, result)
+			})
+		}
+	})
 }
 
 func TestIndexedJsonDocument_Extract(t *testing.T) {
