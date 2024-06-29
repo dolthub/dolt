@@ -123,6 +123,7 @@ func jsonPathFromKey(pathKey []byte) (path jsonLocation) {
 			i += 1
 		} else if pathKey[i] == beginArrayKey {
 			ret.offsets = append(ret.offsets, i)
+			i += 1
 			i += varIntLength(pathKey[i])
 		} else {
 			i += 1
