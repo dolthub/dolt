@@ -315,6 +315,14 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 }
 
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		db.schemaName = schemaName
+	}
+
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
@@ -1403,10 +1411,11 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 
 	if dbState.SessionCache().ViewsCached(key) {
 		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
-		return view, ok, nil
+		if ok {
+			return view, ok, nil
+		}
 	}
 
-	// TODO: do we need a dolt schemas table in every schema?
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
