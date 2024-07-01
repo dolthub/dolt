@@ -103,6 +103,8 @@ func (c *reliableCall[Req, Resp]) Send(r Req) error {
 	case c.reqCh <- r:
 		return nil
 	case <-c.ctx.Done():
+		// Always non-nil. We never closed reqCh, so the only way
+		// sm.run() should complete is with a non-nil error.
 		return c.eg.Wait()
 	}
 }
@@ -118,12 +120,31 @@ func (c *reliableCall[Req, Resp]) Recv() (Resp, error) {
 	select {
 	case r, ok = <-c.respCh:
 		if !ok {
+			// Always |nil|. If respCh is closed, run() should
+			// always return nil error.
+			_ = c.eg.Wait()
 			return r.Resp, io.EOF
 		}
 		c.associatedReq = r.Req
 		return r.Resp, nil
 	case <-c.ctx.Done():
-		return r.Resp, c.eg.Wait()
+		err := c.eg.Wait()
+		if err == nil {
+			// The parent context can be canceled while the state
+			// machine is actually finished successfully and we
+			// have not read the close of c.respCh yet. If err is
+			// nil here, then we technically know that we are at
+			// io.EOF.
+			//
+			// It would also be correct to return
+			// context.Cause(ctx) here, since any behavior relying
+			// on observing one or the other is racey. But it is
+			// *not* correct to return a default-value Resp and a
+			// |nil| error here, which is what you get with just
+			// |return r.Resp, c.eg.Wait()|.
+			return r.Resp, io.EOF
+		}
+		return r.Resp, err
 	}
 }
 

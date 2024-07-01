@@ -19,6 +19,7 @@ import (
 	"errors"
 	"io"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -496,6 +497,30 @@ func TestMakeCall(t *testing.T) {
 	})
 	t.Run("ErrWantBlockForDeliverResp", func(t *testing.T) {
 		assert.EqualError(t, ErrWantBlockForDeliverResp[int]{}, "ErrWantBlockForDeliverResp")
+	})
+	t.Run("RecvOnCompletedCallAndCanceledParentCtxNeverReturnsError", func(t *testing.T) {
+		for i := 0; i < 128; i++ {
+			ctx, cancel := context.WithCancel(context.Background())
+			stream, err := MakeCall(ctx, CallOptions[*int, *int]{
+				ErrF: func(err error) error {
+					return err
+				},
+				Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[*int, *int], error) {
+					ret := newTestStream[*int](ctx, 1)
+					return ret, nil
+				},
+				BackOffF: func(ctx context.Context) backoff.BackOff {
+					return backoff.NewConstantBackOff(0)
+				},
+				ReadRequestTimeout: 5 * time.Second,
+				DeliverRespTimeout: 50 * time.Millisecond,
+			})
+			assert.NoError(t, stream.CloseSend())
+			cancel()
+			runtime.Gosched()
+			_, err = stream.Recv()
+			assert.Error(t, err)
+		}
 	})
 }
 
