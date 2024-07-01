@@ -19,7 +19,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
