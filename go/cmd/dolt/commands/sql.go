@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -97,7 +96,7 @@ const (
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
-# "exit" or "quit" (or Ctrl-D) to exit. "\help;" for help.`
+# "exit" or "quit" (or Ctrl-D) to exit. "\help" for help.`
 )
 
 // TODO: get rid of me, use a real integration point to define system variables
@@ -709,14 +708,19 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	}
 
 	verticalOutputLineTerminators := []string{"\\g", "\\G"}
+	backSlashCommands := make([]string, 0, len(slashCmds))
+	for _, cmd := range slashCmds {
+		backSlashCommands = append(backSlashCommands, "\\"+cmd.Name())
+	}
 
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
 		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
-		LineTerminator: ";",
-		MysqlShellCmds: verticalOutputLineTerminators,
+		LineTerminator:     ";",
+		SpecialTerminators: verticalOutputLineTerminators,
+		BackSlashCmds:      backSlashCommands,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -747,64 +751,52 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
-		if len(strings.TrimSpace(query)) == 0 {
+		query = strings.TrimSpace(query)
+		if len(query) == 0 {
 			return
 		}
 
-		cont := true
 		var nextPrompt string
 		var multiPrompt string
 
-		re := regexp.MustCompile(`\s*\\(.*)`)
-		matches := re.FindStringSubmatch(query)
-		// If the query starts with a slash, it's a shell command. We don't want to print the query in that case.
-		if len(matches) > 1 {
-			func() {
-				subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
-				defer stop()
-				sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
+		// TODO: there's a bug in the readline library when editing multi-line history entries.
+		// Longer term we need to switch to a new readline library, like in this bug:
+		// https://github.com/cockroachdb/cockroach/issues/15460
+		// For now, we store all history entries as single-line strings to avoid the issue.
+		singleLine := strings.ReplaceAll(query, "\n", " ")
 
-				slashCmd := matches[1]
-				err := handleSlashCommand(sqlCtx, slashCmd, cliCtx)
+		if err := shell.AddHistory(singleLine); err != nil {
+			// TODO: handle better, like by turning off history writing for the rest of the session
+			shell.Println(color.RedString(err.Error()))
+		}
+
+		query = strings.TrimSuffix(query, shell.LineTerminator())
+
+		closureFormat := format
+		// TODO: it would be better to build this into the statement parser rather than special case it here
+		for _, terminator := range verticalOutputLineTerminators {
+			if strings.HasSuffix(query, terminator) {
+				closureFormat = engine.FormatVertical
+			}
+			query = strings.TrimSuffix(query, terminator)
+		}
+
+		cont := true
+		var sqlSch sql.Schema
+		var rowIter sql.RowIter
+		cont = func() bool {
+			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
+
+			_, foundCmd := findSlashCmd(query)
+			if foundCmd {
+				err := handleSlashCommand(sqlCtx, query, cliCtx)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
-
-				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
-			}()
-		} else {
-			closureFormat := format
-
-			// TODO: there's a bug in the readline library when editing multi-line history entries.
-			// Longer term we need to switch to a new readline library, like in this bug:
-			// https://github.com/cockroachdb/cockroach/issues/15460
-			// For now, we store all history entries as single-line strings to avoid the issue.
-			singleLine := strings.ReplaceAll(query, "\n", " ")
-
-			if err := shell.AddHistory(singleLine); err != nil {
-				// TODO: handle better, like by turning off history writing for the rest of the session
-				shell.Println(color.RedString(err.Error()))
-			}
-
-			query = strings.TrimSuffix(query, shell.LineTerminator())
-
-			// TODO: it would be better to build this into the statement parser rather than special case it here
-			for _, terminator := range verticalOutputLineTerminators {
-				if strings.HasSuffix(query, terminator) {
-					closureFormat = engine.FormatVertical
-				}
-				query = strings.TrimSuffix(query, terminator)
-			}
-
-			var sqlSch sql.Schema
-			var rowIter sql.RowIter
-
-			cont = func() bool {
-				subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
-				defer stop()
-
-				sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
-
+			} else {
 				if sqlSch, rowIter, err = processQuery(sqlCtx, query, qryist); err != nil {
 					verr := formatQueryError("", err)
 					shell.Println(verr.Verbose())
@@ -820,12 +812,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 						shell.Println(color.RedString(err.Error()))
 					}
 				}
+			}
 
-				nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
+			nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
 
-				return true
-			}()
-		}
+			return true
+		}()
 
 		if !cont {
 			return
