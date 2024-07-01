@@ -98,6 +98,13 @@ var largeDocumentChunkBoundaries = []chunkBoundary{
 	},
 }
 
+func jsonLocationFromMySqlPath(t *testing.T, path string, pathType jsonPathType) jsonLocation {
+	result, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
+	require.NoError(t, err)
+	result.setScannerState(pathType)
+	return result
+}
+
 // TestIndexedJsonDocument_ValidateChunks asserts that the values defined largeDocumentChunkBoundaries are accurate,
 // so they can be used in other tests.
 func TestIndexedJsonDocument_ValidateChunks(t *testing.T) {
@@ -106,9 +113,7 @@ func TestIndexedJsonDocument_ValidateChunks(t *testing.T) {
 	largeDoc := createLargeDocumentForTesting(t, ctx, ns)
 	for _, boundary := range largeDocumentChunkBoundaries {
 		t.Run(fmt.Sprintf("validate %v at chunk %v", jsonPathTypeNames[boundary.pathType], boundary.chunkId), func(t *testing.T) {
-			expectedKey, err := jsonPathElementsFromMySQLJsonPath([]byte(boundary.path))
-			require.NoError(t, err)
-			expectedKey.setScannerState(boundary.pathType)
+			expectedKey := jsonLocationFromMySqlPath(t, boundary.path, boundary.pathType)
 			actualKey := []byte(largeDoc.m.Root.GetKey(boundary.chunkId))
 			require.Equal(t, expectedKey.key, actualKey)
 		})
@@ -133,14 +138,19 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 		valueToInsert, err := largeDoc.Lookup(ctx, "$[6]")
 		require.NoError(t, err)
 
-		for _, chunkBoundaries := range largeDocumentChunkBoundaries {
-			t.Run(jsonPathTypeNames[chunkBoundaries.pathType], func(t *testing.T) {
+		for _, chunkBoundary := range largeDocumentChunkBoundaries {
+			t.Run(jsonPathTypeNames[chunkBoundary.pathType], func(t *testing.T) {
 				// Compute a location right before the chunk boundary, and insert a large value into it.
-				insertionPoint := chunkBoundaries.path[:strings.LastIndex(chunkBoundaries.path, ".")]
+				insertionPoint := chunkBoundary.path[:strings.LastIndex(chunkBoundary.path, ".")]
 				insertionPoint = fmt.Sprint(insertionPoint, ".a")
 				newDoc, changed, err := largeDoc.Insert(ctx, insertionPoint, valueToInsert)
 				require.NoError(t, err)
 				require.True(t, changed)
+
+				// test that the chunk boundary was moved as a result of the insert.
+				newBoundary := []byte(largeDoc.m.Root.GetKey(chunkBoundary.chunkId))
+				previousBoundary := jsonLocationFromMySqlPath(t, chunkBoundary.path, chunkBoundary.pathType)
+				require.NotEqual(t, newBoundary, previousBoundary)
 
 				// test that new value is valid by converting it to interface{}
 				v, err := newDoc.ToInterface()
