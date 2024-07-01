@@ -1675,6 +1675,11 @@ func TestStatsIO(t *testing.T) {
 	RunStatsIOTests(t, h)
 }
 
+func TestStatsIOWithoutReload(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunStatsIOTestsWithoutReload(t, h)
+}
+
 func TestJoinStats(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunJoinStatsTests(t, h)
