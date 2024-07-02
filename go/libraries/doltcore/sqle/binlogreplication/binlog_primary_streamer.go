@@ -82,6 +82,7 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 				if err := conn.WriteBinlogEvent(event, false); err != nil {
 					return err
 				}
+				binlogEventMeta.NextLogPosition += event.Length()
 			}
 			if err := conn.FlushBuffer(); err != nil {
 				return fmt.Errorf("unable to flush binlog connection: %s", err.Error())
