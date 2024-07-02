@@ -1370,6 +1370,12 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+	// attempts to define the db schema name if applicable
+	if resolve.UseSearchPath && db.schemaName == "" {
+		if schemaName, _ := resolve.FirstExistingSchemaOnSearchPath(ctx, root); schemaName != "" {
+			db.schemaName = schemaName
+		}
+	}
 
 	lwrViewName := strings.ToLower(viewName)
 	switch {
@@ -1396,10 +1402,11 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 
 	if dbState.SessionCache().ViewsCached(key) {
 		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
-		return view, ok, nil
+		if ok {
+			return view, ok, nil
+		}
 	}
 
-	// TODO: do we need a dolt schemas table in every schema?
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
@@ -1823,6 +1830,18 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	if resolve.UseSearchPath && db.schemaName == "" {
+		schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return err
+		}
+		db.schemaName = schemaName
 	}
 
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
