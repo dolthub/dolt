@@ -130,7 +130,7 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	// When inserting into the beginning of an object or array, we need to add an extra comma.
 	// We could track then in the chunker, but it's easier to just check the next part of JSON to determine
 	// whether we need the comma.
-	if j.jScanner.currentPath.getScannerState() == endOfValue && jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
+	if j.jScanner.currentPath.getScannerState() == endOfValue && len(jsonBytes) > 0 && jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
 		j.appendJsonToBuffer([]byte(","))
 	}
 	// Append the rest of the JsonCursor, then continue until we either exhaust the cursor, or we coincide with a boundary from the original tree.
