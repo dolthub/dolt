@@ -150,6 +150,10 @@ func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (
 		return nil, err
 	}
 
+	return i.lookupByLocation(ctx, path)
+}
+
+func (i IndexedJsonDocument) lookupByLocation(ctx context.Context, path jsonLocation) (sql.JSONWrapper, error) {
 	jCur, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, path, false)
 	if err != nil {
 		return nil, err
@@ -194,11 +198,16 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 		return nil, false, err
 	}
 
-	cursorPath := jsonCursor.GetCurrentPath()
 	if found {
 		// The key already exists in the document.
 		return i, false, nil
 	}
+
+	return i.insertIntoCursor(ctx, keyPath, jsonCursor, val)
+}
+
+func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	cursorPath := jsonCursor.GetCurrentPath()
 
 	// If the inserted path is equivalent to "$" (which also includes "$[0]" on non-arrays), do nothing.
 	if cursorPath.size() == 0 && cursorPath.getScannerState() == startOfValue {
@@ -345,8 +354,7 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 		return i, false, nil
 	}
 
-	// The cursor is now pointing to the end of the value prior to the one being removed. But if it's an object, we need to remove
-	// the key too. So we rescan the current block.
+	// The cursor is now pointing to the end of the value prior to the one being removed.
 	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 	if err != nil {
 		return nil, false, err
