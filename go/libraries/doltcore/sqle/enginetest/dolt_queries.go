@@ -745,15 +745,15 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select (select count(*) from dolt_statistics) > 0",
-				Expected: []sql.Row{{uint8(1)}},
+				Expected: []sql.Row{{true}},
 			},
 			{
-				Query:    "select count(*) from xy a join xy b on a.y = b.y limit 1",
-				Expected: []sql.Row{{1}},
+				Query:    "select a.y from xy a join xy b on a.y = b.y limit 1",
+				Expected: []sql.Row{{"x"}},
 			},
 			{
-				Query:    "select count(*) from xy where y = 'x'",
-				Expected: []sql.Row{{2}},
+				Query:    "select y from xy where y = 'x' limit 1",
+				Expected: []sql.Row{{"x"}},
 			},
 		},
 	},
