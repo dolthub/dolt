@@ -756,9 +756,6 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			return
 		}
 
-		var nextPrompt string
-		var multiPrompt string
-
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
@@ -781,22 +778,23 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			query = strings.TrimSuffix(query, terminator)
 		}
 
-		cont := true
-		var sqlSch sql.Schema
-		var rowIter sql.RowIter
-		cont = func() bool {
+		var nextPrompt string
+		var multiPrompt string
+		cont := func() bool {
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
 			sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
 
-			_, foundCmd := findSlashCmd(query)
+			subCmd, foundCmd := findSlashCmd(query)
 			if foundCmd {
-				err := handleSlashCommand(sqlCtx, query, cliCtx)
+				err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
 			} else {
+				var sqlSch sql.Schema
+				var rowIter sql.RowIter
 				if sqlSch, rowIter, err = processQuery(sqlCtx, query, qryist); err != nil {
 					verr := formatQueryError("", err)
 					shell.Println(verr.Verbose())

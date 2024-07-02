@@ -67,23 +67,14 @@ func parseSlashCmd(cmd string) []string {
 	return cmdWords
 }
 
-func handleSlashCommand(sqlCtx *sql.Context, fullCmd string, cliCtx cli.CliContext) error {
+func handleSlashCommand(sqlCtx *sql.Context, subCmd cli.Command, fullCmd string, cliCtx cli.CliContext) error {
 	cliCmd := parseSlashCmd(fullCmd)
 	if len(cliCmd) == 0 {
 		return fmt.Errorf("Empty command. Use `\\help` for help.")
 	}
 
-	subCmd := cliCmd[0]
 	subCmdArgs := cliCmd[1:]
-	status := 1
-
-	subCmdInst, ok := findSlashCmd(subCmd)
-	if ok {
-		status = subCmdInst.Exec(sqlCtx, subCmd, subCmdArgs, nil, cliCtx)
-	} else {
-		return fmt.Errorf("Unknown command: %s. Use `\\help` for a list of command.", subCmd)
-	}
-
+	status := subCmd.Exec(sqlCtx, subCmd.Name(), subCmdArgs, nil, cliCtx)
 	if status != 0 {
 		return fmt.Errorf("error executing command: %s", cliCmd)
 	}
