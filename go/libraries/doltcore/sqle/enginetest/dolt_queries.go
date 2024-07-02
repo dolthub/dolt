@@ -736,6 +736,28 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "histogram bucket merging panic",
+		SetUpScript: []string{
+			"CREATE TABLE xy (x int primary key, y varchar(10), key(y));",
+			"insert into xy select x, 'x' from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 5000) select * from inputs) dt",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select (select count(*) from dolt_statistics) > 0",
+				Expected: []sql.Row{{uint8(1)}},
+			},
+			{
+				Query:    "select count(*) from xy a join xy b on a.y = b.y limit 1",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from xy where y = 'x'",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		Name: "dolt_hashof_db tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",
