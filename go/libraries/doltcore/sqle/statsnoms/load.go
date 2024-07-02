@@ -207,7 +207,13 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	idx, err := table.GetIndexRowData(ctx, qual.Index())
+
+	var idx durable.Index
+	if qual.Index() == "primary" {
+		idx, err = table.GetRowData(ctx)
+	} else {
+		idx, err = table.GetIndexRowData(ctx, qual.Index())
+	}
 	if err != nil {
 		return nil, err
 	}
