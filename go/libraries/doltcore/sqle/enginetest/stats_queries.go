@@ -332,6 +332,23 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "boundary nils don't panic when trying to convert to the zero type",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y varchar(10), key(y,x));",
+			"insert into xy values (0,null),(1,null)",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
+				Expected: []sql.Row{
+					{"mydb", "xy", "primary", "x", "bigint"},
+					{"mydb", "xy", "y", "y,x", "varchar(10),bigint"},
+				},
+			},
+		},
+	},
+	{
 		Name: "multi-table",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",

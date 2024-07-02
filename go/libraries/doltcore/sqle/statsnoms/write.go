@@ -17,7 +17,6 @@ package statsnoms
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -106,11 +105,6 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 
 	var pos int64
 	for _, h := range dStats.Hist {
-		var upperBoundElems []string
-		for _, v := range h.UpperBound() {
-			upperBoundElems = append(upperBoundElems, fmt.Sprintf("%v", v))
-		}
-
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Tab)
 		keyBuilder.PutString(2, qual.Idx)
