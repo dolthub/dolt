@@ -102,7 +102,7 @@ func (cmd StatusCmd) EventType() eventsapi.ClientEventType {
 
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	apr, _, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, statusDocs)
+	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, statusDocs)
 	if terminate {
 		return status
 	}

@@ -91,7 +91,7 @@ func (cmd ResetCmd) RequiresRepo() bool {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateResetArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, resetDocContent)
+	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, resetDocContent)
 	if terminate {
 		return status
 	}

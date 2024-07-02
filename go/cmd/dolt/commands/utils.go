@@ -774,7 +774,19 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	return rows[0][0].(string), nil
 }
 
-func ParseArgsAndPrintHelp(
+// ParseArgsOrPrintHelp is used by most commands to parse arguments and print help if necessary. It's a wrapper around
+// cli.ParseArgs that returns an argparser.ArgParseResults IFF parsing the given arguments was successful with the
+// provided argparser.ArgParser. Additional return values are a usage printer, a boolean indicating whether the command
+// should terminate, and an exit status code.
+//
+// The caller of this method should check the boolean value to determine if the command should terminate. Termination
+// does not necessarily mean an error occurred. For example, if the user requested help, the command should terminate
+// with a successful exit code and print the help message with the provided usage printer.
+//
+// There may be cases where the usage printer is still used by the caller. For example if the arguments parse but they
+// don't make sense in the context of other arguments, the caller may want to print the usage message and exit with an
+// error code.
+func ParseArgsOrPrintHelp(
 	ap *argparser.ArgParser,
 	commandStr string,
 	args []string,

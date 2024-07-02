@@ -187,7 +187,7 @@ func (cmd DiffCmd) RequiresRepo() bool {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, diffDocs)
+	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, diffDocs)
 	if terminate {
 		return status
 	}

@@ -99,7 +99,7 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	apr, _, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, logDocs)
+	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, logDocs)
 	if terminate {
 		return status
 	}

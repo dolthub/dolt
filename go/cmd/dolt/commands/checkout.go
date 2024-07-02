@@ -86,7 +86,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCheckoutArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, checkoutDocs)
+	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, checkoutDocs)
 	if terminate {
 		return status
 	}

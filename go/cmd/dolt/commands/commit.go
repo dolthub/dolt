@@ -104,7 +104,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // (e.g. because --skip-empty was specified as an argument).
 func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporaryDEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, commitDocs)
+	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, commitDocs)
 	if terminate {
 		return status, false
 	}

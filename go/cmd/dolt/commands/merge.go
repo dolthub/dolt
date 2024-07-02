@@ -94,7 +94,7 @@ func (cmd MergeCmd) RequiresRepo() bool {
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateMergeArgParser()
 	ap.SupportsFlag(cli.NoJsonMergeFlag, "", "Do not attempt to automatically resolve multiple changes to the same JSON value, report a conflict instead.")
-	apr, usage, terminate, status := ParseArgsAndPrintHelp(ap, commandStr, args, mergeDocs)
+	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, mergeDocs)
 	if terminate {
 		return status
 	}
