@@ -332,7 +332,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "nulls panic bug",
+		Name: "boundary nils don't panic when trying to convert to the zero type",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y varchar(10), key(y,x));",
 			"insert into xy values (0,null),(1,null)",
