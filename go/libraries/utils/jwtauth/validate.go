@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"time"
 
-	jose "gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
+	jose "gopkg.in/go-jose/go-jose.v2"
+	"gopkg.in/go-jose/go-jose.v2/jwt"
 )
 
 type KeyProvider interface {
