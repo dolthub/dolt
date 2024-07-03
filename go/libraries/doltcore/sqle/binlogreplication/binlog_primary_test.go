@@ -134,11 +134,14 @@ func TestBinlogPrimary_Heartbeats(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
 
-	primaryDatabase.MustExec("create table db01.heartbeatTest(pk int);")
+	// Start replication, with a 45s delay before any commands are sent to the primary.
+	// This gives enough time for the first heartbeat event to be sent, before any user
+	// initiated binlog events, so we can test that scenario.
+	startReplicationWithDelay(t, doltPort, 45*time.Second)
 
 	// Insert a row every second, for 70s, which gives the server a chance to send two heartbeats
+	primaryDatabase.MustExec("create table db01.heartbeatTest(pk int);")
 	endTime := time.Now().Add(70 * time.Second)
 	maxInsertValue := 0
 	for time.Now().Before(endTime) {
