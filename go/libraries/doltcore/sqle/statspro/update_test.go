@@ -209,7 +209,7 @@ func TestBucketBuilder(t *testing.T) {
 			require.Equal(t, int(tt.bucket.DistinctCount()), int(bucket.DistinctCount()))
 			require.Equal(t, int(tt.bucket.BoundCount()), int(bucket.BoundCount()))
 			require.Equal(t, tt.bucket.UpperBound(), bucket.UpperBound())
-			require.Equal(t, tt.bucket.McvsCnt, bucket.McvsCnt)
+			require.Equal(t, tt.bucket.McvCounts(), bucket.McvCounts())
 			require.Equal(t, tt.bucket.Mcvs(), bucket.Mcvs())
 		})
 	}
