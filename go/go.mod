@@ -45,7 +45,6 @@ require (
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
-	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -91,6 +90,7 @@ require (
 	golang.org/x/text v0.16.0
 	gonum.org/v1/plot v0.11.0
 	gopkg.in/errgo.v2 v2.1.0
+	gopkg.in/go-jose/go-jose.v2 v2.6.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
+	"gopkg.in/go-jose/go-jose.v2"
+	"gopkg.in/go-jose/go-jose.v2/jwt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 )
