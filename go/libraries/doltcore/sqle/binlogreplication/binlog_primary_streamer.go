@@ -50,7 +50,7 @@ func newBinlogStreamer() *binlogStreamer {
 // is received over the stream (e.g. the connection closing) or the streamer is closed,
 // through it's quit channel.
 func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
-	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogEventMeta); err != nil {
+	if err := sendInitialEvents(ctx, conn, binlogFormat, &binlogEventMeta); err != nil {
 		return err
 	}
 
@@ -185,7 +185,7 @@ func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEve
 
 // sendInitialEvents sends the initial binlog events (i.e. Rotate, FormatDescription) over a newly established binlog
 // streaming connection.
-func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
 	err := sendRotateEvent(conn, binlogFormat, binlogEventMeta)
 	if err != nil {
 		return err
@@ -199,16 +199,20 @@ func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat *mysql.Bin
 	return conn.FlushBuffer()
 }
 
-func sendRotateEvent(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+func sendRotateEvent(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
 	binlogFilePosition := uint64(0)
 	binlogEventMeta.NextLogPosition = uint32(binlogFilePosition)
 
-	binlogEvent := mysql.NewRotateEvent(*binlogFormat, binlogEventMeta, binlogFilePosition, binlogFilename)
+	// The Rotate event sent at the start of a stream is a "virtual" event that isn't actually
+	// recorded to the binary log file, but sent to the replica so it knows what file is being
+	// read from. Because it is virtual, we do NOT update the nextLogPosition field of
+	// BinlogEventMetadata.
+	binlogEvent := mysql.NewRotateEvent(*binlogFormat, *binlogEventMeta, binlogFilePosition, binlogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
 
-func sendFormatDescription(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
-	binlogEvent := mysql.NewFormatDescriptionEvent(*binlogFormat, binlogEventMeta)
+func sendFormatDescription(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
+	binlogEvent := mysql.NewFormatDescriptionEvent(*binlogFormat, *binlogEventMeta)
 	binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
