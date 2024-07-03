@@ -313,21 +313,21 @@ func (i IndexedJsonDocument) Remove(ctx context.Context, path string) (types.Mut
 }
 
 // Set is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Set(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) Set(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	v, err := i.ToInterface()
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Set(path, val)
+	return types.JSONDocument{Val: v}.Set(ctx, path, val)
 }
 
 // Replace is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Replace(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) Replace(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	v, err := i.ToInterface()
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Replace(path, val)
+	return types.JSONDocument{Val: v}.Replace(ctx, path, val)
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.
