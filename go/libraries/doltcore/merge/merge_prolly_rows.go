@@ -2053,7 +2053,7 @@ func mergeJSON(ctx context.Context, base types.JSONDocument, left types.JSONDocu
 
 		switch threeWayDiff.Op {
 		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify:
-			_, _, err := merged.Set(threeWayDiff.Key, threeWayDiff.Right)
+			_, _, err := merged.Set(ctx, threeWayDiff.Key, threeWayDiff.Right)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}
