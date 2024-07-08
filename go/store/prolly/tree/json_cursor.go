@@ -49,8 +49,10 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 }
 
 // newJsonCursor takes the root node of a prolly tree representing a JSON document, and creates a new JsonCursor for reading
-// JSON, starting at the specified location in the document.
-func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLocation, forRemoval bool) (*JsonCursor, bool, error) {
+// JSON, starting at the specified location in the document. Returns a boolean indicating whether the location already exists
+// in the document. If the location does not exist in the document, the resulting JsonCursor
+// will be at the location where the value would be if it was inserted.
+func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLocation, forRemoval bool) (jCur *JsonCursor, found bool, err error) {
 	cur, err := newCursorAtKey(ctx, ns, root, startKey.key, jsonLocationOrdering{})
 	if err != nil {
 		return nil, false, err
@@ -64,7 +66,7 @@ func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLo
 
 	jcur := JsonCursor{cur: cur, jsonScanner: jsonDecoder}
 
-	found, err := jcur.AdvanceToLocation(ctx, startKey, forRemoval)
+	found, err = jcur.AdvanceToLocation(ctx, startKey, forRemoval)
 	if err != nil {
 		return nil, found, err
 	}
@@ -123,6 +125,12 @@ func (j *JsonCursor) isKeyInChunk(path jsonLocation) bool {
 	return compareJsonLocations(path, nodeEndPosition) <= 0
 }
 
+// AdvanceToLocation causes the cursor to advance to the specified position. This function returns a boolean indicating
+// whether the position already exists. If it doesn't, the cursor stops at the location where the value would be if it
+// were inserted.
+// The `forRemoval` parameter changes the behavior when advancing to the start of an object key. When this parameter is true,
+// the cursor advances to the end of the previous value, prior to the object key. This allows the key to be removed along
+// with the value.
 func (j *JsonCursor) AdvanceToLocation(ctx context.Context, path jsonLocation, forRemoval bool) (found bool, err error) {
 	if !j.isKeyInChunk(path) {
 		// Our destination is in another chunk, load it.
