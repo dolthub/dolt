@@ -17,6 +17,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -175,6 +176,76 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 		}
 	})
 
+}
+
+func TestIndexedJsonDocument_Remove(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	convertToIndexedJsonDocument := func(t *testing.T, s interface{}) interface{} {
+		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
+	}
+
+	testCases := jsontests.JsonRemoveTestCases(t, convertToIndexedJsonDocument)
+	jsontests.RunJsonTests(t, testCases)
+
+	t.Run("large document removals", func(t *testing.T) {
+
+		largeDoc := createLargeDocumentForTesting(t, ctx, ns)
+
+		for _, chunkBoundary := range largeDocumentChunkBoundaries {
+			t.Run(jsonPathTypeNames[chunkBoundary.pathType], func(t *testing.T) {
+				// For each tested chunk boundary, get the path to the object containing that crosses that boundary, and remove it.
+				removalPointString := chunkBoundary.path[:strings.LastIndex(chunkBoundary.path, ".")]
+
+				removalPointLocation, err := jsonPathElementsFromMySQLJsonPath([]byte(removalPointString))
+				require.NoError(t, err)
+
+				// Test that the value exists prior to removal
+				result, err := largeDoc.Lookup(ctx, removalPointString)
+				require.NoError(t, err)
+				require.NotNil(t, result)
+
+				newDoc, changed, err := largeDoc.Remove(ctx, removalPointString)
+				require.NoError(t, err)
+				require.True(t, changed)
+
+				// test that new value is valid by calling ToInterface
+				v, err := newDoc.ToInterface()
+				require.NoError(t, err)
+
+				// If the removed value was an object key, check that the key no longer exists.
+				// If the removed value was an array element, check that the parent array has shrunk.
+				if removalPointLocation.getLastPathElement().isArrayIndex {
+					// Check that the parent array has shrunk.
+					arrayIndex := int(removalPointLocation.getLastPathElement().getArrayIndex())
+					parentLocation := removalPointLocation.Clone()
+					parentLocation.pop()
+
+					getParentArray := func(doc IndexedJsonDocument) []interface{} {
+						arrayWrapper, err := doc.lookupByLocation(ctx, parentLocation)
+						require.NoError(t, err)
+						arrayInterface, err := arrayWrapper.ToInterface()
+						require.NoError(t, err)
+						require.IsType(t, []interface{}{}, arrayInterface)
+						return arrayInterface.([]interface{})
+					}
+
+					oldArray := getParentArray(largeDoc)
+					newArray := getParentArray(newDoc.(IndexedJsonDocument))
+
+					oldArray = slices.Delete(oldArray, arrayIndex, arrayIndex+1)
+
+					require.Equal(t, oldArray, newArray)
+				} else {
+					// Check that the key no longer exists.
+					newJsonDocument := types.JSONDocument{Val: v}
+					result, err = newJsonDocument.Lookup(ctx, removalPointString)
+					require.NoError(t, err)
+					require.Nil(t, result)
+				}
+			})
+		}
+	})
 }
 
 func TestIndexedJsonDocument_Extract(t *testing.T) {
