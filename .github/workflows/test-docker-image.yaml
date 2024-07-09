@@ -1,0 +1,37 @@
+name: Test docker image build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer format release tag, i.e. 0.24.5'
+        required: true
+
+jobs:
+  docker-image-push:
+    name: Push Docker Image
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+      - name: Build and push dolt image
+        uses: docker/build-push-action@v5
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/Dockerfile
+          load: true
+          tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
+          build-args: |
+            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
+      - name: Test
+        run: |
+          docker create --platform=linux/arm64 ${{ env.TEST_TAG }}
+          BASH_VAR=$( { docker create --platform=linux/arm64 ${{ env.TEST_TAG }}; } 2>&1 )
+          echo "DUSTIN: BASH_VAR: $BASH_VAR"
