@@ -23,10 +23,10 @@ jobs:
       - name: Build and push dolt image
         uses: docker/build-push-action@v5
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           context: .
           file: ./docker/Dockerfile
-#          load: true
+          load: true
           tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
