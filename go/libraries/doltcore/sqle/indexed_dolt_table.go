@@ -50,6 +50,19 @@ func (idt *IndexedDoltTable) Index() index.DoltIndex {
 	return idt.idx
 }
 
+func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexReaderBuilder, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		return index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch, t.isDoltFormat)
+	}
+	return t.lb, nil
+}
+
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, idt.DoltTable, lookup, idt.isDoltFormat)
 }

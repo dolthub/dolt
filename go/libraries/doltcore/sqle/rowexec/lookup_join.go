@@ -2,6 +2,7 @@ package rowexec
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
 	"io"
 
@@ -21,22 +22,38 @@ import (
 // todo batched version runs a fixed set of workers on kv ranges in parallel
 // need filters and projections in this version for it to be worth it
 
-func rowIterTableLookupJoin(ctx *sql.Context, srcIter prolly.MapIter, srcMap, dstMap prolly.Map, srcSch, dstSch schema.Schema, srcProj, dstProj []uint64, keyExprs []sql.Expression, srcFilter, dstFilter sql.Expression) (sql.RowIter, error) {
+func rowIterTableLookupJoin(
+	ctx *sql.Context,
+	srcIter prolly.MapIter,
+	dstIter index.SecondaryLookupIter,
+	srcMap prolly.Map,
+	srcSch, dstSch schema.Schema,
+	srcProj, dstProj []uint64,
+	keyExprs []sql.Expression,
+	srcFilter, dstFilter, joinFilter sql.Expression,
+	isLeftJoin bool,
+) (sql.RowIter, error) {
 	split := len(srcProj)
 
 	projections := append(srcProj, dstProj...)
 
-	rowJoiner := getPrimaryLookupRowJoiner(srcSch, dstSch, split, projections)
+	// src schema is always pk
+	// dst schema is sometimes secondary
+	rowJoiner := getPrimaryLookupRowJoiner(srcSch, dstIter.Schema(), dstIter, split, projections)
 
-	return newPrimaryLookupKvIter(ctx, srcIter, srcMap, dstMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter)
+	return newPrimaryLookupKvIter(ctx, srcIter, dstIter, srcMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin)
 }
 
-type primaryLookupJoinKvIter struct {
+type lookupJoinKvIter struct {
 	// source is left relation
 	source prolly.MapIter
+	srcKey val.Tuple
+	srcVal val.Tuple
 
 	// target is right relation
-	target prolly.Map
+	//target prolly.Map
+	target index.SecondaryLookupIter
+	dstKey val.Tuple
 
 	targetKb *val.TupleBuilder
 
@@ -51,18 +68,30 @@ type primaryLookupJoinKvIter struct {
 	// projections
 	joiner *sqlRowJoiner
 
-	srcFilter sql.Expression
-	dstFilter sql.Expression
+	srcFilter  sql.Expression
+	dstFilter  sql.Expression
+	joinFilter sql.Expression
+	isLeftJoin bool
 }
 
-func (l primaryLookupJoinKvIter) Close(c *sql.Context) error {
+func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
 	return nil
 }
 
-var _ sql.RowIter = (*primaryLookupJoinKvIter)(nil)
+var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
 // TODO: lookup into primary can do a |map.Get|, but secondary has to do |map.PrefixGet|
-func newPrimaryLookupKvIter(ctx context.Context, srcIter prolly.MapIter, source, target prolly.Map, keyExprs []sql.Expression, sourceSch schema.Schema, joiner *sqlRowJoiner, srcFilter, dstFilter sql.Expression) (*primaryLookupJoinKvIter, error) {
+func newPrimaryLookupKvIter(
+	ctx context.Context,
+	srcIter prolly.MapIter,
+	targetIter index.SecondaryLookupIter,
+	source prolly.Map,
+	keyExprs []sql.Expression,
+	sourceSch schema.Schema,
+	joiner *sqlRowJoiner,
+	srcFilter, dstFilter, joinFilter sql.Expression,
+	isLeftJoin bool,
+) (*lookupJoinKvIter, error) {
 	// if original source not covering, need extra lookup
 	// lookup primary mapping
 	// mappings from source->target
@@ -83,16 +112,23 @@ func newPrimaryLookupKvIter(ctx context.Context, srcIter prolly.MapIter, source,
 	// we need to map the k/v pairs to projections
 	// keyProj -> list of key positions to projection ordinal
 	// valProj -> list of val positions to projection ordinal
+	if lit, ok := joinFilter.(*expression.Literal); ok {
+		if lit.Value() == true {
+			joinFilter = nil
+		}
+	}
 
-	keyLookupMapper := newLookupKeyMapping(ctx, sourceSch, source, target, keyExprs)
+	keyLookupMapper := newLookupKeyMapping(ctx, sourceSch, source, targetIter.InputKeyDesc(), keyExprs)
 
-	return &primaryLookupJoinKvIter{
+	return &lookupJoinKvIter{
 		source:         srcIter,
-		target:         target,
+		target:         targetIter,
 		joiner:         joiner,
 		keyTupleMapper: keyLookupMapper,
 		srcFilter:      srcFilter,
 		dstFilter:      dstFilter,
+		joinFilter:     joinFilter,
+		isLeftJoin:     isLeftJoin,
 	}, nil
 }
 
@@ -113,7 +149,7 @@ type lookupMapping struct {
 	pool pool.BuffPool
 }
 
-func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src, target prolly.Map, keyExprs []sql.Expression) *lookupMapping {
+func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src prolly.Map, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression) *lookupMapping {
 	keyless := schema.IsKeyless(sourceSch)
 	var split int
 	if keyless {
@@ -126,10 +162,10 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src, targ
 	// schMappings tell us where to look for key fields. A field will either
 	// be in the source key tuple (< split), source value tuple (>=split),
 	// or in the literal tuple (-1).
-	srcMapping := make(val.OrdinalMapping, target.KeyDesc().Count())
+	//prefixDesc := target.KeyDesc().PrefixDesc(len(keyExprs))
+	srcMapping := make(val.OrdinalMapping, len(keyExprs))
 	var litMappings val.OrdinalMapping
 	var litTypes []val.Type
-	kd, _ := target.Descriptors()
 	for i, e := range keyExprs {
 		switch e := e.(type) {
 		case *expression.GetField:
@@ -147,18 +183,18 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src, targ
 		case *expression.Literal:
 			srcMapping[i] = -1
 			litMappings = append(litMappings, i)
-			litTypes = append(litTypes, kd.Types[i])
+			litTypes = append(litTypes, tgtKeyDesc.Types[i])
 		}
 	}
 	litDesc := val.NewTupleDescriptor(litTypes...)
 	litTb := val.NewTupleBuilder(litDesc)
 	for i, j := range litMappings {
-		tree.PutField(ctx, target.NodeStore(), litTb, i, keyExprs[j].(*expression.Literal).Value())
+		tree.PutField(ctx, src.NodeStore(), litTb, i, keyExprs[j].(*expression.Literal).Value())
 	}
 
 	var litTuple val.Tuple
 	if litDesc.Count() > 0 {
-		litTuple = litTb.Build(target.Pool())
+		litTuple = litTb.Build(src.Pool())
 	}
 
 	return &lookupMapping{
@@ -169,9 +205,9 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src, targ
 		litKd:       litDesc,
 		srcKd:       src.KeyDesc(),
 		srcVd:       src.ValDesc(),
-		targetKb:    val.NewTupleBuilder(target.KeyDesc()),
-		ns:          target.NodeStore(),
-		pool:        target.Pool(),
+		targetKb:    val.NewTupleBuilder(tgtKeyDesc),
+		ns:          src.NodeStore(),
+		pool:        src.Pool(),
 	}
 }
 
@@ -213,35 +249,44 @@ func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tupl
 		}
 	}
 
-	return m.targetKb.Build(m.pool), nil
+	idxKey := m.targetKb.BuildPermissive(m.pool)
+	return idxKey, nil
 }
 
-func (l *primaryLookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
-	// get row from |src|
+func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
-		srcKey, srcVal, err := l.source.Next(ctx)
+		var err error
+		var newIter bool
+		if l.dstKey == nil {
+			newIter = true
+			// get row from |src|
+			l.srcKey, l.srcVal, err = l.source.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if l.srcKey == nil {
+				return nil, io.EOF
+			}
+
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := l.target.New(ctx, l.dstKey); err != nil {
+				return nil, err
+			}
+		}
+
+		dstKey, dstVal, ok, err := l.target.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if srcKey == nil {
-			return nil, io.EOF
-		}
-
-		//
-		dstKey, err := l.keyTupleMapper.dstKeyTuple(ctx, srcKey, srcVal)
-		if err != nil {
-			return nil, err
-		}
-
-		var dstVal val.Tuple
-		l.target.Get(ctx, dstKey, func(k val.Tuple, v val.Tuple) error {
-			dstVal = v
-			return nil
-		})
-
-		if dstVal == nil {
-			// no match
-			continue
+		if !ok {
+			l.dstKey = nil
+			if !(newIter && l.isLeftJoin) {
+				continue
+			}
 		}
 
 		// map.Get(dstKey)
@@ -250,7 +295,7 @@ func (l *primaryLookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		// todo write output tuple
 
-		ret, err := l.joiner.buildRow(ctx, srcKey, srcVal, dstKey, dstVal)
+		ret, err := l.joiner.buildRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +318,21 @@ func (l *primaryLookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 
 			if !sql.IsTrue(res) {
-				continue
+				if !(newIter && l.isLeftJoin) {
+					continue
+				}
+			}
+		}
+		if l.joinFilter != nil {
+			res, err := sql.EvaluateCondition(ctx, l.joinFilter, ret)
+			if err != nil {
+				return nil, err
+			}
+
+			if !sql.IsTrue(res) {
+				if !(newIter && l.isLeftJoin) {
+					continue
+				}
 			}
 		}
 		return ret, nil

@@ -232,7 +232,7 @@ type IndexReaderBuilder interface {
 	// NewRowIter returns a new index iter for the given partition
 	NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
 	NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error)
-	// NewSecondaryIter(strict bool) SecondaryLookupIter
+	NewSecondaryIter(strict bool, cnt int) SecondaryLookupIter
 	Key() doltdb.DataCacheKey
 }
 
@@ -369,7 +369,7 @@ func (ib *baseIndexImplBuilder) NewRangeMapIter(_ context.Context, _ prolly.Rang
 	panic("cannot call NewMapIter on baseIndexImplBuilder")
 }
 
-func (ib *baseIndexImplBuilder) NewSecondaryIter(_ bool) SecondaryLookupIter {
+func (ib *baseIndexImplBuilder) NewSecondaryIter(_ bool, _ int) SecondaryLookupIter {
 	panic("cannot call NewSecondaryIter on baseIndexImplBuilder")
 }
 
@@ -481,9 +481,9 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 
 func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
 	if strict {
-		return &coveringStrictSecondaryLookup{m: ib.sec}
+		return &coveringStrictSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
 	} else {
-		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols)}
+		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
 	}
 }
 
@@ -571,9 +571,9 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 
 func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
 	if strict {
-		return &nonCoveringStrictSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld}
+		return &nonCoveringStrictSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch}
 	} else {
-		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols)}
+		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
 	}
 }
 
@@ -651,13 +651,20 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
 }
 
-func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool) SecondaryLookupIter {
+func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
 	pri := durable.ProllyMapFromIndex(ib.s.Primary)
-	return keylessSecondaryLookup{
+	pkDesc, _ := pri.Descriptors()
+	pkBld := val.NewTupleBuilder(pkDesc)
+
+	secondary := durable.ProllyMapFromIndex(ib.s.Secondary)
+
+	return &keylessSecondaryLookup{
 		pri:        pri,
-		sec:        durable.ProllyMapFromIndex(ib.s.Secondary),
-		priMapping: ib.p,
-		priBld:     val.TupleBuilder{},
+		sec:        secondary,
+		sch:        ib.idx.tableSch,
+		pkMap:      ordinalMappingFromIndex(ib.idx),
+		pkBld:      pkBld,
+		prefixDesc: secondary.KeyDesc().PrefixDesc(cols),
 	}
 }
 
@@ -678,7 +685,7 @@ func (ib *nomsIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Ra
 	panic("cannot call NewMapIter on *nomsIndexImplBuilder")
 }
 
-func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool) SecondaryLookupIter {
+func (ib *nomsIndexImplBuilder) NewSecondaryIter(_ bool, _ int) SecondaryLookupIter {
 	panic("cannot call NewSecondaryIter on *nomsIndexImplBuilder")
 }
 

@@ -53,7 +53,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	harness := newDoltHarness(t)
 	harness.Setup(setup.SimpleSetup...)
