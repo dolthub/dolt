@@ -283,6 +283,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			} else {
 				secIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
 			}
+		//case *dtables.DiffTable:
+		// TODO: add interface to include system tables
+		default:
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil
 		}
 	case *plan.ResolvedTable:
 		switch dt := n.UnderlyingTable().(type) {
