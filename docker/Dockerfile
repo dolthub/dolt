@@ -6,6 +6,8 @@ ARG BUILDARCH
 
 RUN echo "DUSTIN: BUILDARCH: $BUILDARCH"
 
+RUN apt-get update -y && apt-get install file -y
+
 RUN apt update -y && \
     apt install -y \
         tini \
