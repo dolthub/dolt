@@ -19,7 +19,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
+      - name: Show ENV
+        run: |
+          echo "DUSTIN: BUILDPLATFORM: $BUILDPLATFORM"
+          echo "DUSTIN: BUILDARCH: $BUILDARCH"
       - name: Build and push dolt image
         id: docker-build
         uses: docker/build-push-action@v6.3.0
