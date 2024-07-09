@@ -37,11 +37,12 @@ jobs:
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
             BUILDARCH=arm64
+            BUILDPLATFORM=linux/arm64
       - name: Test
         run: |
           echo "DUSTIN: image id: ${{ steps.docker-build.outputs.imageid }}"
+          docker create --platform=linux/arm64 dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }}
+          BASH_VAR=$( { docker create --platform=linux/arm64 dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }}; } 2>&1 )
+          echo "DUSTIN: BASH_VAR: $BASH_VAR"
 
-#        run: |
-#          docker create --platform=linux/arm64 ${{ env.TEST_TAG }}
-#          BASH_VAR=$( { docker create --platform=linux/arm64 ${{ env.TEST_TAG }}; } 2>&1 )
-#          echo "DUSTIN: BASH_VAR: $BASH_VAR"
+
