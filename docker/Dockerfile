@@ -1,12 +1,9 @@
 # syntax=docker/dockerfile:1.3-labs
+FROM ubuntu:22.04
 
 ARG DOLT_VERSION
 ARG BUILDARCH
-ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM ubuntu:22.04
-
-RUN echo "DUSTIN: BUILDPLATFORM: $BUILDPLATFORM"
 RUN echo "DUSTIN: BUILDARCH: $BUILDARCH"
 
 RUN apt update -y && \
