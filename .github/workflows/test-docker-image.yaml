@@ -22,7 +22,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
       - name: Build and push dolt image
         id: docker-build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6.3.0
         with:
           platforms: linux/arm64
           context: .
