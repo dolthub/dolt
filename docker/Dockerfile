@@ -14,8 +14,11 @@ RUN apt update -y && \
     rm -rf /var/lib/apt/lists/*
 
 ADD https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-${BUILDARCH}.tar.gz dolt-linux-${BUILDARCH}.tar.gz
-RUN tar zxvf dolt-linux-${BUILDARCH}.tar.gz && \
-    cp dolt-linux-${BUILDARCH}/bin/dolt /usr/local/bin && \
+RUN tar zxvf dolt-linux-${BUILDARCH}.tar.gz
+
+RUN file dolt-linux-${BUILDARCH}/bin/dolt
+
+RUN cp dolt-linux-${BUILDARCH}/bin/dolt /usr/local/bin && \
     rm -rf dolt-linux-${BUILDARCH} dolt-linux-${BUILDARCH}.tar.gz
 
 WORKDIR /var/lib/dolt
