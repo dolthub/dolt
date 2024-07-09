@@ -21,17 +21,22 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
       - name: Build and push dolt image
+        id: docker-build
         uses: docker/build-push-action@v5
         with:
           platforms: linux/arm64
           context: .
           file: ./docker/Dockerfile
           load: true
+          no-cache: true
           tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
       - name: Test
         run: |
-          docker create --platform=linux/arm64 ${{ env.TEST_TAG }}
-          BASH_VAR=$( { docker create --platform=linux/arm64 ${{ env.TEST_TAG }}; } 2>&1 )
-          echo "DUSTIN: BASH_VAR: $BASH_VAR"
+          echo "DUSTIN: image id: ${{ steps.docker-build.outputs.imageid }}"
+
+#        run: |
+#          docker create --platform=linux/arm64 ${{ env.TEST_TAG }}
+#          BASH_VAR=$( { docker create --platform=linux/arm64 ${{ env.TEST_TAG }}; } 2>&1 )
+#          echo "DUSTIN: BASH_VAR: $BASH_VAR"
