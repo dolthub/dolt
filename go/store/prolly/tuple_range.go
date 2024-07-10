@@ -15,9 +15,10 @@
 package prolly
 
 import (
-	"github.com/shopspring/decimal"
 	"math"
 	"sort"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
