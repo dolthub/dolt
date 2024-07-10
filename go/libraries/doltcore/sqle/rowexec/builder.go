@@ -53,17 +53,18 @@ func getIta(n sql.Node) (*plan.IndexedTableAccess, bool) {
 	switch n := n.(type) {
 	case *plan.TableAlias:
 		return getIta(n.Child)
-	case *plan.IndexedTableAccess:
-		return n, true
 	case *plan.Filter:
 		return getIta(n.Child)
+	case *plan.IndexedTableAccess:
+		return n, true
 	default:
 		return nil, false
 	}
 }
 
-type sqlRowJoiner struct {
-	// first |split| are from source
+// prollyToSqlJoiner converts two KV pairs into a sql row
+// TODO generalize to N KV pairs
+type prollyToSqlJoiner struct {
 	srcSplit int
 	ns       tree.NodeStore
 
@@ -79,7 +80,7 @@ type sqlRowJoiner struct {
 	tgtValMappings []int
 }
 
-func (m *sqlRowJoiner) buildRow(ctx context.Context, srcKey, srcVal, tgtKey, tgtVal val.Tuple) (sql.Row, error) {
+func (m *prollyToSqlJoiner) buildRow(ctx context.Context, srcKey, srcVal, tgtKey, tgtVal val.Tuple) (sql.Row, error) {
 	row := make(sql.Row, len(m.ordMappings))
 	var err error
 	for i, idx := range m.srcKeyMappings {
@@ -96,6 +97,7 @@ func (m *sqlRowJoiner) buildRow(ctx context.Context, srcKey, srcVal, tgtKey, tgt
 			return nil, err
 		}
 	}
+	// left joins can nullify the right-hand now
 	if tgtKey != nil {
 		for i, idx := range m.tgtKeyMappings {
 			outputIdx := m.ordMappings[m.srcSplit+i]
@@ -115,28 +117,28 @@ func (m *sqlRowJoiner) buildRow(ctx context.Context, srcKey, srcVal, tgtKey, tgt
 	return row, nil
 }
 
-func getPrimaryLookupRowJoiner(src, tgt schema.Schema, tgtIter index.SecondaryLookupIter, srcSplit int, projections []uint64) *sqlRowJoiner {
+func newRowJoiner(srcSch, tgtSch schema.Schema, ns tree.NodeStore, srcSplit int, projections []uint64) *prollyToSqlJoiner {
 	numPhysicalColumns := len(projections)
-	if schema.IsVirtual(src) {
+	if schema.IsVirtual(srcSch) {
 		numPhysicalColumns = 0
 		for i, t := range projections {
-			if idx, ok := src.GetAllCols().TagToIdx[t]; ok && !src.GetAllCols().GetByIndex(idx).Virtual {
+			if idx, ok := srcSch.GetAllCols().TagToIdx[t]; ok && !srcSch.GetAllCols().GetByIndex(idx).Virtual {
 				numPhysicalColumns++
 				srcSplit = i
 			}
-			if idx, ok := tgtIter.Schema().GetAllCols().TagToIdx[t]; ok && !tgtIter.Schema().GetAllCols().GetByIndex(idx).Virtual {
+			if idx, ok := tgtSch.GetAllCols().TagToIdx[t]; ok && !tgtSch.GetAllCols().GetByIndex(idx).Virtual {
 				numPhysicalColumns++
 			}
 		}
 	}
 
-	allMap := make([]int, 2*numPhysicalColumns)
 	// | srcKey | srcVal | trgKey | trg val | ords |
+	allMap := make([]int, 2*numPhysicalColumns)
 
 	keyIdx := 0
 	nonKeyIdx := srcSplit - 1
-	keyCols := src.GetPKCols()
-	valCols := src.GetNonPKCols()
+	keyCols := srcSch.GetPKCols()
+	valCols := srcSch.GetNonPKCols()
 	var firstPkSplit int
 	for projNum, tag := range projections {
 		if projNum == srcSplit {
@@ -144,8 +146,8 @@ func getPrimaryLookupRowJoiner(src, tgt schema.Schema, tgtIter index.SecondaryLo
 			firstPkSplit = keyIdx
 			keyIdx = srcSplit
 			nonKeyIdx = len(projections) - 1
-			keyCols = tgtIter.Schema().GetPKCols()
-			valCols = tgtIter.Schema().GetNonPKCols()
+			keyCols = tgtSch.GetPKCols()
+			valCols = tgtSch.GetNonPKCols()
 		}
 		if idx, ok := keyCols.StoredIndexByTag(tag); ok && !keyCols.GetByStoredIndex(idx).Virtual {
 			allMap[keyIdx] = idx
@@ -158,47 +160,31 @@ func getPrimaryLookupRowJoiner(src, tgt schema.Schema, tgtIter index.SecondaryLo
 		}
 	}
 
-	return &sqlRowJoiner{
+	return &prollyToSqlJoiner{
 		srcSplit:       srcSplit,
 		srcKeyMappings: allMap[:firstPkSplit],
 		srcValMappings: allMap[firstPkSplit:srcSplit],
 		tgtKeyMappings: allMap[srcSplit:keyIdx],
 		tgtValMappings: allMap[keyIdx:numPhysicalColumns],
 		ordMappings:    allMap[numPhysicalColumns:],
-		srcKd:          src.GetKeyDescriptor(),
-		srcVd:          src.GetValueDescriptor(),
-		tgtKd:          tgtIter.OutputKeyDesc(),
-		tgtVd:          tgtIter.OutputValDesc(),
-		ns:             tgtIter.NodeStore(),
+		srcKd:          srcSch.GetKeyDescriptor(),
+		srcVd:          srcSch.GetValueDescriptor(),
+		tgtKd:          tgtSch.GetKeyDescriptor(),
+		tgtVd:          tgtSch.GetValueDescriptor(),
+		ns:             ns,
 	}
 }
 
-func getMap(ctx *sql.Context, dt *sqle.DoltTable) (prolly.Map, schema.Schema, error) {
-	table, err := dt.DoltTable(ctx)
-	if err != nil {
-		return prolly.Map{}, nil, err
-	}
-
-	priIndex, err := table.GetRowData(ctx)
-	if err != nil {
-		return prolly.Map{}, nil, err
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return prolly.Map{}, nil, err
-	}
-
-	return durable.ProllyMapFromIndex(priIndex), sch, nil
-}
-
+// getSourceKv extracts prolly table and index specific structures needed
+// to implement a lookup join. We return either |srcIter| or |dstIter|
+// depending on whether |isSrc| is true.
 func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIter, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
 	var err error
 	var indexMap prolly.Map
-	var mapIter prolly.MapIter
-	var secIter index.SecondaryLookupIter
+	var srcIter prolly.MapIter
+	var dstIter index.SecondaryLookupIter
 	var sch schema.Schema
 	switch n := n.(type) {
 	case *plan.TableAlias:
@@ -218,13 +204,6 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
 
-			//var rowData durable.Index
-			//switch strings.ToLower(dt.Index().ID()) {
-			//case "primary":
-			//	rowData, err = table.GetRowData(ctx)
-			//default:
-			//	rowData, err = table.GetIndexRowData(ctx, dt.Index().ID())
-			//}
 			rowData, err := table.GetRowData(ctx)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
@@ -247,14 +226,12 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 
-				mapIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
+				srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
 				if err != nil {
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 			} else {
-				// strict if PRIMARY KEY,
-				// index is unique + no nullable columns
-				secIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
+				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
 			}
 
 		case *sqle.IndexedDoltTable:
@@ -263,11 +240,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
-			//rowData, err := table.GetIndexRowData(ctx, dt.Index().ID())
-			//if err != nil {
-			//	return prolly.Map{}, nil, nil, nil, nil, nil, err
-			//}
-			//indexMap = durable.ProllyMapFromIndex(rowData)
+
 			rowData, err := table.GetRowData(ctx)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
@@ -290,12 +263,12 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 
-				mapIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
+				srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
 				if err != nil {
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 			} else {
-				secIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
+				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
 			}
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
@@ -325,7 +298,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 		indexMap = durable.ProllyMapFromIndex(priIndex)
 
-		mapIter, err = indexMap.IterAll(ctx)
+		srcIter, err = indexMap.IterAll(ctx)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
@@ -342,5 +315,5 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		return prolly.Map{}, nil, nil, nil, nil, nil, err
 	}
 
-	return indexMap, mapIter, secIter, sch, tags, nil, nil
+	return indexMap, srcIter, dstIter, sch, tags, nil, nil
 }

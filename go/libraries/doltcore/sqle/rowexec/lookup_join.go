@@ -51,37 +51,30 @@ func rowIterTableLookupJoin(
 
 	projections := append(srcProj, dstProj...)
 
-	// src schema is always pk
-	// dst schema is sometimes secondary
-	rowJoiner := getPrimaryLookupRowJoiner(srcSch, dstIter.Schema(), dstIter, split, projections)
+	rowJoiner := newRowJoiner(srcSch, dstIter.Schema(), dstIter.NodeStore(), split, projections)
 
-	return newPrimaryLookupKvIter(ctx, srcIter, dstIter, srcMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin)
+	return newLookupKvIter(ctx, srcIter, dstIter, srcMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin)
 }
 
 type lookupJoinKvIter struct {
-	// source is left relation
-	source prolly.MapIter
-	srcKey val.Tuple
-	srcVal val.Tuple
+	// srcIter is left relation
+	srcIter prolly.MapIter
+	srcKey  val.Tuple
+	srcVal  val.Tuple
 
-	// target is right relation
-	//target prolly.Map
-	target index.SecondaryLookupIter
-	dstKey val.Tuple
+	dstIter index.SecondaryLookupIter
+	dstKey  val.Tuple
 
-	targetKb *val.TupleBuilder
+	dstKb *val.TupleBuilder
 
-	// injective means we can target.Get keys
-	injective bool
-	// keyRangeSafe means we can convert a key lookup into key range
-	keyRangeSafe bool
-	// failing the above two, do a slow rangeIter
-
+	// keyTupleMapper inputs (srcKey, srcVal) to create a dstKey
 	keyTupleMapper *lookupMapping
 
 	// projections
-	joiner *sqlRowJoiner
+	joiner *prollyToSqlJoiner
 
+	// TODO convert sql.Expression to static prolly expressions
+	// that can be pushed.
 	srcFilter  sql.Expression
 	dstFilter  sql.Expression
 	joinFilter sql.Expression
@@ -94,38 +87,17 @@ func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
 
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
-// TODO: lookup into primary can do a |map.Get|, but secondary has to do |map.PrefixGet|
-func newPrimaryLookupKvIter(
+func newLookupKvIter(
 	ctx context.Context,
 	srcIter prolly.MapIter,
 	targetIter index.SecondaryLookupIter,
 	source prolly.Map,
 	keyExprs []sql.Expression,
 	sourceSch schema.Schema,
-	joiner *sqlRowJoiner,
+	joiner *prollyToSqlJoiner,
 	srcFilter, dstFilter, joinFilter sql.Expression,
 	isLeftJoin bool,
 ) (*lookupJoinKvIter, error) {
-	// if original source not covering, need extra lookup
-	// lookup primary mapping
-	// mappings from source->target
-
-	// keyMappings: from source key to lookup key index [0,1] => first key
-	// litMappings: literal value to place in lookup key
-	// valMappings: from source value to lookup key index
-	// keyExprs = [gf(), 1, gf()]
-	// get -> schIdx -> key or value
-
-	// need to map to the output schema
-	// two separate sets of mapings
-	// src table to row
-	// dst table to row
-	// both are primary keys
-	// dst will be offset by a count
-	//[projections] is a list of tags for output
-	// we need to map the k/v pairs to projections
-	// keyProj -> list of key positions to projection ordinal
-	// valProj -> list of val positions to projection ordinal
 	if lit, ok := joinFilter.(*expression.Literal); ok {
 		if lit.Value() == true {
 			joinFilter = nil
@@ -135,8 +107,8 @@ func newPrimaryLookupKvIter(
 	keyLookupMapper := newLookupKeyMapping(ctx, sourceSch, source, targetIter.InputKeyDesc(), keyExprs)
 
 	return &lookupJoinKvIter{
-		source:         srcIter,
-		target:         targetIter,
+		srcIter:        srcIter,
+		dstIter:        targetIter,
 		joiner:         joiner,
 		keyTupleMapper: keyLookupMapper,
 		srcFilter:      srcFilter,
@@ -146,6 +118,8 @@ func newPrimaryLookupKvIter(
 	}, nil
 }
 
+// lookupMapping is responsible for generating keys for lookups into
+// the destination iterator.
 type lookupMapping struct {
 	split      int
 	srcMapping val.OrdinalMapping
@@ -176,7 +150,6 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 	// schMappings tell us where to look for key fields. A field will either
 	// be in the source key tuple (< split), source value tuple (>=split),
 	// or in the literal tuple (-1).
-	//prefixDesc := target.KeyDesc().PrefixDesc(len(keyExprs))
 	srcMapping := make(val.OrdinalMapping, len(keyExprs))
 	var litMappings val.OrdinalMapping
 	var litTypes []val.Type
@@ -226,7 +199,6 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 }
 
 func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tuple) (val.Tuple, error) {
-	// do mapping to |dst| key
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
@@ -274,7 +246,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if l.dstKey == nil {
 			newIter = true
 			// get row from |src|
-			l.srcKey, l.srcVal, err = l.source.Next(ctx)
+			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -287,12 +259,12 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 
-			if err := l.target.New(ctx, l.dstKey); err != nil {
+			if err := l.dstIter.New(ctx, l.dstKey); err != nil {
 				return nil, err
 			}
 		}
 
-		dstKey, dstVal, ok, err := l.target.Next(ctx)
+		dstKey, dstVal, ok, err := l.dstIter.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -303,16 +275,12 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 		}
 
-		// map.Get(dstKey)
-		// return concatenated result? need a mapping to output schema
-		// srcKey | srcVal | dstKey | dstVal
-
-		// todo write output tuple
-
 		ret, err := l.joiner.buildRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
 		if err != nil {
 			return nil, err
 		}
+
+		// side-specific filters are currently hoisted
 
 		if l.srcFilter != nil {
 			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.srcSplit])
@@ -351,55 +319,4 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 		return ret, nil
 	}
-}
-
-type toSqlKvIter struct {
-	source prolly.MapIter
-
-	ns      tree.NodeStore
-	keyDesc val.TupleDesc
-	valDesc val.TupleDesc
-
-	// map to sql row at the end for return to SQL layer
-	// see |prollyRowIter.Next|
-	keyProj []int
-	valProj []int
-	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
-	ordProj []int
-}
-
-func (it *toSqlKvIter) Next(ctx *sql.Context) (sql.Row, error) {
-	key, value, err := it.source.Next(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	row := make(sql.Row, len(it.ordProj))
-	for i, idx := range it.keyProj {
-		outputIdx := it.ordProj[i]
-		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for i, idx := range it.valProj {
-		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return row, nil
-}
-
-func (it *toSqlKvIter) Close(c *sql.Context) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-var _ sql.RowIter = (*toSqlKvIter)(nil)
-
-func newToSqlKvIter(iter prolly.TupleIter) sql.RowIter {
-	// mappings from source->target
-	return nil
 }
