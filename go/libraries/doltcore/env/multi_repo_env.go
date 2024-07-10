@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -51,6 +52,74 @@ type MultiRepoEnv struct {
 	fs           filesys.Filesys
 	cfg          config.ReadWriteConfig
 	dialProvider dbfactory.GRPCDialProvider
+}
+
+type StorageMetadataMap map[string]nbs.StorageMetadata
+
+func (sms StorageMetadataMap) ArchiveFilesPresent() bool {
+	for _, sm := range sms {
+		if sm.ArchiveFilesPresent() {
+			return true
+		}
+	}
+	return false
+}
+
+func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, error) {
+
+	dbMap := make(map[string]filesys.Filesys)
+
+	path, err := dataDirFS.Abs("")
+	if err != nil {
+		return nil, err
+	}
+	envName := getRepoRootDir(path, string(os.PathSeparator))
+	dbName := dbfactory.DirToDBName(envName)
+	dbMap[dbName] = dataDirFS
+
+	// If there are other directories in the directory, try to load them as additional databases
+	dataDirFS.Iter(".", false, func(path string, _ int64, isDir bool) (stop bool) {
+		if !isDir {
+			return false
+		}
+
+		dir := filepath.Base(path)
+
+		newFs, er2 := dataDirFS.WithWorkingDir(dir)
+		if er2 != nil {
+			return false
+		}
+		path, er2 = newFs.Abs("")
+		if er2 != nil {
+			return false
+		}
+		envName := getRepoRootDir(path, string(os.PathSeparator))
+
+		falseEnv := IncompleteEnv(newFs)
+		if !falseEnv.Valid() {
+			return false
+		}
+
+		dbName := dbfactory.DirToDBName(envName)
+		dbMap[dbName] = dataDirFS
+
+		return false
+	})
+
+	sms := make(StorageMetadataMap)
+	for _, fs := range dbMap {
+		fsStr, err := fs.Abs("")
+		if err != nil {
+			return nil, err
+		}
+
+		sm, err := nbs.GetStorageMetadata(fsStr)
+		if err != nil {
+			return nil, err
+		}
+		sms[fsStr] = sm
+	}
+	return sms, nil
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.

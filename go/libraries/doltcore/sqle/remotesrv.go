@@ -33,7 +33,7 @@ type remotesrvStore struct {
 
 var _ remotesrv.DBCache = remotesrvStore{}
 
-func (s remotesrvStore) Get(ctx context.Context, path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (s remotesrvStore) Get(ctx context.Context, path, _ string) (remotesrv.RemoteSrvStore, error) {
 	sqlCtx, err := s.ctxFactory(ctx)
 	if err != nil {
 		return nil, err

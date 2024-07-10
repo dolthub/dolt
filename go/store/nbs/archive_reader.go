@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/bits"
@@ -100,6 +101,38 @@ func (f footer) indexSuffixSpan() byteSpan {
 // metadataSpan returns the span of the metadata section of the archive.
 func (f footer) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
+}
+
+func newArchiveMetadata(reader io.ReaderAt, fileSize uint64) (*ArchiveMetadata, error) {
+	footer, err := loadFooter(reader, fileSize)
+	if err != nil {
+		return nil, err
+	}
+
+	if footer.formatVersion != archiveFormatVersion {
+		return nil, ErrInvalidFormatVersion
+	}
+
+	metaSpan := footer.metadataSpan()
+	metaRdr := io.NewSectionReader(reader, int64(metaSpan.offset), int64(metaSpan.length))
+
+	// Read the data into a byte slice
+	metaData := make([]byte, metaSpan.length)
+	_, err = metaRdr.Read(metaData)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]string
+
+	// Unmarshal the JSON data into the map. TODO - use json tags.
+	err = json.Unmarshal(metaData, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ArchiveMetadata{
+		originalTableFileId: result[amdkOriginTableFile],
+	}, nil
 }
 
 func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {

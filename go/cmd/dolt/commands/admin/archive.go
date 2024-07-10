@@ -53,6 +53,7 @@ table files into archives. Currently, for safety, table files are left in place.
 }
 
 const groupChunksFlag = "group-chunks"
+const revertFlag = "revert"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -69,9 +70,9 @@ func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
 func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(groupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
+	ap.SupportsFlag(revertFlag, "", "Return to unpurged table files, or rebuilt table files from archives")
 	/* TODO: Implement these flags
 	ap.SupportsFlag("purge", "", "remove table files after archiving")
-	ap.SupportsFlag("revert", "", "Return to unpurged table files, or rebuilt table files from archives")
 	*/
 	return ap
 }
@@ -94,8 +95,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	progress := make(chan interface{}, 32)
 	handleProgress(ctx, progress)
 
-	if apr.Contains("reverse") {
-		// Get the list of archives
+	if apr.Contains(revertFlag) {
 		err := nbs.UnArchive(ctx, cs, progress)
 		if err != nil {
 			cli.PrintErrln(err)
@@ -114,14 +114,14 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			return nil
 		})
 
-	groupings := nbs.NewChunkRelations()
-	if apr.Contains(groupChunksFlag) {
-		err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
-		if err != nil {
-			cli.PrintErrln(err)
-			return 1
+		groupings := nbs.NewChunkRelations()
+		if apr.Contains(groupChunksFlag) {
+			err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
+			if err != nil {
+				cli.PrintErrln(err)
+				return 1
+			}
 		}
-	}
 
 		err = nbs.BuildArchive(ctx, cs, &groupings, progress)
 		if err != nil {

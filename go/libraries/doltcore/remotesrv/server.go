@@ -17,11 +17,13 @@ package remotesrv
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -78,6 +80,14 @@ func NewServer(args ServerArgs) (*Server, error) {
 		args.Logger = logrus.NewEntry(logrus.StandardLogger())
 	}
 
+	storageMetadata, err := env.GetMultiEnvStorageMetadata(args.FS)
+	if err != nil {
+		return nil, err
+	}
+	if storageMetadata.ArchiveFilesPresent() {
+		return nil, errors.New("archive files present")
+	}
+
 	s := new(Server)
 	s.stopChan = make(chan struct{})
 
@@ -96,6 +106,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 	s.grpcListenAddr = args.GrpcListenAddr
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
 	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, args.ConcurrencyControl, sealer)
+
 	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}

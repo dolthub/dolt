@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -92,6 +93,19 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	UserPassConfig *creds.DoltCredsForPass
+}
+
+func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
+	return &DoltEnv{
+		Version:     doltversion.Version,
+		Config:      nil,
+		RepoState:   nil,
+		RSLoadErr:   nil,
+		DoltDB:      nil,
+		DBLoadError: nil,
+		FS:          FS,
+		urlStr:      "",
+	}
 }
 
 func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {
