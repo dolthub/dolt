@@ -5,6 +5,7 @@ ARG DOLT_VERSION
 ARG BUILDARCH
 
 RUN echo "DUSTIN: BUILDARCH: $BUILDARCH"
+RUN echo "DUSTIN: TARGETARCH: $TARGETARCH"
 
 RUN apt-get update -y && apt-get install file -y
 
