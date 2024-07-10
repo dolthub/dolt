@@ -29,13 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// internal iterators are strictly |prolly.MapIter|
-
-// todo read a batch of keys from source map, sort before performing lookup
-
-// todo batched version runs a fixed set of workers on kv ranges in parallel
-// need filters and projections in this version for it to be worth it
-
 func rowIterTableLookupJoin(
 	ctx *sql.Context,
 	srcIter prolly.MapIter,
