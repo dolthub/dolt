@@ -17,7 +17,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	rowexec2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"os"
 	"runtime"
 	"strconv"
@@ -44,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
+	rowexec2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
