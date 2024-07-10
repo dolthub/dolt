@@ -17,11 +17,13 @@ package binlogreplication
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
@@ -73,47 +75,152 @@ func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEv
 	}
 	lm.binlogDirectory = abs
 
-	// Ensure the previous log file has a Rotate event that points to the new log file
-	if err := lm.addRotateEventToPreviousLogFile(); err != nil {
+	// Initialize a new binlog file
+	if err := lm.createNewBinlogFile(); err != nil {
 		return nil, err
 	}
 
-	// Initialize the new binlog file
-	if err := lm.createNewBinlogFile(); err != nil {
+	// Purge any expired log files
+	if err := lm.purgeExpiredLogFiles(); err != nil {
+		return nil, err
+	}
+
+	// Ensure the previous log file has a Rotate event that points to the new log file
+	if err := lm.addRotateEventToPreviousLogFile(); err != nil {
 		return nil, err
 	}
 
 	return lm, nil
 }
 
-// addRotateEventToPreviousLogFile finds the previous binlog file and appends a Rotate event that points to the
-// next binlog file. This is necessary so that as streamers are reading from the binlog files, they have a pointer
-// to follow to the next binlog file.
-func (lm *LogManager) addRotateEventToPreviousLogFile() error {
-	// Find the most recent log file for the binlog branch
-	mostRecentLogfile, err := lm.mostRecentLogFileForBranch(BinlogBranch)
+// purgeExpiredLogFiles removes any binlog files that are older than @@binlog_expire_logs_seconds. This automatic
+// binlog purging currently happens only on server startup. Eventually this should also be hooked into the `FLUSH LOGS`
+// (or `FLUSH BINARY LOGS`) statement as well to match MySQL's behavior.
+//
+// When this method is called, it is expected that the new, current binlog file has already been initialized and that
+// adding a Rotate event to the previous log has NOT occurred yet (otherwise adding the Rotate event would update the
+// log file's last modified time and would not be purged).
+func (lm *LogManager) purgeExpiredLogFiles() error {
+	expireLogsSeconds, err := lookupBinlogExpireLogsSeconds()
+	if expireLogsSeconds == 0 {
+		// If @@binlog_expire_logs_seconds is set to 0, then binlog files are never automatically expired
+		return nil
+	}
+
+	purgeThresholdTime := time.Now().Add(-time.Duration(expireLogsSeconds) * time.Second)
+
+	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
 	}
 
-	// If there isn't a most recent log file, then there's nothing to do
-	if mostRecentLogfile == "" {
+	for i := 0; i < len(files); i++ {
+		fullLogFilepath := filepath.Join(lm.binlogDirectory, files[i])
+		stat, err := os.Stat(fullLogFilepath)
+		if err != nil {
+			return err
+		}
+
+		if stat.ModTime().Before(purgeThresholdTime) {
+			logrus.Debugf("purging expired binlog file: %s", files[i])
+			if err := os.Remove(fullLogFilepath); err != nil {
+				return err
+			}
+		}
+	}
+
+	// TODO: This is where things get messy...
+	//       This is where we find the oldest binlog file, and attempt to find the first GTID in it, so that we can
+	//       set @@gtid_purged.
+	//       This should mostly work, but not in the case where there is only one binlog file after purging (the
+	//       current/new binlog file) and it doesn't have a GTID in it. In that case, we could default to
+	//       @@gtid_executed.
+	//
+	// One of the problems here is that @@gtid_executed doesn't get set at startup, like it should. We currently need
+	// a *sql.Context to grab the DoltSession and pull out the location of the GTID position store/file. This happens
+	// the first time we process a GTID binlog event, but it needs to happen at startup.
+	//
+	// Another way to solve this issue would be to have an index file that tracks which GTIDs are present in each log
+	// file. I'd like to avoid this if possible, just because it adds more complexity and seems like we can get away
+	// without it right now.
+
+	// Set @@gtid_purged if we deleted any files
+	files, err = lm.logFilesOnDiskForBranch(BinlogBranch)
+	if err != nil {
+		return err
+	}
+	if len(files) > 0 {
+		// TODO: This doesn't work! If we purge all the log files and we only have the new file, then we can't
+		//       determine the GTID to set... unless we use gtid_executed?
+		openFile, err := os.Open(filepath.Join(lm.binlogDirectory, files[0]))
+		if err != nil {
+			return err
+		}
+		defer openFile.Close()
+
+		binlogEvent, err := readFirstGtidEventFromFile(openFile)
+		if err == io.EOF {
+			// If there are no GTID events in the file, then all GTIDs have been purged, so use @@gtid_executed
+			_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+			if !ok {
+				return fmt.Errorf("unable to find system variable @@gtid_executed")
+			}
+
+			logrus.Errorf("setting gtid_purged to: %s", gtidExecutedValue)
+
+			err = sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		gtid, ok, err := binlogEvent.GTID(lm.binlogFormat)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			panic("not ok!")
+		}
+		sequenceNumber := gtid.SequenceNumber().(int64)
+
+		gtid.SourceServer()
+
+		err = sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// addRotateEventToPreviousLogFile finds the previous binlog file and appends a Rotate event that points to the
+// next binlog file. This is necessary so that as streamers are reading from the binlog files, they have a pointer
+// to follow to the next binlog file. This function MUST be called after the new log file has been initialized,
+// and after any expired log files have been purged.
+func (lm *LogManager) addRotateEventToPreviousLogFile() error {
+	previousLogFileName, err := lm.previousLogFile()
+	if err != nil {
+		return err
+	}
+
+	// If the previous log file in the sequence has been purged, then there's nothing to do
+	if !fileExists(filepath.Join(lm.binlogDirectory, previousLogFileName)) {
 		return nil
 	}
 
 	// Open the log file and append a Rotate event
-	previousLogFile, err := os.OpenFile(filepath.Join(lm.binlogDirectory, mostRecentLogfile), os.O_WRONLY|os.O_APPEND, 0644)
+	previousLogFile, err := os.OpenFile(filepath.Join(lm.binlogDirectory, previousLogFileName), os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
 	defer previousLogFile.Close()
 
-	nextLogFilename, err := lm.nextLogFile()
-	if err != nil {
-		return err
-	}
-
-	rotateEvent := mysql.NewRotateEvent(lm.binlogFormat, lm.binlogEventMeta, 0, nextLogFilename)
+	rotateEvent := mysql.NewRotateEvent(lm.binlogFormat, lm.binlogEventMeta, 0, lm.currentBinlogFileName)
 	_, err = previousLogFile.Write(rotateEvent.Bytes())
 	return err
 }
@@ -131,8 +238,8 @@ func (lm *LogManager) createNewBinlogFile() error {
 }
 
 // nextLogFile returns the filename of the next bin log file in the current sequence. For example, if the
-// current log file is "binlog-main.000008" the nextLogFile() would return "binlog-main.000009". Note that
-// this function returns the file name only, not the full file path.
+// current log file is "binlog-main.000008" the nextLogFile() method would return "binlog-main.000009".
+// Note that this function returns the file name only, not the full file path.
 func (lm *LogManager) nextLogFile() (filename string, err error) {
 	mostRecentLogfile, err := lm.mostRecentLogFileForBranch(BinlogBranch)
 	if err != nil {
@@ -148,6 +255,18 @@ func (lm *LogManager) nextLogFile() (filename string, err error) {
 		}
 		return formatBinlogFilename(branch, sequence+1), nil
 	}
+}
+
+// previousLogFile returns the filename of the previous bin log file in the current sequence. For example, if
+// the current log file is "binlog-main.000008" the previousLogFile() method would return "binlog-main.000007".
+// Note that this function returns the file name only, not the full path, and doesn't guarantee that the named
+// file actually exists on disk or not.
+func (lm *LogManager) previousLogFile() (filename string, err error) {
+	branch, sequence, err := parseBinlogFilename(lm.currentBinlogFileName)
+	if err != nil {
+		return "", err
+	}
+	return formatBinlogFilename(branch, sequence-1), nil
 }
 
 func (lm *LogManager) logFilesOnDisk() (files []string, err error) {
@@ -289,21 +408,6 @@ func (lm *LogManager) initializeCurrentLogFile(binlogFormat mysql.BinlogFormat, 
 	return lm.writeEventsHelper(mysql.NewPreviousGtidsEvent(binlogFormat, binlogEventMeta, gtidSet.(mysql.Mysql56GTIDSet)))
 }
 
-// lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
-// errors encountered while looking it up.
-func lookupMaxBinlogSize() (int, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("max_binlog_size")
-	if !ok {
-		return 0, fmt.Errorf("system variable @@max_binlog_size not found")
-	}
-
-	intValue, _, err := gmstypes.Int32.Convert(value)
-	if err != nil {
-		return 0, err
-	}
-	return int(intValue.(int32)), nil
-}
-
 // WriteEvents writes |binlogEvents| to the current binlog file. Access to write to the binary log is synchronized,
 // so that only one thread can write to the log file at a time.
 func (lm *LogManager) WriteEvents(binlogEvents ...mysql.BinlogEvent) error {
@@ -360,6 +464,46 @@ func (lm *LogManager) resolveLogFile(filename string) string {
 
 func (lm *LogManager) currentBinlogFilepath() string {
 	return lm.resolveLogFile(lm.currentBinlogFileName)
+}
+
+// fileExists returns true if the specified |filename| exists on disk and is not a directory, otherwise returns false.
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+// lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
+// errors encountered while looking it up.
+func lookupMaxBinlogSize() (int, error) {
+	_, value, ok := sql.SystemVariables.GetGlobal("max_binlog_size")
+	if !ok {
+		return 0, fmt.Errorf("system variable @@max_binlog_size not found")
+	}
+
+	intValue, _, err := gmstypes.Int32.Convert(value)
+	if err != nil {
+		return 0, err
+	}
+	return int(intValue.(int32)), nil
+}
+
+// lookupBinlogExpireLogsSeconds looks up the value of the @@binlog_expire_logs_seconds system variable and returns
+// it, along with any errors encountered while looking it up.
+func lookupBinlogExpireLogsSeconds() (int, error) {
+	_, value, ok := sql.SystemVariables.GetGlobal("binlog_expire_logs_seconds")
+	if !ok {
+		return -1, fmt.Errorf("unable to find system variable @@binlog_expire_logs_seconds")
+	}
+
+	int32Value, _, err := gmstypes.Int32.Convert(value)
+	if err != nil {
+		return -1, fmt.Errorf("unable to convert @@binlog_expire_logs_seconds value to integer: %s", err.Error())
+	}
+
+	return int(int32Value.(int32)), nil
 }
 
 // formatBinlogFilename formats a binlog filename using the specified |branch| and |sequence| number. The

@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -62,19 +63,25 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // NewBinlogProducer creates and returns a new instance of BinlogProducer. Note that callers must register the
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
-func NewBinlogProducer(streamerManager *binlogStreamerManager) (*binlogProducer, error) {
+func NewBinlogProducer(fs filesys.Filesys, streamerManager *binlogStreamerManager) (*binlogProducer, error) {
 	binlogFormat := createBinlogFormat()
 	binlogEventMeta, err := createBinlogEventMetadata()
 	if err != nil {
 		return nil, err
 	}
 
-	return &binlogProducer{
+	b := &binlogProducer{
 		binlogEventMeta: *binlogEventMeta,
 		binlogFormat:    binlogFormat,
 		streamerManager: streamerManager,
 		mu:              &sync.Mutex{},
-	}, nil
+	}
+
+	if err = b.initializeGtidPosition(fs); err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
 
 func (b *binlogProducer) BinlogFormat() *mysql.BinlogFormat {
@@ -183,7 +190,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 // in this binlogStreamerManager instance. If the gtidPosition has already been loaded
 // from disk and initialized, this method simply returns. If any problems were encountered
 // loading the GTID position from disk, or parsing its value, an error is returned.
-func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context) error {
+func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
 	if b.gtidPosition != nil {
 		return nil
 	}
@@ -191,7 +198,7 @@ func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	position, err := positionStore.Load(ctx)
+	position, err := positionStore.Load(fs)
 	if err != nil {
 		return err
 	}
@@ -233,17 +240,14 @@ func (b *binlogProducer) initializeGtidPosition(ctx *sql.Context) error {
 		return fmt.Errorf("unable to parse GTID position (%s): %s", gtidString, err.Error())
 	}
 	b.gtidSequence = int64(i + 1)
-	return nil
+
+	return sql.SystemVariables.AssignValues(map[string]any{
+		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }
 
 // createGtidEvent creates a new GTID event for the current transaction and updates the stream's
 // current log position.
 func (b *binlogProducer) createGtidEvent(ctx *sql.Context) (mysql.BinlogEvent, error) {
-	err := b.initializeGtidPosition(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	serverUuid, err := getServerUuid(ctx)
 	if err != nil {
 		return nil, err

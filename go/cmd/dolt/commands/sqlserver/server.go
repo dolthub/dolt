@@ -303,7 +303,7 @@ func ConfigureServices(
 			}
 			if logBin == 1 {
 				logrus.Debug("Enabling binary logging")
-				binlogProducer, err := binlogreplication.NewBinlogProducer(doltBinlogPrimaryController.StreamerManager())
+				binlogProducer, err := binlogreplication.NewBinlogProducer(dEnv.FS, doltBinlogPrimaryController.StreamerManager())
 				if err != nil {
 					return err
 				}

@@ -31,6 +31,15 @@ func init() {
 
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+		// TODO: Remove this and move it to GMS!
+		&sql.MysqlSystemVariable{
+			Name:              "binlog_expire_logs_seconds",
+			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemIntType("binlog_expire_logs_seconds", 0, 4294967295, false),
+			Default:           int64(2592000),
+		},
 		&sql.MysqlSystemVariable{
 			Name:              "log_bin_branch",
 			Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Persist),

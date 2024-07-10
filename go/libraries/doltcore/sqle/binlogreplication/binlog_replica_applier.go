@@ -186,7 +186,10 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 		return err
 	}
 
-	position, err := positionStore.Load(ctx)
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	filesys := doltSession.Provider().FileSystem()
+
+	position, err := positionStore.Load(filesys)
 	if err != nil {
 		return err
 	}

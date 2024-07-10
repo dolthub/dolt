@@ -159,6 +159,46 @@ func TestBinlogPrimary_Rotation(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_AutoPurging tests that the primary server correctly purges binary log files older than
+// @@binlog_expire_logs_seconds on restart.
+func TestBinlogPrimary_AutoPurging(t *testing.T) {
+	defer teardown(t)
+	mapCopy := copyMap(doltReplicationPrimarySystemVars)
+	mapCopy["binlog_expire_logs_seconds"] = "1"
+	startSqlServersWithDoltSystemVars(t, mapCopy)
+	setupForDoltToMySqlReplication()
+
+	// Generate binary log content
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("create table db01.t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into db01.t values (%d);", i))
+	}
+	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
+		{"binlog-main.000001", "21346", "No"},
+	})
+
+	// Restart and confirm the binary log has been purged
+	stopDoltSqlServer(t)
+	mustRestartDoltPrimaryServer(t)
+	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
+		{"binlog-main.000002", "191", "No"},
+	})
+
+	// Check the value of @@gtid_purged
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{
+		{fmt.Sprintf("%s:1-102", queryPrimaryServerUuid(t))},
+	})
+
+	// Verify the replica reports an error about the GTIDs not being available
+	startReplication(t, doltPort)
+	status := queryReplicaStatus(t)
+	require.Equal(t, "13114", status["Last_IO_Errno"])
+	require.Contains(t, status["Last_IO_Error"],
+		"Got fatal error 1236 from source when reading data from binary log: "+
+			"'Cannot replicate because the source purged required binary logs.")
+}
+
 // TestBinlogPrimary_ReplicaAndPrimaryRestart tests that a replica can disconnect and reconnect to the primary to
 // restart the replication stream, even when the primary has been restarted and log files have rotated.
 func TestBinlogPrimary_ReplicaAndPrimaryRestart(t *testing.T) {
@@ -196,12 +236,7 @@ func TestBinlogPrimary_ReplicaAndPrimaryRestart(t *testing.T) {
 	stopDoltSqlServer(t)
 
 	// Restart the Dolt primary server
-	var err error
-	prevReplicaDatabase := replicaDatabase
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
-	require.NoError(t, err)
-	primaryDatabase = replicaDatabase
-	replicaDatabase = prevReplicaDatabase
+	mustRestartDoltPrimaryServer(t)
 
 	// Generate more data on the primary after restarting
 	primaryDatabase.MustExec("use db01;")
@@ -210,11 +245,7 @@ func TestBinlogPrimary_ReplicaAndPrimaryRestart(t *testing.T) {
 	}
 
 	// Restart the MySQL replica and reconnect to the Dolt primary
-	prevPrimaryDatabase := primaryDatabase
-	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
-	require.NoError(t, err)
-	replicaDatabase = primaryDatabase
-	primaryDatabase = prevPrimaryDatabase
+	mustRestartMySqlReplicaServer(t)
 	startReplication(t, doltPort)
 	waitForReplicaToCatchUp(t)
 
@@ -326,14 +357,9 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	// Stop the Dolt primary server
 	stopDoltSqlServer(t)
 	time.Sleep(2_000 * time.Millisecond)
-	prevReplicaDatabase := replicaDatabase
 
 	// Restart the Dolt primary server
-	var err error
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
-	require.NoError(t, err)
-	primaryDatabase = replicaDatabase
-	replicaDatabase = prevReplicaDatabase
+	mustRestartDoltPrimaryServer(t)
 	waitForReplicaToReconnect(t)
 
 	// Create another table and assert that it gets replicated
@@ -934,4 +960,26 @@ func waitForReplicaToReconnect(t *testing.T) {
 			t.Fatalf("Unable to detect replica reconnect after 60s")
 		}
 	}
+}
+
+// mustRestartDoltPrimaryServer starts up the Dolt sql-server, after it has already been stopped before this function
+// is called, and configures it as the primary database.
+func mustRestartDoltPrimaryServer(t *testing.T) {
+	var err error
+	prevReplicaDatabase := replicaDatabase
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+	primaryDatabase = replicaDatabase
+	replicaDatabase = prevReplicaDatabase
+}
+
+// mustRestartMySqlReplicaServer starts up the MySQL server, after it has already been stopped before this function
+// is called, and configures it as the replica database.
+func mustRestartMySqlReplicaServer(t *testing.T) {
+	var err error
+	prevPrimaryDatabase := primaryDatabase
+	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	require.NoError(t, err)
+	replicaDatabase = primaryDatabase
+	primaryDatabase = prevPrimaryDatabase
 }
