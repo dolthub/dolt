@@ -259,6 +259,28 @@ func TestIndexedJsonDocument_Extract(t *testing.T) {
 	jsontests.RunJsonTests(t, testCases)
 }
 
+func TestIndexedJsonDocument_Replace(t *testing.T) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	convertToIndexedJsonDocument := func(t *testing.T, s interface{}) interface{} {
+		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
+	}
+
+	testCases := jsontests.JsonReplaceTestCases(t, convertToIndexedJsonDocument)
+	jsontests.RunJsonTests(t, testCases)
+}
+
+func TestIndexedJsonDocument_Set(t *testing.T) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+	convertToIndexedJsonDocument := func(t *testing.T, s interface{}) interface{} {
+		return newIndexedJsonDocumentFromValue(t, ctx, ns, s)
+	}
+
+	testCases := jsontests.JsonSetTestCases(t, convertToIndexedJsonDocument)
+	jsontests.RunJsonTests(t, testCases)
+}
+
 func TestIndexedJsonDocument_Value(t *testing.T) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()

@@ -144,7 +144,6 @@ func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (res
 }
 
 func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (sql.JSONWrapper, error) {
-
 	path, err := jsonPathElementsFromMySQLJsonPath([]byte(pathString))
 	if err != nil {
 		return nil, err
@@ -386,22 +385,130 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
-// Set is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Set(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
-	if err != nil {
-		return nil, false, err
-	}
-	return types.JSONDocument{Val: v}.Set(ctx, path, val)
+// Set implements types.MutableJSON
+func (i IndexedJsonDocument) Set(ctx context.Context, path string, val sql.JSONWrapper) (result types.MutableJSON, changed bool, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.trySet(ctx, path, val)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Set(ctx, path, val)
+			return err
+		})
+	return result, changed, err
 }
 
-// Replace is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Replace(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
+func (i IndexedJsonDocument) trySet(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Replace(ctx, path, val)
+
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// The supplied path may be 0-indexing into a scalar, which is the same as referencing the scalar. Remove
+	// the index and try again.
+	for !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
+		lastKeyPathElement := keyPath.getLastPathElement()
+		if !lastKeyPathElement.isArrayIndex || lastKeyPathElement.getArrayIndex() != 0 {
+			// The key does not exist in the document.
+			break
+		}
+
+		keyPath.pop()
+		found = compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath) == 0
+	}
+
+	if found {
+		return i.replaceIntoCursor(ctx, keyPath, jsonCursor, val)
+	} else {
+		return i.insertIntoCursor(ctx, keyPath, jsonCursor, val)
+	}
+}
+
+// Replace implements types.MutableJSON
+func (i IndexedJsonDocument) Replace(ctx context.Context, path string, val sql.JSONWrapper) (result types.MutableJSON, changed bool, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.tryReplace(ctx, path, val)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Replace(ctx, path, val)
+			return err
+		})
+	return result, changed, err
+}
+
+func (i IndexedJsonDocument) tryReplace(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
+	if err != nil {
+		return nil, false, err
+	}
+
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// The supplied path may be 0-indexing into a scalar, which is the same as referencing the scalar. Remove
+	// the index and try again.
+	for !found && keyPath.size() > jsonCursor.jsonScanner.currentPath.size() {
+		lastKeyPathElement := keyPath.getLastPathElement()
+		if !lastKeyPathElement.isArrayIndex || lastKeyPathElement.getArrayIndex() != 0 {
+			// The key does not exist in the document.
+			return i, false, nil
+		}
+
+		keyPath.pop()
+		found = compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath) == 0
+	}
+
+	if !found {
+		// The key does not exist in the document.
+		return i, false, nil
+	}
+
+	return i.replaceIntoCursor(ctx, keyPath, jsonCursor, val)
+}
+
+func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+
+	// The cursor is now pointing to the start of the value being replaced.
+	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Advance the cursor to the end of the value being removed.
+	keyPath.setScannerState(endOfValue)
+	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	insertedValueBytes, err := types.MarshallJson(val)
+	if err != nil {
+		return nil, false, err
+	}
+
+	jsonChunker.appendJsonToBuffer(insertedValueBytes)
+	jsonChunker.processBuffer(ctx)
+
+	newRoot, err := jsonChunker.Done(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.
