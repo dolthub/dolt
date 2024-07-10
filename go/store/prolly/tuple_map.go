@@ -435,9 +435,15 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 func ConvertToSecondaryKeylessIndex(m Map) Map {
 	keyDesc, valDesc := m.Descriptors()
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
+	handlers := make([]val.TupleTypeHandler, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)
+	copy(handlers, keyDesc.Handlers)
 	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
-	newKeyDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: keyDesc.Comparator()}, newTypes...)
+	handlers[len(handlers)-1] = nil
+	newKeyDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
+		Comparator: keyDesc.Comparator(),
+		Handlers:   handlers,
+	}, newTypes...)
 	newTuples := m.tuples
 	newTuples.Order = newKeyDesc
 	return Map{

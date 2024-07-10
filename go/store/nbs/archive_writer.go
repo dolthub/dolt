@@ -22,9 +22,6 @@ import (
 	"io"
 	"path/filepath"
 	"sort"
-	"sync"
-
-	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -188,30 +185,20 @@ func (sc *streamCounter) Write(p []byte) (n int, err error) {
 
 var _ io.Writer = &streamCounter{}
 
-// writeIndex writes the index to the archive. Expects the hasher to be reset before be called, and will reset it. It
+// writeIndex writes the index to the archive. Expects the hasher to be reset before being called, and will reset it. It
 // sets the indexLen and indexCheckSum fields on the archiveWriter, and updates the bytesWritten field.
 func (aw *archiveWriter) writeIndex() error {
 	if aw.workflowStage != stageIndex {
 		return fmt.Errorf("Runtime error: writeIndex called out of order")
 	}
 
-	redr, wrtr := io.Pipe()
-	outCount := &streamCounter{wrapped: aw.output}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		err := gozstd.StreamCompressLevel(outCount, redr, 6)
-		if err != nil {
-			redr.CloseWithError(err) // This will cause the writer to return the error.
-		} else {
-			redr.Close()
-		}
-		wg.Done()
-	}()
+	indexStart := aw.bytesWritten
 
-	// Write out the stagedByteSpans
+	// Write out the byte span end offsets
+	endOffset := uint64(0)
 	for _, bs := range aw.stagedBytes {
-		err := writeVarUint64(wrtr, bs.length)
+		endOffset += bs.length
+		err := aw.writeUint64(endOffset)
 		if err != nil {
 			return err
 		}
@@ -222,47 +209,39 @@ func (aw *archiveWriter) writeIndex() error {
 
 	// We lay down the sorted chunk list in it's three forms.
 	// Prefix Map
-	lastPrefix := uint64(0)
 	for _, scr := range aw.stagedChunks {
-		delta := scr.hash.Prefix() - lastPrefix
-		err := binary.Write(wrtr, binary.BigEndian, delta)
+		err := aw.writeUint64(scr.hash.Prefix())
 		if err != nil {
 			return err
 		}
-		lastPrefix += delta
 	}
+
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {
-		err := writeVarUint64(wrtr, uint64(scr.dictionary))
+		err := aw.writeUint32(scr.dictionary)
 		if err != nil {
 			return err
 		}
 
-		err = writeVarUint64(wrtr, uint64(scr.data))
+		err = aw.writeUint32(scr.data)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Stop compressing data going to the output sink
-	err := wrtr.Close()
-	if err != nil {
-		return err
-	}
-	wg.Wait()
-	indexSize := outCount.count
+	indexSize := aw.bytesWritten - indexStart
 
-	// Suffixes (uncompresssed)
+	// Suffixes
 	for _, scr := range aw.stagedChunks {
 		_, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
 		}
 		indexSize += hash.SuffixLen
+		aw.bytesWritten += hash.SuffixLen
 	}
 
 	aw.indexLen = uint32(indexSize)
-	aw.bytesWritten += indexSize
 	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
@@ -372,6 +351,17 @@ func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
 	}
 
 	aw.bytesWritten += sha512.Size
+	return nil
+}
+
+// Write a uint64 to the archive. Increments the bytesWritten field.
+func (aw *archiveWriter) writeUint64(val uint64) error {
+	err := binary.Write(aw.output, binary.BigEndian, val)
+	if err != nil {
+		return err
+	}
+
+	aw.bytesWritten += uint64Size
 	return nil
 }
 

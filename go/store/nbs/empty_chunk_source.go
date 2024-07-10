@@ -74,7 +74,7 @@ func (ecs emptyChunkSource) reader(context.Context) (io.ReadCloser, uint64, erro
 	return io.NopCloser(&bytes.Buffer{}), 0, nil
 }
 
-func (ecs emptyChunkSource) getRecordRanges(lookups []getRecord) (map[hash.Hash]Range, error) {
+func (ecs emptyChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
 	return map[hash.Hash]Range{}, nil
 }
 

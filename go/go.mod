@@ -13,9 +13,9 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
+	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20240626174323-4083c07f5e9c
+	github.com/dolthub/vitess v0.0.0-20240709205318-9938efd011aa
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -38,14 +38,13 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tealeg/xlsx v1.0.5
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.21.0
-	golang.org/x/net v0.23.0
-	golang.org/x/sync v0.6.0
-	golang.org/x/sys v0.18.0
+	golang.org/x/crypto v0.23.0
+	golang.org/x/net v0.25.0
+	golang.org/x/sync v0.7.0
+	golang.org/x/sys v0.20.0
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
-	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -57,7 +56,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240709234141-4835569222f3
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240710145501-f122d3461495
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
@@ -88,9 +87,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
-	golang.org/x/text v0.14.0
+	golang.org/x/text v0.16.0
 	gonum.org/v1/plot v0.11.0
 	gopkg.in/errgo.v2 v2.1.0
+	gopkg.in/go-jose/go-jose.v2 v2.6.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -153,12 +153,12 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/image v0.10.0 // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/image v0.18.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/term v0.18.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
-	golang.org/x/tools v0.13.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230807174057-1744710a1577 // indirect
@@ -170,5 +170,3 @@ require (
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.22.2
-
-replace github.com/dolthub/go-mysql-server => ../../go-mysql-server/

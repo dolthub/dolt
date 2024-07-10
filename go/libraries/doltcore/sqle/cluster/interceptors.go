@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gopkg.in/square/go-jose.v2/jwt"
+	"gopkg.in/go-jose/go-jose.v2/jwt"
 
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 )

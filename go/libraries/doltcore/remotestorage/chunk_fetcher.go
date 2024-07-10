@@ -263,6 +263,9 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 			if err != nil {
 				return NewRpcError(err, "StreamDownloadLocations", host, stream.AssociatedReq())
 			}
+			if resp == nil {
+				return NewRpcError(errors.New("no stream response"), "StreamDownloadLocations", host, stream.AssociatedReq())
+			}
 			if resp.RepoToken != "" {
 				storeRepoToken(resp.RepoToken)
 			}

@@ -335,6 +335,7 @@ SQL
     [ "${lines[2]}" = "2" ]
 }
 
+# bats test_tags=no_lambda
 @test "stats: boostrap abort over 1mm rows" {
     cat <<EOF > data.py
 import random

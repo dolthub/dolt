@@ -19,7 +19,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -107,29 +106,40 @@ func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []b
 	return bytes, err
 }
 
-// Lookup implements types.SearchableJSON
-func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (sql.JSONWrapper, error) {
-	if strings.Contains(pathString, "*") {
-		// Optimized lookup doesn't currently support wildcards. Fall back on an unoptimized approach.
-		// TODO: Optimized lookup on wildcards.
-		val, err := i.ToInterface()
-		if err != nil {
-			return nil, err
-		}
-		nonIndexedDoc := types.JSONDocument{Val: val}
-		return nonIndexedDoc.Lookup(ctx, pathString)
-	}
-	result, err := i.tryLookup(ctx, pathString)
-	if err == unknownLocationKeyError {
-		if sqlCtx, ok := ctx.(*sql.Context); ok {
-			sqlCtx.GetLogger().Warn(err)
+func tryWithFallback(
+	ctx context.Context,
+	i IndexedJsonDocument,
+	tryFunc func() error,
+	fallbackFunc func(document types.JSONDocument) error) error {
+	err := tryFunc()
+	if err == unknownLocationKeyError || err == unsupportedPathError {
+		if err == unknownLocationKeyError {
+			if sqlCtx, ok := ctx.(*sql.Context); ok {
+				sqlCtx.GetLogger().Warn(err)
+			}
 		}
 		v, err := i.ToInterface()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return types.JSONDocument{Val: v}.Lookup(ctx, pathString)
+		return fallbackFunc(types.JSONDocument{Val: v})
 	}
+	return err
+}
+
+// Lookup implements types.SearchableJSON
+func (i IndexedJsonDocument) Lookup(ctx context.Context, pathString string) (result sql.JSONWrapper, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, err = i.tryLookup(ctx, pathString)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, err = jsonDocument.Lookup(ctx, pathString)
+			return err
+		})
 	return result, err
 }
 
@@ -140,14 +150,16 @@ func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (
 		return nil, err
 	}
 
-	jCur, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, path)
+	return i.lookupByLocation(ctx, path)
+}
+
+func (i IndexedJsonDocument) lookupByLocation(ctx context.Context, path jsonLocation) (sql.JSONWrapper, error) {
+	jCur, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, path, false)
 	if err != nil {
 		return nil, err
 	}
 
-	cursorPath := jCur.GetCurrentPath()
-	cmp := compareJsonLocations(cursorPath, path)
-	if cmp != 0 {
+	if !found {
 		// The key doesn't exist in the document.
 		return nil, nil
 	}
@@ -160,18 +172,18 @@ func (i IndexedJsonDocument) tryLookup(ctx context.Context, pathString string) (
 }
 
 // Insert implements types.MutableJSON
-func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	result, changed, err := i.tryInsert(ctx, path, val)
-	if err == unknownLocationKeyError {
-		if sqlCtx, ok := ctx.(*sql.Context); ok {
-			sqlCtx.GetLogger().Warn(err)
-		}
-		v, err := i.ToInterface()
-		if err != nil {
-			return nil, false, err
-		}
-		return types.JSONDocument{Val: v}.Insert(ctx, path, val)
-	}
+func (i IndexedJsonDocument) Insert(ctx context.Context, path string, val sql.JSONWrapper) (result types.MutableJSON, changed bool, err error) {
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.tryInsert(ctx, path, val)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Insert(ctx, path, val)
+			return err
+		})
 	return result, changed, err
 }
 
@@ -181,17 +193,21 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 		return nil, false, err
 	}
 
-	jsonCursor, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath)
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
 	if err != nil {
 		return nil, false, err
 	}
 
-	cursorPath := jsonCursor.GetCurrentPath()
-	cmp := compareJsonLocations(cursorPath, keyPath)
-	if cmp == 0 {
+	if found {
 		// The key already exists in the document.
 		return i, false, nil
 	}
+
+	return i.insertIntoCursor(ctx, keyPath, jsonCursor, val)
+}
+
+func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	cursorPath := jsonCursor.GetCurrentPath()
 
 	// If the inserted path is equivalent to "$" (which also includes "$[0]" on non-arrays), do nothing.
 	if cursorPath.size() == 0 && cursorPath.getScannerState() == startOfValue {
@@ -262,6 +278,7 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 	// For example, attempting to insert into the path "$.a.b" in the document {"a": 1}
 	// We can detect this by checking to see if the insertion point in the original document comes before the inserted path.
 	// (For example, the insertion point occurs at $.a.START, which is before $.a.b)
+	cmp := compareJsonLocations(cursorPath, keyPath)
 	if cmp < 0 && cursorPath.getScannerState() == startOfValue {
 		// We just attempted to insert into a scalar.
 		return i, false, nil
@@ -303,31 +320,88 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
-// Remove is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Remove(path string) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
+// Remove implements types.MutableJSON
+func (i IndexedJsonDocument) Remove(ctx context.Context, path string) (result types.MutableJSON, changed bool, err error) {
+	if path == "$" {
+		return nil, false, fmt.Errorf("The path expression '$' is not allowed in this context.")
+	}
+	err = tryWithFallback(
+		ctx,
+		i,
+		func() error {
+			result, changed, err = i.tryRemove(ctx, path)
+			return err
+		},
+		func(jsonDocument types.JSONDocument) error {
+			result, changed, err = jsonDocument.Remove(ctx, path)
+			return err
+		})
+	return result, changed, err
+}
+
+func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.MutableJSON, bool, error) {
+	keyPath, err := jsonPathElementsFromMySQLJsonPath([]byte(path))
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Remove(path)
+
+	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, true)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		// The key does not exist in the document.
+		return i, false, nil
+	}
+
+	// The cursor is now pointing to the end of the value prior to the one being removed.
+	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
+	if err != nil {
+		return nil, false, err
+	}
+
+	startofRemovedLocation := jsonCursor.GetCurrentPath()
+	startofRemovedLocation = startofRemovedLocation.Clone()
+	isInitialElement := startofRemovedLocation.getScannerState().isInitialElement()
+
+	// Advance the cursor to the end of the value being removed.
+	keyPath.setScannerState(endOfValue)
+	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// If removing the first element of an object/array, skip past the comma, and set the chunker as if it's
+	// at the start of the object/array.
+	if isInitialElement && jsonCursor.jsonScanner.current() == ',' {
+		jsonCursor.jsonScanner.valueOffset++
+		jsonChunker.jScanner.currentPath = startofRemovedLocation
+	}
+
+	newRoot, err := jsonChunker.Done(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
 }
 
 // Set is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Set(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) Set(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	v, err := i.ToInterface()
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Set(path, val)
+	return types.JSONDocument{Val: v}.Set(ctx, path, val)
 }
 
 // Replace is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) Replace(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) Replace(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
 	v, err := i.ToInterface()
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.Replace(path, val)
+	return types.JSONDocument{Val: v}.Replace(ctx, path, val)
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.

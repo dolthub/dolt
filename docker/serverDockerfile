@@ -21,8 +21,7 @@ VOLUME /var/lib/dolt
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]
 
 EXPOSE 3306 33060
 WORKDIR /var/lib/dolt
-CMD [ "dolt", "sql-server", "--host=0.0.0.0" , "--port=3306" ]
+ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]

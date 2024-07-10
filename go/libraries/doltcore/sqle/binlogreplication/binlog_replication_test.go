@@ -681,7 +681,16 @@ func stopDoltSqlServer(t *testing.T) {
 	}
 }
 
+// startReplication starts up replication on the replica, connecting to |port| on the primary,
+// creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
 func startReplication(t *testing.T, port int) {
+	startReplicationWithDelay(t, port, 100*time.Millisecond)
+}
+
+// startReplication starts up replication on the replica, connecting to |port| on the primary,
+// pauses for |delay| before creating the test database, db01, on the primary, and ensures it
+// gets replicated to the replica.
+func startReplicationWithDelay(t *testing.T, port int, delay time.Duration) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
@@ -689,7 +698,7 @@ func startReplication(t *testing.T, port int) {
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(delay)
 
 	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to
 	// replicate to the replica. Note that when re-starting replication in certain tests, we can't rely on

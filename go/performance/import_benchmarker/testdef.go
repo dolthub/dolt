@@ -623,7 +623,7 @@ func tableKey(t Table) (uint64, error) {
 }
 
 func parseTableAndSchema(q string) (string, []string, []sql2.Type) {
-	stmt, _, err := ast.ParseOne(q)
+	stmt, _, err := ast.ParseOne(context.Background(), q)
 	if err != nil {
 		panic(fmt.Sprintf("invalid query: %s; %s", q, err))
 	}

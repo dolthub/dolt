@@ -130,7 +130,7 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 	// When inserting into the beginning of an object or array, we need to add an extra comma.
 	// We could track then in the chunker, but it's easier to just check the next part of JSON to determine
 	// whether we need the comma.
-	if jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
+	if j.jScanner.currentPath.getScannerState() == endOfValue && jsonBytes[0] != '}' && jsonBytes[0] != ']' && jsonBytes[0] != ',' {
 		j.appendJsonToBuffer([]byte(","))
 	}
 	// Append the rest of the JsonCursor, then continue until we either exhaust the cursor, or we coincide with a boundary from the original tree.
@@ -190,9 +190,13 @@ func (j *JsonChunker) appendJsonToBuffer(jsonBytes []byte) {
 
 // processBuffer reads all new additions added by appendJsonToBuffer, and determines any new chunk boundaries.
 // Do not call this method directly. It should only get called from within this file.
-func (j *JsonChunker) processBuffer(ctx context.Context) error {
+func (j *JsonChunker) processBuffer(ctx context.Context) (err error) {
 	chunkStart := 0
-	for j.jScanner.AdvanceToNextLocation() != io.EOF {
+	err = j.jScanner.AdvanceToNextLocation()
+	for err != io.EOF {
+		if err != nil {
+			return err
+		}
 		key := j.jScanner.currentPath.key
 		value := j.jScanner.jsonBuffer[chunkStart:j.jScanner.valueOffset]
 		if crossesBoundary(key, value) {
@@ -202,6 +206,7 @@ func (j *JsonChunker) processBuffer(ctx context.Context) error {
 			}
 			chunkStart = j.jScanner.valueOffset
 		}
+		err = j.jScanner.AdvanceToNextLocation()
 	}
 	if chunkStart > 0 {
 		newValueOffset := j.jScanner.valueOffset - chunkStart

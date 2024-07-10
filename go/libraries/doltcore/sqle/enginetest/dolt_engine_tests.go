@@ -1555,6 +1555,21 @@ func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+		func() {
+			h = h.NewHarness(t).WithConfigureStats(true)
+			defer h.Close()
+			e := mustNewEngine(t, h)
+			if enginetest.IsServerEngine(e) {
+				return
+			}
+			defer e.Close()
+			enginetest.TestScriptWithEngine(t, e, h, script)
+		}()
+	}
+}
+
 // these are sensitive to cardinality estimates,
 // particularly the join-filter tests that trade-off
 // smallest table first vs smallest join first
