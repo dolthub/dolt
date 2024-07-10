@@ -51,7 +51,7 @@ func rowIterTableLookupJoin(
 
 	projections := append(srcProj, dstProj...)
 
-	rowJoiner := newRowJoiner(srcSch, dstIter.Schema(), dstIter.NodeStore(), split, projections)
+	rowJoiner := newRowJoiner([]schema.Schema{srcSch, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
 
 	return newLookupKvIter(ctx, srcIter, dstIter, srcMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin)
 }
@@ -283,7 +283,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		// side-specific filters are currently hoisted
 
 		if l.srcFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.srcSplit])
+			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.kvSplits[0]])
 			if err != nil {
 				return nil, err
 			}
@@ -294,7 +294,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		}
 		if l.dstFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.srcSplit:])
+			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
 			if err != nil {
 				return nil, err
 			}

@@ -65,114 +65,139 @@ func getIta(n sql.Node) (*plan.IndexedTableAccess, bool) {
 // prollyToSqlJoiner converts two KV pairs into a sql row
 // TODO generalize to N KV pairs
 type prollyToSqlJoiner struct {
-	srcSplit int
-	ns       tree.NodeStore
-
-	srcKd val.TupleDesc
-	srcVd val.TupleDesc
-	tgtKd val.TupleDesc
-	tgtVd val.TupleDesc
-
-	ordMappings    []int
-	srcKeyMappings []int
-	srcValMappings []int
-	tgtKeyMappings []int
-	tgtValMappings []int
+	ns tree.NodeStore
+	// kvSplits are offsets between consecutive kv pairs
+	kvSplits    []int
+	desc        []kvDesc
+	ordMappings []int
 }
 
-func (m *prollyToSqlJoiner) buildRow(ctx context.Context, srcKey, srcVal, tgtKey, tgtVal val.Tuple) (sql.Row, error) {
-	row := make(sql.Row, len(m.ordMappings))
-	var err error
-	for i, idx := range m.srcKeyMappings {
-		outputIdx := m.ordMappings[i]
-		row[outputIdx], err = tree.GetField(ctx, m.srcKd, idx, srcKey, m.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for i, idx := range m.srcValMappings {
-		outputIdx := m.ordMappings[len(m.srcKeyMappings)+i]
-		row[outputIdx], err = tree.GetField(ctx, m.srcVd, idx, srcVal, m.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// left joins can nullify the right-hand now
-	if tgtKey != nil {
-		for i, idx := range m.tgtKeyMappings {
-			outputIdx := m.ordMappings[m.srcSplit+i]
-			row[outputIdx], err = tree.GetField(ctx, m.tgtKd, idx, tgtKey, m.ns)
-			if err != nil {
-				return nil, err
-			}
-		}
-		for i, idx := range m.tgtValMappings {
-			outputIdx := m.ordMappings[m.srcSplit+len(m.tgtKeyMappings)+i]
-			row[outputIdx], err = tree.GetField(ctx, m.tgtVd, idx, tgtVal, m.ns)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return row, nil
+type kvDesc struct {
+	keyDesc     val.TupleDesc
+	valDesc     val.TupleDesc
+	keyMappings []int
+	valMappings []int
 }
 
-func newRowJoiner(srcSch, tgtSch schema.Schema, ns tree.NodeStore, srcSplit int, projections []uint64) *prollyToSqlJoiner {
-	numPhysicalColumns := len(projections)
-	if schema.IsVirtual(srcSch) {
-		numPhysicalColumns = 0
-		for i, t := range projections {
-			if idx, ok := srcSch.GetAllCols().TagToIdx[t]; ok && !srcSch.GetAllCols().GetByIndex(idx).Virtual {
-				numPhysicalColumns++
-				srcSplit = i
-			}
-			if idx, ok := tgtSch.GetAllCols().TagToIdx[t]; ok && !tgtSch.GetAllCols().GetByIndex(idx).Virtual {
-				numPhysicalColumns++
-			}
-		}
-	}
+func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
+	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
-	// | srcKey | srcVal | trgKey | trg val | ords |
+	// | k1 | v1 | k2 | v2 | ... | ords |
 	allMap := make([]int, 2*numPhysicalColumns)
 
-	keyIdx := 0
-	nonKeyIdx := srcSplit - 1
-	keyCols := srcSch.GetPKCols()
-	valCols := srcSch.GetNonPKCols()
-	var firstPkSplit int
-	for projNum, tag := range projections {
-		if projNum == srcSplit {
-			// destination is either
-			firstPkSplit = keyIdx
-			keyIdx = srcSplit
-			nonKeyIdx = len(projections) - 1
-			keyCols = tgtSch.GetPKCols()
-			valCols = tgtSch.GetNonPKCols()
+	// last kv pair can safely look ahead for its end range
+	splits = append(splits, len(projections))
+
+	var tupleDesc []kvDesc
+	// | k -> <- v | split
+	nextKeyIdx := 0
+	nextValIdx := splits[0] - 1
+	sch := schemas[0]
+	keyCols := sch.GetPKCols()
+	valCols := sch.GetNonPKCols()
+	splitIdx := 0
+	for i := 0; i <= len(projections); i++ {
+		if i == splits[splitIdx] {
+			var mappingStartIdx int
+			if splitIdx > 0 {
+				mappingStartIdx = splits[splitIdx-1]
+			}
+			tupleDesc = append(tupleDesc, kvDesc{
+				keyDesc:     sch.GetKeyDescriptor(),
+				valDesc:     sch.GetValueDescriptor(),
+				keyMappings: allMap[mappingStartIdx:nextKeyIdx],  // prev kv partition -> last key of this partition
+				valMappings: allMap[nextKeyIdx:splits[splitIdx]], // first val of partition -> next kv partition
+			})
+			if i == len(projections) {
+				break
+			}
+			nextKeyIdx = splits[splitIdx]
+			splitIdx++
+			nextValIdx = splits[splitIdx] - 1
+			sch = schemas[splitIdx]
+			keyCols = sch.GetPKCols()
+			valCols = sch.GetNonPKCols()
 		}
+		tag := projections[i]
 		if idx, ok := keyCols.StoredIndexByTag(tag); ok && !keyCols.GetByStoredIndex(idx).Virtual {
-			allMap[keyIdx] = idx
-			allMap[numPhysicalColumns+keyIdx] = projNum
-			keyIdx++
+			allMap[nextKeyIdx] = idx
+			allMap[numPhysicalColumns+nextKeyIdx] = i
+			nextKeyIdx++
 		} else if idx, ok := valCols.StoredIndexByTag(tag); ok && !valCols.GetByStoredIndex(idx).Virtual {
-			allMap[nonKeyIdx] = idx
-			allMap[numPhysicalColumns+nonKeyIdx] = projNum
-			nonKeyIdx--
+			allMap[nextValIdx] = idx
+			allMap[numPhysicalColumns+nextValIdx] = i
+			nextValIdx--
 		}
 	}
 
 	return &prollyToSqlJoiner{
-		srcSplit:       srcSplit,
-		srcKeyMappings: allMap[:firstPkSplit],
-		srcValMappings: allMap[firstPkSplit:srcSplit],
-		tgtKeyMappings: allMap[srcSplit:keyIdx],
-		tgtValMappings: allMap[keyIdx:numPhysicalColumns],
-		ordMappings:    allMap[numPhysicalColumns:],
-		srcKd:          srcSch.GetKeyDescriptor(),
-		srcVd:          srcSch.GetValueDescriptor(),
-		tgtKd:          tgtSch.GetKeyDescriptor(),
-		tgtVd:          tgtSch.GetValueDescriptor(),
-		ns:             ns,
+		kvSplits:    splits,
+		desc:        tupleDesc,
+		ordMappings: allMap[numPhysicalColumns:],
+		ns:          ns,
 	}
+}
+
+func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (sql.Row, error) {
+	if len(tuples) != 2*len(m.desc) {
+		panic("invalid KV count for prollyToSqlJoiner")
+	}
+	row := make(sql.Row, len(m.ordMappings))
+	split := 0
+	var err error
+	var tup val.Tuple
+	for i, desc := range m.desc {
+		tup = tuples[2*i]
+		if tup == nil {
+			// nullified row
+			continue
+		}
+		for j, idx := range desc.keyMappings {
+			outputIdx := m.ordMappings[split+j]
+			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+		tup = tuples[2*i+1]
+		for j, idx := range desc.valMappings {
+			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
+			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+		split = m.kvSplits[i]
+	}
+	return row, nil
+}
+
+func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []uint64) int {
+	var virtual bool
+	for _, sch := range schemas {
+		if schema.IsVirtual(sch) {
+			virtual = true
+		}
+	}
+
+	if !virtual {
+		return len(projections)
+	}
+
+	numPhysicalColumns := 0
+	sch := schemas[0]
+	splitIdx := 0
+	for i := 0; i < len(projections); i++ {
+		if i == splits[splitIdx] {
+			splitIdx++
+			sch = schemas[splitIdx]
+		}
+		tag := projections[i]
+		if idx, ok := sch.GetAllCols().TagToIdx[tag]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+			numPhysicalColumns++
+		}
+	}
+	return numPhysicalColumns
 }
 
 // getSourceKv extracts prolly table and index specific structures needed
