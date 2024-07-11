@@ -16,6 +16,8 @@ package rowexec
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -37,11 +39,11 @@ var _ sql.NodeExecBuilder = (*Builder)(nil)
 func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
 	switch n := n.(type) {
 	case *plan.JoinNode:
-		if n.Op.IsLookup() {
-			if ita, ok := getIta(n.Right()); ok && len(r) == 0 {
+		if n.Op.IsLookup() && !n.Op.IsPartial() {
+			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
 				if _, _, dstIter, dstSchema, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstSchema != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
-						return rowIterTableLookupJoin(ctx, srcIter, dstIter, srcMap, srcSchema, dstSchema, srcTags, dstTags, ita.Expressions(), srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter())
+						return rowIterTableLookupJoin(ctx, srcIter, dstIter, srcMap, srcSchema, dstSchema, srcTags, dstTags, ita.Expressions(), srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 					}
 				}
 			}
@@ -64,8 +66,20 @@ func getIta(n sql.Node) (*plan.IndexedTableAccess, bool) {
 	}
 }
 
+// simpleLookupExpressions returns true if |keyExprs| includes only field
+// references and literals
+func simpleLookupExpressions(keyExprs []sql.Expression) bool {
+	for _, e := range keyExprs {
+		switch e.(type) {
+		case *expression.Literal, *expression.GetField:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // prollyToSqlJoiner converts two KV pairs into a sql row
-// TODO generalize to N KV pairs
 type prollyToSqlJoiner struct {
 	ns tree.NodeStore
 	// kvSplits are offsets between consecutive kv pairs
@@ -95,6 +109,10 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 	nextKeyIdx := 0
 	nextValIdx := splits[0] - 1
 	sch := schemas[0]
+	keylessOff := 0
+	if schema.IsKeyless(sch) {
+		keylessOff = 1
+	}
 	keyCols := sch.GetPKCols()
 	valCols := sch.GetNonPKCols()
 	splitIdx := 0
@@ -117,20 +135,28 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 			splitIdx++
 			nextValIdx = splits[splitIdx] - 1
 			sch = schemas[splitIdx]
+			if schema.IsKeyless(sch) {
+				keylessOff = 1
+			}
 			keyCols = sch.GetPKCols()
 			valCols = sch.GetNonPKCols()
 		}
 		tag := projections[i]
 		if idx, ok := keyCols.StoredIndexByTag(tag); ok && !keyCols.GetByStoredIndex(idx).Virtual {
-			allMap[nextKeyIdx] = idx
+			allMap[nextKeyIdx] = idx + keylessOff
 			allMap[numPhysicalColumns+nextKeyIdx] = i
 			nextKeyIdx++
 		} else if idx, ok := valCols.StoredIndexByTag(tag); ok && !valCols.GetByStoredIndex(idx).Virtual {
-			allMap[nextValIdx] = idx
+			allMap[nextValIdx] = idx + keylessOff
 			allMap[numPhysicalColumns+nextValIdx] = i
 			nextValIdx--
 		}
 	}
+	fmt.Println("ord mappings", allMap[numPhysicalColumns:])
+	fmt.Println("keymap1", tupleDesc[0].keyMappings)
+	fmt.Println("valmap1", tupleDesc[0].valMappings)
+	fmt.Println("keymap2", tupleDesc[1].keyMappings)
+	fmt.Println("valmap2", tupleDesc[1].valMappings)
 
 	return &prollyToSqlJoiner{
 		kvSplits:    splits,
@@ -152,7 +178,11 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 		tup = tuples[2*i]
 		if tup == nil {
 			// nullified row
+			split = m.kvSplits[i]
 			continue
+		}
+		if i > 0 {
+			split = m.kvSplits[i-1]
 		}
 		for j, idx := range desc.keyMappings {
 			outputIdx := m.ordMappings[split+j]
@@ -169,7 +199,6 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 				return nil, err
 			}
 		}
-		split = m.kvSplits[i]
 	}
 	return row, nil
 }
@@ -242,12 +271,12 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
 
-			l, err := n.GetLookup(ctx, nil)
-			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
-			}
-
 			if isSrc {
+				l, err := n.GetLookup(ctx, nil)
+				if err != nil {
+					return prolly.Map{}, nil, nil, nil, nil, nil, err
+				}
+
 				prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
 				if err != nil {
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
@@ -258,7 +287,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 			} else {
-				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
+				dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()))
 			}
 
 		case *sqle.IndexedDoltTable:

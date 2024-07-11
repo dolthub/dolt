@@ -16,12 +16,12 @@ package index
 
 import (
 	"context"
-	"io"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
+	"log"
 )
 
 type SecondaryLookupIter interface {
@@ -64,13 +64,19 @@ func (c *coveringStrictSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *coveringStrictSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
-	if k.FieldIsNull(0) {
-		c.k, c.v = nil, nil
-		return nil
+	for i := 0; i < c.prefixDesc.Count(); i++ {
+		if k.FieldIsNull(i) {
+			// nil field incompatible with strict key lookup
+			c.k, c.v = nil, nil
+			return nil
+		}
 	}
+	log.Println(c.prefixDesc.Format((k)))
 	return c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
 		c.k = key
 		c.v = value
+		log.Println(c.m.KeyDesc().Format((key)), c.m.ValDesc().Format(value))
+
 		return nil
 	})
 }
@@ -113,19 +119,18 @@ func (c *nonCoveringStrictSecondaryLookup) NodeStore() tree.NodeStore {
 
 func (c *nonCoveringStrictSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
 	var idxKey val.Tuple
-	err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
+	if err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
 		idxKey = key
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 	for to := range c.pkMap {
 		from := c.pkMap.MapOrdinal(to)
 		c.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
 	c.k = c.pkBld.Build(sharePool)
 
-	if err != nil {
-		return err
-	}
 	return c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
 		c.v = value
 		return nil
@@ -160,7 +165,7 @@ func (c *coveringLaxSecondaryLookup) OutputValDesc() val.TupleDesc {
 }
 
 func (c *coveringLaxSecondaryLookup) Schema() schema.Schema {
-	return c.index.Schema()
+	return c.index.IndexSchema()
 }
 
 func (c *coveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
@@ -168,49 +173,34 @@ func (c *coveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *coveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
-	// if no nil fields can do lookup
-	//var lax bool
-	//for i := 0; i < k.Count(); i++ {
-	//	if k.FieldIsNull(i) {
-	//		lax = true
-	//		break
-	//	}
-	//}
-	//
-	//if !lax {
-	//	return c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
-	//		c.k = key
-	//		c.v = value
-	//		return nil
-	//	})
-	//}
+	if k.Count() == 0 {
+		c.iter = prolly.EmptyPointLookup
+		return nil
+	}
 
-	start := k
-	stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
 	var err error
-	if ok {
-		c.iter, err = c.m.IterKeyRange(ctx, start, stop)
-		if err != nil {
-			return err
-		}
-	} else {
-		// TODO inline a prolly range
-		var rng prolly.Range
-		c.iter, err = c.m.IterRange(ctx, rng)
-		if err != nil {
-			return err
+	if c.prefixDesc.Count() == c.m.KeyDesc().Count() {
+		// key range optimization only works if prefix length
+		start := k
+		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
+		if ok {
+			c.iter, err = c.m.IterKeyRange(ctx, start, stop)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	rng := prolly.PrefixRange(k, c.prefixDesc)
+
+	c.iter, err = c.m.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (c *coveringLaxSecondaryLookup) Next(ctx context.Context) (k, v val.Tuple, ok bool, err error) {
-	if c.iter == nil {
-		k, v = c.k, c.v
-		c.k, c.v = nil, nil
-		ok = k != nil
-		return k, v, ok, nil
-	}
 	k, v, err = c.iter.Next(ctx)
 	if err != nil {
 		if err != io.EOF {
@@ -253,50 +243,24 @@ func (c *nonCoveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *nonCoveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
-	var lax bool
-	for i := 0; i < k.Count(); i++ {
-		if k.FieldIsNull(i) {
-			lax = true
-			break
-		}
-	}
-	if !lax {
-		var idxKey val.Tuple
-		err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
-			idxKey = key
-			return nil
-		})
-		for to := range c.pkMap {
-			from := c.pkMap.MapOrdinal(to)
-			c.pkBld.PutRaw(to, idxKey.GetField(from))
-		}
-		c.k = c.pkBld.Build(sharePool)
-
-		if err != nil {
-			return err
-		}
-		return c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
-			c.v = value
-			return nil
-		})
-	}
-
-	start := k
-	stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 	var err error
-	if ok {
-		c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
-		if err != nil {
-			return err
-		}
-	} else {
-		// TODO inline a prolly range
-		var rng prolly.Range
-		c.secIter, err = c.sec.IterRange(ctx, rng)
-		if err != nil {
-			return err
+	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
+		// key range optimization only works if full key
+		start := k
+		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		if ok {
+			c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	rng := prolly.PrefixRange(k, c.prefixDesc)
+	c.secIter, err = c.sec.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -315,6 +279,11 @@ func (c *nonCoveringLaxSecondaryLookup) Next(ctx context.Context) (k, v val.Tupl
 			return nil, nil, false, err
 		}
 		c.secIter = nil
+	}
+
+	if idxKey == nil {
+		c.k, c.v = nil, nil
+		return nil, nil, false, nil
 	}
 
 	// convert sec key to primary key
@@ -374,55 +343,24 @@ func (c *keylessSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *keylessSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
-	// check lax or strict
-	// source index could be strict or lax
-	var lax bool
-	for i := 0; i < k.Count(); i++ {
-		if k.FieldIsNull(i) {
-			lax = true
-			break
-		}
-	}
-	if !lax { // TODO also check uniqueness
-		var idxKey val.Tuple
-		err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
-			idxKey = key
-			return nil
-		})
-		for to := range c.pkMap {
-			from := c.pkMap.MapOrdinal(to)
-			c.pkBld.PutRaw(to, idxKey.GetField(from))
-		}
-		c.k = c.pkBld.Build(sharePool)
-
-		err = c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
-			c.v = value
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		c.card = val.ReadKeylessCardinality(c.v)
-		return nil
-	}
-
-	start := k
-	stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 	var err error
-	if ok {
-		c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
-		if err != nil {
-			return err
-		}
-	} else {
-		// TODO inline a prolly range
-		var rng prolly.Range
-		c.secIter, err = c.sec.IterRange(ctx, rng)
-		if err != nil {
-			return err
+	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
+		// key range optimization only works if full key
+		start := k
+		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		if ok {
+			c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	rng := prolly.PrefixRange(k, c.prefixDesc)
+	c.secIter, err = c.sec.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -446,6 +384,7 @@ func (c *keylessSecondaryLookup) Next(ctx context.Context) (k, v val.Tuple, ok b
 			return nil, nil, false, err
 		}
 		c.secIter = nil
+		return nil, nil, false, nil
 	}
 
 	// convert sec key to primary key

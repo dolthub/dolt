@@ -234,6 +234,7 @@ type IndexReaderBuilder interface {
 	NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error)
 	NewSecondaryIter(strict bool, cnt int) SecondaryLookupIter
 	Key() doltdb.DataCacheKey
+	//IsPointLookup() bool
 }
 
 func NewIndexReaderBuilder(
@@ -480,6 +481,13 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 }
 
 func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
+	prefixDesc := ib.secKd.PrefixDesc(cols)
+	for _, t := range prefixDesc.Types {
+		if t.Nullable {
+			strict = false
+			break
+		}
+	}
 	if strict {
 		return &coveringStrictSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
 	} else {
@@ -573,7 +581,7 @@ func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) S
 	if strict {
 		return &nonCoveringStrictSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch}
 	} else {
-		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
+		return &nonCoveringLaxSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cols)}
 	}
 }
 
