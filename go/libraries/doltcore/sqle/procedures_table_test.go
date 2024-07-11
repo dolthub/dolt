@@ -67,7 +67,12 @@ func TestProceduresMigration(t *testing.T) {
 		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 		require.NoError(t, err)
 		require.True(t, found)
-		rows := readAllRows(ctx, t, tbl.(*WritableDoltTable))
+
+		wrapper, ok := tbl.(*ProceduresTable)
+		require.True(t, ok)
+		require.NotNil(t, wrapper.backingTable)
+
+		rows := readAllRows(ctx, t, wrapper.backingTable)
 		expectedRows := []sql.Row{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
@@ -91,7 +96,12 @@ func TestProceduresMigration(t *testing.T) {
 		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 		require.NoError(t, err)
 		require.True(t, found)
-		rows := readAllRows(ctx, t, tbl.(*WritableDoltTable))
+
+		wrapper, ok := tbl.(*ProceduresTable)
+		require.True(t, ok)
+		require.NotNil(t, wrapper.backingTable)
+
+		rows := readAllRows(ctx, t, wrapper.backingTable)
 		expectedRows := []sql.Row{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
@@ -122,8 +132,12 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 	require.NoError(t, err)
 	require.True(t, found)
 
+	wrapper, ok := sqlTbl.(*ProceduresTable)
+	require.True(t, ok)
+	require.NotNil(t, wrapper.backingTable)
+
 	// Insert some test data for procedures
-	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
+	inserter := wrapper.backingTable.Inserter(ctx)
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Close(ctx))

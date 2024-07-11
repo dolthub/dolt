@@ -499,6 +499,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 	case doltdb.StatisticsTableName:
 		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
+	case doltdb.ProceduresTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.ProceduresTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = NewEmptyProceduresTable(), true
+		} else {
+			writeTable := backingTable.(*WritableDoltTable)
+			dt, found = NewProceduresTable(writeTable), true
+		}
 	}
 
 	if found {
