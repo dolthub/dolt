@@ -32,8 +32,6 @@ jobs:
           tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
           build-args: |
             DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
-            BUILDARCH=arm64
-            BUILDPLATFORM=linux/arm64
       - name: Test
         run: |
           BASH_VAR=$( { docker create --platform=linux/arm64 dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }}; } 2>&1 )
