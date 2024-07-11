@@ -510,6 +510,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			writeTable := backingTable.(*WritableDoltTable)
 			dt, found = NewProceduresTable(writeTable), true
 		}
+	case doltdb.SchemasTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.SchemasTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = NewEmptySchemaTable(), true
+		} else {
+			writeTable := backingTable.(*WritableDoltTable)
+			dt, found = NewSchemaTable(writeTable), true
+		}
 	}
 
 	if found {
@@ -1418,16 +1429,22 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		}
 	}
 
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+
+	wrapper, ok := tbl.(*SchemaTable)
 	if !ok {
+		return sql.ViewDefinition{}, false, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+
+	if wrapper.backingTable == nil {
 		dbState.SessionCache().CacheViews(key, nil, db.schemaName)
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), viewName)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, viewName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1475,15 +1492,20 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 
 // AllViews implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
+
+	wrapper, ok := tbl.(*SchemaTable)
 	if !ok {
+		return nil, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+	if wrapper.backingTable == nil {
 		return nil, nil
 	}
 
-	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, tbl.(*WritableDoltTable), "")
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1535,15 +1557,21 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
 	}()
 
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
+
+	wrapper, ok := tbl.(*SchemaTable)
 	if !ok {
+		return nil, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+
+	if wrapper.backingTable == nil {
 		return nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), triggerFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, triggerFragment)
 	if err != nil {
 		return nil, err
 	}
@@ -1582,15 +1610,20 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 
 // GetEvent implements sql.EventDatabase.
 func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return sql.EventDefinition{}, false, err
 	}
+
+	wrapper, ok := tbl.(*SchemaTable)
 	if !ok {
+		return sql.EventDefinition{}, false, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+	if wrapper.backingTable == nil {
 		return sql.EventDefinition{}, false, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, eventFragment)
 	if err != nil {
 		return sql.EventDefinition{}, false, err
 	}
@@ -1609,16 +1642,21 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 
 // GetEvents implements sql.EventDatabase.
 func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, token interface{}, err error) {
-	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, nil, err
 	}
+	wrapper, ok := tbl.(*SchemaTable)
 	if !ok {
+		return nil, nil, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+
+	if wrapper.backingTable == nil {
 		// If the dolt_schemas table doesn't exist, it's not an error, just no events
 		return nil, nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, eventFragment)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1855,15 +1893,20 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		db.schemaName = schemaName
 	}
 
-	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	stbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
-	if !found {
+
+	swrapper, ok := stbl.(*SchemaTable)
+	if !ok {
+		return fmt.Errorf("expected a SchemaTable, but found %T", stbl)
+	}
+	if swrapper.backingTable == nil {
 		return missingErr
 	}
 
-	tbl := stbl.(*WritableDoltTable)
+	tbl := swrapper.backingTable
 	row, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
 	if err != nil {
 		return err

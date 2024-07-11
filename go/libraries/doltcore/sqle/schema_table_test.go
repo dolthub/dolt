@@ -52,7 +52,11 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, found)
 
-	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
+	wrapper, ok := sqlTbl.(*SchemaTable)
+	require.True(t, ok)
+	require.NotNil(t, wrapper.backingTable)
+
+	inserter := wrapper.backingTable.Inserter(ctx)
 	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
 	require.NoError(t, err)
 	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
