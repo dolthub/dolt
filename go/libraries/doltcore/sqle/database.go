@@ -1940,6 +1940,13 @@ func (db Database) dropTableIfEmpty(ctx *sql.Context, tableName string) error {
 		return nil
 	}
 
+	if wrapped, ok := stbl.(WritableDoltTableWrapper); ok {
+		stbl = wrapped.UnWrap()
+		if stbl == nil {
+			return nil
+		}
+	}
+
 	table, err := stbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err

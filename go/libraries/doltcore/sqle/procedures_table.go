@@ -102,6 +102,10 @@ func (pt *ProceduresTable) PreciseMatch() bool {
 	return true
 }
 
+func (pt *ProceduresTable) UnWrap() *WritableDoltTable {
+	return pt.backingTable
+}
+
 func NewProceduresTable(backing *WritableDoltTable) sql.Table {
 	return &ProceduresTable{backingTable: backing}
 }
@@ -113,6 +117,7 @@ func NewEmptyProceduresTable() sql.Table {
 var _ sql.Table = (*ProceduresTable)(nil)
 var _ dtables.VersionableTable = (*ProceduresTable)(nil)
 var _ sql.IndexAddressableTable = (*ProceduresTable)(nil)
+var _ WritableDoltTableWrapper = (*ProceduresTable)(nil)
 
 // The fixed SQL schema for the `dolt_procedures` table.
 func ProceduresTableSqlSchema() sql.PrimaryKeySchema {

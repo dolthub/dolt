@@ -97,9 +97,14 @@ func (st *SchemaTable) PreciseMatch() bool {
 	return true
 }
 
+func (st *SchemaTable) UnWrap() *WritableDoltTable {
+	return st.backingTable
+}
+
 var _ sql.Table = (*SchemaTable)(nil)
 var _ dtables.VersionableTable = (*SchemaTable)(nil)
 var _ sql.IndexAddressableTable = (*SchemaTable)(nil)
+var _ WritableDoltTableWrapper = (*SchemaTable)(nil)
 
 func SchemaTableSqlSchema() sql.PrimaryKeySchema {
 	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, SchemaTableSchema())
