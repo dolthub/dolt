@@ -20,9 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -30,7 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 const (
