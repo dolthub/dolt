@@ -150,6 +150,7 @@ type coveringLaxSecondaryLookup struct {
 	prefixDesc val.TupleDesc
 	k, v       val.Tuple
 	iter       prolly.MapIter
+	nullSafe   []bool
 }
 
 func (c *coveringLaxSecondaryLookup) InputKeyDesc() val.TupleDesc {
@@ -173,9 +174,11 @@ func (c *coveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *coveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
-	if k.Count() == 0 {
-		c.iter = prolly.EmptyPointLookup
-		return nil
+	for i := 0; i < c.prefixDesc.Count(); i++ {
+		if k.FieldIsNull(i) && !c.nullSafe[i] {
+			c.iter = prolly.EmptyPointLookup
+			return nil
+		}
 	}
 
 	var err error
@@ -220,6 +223,7 @@ type nonCoveringLaxSecondaryLookup struct {
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
 	secIter    prolly.MapIter
+	nullSafe   []bool
 }
 
 func (c *nonCoveringLaxSecondaryLookup) InputKeyDesc() val.TupleDesc {
@@ -243,6 +247,14 @@ func (c *nonCoveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
 }
 
 func (c *nonCoveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+	for i := 0; i < c.prefixDesc.Count(); i++ {
+		if k.FieldIsNull(i) && !c.nullSafe[i] {
+			// TODO test this case
+			c.secIter = prolly.EmptyPointLookup
+			return nil
+		}
+	}
+
 	var err error
 	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
 		// key range optimization only works if full key

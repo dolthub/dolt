@@ -232,7 +232,7 @@ type IndexReaderBuilder interface {
 	// NewRowIter returns a new index iter for the given partition
 	NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error)
 	NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error)
-	NewSecondaryIter(strict bool, cnt int) SecondaryLookupIter
+	NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter
 	Key() doltdb.DataCacheKey
 	//IsPointLookup() bool
 }
@@ -370,7 +370,7 @@ func (ib *baseIndexImplBuilder) NewRangeMapIter(_ context.Context, _ prolly.Rang
 	panic("cannot call NewMapIter on baseIndexImplBuilder")
 }
 
-func (ib *baseIndexImplBuilder) NewSecondaryIter(_ bool, _ int) SecondaryLookupIter {
+func (ib *baseIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
 	panic("cannot call NewSecondaryIter on baseIndexImplBuilder")
 }
 
@@ -480,8 +480,8 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 	}, nil
 }
 
-func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
-	prefixDesc := ib.secKd.PrefixDesc(cols)
+func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+	prefixDesc := ib.secKd.PrefixDesc(cnt)
 	for _, t := range prefixDesc.Types {
 		if t.Nullable {
 			strict = false
@@ -489,9 +489,9 @@ func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) Seco
 		}
 	}
 	if strict {
-		return &coveringStrictSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
+		return &coveringStrictSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx}
 	} else {
-		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cols), index: ib.idx}
+		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx, nullSafe: nullSafe}
 	}
 }
 
@@ -577,11 +577,11 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 	}, nil
 }
 
-func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
+func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
 	if strict {
 		return &nonCoveringStrictSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch}
 	} else {
-		return &nonCoveringLaxSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cols)}
+		return &nonCoveringLaxSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}
 	}
 }
 
@@ -659,7 +659,7 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
 }
 
-func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cols int) SecondaryLookupIter {
+func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
 	pri := durable.ProllyMapFromIndex(ib.s.Primary)
 	pkDesc, _ := pri.Descriptors()
 	pkBld := val.NewTupleBuilder(pkDesc)
@@ -672,7 +672,7 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cols int) Secon
 		sch:        ib.idx.tableSch,
 		pkMap:      ordinalMappingFromIndex(ib.idx),
 		pkBld:      pkBld,
-		prefixDesc: secondary.KeyDesc().PrefixDesc(cols),
+		prefixDesc: secondary.KeyDesc().PrefixDesc(cnt),
 	}
 }
 
@@ -693,7 +693,7 @@ func (ib *nomsIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Ra
 	panic("cannot call NewMapIter on *nomsIndexImplBuilder")
 }
 
-func (ib *nomsIndexImplBuilder) NewSecondaryIter(_ bool, _ int) SecondaryLookupIter {
+func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
 	panic("cannot call NewSecondaryIter on *nomsIndexImplBuilder")
 }
 

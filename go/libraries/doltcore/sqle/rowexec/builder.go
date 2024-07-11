@@ -287,7 +287,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 			} else {
-				dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()))
+				dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
 			}
 
 		case *sqle.IndexedDoltTable:
@@ -324,7 +324,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 					return prolly.Map{}, nil, nil, nil, nil, nil, err
 				}
 			} else {
-				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()))
+				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()), n.NullMask())
 			}
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
