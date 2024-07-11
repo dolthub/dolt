@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -80,6 +81,27 @@ func (pt *ProceduresTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 	return pt.backingTable.PartitionRows(ctx, partition)
 }
 
+func (pt *ProceduresTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if pt.backingTable == nil {
+		return pt, nil
+
+	}
+	return pt.backingTable.LockedToRoot(ctx, root)
+}
+
+func (pt *ProceduresTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	// Never reached. Interface required for LockedToRoot to be implemented.
+	panic("Unreachable")
+}
+
+func (pt *ProceduresTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
+}
+
+func (pt *ProceduresTable) PreciseMatch() bool {
+	return true
+}
+
 func NewProceduresTable(backing *WritableDoltTable) sql.Table {
 	return &ProceduresTable{backingTable: backing}
 }
@@ -89,6 +111,8 @@ func NewEmptyProceduresTable() sql.Table {
 }
 
 var _ sql.Table = (*ProceduresTable)(nil)
+var _ dtables.VersionableTable = (*ProceduresTable)(nil)
+var _ sql.IndexAddressableTable = (*ProceduresTable)(nil)
 
 // The fixed SQL schema for the `dolt_procedures` table.
 func ProceduresTableSqlSchema() sql.PrimaryKeySchema {

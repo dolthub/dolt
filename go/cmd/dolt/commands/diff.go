@@ -385,9 +385,11 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %w", err)
 		}
-		_, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+		result, err := GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 		if err == nil {
-			tableNames[sysTable] = true
+			if len(result) > 0 {
+				tableNames[sysTable] = true
+			}
 		} else if isTableNotFoundError(err) {
 			continue
 		} else {
