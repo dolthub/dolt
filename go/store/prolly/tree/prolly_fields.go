@@ -328,8 +328,6 @@ func convInt(v interface{}) int {
 		return int(i)
 	case uint64:
 		return int(i)
-	case string:
-		return 0
 	default:
 		panic("impossible conversion")
 	}
