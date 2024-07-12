@@ -17,10 +17,8 @@ package rowexec
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"log"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -45,7 +43,6 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				if _, _, dstIter, dstSchema, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstSchema != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
-							log.Println("xxxx doltLookupJoinIter")
 							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, srcSchema, srcTags, dstTags, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 						}
 					}
@@ -139,6 +136,8 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 			splitIdx++
 			nextValIdx = splits[splitIdx] - 1
 			sch = schemas[splitIdx]
+
+			keylessOff = 0
 			if schema.IsKeyless(sch) {
 				keylessOff = 1
 			}
@@ -180,6 +179,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	var tup val.Tuple
 	for i, desc := range m.desc {
 		tup = tuples[2*i]
+		fmt.Println(desc.keyDesc.Format(tup))
 		if tup == nil {
 			// nullified row
 			split = m.kvSplits[i]
@@ -196,6 +196,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 			}
 		}
 		tup = tuples[2*i+1]
+		fmt.Println(desc.valDesc.Format(tup))
 		for j, idx := range desc.valMappings {
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
 			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
@@ -352,6 +353,12 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
+
+		sch, err = table.GetSchema(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, err
+		}
+
 		priIndex, err := table.GetRowData(ctx)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
@@ -363,6 +370,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
 
+		if schema.IsKeyless(sch) {
+			srcIter = newKeylessMapIter(srcIter)
+		}
+
 	default:
 		return prolly.Map{}, nil, nil, nil, nil, nil, nil
 	}
@@ -370,9 +381,11 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		return prolly.Map{}, nil, nil, nil, nil, nil, err
 	}
 
-	sch, err = table.GetSchema(ctx)
-	if err != nil {
-		return prolly.Map{}, nil, nil, nil, nil, nil, err
+	if table == nil {
+		sch, err = table.GetSchema(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, err
+		}
 	}
 
 	return indexMap, srcIter, dstIter, sch, tags, nil, nil

@@ -16,7 +16,6 @@ package rowexec
 
 import (
 	"context"
-	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
@@ -299,7 +298,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println(ret)
 
 		// side-specific filters are currently hoisted
 
