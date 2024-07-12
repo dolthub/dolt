@@ -97,6 +97,11 @@ func (st *SchemaTable) PreciseMatch() bool {
 	return true
 }
 
+// Updater implements sql.UpdatableTable. The SchemaTable is only every modified by using it's wrapped backing table.
+func (st *SchemaTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	panic("Runtime error: SchemaTable.Updater() should never be called")
+}
+
 func (st *SchemaTable) UnWrap() *WritableDoltTable {
 	return st.backingTable
 }
@@ -104,6 +109,7 @@ func (st *SchemaTable) UnWrap() *WritableDoltTable {
 var _ sql.Table = (*SchemaTable)(nil)
 var _ dtables.VersionableTable = (*SchemaTable)(nil)
 var _ sql.IndexAddressableTable = (*SchemaTable)(nil)
+var _ sql.UpdatableTable = (*SchemaTable)(nil)
 var _ WritableDoltTableWrapper = (*SchemaTable)(nil)
 
 func SchemaTableSqlSchema() sql.PrimaryKeySchema {
