@@ -70,12 +70,12 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace no columns too few values",
 		ReplaceQuery: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002')",
-		ExpectedErr:  "too few values",
+		ExpectedErr:  "number of values does not match number of columns provided",
 	},
 	{
 		Name:         "replace no columns too many values",
 		ReplaceQuery: "replace into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222, 'abc')",
-		ExpectedErr:  "too many values",
+		ExpectedErr:  "number of values does not match number of columns provided",
 	},
 	{
 		Name:           "replace full columns",
@@ -129,27 +129,27 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace partial columns duplicate column",
 		ReplaceQuery: "replace into people (id, first_name, last_name, first_name) values (2, 'Bart', 'Simpson', 'Bart')",
-		ExpectedErr:  "duplicate column",
+		ExpectedErr:  "column 'first_name' specified twice",
 	},
 	{
 		Name:         "replace partial columns invalid column",
 		ReplaceQuery: "replace into people (id, first_name, last_name, middle) values (2, 'Bart', 'Simpson', 'Nani')",
-		ExpectedErr:  "duplicate column",
+		ExpectedErr:  "Unknown column 'middle' in 'people'",
 	},
 	{
 		Name:         "replace missing non-nullable column",
 		ReplaceQuery: "replace into people (id, first_name) values (2, 'Bart')",
-		ExpectedErr:  "column <last_name> received nil but is non-nullable",
+		ExpectedErr:  "Field 'last_name' doesn't have a default value",
 	},
 	{
 		Name:         "replace partial columns mismatch too many values",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson', false)",
-		ExpectedErr:  "too many values",
+		ExpectedErr:  "number of values does not match number of columns provided",
 	},
 	{
 		Name:         "replace partial columns mismatch too few values",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart')",
-		ExpectedErr:  "too few values",
+		ExpectedErr:  "number of values does not match number of columns provided",
 	},
 	{
 		Name:         "replace partial columns functions",
@@ -194,7 +194,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace partial columns multiple rows null pk",
 		ReplaceQuery: "replace into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', null)",
-		ExpectedErr:  "column <last_name> received nil but is non-nullable",
+		ExpectedErr:  "column name 'last_name' is non-nullable but attempted to set a value of null",
 	},
 	{
 		Name:         "replace partial columns multiple rows duplicate",
@@ -225,7 +225,7 @@ var BasicReplaceTests = []ReplaceTest{
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
-		ExpectedErr: "Constraint failed for column 'last_name': Not null",
+		ExpectedErr: "column name 'last_name' is non-nullable but attempted to set a value of null",
 	},
 	{
 		Name: "replace partial columns existing pk",
@@ -273,11 +273,9 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
-			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL, NULL)"),
-		ReplaceQuery:   "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 1+1 from dual')",
-		SelectQuery:    "select type, name, fragment, extra, sql_mode from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 1+1 from dual", nil, nil}},
-		ExpectedSchema: CompressSchema(SchemaTableSchema()),
+			"CREATE VIEW name as select 2+2 from dual"),
+		ReplaceQuery: "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 1+1 from dual')",
+		ExpectedErr:  "table doesn't support INSERT INTO",
 	},
 }
 
@@ -312,6 +310,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 	root, err = executeModify(t, context.Background(), dEnv, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
+		assert.Contains(t, err.Error(), test.ExpectedErr)
 		return
 	} else {
 		require.NoError(t, err)

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
@@ -32,8 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1309,9 +1308,9 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL, NULL)`),
+			`CREATE VIEW name as select 2+2 from dual`),
 		Query:          "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 2+2 from dual", nil, nil}},
+		ExpectedRows:   []sql.Row{{"view", "name", "CREATE VIEW name as select 2+2 from dual", ignoreVal, "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"}},
 		ExpectedSchema: CompressSchema(SchemaTableSchema()),
 	},
 }
@@ -1346,6 +1345,10 @@ func installTestCommitClock() func() {
 	}
 }
 
+type testIgnoredValue struct{}
+
+var ignoreVal = testIgnoredValue{}
+
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
@@ -1378,14 +1381,10 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	for i := 0; i < len(test.ExpectedRows); i++ {
 		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
 		for j := 0; j < len(test.ExpectedRows[i]); j++ {
-			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
-				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), test.ExpectedRows[i][j].(json.NomsJSON))
-				assert.NoError(t, err)
-				assert.Equal(t, 0, cmp)
-			} else {
-				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+			if test.ExpectedRows[i][j] == ignoreVal {
+				continue
 			}
-
+			assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
 		}
 	}
 

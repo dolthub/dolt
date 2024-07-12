@@ -376,15 +376,6 @@ var systemTableUpdateTests = []UpdateTest{
 		ExpectedRows:   []sql.Row{{"abc123", uint64(2), "example", "select 2+2 from dual", "description"}},
 		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
-	{
-		Name: "update dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL, NULL)`),
-		UpdateQuery:    "update dolt_schemas set type = 'not a view'",
-		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"not a view", "name", "create view name as select 2+2 from dual", nil, nil}},
-		ExpectedSchema: CompressSchema(SchemaTableSchema()),
-	},
 }
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If

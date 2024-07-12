@@ -119,16 +119,12 @@ SQL
     [[ "$output" =~ "trigger1,INSERT,test,1,,SET new.v1 = new.v1 + 1,BEFORE,root@localhost,utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
-@test "triggers: Writing directly into dolt_schemas" {
+@test "triggers: Writing directly into dolt_schemas is forbidden" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
-    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', json_object('CreatedAt', 1), NULL);"
-    dolt sql -q "INSERT INTO test VALUES (1, 1);"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,-1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', json_object('CreatedAt', 1), NULL);"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "doesn't support INSERT INTO" ]] || false
 }
 
 @test "triggers: Merge triggers on different branches, no conflict" {

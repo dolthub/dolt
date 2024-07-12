@@ -68,12 +68,12 @@ var BasicInsertTests = []InsertTest{
 	{
 		Name:        "insert no columns too few values",
 		InsertQuery: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002')",
-		ExpectedErr: "too few values",
+		ExpectedErr: "number of values does not match number of columns provided",
 	},
 	{
 		Name:        "insert no columns too many values",
 		InsertQuery: "insert into people values (2, 'Bart', 'Simpson', false, 10, 9, '00000000-0000-0000-0000-000000000002', 222, 'abc')",
-		ExpectedErr: "too many values",
+		ExpectedErr: "number of values does not match number of columns provided",
 	},
 	{
 		Name:           "insert full columns",
@@ -127,27 +127,27 @@ var BasicInsertTests = []InsertTest{
 	{
 		Name:        "insert partial columns duplicate column",
 		InsertQuery: "insert into people (id, first_name, last_name, first_name) values (2, 'Bart', 'Simpson', 'Bart')",
-		ExpectedErr: "duplicate column",
+		ExpectedErr: "column 'first_name' specified twice",
 	},
 	{
 		Name:        "insert partial columns invalid column",
 		InsertQuery: "insert into people (id, first_name, last_name, middle) values (2, 'Bart', 'Simpson', 'Nani')",
-		ExpectedErr: "duplicate column",
+		ExpectedErr: "Unknown column 'middle' in 'people'",
 	},
 	{
 		Name:        "insert missing non-nullable column",
 		InsertQuery: "insert into people (id, first_name) values (2, 'Bart')",
-		ExpectedErr: "column <last_name> received nil but is non-nullable",
+		ExpectedErr: "Field 'last_name' doesn't have a default value",
 	},
 	{
 		Name:        "insert partial columns mismatch too many values",
 		InsertQuery: "insert into people (id, first_name, last_name) values (2, 'Bart', 'Simpson', false)",
-		ExpectedErr: "too many values",
+		ExpectedErr: "number of values does not match number of columns provided",
 	},
 	{
 		Name:        "insert partial columns mismatch too few values",
 		InsertQuery: "insert into people (id, first_name, last_name) values (2, 'Bart')",
-		ExpectedErr: "too few values",
+		ExpectedErr: "number of values does not match number of columns provided",
 	},
 	{
 		Name:        "insert partial columns functions",
@@ -228,7 +228,7 @@ var BasicInsertTests = []InsertTest{
 	{
 		Name:        "insert partial columns multiple rows null pk",
 		InsertQuery: "insert into people (id, first_name, last_name) values (0, 'Bart', 'Simpson'), (1, 'Homer', null)",
-		ExpectedErr: "column <last_name> received nil but is non-nullable",
+		ExpectedErr: "column name 'last_name' is non-nullable but attempted to set a value of null",
 	},
 	{
 		Name:        "insert partial columns multiple rows duplicate",
@@ -399,11 +399,7 @@ var systemTableInsertTests = []InsertTest{
 		Name:            "insert into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(), ""),
 		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 2+2 from dual')",
-		SelectQuery:     "select * from dolt_schemas ORDER BY name",
-		ExpectedRows: ToSqlRows(CompressSchema(SchemaTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("create view name as select 2+2 from dual")),
-		),
-		ExpectedSchema: CompressSchema(SchemaTableSchema()),
+		ExpectedErr:     "table doesn't support INSERT INTO",
 	},
 }
 
@@ -442,6 +438,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 	root, err = executeModify(t, context.Background(), dEnv, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
+		assert.Contains(t, err.Error(), test.ExpectedErr)
 		return
 	} else {
 		require.NoError(t, err)
