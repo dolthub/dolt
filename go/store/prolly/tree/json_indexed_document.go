@@ -305,14 +305,17 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 	// If the value is a newly inserted key, write the key.
 	if !keyLastPathElement.isArrayIndex {
-		jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf(`"%s":`, keyLastPathElement.key)))
+		jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf(`"%s":`, escapeKey(keyLastPathElement.key))))
 	}
 
 	// Manually set the chunker's path and offset to the start of the value we're about to insert.
 	jsonChunker.jScanner.valueOffset = len(jsonChunker.jScanner.jsonBuffer)
 	jsonChunker.jScanner.currentPath = keyPath
 	jsonChunker.appendJsonToBuffer(insertedValueBytes)
-	jsonChunker.processBuffer(ctx)
+	err = jsonChunker.processBuffer(ctx)
+	if err != nil {
+		return nil, false, err
+	}
 
 	newRoot, err := jsonChunker.Done(ctx)
 	if err != nil {

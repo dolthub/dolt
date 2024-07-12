@@ -186,6 +186,10 @@ const (
 	lexStateEscapedQuotedKey lexState = 5
 )
 
+func escapeKey(key []byte) []byte {
+	return bytes.Replace(key, []byte(`"`), []byte(`\"`), -1)
+}
+
 func unescapeKey(key []byte) []byte {
 	return bytes.Replace(key, []byte(`\"`), []byte(`"`), -1)
 }
@@ -434,6 +438,16 @@ type jsonLocationOrdering struct{}
 var _ Ordering[[]byte] = jsonLocationOrdering{}
 
 func (jsonLocationOrdering) Compare(left, right []byte) int {
+	// A JSON document that fits entirely in a single chunk has no keys,
+	if len(left) == 0 {
+		if len(right) == 0 {
+			return 0
+		}
+		return -1
+	}
+	if len(right) == 0 {
+		return 1
+	}
 	leftPath := jsonPathFromKey(left)
 	rightPath := jsonPathFromKey(right)
 	return compareJsonLocations(leftPath, rightPath)
