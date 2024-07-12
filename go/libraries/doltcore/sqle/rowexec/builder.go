@@ -16,7 +16,6 @@ package rowexec
 
 import (
 	"context"
-	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -155,11 +154,6 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 			nextValIdx--
 		}
 	}
-	fmt.Println("ord mappings", allMap[numPhysicalColumns:])
-	fmt.Println("keymap1", tupleDesc[0].keyMappings)
-	fmt.Println("valmap1", tupleDesc[0].valMappings)
-	fmt.Println("keymap2", tupleDesc[1].keyMappings)
-	fmt.Println("valmap2", tupleDesc[1].valMappings)
 
 	return &prollyToSqlJoiner{
 		kvSplits:    splits,
@@ -179,7 +173,6 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	var tup val.Tuple
 	for i, desc := range m.desc {
 		tup = tuples[2*i]
-		fmt.Println(desc.keyDesc.Format(tup))
 		if tup == nil {
 			// nullified row
 			split = m.kvSplits[i]
@@ -196,7 +189,6 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 			}
 		}
 		tup = tuples[2*i+1]
-		fmt.Println(desc.valDesc.Format(tup))
 		for j, idx := range desc.valMappings {
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
 			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
