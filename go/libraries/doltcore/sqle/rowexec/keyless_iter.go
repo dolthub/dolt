@@ -16,6 +16,7 @@ package rowexec
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
