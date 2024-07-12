@@ -17,11 +17,9 @@ package rowexec
 import (
 	"context"
 	"fmt"
-	"io"
-	"log"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -32,13 +30,11 @@ import (
 )
 
 func rowIterTableLookupJoin(
-	ctx *sql.Context,
 	srcIter prolly.MapIter,
 	dstIter index.SecondaryLookupIter,
-	srcMap prolly.Map,
-	srcSch, dstSch schema.Schema,
+	mapping *lookupMapping,
+	srcSch schema.Schema,
 	srcProj, dstProj []uint64,
-	keyExprs []sql.Expression,
 	srcFilter, dstFilter, joinFilter sql.Expression,
 	isLeftJoin bool,
 	excludeNulls bool,
@@ -49,7 +45,7 @@ func rowIterTableLookupJoin(
 
 	rowJoiner := newRowJoiner([]schema.Schema{srcSch, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
 
-	return newLookupKvIter(ctx, srcIter, dstIter, srcMap, keyExprs, srcSch, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin, excludeNulls)
+	return newLookupKvIter(srcIter, dstIter, mapping, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin, excludeNulls)
 }
 
 type lookupJoinKvIter struct {
@@ -88,12 +84,9 @@ func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
 func newLookupKvIter(
-	ctx context.Context,
 	srcIter prolly.MapIter,
 	targetIter index.SecondaryLookupIter,
-	source prolly.Map,
-	keyExprs []sql.Expression,
-	sourceSch schema.Schema,
+	mapping *lookupMapping,
 	joiner *prollyToSqlJoiner,
 	srcFilter, dstFilter, joinFilter sql.Expression,
 	isLeftJoin bool,
@@ -105,13 +98,11 @@ func newLookupKvIter(
 		}
 	}
 
-	keyLookupMapper := newLookupKeyMapping(ctx, sourceSch, source, targetIter.InputKeyDesc(), keyExprs)
-
 	return &lookupJoinKvIter{
 		srcIter:        srcIter,
 		dstIter:        targetIter,
 		joiner:         joiner,
-		keyTupleMapper: keyLookupMapper,
+		keyTupleMapper: mapping,
 		srcFilter:      srcFilter,
 		dstFilter:      dstFilter,
 		joinFilter:     joinFilter,
@@ -200,6 +191,32 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 	}
 }
 
+// valid returns whether the source and destination key types
+// are type compatible
+func (m *lookupMapping) valid() bool {
+	var litIdx int
+	for to := range m.srcMapping {
+		from := m.srcMapping.MapOrdinal(to)
+		var desc val.TupleDesc
+		if from == -1 {
+			desc = m.litKd
+			// literal offsets increment sequentially
+			from = litIdx
+			litIdx++
+		} else if from < m.split {
+			desc = m.srcKd
+		} else {
+			// value tuple, adjust offset
+			desc = m.srcVd
+			from = from - m.split
+		}
+		if desc.Types[from].Enc != m.targetKb.Desc.Types[to].Enc {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tuple) (val.Tuple, error) {
 	var litIdx int
 	for to := range m.srcMapping {
@@ -225,6 +242,7 @@ func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tupl
 		if desc.Types[from].Enc == m.targetKb.Desc.Types[to].Enc {
 			m.targetKb.PutRaw(to, desc.GetField(from, tup))
 		} else {
+			// TODO how to do GMS consistent conversion?
 			value, err := tree.GetField(ctx, desc, from, tup, m.ns)
 			if err != nil {
 				return nil, err
@@ -255,8 +273,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, io.EOF
 			}
 
-			log.Println("src", l.keyTupleMapper.srcKd.Format(l.srcKey), l.keyTupleMapper.srcVd.Format(l.srcVal))
-
 			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
 			if err != nil {
 				return nil, err
@@ -271,7 +287,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Println("dst", l.dstIter.OutputKeyDesc().Format(dstKey), l.dstIter.OutputValDesc().Format(dstVal))
 
 		if !ok {
 			l.dstKey = nil

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"log"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -43,7 +44,10 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
 				if _, _, dstIter, dstSchema, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstSchema != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
-						return rowIterTableLookupJoin(ctx, srcIter, dstIter, srcMap, srcSchema, dstSchema, srcTags, dstTags, ita.Expressions(), srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
+						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
+							log.Println("xxxx doltLookupJoinIter")
+							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, srcSchema, srcTags, dstTags, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
+						}
 					}
 				}
 			}
@@ -143,7 +147,7 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 		}
 		tag := projections[i]
 		if idx, ok := keyCols.StoredIndexByTag(tag); ok && !keyCols.GetByStoredIndex(idx).Virtual {
-			allMap[nextKeyIdx] = idx + keylessOff
+			allMap[nextKeyIdx] = idx
 			allMap[numPhysicalColumns+nextKeyIdx] = i
 			nextKeyIdx++
 		} else if idx, ok := valCols.StoredIndexByTag(tag); ok && !valCols.GetByStoredIndex(idx).Virtual {

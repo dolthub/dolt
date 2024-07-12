@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"io"
-	"log"
 )
 
 type SecondaryLookupIter interface {
@@ -71,12 +70,9 @@ func (c *coveringStrictSecondaryLookup) New(ctx context.Context, k val.Tuple) er
 			return nil
 		}
 	}
-	log.Println(c.prefixDesc.Format((k)))
 	return c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
 		c.k = key
 		c.v = value
-		log.Println(c.m.KeyDesc().Format((key)), c.m.ValDesc().Format(value))
-
 		return nil
 	})
 }
