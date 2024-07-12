@@ -548,3 +548,185 @@ func (i IndexedJsonDocument) GetBytes() (bytes []byte, err error) {
 	// TODO: Add context parameter to JSONBytes.GetBytes
 	return getBytesFromIndexedJsonMap(i.ctx, i.m)
 }
+
+func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error) {
+	stopIterationError := fmt.Errorf("stop")
+	var firstCharacter byte
+	err := i.m.WalkNodes(ctx, func(ctx context.Context, nd Node) error {
+		if nd.IsLeaf() {
+			firstCharacter = nd.GetValue(0)[0]
+			return stopIterationError
+		}
+		return nil
+	})
+	if err != stopIterationError {
+		return 0, err
+	}
+	return firstCharacter, nil
+}
+
+type jsonTypeCategory int
+
+const (
+	jsonTypeNull jsonTypeCategory = iota
+	jsonTypeNumber
+	jsonTypeString
+	JsonTypeObject
+	jsonTypeArray
+	jsonTypeBoolean
+)
+
+func getTypeCategoryOfValue(val interface{}) (jsonTypeCategory, error) {
+	if val == nil {
+		return jsonTypeNull, nil
+	}
+	switch val.(type) {
+	case map[string]interface{}:
+		return JsonTypeObject, nil
+	case []interface{}:
+		return jsonTypeArray, nil
+	case bool:
+		return jsonTypeBoolean, nil
+	case string:
+		return jsonTypeString, nil
+	case decimal.Decimal, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64:
+		return jsonTypeNumber, nil
+	}
+	return 0, fmt.Errorf("expected json value, got %v", val)
+}
+
+// getTypeCategoryFromFirstCharacter returns the type of a JSON object by inspecting its first byte.
+func getTypeCategoryFromFirstCharacter(c byte) jsonTypeCategory {
+	switch c {
+	case '{':
+		return JsonTypeObject
+	case '[':
+		return jsonTypeArray
+	case 'n':
+		return jsonTypeNull
+	case 't', 'f':
+		return jsonTypeBoolean
+	case '"':
+		return jsonTypeString
+	default:
+		return jsonTypeNumber
+	}
+}
+
+func (i IndexedJsonDocument) getTypeCategory() (jsonTypeCategory, error) {
+	firstCharacter, err := i.getFirstCharacter(i.ctx)
+	if err != nil {
+		return 0, err
+	}
+	return getTypeCategoryFromFirstCharacter(firstCharacter), nil
+}
+
+func GetTypeCategory(wrapper sql.JSONWrapper) (jsonTypeCategory, error) {
+	switch doc := wrapper.(type) {
+	case IndexedJsonDocument:
+		return doc.getTypeCategory()
+	case *types.LazyJSONDocument:
+		return getTypeCategoryFromFirstCharacter(doc.Bytes[0]), nil
+	default:
+		val, err := doc.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		return getTypeCategoryOfValue(val)
+	}
+}
+
+// Type implements types.ComparableJson
+func (i IndexedJsonDocument) Type(ctx context.Context) (string, error) {
+	firstCharacter, err := i.getFirstCharacter(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	switch firstCharacter {
+	case '{':
+		return "OBJECT", nil
+	case '[':
+		return "ARRAY", nil
+	}
+	// At this point the value must be a scalar, so it's okay to just load the whole thing.
+	val, err := i.ToInterface()
+	if err != nil {
+		return "", err
+	}
+	return sqljson.TypeOfJsonValue(val), nil
+}
+
+// Compare implements types.ComparableJson
+func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
+	thisTypeCategory, err := i.getTypeCategory()
+	if err != nil {
+		return 0, err
+	}
+
+	otherIndexedDocument, ok := other.(IndexedJsonDocument)
+	if !ok {
+		val, err := i.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		otherVal := other
+		if otherWrapper, ok := other.(sql.JSONWrapper); ok {
+			otherVal, err = otherWrapper.ToInterface()
+			if err != nil {
+				return 0, err
+			}
+		}
+		return types.CompareJSON(val, otherVal)
+	}
+
+	otherTypeCategory, err := otherIndexedDocument.getTypeCategory()
+	if err != nil {
+		return 0, err
+	}
+	if thisTypeCategory < otherTypeCategory {
+		return -1, nil
+	}
+	if thisTypeCategory > otherTypeCategory {
+		return 1, nil
+	}
+	switch thisTypeCategory {
+	case jsonTypeNull:
+		return 0, nil
+	case jsonTypeArray, JsonTypeObject:
+		// To compare two values that are both arrays or both objects, we must locate the first location
+		// where they differ.
+
+		jsonDiffer, err := NewIndexedJsonDiffer(i.ctx, i, otherIndexedDocument)
+		if err != nil {
+			return 0, err
+		}
+		firstDiff, err := jsonDiffer.Next(i.ctx)
+		if err == io.EOF {
+			// The two documents have no differences.
+			return 0, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		switch firstDiff.Type {
+		case AddedDiff:
+			// A key is present in other but not this.
+			return -1, nil
+		case RemovedDiff:
+			return 1, nil
+		case ModifiedDiff:
+			// Since both modified values have already been loaded into memory,
+			// We can just compare them.
+			return types.JSON.Compare(firstDiff.From, firstDiff.To)
+		default:
+			panic("Impossible diff type")
+		}
+	default:
+		val, err := i.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		return types.CompareJSON(val, other)
+	}
+}

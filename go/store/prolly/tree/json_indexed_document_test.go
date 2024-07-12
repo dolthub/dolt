@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json/jsontests"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	typetests "github.com/dolthub/go-mysql-server/sql/types/jsontests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -300,4 +301,163 @@ func TestIndexedJsonDocument_ContainsPath(t *testing.T) {
 
 	testCases := jsontests.JsonContainsPathTestCases(t, convertToIndexedJsonDocument)
 	jsontests.RunJsonTests(t, testCases)
+}
+
+func TestJsonCompare(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	convertToIndexedJsonDocument := func(t *testing.T, left, right interface{}) (interface{}, interface{}) {
+		if left != nil {
+			left = newIndexedJsonDocumentFromValue(t, ctx, ns, left)
+		}
+		if right != nil {
+			right = newIndexedJsonDocumentFromValue(t, ctx, ns, right)
+		}
+		return left, right
+	}
+	convertOnlyLeftToIndexedJsonDocument := func(t *testing.T, left, right interface{}) (interface{}, interface{}) {
+		if left != nil {
+			left = newIndexedJsonDocumentFromValue(t, ctx, ns, left)
+		}
+		if right != nil {
+			rightJSON, inRange, err := types.JSON.Convert(right)
+			require.NoError(t, err)
+			require.True(t, bool(inRange))
+			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface()
+			require.NoError(t, err)
+			right = types.JSONDocument{Val: rightInterface}
+		}
+		return left, right
+	}
+	convertOnlyRightToIndexedJsonDocument := func(t *testing.T, left, right interface{}) (interface{}, interface{}) {
+		right, left = convertOnlyLeftToIndexedJsonDocument(t, right, left)
+		return left, right
+	}
+
+	t.Run("small documents", func(t *testing.T) {
+		tests := append(typetests.JsonCompareTests, typetests.JsonCompareNullsTests...)
+		t.Run("compare two indexed json documents", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, tests, convertToIndexedJsonDocument)
+		})
+		t.Run("compare indexed json document with non-indexed", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, tests, convertOnlyLeftToIndexedJsonDocument)
+		})
+		t.Run("compare non-indexed json document with indexed", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, tests, convertOnlyRightToIndexedJsonDocument)
+		})
+	})
+
+	noError := func(j types.MutableJSON, changed bool, err error) types.MutableJSON {
+		require.NoError(t, err)
+		require.True(t, changed)
+		return j
+	}
+
+	largeArray := createLargeDocumentForTesting(t, ctx, ns)
+	largeObjectWrapper, err := largeArray.Lookup(ctx, "$[7]")
+	largeObject := newIndexedJsonDocumentFromValue(t, ctx, ns, largeObjectWrapper)
+	require.NoError(t, err)
+	largeDocTests := []typetests.JsonCompareTest{
+		{
+			Name:  "large object < boolean",
+			Left:  largeObject,
+			Right: true,
+			Cmp:   -1,
+		},
+		{
+			Name:  "large object > string",
+			Left:  largeObject,
+			Right: `"test"`,
+			Cmp:   1,
+		},
+		{
+			Name:  "large object > number",
+			Left:  largeObject,
+			Right: 1,
+			Cmp:   1,
+		},
+		{
+			Name:  "large object > null",
+			Left:  largeObject,
+			Right: `null`,
+			Cmp:   1,
+		},
+		{
+			Name:  "inserting into beginning of object makes it greater",
+			Left:  largeObject,
+			Right: noError(largeObject.Insert(ctx, "$.a", types.MustJSON("1"))),
+			Cmp:   -1,
+		},
+		{
+			Name:  "inserting into end of object makes it greater",
+			Left:  largeObject,
+			Right: noError(largeObject.Insert(ctx, "$.z", types.MustJSON("1"))),
+			Cmp:   -1,
+		},
+		{
+			Name:  "large array < boolean",
+			Left:  largeArray,
+			Right: true,
+			Cmp:   -1,
+		},
+		{
+			Name:  "large array > string",
+			Left:  largeArray,
+			Right: `"test"`,
+			Cmp:   1,
+		},
+		{
+			Name:  "large array > number",
+			Left:  largeArray,
+			Right: 1,
+			Cmp:   1,
+		},
+		{
+			Name:  "large array > null",
+			Left:  largeArray,
+			Right: `null`,
+			Cmp:   1,
+		},
+		{
+			Name:  "large array > null",
+			Left:  largeArray,
+			Right: `null`,
+			Cmp:   1,
+		},
+		{
+			Name:  "inserting into end of array makes it greater",
+			Left:  largeArray,
+			Right: noError(largeArray.ArrayAppend("$", types.MustJSON("1"))),
+			Cmp:   -1,
+		},
+		{
+			Name:  "inserting high value into beginning of array makes it greater",
+			Left:  largeArray,
+			Right: noError(largeArray.ArrayInsert("$[0]", types.MustJSON("true"))),
+			Cmp:   -1,
+		},
+		{
+			Name:  "inserting low value into beginning of array makes it less",
+			Left:  largeArray,
+			Right: noError(largeArray.ArrayInsert("$[0]", types.MustJSON("1"))),
+			Cmp:   1,
+		},
+		{
+			Name:  "large array > large object",
+			Left:  largeArray,
+			Right: largeObject,
+			Cmp:   1,
+		},
+	}
+	t.Run("large documents", func(t *testing.T) {
+		t.Run("compare two indexed json documents", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, largeDocTests, convertToIndexedJsonDocument)
+		})
+		t.Run("compare indexed json document with non-indexed", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, largeDocTests, convertOnlyLeftToIndexedJsonDocument)
+		})
+		t.Run("compare non-indexed json document with indexed", func(t *testing.T) {
+			typetests.RunJsonCompareTests(t, largeDocTests, convertOnlyRightToIndexedJsonDocument)
+		})
+	})
 }
