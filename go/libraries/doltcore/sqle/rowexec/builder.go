@@ -40,7 +40,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	case *plan.JoinNode:
 		if n.Op.IsLookup() && !n.Op.IsPartial() {
 			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
-				if _, _, dstIter, dstSchema, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstSchema != nil {
+				if _, _, dstIter, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
 							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, srcSchema, srcTags, dstTags, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
