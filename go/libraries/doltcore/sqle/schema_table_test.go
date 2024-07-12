@@ -16,8 +16,6 @@ package sqle
 
 import (
 	"context"
-	"io"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -30,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func TestSchemaTableMigrationOriginal(t *testing.T) {
+func TestAncientSchemaTableError(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -64,104 +62,9 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
-	require.NoError(t, err)
-
-	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
-	require.NoError(t, err)
-
-	var rows []sql.Row
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-
-		require.NoError(t, err)
-		rows = append(rows, row)
-	}
-
-	require.NoError(t, iter.Close(ctx))
-	expectedRows := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
-		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
-	}
-
-	assert.Equal(t, expectedRows, rows)
-}
-
-func TestSchemaTableMigrationV1(t *testing.T) {
-	dEnv := dtestutils.CreateTestEnv()
-	tmpDir, err := dEnv.TempTableFilesDir()
-	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
-	require.NoError(t, err)
-
-	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
-	require.NoError(t, err)
-
-	// original schema of dolt_schemas table with the ID column
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{
-		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesIdCol, Type: gmstypes.Int64, Source: doltdb.SchemasTableName, PrimaryKey: true},
-		{Name: doltdb.SchemasTablesExtraCol, Type: gmstypes.JsonType{}, Source: doltdb.SchemasTableName, PrimaryKey: false, Nullable: true},
-	}), sql.Collation_Default, "")
-	require.NoError(t, err)
-
-	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	require.NoError(t, err)
-	require.True(t, found)
-
-	wrapper, ok := sqlTbl.(*SchemaTable)
-	require.True(t, ok)
-	require.NotNil(t, wrapper.backingTable)
-
-	inserter := wrapper.UnWrap().Inserter(ctx)
-	// JSON string has no spaces because our various JSON libraries don't agree on how to marshall it
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;", 1, `{"extra":"data"}`})
-	require.NoError(t, err)
-	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;", 2, nil})
-	require.NoError(t, err)
-	err = inserter.Close(ctx)
-	require.NoError(t, err)
-
-	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
-	require.NoError(t, err)
-
-	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
-	require.NoError(t, err)
-
-	var rows []sql.Row
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-
-		require.NoError(t, err)
-		// convert the JSONDocument to a string for comparison
-		if row[3] != nil {
-			jsonDoc, ok := row[3].(sql.JSONWrapper)
-			if ok {
-				row[3], err = gmstypes.StringifyJSON(jsonDoc)
-				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
-			}
-
-			require.NoError(t, err)
-		}
-
-		rows = append(rows, row)
-	}
-
-	require.NoError(t, iter.Close(ctx))
-
-	expectedRows := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", `{"extra":"data"}`, nil},
-		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
-	}
-
-	assert.Equal(t, expectedRows, rows)
+	// Ancient dolt_schemas table. Verify error.
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) //
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot migrate dolt_schemas table")
+	require.Nil(t, tbl)
 }
