@@ -1,3 +1,17 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package rowexec
 
 import (
@@ -6,25 +20,21 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// iterator that duplicates keyless rows by cardinality
-
-// TODO tablescan
-// TODO indexscan
-
 func newKeylessMapIter(iter prolly.MapIter) prolly.MapIter {
-	return &keylessSourceIter{iter: iter}
+	return &keylessMapIter{iter: iter}
 }
 
-type keylessSourceIter struct {
+// keylessMapIter duplicates keyless rows using the cardinality column
+type keylessMapIter struct {
 	iter prolly.MapIter
 	card uint64
 	key  val.Tuple
 	val  val.Tuple
 }
 
-var _ prolly.MapIter = (*keylessSourceIter)(nil)
+var _ prolly.MapIter = (*keylessMapIter)(nil)
 
-func (k *keylessSourceIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+func (k *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
 	var err error
 	if k.key == nil {
 		k.key, k.val, err = k.iter.Next(ctx)
