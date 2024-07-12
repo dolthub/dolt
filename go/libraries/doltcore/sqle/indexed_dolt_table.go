@@ -29,7 +29,7 @@ import (
 type IndexedDoltTable struct {
 	*DoltTable
 	idx          index.DoltIndex
-	lb           index.IndexReaderBuilder
+	lb           index.IndexScanBuilder
 	isDoltFormat bool
 	mu           *sync.Mutex
 }
@@ -50,7 +50,7 @@ func (idt *IndexedDoltTable) Index() index.DoltIndex {
 	return idt.idx
 }
 
-func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexReaderBuilder, error) {
+func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	key, canCache, err := t.DataCacheKey(ctx)
@@ -126,7 +126,7 @@ type WritableIndexedDoltTable struct {
 	*WritableDoltTable
 	idx          index.DoltIndex
 	isDoltFormat bool
-	lb           index.IndexReaderBuilder
+	lb           index.IndexScanBuilder
 	mu           *sync.Mutex
 }
 
@@ -134,7 +134,7 @@ func (t *WritableIndexedDoltTable) Index() index.DoltIndex {
 	return t.idx
 }
 
-func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexReaderBuilder, error) {
+func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	key, canCache, err := t.DataCacheKey(ctx)
