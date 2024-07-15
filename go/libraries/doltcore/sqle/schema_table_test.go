@@ -20,7 +20,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -46,25 +45,38 @@ func TestAncientSchemaTableError(t *testing.T) {
 	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
-	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	require.NoError(t, err)
-	require.True(t, found)
+	_, _, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot migrate dolt_schemas table from v0.19.1 or earlier")
 
-	wrapper, ok := sqlTbl.(*SchemaTable)
+}
+
+func TestV1SchemasTable(t *testing.T) {
+	dEnv := dtestutils.CreateTestEnv()
+	tmpDir, err := dEnv.TempTableFilesDir()
+	require.NoError(t, err)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	require.NoError(t, err)
+
+	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	require.NoError(t, err)
+
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
+		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
+		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Source: doltdb.SchemasTableName, PrimaryKey: false},
+	}), sql.Collation_Default, "")
+	require.NoError(t, err)
+
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	require.NoError(t, err)
+
+	wrapper, ok := tbl.(*SchemaTable)
 	require.True(t, ok)
 	require.NotNil(t, wrapper.backingTable)
 
-	inserter := wrapper.backingTable.Inserter(ctx)
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
-	require.NoError(t, err)
-	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
-	require.NoError(t, err)
-	err = inserter.Close(ctx)
-	require.NoError(t, err)
-
-	// Ancient dolt_schemas table. Verify error.
-	tbl, err := getOrCreateDoltSchemasTable(ctx, db) //
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot migrate dolt_schemas table")
-	require.Nil(t, tbl)
+	// Comparing the full schema is awkward because the are different instacne. So we'll just compare the new column name.
+	require.Equal(t, SchemaTableSqlSchema().Schema[4].Name, wrapper.backingTable.Schema()[4].Name)
 }
