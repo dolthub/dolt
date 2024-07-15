@@ -16,7 +16,6 @@ package rowexec
 
 import (
 	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -43,7 +42,10 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				if _, _, dstIter, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
-							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, srcSchema, srcTags, dstTags, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
+							split := len(srcTags)
+							projections := append(srcTags, dstTags...)
+							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 						}
 					}
 				}
@@ -250,6 +252,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 		return m, mIter, destIter, s, t, n.Expression, nil
 	case *plan.IndexedTableAccess:
+		var lb index.IndexScanBuilder
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
 			tags = dt.ProjectedTags()
@@ -257,78 +260,51 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
-
-			rowData, err := table.GetRowData(ctx)
+			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
-			indexMap = durable.ProllyMapFromIndex(rowData)
-
-			lb, err := dt.LookupBuilder(ctx)
-			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
-			}
-
-			if isSrc {
-				l, err := n.GetLookup(ctx, nil)
-				if err != nil {
-					return prolly.Map{}, nil, nil, nil, nil, nil, err
-				}
-
-				prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
-				if err != nil {
-					return prolly.Map{}, nil, nil, nil, nil, nil, err
-				}
-
-				srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
-				if err != nil {
-					return prolly.Map{}, nil, nil, nil, nil, nil, err
-				}
-			} else {
-				dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
-			}
-
 		case *sqle.IndexedDoltTable:
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable.DoltTable(ctx)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
-
-			rowData, err := table.GetRowData(ctx)
+			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
-			}
-			indexMap = durable.ProllyMapFromIndex(rowData)
-
-			lb, err := dt.LookupBuilder(ctx)
-			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
-			}
-
-			l, err := n.GetLookup(ctx, nil)
-			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
-			}
-
-			if isSrc {
-				prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
-				if err != nil {
-					return prolly.Map{}, nil, nil, nil, nil, nil, err
-				}
-
-				srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
-				if err != nil {
-					return prolly.Map{}, nil, nil, nil, nil, nil, err
-				}
-			} else {
-				dstIter = lb.NewSecondaryIter(l.IsPointLookup, len(n.Expressions()), n.NullMask())
 			}
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil
 		}
+
+		rowData, err := table.GetRowData(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, err
+		}
+		indexMap = durable.ProllyMapFromIndex(rowData)
+
+		if isSrc {
+			l, err := n.GetLookup(ctx, nil)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, nil, err
+			}
+
+			prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, nil, err
+			}
+
+			srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, nil, err
+			}
+		} else {
+			dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
+		}
+
 	case *plan.ResolvedTable:
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableDoltTable:

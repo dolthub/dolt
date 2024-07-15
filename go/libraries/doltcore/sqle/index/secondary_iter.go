@@ -180,7 +180,7 @@ func (c *coveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error
 
 	var err error
 	if c.prefixDesc.Count() == c.m.KeyDesc().Count() {
-		// key range optimization only works if prefix length
+		// key range optimization only works for full length key
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
 		if ok {
@@ -281,7 +281,7 @@ func (c *nonCoveringLaxSecondaryLookup) Next(ctx context.Context) (k, v val.Tupl
 		ok = k != nil
 		return k, v, ok, nil
 	}
-	// get secondary key
+
 	idxKey, _, err := c.secIter.Next(ctx)
 	if err != nil {
 		if err != io.EOF {

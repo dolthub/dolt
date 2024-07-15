@@ -33,31 +33,21 @@ func rowIterTableLookupJoin(
 	srcIter prolly.MapIter,
 	dstIter index.SecondaryLookupIter,
 	mapping *lookupMapping,
-	srcSch schema.Schema,
-	srcProj, dstProj []uint64,
+	rowJoiner *prollyToSqlJoiner,
 	srcFilter, dstFilter, joinFilter sql.Expression,
 	isLeftJoin bool,
 	excludeNulls bool,
 ) (sql.RowIter, error) {
-	split := len(srcProj)
-
-	projections := append(srcProj, dstProj...)
-
-	rowJoiner := newRowJoiner([]schema.Schema{srcSch, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-
 	return newLookupKvIter(srcIter, dstIter, mapping, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin, excludeNulls)
 }
 
 type lookupJoinKvIter struct {
-	// srcIter is left relation
 	srcIter prolly.MapIter
 	srcKey  val.Tuple
 	srcVal  val.Tuple
 
 	dstIter index.SecondaryLookupIter
 	dstKey  val.Tuple
-
-	dstKb *val.TupleBuilder
 
 	// keyTupleMapper inputs (srcKey, srcVal) to create a dstKey
 	keyTupleMapper *lookupMapping
@@ -66,12 +56,11 @@ type lookupJoinKvIter struct {
 	joiner *prollyToSqlJoiner
 
 	// TODO convert sql.Expression to static prolly expressions
-	// that can be pushed.
 	srcFilter  sql.Expression
 	dstFilter  sql.Expression
 	joinFilter sql.Expression
 
-	// override LEFT_JOIN behavior if null filter result
+	// LEFT_JOIN impl details
 	excludeNulls bool
 	isLeftJoin   bool
 	returnedARow bool
@@ -111,6 +100,87 @@ func newLookupKvIter(
 	}, nil
 }
 
+func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
+	for {
+		var err error
+		if l.dstKey == nil {
+			l.returnedARow = false
+			// get row from |src|
+			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if l.srcKey == nil {
+				return nil, io.EOF
+			}
+
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := l.dstIter.New(ctx, l.dstKey); err != nil {
+				return nil, err
+			}
+		}
+
+		dstKey, dstVal, ok, err := l.dstIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			l.dstKey = nil
+			if !(l.isLeftJoin && !l.returnedARow) {
+				continue
+			}
+		}
+
+		ret, err := l.joiner.buildRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
+		if err != nil {
+			return nil, err
+		}
+
+		// side-specific filters are currently hoisted
+		if l.srcFilter != nil {
+			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.kvSplits[0]])
+			if err != nil {
+				return nil, err
+			}
+
+			if !sql.IsTrue(res) {
+				continue
+			}
+
+		}
+		if l.dstFilter != nil && l.dstKey != nil {
+			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
+			if err != nil {
+				return nil, err
+			}
+
+			if !sql.IsTrue(res) {
+				continue
+			}
+		}
+		if l.joinFilter != nil {
+			res, err := sql.EvaluateCondition(ctx, l.joinFilter, ret)
+			if err != nil {
+				return nil, err
+			}
+			if res == nil && l.excludeNulls {
+				// override default left join behavior
+				l.dstKey = nil
+				continue
+			} else if !sql.IsTrue(res) && l.dstKey != nil {
+				continue
+			}
+		}
+		l.returnedARow = true
+		return ret, nil
+	}
+}
+
 // lookupMapping is responsible for generating keys for lookups into
 // the destination iterator.
 type lookupMapping struct {
@@ -118,8 +188,7 @@ type lookupMapping struct {
 	srcMapping val.OrdinalMapping
 
 	// litTuple are the statically provided literal expressions in the key expression
-	litTuple    val.Tuple
-	litMappings val.OrdinalMapping
+	litTuple val.Tuple
 
 	litKd    val.TupleDesc
 	srcKd    val.TupleDesc
@@ -150,7 +219,6 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 		switch e := e.(type) {
 		case *expression.GetField:
 			// map the schema order index to the physical storage index
-			//j := e.Index()
 			col := sourceSch.GetAllCols().NameToCol[e.Name()]
 			if col.IsPartOfPK {
 				srcMapping[i] = sourceSch.GetPKCols().TagToIdx[col.Tag]
@@ -178,16 +246,15 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 	}
 
 	return &lookupMapping{
-		split:       split,
-		srcMapping:  srcMapping,
-		litTuple:    litTuple,
-		litMappings: litMappings,
-		litKd:       litDesc,
-		srcKd:       src.KeyDesc(),
-		srcVd:       src.ValDesc(),
-		targetKb:    val.NewTupleBuilder(tgtKeyDesc),
-		ns:          src.NodeStore(),
-		pool:        src.Pool(),
+		split:      split,
+		srcMapping: srcMapping,
+		litTuple:   litTuple,
+		litKd:      litDesc,
+		srcKd:      src.KeyDesc(),
+		srcVd:      src.ValDesc(),
+		targetKb:   val.NewTupleBuilder(tgtKeyDesc),
+		ns:         src.NodeStore(),
+		pool:       src.Pool(),
 	}
 }
 
@@ -257,86 +324,4 @@ func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tupl
 
 	idxKey := m.targetKb.BuildPermissive(m.pool)
 	return idxKey, nil
-}
-
-func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
-	for {
-		var err error
-		if l.dstKey == nil {
-			l.returnedARow = false
-			// get row from |src|
-			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if l.srcKey == nil {
-				return nil, io.EOF
-			}
-
-			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
-			if err != nil {
-				return nil, err
-			}
-
-			if err := l.dstIter.New(ctx, l.dstKey); err != nil {
-				return nil, err
-			}
-		}
-
-		dstKey, dstVal, ok, err := l.dstIter.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			l.dstKey = nil
-			if !(l.isLeftJoin && !l.returnedARow) {
-				continue
-			}
-		}
-
-		ret, err := l.joiner.buildRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
-		if err != nil {
-			return nil, err
-		}
-
-		// side-specific filters are currently hoisted
-
-		if l.srcFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.kvSplits[0]])
-			if err != nil {
-				return nil, err
-			}
-
-			if !sql.IsTrue(res) {
-				continue
-			}
-
-		}
-		if l.dstFilter != nil && l.dstKey != nil {
-			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
-			if err != nil {
-				return nil, err
-			}
-
-			if !sql.IsTrue(res) {
-				continue
-			}
-		}
-		if l.joinFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.joinFilter, ret)
-			if err != nil {
-				return nil, err
-			}
-			if res == nil && l.excludeNulls {
-				// override default left join behavior
-				l.dstKey = nil
-				continue
-			} else if !sql.IsTrue(res) && l.dstKey != nil {
-				continue
-			}
-		}
-		l.returnedARow = true
-		return ret, nil
-	}
 }
