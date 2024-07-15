@@ -91,6 +91,14 @@ func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEv
 		return nil, err
 	}
 
+	// Initialize @@gtid_purged based on the first GTID we see available in the available binary logs
+	// NOTE that we assume that all GTIDs are available after the first GTID we find in the logs. This won't
+	// be true if someone goes directly to the file system and deletes binary log files, but that isn't
+	// how we expect people to manage the binary log files.
+	if err := lm.initializePurgedGtids(); err != nil {
+		return nil, err
+	}
+
 	// Initialize the set of GTIDs that are available in the current log files
 	if err := lm.initializeAvailableGtids(); err != nil {
 		return nil, err
@@ -168,68 +176,63 @@ func (lm *LogManager) purgeExpiredLogFiles() error {
 			}
 		}
 	}
+	return nil
+}
 
-	// TODO: This is where things get messy...
-	//       This is where we find the oldest binlog file, and attempt to find the first GTID in it, so that we can
-	//       set @@gtid_purged.
-	//       This should mostly work, but not in the case where there is only one binlog file after purging (the
-	//       current/new binlog file) and it doesn't have a GTID in it. In that case, we could default to
-	//       @@gtid_executed.
-	//
-	// One of the problems here is that @@gtid_executed doesn't get set at startup, like it should. We currently need
-	// a *sql.Context to grab the DoltSession and pull out the location of the GTID position store/file. This happens
-	// the first time we process a GTID binlog event, but it needs to happen at startup.
-	//
-	// Another way to solve this issue would be to have an index file that tracks which GTIDs are present in each log
-	// file. I'd like to avoid this if possible, just because it adds more complexity and seems like we can get away
-	// without it right now.
-
-	// Set @@gtid_purged if we deleted any files
-	files, err = lm.logFilesOnDiskForBranch(BinlogBranch)
+// initializePurgedGtids searches through the available binary logs to find the first GTID available
+// in the binary logs. If a GTID is found in the available logs, then @@gtid_purged is set to the GTID immediately
+// preceding the found GTID, unless the found GTID is sequence number 1. If no GTIDs are found in the available
+// binary logs, then it is assumed that all GTIDs have been purged, so @@gtid_purged is set to the same value
+// held in @@gtid_executed.
+func (lm *LogManager) initializePurgedGtids() error {
+	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
 	}
-	if len(files) > 0 {
-		openFile, err := openBinlogFileForReading(filepath.Join(lm.binlogDirectory, files[0]))
-		if err != nil {
-			return err
-		}
-		defer openFile.Close()
 
-		binlogEvent, err := readFirstGtidEventFromFile(openFile)
-		if err == io.EOF {
-			// If there are no GTID events in the file, then all GTIDs have been purged, so use @@gtid_executed
-			_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
-			if !ok {
-				return fmt.Errorf("unable to find system variable @@gtid_executed")
+	for _, file := range files {
+		var gtid mysql.GTID
+		err := func() error {
+			openFile, err := openBinlogFileForReading(filepath.Join(lm.binlogDirectory, file))
+			if err != nil {
+				return err
 			}
+			defer openFile.Close()
 
-			logrus.Errorf("setting gtid_purged to: %s", gtidExecutedValue)
-
-			err = sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
+			binlogEvent, err := readFirstGtidEventFromFile(openFile)
 			if err != nil {
 				return err
 			}
 
+			gtid, _, err = binlogEvent.GTID(lm.binlogFormat)
+			if err != nil {
+				return err
+			}
+			sequenceNumber := gtid.SequenceNumber().(int64)
+			if sequenceNumber > 1 {
+				// If the first found GTID in the available binary logs is sequence number 1, then all GTIDs
+				// are available, so no need to set @@gtid_purged to anything.
+				return sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
+			}
 			return nil
-		} else if err != nil {
+		}()
+		if err != nil && err != io.EOF {
 			return err
 		}
 
-		gtid, _, err := binlogEvent.GTID(lm.binlogFormat)
-		if err != nil {
-			return err
-		}
-		sequenceNumber := gtid.SequenceNumber().(int64)
-		if sequenceNumber > 1 {
-			err = sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
-			if err != nil {
-				return err
-			}
+		// If we found a GTID, then stop searching through logs and return
+		if gtid != nil {
+			return nil
 		}
 	}
 
-	return nil
+	// If there are no GTID events in any of the files, then all GTIDs have been purged, so use @@gtid_executed
+	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	if !ok {
+		return fmt.Errorf("unable to find system variable @@gtid_executed")
+	}
+	logrus.Debugf("setting gtid_purged to: %s", gtidExecutedValue)
+	return sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
 }
 
 // addRotateEventToPreviousLogFile finds the previous binlog file and appends a Rotate event that points to the
