@@ -391,6 +391,11 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	setupForDoltToMySqlReplication()
 	startReplication(t, doltPort)
 
+	// Only one binary log file should be present on a fresh server
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "263", "No"},
+	})
+
 	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
 	waitForReplicaToCatchUp(t)
@@ -408,6 +413,12 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	// Restart the Dolt primary server
 	mustRestartDoltPrimaryServer(t)
 	waitForReplicaToReconnect(t)
+
+	// A new binary log file is created on each server restart
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "549", "No"},
+		{"binlog-main.000002", "191", "No"},
+	})
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
