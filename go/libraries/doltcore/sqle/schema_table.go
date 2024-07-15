@@ -153,8 +153,18 @@ func NewEmptySchemaTable() sql.Table {
 	return &SchemaTable{}
 }
 
-func NewSchemaTable(backingTable *WritableDoltTable) sql.Table {
-	return &SchemaTable{backingTable: backingTable}
+func NewSchemaTable(ctx *sql.Context, db Database, backingTable *WritableDoltTable) (sql.Table, error) {
+	if !backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+		return nil, fmt.Errorf("cannot migrate dolt_schemas table from v0.19.1 or earlier")
+	} else if !backingTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+		migrated, err := migrateOldSchemasTableToNew(ctx, db, backingTable)
+		if err != nil {
+			return nil, err
+		}
+		backingTable = migrated
+	}
+
+	return &SchemaTable{backingTable: backingTable}, nil
 }
 
 // getOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
@@ -193,6 +203,8 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		// Old schemas are missing the `extra` column. Very ancient. Provide error message and bail.
 		if !schemasTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 			return nil, fmt.Errorf("cannot migrate dolt_schemas table from v0.19.1 or earlier")
+		} else if !schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+			return migrateOldSchemasTableToNew(ctx, db, schemasTable)
 		} else {
 			return schemasTable, nil
 		}
@@ -214,6 +226,97 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	}
 	if wrapper.backingTable == nil {
 		return nil, sql.ErrTableNotFound.New(doltdb.SchemasTableName)
+	}
+
+	return wrapper.backingTable, nil
+}
+
+func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
+	// Copy all of the old data over and add an index column and an extra column
+	iter, err := SqlTableToRowIter(ctx, schemasTable.DoltTable, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
+	// need to get the column indexes from the current schema
+	nameIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	typeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
+	fragmentIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	extraIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
+	sqlModeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesSqlModeCol)
+
+	defer func(iter sql.RowIter, ctx *sql.Context) {
+		err := iter.Close(ctx)
+		if err != nil && rerr == nil {
+			rerr = err
+		}
+	}(iter, ctx)
+
+	var newRows []sql.Row
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		newRow := make(sql.Row, SchemaTableSchema().GetAllCols().Size())
+		newRow[0] = sqlRow[typeIdx]
+		newRow[1] = sqlRow[nameIdx]
+		newRow[2] = sqlRow[fragmentIdx]
+		if extraIdx >= 0 {
+			newRow[3] = sqlRow[extraIdx]
+		}
+		if sqlModeIdx >= 0 {
+			newRow[4] = sqlRow[sqlModeIdx]
+		}
+
+		newRows = append(newRows, newRow)
+	}
+
+	err = db.dropTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, doltdb.DefaultSchemaName, root, SchemaTableSchema())
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	wrapper, ok := tbl.(*SchemaTable)
+	if !ok {
+		return nil, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	}
+
+	if wrapper.backingTable == nil {
+		return nil, sql.ErrTableNotFound.New(doltdb.SchemasTableName)
+	}
+
+	inserter := wrapper.backingTable.Inserter(ctx)
+	for _, row := range newRows {
+		err = inserter.Insert(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = inserter.Close(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	return wrapper.backingTable, nil

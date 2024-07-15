@@ -165,3 +165,49 @@ SQL
     [[ "$output" =~ "trigger,trigger4,CREATE TRIGGER trigger4 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 1000" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
 }
+
+@test "triggers: Upgrade dolt_schemas" {
+    rm -rf .dolt
+    # old_dolt_schemas was created using v1.0.0, which is pre-sqlMode change
+    cp -a $BATS_TEST_DIRNAME/helper/old_dolt_schemas/. ./.dolt/
+
+    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "type,name,fragment,extra" ]] || false
+    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "SELECT * FROM view1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "2+2" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    # creating a new view/trigger will recreate the dolt_schemas table
+    dolt sql -q "CREATE VIEW view2 AS SELECT 3+3 FROM dual;"
+
+    skip "diff is broken on schema change"
+    run dolt diff
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "deleted table" ]] || false
+    [[ "$output" =~ "added table" ]] || false
+
+    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "type,name,fragment,id" ]] || false
+    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT 2+2 FROM dual,1" ]] || false
+    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT 3+3 FROM dual,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "SELECT * FROM view1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "2+2" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "SELECT * FROM view2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "3+3" ]] || false
+    [[ "$output" =~ "6" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
