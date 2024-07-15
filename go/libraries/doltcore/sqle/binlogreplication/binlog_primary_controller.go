@@ -65,7 +65,24 @@ func (d *DoltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql
 // BinlogDumpGtid implements the BinlogPrimaryController interface.
 func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, replicaExecutedGtids mysql.GTIDSet) error {
 	if d.BinlogProducer == nil {
-		return fmt.Errorf("no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
+		// TODO: Add a test for this, now that we have errors being
+		//       reported in replica status correctly
+		return mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, "HY000",
+			"no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
+
+	}
+
+	primaryExecutedGtids := d.BinlogProducer.gtidPosition.GTIDSet
+	// TODO: This is awkward... should controller have a direct link to log manager?
+	//       Or should BinlogProducer have a direct link to the log manager?
+	missingGtids := d.BinlogProducer.streamerManager.logManager.calculateMissingGtids(replicaExecutedGtids, primaryExecutedGtids)
+	if !missingGtids.Equal(mysql.Mysql56GTIDSet{}) {
+		// We must send back error code 1236 (ER_MASTER_FATAL_ERROR_READING_BINLOG) to the replica to signal an error,
+		// otherwise the replica won't expose the error in replica status and will just keep trying to reconnect and
+		// only log the error to MySQL's error log.
+		return mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, "HY000",
+			"Cannot replicate because the source purged required binary logs. Replicate the missing transactions from elsewhere, or provision a new replica from backup. Consider increasing the source's binary log expiration period. The GTID set sent by the replica is '%s', and the missing transactions are '%s'.",
+			replicaExecutedGtids.String(), missingGtids.String())
 	}
 
 	err := d.streamerManager.StartStream(ctx, conn, replicaExecutedGtids, d.BinlogProducer.binlogFormat, d.BinlogProducer.binlogEventMeta)

@@ -50,6 +50,7 @@ type LogManager struct {
 	binlogFormat          mysql.BinlogFormat
 	binlogEventMeta       mysql.BinlogEventMetadata
 	binlogDirectory       string
+	availableGtids        mysql.GTIDSet
 }
 
 // NewLogManager creates a new LogManager instance where binlog files are stored in the .dolt/binlog directory
@@ -90,7 +91,46 @@ func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEv
 		return nil, err
 	}
 
+	// Initialize the set of GTIDs that are available in the current log files
+	if err := lm.initializeAvailableGtids(); err != nil {
+		return nil, err
+	}
+
 	return lm, nil
+}
+
+// initializeAvailableGtids sets the value of availableGtids by seeing what GTIDs have been executed (@@gtid_executed)
+// and subtracting any GTIDs that have been marked as purged (@@gtid_purged).
+func (lm *LogManager) initializeAvailableGtids() (err error) {
+	// Initialize availableGtids from @@gtid_executed – we start by assuming we have all executed GTIDs available
+	// in the logs, and then adjust availableGtids based on which GTIDs we detect have been purged.
+	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
+	if !ok {
+		fmt.Errorf("unable to find system variable @@gtid_executed")
+	}
+	if _, ok := gtidExecutedValue.(string); !ok {
+		return fmt.Errorf("unexpected type for @@gtid_executed: %T", gtidExecutedValue)
+	}
+	lm.availableGtids, err = mysql.ParseMysql56GTIDSet(gtidExecutedValue.(string))
+	if err != nil {
+		return err
+	}
+
+	_, gtidPurgedValue, ok := sql.SystemVariables.GetGlobal("gtid_purged")
+	if !ok {
+		return fmt.Errorf("unable to find system variable @@gtid_purged")
+	}
+	if _, ok := gtidExecutedValue.(string); !ok {
+		return fmt.Errorf("unexpected type for @@gtid_purged: %T", gtidPurgedValue)
+	}
+	purgedGtids, err := mysql.ParseMysql56GTIDSet(gtidPurgedValue.(string))
+	if err != nil {
+		return err
+	}
+
+	lm.availableGtids = lm.availableGtids.Subtract(purgedGtids)
+	logrus.Debugf("setting availableGtids to %s after removing purgedGtids %s", lm.availableGtids, purgedGtids)
+	return nil
 }
 
 // purgeExpiredLogFiles removes any binlog files that are older than @@binlog_expire_logs_seconds. This automatic
@@ -150,9 +190,7 @@ func (lm *LogManager) purgeExpiredLogFiles() error {
 		return err
 	}
 	if len(files) > 0 {
-		// TODO: This doesn't work! If we purge all the log files and we only have the new file, then we can't
-		//       determine the GTID to set... unless we use gtid_executed?
-		openFile, err := os.Open(filepath.Join(lm.binlogDirectory, files[0]))
+		openFile, err := openBinlogFileForReading(filepath.Join(lm.binlogDirectory, files[0]))
 		if err != nil {
 			return err
 		}
@@ -178,20 +216,16 @@ func (lm *LogManager) purgeExpiredLogFiles() error {
 			return err
 		}
 
-		gtid, ok, err := binlogEvent.GTID(lm.binlogFormat)
+		gtid, _, err := binlogEvent.GTID(lm.binlogFormat)
 		if err != nil {
 			return err
-		}
-		if !ok {
-			panic("not ok!")
 		}
 		sequenceNumber := gtid.SequenceNumber().(int64)
-
-		gtid.SourceServer()
-
-		err = sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
-		if err != nil {
-			return err
+		if sequenceNumber > 1 {
+			err = sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -446,6 +480,15 @@ func (lm *LogManager) writeEventsHelper(binlogEvents ...mysql.BinlogEvent) error
 		if _, err := lm.currentBinlogFile.Write(event.Bytes()); err != nil {
 			return err
 		}
+
+		if event.IsGTID() {
+			gtid, _, err := event.GTID(lm.binlogFormat)
+			if err != nil {
+				return err
+			}
+			// TODO: Consider locking around lm.availableGtids
+			lm.availableGtids = lm.availableGtids.AddGTID(gtid)
+		}
 	}
 
 	if rotateLogFile {
@@ -455,6 +498,26 @@ func (lm *LogManager) writeEventsHelper(binlogEvents ...mysql.BinlogEvent) error
 	}
 
 	return nil
+}
+
+// calculateMissingGtids takes the set of GTIDs that a replica reports it has executed, |replicaExecutedGtids|,
+// and the full set of GTIDs executed in this primary server, |primaryExecutedGtids|, and determines which GTIDs
+// are needed to bring the replica in sync with this server, but not available in the current binary logs. The
+// results are a returned as the set of GTIDs that this server is unable to provide to the replica, since they are
+// no longer available in this server's binary logs. If the returned set of GTIDs is empty, then this server can
+// accept the connection from the replica and start streaming it the GTIDs needed to get it in sync with this
+// primary.
+func (lm *LogManager) calculateMissingGtids(replicaExecutedGtids mysql.GTIDSet, primaryExecutedGtids mysql.GTIDSet) mysql.GTIDSet {
+	// First, subtract all the GTIDs that the replica has executed from the GTIDs this server has executed,
+	// in order to determine which GTIDs are needed to get the replica in sync with the primary.
+	neededGtids := primaryExecutedGtids.Subtract(replicaExecutedGtids)
+
+	// Next subtract all the GTIDs that are available in the logs to determine which GTIDs are missing.
+	missingGtids := neededGtids.Subtract(lm.availableGtids)
+
+	logrus.Debugf("calculateMissingGtids: replicaExecutedGtids: %s, primaryExecutedGtids: %s, neededGtids: %s, availableGtids: %s, missingGtids: %s", replicaExecutedGtids, primaryExecutedGtids, neededGtids, lm.availableGtids, missingGtids)
+
+	return missingGtids
 }
 
 func (lm *LogManager) resolveLogFile(filename string) string {
