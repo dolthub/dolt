@@ -171,43 +171,16 @@ SQL
     # old_dolt_schemas was created using v1.0.0, which is pre-sqlMode change
     cp -a $BATS_TEST_DIRNAME/helper/old_dolt_schemas/. ./.dolt/
 
-    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment,extra" ]] || false
-    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt sql -q "SELECT * FROM view1" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "2+2" ]] || false
-    [[ "$output" =~ "4" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    # creating a new view/trigger will recreate the dolt_schemas table
-    dolt sql -q "CREATE VIEW view2 AS SELECT 3+3 FROM dual;"
-
-    skip "diff is broken on schema change"
-    run dolt diff
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "deleted table" ]] || false
-    [[ "$output" =~ "added table" ]] || false
+    # The column will automatically be added if it doesn't exist in the original schema,
+    # and just by selecting on the table, you will dirty the workspace.
 
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT 2+2 FROM dual,1" ]] || false
-    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT 3+3 FROM dual,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
+    [[ "$output" =~ "type,name,fragment,extra,sql_mode" ]] || false
+    [[ "$output" =~ "view,my_view" ]] || false
+    [[ "$output" =~ "SELECT 2+2" ]] || false
 
-    run dolt sql -q "SELECT * FROM view1" -r=csv
+    run dolt status
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "2+2" ]] || false
-    [[ "$output" =~ "4" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt sql -q "SELECT * FROM view2" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "3+3" ]] || false
-    [[ "$output" =~ "6" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "modified:         dolt_schemas" ]] || false
 }

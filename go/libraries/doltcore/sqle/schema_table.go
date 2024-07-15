@@ -267,9 +267,8 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		newRow[0] = sqlRow[typeIdx]
 		newRow[1] = sqlRow[nameIdx]
 		newRow[2] = sqlRow[fragmentIdx]
-		if extraIdx >= 0 {
-			newRow[3] = sqlRow[extraIdx]
-		}
+		newRow[3] = sqlRow[extraIdx]
+
 		if sqlModeIdx >= 0 {
 			newRow[4] = sqlRow[sqlModeIdx]
 		}
