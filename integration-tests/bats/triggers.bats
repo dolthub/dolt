@@ -168,19 +168,19 @@ SQL
 
 @test "triggers: Upgrade dolt_schemas" {
     rm -rf .dolt
+
     # old_dolt_schemas was created using v1.0.0, which is pre-sqlMode change
     cp -a $BATS_TEST_DIRNAME/helper/old_dolt_schemas/. ./.dolt/
 
-    # The column will automatically be added if it doesn't exist in the original schema,
-    # and just by selecting on the table, you will dirty the workspace.
+    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "type,name,fragment,extra" ]] || false
+    [[ "$output" =~ "view,my_view" ]] || false
+    [[ "$output" =~ "SELECT 2+2" ]] || false
+
+    dolt sql -q "CREATE VIEW another_view AS SELECT 3+3"
 
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "type,name,fragment,extra,sql_mode" ]] || false
-    [[ "$output" =~ "view,my_view" ]] || false
-    [[ "$output" =~ "SELECT 2+2" ]] || false
-
-    run dolt status
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "modified:         dolt_schemas" ]] || false
 }

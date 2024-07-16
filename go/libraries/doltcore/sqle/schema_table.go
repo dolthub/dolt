@@ -56,6 +56,16 @@ func (st *SchemaTable) String() string {
 }
 
 func (st *SchemaTable) Schema() sql.Schema {
+	if st.backingTable == nil {
+		// No backing table; return an current schema.
+		return SchemaTableSqlSchema().Schema
+	}
+
+	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+		// No SQL_MODE column; return an old schema.
+		return SchemaTableV1SqlSchema()
+	}
+
 	return SchemaTableSqlSchema().Schema
 }
 
@@ -136,6 +146,23 @@ func mustCreateStringType(baseType query.Type, length int64, collation sql.Colla
 	return ti
 }
 
+// dolt_schemas columns, for dolt_schemas of v1.0.0.
+func SchemaTableV1SqlSchema() sql.Schema {
+	var schemasTableCols = schema.NewColCollection(
+		mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
+		mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
+		mustNewColWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.CreateVarStringTypeFromSqlType(gmstypes.LongText), false, "", false, ""),
+		mustNewColWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, ""),
+	)
+
+	legacy := schema.MustSchemaFromCols(schemasTableCols)
+	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, legacy)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return sqlSchema.Schema
+}
+
 // dolt_schemas columns
 func SchemaTableSchema() schema.Schema {
 	var schemasTableCols = schema.NewColCollection(
@@ -156,12 +183,6 @@ func NewEmptySchemaTable() sql.Table {
 func NewSchemaTable(ctx *sql.Context, db Database, backingTable *WritableDoltTable) (sql.Table, error) {
 	if !backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 		return nil, fmt.Errorf("cannot migrate dolt_schemas table from v0.19.1 or earlier")
-	} else if !backingTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
-		migrated, err := migrateOldSchemasTableToNew(ctx, db, backingTable)
-		if err != nil {
-			return nil, err
-		}
-		backingTable = migrated
 	}
 
 	return &SchemaTable{backingTable: backingTable}, nil
