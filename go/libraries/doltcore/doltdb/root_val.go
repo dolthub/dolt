@@ -582,7 +582,8 @@ func (root *rootValue) GetTableNames(ctx context.Context, schemaName string) ([]
 	var names []string
 	err = tmIterAll(ctx, tableMap, func(name string, _ hash.Hash) {
 		md5.Write([]byte(name))
-		md5.Write([]byte{','})
+		// avoid distinct table names converging to the same hash
+		md5.Write([]byte{0x0000})
 		names = append(names, name)
 	})
 	if err != nil {
