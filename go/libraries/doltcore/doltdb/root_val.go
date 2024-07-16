@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cespare/xxhash"
 	"sort"
 	"strings"
 
@@ -108,17 +109,20 @@ type RootValue interface {
 	SetFeatureVersion(v FeatureVersion) (RootValue, error)
 	// SetTableHash sets the table with the given case-sensitive name to the new hash, and returns a new root.
 	SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error)
+	// TableListHash returns a unique digest of the list of table names
+	TableListHash() uint64
 	// VRW returns this root's ValueReadWriter.
 	VRW() types.ValueReadWriter
 }
 
 // rootValue is Dolt's implementation of RootValue.
 type rootValue struct {
-	vrw  types.ValueReadWriter
-	ns   tree.NodeStore
-	st   rootValueStorage
-	fkc  *ForeignKeyCollection // cache the first load
-	hash hash.Hash             // cache the first load
+	vrw        types.ValueReadWriter
+	ns         tree.NodeStore
+	st         rootValueStorage
+	fkc        *ForeignKeyCollection // cache the first load
+	rootHash   hash.Hash             // cache the first load
+	tablesHash uint64
 }
 
 var _ RootValue = (*rootValue)(nil)
@@ -162,7 +166,7 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 		}
 	}
 
-	return &rootValue{vrw, ns, storage, nil, hash.Hash{}}, nil
+	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, 0}, nil
 }
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
@@ -440,6 +444,10 @@ func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schem
 	return m, nil
 }
 
+func (root *rootValue) TableListHash() uint64 {
+	return root.tablesHash
+}
+
 func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error) {
 	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
@@ -569,13 +577,19 @@ func (root *rootValue) GetTableNames(ctx context.Context, schemaName string) ([]
 		return nil, err
 	}
 
+	md5 := xxhash.New()
+
 	var names []string
 	err = tmIterAll(ctx, tableMap, func(name string, _ hash.Hash) {
+		md5.Write([]byte(name))
+		md5.Write([]byte{','})
 		names = append(names, name)
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	root.tablesHash = md5.Sum64()
 
 	return names, nil
 }
@@ -695,7 +709,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}}
+	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -857,14 +871,14 @@ func (root *rootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema
 
 // HashOf gets the hash of the root value
 func (root *rootValue) HashOf() (hash.Hash, error) {
-	if root.hash.IsEmpty() {
+	if root.rootHash.IsEmpty() {
 		var err error
-		root.hash, err = root.st.nomsValue().Hash(root.vrw.Format())
+		root.rootHash, err = root.st.nomsValue().Hash(root.vrw.Format())
 		if err != nil {
 			return hash.Hash{}, nil
 		}
 	}
-	return root.hash, nil
+	return root.rootHash, nil
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
