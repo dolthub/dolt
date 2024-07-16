@@ -819,9 +819,8 @@ func TestAlterSystemTables(t *testing.T) {
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
 		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
 			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
-		CreateTestTable(t, dEnv, doltdb.SchemasTableName, schemaTableSchema,
-			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')")
 		ExecuteSetupSQL(context.Background(), `
+    CREATE VIEW name as select 2+2 from dual;
 		CREATE PROCEDURE simple_proc2() SELECT 1+1;
 		INSERT INTO dolt_ignore VALUES ('test', 1);`)(t, dEnv)
 	}

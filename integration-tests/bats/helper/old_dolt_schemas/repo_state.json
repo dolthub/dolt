@@ -1,8 +1,6 @@
 {
-  "head": "refs/heads/master",
-  "staged": "s0o665ofbugmrfechrp7vq1390oefojf",
-  "working": "s0o665ofbugmrfechrp7vq1390oefojf",
-  "merge": null,
+  "head": "refs/heads/main",
   "remotes": {},
+  "backups": {},
   "branches": {}
 }

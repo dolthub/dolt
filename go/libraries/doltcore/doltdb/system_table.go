@@ -236,9 +236,6 @@ const (
 const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
-	// SchemasTablesIdCol is an incrementing integer that represents the insertion index.
-	// Deprecated: This column is no longer used and will be removed in a future release.
-	SchemasTablesIdCol = "id"
 	// SchemasTablesTypeCol is the name of the column that stores the type of a schema fragment  in the dolt_schemas table
 	SchemasTablesTypeCol = "type"
 	// SchemasTablesNameCol The name of the column that stores the name of a schema fragment in the dolt_schemas table
