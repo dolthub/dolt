@@ -77,6 +77,23 @@ func TestV1SchemasTable(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, wrapper.backingTable)
 
-	// Comparing the full schema is awkward because the are different instacne. So we'll just compare the new column name.
-	require.Equal(t, SchemaTableSqlSchema().Schema[4].Name, wrapper.backingTable.Schema()[4].Name)
+	// unmodified dolt_schemas table.
+	require.Equal(t, 4, len(wrapper.backingTable.Schema()))
+
+	tbl, err = getOrCreateDoltSchemasTable(ctx, db)
+	require.NoError(t, err)
+	require.NotNil(t, tbl)
+
+	// modified dolt_schemas table.
+	require.Equal(t, 5, len(tbl.Schema()))
+
+	tbl, _, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	require.NoError(t, err)
+	wrapper, ok = tbl.(*SchemaTable)
+	require.True(t, ok)
+	require.NotNil(t, wrapper.backingTable)
+
+	// modified dolt_schemas table.
+	require.Equal(t, 5, len(wrapper.backingTable.Schema()))
+
 }
