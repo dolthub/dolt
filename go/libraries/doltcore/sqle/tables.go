@@ -540,7 +540,7 @@ var _ doltTableInterface = (*WritableDoltTable)(nil)
 // fake table. Specifically, databases.getTableInsensitive will returns an sql.Table, and there are cases where we
 // want to return a table that hasn't been materialized yet.
 type WritableDoltTableWrapper interface {
-	// Return the underlying WritableDoltTable, nil returns are expected when the wrapped table hasn't been materialized
+	// Unwrap returns the underlying WritableDoltTable, nil returns are expected when the wrapped table hasn't been materialized
 	UnWrap() *WritableDoltTable
 }
 
