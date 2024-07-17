@@ -38,6 +38,8 @@ type SessionCache struct {
 
 	// writers are keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
+	// strictLookups are keyed by table schema hash
+	strictLookups map[doltdb.DataCacheKey]map[sql.FastIntSet]sql.Index
 	// checks is keyed by table schema hash
 	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
@@ -186,6 +188,31 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 
 	table, ok := tablesForKey[tableName.ToLower()]
 	return table, ok
+}
+
+// GetCachedStrictLookup returns a cached set of |sql.IndexLookup|s for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) (map[sql.FastIntSet]sql.Index, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	schemaState, ok := c.strictLookups[key]
+	return schemaState, ok
+}
+
+// CacheStrictLookup caches a set of |sql.IndexLookup|s for the table named
+func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state map[sql.FastIntSet]sql.Index) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.strictLookups == nil {
+		c.strictLookups = make(map[doltdb.DataCacheKey]map[sql.FastIntSet]sql.Index)
+	}
+	if len(c.strictLookups) > maxCachedKeys {
+		for k := range c.strictLookups {
+			delete(c.strictLookups, k)
+		}
+	}
+
+	c.strictLookups[key] = state
 }
 
 // GetCachedWriterState returns the cached WriterState for the table named, and whether the cache was present

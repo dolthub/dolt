@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"math"
 	"os"
@@ -76,6 +77,7 @@ func init() {
 }
 
 var _ dtables.VersionableTable = (*DoltTable)(nil)
+var _ dtables.VersionableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
@@ -94,6 +96,91 @@ type DoltTable struct {
 
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
+}
+
+func (t *DoltTable) SkipIndexCosting() bool {
+	return false
+}
+
+func (t *DoltTable) LookupForExpressions(ctx *sql.Context, e sql.Expression) (sql.IndexLookup, bool, error) {
+	// convert expressions to sorted list of column names
+	// get schema hash
+	// check cache from preexisting list of strict key matches
+	// (schemakey) -> map[cols]->indexLookup
+	root, err := t.workingRoot(ctx)
+
+	tab, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
+	if err != nil {
+		return sql.IndexLookup{}, false, nil
+	}
+	if !ok {
+		// ?
+	}
+
+	schHash, err := tab.GetSchemaHash(ctx)
+	if err != nil {
+		return sql.IndexLookup{}, false, nil
+	}
+
+	sess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return sql.IndexLookup{}, false, nil
+	}
+
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	if err != nil {
+		return sql.IndexLookup{}, false, nil
+	}
+	if !ok {
+		return sql.IndexLookup{}, false, fmt.Errorf("no state for database %s", t.db.Name())
+	}
+
+	cols := expression.LookupEqualityColumns(t.db.Name(), t.tableName, e)
+	colset := sql.NewFastIntSet()
+	schCols := t.sch.GetAllCols()
+	for _, c := range cols {
+		col := schCols.LowerNameToCol[c.col]
+		idx := schCols.TagToIdx[col.Tag]
+		colset.Add(idx + 1)
+	}
+
+	schKey := doltdb.DataCacheKey{Hash: schHash}
+
+	lookups, ok := dbState.SessionCache().GetCachedStrictLookup(schKey)
+	if !ok {
+
+		// create lookups
+		// get indexes
+		indexes, err := t.GetIndexes(ctx)
+		lookups = index.GetStrictLookups(schCols, indexes)
+
+		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
+	}
+
+	for keyCols, idx := range lookups {
+		if keyCols.Intersection(colset).Len() == keyCols.Len() {
+			// idx is strict lookup
+			rb := sql.NewIndexBuilder(idx)
+			for col, ok := keyCols.Next(1); ok; col, ok = keyCols.Next(col) {
+				idx := col - 1
+				c := schCols.GetColumns()[idx]
+				for _, c2 := range cols {
+					if strings.EqualFold(c2.col, c.Name) {
+						rb.Equals(ctx, c2.col, c2.expr.Value())
+						break
+					}
+				}
+			}
+			lookup, err := rb.Build(ctx)
+			if err != nil {
+				return sql.IndexLookup{}, false, err
+			}
+			return lookup, true, nil
+		}
+	}
+
+	return sql.IndexLookup{}, false, nil
+
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -182,6 +269,7 @@ type doltReadOnlyTableInterface interface {
 
 var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 var _ sql.ProjectedTable = (*DoltTable)(nil)
+var _ sql.IndexSearchable = (*DoltTable)(nil)
 
 // IndexedAccess implements sql.IndexAddressableTable
 func (t *DoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {

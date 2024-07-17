@@ -562,6 +562,20 @@ type doltIndex struct {
 	fullTextProps schema.FullTextProperties
 }
 
+func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sql.FastIntSet]sql.Index {
+	lookups := make(map[sql.FastIntSet]sql.Index)
+	for _, i := range indexes {
+		idx := i.(*doltIndex)
+		colset := sql.NewFastIntSet()
+		for _, c := range idx.columns {
+			idx := schCols.TagToIdx[c.Tag]
+			colset.Add(idx + 1)
+		}
+		lookups[colset] = i
+	}
+	return lookups
+}
+
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
 
