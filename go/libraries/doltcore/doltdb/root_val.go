@@ -794,9 +794,13 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	_, preexisting, err := root.GetTable(ctx, tName)
-	if err != nil {
-		return nil, err
+	var preserveTablesHash bool
+	if root.tablesHash != 0 {
+		var err error
+		_, preserveTablesHash, err = root.GetTable(ctx, tName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.VRW(), root.NodeStore(), []tableEdit{{name: tName, ref: &ref}})
@@ -804,10 +808,9 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 		return nil, err
 	}
 
-	// putTable is the one place we can preserve table list hash. Other mutation
-	// points edit the list of table names.
 	ret := root.withStorage(newStorage)
-	if preexisting {
+	if preserveTablesHash {
+		// maintain |tablesHash| if we are replacing a table,
 		ret.tablesHash = root.tablesHash
 	}
 	return ret, nil
