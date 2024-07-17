@@ -190,6 +190,23 @@ func unescapeKey(key []byte) []byte {
 	return bytes.Replace(key, []byte(`\"`), []byte(`"`), -1)
 }
 
+// IsJsonKeyPrefix computes whether one key encodes a json location that is a prefix of another.
+// Example: $.a is a prefix of $.a.b, but not $.aa
+func IsJsonKeyPrefix(path, prefix []byte) bool {
+	return bytes.HasPrefix(path, prefix) && (path[len(prefix)] == beginArrayKey || path[len(prefix)] == beginObjectKey)
+}
+
+func JsonKeysModifySameArray(leftKey, rightKey []byte) bool {
+	i := 0
+	for i < len(leftKey) && i < len(rightKey) && leftKey[i] == rightKey[i] {
+		if leftKey[i] == beginArrayKey {
+			return true
+		}
+		i++
+	}
+	return false
+}
+
 func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 	location := newRootLocation()
 	state := lexStatePath

@@ -1208,6 +1208,13 @@ var jsonMergeTests = []schemaMergeTest{
 				merged:   singleRow(1, 2, 2, `{ "key1": "value3", "key2": "value4" }`),
 			},
 			{
+				name:     `parallel array modification`,
+				ancestor: singleRow(1, 1, 1, `{"a": [1, 2, 1], "b":0, "c":0}`),
+				left:     singleRow(1, 2, 1, `{"a": [2, 1, 2], "b":1, "c":0}`),
+				right:    singleRow(1, 1, 2, `{"a": [2, 1, 2], "b":0, "c":1}`),
+				merged:   singleRow(1, 2, 2, `{"a": [2, 1, 2], "b":1, "c":1}`),
+			},
+			{
 				name:     `parallel deletion`,
 				ancestor: singleRow(1, 1, 1, `{ "key1": "value1" }`),
 				left:     singleRow(1, 2, 1, `{}`),
@@ -1337,7 +1344,7 @@ var jsonMergeTests = []schemaMergeTest{
 				// Which array element should go first?
 				// We avoid making assumptions and flag this as a conflict.
 				name:         "object inside array conflict",
-				ancestor:     singleRow(1, 1, 1, `{ "key1": [ { } ] }`),
+				ancestor:     singleRow(1, 1, 1, `{ "key1": [ ] }`),
 				left:         singleRow(1, 2, 1, `{ "key1": [ { "key2": "value2" } ] }`),
 				right:        singleRow(1, 1, 2, `{ "key1": [ { "key3": "value3" } ] }`),
 				dataConflict: true,
@@ -1354,8 +1361,57 @@ var jsonMergeTests = []schemaMergeTest{
 				right:        singleRow(1, 1, 2, `{ "key1": [ 1, 2 ] }`),
 				dataConflict: true,
 			},
+			{
+				name:     "false positive conflict",
+				ancestor: singleRow(1, 1, 1, `{ "a": 1, "aa":2 }`),
+				left:     singleRow(1, 2, 1, `{ "aa":2 }`),
+				right:    singleRow(1, 1, 2, `{ "a": 1, "aa": 3 }`),
+				merged:   singleRow(1, 2, 2, `{ "aa": 3 }`),
+			},
 		},
 	},
+}
+
+// newIndexedJsonDocumentFromValue creates an IndexedJsonDocument from a provided value.
+func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.NodeStore, v interface{}) tree.IndexedJsonDocument {
+	doc, _, err := sqltypes.JSON.Convert(v)
+	require.NoError(t, err)
+	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
+	require.NoError(t, err)
+	return tree.NewIndexedJsonDocument(ctx, root, ns)
+}
+
+// createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
+// This is useful for testing mutation operations in large documents.
+// Every different possible jsonPathType appears on a chunk boundary, for better test coverage:
+// chunk 0 key: $[6].children[2].children[0].number(endOfValue)
+// chunk 2 key: $[7].children[5].children[4].children[2].children(arrayInitialElement)
+// chunk 5 key: $[8].children[6].children[4].children[3].children[0](startOfValue)
+// chunk 8 key: $[8].children[7].children[6].children[5].children[3].children[2].children[1](objectInitialElement)
+func createLargeDocumentForTesting(t *testing.T, ctx *sql.Context, ns tree.NodeStore) tree.IndexedJsonDocument {
+	leafDoc := make(map[string]interface{})
+	leafDoc["number"] = float64(1.0)
+	leafDoc["string"] = "dolt"
+	docExpression, err := json.NewJSONArray(expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), sqltypes.JSON))
+	require.NoError(t, err)
+
+	for level := 0; level < 8; level++ {
+		childObjectExpression, err := json.NewJSONObject(expression.NewLiteral("children", sqltypes.Text), docExpression)
+		require.NoError(t, err)
+		docExpression, err = json.NewJSONArrayAppend(docExpression, expression.NewLiteral("$", sqltypes.Text), childObjectExpression)
+		require.NoError(t, err)
+	}
+	doc, err := docExpression.Eval(ctx, nil)
+	require.NoError(t, err)
+	return newIndexedJsonDocumentFromValue(t, ctx, ns, doc)
+}
+
+func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
+	// Test for each possible case in the three-way merge code.
+	// Test for multiple diffs in the same chunk,
+	// multiple diffs in adjacent chunks (with a moved boundary)
+	// and multiple diffs in non-adjacent chunks.
+	return nil
 }
 
 func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
