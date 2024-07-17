@@ -117,11 +117,12 @@ type RootValue interface {
 
 // rootValue is Dolt's implementation of RootValue.
 type rootValue struct {
-	vrw        types.ValueReadWriter
-	ns         tree.NodeStore
-	st         rootValueStorage
-	fkc        *ForeignKeyCollection // cache the first load
-	rootHash   hash.Hash             // cache the first load
+	vrw      types.ValueReadWriter
+	ns       tree.NodeStore
+	st       rootValueStorage
+	fkc      *ForeignKeyCollection // cache the first load
+	rootHash hash.Hash             // cache the first load
+	// tablesHash is a digest of the table names
 	tablesHash uint64
 }
 
@@ -793,12 +794,23 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
+	_, preexisting, err := root.GetTable(ctx, tName)
+	if err != nil {
+		return nil, err
+	}
+
 	newStorage, err := root.st.EditTablesMap(ctx, root.VRW(), root.NodeStore(), []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
 		return nil, err
 	}
 
-	return root.withStorage(newStorage), nil
+	// putTable is the one place we can preserve table list hash. Other mutation
+	// points edit the list of table names.
+	ret := root.withStorage(newStorage)
+	if preexisting {
+		ret.tablesHash = root.tablesHash
+	}
+	return ret, nil
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
