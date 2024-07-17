@@ -3559,7 +3559,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 	},
 }
 
-var DoltReset = []queries.ScriptTest{
+var DoltResetTestScripts = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
 		SetUpScript: []string{
@@ -3611,6 +3611,75 @@ var DoltReset = []queries.ScriptTest{
 			{
 				Query:          "CALL DOLT_MERGE('--abort')",
 				ExpectedErrStr: "fatal: There is no merge to abort",
+			},
+		},
+	},
+	{
+		Name: "dolt_reset('--hard') commits the active SQL transaction",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"call dolt_commit('-Am', 'creating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset('--hard', 'HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// dolt_status should be empty after a hard reset
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset('--soft') commits the active SQL transaction",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"call dolt_commit('-Am', 'creating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset('--soft', 'HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// dolt_status should only show the unstaged table t being added
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "new table"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_reset() commits the active SQL transaction",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"call dolt_commit('-Am', 'creating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "start transaction;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_reset('HEAD~');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// dolt_status should only show the unstaged table t being added
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "new table"}},
 			},
 		},
 	},
