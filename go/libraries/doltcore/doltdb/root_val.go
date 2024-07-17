@@ -578,20 +578,20 @@ func (root *rootValue) GetTableNames(ctx context.Context, schemaName string) ([]
 		return nil, err
 	}
 
-	md5 := xxhash.New()
+	tablesHash := xxhash.New()
 
 	var names []string
 	err = tmIterAll(ctx, tableMap, func(name string, _ hash.Hash) {
-		md5.Write([]byte(name))
+		tablesHash.Write([]byte(name))
 		// avoid distinct table names converging to the same hash
-		md5.Write([]byte{0x0000})
+		tablesHash.Write([]byte{0x0000})
 		names = append(names, name)
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	root.tablesHash = md5.Sum64()
+	root.tablesHash = tablesHash.Sum64()
 
 	return names, nil
 }
