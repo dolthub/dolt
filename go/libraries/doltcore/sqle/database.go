@@ -750,7 +750,8 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
 	// TODO: dolt_schemas needs work to be compatible with multiple schemas
-	if resolve.UseSearchPath && db.schemaName == "" && !doltdb.HasDoltPrefix(tableName) {
+	hasDoltPrefix := doltdb.HasDoltPrefix(tableName)
+	if resolve.UseSearchPath && db.schemaName == "" && !hasDoltPrefix {
 		return resolve.TableWithSearchPath(ctx, root, tableName)
 	} else {
 		return db.tableInsensitive(ctx, root, tableName)
@@ -761,12 +762,46 @@ func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tab
 // Name matching is applied in a case-insensitive manner, and the table's case-corrected name is returned as the
 // first result.
 func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+	if !ok {
+		return doltdb.TableName{}, nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
+	}
+
+	if tableListKey := root.TableListHash(); tableListKey != 0 {
+		tableList, ok := dbState.SessionCache().GetCachedTableMap(tableListKey)
+		if ok {
+			tname, ok := tableList[strings.ToLower(tableName)]
+			if ok {
+				tblName := doltdb.TableName{Name: tname, Schema: db.schemaName}
+				tbl, _, err := root.GetTable(ctx, tblName)
+				if err != nil {
+					return doltdb.TableName{}, nil, false, err
+				}
+				return tblName, tbl, true, nil
+			} else {
+				return doltdb.TableName{}, nil, false, nil
+			}
+		}
+	}
+
 	tableNames, err := db.getAllTableNames(ctx, root)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
 
-	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
+	if tableListKey := root.TableListHash(); tableListKey != 0 {
+		tableMap := make(map[string]string)
+		for _, table := range tableNames {
+			tableMap[strings.ToLower(table)] = table
+		}
+		dbState.SessionCache().CacheTableMap(tableListKey, tableMap)
+	}
+
+	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
 	if !ok {
 		return doltdb.TableName{}, nil, false, nil
 	}
@@ -810,6 +845,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO: should just elide system table gathering if we don't need them
 	showSystemTables, err := ctx.GetSessionVariable(ctx, dsess.ShowSystemTables)
 	if err != nil {
 		return nil, err

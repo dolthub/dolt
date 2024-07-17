@@ -29,12 +29,14 @@ type SessionCache struct {
 	indexes map[doltdb.DataCacheKey]map[string][]sql.Index
 	// tables is keyed by table root value
 	tables map[doltdb.DataCacheKey]map[TableCacheKey]sql.Table
+	// tableMaps is keyed by a digest of the table list of table names
+	tableMaps map[uint64]map[string]string
 
 	// TODO: cache views/triggers by schema fragment hash
 	views    map[doltdb.DataCacheKey]map[TableCacheKey]sql.ViewDefinition
 	triggers map[TableSchemaKey][]sql.TriggerDefinition
 
-	// writers is keyed by table schema hash
+	// writers are keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
 	// checks is keyed by table schema hash
 	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
@@ -231,6 +233,28 @@ func (c *SessionCache) CacheTableChecks(key doltdb.DataCacheKey, checks []sql.Ch
 	}
 
 	c.checks[key] = checks
+}
+
+func (c *SessionCache) GetCachedTableMap(key uint64) (map[string]string, bool) {
+	tables, ok := c.tableMaps[key]
+	return tables, ok
+}
+
+// CacheTableChecks caches sql.CheckConstraints for the table named
+func (c *SessionCache) CacheTableMap(key uint64, tables map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.tableMaps == nil {
+		c.tableMaps = make(map[uint64]map[string]string)
+	}
+	if len(c.tableMaps) > maxCachedKeys {
+		for k := range c.tableMaps {
+			delete(c.tableMaps, k)
+		}
+	}
+
+	c.tableMaps[key] = tables
 }
 
 // CacheViews caches all views in a database for the cache key given
