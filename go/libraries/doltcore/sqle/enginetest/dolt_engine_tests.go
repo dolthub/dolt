@@ -975,7 +975,7 @@ func RunDoltMergeArtifacts(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunDoltResetTest(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range DoltReset {
+	for _, script := range DoltResetTestScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		func() {
 			h := h.NewHarness(t)
