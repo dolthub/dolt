@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 	"sort"
 	"strings"
 
