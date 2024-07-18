@@ -16,6 +16,7 @@ package rowexec
 
 import (
 	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -42,6 +43,11 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				if _, _, dstIter, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
+							// conditions:
+							// (1) lookup or left lookup join
+							// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
+							// (3) right-side is an index lookup, by definition
+							// (4) the key expressions for the lookup are literals or columns (ex: no arithmetic yet)
 							split := len(srcTags)
 							projections := append(srcTags, dstTags...)
 							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
@@ -82,7 +88,7 @@ func simpleLookupExpressions(keyExprs []sql.Expression) bool {
 	return true
 }
 
-// prollyToSqlJoiner converts two KV pairs into a sql row
+// prollyToSqlJoiner converts a list of KV pairs into a sql.Row
 type prollyToSqlJoiner struct {
 	ns tree.NodeStore
 	// kvSplits are offsets between consecutive kv pairs
@@ -101,6 +107,8 @@ type kvDesc struct {
 func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
+	// first half are key value pairs
+	// second half are ordinals that map tuple to projection position
 	// | k1 | v1 | k2 | v2 | ... | ords |
 	allMap := make([]int, 2*numPhysicalColumns)
 
@@ -108,7 +116,9 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 	splits = append(splits, len(projections))
 
 	var tupleDesc []kvDesc
-	// | k -> <- v | split
+	// keys positions increment upwards, value positions decrement downwards from split
+	// | k-> <-v | split
+	// the KV meetpoint segments key/value mappings
 	nextKeyIdx := 0
 	nextValIdx := splits[0] - 1
 	sch := schemas[0]
@@ -234,13 +244,13 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // getSourceKv extracts prolly table and index specific structures needed
 // to implement a lookup join. We return either |srcIter| or |dstIter|
 // depending on whether |isSrc| is true.
-func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIter, schema.Schema, []uint64, sql.Expression, error) {
+func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
 	var err error
 	var indexMap prolly.Map
 	var srcIter prolly.MapIter
-	var dstIter index.SecondaryLookupIter
+	var dstIter index.SecondaryLookupIterGen
 	var sch schema.Schema
 	switch n := n.(type) {
 	case *plan.TableAlias:
@@ -340,7 +350,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 
 		if schema.IsKeyless(sch) {
-			srcIter = newKeylessMapIter(srcIter)
+			srcIter = index.NewKeylessCardedMapIter(srcIter)
 		}
 
 	default:

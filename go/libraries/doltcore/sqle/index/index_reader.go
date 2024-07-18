@@ -237,7 +237,7 @@ type IndexScanBuilder interface {
 
 	// NewSecondaryIter returns an object used to perform secondary lookups
 	// for index joins.
-	NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter
+	NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen
 
 	// Key returns the table root for caching purposes
 	Key() doltdb.DataCacheKey
@@ -376,7 +376,7 @@ func (ib *baseIndexImplBuilder) NewRangeMapIter(_ context.Context, _ prolly.Rang
 	panic("cannot call NewMapIter on baseIndexImplBuilder")
 }
 
-func (ib *baseIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+func (ib *baseIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	panic("cannot call NewSecondaryIter on baseIndexImplBuilder")
 }
 
@@ -421,37 +421,43 @@ type coveringIndexImplBuilder struct {
 	keyMap, valMap, ordMap val.OrdinalMapping
 }
 
-type sequenceMapIter struct {
-	cur     prolly.MapIter
-	ib      IndexScanBuilder
-	reverse bool
-	left    []prolly.Range
-}
-
 func NewSequenceMapIter(ctx context.Context, ib IndexScanBuilder, ranges []prolly.Range, reverse bool) (prolly.MapIter, error) {
 	cur, err := ib.NewRangeMapIter(ctx, ranges[0], reverse)
 	if err != nil || len(ranges) < 2 {
 		return cur, err
 	}
-	return &sequenceMapIter{
-		cur:     cur,
-		ib:      ib,
-		reverse: reverse,
-		left:    ranges[1:],
+	return &sequenceRangeIter{
+		cur:             cur,
+		ib:              ib,
+		reverse:         reverse,
+		remainingRanges: ranges[1:],
 	}, nil
 
 }
-func (i *sequenceMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+
+// sequenceRangeIter iterates a list of ranges into
+// and underlying map.
+type sequenceRangeIter struct {
+	cur             prolly.MapIter
+	ib              IndexScanBuilder
+	reverse         bool
+	remainingRanges []prolly.Range
+}
+
+var _ prolly.MapIter = (*sequenceRangeIter)(nil)
+
+// Next implements prolly.MapIter
+func (i *sequenceRangeIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
 	k, v, err := i.cur.Next(ctx)
 	if err == io.EOF {
-		if len(i.left) == 0 {
+		if len(i.remainingRanges) == 0 {
 			return nil, nil, io.EOF
 		}
-		i.cur, err = i.ib.NewRangeMapIter(ctx, i.left[0], i.reverse)
+		i.cur, err = i.ib.NewRangeMapIter(ctx, i.remainingRanges[0], i.reverse)
 		if err != nil {
 			return nil, nil, err
 		}
-		i.left = i.left[1:]
+		i.remainingRanges = i.remainingRanges[1:]
 		return i.Next(ctx)
 	}
 	return k, v, nil
@@ -487,7 +493,7 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 }
 
 // NewSecondaryIter implements IndexScanBuilder
-func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	prefixDesc := ib.secKd.PrefixDesc(cnt)
 	for _, t := range prefixDesc.Types {
 		if t.Nullable {
@@ -496,9 +502,9 @@ func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullS
 		}
 	}
 	if strict {
-		return &coveringStrictSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx}
+		return &covStrictSecondaryLookupGen{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx}
 	} else {
-		return &coveringLaxSecondaryLookup{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx, nullSafe: nullSafe}
+		return &covLaxSecondaryLookupGen{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx, nullSafe: nullSafe}
 	}
 }
 
@@ -516,17 +522,22 @@ type nonCoveringIndexImplBuilder struct {
 }
 
 type nonCoveringMapIter struct {
-	idx       DoltIndex
 	indexIter prolly.MapIter
 	primary   prolly.Map
 	pkMap     val.OrdinalMapping
 	pkBld     *val.TupleBuilder
 }
 
+var _ prolly.MapIter = (*nonCoveringMapIter)(nil)
+
+// Next implements prolly.MapIter
 func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
 	idxKey, _, err := i.indexIter.Next(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	if idxKey == nil {
+		return nil, nil, nil
 	}
 	for to := range i.pkMap {
 		from := i.pkMap.MapOrdinal(to)
@@ -556,7 +567,6 @@ func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r pr
 	}
 
 	return &nonCoveringMapIter{
-		idx:       ib.idx,
 		indexIter: secIter,
 		primary:   ib.pri,
 		pkBld:     ib.pkBld,
@@ -584,11 +594,11 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 	}, nil
 }
 
-func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	if strict {
-		return &nonCoveringStrictSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch}
+		return &nonCovStrictSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch}
 	} else {
-		return &nonCoveringLaxSecondaryLookup{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}
+		return &nonCovLaxSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}
 	}
 }
 
@@ -631,6 +641,9 @@ type keylessMapIter struct {
 	clusteredBld *val.TupleBuilder
 }
 
+var _ prolly.MapIter = (*keylessMapIter)(nil)
+
+// Next implements prolly.MapIter
 func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
 	idxKey, _, err := i.indexIter.Next(ctx)
 	if err != nil {
@@ -654,7 +667,7 @@ func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 	return pk, value, nil
 }
 
-// NewRowIter implements IndexScanBuilder
+// NewPartitionRowIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	var prollyRange prolly.Range
 	switch p := part.(type) {
@@ -666,14 +679,14 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
 }
 
-func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	pri := durable.ProllyMapFromIndex(ib.s.Primary)
 	pkDesc, _ := pri.Descriptors()
 	pkBld := val.NewTupleBuilder(pkDesc)
 
 	secondary := durable.ProllyMapFromIndex(ib.s.Secondary)
 
-	return &keylessSecondaryLookup{
+	return &keylessSecondaryLookupGen{
 		pri:        pri,
 		sec:        secondary,
 		sch:        ib.idx.tableSch,
@@ -700,7 +713,7 @@ func (ib *nomsIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Ra
 	panic("cannot call NewMapIter on *nomsIndexImplBuilder")
 }
 
-func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIter {
+func (ib *nomsIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	panic("cannot call NewSecondaryIter on *nomsIndexImplBuilder")
 }
 

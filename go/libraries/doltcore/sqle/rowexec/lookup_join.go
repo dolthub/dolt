@@ -16,6 +16,7 @@ package rowexec
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,7 +32,7 @@ import (
 
 func rowIterTableLookupJoin(
 	srcIter prolly.MapIter,
-	dstIter index.SecondaryLookupIter,
+	dstIter index.SecondaryLookupIterGen,
 	mapping *lookupMapping,
 	rowJoiner *prollyToSqlJoiner,
 	srcFilter, dstFilter, joinFilter sql.Expression,
@@ -46,8 +47,9 @@ type lookupJoinKvIter struct {
 	srcKey  val.Tuple
 	srcVal  val.Tuple
 
-	dstIter index.SecondaryLookupIter
-	dstKey  val.Tuple
+	dstIterGen index.SecondaryLookupIterGen
+	dstIter    prolly.MapIter
+	dstKey     val.Tuple
 
 	// keyTupleMapper inputs (srcKey, srcVal) to create a dstKey
 	keyTupleMapper *lookupMapping
@@ -74,7 +76,7 @@ var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
 func newLookupKvIter(
 	srcIter prolly.MapIter,
-	targetIter index.SecondaryLookupIter,
+	targetIter index.SecondaryLookupIterGen,
 	mapping *lookupMapping,
 	joiner *prollyToSqlJoiner,
 	srcFilter, dstFilter, joinFilter sql.Expression,
@@ -89,7 +91,7 @@ func newLookupKvIter(
 
 	return &lookupJoinKvIter{
 		srcIter:        srcIter,
-		dstIter:        targetIter,
+		dstIterGen:     targetIter,
 		joiner:         joiner,
 		keyTupleMapper: mapping,
 		srcFilter:      srcFilter,
@@ -102,10 +104,17 @@ func newLookupKvIter(
 
 func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
+		// (1) initialize secondary iter if does not exist yet
+		// (2) read from secondary until EOF
+		// (3) concat, convert, filter primary/secondary rows
 		var err error
-		if l.dstKey == nil {
+		if l.dstIter == nil {
+			// if secondary iterator does not exist:
+			//   (1) read the next KV pair from the primary iterator
+			//   (2) perform tuple mapping into destination key form
+			//   (3) initialize secondary iterator with |dstKey|
 			l.returnedARow = false
-			// get row from |src|
+
 			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
 			if err != nil {
 				return nil, err
@@ -119,19 +128,21 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 
-			if err := l.dstIter.New(ctx, l.dstKey); err != nil {
+			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey)
+			if err != nil {
 				return nil, err
 			}
 		}
 
-		dstKey, dstVal, ok, err := l.dstIter.Next(ctx)
-		if err != nil {
+		dstKey, dstVal, err := l.dstIter.Next(ctx)
+		if err != nil && err != io.EOF {
 			return nil, err
 		}
 
-		if !ok {
-			l.dstKey = nil
-			if !(l.isLeftJoin && !l.returnedARow) {
+		if dstKey == nil {
+			l.dstIter = nil
+			emitLeftJoinNullRow := l.isLeftJoin && !l.returnedARow
+			if !emitLeftJoinNullRow {
 				continue
 			}
 		}
@@ -201,6 +212,7 @@ type lookupMapping struct {
 
 func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src prolly.Map, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression) *lookupMapping {
 	keyless := schema.IsKeyless(sourceSch)
+	// |split| separates key and value fields
 	var split int
 	if keyless {
 		// the only key is the hash of the values
@@ -309,16 +321,8 @@ func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tupl
 		if desc.Types[from].Enc == m.targetKb.Desc.Types[to].Enc {
 			m.targetKb.PutRaw(to, desc.GetField(from, tup))
 		} else {
-			// TODO how to do GMS consistent conversion?
-			value, err := tree.GetField(ctx, desc, from, tup, m.ns)
-			if err != nil {
-				return nil, err
-			}
-
-			err = tree.PutField(ctx, m.ns, m.targetKb, to, value)
-			if err != nil {
-				return nil, err
-			}
+			// TODO support GMS-side type conversions
+			return nil, fmt.Errorf("invalid key type conversions should be rejected by lookupMapping.valid()")
 		}
 	}
 

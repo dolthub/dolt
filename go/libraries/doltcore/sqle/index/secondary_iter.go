@@ -16,17 +16,17 @@ package index
 
 import (
 	"context"
-	"io"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
-type SecondaryLookupIter interface {
-	New(context.Context, val.Tuple) error
-	Next(context.Context) (k, v val.Tuple, ok bool, err error)
+// SecondaryLookupIterGen is responsible for creating secondary
+// iterators for lookup joins given a primary key.
+type SecondaryLookupIterGen interface {
+	New(context.Context, val.Tuple) (prolly.MapIter, error)
 	InputKeyDesc() val.TupleDesc
 	OutputKeyDesc() val.TupleDesc
 	OutputValDesc() val.TupleDesc
@@ -34,58 +34,65 @@ type SecondaryLookupIter interface {
 	NodeStore() tree.NodeStore
 }
 
-type coveringStrictSecondaryLookup struct {
+type strictLookupIter struct {
+	k, v val.Tuple
+}
+
+func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
+	k, v = i.k, i.v
+	i.k, i.v = nil, nil
+	return k, v, nil
+}
+
+type covStrictSecondaryLookupGen struct {
 	m          prolly.Map
 	k, v       val.Tuple
 	prefixDesc val.TupleDesc
 	index      *doltIndex
 }
 
-var _ SecondaryLookupIter = (*coveringStrictSecondaryLookup)(nil)
+var _ SecondaryLookupIterGen = (*covStrictSecondaryLookupGen)(nil)
 
-func (c *coveringStrictSecondaryLookup) InputKeyDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *coveringStrictSecondaryLookup) OutputKeyDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
 	return c.m.KeyDesc()
 }
 
-func (c *coveringStrictSecondaryLookup) OutputValDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) OutputValDesc() val.TupleDesc {
 	return c.m.ValDesc()
 }
 
-func (c *coveringStrictSecondaryLookup) Schema() schema.Schema {
+func (c *covStrictSecondaryLookupGen) Schema() schema.Schema {
 	return c.index.IndexSchema()
 }
 
-func (c *coveringStrictSecondaryLookup) NodeStore() tree.NodeStore {
+func (c *covStrictSecondaryLookupGen) NodeStore() tree.NodeStore {
 	return c.m.NodeStore()
 }
 
-func (c *coveringStrictSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+func (c *covStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	for i := 0; i < c.prefixDesc.Count(); i++ {
 		if k.FieldIsNull(i) {
 			// nil field incompatible with strict key lookup
 			c.k, c.v = nil, nil
-			return nil
+			return nil, nil
 		}
 	}
-	return c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
-		c.k = key
-		c.v = value
+	iter := &strictLookupIter{}
+	if err := c.m.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
+		iter.k = key
+		iter.v = value
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return iter, nil
 }
 
-func (c *coveringStrictSecondaryLookup) Next(_ context.Context) (k, v val.Tuple, ok bool, err error) {
-	k, v = c.k, c.v
-	c.k, c.v = nil, nil
-	ok = k != nil
-	return
-}
-
-type nonCoveringStrictSecondaryLookup struct {
+type nonCovStrictSecondaryLookupGen struct {
 	pri   prolly.Map
 	sec   prolly.Map
 	sch   schema.Schema
@@ -94,87 +101,82 @@ type nonCoveringStrictSecondaryLookup struct {
 	pkBld *val.TupleBuilder
 }
 
-func (c *nonCoveringStrictSecondaryLookup) InputKeyDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
 	return c.sec.KeyDesc()
 }
 
-func (c *nonCoveringStrictSecondaryLookup) OutputKeyDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
-func (c *nonCoveringStrictSecondaryLookup) OutputValDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) OutputValDesc() val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
-func (c *nonCoveringStrictSecondaryLookup) Schema() schema.Schema {
+func (c *nonCovStrictSecondaryLookupGen) Schema() schema.Schema {
 	return c.sch
 }
 
-func (c *nonCoveringStrictSecondaryLookup) NodeStore() tree.NodeStore {
+func (c *nonCovStrictSecondaryLookupGen) NodeStore() tree.NodeStore {
 	return c.pri.NodeStore()
 }
 
-func (c *nonCoveringStrictSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	var idxKey val.Tuple
 	if err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
 		idxKey = key
 		return nil
 	}); err != nil {
-		return err
+		return nil, err
 	}
 	for to := range c.pkMap {
 		from := c.pkMap.MapOrdinal(to)
 		c.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	c.k = c.pkBld.Build(sharePool)
+	pk := c.pkBld.Build(sharePool)
 
-	return c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
-		c.v = value
+	iter := &strictLookupIter{k: pk}
+	if err := c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
+		iter.v = value
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return iter, nil
 }
 
-func (c *nonCoveringStrictSecondaryLookup) Next(_ context.Context) (k, v val.Tuple, ok bool, err error) {
-	k, v = c.k, c.v
-	c.k, c.v = nil, nil
-	ok = k != nil
-	return k, v, ok, nil
-}
-
-type coveringLaxSecondaryLookup struct {
+type covLaxSecondaryLookupGen struct {
 	m          prolly.Map
 	index      *doltIndex
 	prefixDesc val.TupleDesc
 	k, v       val.Tuple
-	iter       prolly.MapIter
 	nullSafe   []bool
 }
 
-func (c *coveringLaxSecondaryLookup) InputKeyDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *coveringLaxSecondaryLookup) OutputKeyDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
 	return c.m.KeyDesc()
 }
 
-func (c *coveringLaxSecondaryLookup) OutputValDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) OutputValDesc() val.TupleDesc {
 	return c.m.ValDesc()
 }
 
-func (c *coveringLaxSecondaryLookup) Schema() schema.Schema {
+func (c *covLaxSecondaryLookupGen) Schema() schema.Schema {
 	return c.index.IndexSchema()
 }
 
-func (c *coveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
+func (c *covLaxSecondaryLookupGen) NodeStore() tree.NodeStore {
 	return c.m.NodeStore()
 }
 
-func (c *coveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	for i := 0; i < c.prefixDesc.Count(); i++ {
 		if k.FieldIsNull(i) && !c.nullSafe[i] {
-			c.iter = prolly.EmptyPointLookup
-			return nil
+			return prolly.EmptyPointLookup, nil
 		}
 	}
 
@@ -184,34 +186,20 @@ func (c *coveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
 		if ok {
-			c.iter, err = c.m.IterKeyRange(ctx, start, stop)
-			if err != nil {
-				return err
-			}
+			return c.m.IterKeyRange(ctx, start, stop)
 		}
 	}
 	rng := prolly.PrefixRange(k, c.prefixDesc)
 
-	c.iter, err = c.m.IterRange(ctx, rng)
+	iter, err := c.m.IterRange(ctx, rng)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return iter, nil
 }
 
-func (c *coveringLaxSecondaryLookup) Next(ctx context.Context) (k, v val.Tuple, ok bool, err error) {
-	k, v, err = c.iter.Next(ctx)
-	if err != nil {
-		if err != io.EOF {
-			return nil, nil, false, err
-		}
-		return nil, nil, false, nil
-	}
-	return k, v, true, nil
-}
-
-type nonCoveringLaxSecondaryLookup struct {
+type nonCovLaxSecondaryLookupGen struct {
 	pri        prolly.Map
 	sec        prolly.Map
 	sch        schema.Schema
@@ -219,36 +207,34 @@ type nonCoveringLaxSecondaryLookup struct {
 	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
-	secIter    prolly.MapIter
 	nullSafe   []bool
 }
 
-func (c *nonCoveringLaxSecondaryLookup) InputKeyDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *nonCoveringLaxSecondaryLookup) OutputKeyDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
-func (c *nonCoveringLaxSecondaryLookup) Schema() schema.Schema {
+func (c *nonCovLaxSecondaryLookupGen) Schema() schema.Schema {
 	return c.sch
 }
 
-func (c *nonCoveringLaxSecondaryLookup) OutputValDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) OutputValDesc() val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
-func (c *nonCoveringLaxSecondaryLookup) NodeStore() tree.NodeStore {
+func (c *nonCovLaxSecondaryLookupGen) NodeStore() tree.NodeStore {
 	return c.pri.NodeStore()
 }
 
-func (c *nonCoveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	for i := 0; i < c.prefixDesc.Count(); i++ {
 		if k.FieldIsNull(i) && !c.nullSafe[i] {
 			// TODO test this case
-			c.secIter = prolly.EmptyPointLookup
-			return nil
+			return prolly.EmptyPointLookup, nil
 		}
 	}
 
@@ -258,161 +244,123 @@ func (c *nonCoveringLaxSecondaryLookup) New(ctx context.Context, k val.Tuple) er
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
-			c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
+			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 		}
 	}
 	rng := prolly.PrefixRange(k, c.prefixDesc)
-	c.secIter, err = c.sec.IterRange(ctx, rng)
+	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 }
 
-func (c *nonCoveringLaxSecondaryLookup) Next(ctx context.Context) (k, v val.Tuple, ok bool, err error) {
-	if c.secIter == nil {
-		// strict key already found
-		k, v = c.k, c.v
-		c.k, c.v = nil, nil
-		ok = k != nil
-		return k, v, ok, nil
-	}
-
-	idxKey, _, err := c.secIter.Next(ctx)
-	if err != nil {
-		if err != io.EOF {
-			return nil, nil, false, err
-		}
-		c.secIter = nil
-	}
-
-	if idxKey == nil {
-		c.k, c.v = nil, nil
-		return nil, nil, false, nil
-	}
-
-	// convert sec key to primary key
-	for to := range c.pkMap {
-		from := c.pkMap.MapOrdinal(to)
-		c.pkBld.PutRaw(to, idxKey.GetField(from))
-	}
-	k = c.pkBld.Build(sharePool)
-
-	if err != nil {
-		return nil, nil, false, err
-	}
-
-	// primary key lookup
-	err = c.pri.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
-		v = value
-		return nil
-	})
-	if err != nil {
-		return nil, nil, false, err
-	}
-
-	return k, v, c.secIter != nil, nil
-}
-
-type keylessSecondaryLookup struct {
+type keylessSecondaryLookupGen struct {
 	pri        prolly.Map
 	sec        prolly.Map
 	sch        schema.Schema
 	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
-
-	secIter prolly.MapIter
-	k, v    val.Tuple
-	card    uint64
 }
 
-func (c *keylessSecondaryLookup) InputKeyDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *keylessSecondaryLookup) OutputKeyDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
-func (c *keylessSecondaryLookup) Schema() schema.Schema {
+func (c *keylessSecondaryLookupGen) Schema() schema.Schema {
 	return c.sch
 }
 
-func (c *keylessSecondaryLookup) OutputValDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) OutputValDesc() val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
-func (c *keylessSecondaryLookup) NodeStore() tree.NodeStore {
+func (c *keylessSecondaryLookupGen) NodeStore() tree.NodeStore {
 	return c.pri.NodeStore()
 }
 
-func (c *keylessSecondaryLookup) New(ctx context.Context, k val.Tuple) error {
+func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	var err error
 	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
 		// key range optimization only works if full key
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
-			c.secIter, err = c.sec.IterKeyRange(ctx, start, stop)
+			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
-				return err
+				return nil, err
 			}
+			return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 		}
 	}
 	rng := prolly.PrefixRange(k, c.prefixDesc)
-	c.secIter, err = c.sec.IterRange(ctx, rng)
+	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 }
 
-func (c *keylessSecondaryLookup) Next(ctx context.Context) (k, v val.Tuple, ok bool, err error) {
-	if c.card > 0 {
-		// exhaust duplicates
-		c.card--
-		k, v = c.k, c.v
-		return k, v, true, nil
-	}
+type keylessLookupIter struct {
+	pri     prolly.Map
+	secIter prolly.MapIter
 
-	if c.secIter == nil {
-		// original lookup was strict, done
-		return nil, nil, false, err
+	prefixDesc val.TupleDesc
+	pkMap      val.OrdinalMapping
+	pkBld      *val.TupleBuilder
+
+	card uint64
+	k, v val.Tuple
+}
+
+func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
+	if i.card > 0 {
+		// exhaust duplicates
+		i.card--
+		k, v = i.k, i.v
+		return k, v, nil
 	}
 
 	// get next secondary key
-	idxKey, _, err := c.secIter.Next(ctx)
+	idxKey, _, err := i.secIter.Next(ctx)
 	if err != nil {
 		if err != io.EOF {
-			return nil, nil, false, err
+			return nil, nil, err
 		}
-		c.secIter = nil
-		return nil, nil, false, nil
+		return nil, nil, nil
+	}
+
+	if idxKey == nil {
+		return nil, nil, nil
 	}
 
 	// convert sec key to primary key
-	for to := range c.pkMap {
-		from := c.pkMap.MapOrdinal(to)
-		c.pkBld.PutRaw(to, idxKey.GetField(from))
+	for to := range i.pkMap {
+		from := i.pkMap.MapOrdinal(to)
+		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	c.k = c.pkBld.Build(sharePool)
+	i.k = i.pkBld.Build(sharePool)
 
-	err = c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
-		c.v = value
+	err = i.pri.Get(ctx, i.k, func(key val.Tuple, value val.Tuple) error {
+		i.v = value
 		return nil
 	})
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, err
 	}
 
-	c.card = val.ReadKeylessCardinality(c.v)
+	i.card = val.ReadKeylessCardinality(i.v)
 
-	return c.Next(ctx)
-
+	return i.Next(ctx)
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rowexec
+package index
 
 import (
 	"context"
@@ -21,26 +21,29 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newKeylessMapIter(iter prolly.MapIter) prolly.MapIter {
-	return &keylessMapIter{iter: iter}
+func NewKeylessCardedMapIter(iter prolly.MapIter) prolly.MapIter {
+	return &keylessCardedMapIter{iter: iter}
 }
 
-// keylessMapIter duplicates keyless rows using the cardinality column
-type keylessMapIter struct {
+// keylessCardedMapIter duplicates keyless rows using the cardinality column
+type keylessCardedMapIter struct {
 	iter prolly.MapIter
 	card uint64
 	key  val.Tuple
 	val  val.Tuple
 }
 
-var _ prolly.MapIter = (*keylessMapIter)(nil)
+var _ prolly.MapIter = (*keylessCardedMapIter)(nil)
 
-func (k *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
+func (k *keylessCardedMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error) {
 	var err error
 	if k.key == nil {
 		k.key, k.val, err = k.iter.Next(ctx)
 		if err != nil {
 			return nil, nil, err
+		}
+		if k.key == nil {
+			return nil, nil, nil
 		}
 		k.card = val.ReadKeylessCardinality(k.val)
 	}
