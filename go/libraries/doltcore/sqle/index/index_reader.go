@@ -494,13 +494,6 @@ func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part s
 
 // NewSecondaryIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
-	prefixDesc := ib.secKd.PrefixDesc(cnt)
-	for _, t := range prefixDesc.Types {
-		if t.Nullable {
-			strict = false
-			break
-		}
-	}
 	if strict {
 		return &covStrictSecondaryLookupGen{m: ib.sec, prefixDesc: ib.secKd.PrefixDesc(cnt), index: ib.idx}
 	} else {

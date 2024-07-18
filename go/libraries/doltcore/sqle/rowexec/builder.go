@@ -106,7 +106,7 @@ type kvDesc struct {
 
 func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
-	
+
 	// | k1 | v1 | k2 | v2 | ... | ords |
 	allMap := make([]int, 2*numPhysicalColumns)
 

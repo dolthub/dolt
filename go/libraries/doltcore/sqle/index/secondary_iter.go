@@ -234,14 +234,17 @@ func (c *nonCovLaxSecondaryLookupGen) NodeStore() tree.NodeStore {
 func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	for i := 0; i < c.prefixDesc.Count(); i++ {
 		if k.FieldIsNull(i) && !c.nullSafe[i] {
-			// TODO test this case
 			return prolly.EmptyPointLookup, nil
 		}
 	}
 
 	var err error
-	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
-		// key range optimization only works if full key
+	if c.prefixDesc.Count() >= c.sec.KeyDesc().Count()-1 {
+		// if there are at least cnt-1 fields set in the prefix, the full key
+		// is present (the pk columns are appended at the end. at least one pk
+		// must not be present in a valid secondary index).
+		// TODO: widen this restriction for multiple PKs. need to count the number
+		// of PK cols in the index colset vs outside
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
@@ -294,6 +297,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 	var err error
 	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
 		// key range optimization only works if full key
+		// keyless indexs should include all rows
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
