@@ -35,7 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	rowexec2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
+	drowexec "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -252,7 +252,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(rowexec2.Builder{})
+		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(drowexec.Builder{})
 		d.engine = e
 
 		ctx := enginetest.NewContext(d)
