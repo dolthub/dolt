@@ -35,6 +35,9 @@ const maxSamples = 1000
 const minSamples = 25
 
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, progress chan interface{}) (err error) {
+	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
+	var stats Stats
+
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		outPath, _ := gs.oldGen.Path()
 		oldgen := gs.oldGen.tables.upstream
@@ -51,7 +54,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 
 			archivePath := ""
 			archiveName := hash.Hash{}
-			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress)
+			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress, &stats)
 			if err != nil {
 				return err
 			}
@@ -84,8 +87,16 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	return nil
 }
 
-func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableIndex, dagGroups *ChunkRelations, archivePath string, progress chan interface{}) (string, hash.Hash, error) {
-	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx)
+func convertTableFileToArchive(
+	ctx context.Context,
+	cs chunkSource,
+	idx tableIndex,
+	dagGroups *ChunkRelations,
+	archivePath string,
+	progress chan interface{},
+	stats *Stats,
+) (string, hash.Hash, error) {
+	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx, stats)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -103,7 +114,7 @@ func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableInd
 		return "", hash.Hash{}, err
 	}
 
-	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict, progress)
+	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict, progress, stats)
 	sort.Slice(cgList, func(i, j int) bool {
 		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
 	})
@@ -129,7 +140,7 @@ func convertTableFileToArchive(ctx context.Context, cs chunkSource, idx tableInd
 		return "", hash.Hash{}, err
 	}
 
-	_, grouped, singles, err := writeChunkGroupToArchive(ctx, cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW)
+	_, grouped, singles, err := writeChunkGroupToArchive(ctx, cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, stats)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -193,6 +204,7 @@ func writeChunkGroupToArchive(
 	defaultSpanId uint32,
 	defaultDict *gozstd.CDict,
 	arcW *archiveWriter,
+	stats *Stats,
 ) (groupCount, groupedChunkCount, individualChunkCount uint32, err error) {
 	var allChunks hash.HashSet
 	allChunks, err = chunkCache.addresses()
@@ -212,7 +224,7 @@ func writeChunkGroupToArchive(
 			}
 
 			for _, cs := range cg.chks {
-				c, e2 := chunkCache.get(ctx, cs.chunkId)
+				c, e2 := chunkCache.get(ctx, cs.chunkId, stats)
 				if e2 != nil {
 					return 0, 0, 0, e2
 				}
@@ -240,7 +252,7 @@ func writeChunkGroupToArchive(
 		var compressed []byte
 		dictId := uint32(0)
 
-		c, e2 := chunkCache.get(ctx, h)
+		c, e2 := chunkCache.get(ctx, h, stats)
 		if e2 != nil {
 			return 0, 0, 0, e2
 		}
@@ -265,7 +277,7 @@ func writeChunkGroupToArchive(
 // gatherAllChunks reads all the chunks from the chunk source and returns them in a map. The map is keyed by the hash of
 // the chunk. This is going to take up a bunch of memory.
 // It also returns a list of default samples, which are the first 1000 chunks that are read. These are used to build the default dictionary.
-func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex) (*SimpleChunkSourceCache, []*chunks.Chunk, error) {
+func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats *Stats) (*SimpleChunkSourceCache, []*chunks.Chunk, error) {
 	sampleCount := min(idx.chunkCount(), maxSamples)
 
 	defaultSamples := make([]*chunks.Chunk, 0, sampleCount)
@@ -276,7 +288,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex) (*Simp
 			return nil, nil, err
 		}
 
-		bytes, err := cs.get(ctx, h, nil)
+		bytes, err := cs.get(ctx, h, stats)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -382,7 +394,14 @@ type chunkCmpScore struct {
 }
 
 // newChunkGroup creates a new chunkGroup from a set of chunks.
-func newChunkGroup(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, chks hash.HashSet, defaultDict *gozstd.CDict, progress chan interface{}) (*chunkGroup, error) {
+func newChunkGroup(
+	ctx context.Context,
+	chunkCache *SimpleChunkSourceCache,
+	cmpBuff []byte, chks hash.HashSet,
+	defaultDict *gozstd.CDict,
+	progress chan interface{},
+	stats *Stats,
+) (*chunkGroup, error) {
 	scored := make([]chunkCmpScore, len(chks))
 	i := 0
 	for h := range chks {
@@ -391,7 +410,7 @@ func newChunkGroup(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpB
 	}
 
 	result := chunkGroup{dict: nil, cDict: nil, chks: scored}
-	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, progress)
+	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, progress, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +434,15 @@ func padSamples(chks []*chunks.Chunk) []*chunks.Chunk {
 // use testChunk to determine if this chunk should be added.
 //
 // The chunkGroup will be recalculated after this chunk is added.
-func (cg *chunkGroup) addChunk(ctx context.Context, chunkChache *SimpleChunkSourceCache, cmpBuff []byte, c *chunks.Chunk, defaultDict *gozstd.CDict, progress chan interface{}) error {
+func (cg *chunkGroup) addChunk(
+	ctx context.Context,
+	chunkChache *SimpleChunkSourceCache,
+	cmpBuff []byte,
+	c *chunks.Chunk,
+	defaultDict *gozstd.CDict,
+	progress chan interface{},
+	stats *Stats,
+) error {
 	scored := chunkCmpScore{
 		chunkId:     c.Hash(),
 		score:       0.0,
@@ -423,7 +450,7 @@ func (cg *chunkGroup) addChunk(ctx context.Context, chunkChache *SimpleChunkSour
 	}
 
 	cg.chks = append(cg.chks, scored)
-	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, progress)
+	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, progress, stats)
 }
 
 // worstZScore returns the z-score of the worst chunk in the group. The z-score is a measure of how many standard
@@ -455,11 +482,11 @@ func (cg *chunkGroup) worstZScore() float64 {
 
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
-func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, progress chan interface{}) error {
+func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, progress chan interface{}, stats *Stats) error {
 	chks := make([]*chunks.Chunk, len(cg.chks))
 
 	for i, cs := range cg.chks {
-		chk, err := chunkCache.get(ctx, cs.chunkId)
+		chk, err := chunkCache.get(ctx, cs.chunkId, stats)
 		if err != nil {
 			return err
 		}
@@ -566,7 +593,13 @@ type ArchiveConvertToChunkGroupsMsg struct {
 	Done        bool
 }
 
-func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *SimpleChunkSourceCache, defaultDict *gozstd.CDict, progress chan interface{}) ([]*chunkGroup, error) {
+func (cr *ChunkRelations) convertToChunkGroups(
+	ctx context.Context,
+	chks *SimpleChunkSourceCache,
+	defaultDict *gozstd.CDict,
+	progress chan interface{},
+	stats *Stats,
+) ([]*chunkGroup, error) {
 	result := make([]*chunkGroup, 0, cr.Count())
 
 	// Create a channel for sending groups to process
@@ -587,7 +620,7 @@ func (cr *ChunkRelations) convertToChunkGroups(ctx context.Context, chks *Simple
 			for hs := range groupChannel {
 				progress <- fmt.Sprintf("Worker (%d) taking group of size %d", i, len(hs))
 				if len(hs) > 1 {
-					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, progress)
+					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, progress, stats)
 					if err != nil {
 						progress <- err
 						continue
@@ -697,12 +730,12 @@ func newSimpleChunkSourceCache(cs chunkSource) (*SimpleChunkSourceCache, error) 
 }
 
 // get a chunk from the cache. If the chunk is not in the cache, it will be fetched from the ChunkSource.
-func (csc *SimpleChunkSourceCache) get(ctx context.Context, h hash.Hash) (*chunks.Chunk, error) {
+func (csc *SimpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *Stats) (*chunks.Chunk, error) {
 	if chk, ok := csc.cache.Get(h); ok {
 		return chk, nil
 	}
 
-	bytes, err := csc.cs.get(ctx, h, nil)
+	bytes, err := csc.cs.get(ctx, h, stats)
 	if err != nil {
 		return nil, err
 	}
