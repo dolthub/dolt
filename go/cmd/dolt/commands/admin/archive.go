@@ -91,17 +91,28 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 1
 	}
 
-	datasets, err := db.Datasets(ctx)
-	if err != nil {
-		cli.PrintErrln(err)
-		return 1
-	}
+	progress := make(chan interface{}, 32)
+	handleProgress(ctx, progress)
 
-	hs := hash.NewHashSet()
-	err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
-		hs.Insert(hash)
-		return nil
-	})
+	if apr.Contains("reverse") {
+		// Get the list of archives
+		err := nbs.UnArchive(ctx, cs, progress)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
+	} else {
+		datasets, err := db.Datasets(ctx)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
+
+		hs := hash.NewHashSet()
+		err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
+			hs.Insert(hash)
+			return nil
+		})
 
 	groupings := nbs.NewChunkRelations()
 	if apr.Contains(groupChunksFlag) {
@@ -112,15 +123,13 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		}
 	}
 
-	progress := make(chan interface{}, 32)
-	handleProgress(ctx, progress)
+		err = nbs.BuildArchive(ctx, cs, &groupings, progress)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
 
-	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
-	if err != nil {
-		cli.PrintErrln(err)
-		return 1
 	}
-
 	return 0
 }
 

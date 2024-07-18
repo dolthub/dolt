@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,70 @@ import (
 const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chunk. TBD.
 const maxSamples = 1000
 const minSamples = 25
+
+func UnArchive(ctx context.Context, cs chunks.ChunkStore, progress chan interface{}) error {
+	if gs, ok := cs.(*GenerationalNBS); ok {
+		outPath, _ := gs.oldGen.Path()
+		oldgen := gs.oldGen.tables.upstream
+
+		swapMap := make(map[hash.Hash]hash.Hash)
+
+		for _, ogcs := range oldgen {
+			if arc, ok := ogcs.(archiveChunkSource); ok {
+				classicTable, err := NewCmpChunkTableWriter("")
+				if err != nil {
+					return err
+				}
+
+				err = arc.iterate(ctx, func(chk chunks.Chunk) error {
+					cmpChk := ChunkToCompressedChunk(chk)
+					err := classicTable.AddCmpChunk(cmpChk)
+					if err != nil {
+						return err
+					}
+
+					progress <- fmt.Sprintf("UnArchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
+					return nil
+				})
+
+				if err != nil {
+					return err
+				}
+
+				id, err := classicTable.Finish()
+				if err != nil {
+					return err
+				}
+				err = classicTable.FlushToFile(filepath.Join(outPath, id))
+				if err != nil {
+					return err
+				}
+
+				swapMap[arc.hash()] = hash.Parse(id)
+
+				progress <- fmt.Sprintf("UnArchiving Finished: %s", id)
+			}
+		}
+
+		if len(swapMap) > 0 {
+			//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
+			specs, err := gs.oldGen.tables.toSpecs()
+			newSpecs := make([]tableSpec, 0, len(specs))
+			for _, spec := range specs {
+				if newSpec, exists := swapMap[spec.name]; exists {
+					newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
+				} else {
+					newSpecs = append(newSpecs, spec)
+				}
+			}
+			err = gs.oldGen.swapTables(ctx, newSpecs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, progress chan interface{}) (err error) {
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.

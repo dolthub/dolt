@@ -92,6 +92,12 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 	return !foundAll, nil
 }
 
+// iterate iterates over the archive chunks. The callback is called for each chunk in the archive. This is not optimized
+// as currently is it only used for un-archiving, which should be uncommon.
+func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error) error {
+	return acs.aRdr.iterate(ctx, cb)
+}
+
 func (acs archiveChunkSource) count() (uint32, error) {
 	return acs.aRdr.count(), nil
 }
