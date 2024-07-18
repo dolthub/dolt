@@ -114,7 +114,6 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-
 	} else if apr.Contains(cli.SoftResetParam) {
 		arg := ""
 		if apr.NArg() > 1 {
@@ -176,7 +175,10 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 				}
 			}
 		}
+	}
 
+	if err = commitTransaction(ctx, dSess, nil); err != nil {
+		return 1, err
 	}
 
 	return 0, nil

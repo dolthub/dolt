@@ -119,16 +119,12 @@ SQL
     [[ "$output" =~ "trigger1,INSERT,test,1,,SET new.v1 = new.v1 + 1,BEFORE,root@localhost,utf8mb4,utf8mb4_0900_bin,utf8mb4_0900_bin" ]] || false
 }
 
-@test "triggers: Writing directly into dolt_schemas" {
+@test "triggers: Writing directly into dolt_schemas is forbidden" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
-    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', json_object('CreatedAt', 1), NULL);"
-    dolt sql -q "INSERT INTO test VALUES (1, 1);"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,-1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', json_object('CreatedAt', 1), NULL);"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "doesn't support INSERT INTO" ]] || false
 }
 
 @test "triggers: Merge triggers on different branches, no conflict" {
@@ -172,46 +168,19 @@ SQL
 
 @test "triggers: Upgrade dolt_schemas" {
     rm -rf .dolt
-    # old_dolt_schemas was created using v0.19.1, which is pre-id change
+
+    # old_dolt_schemas was created using v1.0.0, which is pre-sqlMode change
     cp -a $BATS_TEST_DIRNAME/helper/old_dolt_schemas/. ./.dolt/
 
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment" ]] || false
-    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "type,name,fragment,extra" ]] || false
+    [[ "$output" =~ "view,my_view" ]] || false
+    [[ "$output" =~ "SELECT 2+2" ]] || false
 
-    run dolt sql -q "SELECT * FROM view1" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "2+2" ]] || false
-    [[ "$output" =~ "4" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    # creating a new view/trigger will recreate the dolt_schemas table
-    dolt sql -q "CREATE VIEW view2 AS SELECT 3+3 FROM dual;"
-
-    skip "diff is broken on schema change"
-    run dolt diff
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "deleted table" ]] || false
-    [[ "$output" =~ "added table" ]] || false
+    dolt sql -q "CREATE VIEW another_view AS SELECT 3+3"
 
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "type,name,fragment,id" ]] || false
-    [[ "$output" =~ "view,view1,CREATE VIEW view1 AS SELECT 2+2 FROM dual,1" ]] || false
-    [[ "$output" =~ "view,view2,CREATE VIEW view2 AS SELECT 3+3 FROM dual,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-
-    run dolt sql -q "SELECT * FROM view1" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "2+2" ]] || false
-    [[ "$output" =~ "4" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt sql -q "SELECT * FROM view2" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "3+3" ]] || false
-    [[ "$output" =~ "6" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ "type,name,fragment,extra,sql_mode" ]] || false
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -42,6 +43,81 @@ const (
 	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
 	ProceduresTableModifiedAtCol = "modified_at"
 )
+
+type ProceduresTable struct {
+	backingTable *WritableDoltTable
+}
+
+func (pt *ProceduresTable) Name() string {
+	return ProceduresTableName
+}
+
+func (pt *ProceduresTable) String() string {
+	return ProceduresTableName
+}
+
+func (pt *ProceduresTable) Schema() sql.Schema {
+	return ProceduresTableSqlSchema().Schema
+}
+
+func (pt *ProceduresTable) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
+func (pt *ProceduresTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	if pt.backingTable == nil {
+		// no backing table; return an empty iter.
+		return index.SinglePartitionIterFromNomsMap(nil), nil
+	}
+	return pt.backingTable.Partitions(ctx)
+}
+
+func (pt *ProceduresTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	if pt.backingTable == nil {
+		// no backing table; return an empty iter.
+		return sql.RowsToRowIter(), nil
+	}
+
+	return pt.backingTable.PartitionRows(ctx, partition)
+}
+
+func (pt *ProceduresTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if pt.backingTable == nil {
+		return pt, nil
+
+	}
+	return pt.backingTable.LockedToRoot(ctx, root)
+}
+
+func (pt *ProceduresTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	// Never reached. Interface required for LockedToRoot to be implemented.
+	panic("Unreachable")
+}
+
+func (pt *ProceduresTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
+}
+
+func (pt *ProceduresTable) PreciseMatch() bool {
+	return true
+}
+
+func (pt *ProceduresTable) UnWrap() *WritableDoltTable {
+	return pt.backingTable
+}
+
+func NewProceduresTable(backing *WritableDoltTable) sql.Table {
+	return &ProceduresTable{backingTable: backing}
+}
+
+func NewEmptyProceduresTable() sql.Table {
+	return &ProceduresTable{}
+}
+
+var _ sql.Table = (*ProceduresTable)(nil)
+var _ dtables.VersionableTable = (*ProceduresTable)(nil)
+var _ sql.IndexAddressableTable = (*ProceduresTable)(nil)
+var _ WritableDoltTableWrapper = (*ProceduresTable)(nil)
 
 // The fixed SQL schema for the `dolt_procedures` table.
 func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
@@ -65,37 +141,47 @@ func ProceduresTableSchema() schema.Schema {
 }
 
 // DoltProceduresGetOrCreateTable returns the `dolt_procedures` table from the given db, creating it in the db's
-// current root if it doesn't exist
+// current root if it doesn't exist.
 func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
-	if found {
-		// Make sure the schema is up to date
-		writableDoltTable := tbl.(*WritableDoltTable)
-		return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
-	}
-
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = db.createDoltTable(ctx, doltdb.ProceduresTableName, doltdb.DefaultSchemaName, root, ProceduresTableSchema())
-	if err != nil {
-		return nil, err
-	}
-
-	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
-	if err != nil {
-		return nil, err
-	}
-	// Verify it was created successfully
 	if !found {
-		return nil, sql.ErrTableNotFound.New(ProceduresTableName)
+		// Should never happen.
+		panic("runtime error. dolt_procedures table not found")
 	}
-	return tbl.(*WritableDoltTable), nil
+
+	wrapper, ok := tbl.(*ProceduresTable)
+	if !ok {
+		return nil, fmt.Errorf("expected a ProceduresTable, but got %T", tbl)
+	}
+
+	if wrapper.backingTable == nil {
+		// We haven't materialized the table yet. Go ahead and do so.
+		root, err := db.GetRoot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		err = db.createDoltTable(ctx, doltdb.ProceduresTableName, doltdb.DefaultSchemaName, root, ProceduresTableSchema())
+		if err != nil {
+			return nil, err
+		}
+		tbl, _, err = db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+		if err != nil {
+			return nil, err
+		}
+		wrapper, ok = tbl.(*ProceduresTable)
+		if !ok {
+			return nil, fmt.Errorf("expected a ProceduresTable, but got %T", tbl)
+		}
+		if wrapper.backingTable == nil {
+			return nil, sql.ErrTableNotFound.New(ProceduresTableName)
+		}
+		return wrapper.backingTable, nil
+	} else {
+		return migrateDoltProceduresSchema(ctx, db, wrapper.backingTable)
+	}
 }
 
 // migrateDoltProceduresSchema migrates the dolt_procedures system table from a previous schema version to the current
@@ -162,15 +248,20 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 		return nil, err
 	}
 
-	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
+
+	wrapper, ok := tbl.(*ProceduresTable)
+	if !ok {
+		return nil, fmt.Errorf("expected a ProceduresTable, but got %T", tbl)
+	}
+	if wrapper.backingTable == nil {
 		return nil, sql.ErrTableNotFound.New(doltdb.ProceduresTableName)
 	}
 
-	inserter := tbl.(*WritableDoltTable).Inserter(ctx)
+	inserter := wrapper.backingTable.Inserter(ctx)
 	for _, row := range newRows {
 		err = inserter.Insert(ctx, row)
 		if err != nil {
@@ -183,22 +274,24 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 		return nil, err
 	}
 
-	return tbl.(*WritableDoltTable), nil
+	return wrapper.backingTable, nil
 }
 
 // DoltProceduresGetTable returns the `dolt_procedures` table from the given db, or nil if the table doesn't exist
 func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
-	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
-	if found {
-		// Make sure the schema is up to date
-		writableDoltTable := tbl.(*WritableDoltTable)
-		return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
-	} else {
-		return nil, nil
+
+	wrapper, ok := tbl.(*ProceduresTable)
+	if !ok {
+		return nil, fmt.Errorf("expected a ProceduresTable, but got %T", tbl)
 	}
+	if wrapper.backingTable != nil {
+		return migrateDoltProceduresSchema(ctx, db, wrapper.backingTable)
+	}
+	return nil, nil
 }
 
 // DoltProceduresGetAll returns all stored procedures for the database if the procedureName is blank (and empty string),

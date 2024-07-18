@@ -151,22 +151,22 @@ var BasicDeleteTests = []DeleteTest{
 	{
 		Name:        "delete invalid table",
 		DeleteQuery: "delete from nobody",
-		ExpectedErr: "invalid table",
+		ExpectedErr: "table not found: nobody",
 	},
 	{
 		Name:        "delete invalid column",
 		DeleteQuery: "delete from people where z = 'dne'",
-		ExpectedErr: "invalid column",
+		ExpectedErr: "column \"z\" could not be found in any table in scope",
 	},
 	{
 		Name:        "delete negative limit",
 		DeleteQuery: "delete from people limit -1",
-		ExpectedErr: "invalid limit number",
+		ExpectedErr: "syntax error", // syntax error at position 27 near 'limit'
 	},
 	{
 		Name:        "delete negative offset",
 		DeleteQuery: "delete from people limit 1 offset -1",
-		ExpectedErr: "invalid limit number",
+		ExpectedErr: "syntax error", // syntax error at position 36 near 'offset'
 	},
 }
 
@@ -207,12 +207,10 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
-			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')"),
-		DeleteQuery:    "delete from dolt_schemas",
-		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
-		ExpectedSchema: schemaTableSchema,
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
+			"CREATE VIEW name as select 2+2 from dual"),
+		DeleteQuery: "delete from dolt_schemas",
+		ExpectedErr: "table doesn't support DELETE FROM",
 	},
 }
 
@@ -239,6 +237,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 	root, err = executeModify(t, context.Background(), dEnv, root, test.DeleteQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
+		assert.Contains(t, err.Error(), test.ExpectedErr)
 		return
 	} else {
 		require.NoError(t, err)

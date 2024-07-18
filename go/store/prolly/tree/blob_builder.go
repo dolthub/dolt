@@ -304,6 +304,10 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 	if err != nil {
 		return nil, err
 	}
+	if root.level > 0 && root.keys.IsEmpty() {
+		// We're reading a non-indexed multi-chunk document written by an older version of Dolt.
+		return b.ToLazyJSONDocument(ctx)
+	}
 	return NewIndexedJsonDocument(ctx, root, b.ns), nil
 }
 

@@ -11,7 +11,7 @@ export const viewsTests = [
   {
     q: "SELECT * FROM ::tableName ::col0 LIMIT :limit OFFSET :offset",
     p: { tableName: "dolt_schemas", col0: "id", limit: 10, offset: 0 },
-    expectedErr: "table not found: dolt_schemas",
+    res: [],
   },
   {
     q: "CREATE VIEW ::name AS SELECT * FROM test",
