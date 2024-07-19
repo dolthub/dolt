@@ -95,7 +95,7 @@ func teardown(t *testing.T) {
 func TestBinlogReplicationSanityCheck(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
@@ -120,7 +120,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 	require.ErrorContains(t, err, "User not found")
 
 	// After starting replication, the system account is locked
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	err = db.Ping()
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Access denied for user")
@@ -132,7 +132,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 func TestFlushLogs(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
@@ -156,7 +156,7 @@ func TestFlushLogs(t *testing.T) {
 func TestResetReplica(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// RESET REPLICA returns an error if replication is running
 	_, err := replicaDatabase.Queryx("RESET REPLICA")
@@ -195,7 +195,7 @@ func TestResetReplica(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Start replication again and verify that we can still query replica status
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	replicaStatus := showReplicaStatus(t)
 	require.Equal(t, "0", replicaStatus["Last_Errno"])
 	require.Equal(t, "", replicaStatus["Last_Error"])
@@ -229,7 +229,7 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.Nil(t, rows)
 
 	// START REPLICA logs a warning if replication is already running
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
 	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
 }
@@ -272,7 +272,7 @@ func TestStopReplica(t *testing.T) {
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	// START REPLICA and verify status
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	time.Sleep(100 * time.Millisecond)
 	status = showReplicaStatus(t)
 	require.True(t, status["Replica_IO_Running"] == "Connecting" || status["Replica_IO_Running"] == "Yes")
@@ -293,7 +293,7 @@ func TestStopReplica(t *testing.T) {
 func TestDoltCommits(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// First transaction (DDL)
 	primaryDatabase.MustExec("create table t1 (pk int primary key);")
@@ -373,7 +373,7 @@ func TestDoltCommits(t *testing.T) {
 func TestForeignKeyChecks(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Test that we can execute statement-based replication that requires foreign_key_checks
 	// being turned off (referenced table doesn't exist yet).
@@ -430,7 +430,7 @@ func TestForeignKeyChecks(t *testing.T) {
 func TestCharsetsAndCollations(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Use non-default charset/collations to create data on the primary
 	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
@@ -646,16 +646,8 @@ func stopDoltSqlServer(t *testing.T) {
 	}
 }
 
-// startReplication starts up replication on the replica, connecting to |port| on the primary,
-// creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
-func startReplication(t *testing.T, port int) {
-	startReplicationWithDelay(t, port, 100*time.Millisecond)
-}
-
-// startReplication starts up replication on the replica, connecting to |port| on the primary,
-// pauses for |delay| before creating the test database, db01, on the primary, and ensures it
-// gets replicated to the replica.
-func startReplicationWithDelay(t *testing.T, port int, delay time.Duration) {
+// startReplication configures the replication source on the replica and runs the START REPLICA statement.
+func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
@@ -663,6 +655,19 @@ func startReplicationWithDelay(t *testing.T, port int, delay time.Duration) {
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
+}
+
+// startReplicationAndCreateTestDb starts up replication on the replica, connecting to |port| on the primary,
+// creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
+func startReplicationAndCreateTestDb(t *testing.T, port int) {
+	startReplicationAndCreateTestDbWithDelay(t, port, 100*time.Millisecond)
+}
+
+// startReplicationAndCreateTestDbWithDelay starts up replication on the replica, connecting to |port| on the primary,
+// pauses for |delay| before creating the test database, db01, on the primary, and ensures it
+// gets replicated to the replica.
+func startReplicationAndCreateTestDbWithDelay(t *testing.T, port int, delay time.Duration) {
+	startReplication(t, port)
 	time.Sleep(delay)
 
 	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to

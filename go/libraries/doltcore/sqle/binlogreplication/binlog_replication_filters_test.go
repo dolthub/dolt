@@ -26,7 +26,7 @@ import (
 func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Ignore replication events for db01.t2. Also tests that the first filter setting is overwritten by
 	// the second and that db and that db and table names are case-insensitive.
@@ -77,7 +77,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Do replication events for db01.t1. Also tests that the first filter setting is overwritten by
 	// the second and that db and that db and table names are case-insensitive.
@@ -128,7 +128,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Do replication events for db01.t1, and db01.t2
 	replicaDatabase.MustExec("CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db01.t1, db01.t2);")

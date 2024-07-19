@@ -40,31 +40,37 @@ var binlogDirectory = filepath.Join(".dolt", "binlog")
 var binlogFileMagicNumber = []byte{0xfe, 0x62, 0x69, 0x6e}
 
 // LogManager is responsible for the binary log files on disk, including actually writing events to the log files,
-// rotating the log files, listing the available log files, and purging old log files.
+// rotating the log files, listing the available log files, purging old log files, and keeping track of what GTIDs
+// are available in the log files.
 type LogManager struct {
+	binlogFormat    mysql.BinlogFormat
+	binlogEventMeta mysql.BinlogEventMetadata
+
 	mu                    *sync.Mutex
 	currentBinlogFile     *os.File
 	currentBinlogFileName string
 	currentPosition       int
 	fs                    filesys.Filesys
-	binlogFormat          mysql.BinlogFormat
-	binlogEventMeta       mysql.BinlogEventMetadata
 	binlogDirectory       string
 	availableGtids        mysql.GTIDSet
 }
 
 // NewLogManager creates a new LogManager instance where binlog files are stored in the .dolt/binlog directory
-// underneath the specified |fs| filesystem. The |binlogFormat| and |binlogStream| are used to initialize the
-// new binlog file.
-func NewLogManager(fs filesys.Filesys, binlogFormat mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) (*LogManager, error) {
+// underneath the specified |fs| filesystem. This method also initializes the binlog logging system, including
+// rotating to a new log file and purging expired log files.
+func NewLogManager(fs filesys.Filesys) (*LogManager, error) {
+	binlogFormat := createBinlogFormat()
+	binlogEventMeta, err := createBinlogEventMetadata()
+	if err != nil {
+		return nil, err
+	}
+
 	lm := &LogManager{
 		mu:              &sync.Mutex{},
 		fs:              fs,
-		binlogFormat:    binlogFormat,
-		binlogEventMeta: binlogEventMeta,
+		binlogFormat:    *binlogFormat,
+		binlogEventMeta: *binlogEventMeta,
 	}
-
-	// TODO: Could resolve the base dir for the binlog file directory here; would it help us avoid returning errors in other APIs?
 
 	// Initialize binlog file storage directory
 	if err := fs.MkDirs(binlogDirectory); err != nil {
@@ -157,20 +163,20 @@ func (lm *LogManager) purgeExpiredLogFiles() error {
 
 	purgeThresholdTime := time.Now().Add(-time.Duration(expireLogsSeconds) * time.Second)
 
-	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
+	filenames, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < len(files); i++ {
-		fullLogFilepath := filepath.Join(lm.binlogDirectory, files[i])
+	for _, filename := range filenames {
+		fullLogFilepath := lm.resolveLogFile(filename)
 		stat, err := os.Stat(fullLogFilepath)
 		if err != nil {
 			return err
 		}
 
 		if stat.ModTime().Before(purgeThresholdTime) {
-			logrus.Debugf("purging expired binlog file: %s", files[i])
+			logrus.Debugf("purging expired binlog filename: %s", filename)
 			if err := os.Remove(fullLogFilepath); err != nil {
 				return err
 			}
@@ -185,54 +191,62 @@ func (lm *LogManager) purgeExpiredLogFiles() error {
 // binary logs, then it is assumed that all GTIDs have been purged, so @@gtid_purged is set to the same value
 // held in @@gtid_executed.
 func (lm *LogManager) initializePurgedGtids() error {
-	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
+	filenames, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
 	}
 
-	for _, file := range files {
-		var gtid mysql.GTID
-		err := func() error {
-			openFile, err := openBinlogFileForReading(filepath.Join(lm.binlogDirectory, file))
-			if err != nil {
-				return err
-			}
-			defer openFile.Close()
-
-			binlogEvent, err := readFirstGtidEventFromFile(openFile)
-			if err != nil {
-				return err
-			}
-
-			gtid, _, err = binlogEvent.GTID(lm.binlogFormat)
-			if err != nil {
-				return err
-			}
-			sequenceNumber := gtid.SequenceNumber().(int64)
-			if sequenceNumber > 1 {
-				// If the first found GTID in the available binary logs is sequence number 1, then all GTIDs
-				// are available, so no need to set @@gtid_purged to anything.
-				return sql.SystemVariables.SetGlobal("gtid_purged", fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1))
-			}
-			return nil
-		}()
-		if err != nil && err != io.EOF {
+	for _, filename := range filenames {
+		gtid, err := lm.findFirstGtidInFile(filename)
+		if err == io.EOF {
+			continue
+		} else if err != nil {
 			return err
 		}
 
-		// If we found a GTID, then stop searching through logs and return
-		if gtid != nil {
+		// If the first found GTID in the available binary logs is anything other than sequence number 1,
+		// then we need to set @@gtid_purged to indicate that not all GTIDs are available in the logs, and
+		// all GTIDs before the first sequence number found have been purged.
+		sequenceNumber := gtid.SequenceNumber().(int64)
+		if sequenceNumber > 1 {
+			gtidPurged := fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1)
+			logrus.Debugf("setting gtid_purged to: %s", gtidPurged)
+			return sql.SystemVariables.SetGlobal("gtid_purged", gtidPurged)
+		} else {
 			return nil
 		}
 	}
 
-	// If there are no GTID events in any of the files, then all GTIDs have been purged, so use @@gtid_executed
+	// If there are no GTID events in any of the files, then all GTIDs have been purged, so
+	// initialize @@gtid_purged with the value of @@gtid_executed.
 	_, gtidExecutedValue, ok := sql.SystemVariables.GetGlobal("gtid_executed")
 	if !ok {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
-	logrus.Debugf("setting gtid_purged to: %s", gtidExecutedValue)
+	logrus.Debugf("no available GTIDs found in logs, setting gtid_purged to: %s", gtidExecutedValue)
 	return sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
+}
+
+// findFirstGtidInFile opens the file with the base name |filename| in the binlog directory and
+// reads the events until a GTID event is found, then extracts the GTID value and returns it.
+func (lm *LogManager) findFirstGtidInFile(filename string) (gtid mysql.GTID, err error) {
+	openFile, err := openBinlogFileForReading(lm.resolveLogFile(filename))
+	if err != nil {
+		return nil, err
+	}
+	defer openFile.Close()
+
+	binlogEvent, err := readFirstGtidEventFromFile(openFile)
+	if err != nil {
+		return nil, err
+	}
+
+	gtid, _, err = binlogEvent.GTID(lm.binlogFormat)
+	if err != nil {
+		return nil, err
+	}
+
+	return gtid, nil
 }
 
 // addRotateEventToPreviousLogFile finds the previous binlog file and appends a Rotate event that points to the
@@ -246,12 +260,12 @@ func (lm *LogManager) addRotateEventToPreviousLogFile() error {
 	}
 
 	// If the previous log file in the sequence has been purged, then there's nothing to do
-	if !fileExists(filepath.Join(lm.binlogDirectory, previousLogFileName)) {
+	if !fileExists(lm.resolveLogFile(previousLogFileName)) {
 		return nil
 	}
 
 	// Open the log file and append a Rotate event
-	previousLogFile, err := os.OpenFile(filepath.Join(lm.binlogDirectory, previousLogFileName), os.O_WRONLY|os.O_APPEND, 0644)
+	previousLogFile, err := os.OpenFile(lm.resolveLogFile(previousLogFileName), os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
@@ -393,8 +407,6 @@ func (lm *LogManager) PurgeLogFiles() error {
 	// TODO: implement support for purging older binlog files
 	//       This also requires setting gtid_purged
 	// https://dev.mysql.com/doc/refman/8.0/en/replication-options-gtids.html#sysvar_gtid_purged
-	// Need to test the case where the GTID requested is not
-	// available –has been executed, but has been purged
 	return nil
 }
 
@@ -523,8 +535,9 @@ func (lm *LogManager) calculateMissingGtids(replicaExecutedGtids mysql.GTIDSet, 
 	return missingGtids
 }
 
+// resolveLogFile accepts a base filename of a binlog file and returns a fully qualified file
+// path to the file in the binlog storage directory.
 func (lm *LogManager) resolveLogFile(filename string) string {
-	// TODO: Should we make sure it exists?
 	return filepath.Join(lm.binlogDirectory, filename)
 }
 

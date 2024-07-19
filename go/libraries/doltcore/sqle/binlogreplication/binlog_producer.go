@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -47,15 +48,15 @@ var BinlogBranch = "main"
 // Note that the initial version of binlogProducer currently delivers the generated binlog events directly to the
 // connected replicas, without actually writing them to a real binlog file on disk.
 type binlogProducer struct {
-	binlogEventMeta mysql.BinlogEventMetadata
 	binlogFormat    *mysql.BinlogFormat
+	binlogEventMeta mysql.BinlogEventMetadata
 
 	mu *sync.Mutex
 
 	gtidPosition *mysql.Position
 	gtidSequence int64
 
-	streamerManager *binlogStreamerManager
+	logManager *LogManager
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
@@ -63,7 +64,7 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // NewBinlogProducer creates and returns a new instance of BinlogProducer. Note that callers must register the
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
-func NewBinlogProducer(fs filesys.Filesys, streamerManager *binlogStreamerManager) (*binlogProducer, error) {
+func NewBinlogProducer(fs filesys.Filesys) (*binlogProducer, error) {
 	binlogFormat := createBinlogFormat()
 	binlogEventMeta, err := createBinlogEventMetadata()
 	if err != nil {
@@ -73,7 +74,6 @@ func NewBinlogProducer(fs filesys.Filesys, streamerManager *binlogStreamerManage
 	b := &binlogProducer{
 		binlogEventMeta: *binlogEventMeta,
 		binlogFormat:    binlogFormat,
-		streamerManager: streamerManager,
 		mu:              &sync.Mutex{},
 	}
 
@@ -84,15 +84,9 @@ func NewBinlogProducer(fs filesys.Filesys, streamerManager *binlogStreamerManage
 	return b, nil
 }
 
-func (b *binlogProducer) BinlogFormat() *mysql.BinlogFormat {
-	return b.binlogFormat
-}
-
-// TODO: It's kinda weird for us to expose BinlogStream here... This type doesn't seem fully necessary, and
-//
-//	stream seems like a bad name. Might be a better way to shape this in Vitess.
-func (b *binlogProducer) BinlogStream() mysql.BinlogEventMetadata {
-	return b.binlogEventMeta
+// LogManager sets the |logManager| this producer will send events to.
+func (b *binlogProducer) LogManager(logManager *LogManager) {
+	b.logManager = logManager
 }
 
 // WorkingRootUpdated implements the doltdb.DatabaseUpdateListener interface. When a working root changes,
@@ -149,7 +143,7 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		binlogEvents = append(binlogEvents, b.newXIDEvent())
 	}
 
-	return b.streamerManager.logManager.WriteEvents(binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // DatabaseCreated implements the doltdb.DatabaseUpdateListener interface.
@@ -168,7 +162,7 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 	createDatabaseStatement := fmt.Sprintf("create database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, createDatabaseStatement))
 
-	return b.streamerManager.logManager.WriteEvents(binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // DatabaseDropped implements the doltdb.DatabaseUpdateListener interface.
@@ -183,7 +177,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 	dropDatabaseStatement := fmt.Sprintf("drop database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, dropDatabaseStatement))
 
-	return b.streamerManager.logManager.WriteEvents(binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // initializeGtidPosition loads the persisted GTID position from disk and initializes it
@@ -241,6 +235,7 @@ func (b *binlogProducer) initializeGtidPosition(fs filesys.Filesys) error {
 	}
 	b.gtidSequence = int64(i + 1)
 
+	logrus.Tracef("setting @@gtid_executed to %s", b.gtidPosition.GTIDSet.String())
 	return sql.SystemVariables.AssignValues(map[string]any{
 		"gtid_executed": b.gtidPosition.GTIDSet.String()})
 }

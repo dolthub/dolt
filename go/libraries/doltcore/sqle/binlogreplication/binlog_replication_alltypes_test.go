@@ -29,7 +29,7 @@ import (
 func TestBinlogReplicationForAllTypes(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.
