@@ -101,3 +101,45 @@ make_updates() {
   [ "$commits" -eq "186" ]
 }
 
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive with remotesrv no go" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+
+  dolt admin archive
+
+  run dolt sql-server --remotesapi-port=12321
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+
+  run remotesrv --repo-mode
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive --reverse" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt admin archive
+
+  dolt admin archive --reverse
+
+  # NM4 TODO: verify the darc files are gone.
+
+  # dolt log --stat will load every single chunk. 66 manually verified.
+  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
+  [ "$commits" -eq "66" ]
+}
