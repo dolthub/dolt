@@ -16,6 +16,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -107,11 +108,10 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			cli.PrintErrln(err)
 			return 1
 		}
-		cli.Printf("Found %d possible relations by walking history\n", groupings.Count())
 	}
 
 	progress := make(chan interface{}, 32)
-	handleProgress(progress)
+	handleProgress(ctx, progress)
 
 	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
 	if err != nil {
@@ -122,43 +122,72 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	return 0
 }
 
-func handleProgress(progress chan interface{}) {
+func handleProgress(ctx context.Context, progress chan interface{}) {
 	go func() {
-		totalGroupCount := 0
-		finishedGroupCount := 0
+		rotation := 0
+		p := cli.NewEphemeralPrinter()
+		currentMessage := "Starting Archive Build"
+		var lastProgressMsg *nbs.ArchiveBuildProgressMsg
 		lastUpdateTime := time.Now()
+
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case msg, ok := <-progress:
 				if !ok {
-					cli.Println("Channel closed. Exiting.")
+					// NM4 - message required?
 					return
 				}
 				switch v := msg.(type) {
 				case string:
-					cli.Printf("Archive Progress: %s\n", v)
-				case nbs.ArchiveConvertToChunkGroupsMsg:
-					if v.GroupCount > 0 {
-						totalGroupCount += v.GroupCount
-					}
-					if v.FinishedOne {
-						finishedGroupCount++
+					cli.Printf("LOG: %s", v)
+				case nbs.ArchiveBuildProgressMsg:
+					if v.Total == v.Completed {
+						p.Printf("%s: Done\n", v.Stage)
+						lastProgressMsg = nil
+						currentMessage = ""
+						p.Display()
+						cli.Printf("\n")
+					} else {
+						lastProgressMsg = &v
 					}
 				default:
 					cli.Printf("Unexpected Message: %v\n", v)
 				}
-			case <-time.After(3 * time.Second):
+			case <-time.After(1 * time.Second):
 			}
 
-			if now := time.Now(); now.Sub(lastUpdateTime) > 3*time.Second {
-				percentDone := 0.0
-				if totalGroupCount > 0 {
-					percentDone = float64(finishedGroupCount) / float64(totalGroupCount)
+			if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
+				rotation++
+				switch rotation % 4 {
+				case 0:
+					p.Printf("- ")
+				case 1:
+					p.Printf("\\ ")
+				case 2:
+					p.Printf("| ")
+				case 3:
+					p.Printf("/ ")
 				}
 
-				cli.Printf("Groups: %d/%d (%f)\n", finishedGroupCount, totalGroupCount, percentDone)
+				if lastProgressMsg != nil {
+					percentDone := 0.0
+					totalCount := lastProgressMsg.Total
+					if lastProgressMsg.Total > 0 {
+						percentDone = float64(lastProgressMsg.Completed) / float64(lastProgressMsg.Total)
+						percentDone *= 100.0
+					}
+
+					currentMessage = fmt.Sprintf("%s: %d/%d (%.2f%%)", lastProgressMsg.Stage, lastProgressMsg.Completed, totalCount, percentDone)
+				}
+
+				p.Printf("%s", currentMessage) // Don't update message, but allow ticker to turn.
 				lastUpdateTime = now
+
+				p.Display()
 			}
+
 		}
 	}()
 }

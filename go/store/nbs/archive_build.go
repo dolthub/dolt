@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -59,7 +60,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				return err
 			}
 
-			err = verifyAllChunks(idx, archivePath)
+			err = verifyAllChunks(idx, archivePath, progress)
 			if err != nil {
 				return err
 			}
@@ -140,7 +141,7 @@ func convertTableFileToArchive(
 		return "", hash.Hash{}, err
 	}
 
-	_, grouped, singles, err := writeChunkGroupToArchive(ctx, cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, stats)
+	_, grouped, singles, err := writeDataToArchive(ctx, cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -196,7 +197,7 @@ func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string) error {
 	return arcW.flushToFile(fileName)
 }
 
-func writeChunkGroupToArchive(
+func writeDataToArchive(
 	ctx context.Context,
 	cmpBuff []byte,
 	chunkCache *SimpleChunkSourceCache,
@@ -204,6 +205,7 @@ func writeChunkGroupToArchive(
 	defaultSpanId uint32,
 	defaultDict *gozstd.CDict,
 	arcW *archiveWriter,
+	progress chan interface{},
 	stats *Stats,
 ) (groupCount, groupedChunkCount, individualChunkCount uint32, err error) {
 	var allChunks hash.HashSet
@@ -211,6 +213,9 @@ func writeChunkGroupToArchive(
 	if err != nil {
 		return 0, 0, 0, err
 	}
+
+	possibleGroupCount := len(cgList)
+	groupsCompleted := int32(0)
 
 	for _, cg := range cgList {
 		if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
@@ -245,7 +250,12 @@ func writeChunkGroupToArchive(
 				allChunks.Remove(cs.chunkId)
 			}
 		}
+		groupsCompleted++
+		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Groups Materialized", Total: int32(possibleGroupCount), Completed: groupsCompleted}
 	}
+
+	ungroupedChunkCount := int32(len(allChunks))
+	ungroupedChunkProgress := int32(0)
 
 	// Any chunks remaining will be written out individually.
 	for h := range allChunks {
@@ -268,7 +278,12 @@ func writeChunkGroupToArchive(
 		if err != nil {
 			return 0, 0, 0, err
 		}
+
+		ungroupedChunkProgress++
+		progress <- ArchiveBuildProgressMsg{Stage: "Ungrouped Chunks Written", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
+
 	}
+
 	individualChunkCount = uint32(len(allChunks))
 
 	return
@@ -304,7 +319,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 
 	return chkCache, defaultSamples, nil
 }
-func verifyAllChunks(idx tableIndex, archiveFile string) error {
+func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface{}) error {
 	file, err := os.Open(archiveFile)
 	if err != nil {
 		return err
@@ -337,6 +352,9 @@ func verifyAllChunks(idx tableIndex, archiveFile string) error {
 		hashList[i], hashList[j] = hashList[j], hashList[i]
 	})
 
+	chunkCount := int32(idx.chunkCount())
+	chunkProgress := int32(0)
+
 	for _, h := range hashList {
 		if !index.has(h) {
 			msg := fmt.Sprintf("chunk not found in archive: %s", h.String())
@@ -360,6 +378,9 @@ func verifyAllChunks(idx tableIndex, archiveFile string) error {
 			msg := fmt.Sprintf("hash mismatch for chunk: %s", h.String())
 			return errors.New(msg)
 		}
+
+		chunkProgress++
+		progress <- ArchiveBuildProgressMsg{Stage: "Verifying Chunks", Total: chunkCount, Completed: chunkProgress}
 	}
 
 	return nil
@@ -399,7 +420,6 @@ func newChunkGroup(
 	chunkCache *SimpleChunkSourceCache,
 	cmpBuff []byte, chks hash.HashSet,
 	defaultDict *gozstd.CDict,
-	progress chan interface{},
 	stats *Stats,
 ) (*chunkGroup, error) {
 	scored := make([]chunkCmpScore, len(chks))
@@ -410,7 +430,7 @@ func newChunkGroup(
 	}
 
 	result := chunkGroup{dict: nil, cDict: nil, chks: scored}
-	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, progress, stats)
+	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +460,6 @@ func (cg *chunkGroup) addChunk(
 	cmpBuff []byte,
 	c *chunks.Chunk,
 	defaultDict *gozstd.CDict,
-	progress chan interface{},
 	stats *Stats,
 ) error {
 	scored := chunkCmpScore{
@@ -450,7 +469,7 @@ func (cg *chunkGroup) addChunk(
 	}
 
 	cg.chks = append(cg.chks, scored)
-	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, progress, stats)
+	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, stats)
 }
 
 // worstZScore returns the z-score of the worst chunk in the group. The z-score is a measure of how many standard
@@ -482,7 +501,7 @@ func (cg *chunkGroup) worstZScore() float64 {
 
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
-func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, progress chan interface{}, stats *Stats) error {
+func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, stats *Stats) error {
 	chks := make([]*chunks.Chunk, len(cg.chks))
 
 	for i, cs := range cg.chks {
@@ -497,7 +516,6 @@ func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSource
 	for _, c := range chks {
 		totalBytes += len(c.Data())
 	}
-	progress <- fmt.Sprintf("Rebuilding group with %d chunks (%d bytes)\n", len(chks), totalBytes)
 
 	dct := buildDictionary(padSamples(chks))
 
@@ -587,10 +605,10 @@ func (cr *ChunkRelations) Count() int {
 	return len(cr.manyToGroup)
 }
 
-type ArchiveConvertToChunkGroupsMsg struct {
-	GroupCount  int
-	FinishedOne bool
-	Done        bool
+type ArchiveBuildProgressMsg struct {
+	Stage     string
+	Total     int32
+	Completed int32
 }
 
 func (cr *ChunkRelations) convertToChunkGroups(
@@ -602,50 +620,53 @@ func (cr *ChunkRelations) convertToChunkGroups(
 ) ([]*chunkGroup, error) {
 	result := make([]*chunkGroup, 0, cr.Count())
 
-	// Create a channel for sending groups to process
 	groups := cr.groups()
-	progress <- ArchiveConvertToChunkGroupsMsg{GroupCount: len(groups)}
 
-	groupChannel := make(chan hash.HashSet, len(groups))
-	resultChannel := make(chan *chunkGroup, len(groups))
+	if len(groups) > 0 {
+		groupCount := int32(len(groups))
+		completedGroupCount := int32(0)
 
-	// Start worker goroutines
-	numThreads := 1
-	var wg sync.WaitGroup
-	wg.Add(numThreads)
-	for i := 0; i < numThreads; i++ {
-		go func() {
-			buff := make([]byte, 0, maxChunkSize)
-			defer wg.Done()
-			for hs := range groupChannel {
-				progress <- fmt.Sprintf("Worker (%d) taking group of size %d", i, len(hs))
-				if len(hs) > 1 {
-					chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, progress, stats)
-					if err != nil {
-						progress <- err
-						continue
+		groupChannel := make(chan hash.HashSet, len(groups))
+		resultChannel := make(chan *chunkGroup, len(groups))
+
+		// Start worker goroutines
+		numThreads := 1 // TODO: Fix CGO zstd lib to handle multiple dictionary build threads.
+		var wg sync.WaitGroup
+		wg.Add(numThreads)
+		for i := 0; i < numThreads; i++ {
+			go func() {
+				buff := make([]byte, 0, maxChunkSize)
+				defer wg.Done()
+				for hs := range groupChannel {
+					if len(hs) > 1 {
+						chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, stats)
+						if err != nil {
+							progress <- err
+							continue
+						}
+						atomic.AddInt32(&completedGroupCount, 1)
+						progress <- ArchiveBuildProgressMsg{Stage: "Building Chunk Group Dictionaries", Total: groupCount, Completed: completedGroupCount}
+						resultChannel <- chkGrp
 					}
-					progress <- ArchiveConvertToChunkGroupsMsg{FinishedOne: true}
-					resultChannel <- chkGrp
 				}
-			}
-		}()
+			}()
+		}
+
+		// Send groups to process
+		for _, v := range groups {
+			groupChannel <- v
+		}
+		close(groupChannel)
+
+		wg.Wait()
+		close(resultChannel)
+
+		for group := range resultChannel {
+			result = append(result, group)
+		}
+	} else {
+		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Grouping Skipped", Total: -1, Completed: -1}
 	}
-
-	// Send groups to process
-	for _, v := range groups {
-		groupChannel <- v
-	}
-	close(groupChannel)
-
-	wg.Wait()
-	close(resultChannel)
-
-	for group := range resultChannel {
-		result = append(result, group)
-	}
-
-	progress <- ArchiveConvertToChunkGroupsMsg{Done: true}
 
 	return result, nil
 }
