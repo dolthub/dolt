@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -24,7 +25,9 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
@@ -146,7 +149,7 @@ func convertTableFileToArchive(
 		return "", hash.Hash{}, err
 	}
 
-	err = indexAndFinalizeArchive(arcW, archivePath)
+	err = indexAndFinalizeArchive(arcW, archivePath, cs.hash())
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -167,7 +170,7 @@ func convertTableFileToArchive(
 
 // indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
 // to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
-func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string) error {
+func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string, originTableFile hash.Hash) error {
 	err := arcW.finalizeByteSpans()
 	if err != nil {
 		return err
@@ -178,8 +181,17 @@ func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string) error {
 		return err
 	}
 
-	// NM4 - Pin down what we want in the metatdata.
-	err = arcW.writeMetadata([]byte("{dolt_version: 0.0.0}"))
+	meta := map[string]string{
+		amdkDoltVersion:     doltversion.Version,
+		amdkOriginTableFile: originTableFile.String(),
+		amdkConversionTime:  time.Now().UTC().Format(time.RFC3339),
+	}
+	jsonData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	err = arcW.writeMetadata(jsonData)
 	if err != nil {
 		return err
 	}
