@@ -528,14 +528,17 @@ func (cg *chunkGroup) worstZScore() float64 {
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
 func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, defaultDict *gozstd.CDict, stats *Stats) error {
-	chks := make([]*chunks.Chunk, len(cg.chks))
+	chks := make([]*chunks.Chunk, 0, len(cg.chks))
 
-	for i, cs := range cg.chks {
+	for _, cs := range cg.chks {
 		chk, err := chunkCache.get(ctx, cs.chunkId, stats)
 		if err != nil {
 			return err
 		}
-		chks[i] = chk
+		if chk == nil {
+			continue
+		}
+		chks = append(chks, chk)
 	}
 
 	totalBytes := 0
@@ -798,13 +801,14 @@ func newSimpleChunkSourceCache(cs chunkSource) (*SimpleChunkSourceCache, error) 
 }
 
 // get a chunk from the cache. If the chunk is not in the cache, it will be fetched from the ChunkSource.
+// If the ChunkSource doesn't have the chunk, return nil - this is a valid case.
 func (csc *SimpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *Stats) (*chunks.Chunk, error) {
 	if chk, ok := csc.cache.Get(h); ok {
 		return chk, nil
 	}
 
 	bytes, err := csc.cs.get(ctx, h, stats)
-	if err != nil {
+	if bytes == nil || err != nil {
 		return nil, err
 	}
 

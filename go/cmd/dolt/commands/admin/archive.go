@@ -48,11 +48,11 @@ var docs = cli.CommandDocumentationContent{
 table files into archives. Currently, for safety, table files are left in place.`,
 
 	Synopsis: []string{
-		`[--no-grouping]`,
+		`[--group-chunks]`,
 	},
 }
 
-const noGroupingFlag = "no-grouping"
+const groupChunksFlag = "group-chunks"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -68,7 +68,7 @@ func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(noGroupingFlag, "", "Do not attempt to group chunks. Default dictionary will be used for all chunks")
+	ap.SupportsFlag(groupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
 	/* TODO: Implement these flags
 	ap.SupportsFlag("purge", "", "remove table files after archiving")
 	ap.SupportsFlag("revert", "", "Return to unpurged table files, or rebuilt table files from archives")
@@ -104,7 +104,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	})
 
 	groupings := nbs.NewChunkRelations()
-	if !apr.Contains(noGroupingFlag) {
+	if apr.Contains(groupChunksFlag) {
 		err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
 		if err != nil {
 			cli.PrintErrln(err)
