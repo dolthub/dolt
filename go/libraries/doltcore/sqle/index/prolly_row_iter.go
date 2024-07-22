@@ -109,7 +109,7 @@ func NewKeylessProllyRowIter(
 // projectionMappings returns data structures that specify 1) which fields we read
 // from key and value tuples, and 2) the position of those fields in the output row.
 func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
-	keyMap, valMap, ordMap = projectionMappingsForIndex(sch, projections)
+	keyMap, valMap, ordMap = ProjectionMappingsForIndex(sch, projections)
 	adjustOffsetsForKeylessTable(sch, keyMap, valMap)
 	return keyMap, valMap, ordMap
 }
@@ -126,7 +126,7 @@ func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, 
 	}
 }
 
-func projectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
+func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
