@@ -43,13 +43,16 @@ func (cmd ArchiveCmd) Name() string {
 }
 
 var docs = cli.CommandDocumentationContent{
-	ShortDesc: "Create archive files using native or cgo compression, then verify.",
-	LongDesc:  `Run this command on a dolt database only after running 'dolt gc'. This command will create an archive file to the CWD. Suffix: .darc. After the new file is generated, it will read every chunk from the new file and verify that the chunk hashes to the correct addr.`,
+	ShortDesc: "Create archive files for greater compression, then verify all chunks.",
+	LongDesc: `Run this command on a dolt database only after running 'dolt gc'. This command will convert all 'oldgen' 
+table files into archives. Currently, for safety, table files are left in place.`,
 
 	Synopsis: []string{
-		`--no-grouping`,
+		`[--no-grouping]`,
 	},
 }
+
+const noGroupingFlag = "no-grouping"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -65,11 +68,10 @@ func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag("no-grouping", "", "Do not attempt to group chunks. Default dictionary will be used for all chunks")
+	ap.SupportsFlag(noGroupingFlag, "", "Do not attempt to group chunks. Default dictionary will be used for all chunks")
 	/* TODO: Implement these flags
-	ap.SupportsFlag("raw", "", "Create an archive file with 0 compression")
-	ap.SupportsFlag("no-manifest", "", "Do not alter the manifest file. Generate the archive file only")
-	ap.SupportsFlag("verify-existing", "", "Skip generation altogether and just verify the existing archive file.")
+	ap.SupportsFlag("purge", "", "remove table files after archiving")
+	ap.SupportsFlag("revert", "", "Return to unpurged table files, or rebuilt table files from archives")
 	*/
 	return ap
 }
@@ -102,7 +104,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	})
 
 	groupings := nbs.NewChunkRelations()
-	if !apr.Contains("no-grouping") {
+	if !apr.Contains(noGroupingFlag) {
 		err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
 		if err != nil {
 			cli.PrintErrln(err)
@@ -136,7 +138,6 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 				return
 			case msg, ok := <-progress:
 				if !ok {
-					// NM4 - message required?
 					return
 				}
 				switch v := msg.(type) {
@@ -193,7 +194,7 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 }
 
 func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
-	hs := []hash.Hash{}
+	var hs []hash.Hash
 	for h := range heads {
 		_, err := db.ReadCommit(ctx, h)
 		if err != nil {
