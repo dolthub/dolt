@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"os"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chunk. TBD.
@@ -119,6 +119,9 @@ func convertTableFileToArchive(
 	}
 
 	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict, progress, stats)
+	if err != nil {
+		return "", hash.Hash{}, err
+	}
 	sort.Slice(cgList, func(i, j int) bool {
 		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
 	})
@@ -226,44 +229,52 @@ func writeDataToArchive(
 		return 0, 0, 0, err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	possibleGroupCount := len(cgList)
 	groupsCompleted := int32(0)
 
 	for _, cg := range cgList {
-		if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
-			groupCount++
+		select {
+		case <-ctx.Done():
+			return 0, 0, 0, ctx.Err()
+		default:
+			if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
+				groupCount++
 
-			cmpDict := gozstd.Compress(cmpBuff, cg.dict)
+				cmpDict := gozstd.Compress(cmpBuff, cg.dict)
 
-			dictId, err := arcW.writeByteSpan(cmpDict)
-			if err != nil {
-				return 0, 0, 0, err
-			}
-
-			for _, cs := range cg.chks {
-				c, e2 := chunkCache.get(ctx, cs.chunkId, stats)
-				if e2 != nil {
-					return 0, 0, 0, e2
+				dictId, err := arcW.writeByteSpan(cmpDict)
+				if err != nil {
+					return 0, 0, 0, err
 				}
 
-				if !arcW.chunkSeen(cs.chunkId) {
-					compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
+				for _, cs := range cg.chks {
+					c, e2 := chunkCache.get(ctx, cs.chunkId, stats)
+					if e2 != nil {
+						return 0, 0, 0, e2
+					}
 
-					dataId, err := arcW.writeByteSpan(compressed)
-					if err != nil {
-						return 0, 0, 0, err
+					if !arcW.chunkSeen(cs.chunkId) {
+						compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
+
+						dataId, err := arcW.writeByteSpan(compressed)
+						if err != nil {
+							return 0, 0, 0, err
+						}
+						err = arcW.stageChunk(cs.chunkId, dictId, dataId)
+						if err != nil {
+							return 0, 0, 0, err
+						}
+						groupedChunkCount++
 					}
-					err = arcW.stageChunk(cs.chunkId, dictId, dataId)
-					if err != nil {
-						return 0, 0, 0, err
-					}
-					groupedChunkCount++
+					allChunks.Remove(cs.chunkId)
 				}
-				allChunks.Remove(cs.chunkId)
 			}
+			groupsCompleted++
+			progress <- ArchiveBuildProgressMsg{Stage: "Chunk Groups Materialized", Total: int32(possibleGroupCount), Completed: groupsCompleted}
 		}
-		groupsCompleted++
-		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Groups Materialized", Total: int32(possibleGroupCount), Completed: groupsCompleted}
 	}
 
 	ungroupedChunkCount := int32(len(allChunks))
@@ -271,29 +282,33 @@ func writeDataToArchive(
 
 	// Any chunks remaining will be written out individually.
 	for h := range allChunks {
-		var compressed []byte
-		dictId := uint32(0)
+		select {
+		case <-ctx.Done():
+			return 0, 0, 0, ctx.Err()
+		default:
+			var compressed []byte
+			dictId := uint32(0)
 
-		c, e2 := chunkCache.get(ctx, h, stats)
-		if e2 != nil {
-			return 0, 0, 0, e2
+			c, e2 := chunkCache.get(ctx, h, stats)
+			if e2 != nil {
+				return 0, 0, 0, e2
+			}
+
+			compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultDict)
+			dictId = defaultSpanId
+
+			id, err := arcW.writeByteSpan(compressed)
+			if err != nil {
+				return 0, 0, 0, err
+			}
+			err = arcW.stageChunk(h, dictId, id)
+			if err != nil {
+				return 0, 0, 0, err
+			}
+
+			ungroupedChunkProgress++
+			progress <- ArchiveBuildProgressMsg{Stage: "Ungrouped Chunks Written", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
 		}
-
-		compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultDict)
-		dictId = defaultSpanId
-
-		id, err := arcW.writeByteSpan(compressed)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		err = arcW.stageChunk(h, dictId, id)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-
-		ungroupedChunkProgress++
-		progress <- ArchiveBuildProgressMsg{Stage: "Ungrouped Chunks Written", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
-
 	}
 
 	individualChunkCount = uint32(len(allChunks))
@@ -630,6 +645,9 @@ func (cr *ChunkRelations) convertToChunkGroups(
 	progress chan interface{},
 	stats *Stats,
 ) ([]*chunkGroup, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	result := make([]*chunkGroup, 0, cr.Count())
 
 	groups := cr.groups()
@@ -643,25 +661,30 @@ func (cr *ChunkRelations) convertToChunkGroups(
 
 		// Start worker goroutines
 		numThreads := 1 // TODO: Fix CGO zstd lib to handle multiple dictionary build threads.
-		var wg sync.WaitGroup
-		wg.Add(numThreads)
+		g, egCtx := errgroup.WithContext(ctx)
 		for i := 0; i < numThreads; i++ {
-			go func() {
+			g.Go(func() error {
 				buff := make([]byte, 0, maxChunkSize)
-				defer wg.Done()
-				for hs := range groupChannel {
-					if len(hs) > 1 {
-						chkGrp, err := newChunkGroup(ctx, chks, buff, hs, defaultDict, stats)
-						if err != nil {
-							progress <- err
-							continue
+				for {
+					select {
+					case hs, ok := <-groupChannel:
+						if !ok {
+							return nil
 						}
-						atomic.AddInt32(&completedGroupCount, 1)
-						progress <- ArchiveBuildProgressMsg{Stage: "Building Chunk Group Dictionaries", Total: groupCount, Completed: completedGroupCount}
-						resultChannel <- chkGrp
+						if len(hs) > 1 {
+							chkGrp, err := newChunkGroup(egCtx, chks, buff, hs, defaultDict, stats)
+							if err != nil {
+								return err
+							}
+							atomic.AddInt32(&completedGroupCount, 1)
+							progress <- ArchiveBuildProgressMsg{Stage: "Building Chunk Group Dictionaries", Total: groupCount, Completed: completedGroupCount}
+							resultChannel <- chkGrp
+						}
+					case <-egCtx.Done():
+						return egCtx.Err()
 					}
 				}
-			}()
+			})
 		}
 
 		// Send groups to process
@@ -670,11 +693,25 @@ func (cr *ChunkRelations) convertToChunkGroups(
 		}
 		close(groupChannel)
 
-		wg.Wait()
+		err := g.Wait()
+		if err != nil {
+			return nil, err
+		}
+
 		close(resultChannel)
 
-		for group := range resultChannel {
-			result = append(result, group)
+		pullResult := true
+		for pullResult {
+			select {
+			case group, ok := <-resultChannel:
+				if !ok {
+					pullResult = false
+					break
+				}
+				result = append(result, group)
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
 		}
 	} else {
 		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Grouping Skipped", Total: -1, Completed: -1}
@@ -783,7 +820,8 @@ func (csc *SimpleChunkSourceCache) has(h hash.Hash) (bool, error) {
 	return csc.cs.has(h)
 }
 
-// addresses get all chunk addresses of the ChunkSource as a hash.HashSet. This is not related to what is cached, just a helper.
+// addresses get all chunk addresses of the ChunkSource as a hash.HashSet.
+// This is not related to what is cached, just a helper since the cache has a reference to the ChunkSource.
 func (csc *SimpleChunkSourceCache) addresses() (hash.HashSet, error) {
 	idx, err := csc.cs.index()
 	if err != nil {
