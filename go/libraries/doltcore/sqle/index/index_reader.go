@@ -436,7 +436,7 @@ func NewSequenceMapIter(ctx context.Context, ib IndexScanBuilder, ranges []proll
 }
 
 // sequenceRangeIter iterates a list of ranges into
-// and underlying map.
+// an underlying map.
 type sequenceRangeIter struct {
 	cur             prolly.MapIter
 	ib              IndexScanBuilder

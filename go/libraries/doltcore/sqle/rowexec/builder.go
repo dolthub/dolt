@@ -107,16 +107,15 @@ type kvDesc struct {
 func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, ns tree.NodeStore) *prollyToSqlJoiner {
 	numPhysicalColumns := getPhysicalColCount(schemas, splits, projections)
 
-	// | k1 | v1 | k2 | v2 | ... | ords |
-	allMap := make([]int, 2*numPhysicalColumns)
-
 	// last kv pair can safely look ahead for its end range
 	splits = append(splits, len(projections))
 
+	// | k1 | v1 | k2 | v2 | ... | ords |
+	// refer to more detailed comment below
+	// todo: is it worth refactoring from a two-phase to one-phase mapping?
+	allMap := make([]int, 2*numPhysicalColumns)
 	var tupleDesc []kvDesc
-	// keys positions increment upwards, value positions decrement downwards from split
-	// | k-> <-v | split
-	// the KV meetpoint segments key/value mappings
+
 	nextKeyIdx := 0
 	nextValIdx := splits[0] - 1
 	sch := schemas[0]
@@ -128,6 +127,13 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 	valCols := sch.GetNonPKCols()
 	splitIdx := 0
 	for i := 0; i <= len(projections); i++ {
+		// We will fill the map from table sources incrementally. Each source will have
+		// a keyMapping, valueMapping, and ordinal mappings related to converting from
+		// storage order->schema order->projection order. allMap is a shared underlying
+		// storage for all of these mappings. Split indexes refers to a K/V segmentation
+		// of columns from a table. We increment the key mapping positions and decrement
+		// the value mapping positions, so the split index will be where the key and value
+		// indexes converge after processing a table source's fields.
 		if i == splits[splitIdx] {
 			var mappingStartIdx int
 			if splitIdx > 0 {

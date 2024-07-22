@@ -57,7 +57,8 @@ type lookupJoinKvIter struct {
 	// projections
 	joiner *prollyToSqlJoiner
 
-	// TODO convert sql.Expression to static prolly expressions
+	// todo: we want to build KV-side static expression implementations
+	// so that we can execute filters more efficiently
 	srcFilter  sql.Expression
 	dstFilter  sql.Expression
 	joinFilter sql.Expression
@@ -212,7 +213,7 @@ type lookupMapping struct {
 
 func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src prolly.Map, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression) *lookupMapping {
 	keyless := schema.IsKeyless(sourceSch)
-	// |split| separates key and value fields
+	// |split| is an index into the schema separating the key and value fields
 	var split int
 	if keyless {
 		// the only key is the hash of the values
