@@ -16,13 +16,18 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
+	"io"
 	"math"
 	"math/rand"
 	"testing"
 
 	"github.com/dolthub/gozstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -202,7 +207,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 4096))
 
 	// This is 32K worth of data, but it's all very similar. Only fits in 4K if compressed with a dictionary.
-	chks := generateSimilarChunks(42, 32)
+	chks, _, _ := generateSimilarChunks(42, 32)
 	samples := make([][]byte, len(chks))
 	for i, c := range chks {
 		samples[i] = c.Data()
@@ -527,39 +532,53 @@ func TestArchiveChunkGroup(t *testing.T) {
 	// This test has a lot of magic numbers. They have been verified at the time of writing, and heavily
 	// depend on the random data generated. If the random data generation changes, these numbers will
 	//
-	// The totalBytesSavedWDict is eyeballed to be correct.
+	// There is also some non-determinism in the compression library itself, so the compression ratios are compared against
+	// ranges we've seen over several runs of the tests.
 	_, defDict := generateTerribleDefaultDictionary()
-
-	cg := newChunkGroup(nil, generateSimilarChunks(42, 10), defDict)
-	assert.True(t, cg.totalRatioWDict >= 0.8666)
-	assert.True(t, cg.totalRatioWDict <= 0.8667)
-	assert.Equal(t, 8705, cg.totalBytesSavedWDict)
-	assert.Equal(t, 1004, cg.avgRawChunkSize)
+	var stats Stats
+	_, cache, hs := generateSimilarChunks(42, 10)
+	cg, err := newChunkGroup(context.TODO(), cache, hs, defDict, &stats)
+	require.NoError(t, err)
+	assertFloatBetween(t, cg.totalRatioWDict, 0.86, 0.87)
+	assertIntBetween(t, cg.totalBytesSavedWDict, 8690, 8710)
+	assertIntBetween(t, cg.avgRawChunkSize, 1004, 1005)
 
 	unsimilar := generateRandomChunk(23, 980) // 20 bytes shorter to effect the average size.
 	v, err := cg.testChunk(unsimilar)
 	assert.NoError(t, err)
 	assert.False(t, v)
+	// Adding unsimilar chunk should change the ratio significantly downward. Doing this mainly to ensure the next
+	// chunk tests positive because of it's high similarity.
+	addChunkToCache(cache, unsimilar)
+	err = cg.addChunk(context.TODO(), cache, unsimilar, defDict, &stats)
+	assert.NoError(t, err)
+	assertFloatBetween(t, cg.totalRatioWDict, 0.78, 0.81)
+	assertIntBetween(t, cg.totalBytesSavedWDict, 8650, 8700)
+	assertIntBetween(t, cg.avgRawChunkSize, 990, 1010)
 
-	similar := generateRandomChunk(42, 999)
+	similar := generateRandomChunk(42, 980)
 	v, err = cg.testChunk(similar)
 	assert.NoError(t, err)
 	assert.True(t, v)
 
-	err = cg.addChunk(nil, similar, defDict)
+	addChunkToCache(cache, similar)
+	err = cg.addChunk(context.TODO(), cache, similar, defDict, &stats)
 	assert.NoError(t, err)
-	assert.True(t, cg.totalRatioWDict >= 0.8768)
-	assert.True(t, cg.totalRatioWDict <= 0.8769)
-	assert.Equal(t, 9684, cg.totalBytesSavedWDict) // 11 chunks.
-	assert.Equal(t, 1004, cg.avgRawChunkSize)
+	assertFloatBetween(t, cg.totalRatioWDict, 0.80, 0.81)
+	assertIntBetween(t, cg.totalBytesSavedWDict, 9650, 9700)
+	assertIntBetween(t, cg.avgRawChunkSize, 990, 1010)
+}
 
-	// Adding unsimilar chunk should change the ratio significantly downward.
-	err = cg.addChunk(nil, unsimilar, defDict)
-	assert.NoError(t, err)
-	assert.True(t, cg.totalRatioWDict >= 0.8046)
-	assert.True(t, cg.totalRatioWDict <= 0.8047)
-	assert.Equal(t, 9675, cg.totalBytesSavedWDict) // 12 chunks, with virtually no improvement for the last one.
-	assert.Equal(t, 1002, cg.avgRawChunkSize)
+func assertFloatBetween(t *testing.T, actual, min, max float64) {
+	if actual < min || actual > max {
+		t.Errorf("Expected %f to be between %f and %f", actual, min, max)
+	}
+}
+
+func assertIntBetween(t *testing.T, actual, min, max int) {
+	if actual < min || actual > max {
+		t.Errorf("Expected %d to be between %d and %d", actual, min, max)
+	}
 }
 
 // Helper functions to create test data below...dd.
@@ -580,20 +599,26 @@ func generateTerribleDefaultDictionary() ([]byte, *gozstd.CDict) {
 }
 
 func generateDictionary(seed int64) ([]byte, *gozstd.CDict) {
-	chks := generateSimilarChunks(seed, 10)
+	chks, _, _ := generateSimilarChunks(seed, 10)
 	rawDict := buildDictionary(chks)
 	cDict, _ := gozstd.NewCDict(rawDict)
 	rawDict = gozstd.Compress(nil, rawDict)
 	return rawDict, cDict
 }
 
-func generateSimilarChunks(seed int64, count int) []*chunks.Chunk {
+func addChunkToCache(cache *SimpleChunkSourceCache, chk *chunks.Chunk) {
+	internal, _ := cache.cs.(*testChunkSource)
+	internal.chunks = append(internal.chunks, chk)
+}
+
+func generateSimilarChunks(seed int64, count int) ([]*chunks.Chunk, *SimpleChunkSourceCache, hash.HashSet) {
 	chks := make([]*chunks.Chunk, count)
 	for i := 0; i < count; i++ {
 		chks[i] = generateRandomChunk(seed, 1000+i)
 	}
 
-	return chks
+	c, hs := buildTestChunkSource(chks)
+	return chks, c, hs
 }
 
 func generateRandomChunk(seed int64, len int) *chunks.Chunk {
@@ -610,4 +635,83 @@ func generateRandomBytes(seed int64, len int) []byte {
 	}
 
 	return data
+}
+
+func buildTestChunkSource(chks []*chunks.Chunk) (*SimpleChunkSourceCache, hash.HashSet) {
+	cpy := make([]*chunks.Chunk, len(chks))
+	copy(cpy, chks)
+	tcs := &testChunkSource{chunks: cpy}
+	hs := hash.NewHashSet()
+	for _, chk := range cpy {
+		hs.Insert(chk.Hash())
+	}
+	cache, _ := newSimpleChunkSourceCache(tcs)
+	return cache, hs
+}
+
+type testChunkSource struct {
+	chunks []*chunks.Chunk
+}
+
+var _ chunkSource = (*testChunkSource)(nil)
+
+func (tcs *testChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+	for _, chk := range tcs.chunks {
+		if chk.Hash() == h {
+			return chk.Data(), nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+
+func (tcs *testChunkSource) has(h hash.Hash) (bool, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) hasMany(addrs []hasRecord) (bool, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) count() (uint32, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) uncompressedLen() (uint64, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) close() error {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) hash() hash.Hash {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) index() (tableIndex, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) clone() (chunkSource, error) {
+	panic("never used")
+}
+
+func (tcs *testChunkSource) currentSize() uint64 {
+	panic("never used")
 }

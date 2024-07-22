@@ -445,7 +445,7 @@ type chunkCmpScore struct {
 func newChunkGroup(
 	ctx context.Context,
 	chunkCache *SimpleChunkSourceCache,
-	cmpBuff []byte, chks hash.HashSet,
+	chks hash.HashSet,
 	defaultDict *gozstd.CDict,
 	stats *Stats,
 ) (*chunkGroup, error) {
@@ -457,7 +457,7 @@ func newChunkGroup(
 	}
 
 	result := chunkGroup{dict: nil, cDict: nil, chks: scored}
-	err := result.rebuild(ctx, chunkCache, cmpBuff, defaultDict, stats)
+	err := result.rebuild(ctx, chunkCache, defaultDict, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +484,6 @@ func padSamples(chks []*chunks.Chunk) []*chunks.Chunk {
 func (cg *chunkGroup) addChunk(
 	ctx context.Context,
 	chunkChache *SimpleChunkSourceCache,
-	cmpBuff []byte,
 	c *chunks.Chunk,
 	defaultDict *gozstd.CDict,
 	stats *Stats,
@@ -496,7 +495,7 @@ func (cg *chunkGroup) addChunk(
 	}
 
 	cg.chks = append(cg.chks, scored)
-	return cg.rebuild(ctx, chunkChache, cmpBuff, defaultDict, stats)
+	return cg.rebuild(ctx, chunkChache, defaultDict, stats)
 }
 
 // worstZScore returns the z-score of the worst chunk in the group. The z-score is a measure of how many standard
@@ -528,7 +527,7 @@ func (cg *chunkGroup) worstZScore() float64 {
 
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
-func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, cmpBuff []byte, defaultDict *gozstd.CDict, stats *Stats) error {
+func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, defaultDict *gozstd.CDict, stats *Stats) error {
 	chks := make([]*chunks.Chunk, len(cg.chks))
 
 	for i, cs := range cg.chks {
@@ -560,8 +559,8 @@ func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSource
 	scored := make([]chunkCmpScore, len(chks))
 	for i, c := range chks {
 		d := c.Data()
-		comp := gozstd.CompressDict(cmpBuff, d, cDict)
-		defaultDictComp := gozstd.CompressDict(cmpBuff, d, defaultDict)
+		comp := gozstd.CompressDict(nil, d, cDict)
+		defaultDictComp := gozstd.CompressDict(nil, d, defaultDict)
 
 		ccs := chunkCmpScore{
 			chunkId:            c.Hash(),
@@ -664,7 +663,6 @@ func (cr *ChunkRelations) convertToChunkGroups(
 		g, egCtx := errgroup.WithContext(ctx)
 		for i := 0; i < numThreads; i++ {
 			g.Go(func() error {
-				buff := make([]byte, 0, maxChunkSize)
 				for {
 					select {
 					case hs, ok := <-groupChannel:
@@ -672,7 +670,7 @@ func (cr *ChunkRelations) convertToChunkGroups(
 							return nil
 						}
 						if len(hs) > 1 {
-							chkGrp, err := newChunkGroup(egCtx, chks, buff, hs, defaultDict, stats)
+							chkGrp, err := newChunkGroup(egCtx, chks, hs, defaultDict, stats)
 							if err != nil {
 								return err
 							}
