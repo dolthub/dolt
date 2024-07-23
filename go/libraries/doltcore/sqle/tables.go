@@ -342,10 +342,11 @@ func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, 
 	//if err != nil {
 	//	return doltdb.DataCacheKey{}, false, err
 	//}
-	root, err := t.getRoot(ctx)
+	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}
+
 	key, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
