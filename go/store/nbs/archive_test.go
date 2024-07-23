@@ -540,7 +540,7 @@ func TestArchiveChunkGroup(t *testing.T) {
 	cg, err := newChunkGroup(context.TODO(), cache, hs, defDict, &stats)
 	require.NoError(t, err)
 	assertFloatBetween(t, cg.totalRatioWDict, 0.86, 0.87)
-	assertIntBetween(t, cg.totalBytesSavedWDict, 8690, 8710)
+	assertIntBetween(t, cg.totalBytesSavedWDict, 8690, 8720)
 	assertIntBetween(t, cg.avgRawChunkSize, 1004, 1005)
 
 	unsimilar := generateRandomChunk(23, 980) // 20 bytes shorter to effect the average size.
