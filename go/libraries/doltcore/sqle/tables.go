@@ -166,13 +166,16 @@ func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql
 	for keyCols, idx := range lookups {
 		if keyCols.Intersection(colset).Len() == keyCols.Len() {
 			// idx is strict lookup
-			rb := sql.NewIndexBuilder(idx)
+			rb := sql.NewEqualityIndexBuilder(idx)
 			for col, ok := keyCols.Next(1); ok; col, ok = keyCols.Next(col + 1) {
 				idx := col - 1
 				c := schCols.GetColumns()[idx]
 				for _, c2 := range cols {
 					if strings.EqualFold(c2.Col, c.Name) {
-						rb.Equals(ctx, fmt.Sprintf("%s.%s", t.tableName, c2.Col), c2.Expr.Value())
+						// |c| is the target column
+						// |c2.Expr| is the literal
+						// goal is a set of range expressions
+						rb.Equals(ctx, c.TypeInfo.ToSqlType(), c2.Expr.Value())
 						break
 					}
 				}
