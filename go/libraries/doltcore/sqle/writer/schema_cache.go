@@ -42,6 +42,7 @@ func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName st
 		return nil, fmt.Errorf("no state for database %s", dbName)
 	}
 
+	// cannot use root value schema cache, |t| is not in root value
 	schHash, err := t.GetSchemaHash(ctx)
 	if err != nil {
 		return nil, err
@@ -54,7 +55,9 @@ func writerSchema(ctx *sql.Context, t *doltdb.Table, tableName string, dbName st
 		if err != nil {
 			return nil, err
 		}
-		dbState.SessionCache().CacheWriterState(schKey, schState)
+		if !schKey.IsEmpty() {
+			dbState.SessionCache().CacheWriterState(schKey, schState)
+		}
 	}
 	return schState, nil
 }

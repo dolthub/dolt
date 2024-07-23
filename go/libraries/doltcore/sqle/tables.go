@@ -112,18 +112,23 @@ func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql
 		return sql.IndexLookup{}, false, nil
 	}
 
-	tab, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
+	schHash, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
 	if err != nil {
-		return sql.IndexLookup{}, false, nil
-	}
-	if !ok {
-		// ?
+		return sql.IndexLookup{}, false, err
 	}
 
-	schHash, err := tab.GetSchemaHash(ctx)
-	if err != nil {
-		return sql.IndexLookup{}, false, nil
-	}
+	//tab, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
+	//if err != nil {
+	//	return sql.IndexLookup{}, false, nil
+	//}
+	//if !ok {
+	//	// ?
+	//}
+	//
+	//schHash, err := tab.GetSchemaHash(ctx)
+	//if err != nil {
+	//	return sql.IndexLookup{}, false, nil
+	//}
 
 	sess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
@@ -206,7 +211,9 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 	if err != nil {
 		return nil, err
 	}
-
+	if tbl.GetOverriddenSchema() != nil {
+		print()
+	}
 	return &DoltTable{
 		tableName:        name,
 		db:               db,
@@ -326,12 +333,20 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 }
 
 func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
-	tab, err := t.DoltTable(ctx)
+	//tab, err := t.DoltTable(ctx)
+	//if err != nil {
+	//	return doltdb.DataCacheKey{}, false, err
+	//}
+	//
+	//key, err := tab.GetSchemaHash(ctx)
+	//if err != nil {
+	//	return doltdb.DataCacheKey{}, false, err
+	//}
+	root, err := t.getRoot(ctx)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}
-
-	key, err := tab.GetSchemaHash(ctx)
+	key, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}
