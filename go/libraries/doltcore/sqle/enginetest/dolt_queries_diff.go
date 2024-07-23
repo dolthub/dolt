@@ -3622,14 +3622,14 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'WORKING'",
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'WORKING'",
 				Expected: []sql.Row{
 					{"WORKING", "newRenamedEmptyTable"},
 					{"WORKING", "regularTable"},
 				},
 			},
 			{
-				Query:    "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'STAGED'",
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'STAGED'",
 				Expected: []sql.Row{
 					{"STAGED", "addedTable"},
 					{"STAGED", "droppedTable"},
