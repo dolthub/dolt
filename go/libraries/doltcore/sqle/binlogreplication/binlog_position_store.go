@@ -39,7 +39,7 @@ type binlogPositionStore struct {
 	mu sync.Mutex
 }
 
-// Load loads a mysql.Position instance from the .doltcfg/binlog-position file at the root of the provider's filesystem.
+// Load loads a mysql.Position instance from the .doltcfg/binlog-position file at the root of the specified |filesystem|.
 // This file MUST be stored at the root of the provider's filesystem, and NOT inside a nested database's .doltcfg directory,
 // since the binlog position contains events that cover all databases in a SQL server. The returned mysql.Position
 // represents the set of GTIDs that have been successfully executed and applied on this replica. Currently only the

@@ -243,6 +243,7 @@ func TestBinlogPrimary_AutoPurging(t *testing.T) {
 
 	// Restart and confirm the binary log has been purged
 	stopDoltSqlServer(t)
+	time.Sleep(1 * time.Second)
 	mustRestartDoltPrimaryServer(t)
 	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
 		{"binlog-main.000002", "191", "No"},

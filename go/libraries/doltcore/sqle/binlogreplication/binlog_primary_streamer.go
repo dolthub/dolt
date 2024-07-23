@@ -33,8 +33,10 @@ import (
 // It also sends heartbeat events to the replica over the same connection at
 // regular intervals. There is one streamer per connected replica.
 type binlogStreamer struct {
-	quitChan chan struct{}
-	ticker   *time.Ticker
+	quitChan       chan struct{}
+	ticker         *time.Ticker
+	skippingGtids  bool
+	currentLogFile *os.File
 }
 
 // NewBinlogStreamer creates a new binlogStreamer instance.
@@ -51,42 +53,35 @@ func newBinlogStreamer() *binlogStreamer {
 // and |binlogEventMeta| records the position of the stream. This method blocks until an error
 // is received over the stream (e.g. the connection closing) or the streamer is closed,
 // through it's quit channel.
-func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, executedGtids mysql.GTIDSet, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata, logfile string) error {
+func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, executedGtids mysql.GTIDSet, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata, logfile string) (err error) {
 	logrus.WithField("connection_id", conn.ConnectionID).
-		WithField("executed_gtids", executedGtids.String()).
+		WithField("executed_gtids", executedGtids).
 		Trace("starting binlog stream")
 
-	if err := sendInitialEvents(ctx, conn, logfile, binlogFormat, binlogEventMeta); err != nil {
-		return err
-	}
-
-	file, err := openBinlogFileForReading(logfile)
+	streamer.currentLogFile, err = openBinlogFileForReading(logfile)
 	if err != nil {
 		return err
 	}
 
-	binlogEventMetaCopy := binlogEventMeta
-	binlogEventMetaCopy.NextLogPosition = 0
-
-	rotateEvent := mysql.NewFakeRotateEvent(*binlogFormat, *binlogEventMetaCopy, filepath.Base(logfile))
+	// Send a fake rotate event to let the replica know what file and position we're at
+	binlogEventMeta.NextLogPosition = 4
+	rotateEvent := mysql.NewFakeRotateEvent(*binlogFormat, *binlogEventMeta, filepath.Base(logfile))
 	if err = conn.WriteBinlogEvent(rotateEvent, false); err != nil {
 		return err
 	}
 	_ = conn.FlushBuffer()
 
-	defer file.Close()
+	defer streamer.currentLogFile.Close()
 
 	for {
-		logrus.Trace("binlog streamer is listening for messages")
-
 		select {
 		case <-streamer.quitChan:
-			logrus.Trace("received message from streamer's quit channel")
+			logrus.Debug("received message from streamer's quit channel")
 			streamer.ticker.Stop()
 			return nil
 
 		case <-streamer.ticker.C:
-			logrus.Trace("sending binlog heartbeat")
+			logrus.Debug("sending binlog heartbeat")
 			if err := sendHeartbeat(conn, binlogFormat, *binlogEventMeta); err != nil {
 				return err
 			}
@@ -95,65 +90,81 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 			}
 
 		default:
-			logrus.Debug("checking file for new data...")
-			skippingGtids := false
-			for {
-				binlogEvent, err := readBinlogEventFromFile(file)
-				if err == io.EOF {
-					logrus.Tracef("End of binlog file! Waiting for new events...")
-					time.Sleep(250 * time.Millisecond)
-					continue
-				} else if err != nil {
-					return err
-				}
-
-				if binlogEvent.IsRotate() {
-					bytes := binlogEvent.Bytes()
-					newLogfile := string(bytes[19+8 : (len(bytes) - 4)])
-					logrus.Errorf("Rotatating to new binlog file: %s", newLogfile)
-
-					dir := filepath.Dir(logfile)
-					newLogfile = filepath.Join(dir, newLogfile)
-
-					if err = file.Close(); err != nil {
-						logrus.Errorf("unable to close previous binlog file: %s", err.Error())
-					}
-
-					if file, err = openBinlogFileForReading(newLogfile); err != nil {
-						return err
-					}
-
-					continue
-				}
-
-				if binlogEvent.IsGTID() {
-					gtid, _, err := binlogEvent.GTID(*binlogFormat)
-					if err != nil {
-						return err
-					}
-
-					// If the replica has already executed this GTID, then skip it.
-					if executedGtids.ContainsGTID(gtid) {
-						skippingGtids = true
-					} else {
-						skippingGtids = false
-					}
-				}
-
-				if skippingGtids {
-					continue
-				}
-
-				if err := conn.WriteBinlogEvent(binlogEvent, false); err != nil {
-					return err
-				}
-				if err = conn.FlushBuffer(); err != nil {
-					return err
-				}
+			logrus.Trace("checking binlog file for new events...")
+			// TODO: Being able to select on new updates from the file would be nicer
+			err := streamer.streamNextEvents(ctx, conn,
+				*binlogFormat, binlogEventMeta, filepath.Dir(logfile), executedGtids)
+			if err == io.EOF {
+				logrus.Debug("End of binlog file! Pausing for new events...")
+				time.Sleep(250 * time.Millisecond)
+			} else if err != nil {
+				return err
 			}
-			time.Sleep(500 * time.Millisecond)
 		}
 	}
+}
+
+// streamNextEvents streams up to 50 of the next events from the current binary logfile to a replica connected on
+// |conn|. |executedGtids| indicates which GTIDs the connected replica has already executed. |logFileDir| indicates
+// where the streamer can look for more binary log files with the current file rotates. If an error, including
+// io.EOF, occurs while reading from the file, it is returned.
+func (streamer *binlogStreamer) streamNextEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata, logFileDir string, executedGtids mysql.GTIDSet) error {
+	for range 50 {
+		binlogEvent, err := readBinlogEventFromFile(streamer.currentLogFile)
+		if err != nil {
+			return err
+		}
+
+		// Update next log position in the stream so that we can send the correct position
+		// when a heartbeat needs to be sent by the timer signal.
+		binlogEventMeta.NextLogPosition += binlogEvent.Length()
+
+		if binlogEvent.IsRotate() {
+			bytes := binlogEvent.Bytes()
+			newLogfile := string(bytes[19+8 : (len(bytes) - 4)])
+			logrus.Debugf("Rotatating to new binlog file: %s", newLogfile)
+
+			if err = streamer.currentLogFile.Close(); err != nil {
+				logrus.Errorf("unable to close previous binlog file: %s", err.Error())
+			}
+
+			newLogfile = filepath.Join(logFileDir, newLogfile)
+			if streamer.currentLogFile, err = openBinlogFileForReading(newLogfile); err != nil {
+				return err
+			}
+
+			// Reset log position to right after the 4 byte magic number for the file type
+			binlogEventMeta.NextLogPosition = 4
+			continue
+		}
+
+		if binlogEvent.IsGTID() {
+			gtid, _, err := binlogEvent.GTID(binlogFormat)
+			if err != nil {
+				return err
+			}
+
+			// If the replica has already executed this GTID, then skip it.
+			if executedGtids.ContainsGTID(gtid) {
+				streamer.skippingGtids = true
+			} else {
+				streamer.skippingGtids = false
+			}
+		}
+
+		if streamer.skippingGtids {
+			continue
+		}
+
+		if err := conn.WriteBinlogEvent(binlogEvent, false); err != nil {
+			return err
+		}
+		if err := conn.FlushBuffer(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // openBinlogFileForReading opens the specified |logfile| for reading and reads the first four bytes to make sure they
@@ -183,7 +194,7 @@ type binlogStreamerManager struct {
 	streamers      []*binlogStreamer
 	streamersMutex sync.Mutex
 	quitChan       chan struct{}
-	logManager     *LogManager
+	logManager     *logManager
 }
 
 // NewBinlogStreamerManager creates a new binlogStreamerManager instance.
@@ -358,39 +369,5 @@ func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEve
 	logrus.WithField("log_position", binlogEventMeta.NextLogPosition).Tracef("sending heartbeat")
 
 	binlogEvent := mysql.NewHeartbeatEvent(*binlogFormat, binlogEventMeta)
-	return conn.WriteBinlogEvent(binlogEvent, false)
-}
-
-// sendInitialEvents sends the initial binlog events (i.e. Rotate, FormatDescription) over a newly established binlog
-// streaming connection.
-func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFilename string, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
-	err := sendRotateEvent(conn, binlogFilename, binlogFormat, binlogEventMeta)
-	if err != nil {
-		return err
-	}
-
-	err = sendFormatDescription(conn, binlogFormat, binlogEventMeta)
-	if err != nil {
-		return err
-	}
-
-	return conn.FlushBuffer()
-}
-
-func sendRotateEvent(conn *mysql.Conn, binlogFilename string, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
-	binlogFilePosition := uint64(0)
-	binlogEventMeta.NextLogPosition = uint32(binlogFilePosition)
-
-	// The Rotate event sent at the start of a stream is a "virtual" event that isn't actually
-	// recorded to the binary log file, but sent to the replica so it knows what file is being
-	// read from. Because it is virtual, we do NOT update the nextLogPosition field of
-	// BinlogEventMetadata.
-	binlogEvent := mysql.NewRotateEvent(*binlogFormat, *binlogEventMeta, binlogFilePosition, binlogFilename)
-	return conn.WriteBinlogEvent(binlogEvent, false)
-}
-
-func sendFormatDescription(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta *mysql.BinlogEventMetadata) error {
-	binlogEvent := mysql.NewFormatDescriptionEvent(*binlogFormat, *binlogEventMeta)
-	binlogEventMeta.NextLogPosition += binlogEvent.Length()
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }

@@ -306,7 +306,7 @@ func ConfigureServices(
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {
-				panic("Found unexpected type of binlog controller!")
+				return fmt.Errorf("unexpected type of binlog controller: %T", primaryController)
 			}
 
 			_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
@@ -318,7 +318,7 @@ func ConfigureServices(
 				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
 			}
 			if logBin == 1 {
-				logrus.Debug("Enabling binary logging")
+				logrus.Info("Enabling binary logging")
 				binlogProducer, err := binlogreplication.NewBinlogProducer(dEnv.FS)
 				if err != nil {
 					return err

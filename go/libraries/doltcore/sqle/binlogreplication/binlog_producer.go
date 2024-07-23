@@ -56,7 +56,7 @@ type binlogProducer struct {
 	gtidPosition *mysql.Position
 	gtidSequence int64
 
-	logManager *LogManager
+	logManager *logManager
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
@@ -85,7 +85,7 @@ func NewBinlogProducer(fs filesys.Filesys) (*binlogProducer, error) {
 }
 
 // LogManager sets the |logManager| this producer will send events to.
-func (b *binlogProducer) LogManager(logManager *LogManager) {
+func (b *binlogProducer) LogManager(logManager *logManager) {
 	b.logManager = logManager
 }
 

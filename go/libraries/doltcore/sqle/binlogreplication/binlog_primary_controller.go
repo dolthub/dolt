@@ -121,6 +121,10 @@ func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mys
 		return err
 	}
 
+	if replicaExecutedGtids == nil {
+		replicaExecutedGtids = mysql.Mysql56GTIDSet{}
+	}
+
 	primaryExecutedGtids := d.binlogProducer.gtidPosition.GTIDSet
 	missingGtids := d.binlogProducer.logManager.calculateMissingGtids(replicaExecutedGtids, primaryExecutedGtids)
 	if !missingGtids.Equal(mysql.Mysql56GTIDSet{}) {
@@ -128,7 +132,9 @@ func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mys
 		// otherwise the replica won't expose the error in replica status and will just keep trying to reconnect and
 		// only log the error to MySQL's error log.
 		return mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, "HY000",
-			"Cannot replicate because the source purged required binary logs. Replicate the missing transactions from elsewhere, or provision a new replica from backup. Consider increasing the source's binary log expiration period. The GTID set sent by the replica is '%s', and the missing transactions are '%s'.",
+			"Cannot replicate because the source purged required binary logs. Replicate the missing transactions "+
+				"from elsewhere, or provision a new replica from backup. Consider increasing the source's binary log "+
+				"expiration period. The GTID set sent by the replica is '%s', and the missing transactions are '%s'.",
 			replicaExecutedGtids.String(), missingGtids.String())
 	}
 
