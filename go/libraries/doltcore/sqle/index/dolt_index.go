@@ -566,6 +566,19 @@ func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sq
 	lookups := make(map[sql.FastIntSet]sql.Index)
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
+		if !idx.IsUnique() {
+			continue
+		}
+		var nullAccepting bool
+		for _, c := range idx.columns {
+			if c.IsNullable() {
+				nullAccepting = true
+				break
+			}
+		}
+		if nullAccepting {
+			continue
+		}
 		colset := sql.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]

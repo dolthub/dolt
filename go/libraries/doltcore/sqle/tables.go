@@ -102,12 +102,15 @@ func (t *DoltTable) SkipIndexCosting() bool {
 	return false
 }
 
-func (t *DoltTable) LookupForExpressions(ctx *sql.Context, e sql.Expression) (sql.IndexLookup, bool, error) {
+func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql.IndexLookup, bool, error) {
 	// convert expressions to sorted list of column names
 	// get schema hash
 	// check cache from preexisting list of strict key matches
 	// (schemakey) -> map[cols]->indexLookup
 	root, err := t.workingRoot(ctx)
+	if err != nil {
+		return sql.IndexLookup{}, false, nil
+	}
 
 	tab, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
@@ -139,7 +142,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, e sql.Expression) (sq
 	colset := sql.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
 	for _, c := range cols {
-		col := schCols.LowerNameToCol[c.col]
+		col := schCols.LowerNameToCol[c.Col]
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
 	}
@@ -152,6 +155,9 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, e sql.Expression) (sq
 		// create lookups
 		// get indexes
 		indexes, err := t.GetIndexes(ctx)
+		if err != nil {
+			return sql.IndexLookup{}, false, err
+		}
 		lookups = index.GetStrictLookups(schCols, indexes)
 
 		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
@@ -161,12 +167,12 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, e sql.Expression) (sq
 		if keyCols.Intersection(colset).Len() == keyCols.Len() {
 			// idx is strict lookup
 			rb := sql.NewIndexBuilder(idx)
-			for col, ok := keyCols.Next(1); ok; col, ok = keyCols.Next(col) {
+			for col, ok := keyCols.Next(1); ok; col, ok = keyCols.Next(col + 1) {
 				idx := col - 1
 				c := schCols.GetColumns()[idx]
 				for _, c2 := range cols {
-					if strings.EqualFold(c2.col, c.Name) {
-						rb.Equals(ctx, c2.col, c2.expr.Value())
+					if strings.EqualFold(c2.Col, c.Name) {
+						rb.Equals(ctx, fmt.Sprintf("%s.%s", t.tableName, c2.Col), c2.Expr.Value())
 						break
 					}
 				}
