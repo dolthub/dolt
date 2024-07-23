@@ -28,7 +28,7 @@ stop_remotesrv() {
 
 # serial repository is 7 commits:
 # (init) <- (table create) <- (val 1) <- (val 2) <- (val 3) <- (val 4) <- (val 5) [main]
-seed_and_start_serial_remote() {
+seed_local_remote() {
     mkdir remote
     cd remote
     dolt init
@@ -42,6 +42,13 @@ seed_and_start_serial_remote() {
     done
 
     dolt tag nonheadtag HEAD~2
+    cd ..
+}
+
+
+seed_and_start_serial_remote() {
+    seed_local_remote
+    cd remote
 
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
@@ -94,8 +101,7 @@ seed_and_start_serial_remote() {
 }
 
 @test "shallow-clone: shallow clone with a file path" {
-    seed_and_start_serial_remote
-    stop_remotesrv
+    seed_local_remote
     cd remote
     dolt remote add origin file://../file-remote
     dolt push origin main
