@@ -157,6 +157,20 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	}, nil
 }
 
+// clone returns a new archiveReader with a new (provided) reader. All other fields are immutable or thread safe,
+// so they are copied.
+func (ar archiveReader) clone(newReader io.ReaderAt) archiveReader {
+	return archiveReader{
+		reader:    newReader,
+		prefixes:  ar.prefixes,
+		spanIndex: ar.spanIndex,
+		chunkRefs: ar.chunkRefs,
+		suffixes:  ar.suffixes,
+		footer:    ar.footer,
+		dictCache: ar.dictCache, // cache is thread safe.
+	}
+}
+
 func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 

@@ -28,7 +28,7 @@ make_inserts() {
 make_updates() {
   for ((i=1; i<=10; i++))
   do
-        dolt sql -q "
+    dolt sql -q	"
     SET @max_id = (SELECT MAX(i) FROM tbl);
     SET @random_id = FLOOR(1 + RAND() * @max_id);
     UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
@@ -105,6 +105,29 @@ make_updates() {
   # dolt log --stat will load every single chunk.
   commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
   [ "$commits" -eq "186" ]
+}
+
+@test "archive: archive multiple times" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt admin archive
+
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+
+  dolt gc
+  dolt admin archive
+
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "2" ]
 }
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats

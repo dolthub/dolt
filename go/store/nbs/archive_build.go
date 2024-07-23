@@ -115,7 +115,9 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		swapMap := make(map[hash.Hash]hash.Hash)
 
 		for tf, ogcs := range oldgen {
-			// NM4 - We should probably provide a way to pick a particular table file to build an archive for.
+			if _, ok := ogcs.(archiveChunkSource); ok {
+				continue
+			}
 
 			idx, err := ogcs.index()
 			if err != nil {

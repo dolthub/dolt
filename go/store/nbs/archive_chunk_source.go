@@ -28,6 +28,7 @@ import (
 )
 
 type archiveChunkSource struct {
+	file string
 	aRdr archiveReader
 }
 
@@ -36,22 +37,30 @@ var _ chunkSource = &archiveChunkSource{}
 func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+archiveFileSuffix)
 
-	file, err := os.Open(archiveFile)
+	file, size, err := openReader(archiveFile)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
 
-	stat, err := file.Stat()
+	aRdr, err := newArchiveReader(file, size)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
-	fileSize := stat.Size()
+	return archiveChunkSource{archiveFile, aRdr}, nil
+}
 
-	aRdr, err := newArchiveReader(file, uint64(fileSize))
+func openReader(file string) (io.ReaderAt, uint64, error) {
+	f, err := os.Open(file)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return nil, 0, err
 	}
-	return archiveChunkSource{aRdr}, nil
+
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return f, uint64(stat.Size()), nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash) (bool, error) {
@@ -126,7 +135,14 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 }
 
 func (acs archiveChunkSource) clone() (chunkSource, error) {
-	return nil, errors.New("Archive chunk source does not support clone")
+	newReader, _, err := openReader(acs.file)
+	if err != nil {
+		return nil, err
+	}
+
+	rdr := acs.aRdr.clone(newReader)
+
+	return archiveChunkSource{acs.file, rdr}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord) (map[hash.Hash]Range, error) {
