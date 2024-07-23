@@ -61,9 +61,9 @@ func (acs archiveChunkSource) has(h hash.Hash) (bool, error) {
 func (acs archiveChunkSource) hasMany(addrs []hasRecord) (bool, error) {
 	// single threaded first pass.
 	foundAll := true
-	for _, addr := range addrs {
+	for i, addr := range addrs {
 		if acs.aRdr.has(*(addr.a)) {
-			addr.has = true
+			addrs[i].has = true
 		} else {
 			foundAll = false
 		}
@@ -79,14 +79,14 @@ func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, stats *Stats
 func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	// single threaded first pass.
 	foundAll := true
-	for _, req := range reqs {
+	for i, req := range reqs {
 		data, err := acs.aRdr.get(*req.a)
 		if err != nil || data == nil {
 			foundAll = false
 		} else {
 			chunk := chunks.NewChunk(data)
 			found(ctx, &chunk)
-			req.found = true
+			reqs[i].found = true
 		}
 	}
 	return !foundAll, nil

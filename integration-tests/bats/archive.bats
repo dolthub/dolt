@@ -28,7 +28,10 @@ make_inserts() {
 make_updates() {
   for ((i=1; i<=10; i++))
   do
-    dolt sql -q	"UPDATE tbl SET guid = UUID() WHERE i = (SELECT i FROM tbl ORDER BY RAND() LIMIT 1)"
+        dolt sql -q "
+    SET @max_id = (SELECT MAX(i) FROM tbl);
+    SET @random_id = FLOOR(1 + RAND() * @max_id);
+    UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   done
   dolt commit -a -m "Update 10 values."
 }
@@ -57,7 +60,11 @@ make_updates() {
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
+
+  # Ensure updates continue to work.
+  make_updates
 }
+
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
 # bats test_tags=no_lambda
