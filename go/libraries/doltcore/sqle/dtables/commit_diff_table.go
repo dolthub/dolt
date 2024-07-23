@@ -57,11 +57,11 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 
-func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root, stagedRoot doltdb.RootValue) (sql.Table, error) {
+func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
 	// TODO: schema
-	table, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tblName})
+	table, _, ok, err := doltdb.GetTableInsensitive(ctx, wRoot, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.Do
 		dbName:       dbName,
 		name:         tblName,
 		ddb:          ddb,
-		workingRoot:  root,
-		stagedRoot:   stagedRoot,
+		workingRoot:  wRoot,
+		stagedRoot:   sRoot,
 		joiner:       j,
 		sqlSch:       sqlSch,
 		targetSchema: sch,

@@ -343,7 +343,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, ws.WorkingRoot(), ws.StagedRoot())
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root, ws.StagedRoot())
 		if err != nil {
 			return nil, false, err
 		}
