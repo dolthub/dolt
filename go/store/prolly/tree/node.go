@@ -284,43 +284,7 @@ func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore,
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys
 func OutputProllyNodeBytes(w io.Writer, node Node) error {
-	for i := 0; i < int(node.count); i++ {
-		k := node.GetKey(i)
-		kt := val.Tuple(k)
-
-		w.Write([]byte("\n    { key: "))
-		for j := 0; j < kt.Count(); j++ {
-			if j > 0 {
-				w.Write([]byte(", "))
-			}
-
-			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
-		}
-
-		if node.IsLeaf() {
-			v := node.GetValue(i)
-			vt := val.Tuple(v)
-
-			w.Write([]byte(" value: "))
-			for j := 0; j < vt.Count(); j++ {
-				if j > 0 {
-					w.Write([]byte(", "))
-				}
-				w.Write([]byte(hex.EncodeToString(vt.GetField(j))))
-			}
-
-			w.Write([]byte(" }"))
-		} else {
-			ref := node.getAddress(i)
-
-			w.Write([]byte(" ref: #"))
-			w.Write([]byte(ref.String()))
-			w.Write([]byte(" }"))
-		}
-	}
-
-	w.Write([]byte("\n"))
-	return nil
+	return types.OutputProllyNodeBytes(w, node.msg)
 }
 
 func OutputAddressMapNode(w io.Writer, node Node) error {
