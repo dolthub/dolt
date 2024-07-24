@@ -156,6 +156,7 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 				default:
 					cli.Printf("Unexpected Message: %v\n", v)
 				}
+			// If no events come in, we still want to update the progress bar every second.
 			case <-time.After(1 * time.Second):
 			}
 

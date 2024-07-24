@@ -606,12 +606,12 @@ func generateDictionary(seed int64) ([]byte, *gozstd.CDict) {
 	return rawDict, cDict
 }
 
-func addChunkToCache(cache *SimpleChunkSourceCache, chk *chunks.Chunk) {
+func addChunkToCache(cache *simpleChunkSourceCache, chk *chunks.Chunk) {
 	internal, _ := cache.cs.(*testChunkSource)
 	internal.chunks = append(internal.chunks, chk)
 }
 
-func generateSimilarChunks(seed int64, count int) ([]*chunks.Chunk, *SimpleChunkSourceCache, hash.HashSet) {
+func generateSimilarChunks(seed int64, count int) ([]*chunks.Chunk, *simpleChunkSourceCache, hash.HashSet) {
 	chks := make([]*chunks.Chunk, count)
 	for i := 0; i < count; i++ {
 		chks[i] = generateRandomChunk(seed, 1000+i)
@@ -637,7 +637,7 @@ func generateRandomBytes(seed int64, len int) []byte {
 	return data
 }
 
-func buildTestChunkSource(chks []*chunks.Chunk) (*SimpleChunkSourceCache, hash.HashSet) {
+func buildTestChunkSource(chks []*chunks.Chunk) (*simpleChunkSourceCache, hash.HashSet) {
 	cpy := make([]*chunks.Chunk, len(chks))
 	copy(cpy, chks)
 	tcs := &testChunkSource{chunks: cpy}

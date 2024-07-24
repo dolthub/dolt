@@ -216,7 +216,7 @@ func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string, originTabl
 func writeDataToArchive(
 	ctx context.Context,
 	cmpBuff []byte,
-	chunkCache *SimpleChunkSourceCache,
+	chunkCache *simpleChunkSourceCache,
 	cgList []*chunkGroup,
 	defaultSpanId uint32,
 	defaultDict *gozstd.CDict,
@@ -274,7 +274,7 @@ func writeDataToArchive(
 				}
 			}
 			groupsCompleted++
-			progress <- ArchiveBuildProgressMsg{Stage: "Chunk Groups Materialized", Total: int32(possibleGroupCount), Completed: groupsCompleted}
+			progress <- ArchiveBuildProgressMsg{Stage: "Materializing Chunk Groups", Total: int32(possibleGroupCount), Completed: groupsCompleted}
 		}
 	}
 
@@ -308,7 +308,7 @@ func writeDataToArchive(
 			}
 
 			ungroupedChunkProgress++
-			progress <- ArchiveBuildProgressMsg{Stage: "Ungrouped Chunks Written", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
+			progress <- ArchiveBuildProgressMsg{Stage: "Writing Ungrouped Chunks", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
 		}
 	}
 
@@ -320,7 +320,7 @@ func writeDataToArchive(
 // gatherAllChunks reads all the chunks from the chunk source and returns them in a map. The map is keyed by the hash of
 // the chunk. This is going to take up a bunch of memory.
 // It also returns a list of default samples, which are the first 1000 chunks that are read. These are used to build the default dictionary.
-func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats *Stats) (*SimpleChunkSourceCache, []*chunks.Chunk, error) {
+func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats *Stats) (*simpleChunkSourceCache, []*chunks.Chunk, error) {
 	sampleCount := min(idx.chunkCount(), maxSamples)
 
 	defaultSamples := make([]*chunks.Chunk, 0, sampleCount)
@@ -429,7 +429,12 @@ type chunkGroup struct {
 	avgRawChunkSize            int
 }
 
-// chunkCmpScore wraps a chunk and its compression score for use by the chunkGroup. This score includes the
+// chunkCmpScore wraps a chunk and its compression score for use by the chunkGroup. This score is calculated by comparing
+// the size of the compressed chunk using the group's dictionary to the size of the compressed chunk using the default
+// dictionary. Closer to 1.0 is better.
+
+// This score if for an individual chunk, and does not include the dictionary size. The group may not be used when the
+// full set is considered with the inclusion of the default dictionary.
 type chunkCmpScore struct {
 	chunkId hash.Hash
 	// The compression score. Higher is better. This is the ratio of the compressed size to the raw size, using the group's
@@ -445,7 +450,7 @@ type chunkCmpScore struct {
 // newChunkGroup creates a new chunkGroup from a set of chunks.
 func newChunkGroup(
 	ctx context.Context,
-	chunkCache *SimpleChunkSourceCache,
+	chunkCache *simpleChunkSourceCache,
 	chks hash.HashSet,
 	defaultDict *gozstd.CDict,
 	stats *Stats,
@@ -484,7 +489,7 @@ func padSamples(chks []*chunks.Chunk) []*chunks.Chunk {
 // The chunkGroup will be recalculated after this chunk is added.
 func (cg *chunkGroup) addChunk(
 	ctx context.Context,
-	chunkChache *SimpleChunkSourceCache,
+	chunkChache *simpleChunkSourceCache,
 	c *chunks.Chunk,
 	defaultDict *gozstd.CDict,
 	stats *Stats,
@@ -528,7 +533,7 @@ func (cg *chunkGroup) worstZScore() float64 {
 
 // rebuild - recalculate the entire group's compression ratio. Dictionary and total compression ratio are updated as well.
 // This method is called after a new chunk is added to the group. Ensures that stats about the group are up-to-date.
-func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *SimpleChunkSourceCache, defaultDict *gozstd.CDict, stats *Stats) error {
+func (cg *chunkGroup) rebuild(ctx context.Context, chunkCache *simpleChunkSourceCache, defaultDict *gozstd.CDict, stats *Stats) error {
 	chks := make([]*chunks.Chunk, 0, len(cg.chks))
 
 	for _, cs := range cg.chks {
@@ -643,7 +648,7 @@ type ArchiveBuildProgressMsg struct {
 
 func (cr *ChunkRelations) convertToChunkGroups(
 	ctx context.Context,
-	chks *SimpleChunkSourceCache,
+	chks *simpleChunkSourceCache,
 	defaultDict *gozstd.CDict,
 	progress chan interface{},
 	stats *Stats,
@@ -783,27 +788,27 @@ func (cr *ChunkRelations) Add(a, b hash.Hash) {
 	}
 }
 
-// SimpleChunkSourceCache is a simple cache for chunks. For the purposes of building archives, we want to avoid storing
+// simpleChunkSourceCache is a simple cache for chunks. For the purposes of building archives, we want to avoid storing
 // all chunks in memory.
-type SimpleChunkSourceCache struct {
+type simpleChunkSourceCache struct {
 	cache *lru.TwoQueueCache[hash.Hash, *chunks.Chunk]
 	cs    chunkSource
 }
 
-// newSimpleChunkSourceCache creates a new SimpleChunkSourceCache. The cache size is fixed, should use approximately
+// newSimpleChunkSourceCache creates a new simpleChunkSourceCache. The cache size is fixed, should use approximately
 // 12Gb of memory.
-func newSimpleChunkSourceCache(cs chunkSource) (*SimpleChunkSourceCache, error) {
+func newSimpleChunkSourceCache(cs chunkSource) (*simpleChunkSourceCache, error) {
 	// Chunks are 4K on average, so 3M chunks should be about 12Gb.
 	lruCache, err := lru.New2Q[hash.Hash, *chunks.Chunk](3000000)
 	if err != nil {
 		return nil, err
 	}
-	return &SimpleChunkSourceCache{lruCache, cs}, nil
+	return &simpleChunkSourceCache{lruCache, cs}, nil
 }
 
 // get a chunk from the cache. If the chunk is not in the cache, it will be fetched from the ChunkSource.
 // If the ChunkSource doesn't have the chunk, return nil - this is a valid case.
-func (csc *SimpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *Stats) (*chunks.Chunk, error) {
+func (csc *simpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *Stats) (*chunks.Chunk, error) {
 	if chk, ok := csc.cache.Get(h); ok {
 		return chk, nil
 	}
@@ -819,13 +824,13 @@ func (csc *SimpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *
 }
 
 // has returns true if the chunk is in the ChunkSource. This is not related to what is cached, just a helper.
-func (csc *SimpleChunkSourceCache) has(h hash.Hash) (bool, error) {
+func (csc *simpleChunkSourceCache) has(h hash.Hash) (bool, error) {
 	return csc.cs.has(h)
 }
 
 // addresses get all chunk addresses of the ChunkSource as a hash.HashSet.
 // This is not related to what is cached, just a helper since the cache has a reference to the ChunkSource.
-func (csc *SimpleChunkSourceCache) addresses() (hash.HashSet, error) {
+func (csc *simpleChunkSourceCache) addresses() (hash.HashSet, error) {
 	idx, err := csc.cs.index()
 	if err != nil {
 		return nil, err
