@@ -725,10 +725,6 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 			toVisit = make([]hash.HashSet, len(batches)+1)
 			toVisitCount = 0
 			for i, batch := range batches {
-				if err := keepHashes(batch); err != nil {
-					return err
-				}
-
 				vals, err := lvs.ReadManyValues(ctx, batch)
 				if err != nil {
 					return err
@@ -741,18 +737,24 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 
 				// GC skips ghost values, but other ref walkers don't. Filter them out here.
 				realVals := make(ValueSlice, 0, len(vals))
+				nonGhostBatch := make([]hash.Hash, 0, len(vals))
 				for _, v := range vals {
-					if _, ok := v.(GhostValue); !ok {
-						h, err := v.Hash(lvs.Format())
-						if err != nil {
-							return err
-						}
+					h, err := v.Hash(lvs.Format())
+					if err != nil {
+						return err
+					}
+					if _, ok := v.(GhostValue); ok {
 						visited.Insert(h) // Can't visit a ghost. That would be spooky.
 					} else {
 						realVals = append(realVals, v)
+						nonGhostBatch = append(nonGhostBatch, h)
 					}
 				}
 				vals = realVals
+
+				if err := keepHashes(nonGhostBatch); err != nil {
+					return err
+				}
 
 				hashes, err := walker.GetRefSet(visited, vals)
 				if err != nil {
