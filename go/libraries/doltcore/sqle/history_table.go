@@ -133,9 +133,6 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 		var commits []*doltdb.Commit
 		var metas []*datas.CommitMeta
 		for _, hs := range hs {
-			if hs == doltdb.Working {
-
-			}
 			h, ok := hash.MaybeParse(hs)
 			if !ok {
 				continue
@@ -246,8 +243,10 @@ func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
 		ret[i], _, _ = transform.Expr(e, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			switch e := e.(type) {
 			case *expression.Literal:
-				if e.Value() == doltdb.Working {
-					return expression.NewLiteral(h.String(), e.Type()), transform.NewTree, nil
+				if str, isStr := e.Value().(string); isStr {
+					if strings.EqualFold(str, doltdb.Working) || strings.EqualFold(str, doltdb.Staged) {
+						return expression.NewLiteral(h.String(), e.Type()), transform.NewTree, nil
+					}
 				}
 			default:
 			}

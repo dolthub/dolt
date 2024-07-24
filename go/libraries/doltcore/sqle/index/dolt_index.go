@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -1404,14 +1405,14 @@ func HashesToCommits(
 	var hashes []hash.Hash
 	var commits []*doltdb.Commit
 	var metas []*datas.CommitMeta
+	var addedHead bool
 	var err error
 	var ok bool
 	for _, hs := range hashStrs {
 		var h hash.Hash
 		var cm *doltdb.Commit
 		var meta *datas.CommitMeta
-		switch hs {
-		case doltdb.Working:
+		if !addedHead && (strings.EqualFold(hs, doltdb.Working) || strings.EqualFold(hs, doltdb.Staged)) {
 			if head == nil {
 				continue
 			}
@@ -1419,6 +1420,7 @@ func HashesToCommits(
 			if err != nil {
 				continue
 			}
+			addedHead = true
 
 			if convertWorkingToCommit {
 				cm, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), h)
@@ -1432,7 +1434,7 @@ func HashesToCommits(
 					}
 				}
 			}
-		default:
+		} else {
 			h, ok = hash.MaybeParse(hs)
 			if !ok {
 				continue
