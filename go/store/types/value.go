@@ -343,7 +343,7 @@ func (g GhostValue) HumanReadableString() string {
 }
 
 func (g GhostValue) walkRefs(_ *NomsBinFormat, _ RefCallback) error {
-	return nil
+	panic("Error: GhostValue.walkRefs() called.")
 }
 
 func (g GhostValue) typeOf() (*Type, error) {
