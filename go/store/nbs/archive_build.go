@@ -137,6 +137,10 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			swapMap[tf] = archiveName
 		}
 
+		if len(swapMap) == 0 {
+			return fmt.Errorf("No tables found to archive. Run 'dolt gc' first")
+		}
+
 		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
 		specs, err := gs.oldGen.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))

@@ -45,6 +45,12 @@ make_updates() {
   [[ "$output" =~ "Not enough samples to build default dictionary" ]] || false
 }
 
+@test "archive: require gc first" {
+  run dolt admin archive
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Run 'dolt gc' first" ]] || false
+}
+
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
 # bats test_tags=no_lambda
 @test "archive: single archive" {
