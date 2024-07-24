@@ -58,12 +58,14 @@ EOF
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ALTER DATABASE \`colldb\` COLLATE='utf8mb4_spanish_ci';" ]] || false
+}
 
-    # regression test for dolt diff failing when database name starts or ends with any of the characters in __DATABASE__
-
-    cd ..
-    mv colldb COLLDB
+@test "diff: db collation diff regression test" {
+    dolt sql -q "create database COLLDB"
     cd COLLDB
+
+    dolt sql -q "alter database COLLDB collate utf8mb4_spanish_ci"
+    # regression test for dolt diff failing when database name starts or ends with any of the characters in __DATABASE__
 
     run dolt diff -r sql
     [ "$status" -eq 0 ]
