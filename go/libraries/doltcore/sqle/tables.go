@@ -168,12 +168,13 @@ func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql
 		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
 	}
 
-	for keyCols, idx := range lookups {
+	// TODO the key columns might not be schema order
+	for keyCols, lookup := range lookups {
 		if keyCols.Intersection(colset).Len() == keyCols.Len() {
 			// idx is strict lookup
-			rb := sql.NewEqualityIndexBuilder(idx)
-			for col, ok := keyCols.Next(1); ok; col, ok = keyCols.Next(col + 1) {
-				idx := col - 1
+			rb := sql.NewEqualityIndexBuilder(lookup.Idx)
+			for _, ord := range lookup.Ordinals {
+				idx := ord - 1
 				c := schCols.GetColumns()[idx]
 				for _, c2 := range cols {
 					if strings.EqualFold(c2.Col, c.Name) {
@@ -333,15 +334,6 @@ func (t *DoltTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, e
 }
 
 func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
-	//tab, err := t.DoltTable(ctx)
-	//if err != nil {
-	//	return doltdb.DataCacheKey{}, false, err
-	//}
-	//
-	//key, err := tab.GetSchemaHash(ctx)
-	//if err != nil {
-	//	return doltdb.DataCacheKey{}, false, err
-	//}
 	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err

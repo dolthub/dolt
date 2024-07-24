@@ -562,8 +562,13 @@ type doltIndex struct {
 	fullTextProps schema.FullTextProperties
 }
 
-func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sql.FastIntSet]sql.Index {
-	lookups := make(map[sql.FastIntSet]sql.Index)
+type LookupMeta struct {
+	Idx      sql.Index
+	Ordinals []int
+}
+
+func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sql.FastIntSet]LookupMeta {
+	lookups := make(map[sql.FastIntSet]LookupMeta)
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
@@ -579,12 +584,14 @@ func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sq
 		if nullAccepting {
 			continue
 		}
+		var ordinals []int
 		colset := sql.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]
 			colset.Add(idx + 1)
+			ordinals = append(ordinals, idx+1)
 		}
-		lookups[colset] = i
+		lookups[colset] = LookupMeta{Idx: i, Ordinals: ordinals}
 	}
 	return lookups
 }
