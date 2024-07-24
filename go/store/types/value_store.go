@@ -200,7 +200,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		return nil, err
 	}
 	if chunk.IsGhost() {
-		return GhostValue{}, nil
+		return GhostValue{hash: chunk.Hash()}, nil
 	}
 
 	if chunk.IsEmpty() {
@@ -233,7 +233,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) (Value, error) {
 		if chunk.IsGhost() {
-			return GhostValue{}, nil
+			return GhostValue{hash: chunk.Hash()}, nil
 		}
 
 		v, ferr := DecodeValue(*chunk, lvs)
@@ -738,6 +738,21 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 						return fmt.Errorf("gc failed, dangling reference requested %v", batch[i])
 					}
 				}
+
+				// GC skips ghost values, but other ref walkers don't. Filter them out here.
+				realVals := make(ValueSlice, 0, len(vals))
+				for _, v := range vals {
+					if _, ok := v.(GhostValue); !ok {
+						h, err := v.Hash(lvs.Format())
+						if err != nil {
+							return err
+						}
+						visited.Insert(h) // Can't visit a ghost. That would be spooky.
+					} else {
+						realVals = append(realVals, v)
+					}
+				}
+				vals = realVals
 
 				hashes, err := walker.GetRefSet(visited, vals)
 				if err != nil {

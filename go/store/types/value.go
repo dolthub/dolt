@@ -309,6 +309,7 @@ func (v valueImpl) Kind() NomsKind {
 // GhostValue is a placeholder for a value that has not been pulled from a remote. The structure holds no information,
 // All methods will panic if called.
 type GhostValue struct {
+	hash hash.Hash
 }
 
 var _ Value = GhostValue{}
@@ -317,20 +318,20 @@ func (g GhostValue) Kind() NomsKind {
 	panic("Error: GhostValue.Kind() called.")
 }
 
-func (g GhostValue) Value(ctx context.Context) (Value, error) {
+func (g GhostValue) Value(_ context.Context) (Value, error) {
 	panic("Error: GhostValue.Value() called.")
 }
 
-func (g GhostValue) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (g GhostValue) Less(_ context.Context, _ *NomsBinFormat, _ LesserValuable) (bool, error) {
 	panic("Error: GhostValue.Less() called.")
 }
 
-func (g GhostValue) Equals(other Value) bool {
+func (g GhostValue) Equals(_ Value) bool {
 	panic("Error: GhostValue.Equals() called.")
 }
 
-func (g GhostValue) Hash(format *NomsBinFormat) (hash.Hash, error) {
-	panic("Error: GhostValue.Hash() called.")
+func (g GhostValue) Hash(_ *NomsBinFormat) (hash.Hash, error) {
+	return g.hash, nil
 }
 
 func (g GhostValue) isPrimitive() bool {
@@ -341,22 +342,22 @@ func (g GhostValue) HumanReadableString() string {
 	panic("Error: GhostValue.HumanReadableString() called.")
 }
 
-func (g GhostValue) walkRefs(format *NomsBinFormat, callback RefCallback) error {
-	panic("Error: GhostValue.walkRefs() called.")
+func (g GhostValue) walkRefs(_ *NomsBinFormat, _ RefCallback) error {
+	return nil
 }
 
 func (g GhostValue) typeOf() (*Type, error) {
 	panic("Error: GhostValue.typeOf() called.")
 }
 
-func (g GhostValue) writeTo(writer nomsWriter, format *NomsBinFormat) error {
+func (g GhostValue) writeTo(_ nomsWriter, _ *NomsBinFormat) error {
 	panic("Error: GhostValue.writeTo() called.")
 }
 
-func (g GhostValue) readFrom(format *NomsBinFormat, reader *binaryNomsReader) (Value, error) {
+func (g GhostValue) readFrom(_ *NomsBinFormat, _ *binaryNomsReader) (Value, error) {
 	panic("Error: GhostValue.readFrom() called.")
 }
 
-func (g GhostValue) skip(format *NomsBinFormat, reader *binaryNomsReader) {
+func (g GhostValue) skip(_ *NomsBinFormat, _ *binaryNomsReader) {
 	panic("Error: GhostValue.skip() called.")
 }

@@ -120,6 +120,17 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
 }
 
+@test "shallow-clone: dolt gc works" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+
+    cd test-repo
+    dolt gc
+}
 @test "shallow-clone: push to a new remote should error" {
     seed_and_start_serial_remote
 
