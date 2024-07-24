@@ -20,11 +20,12 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
