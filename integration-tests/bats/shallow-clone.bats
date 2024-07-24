@@ -136,6 +136,11 @@ seed_and_start_serial_remote() {
 
     cd test-repo
     dolt gc
+
+    # Verify that the table is complete.
+    run dolt sql -q "select sum(i) from vals"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
 }
 @test "shallow-clone: push to a new remote should error" {
     seed_and_start_serial_remote
