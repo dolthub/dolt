@@ -142,7 +142,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	sec, err := newSecondaryMerger(ctx, tm, valueMerger, finalSch, mergeInfo)
+	sec, err := newSecondaryMerger(ctx, tm, valueMerger, tm.leftSch, finalSch, mergeInfo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1275,14 +1275,14 @@ type secondaryMerger struct {
 
 const secondaryMergerPendingSize = 650_000
 
-func newSecondaryMerger(ctx *sql.Context, tm *TableMerger, valueMerger *valueMerger, mergedSchema schema.Schema, mergeInfo MergeInfo) (*secondaryMerger, error) {
+func newSecondaryMerger(ctx *sql.Context, tm *TableMerger, valueMerger *valueMerger, leftSchema, mergedSchema schema.Schema, mergeInfo MergeInfo) (*secondaryMerger, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Use the mergedSchema to work with the secondary indexes, to pull out row data using the right
 	// pri_index -> sec_index mapping.
-	lm, err := GetMutableSecondaryIdxsWithPending(ctx, mergedSchema, tm.name, ls, secondaryMergerPendingSize)
+	lm, err := GetMutableSecondaryIdxsWithPending(ctx, leftSchema, mergedSchema, tm.name, ls, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}
