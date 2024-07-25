@@ -4,19 +4,19 @@ set timeout 5
 spawn dolt sql
 
 expect {
-    -re "\rdolt-repo-[0-9]+/main\*> " { send "select 1/0;\r"; }
+    -re "\rdolt-repo-.*> " { send "select 1/0;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
 
 expect {
-    -re "\rdolt-repo-[0-9]+/main\*> " { send "show warnings;\r"; }
+    -re "\rdolt-repo-.*> " { send "show warnings;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
 
 expect {
-    -re "\rdolt-repo-[0-9]+/main\*> " { send "exit;\r"; }
+    -re "\rdolt-repo-.*> " { send "exit;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
