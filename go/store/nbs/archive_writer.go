@@ -105,7 +105,7 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	}
 
 	if len(b) == 0 {
-		return 0, nil
+		return 0, fmt.Errorf("Rutime error: empty compressed byte span")
 	}
 
 	offset := aw.bytesWritten

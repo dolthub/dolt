@@ -16,7 +16,9 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -41,13 +43,16 @@ func (cmd ArchiveCmd) Name() string {
 }
 
 var docs = cli.CommandDocumentationContent{
-	ShortDesc: "Create archive files using native or cgo compression, then verify.",
-	LongDesc:  `Run this command on a dolt database only after running 'dolt gc'. This command will create an archive file to the CWD. Suffix: .darc. After the new file is generated, it will read every chunk from the new file and verify that the chunk hashes to the correct addr.`,
+	ShortDesc: "Create archive files for greater compression, then verify all chunks.",
+	LongDesc: `Run this command on a dolt database only after running 'dolt gc'. This command will convert all 'oldgen' 
+table files into archives. Currently, for safety, table files are left in place.`,
 
 	Synopsis: []string{
-		`--no-group`,
+		`[--group-chunks]`,
 	},
 }
+
+const groupChunksFlag = "group-chunks"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -63,11 +68,10 @@ func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+	ap.SupportsFlag(groupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
 	/* TODO: Implement these flags
-	ap.SupportsFlag("raw", "", "Create an archive file with 0 compression")
-	ap.SupportsFlag("no-manifest", "", "Do not alter the manifest file. Generate the archive file only")
-	ap.SupportsFlag("no-grouping", "", "Do not attempt to group chunks. Default dictionary will be used for all chunks")
-	ap.SupportsFlag("verify-existing", "", "Skip generation altogether and just verify the existing archive file.")
+	ap.SupportsFlag("purge", "", "remove table files after archiving")
+	ap.SupportsFlag("revert", "", "Return to unpurged table files, or rebuilt table files from archives")
 	*/
 	return ap
 }
@@ -78,7 +82,7 @@ func (cmd ArchiveCmd) Hidden() bool {
 func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
-	_ = cli.ParseArgsOrDie(ap, args, help)
+	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
 	cs := datas.ChunkStoreFromDatabase(db)
@@ -100,14 +104,18 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	})
 
 	groupings := nbs.NewChunkRelations()
-	err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
-	if err != nil {
-		cli.PrintErrln(err)
-		return 1
+	if apr.Contains(groupChunksFlag) {
+		err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
 	}
-	cli.Printf("Found %d possible relations by walking history\n", groupings.Count())
 
-	err = nbs.BuildArchive(ctx, cs, &groupings)
+	progress := make(chan interface{}, 32)
+	handleProgress(ctx, progress)
+
+	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
@@ -116,8 +124,78 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	return 0
 }
 
+func handleProgress(ctx context.Context, progress chan interface{}) {
+	go func() {
+		rotation := 0
+		p := cli.NewEphemeralPrinter()
+		currentMessage := "Starting Archive Build"
+		var lastProgressMsg *nbs.ArchiveBuildProgressMsg
+		lastUpdateTime := time.Now()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-progress:
+				if !ok {
+					return
+				}
+				switch v := msg.(type) {
+				case string:
+					cli.Printf("LOG: %s\n", v)
+				case nbs.ArchiveBuildProgressMsg:
+					if v.Total == v.Completed {
+						p.Printf("%s: Done\n", v.Stage)
+						lastProgressMsg = nil
+						currentMessage = ""
+						p.Display()
+						cli.Printf("\n")
+					} else {
+						lastProgressMsg = &v
+					}
+				default:
+					cli.Printf("Unexpected Message: %v\n", v)
+				}
+			// If no events come in, we still want to update the progress bar every second.
+			case <-time.After(1 * time.Second):
+			}
+
+			if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
+				rotation++
+				switch rotation % 4 {
+				case 0:
+					p.Printf("- ")
+				case 1:
+					p.Printf("\\ ")
+				case 2:
+					p.Printf("| ")
+				case 3:
+					p.Printf("/ ")
+				}
+
+				if lastProgressMsg != nil {
+					percentDone := 0.0
+					totalCount := lastProgressMsg.Total
+					if lastProgressMsg.Total > 0 {
+						percentDone = float64(lastProgressMsg.Completed) / float64(lastProgressMsg.Total)
+						percentDone *= 100.0
+					}
+
+					currentMessage = fmt.Sprintf("%s: %d/%d (%.2f%%)", lastProgressMsg.Stage, lastProgressMsg.Completed, totalCount, percentDone)
+				}
+
+				p.Printf("%s", currentMessage) // Don't update message, but allow ticker to turn.
+				lastUpdateTime = now
+
+				p.Display()
+			}
+
+		}
+	}()
+}
+
 func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
-	hs := []hash.Hash{}
+	var hs []hash.Hash
 	for h := range heads {
 		_, err := db.ReadCommit(ctx, h)
 		if err != nil {
