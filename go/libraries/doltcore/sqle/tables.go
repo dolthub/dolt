@@ -102,30 +102,30 @@ func (t *DoltTable) SkipIndexCosting() bool {
 	return false
 }
 
-func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.IndexLookup, sql.Expression, bool, error) {
-	return sql.IndexLookup{}, nil, false, nil
+func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.IndexLookup, *sql.FuncDepSet, sql.Expression, bool, error) {
+	return sql.IndexLookup{}, nil, nil, false, nil
 
 	root, err := t.workingRoot(ctx)
 	if err != nil {
-		return sql.IndexLookup{}, nil, false, err
+		return sql.IndexLookup{}, nil, nil, false, err
 	}
 
 	schHash, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
 	if err != nil {
-		return sql.IndexLookup{}, nil, false, err
+		return sql.IndexLookup{}, nil, nil, false, err
 	}
 
 	sess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
-		return sql.IndexLookup{}, nil, false, nil
+		return sql.IndexLookup{}, nil, nil, false, nil
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
 	if err != nil {
-		return sql.IndexLookup{}, nil, false, nil
+		return sql.IndexLookup{}, nil, nil, false, nil
 	}
 	if !ok {
-		return sql.IndexLookup{}, nil, false, fmt.Errorf("no state for database %s", t.db.Name())
+		return sql.IndexLookup{}, nil, nil, false, fmt.Errorf("no state for database %s", t.db.Name())
 	}
 
 	var lookupCols []expression.LookupColumn
@@ -155,14 +155,14 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 	if !ok {
 		indexes, err := t.GetIndexes(ctx)
 		if err != nil {
-			return sql.IndexLookup{}, nil, false, err
+			return sql.IndexLookup{}, nil, nil, false, err
 		}
 		lookups = index.GetStrictLookups(schCols, indexes)
 		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
 	}
 
-	for keyCols, lookup := range lookups {
-		if keyCols.Intersection(colset).Len() == keyCols.Len() {
+	for _, lookup := range lookups {
+		if lookup.Cols.Intersection(colset).Len() == lookup.Cols.Len() {
 			// (1) assign lookup columns to range expressions in the appropriate
 			// order for the given lookup.
 			// (2) aggregate the unused expressions into the return filter.
@@ -182,23 +182,25 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 					}
 				}
 				if matched {
-					rb.Equals(ctx, matchIdx, c2.Lit.Value())
+					if err := rb.Equals(ctx, matchIdx, c2.Lit.Value()); err != nil {
+						return sql.IndexLookup{}, nil, nil, false, nil
+					}
 				} else if leftoverExpr == nil {
 					leftoverExpr = c2.Gf
 				} else {
 					leftoverExpr = expression.NewAnd(leftoverExpr, c2.Gf)
 				}
 			}
-			lookup, err := rb.Build(ctx)
+			ret, err := rb.Build(ctx)
 			if err != nil {
-				return sql.IndexLookup{}, nil, false, err
+				return sql.IndexLookup{}, nil, nil, false, err
 			}
 
-			return lookup, leftoverExpr, true, nil
+			return ret, lookup.Fds, leftoverExpr, true, nil
 		}
 	}
 
-	return sql.IndexLookup{}, nil, false, nil
+	return sql.IndexLookup{}, nil, nil, false, nil
 
 }
 

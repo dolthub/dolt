@@ -564,12 +564,14 @@ type doltIndex struct {
 }
 
 type LookupMeta struct {
+	Cols     sql.FastIntSet
 	Idx      sql.Index
 	Ordinals []int
+	Fds      *sql.FuncDepSet
 }
 
-func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sql.FastIntSet]LookupMeta {
-	lookups := make(map[sql.FastIntSet]LookupMeta)
+func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {
+	var lookups []LookupMeta
 	for _, i := range indexes {
 		idx := i.(*doltIndex)
 		if !idx.IsUnique() {
@@ -586,13 +588,14 @@ func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) map[sq
 			continue
 		}
 		var ordinals []int
-		colset := sql.NewFastIntSet()
+		allCols := sql.NewFastIntSet()
 		for _, c := range idx.columns {
 			idx := schCols.TagToIdx[c.Tag]
-			colset.Add(idx + 1)
+			allCols.Add(idx + 1)
 			ordinals = append(ordinals, idx+1)
 		}
-		lookups[colset] = LookupMeta{Idx: i, Ordinals: ordinals}
+		colset := sql.NewColSetFromIntSet(allCols)
+		lookups = append(lookups, LookupMeta{Cols: allCols, Idx: i, Ordinals: ordinals, Fds: sql.NewLookupFDs(&sql.FuncDepSet{}, colset, colset, colset, nil)})
 	}
 	return lookups
 }

@@ -40,7 +40,7 @@ type SessionCache struct {
 	// writers are keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
 	// strictLookups are keyed by table schema hash
-	strictLookups map[doltdb.DataCacheKey]map[sql.FastIntSet]index.LookupMeta
+	strictLookups map[doltdb.DataCacheKey][]index.LookupMeta
 	// checks is keyed by table schema hash
 	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
@@ -192,7 +192,7 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 }
 
 // GetCachedStrictLookup returns a cached set of |sql.IndexLookup|s for the table named, and whether the cache was present
-func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) (map[sql.FastIntSet]index.LookupMeta, bool) {
+func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) ([]index.LookupMeta, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	schemaState, ok := c.strictLookups[key]
@@ -200,12 +200,12 @@ func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) (map[sql.F
 }
 
 // CacheStrictLookup caches a set of |sql.IndexLookup|s for the table named
-func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state map[sql.FastIntSet]index.LookupMeta) {
+func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state []index.LookupMeta) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.strictLookups == nil {
-		c.strictLookups = make(map[doltdb.DataCacheKey]map[sql.FastIntSet]index.LookupMeta)
+		c.strictLookups = make(map[doltdb.DataCacheKey][]index.LookupMeta)
 	}
 	if len(c.strictLookups) > maxCachedKeys {
 		for k := range c.strictLookups {
