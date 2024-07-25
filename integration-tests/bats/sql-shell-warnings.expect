@@ -1,6 +1,7 @@
 #!/usr/bin/expect
 
 set timeout 5
+set env(NO_COLOR) 1
 spawn dolt sql
 
 expect {
