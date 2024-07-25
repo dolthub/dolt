@@ -906,7 +906,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 
 		// It is possible to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
 		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
-		if strings.HasSuffix(db, "/"+branch) {
+		if strings.HasSuffix(strings.ToLower(db), strings.ToLower("/"+branch)) {
 			db = db[:len(db)-len(branch)-1]
 		}
 	}
