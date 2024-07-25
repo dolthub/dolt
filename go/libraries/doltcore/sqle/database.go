@@ -525,7 +525,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt = NewEmptySchemaTable()
 		} else {
 			writeTable := backingTable.(*WritableDoltTable)
-			dt, err = NewSchemaTable(ctx, db, writeTable)
+			dt, err = NewSchemaTable(writeTable)
 			if err != nil {
 				return nil, false, err
 			}

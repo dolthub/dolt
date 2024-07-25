@@ -57,8 +57,13 @@ func (st *SchemaTable) String() string {
 
 func (st *SchemaTable) Schema() sql.Schema {
 	if st.backingTable == nil {
-		// No backing table; return an current schema.
+		// No backing table; return a current schema.
 		return SchemaTableSqlSchema().Schema
+	}
+
+	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
+		// No Extra column; return an ancient schema.
+		return SchemaTableAncientSqlSchema()
 	}
 
 	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
@@ -163,6 +168,22 @@ func SchemaTableV1SqlSchema() sql.Schema {
 	return sqlSchema.Schema
 }
 
+// dolt_schemas columns, for dolt_schemas <= 0.19.0.
+func SchemaTableAncientSqlSchema() sql.Schema {
+	var schemasTableCols = schema.NewColCollection(
+		mustNewColWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
+		mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
+		mustNewColWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.CreateVarStringTypeFromSqlType(gmstypes.LongText), false, "", false, ""),
+	)
+
+	legacy := schema.MustSchemaFromCols(schemasTableCols)
+	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.SchemasTableName, legacy)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return sqlSchema.Schema
+}
+
 // dolt_schemas columns
 func SchemaTableSchema() schema.Schema {
 	var schemasTableCols = schema.NewColCollection(
@@ -180,11 +201,7 @@ func NewEmptySchemaTable() sql.Table {
 	return &SchemaTable{}
 }
 
-func NewSchemaTable(ctx *sql.Context, db Database, backingTable *WritableDoltTable) (sql.Table, error) {
-	if !backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
-		return nil, fmt.Errorf("cannot migrate dolt_schemas table from v0.19.1 or earlier")
-	}
-
+func NewSchemaTable(backingTable *WritableDoltTable) (sql.Table, error) {
 	return &SchemaTable{backingTable: backingTable}, nil
 }
 
@@ -221,10 +238,9 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 
 	if wrapper.backingTable != nil {
 		schemasTable := wrapper.backingTable
-		// Old schemas are missing the `extra` column. Very ancient. Provide error message and bail.
-		if !schemasTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
-			return nil, fmt.Errorf("cannot migrate dolt_schemas table from v0.19.1 or earlier")
-		} else if !schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
+
+		if !schemasTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) ||
+			!schemasTable.Schema().Contains(doltdb.SchemasTablesSqlModeCol, doltdb.SchemasTableName) {
 			return migrateOldSchemasTableToNew(ctx, db, schemasTable)
 		} else {
 			return schemasTable, nil
@@ -288,8 +304,9 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		newRow[0] = sqlRow[typeIdx]
 		newRow[1] = sqlRow[nameIdx]
 		newRow[2] = sqlRow[fragmentIdx]
-		newRow[3] = sqlRow[extraIdx]
-
+		if extraIdx >= 0 {
+			newRow[3] = sqlRow[extraIdx]
+		}
 		if sqlModeIdx >= 0 {
 			newRow[4] = sqlRow[sqlModeIdx]
 		}

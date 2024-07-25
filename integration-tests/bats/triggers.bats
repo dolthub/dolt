@@ -184,3 +184,22 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "type,name,fragment,extra,sql_mode" ]] || false
 }
+
+@test "triggers: Upgrade oldest dolt_schemas" {
+    rm -rf .dolt
+
+    # old_old_dolt_schemas was created using v0.19.0, which is pre-extra column.
+    cp -a $BATS_TEST_DIRNAME/helper/old_old_dolt_schemas/. ./.dolt/
+
+    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
+    [ "$status" -eq "0" ]
+
+    [[ "$output" =~ "type,name,fragment" ]] || false
+    [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual" ]] || false
+
+    dolt sql -q "CREATE VIEW another_view AS SELECT 3+3"
+
+    run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "type,name,fragment,extra,sql_mode" ]] || false
+}
