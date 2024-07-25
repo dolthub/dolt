@@ -182,6 +182,18 @@ const ( // afr = Archive FooteR
 	afrSigOffset         = afrVersionOffset + 1
 )
 
+// Archive Metadata Data Keys are the fields in the archive metadata that are stored in the footer. These are used
+// to store information about the archive that is semi-structured. The data is stored in JSON format, all values are strings.
+const ( //amdk = Archive Metadata Data Key
+	// The version of Dolt that created the archive.
+	amdkDoltVersion = "dolt_version"
+	// The id of the table file that the archive was created from. This value can be used during the reverse process
+	// to quickly get back to the original table file if it is still available.
+	amdkOriginTableFile = "origin_table_file"
+	// The timestamp of when the archive was created.
+	amdkConversionTime = "conversion_time"
+)
+
 var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
 var ErrInvalidFileSignature = errors.New("invalid file signature")
