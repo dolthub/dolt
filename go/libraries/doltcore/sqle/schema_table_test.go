@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func TestAncientSchemaTableError(t *testing.T) {
+func TestAncientSchemaTableMigration(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
