@@ -102,51 +102,48 @@ func (t *DoltTable) SkipIndexCosting() bool {
 	return false
 }
 
-func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql.IndexLookup, bool, error) {
-	// convert expressions to sorted list of column names
-	// get schema hash
-	// check cache from preexisting list of strict key matches
-	// (schemakey) -> map[cols]->indexLookup
+func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.IndexLookup, sql.Expression, bool, error) {
+	return sql.IndexLookup{}, nil, false, nil
+
 	root, err := t.workingRoot(ctx)
 	if err != nil {
-		return sql.IndexLookup{}, false, nil
+		return sql.IndexLookup{}, nil, false, err
 	}
 
 	schHash, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
 	if err != nil {
-		return sql.IndexLookup{}, false, err
+		return sql.IndexLookup{}, nil, false, err
 	}
-
-	//tab, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
-	//if err != nil {
-	//	return sql.IndexLookup{}, false, nil
-	//}
-	//if !ok {
-	//	// ?
-	//}
-	//
-	//schHash, err := tab.GetSchemaHash(ctx)
-	//if err != nil {
-	//	return sql.IndexLookup{}, false, nil
-	//}
 
 	sess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
-		return sql.IndexLookup{}, false, nil
+		return sql.IndexLookup{}, nil, false, nil
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
 	if err != nil {
-		return sql.IndexLookup{}, false, nil
+		return sql.IndexLookup{}, nil, false, nil
 	}
 	if !ok {
-		return sql.IndexLookup{}, false, fmt.Errorf("no state for database %s", t.db.Name())
+		return sql.IndexLookup{}, nil, false, fmt.Errorf("no state for database %s", t.db.Name())
 	}
 
-	cols := expression.LookupEqualityColumns(t.db.Name(), t.tableName, e)
+	var lookupCols []expression.LookupColumn
+	var leftoverExpr sql.Expression
+	for _, e := range exprs {
+		col, ok := expression.LookupEqualityColumn(t.db.Name(), t.tableName, e)
+		if ok {
+			lookupCols = append(lookupCols, col)
+		} else if leftoverExpr == nil {
+			leftoverExpr = e
+		} else {
+			leftoverExpr = expression.NewAnd(leftoverExpr, e)
+		}
+	}
+
 	colset := sql.NewFastIntSet()
 	schCols := t.sch.GetAllCols()
-	for _, c := range cols {
+	for _, c := range lookupCols {
 		col := schCols.LowerNameToCol[c.Col]
 		idx := schCols.TagToIdx[col.Tag]
 		colset.Add(idx + 1)
@@ -156,45 +153,52 @@ func (t *DoltTable) LookupForExpression(ctx *sql.Context, e sql.Expression) (sql
 
 	lookups, ok := dbState.SessionCache().GetCachedStrictLookup(schKey)
 	if !ok {
-
-		// create lookups
-		// get indexes
 		indexes, err := t.GetIndexes(ctx)
 		if err != nil {
-			return sql.IndexLookup{}, false, err
+			return sql.IndexLookup{}, nil, false, err
 		}
 		lookups = index.GetStrictLookups(schCols, indexes)
-
 		dbState.SessionCache().CacheStrictLookup(schKey, lookups)
 	}
 
-	// TODO the key columns might not be schema order
 	for keyCols, lookup := range lookups {
 		if keyCols.Intersection(colset).Len() == keyCols.Len() {
-			// idx is strict lookup
+			// (1) assign lookup columns to range expressions in the appropriate
+			// order for the given lookup.
+			// (2) aggregate the unused expressions into the return filter.
 			rb := sql.NewEqualityIndexBuilder(lookup.Idx)
-			for _, ord := range lookup.Ordinals {
-				idx := ord - 1
-				c := schCols.GetColumns()[idx]
-				for _, c2 := range cols {
+			for _, c2 := range lookupCols {
+				var matched bool
+				var matchIdx int
+				for i, ord := range lookup.Ordinals {
+					// the ordinals redirection accounts for index
+					// columns not in schema order
+					idx := ord - 1
+					c := schCols.GetColumns()[idx]
 					if strings.EqualFold(c2.Col, c.Name) {
-						// |c| is the target column
-						// |c2.Expr| is the literal
-						// goal is a set of range expressions
-						rb.Equals(ctx, c.TypeInfo.ToSqlType(), c2.Expr.Value())
+						matched = true
+						matchIdx = i
 						break
 					}
+				}
+				if matched {
+					rb.Equals(ctx, matchIdx, c2.Lit.Value())
+				} else if leftoverExpr == nil {
+					leftoverExpr = c2.Gf
+				} else {
+					leftoverExpr = expression.NewAnd(leftoverExpr, c2.Gf)
 				}
 			}
 			lookup, err := rb.Build(ctx)
 			if err != nil {
-				return sql.IndexLookup{}, false, err
+				return sql.IndexLookup{}, nil, false, err
 			}
-			return lookup, true, nil
+
+			return lookup, leftoverExpr, true, nil
 		}
 	}
 
-	return sql.IndexLookup{}, false, nil
+	return sql.IndexLookup{}, nil, false, nil
 
 }
 
