@@ -910,7 +910,7 @@ func getDatabaseInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName 
 func getDatabaseSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (string, error) {
 	var rows []sql.Row
 	// TODO: implement `show create database as of ...`
-	tableName = strings.Trim(tableName, diff.DBPrefix)
+	tableName = strings.TrimPrefix(tableName, diff.DBPrefix)
 	interpolatedQuery, err := dbr.InterpolateForDialect("SHOW CREATE DATABASE ?", []interface{}{dbr.I(tableName)}, dialect.MySQL)
 	if err != nil {
 		return "", fmt.Errorf("error interpolating query: %w", err)
