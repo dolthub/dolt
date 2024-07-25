@@ -21,6 +21,20 @@ teardown() {
     teardown_common
 }
 
+
+# bats test_tags=no_lambda
+@test "sql-shell: warnings are not suppressed" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
+    echo "$output"
+
+    [[ "$output" =~ "+---------+------+---------------+" ]] || false
+    [[ "$output" =~ "| Level   | Code | Message       |" ]] || false
+    [[ "$output" =~ "+---------+------+---------------+" ]] || false
+    [[ "$output" =~ "| Warning | 1365 | Division by 0 |" ]] || false
+    [[ "$output" =~ "+---------+------+---------------+" ]] || false
+}
+
 @test "sql-shell: use user without privileges, and no superuser created" {
     rm -rf .doltcfg
 
