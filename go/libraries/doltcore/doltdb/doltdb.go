@@ -1063,19 +1063,19 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 }
 
 // HasTag returns whether the DB has a tag with the name given
-func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (bool, error) {
+func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (string, bool, error) {
 	tags, err := ddb.GetRefsOfType(ctx, tagsRefFilter)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 
 	for _, t := range tags {
-		if strings.EqualFold(t.GetPath(), tagName) {
-			return true, nil
+		if path := t.GetPath(); strings.EqualFold(t.GetPath(), tagName) {
+			return path, true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 type TagWithHash struct {

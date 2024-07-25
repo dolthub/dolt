@@ -4623,10 +4623,10 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Name: "dolt-tag: case insensitive",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk int primary key);",
-			"CALL DOLT_ADD('.');",
-			"CALL DOLT_TAG('ABC','HEAD');",
+			"CALL DOLT_COMMIT('-Am','created table test');",
+			"CALL DOLT_TAG('ABC');",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"CALL DOLT_COMMIT('-am','created table test');",
+			"CALL DOLT_COMMIT('-am','inserted rows into test');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -4644,20 +4644,12 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "select database();",
-				Expected: []sql.Row{},
-			},
-			{
 				Query:    "use mydb/abc;",
 				Expected: []sql.Row{},
 			},
 			{
 				Query: "select * from test;",
-				Expected: []sql.Row{
-					{0},
-					{1},
-					{2},
-				},
+				Expected: []sql.Row{},
 			},
 		},
 	},
