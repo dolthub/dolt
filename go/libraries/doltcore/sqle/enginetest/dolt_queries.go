@@ -4619,6 +4619,48 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt-tag: case insensitive",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_TAG('ABC','HEAD');",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','created table test');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT tag_name FROM dolt_tags",
+				Expected: []sql.Row{
+					{"ABC"},
+				},
+			},
+			{
+				Query: "select * from test;",
+				Expected: []sql.Row{
+					{0},
+					{1},
+					{2},
+				},
+			},
+			{
+				Query:    "select database();",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "use mydb/abc;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from test;",
+				Expected: []sql.Row{
+					{0},
+					{1},
+					{2},
+				},
+			},
+		},
+	},
 }
 
 var DoltRemoteTestScripts = []queries.ScriptTest{
