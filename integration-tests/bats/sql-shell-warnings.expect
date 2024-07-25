@@ -5,19 +5,19 @@ set env(NO_COLOR) 1
 spawn dolt sql
 
 expect {
-    -re "\rdolt-repo-.*> " { send "select 1/0;\r"; }
+    -re "dolt-repo-.*> " { send "select 1/0;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
 
 expect {
-    -re "\rdolt-repo-.*> " { send "show warnings;\r"; }
+    -re "dolt-repo-.*> " { send "show warnings;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
 
 expect {
-    -re "\rdolt-repo-.*> " { send "exit;\r"; }
+    -re "dolt-repo-.*> " { send "exit;\r"; }
     timeout { exit 1; }
     failed { exit 1; }
 }
