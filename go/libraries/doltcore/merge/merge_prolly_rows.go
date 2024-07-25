@@ -1998,20 +1998,12 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, nil
 	}
 
-	mergedVal, err := mergedDoc.ToInterface()
+	root, err := tree.SerializeJsonToAddr(ctx, m.ns, mergedDoc)
 	if err != nil {
 		return nil, true, err
 	}
-	mergedBytes, err := json.Marshal(mergedVal)
-	if err != nil {
-		return nil, true, err
-	}
-	mergedAddr, err := tree.SerializeBytesToAddr(ctx, m.ns, bytes.NewReader(mergedBytes), len(mergedBytes))
-	if err != nil {
-		return nil, true, err
-	}
+	mergedAddr := root.HashOf()
 	return mergedAddr[:], false, nil
-
 }
 
 func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSONWrapper) (resultDoc sql.JSONWrapper, conflict bool, err error) {
