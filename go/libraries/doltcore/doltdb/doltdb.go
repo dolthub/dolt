@@ -980,15 +980,14 @@ func (ddb *DoltDB) GetBranchesByNomsRoot(ctx context.Context, nomsRoot hash.Hash
 // HasBranch returns whether the DB has a branch with the name given, case-insensitive. Returns the case-sensitive
 // matching branch if found, as well as a bool indicating if there was a case-insensitive match, and any error.
 func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (string, bool, error) {
-	branchName = strings.ToLower(branchName)
 	branches, err := ddb.GetRefsOfType(ctx, branchRefFilter)
 	if err != nil {
 		return "", false, err
 	}
 
 	for _, b := range branches {
-		if strings.ToLower(b.GetPath()) == branchName {
-			return b.GetPath(), true, nil
+		if path := b.GetPath(); strings.EqualFold(path, branchName) {
+			return path, true, nil
 		}
 	}
 
@@ -1064,19 +1063,19 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 }
 
 // HasTag returns whether the DB has a tag with the name given
-func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (bool, error) {
+func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (string, bool, error) {
 	tags, err := ddb.GetRefsOfType(ctx, tagsRefFilter)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 
 	for _, t := range tags {
-		if t.GetPath() == tagName {
-			return true, nil
+		if path := t.GetPath(); strings.EqualFold(path, tagName) {
+			return path, true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 type TagWithHash struct {
