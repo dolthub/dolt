@@ -1070,7 +1070,7 @@ func (ddb *DoltDB) HasTag(ctx context.Context, tagName string) (string, bool, er
 	}
 
 	for _, t := range tags {
-		if path := t.GetPath(); strings.EqualFold(t.GetPath(), tagName) {
+		if path := t.GetPath(); strings.EqualFold(path, tagName) {
 			return path, true, nil
 		}
 	}
