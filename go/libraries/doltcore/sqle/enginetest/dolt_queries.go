@@ -4630,7 +4630,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT tag_name FROM dolt_tags",
+				Query: "SELECT tag_name FROM dolt_tags",
 				Expected: []sql.Row{
 					{"ABC"},
 				},
@@ -4648,7 +4648,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select * from test;",
+				Query:    "select * from test;",
 				Expected: []sql.Row{},
 			},
 		},
