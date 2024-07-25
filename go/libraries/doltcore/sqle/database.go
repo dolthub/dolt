@@ -339,7 +339,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root)
+		ws, err := ds.WorkingSet(ctx, db.RevisionQualifiedName())
+		if err != nil {
+			return nil, false, err
+		}
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root, ws.StagedRoot())
 		if err != nil {
 			return nil, false, err
 		}

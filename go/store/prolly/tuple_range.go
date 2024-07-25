@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"math"
 	"sort"
 
 	"github.com/shopspring/decimal"
@@ -236,82 +237,91 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 
 	}
 
-	tb := val.NewTupleBuilder(r.Desc)
+	return IncrementTuple(r.Tup, n, r.Desc, pool)
+}
+
+func IncrementTuple(start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool) (val.Tuple, bool) {
+	tb := val.NewTupleBuilder(desc)
 	for i := 0; i < n; i++ {
 		if i != n {
 			// direct copy all but the last field
-			tb.PutRaw(i, r.Tup.GetField(i))
+			tb.PutRaw(i, start.GetField(i))
 		}
 	}
 
 	// last field will be incremented by one to get the exclusive key
 	// range [key, key+1)
-	switch r.Desc.Types[n].Enc {
+	switch desc.Types[n].Enc {
 	case val.StringEnc:
-		v := r.Fields[n].Lo.Value
+		v, ok := desc.GetString(n, start)
+		if !ok {
+			return nil, false
+		}
 		tb.PutString(n, string(v)+"0")
 	case val.Int8Enc:
-		v, ok := r.Desc.GetInt8(n, r.Tup)
+		v, ok := desc.GetInt8(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutInt8(n, v+1)
 	case val.Uint8Enc:
-		v, ok := r.Desc.GetUint8(n, r.Tup)
+		v, ok := desc.GetUint8(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutUint8(n, v+1)
 	case val.Int16Enc:
-		v, ok := r.Desc.GetInt16(n, r.Tup)
+		v, ok := desc.GetInt16(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutInt16(n, v+1)
 	case val.Uint16Enc:
-		v, ok := r.Desc.GetUint16(n, r.Tup)
+		v, ok := desc.GetUint16(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutUint16(n, v+1)
 	case val.Int32Enc:
-		v, ok := r.Desc.GetInt32(n, r.Tup)
+		v, ok := desc.GetInt32(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutInt32(n, v+1)
 	case val.Uint32Enc:
-		v, ok := r.Desc.GetUint32(n, r.Tup)
+		v, ok := desc.GetUint32(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutUint32(n, v+1)
 	case val.Int64Enc:
-		v, ok := r.Desc.GetInt64(n, r.Tup)
+		v, ok := desc.GetInt64(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutInt64(n, v+1)
 	case val.Uint64Enc:
-		v, ok := r.Desc.GetUint64(n, r.Tup)
+		v, ok := desc.GetUint64(n, start)
 		if !ok {
 			return nil, false
 		}
 		tb.PutUint64(n, v+1)
 	case val.Float32Enc:
-		v, ok := r.Desc.GetFloat32(n, r.Tup)
+		v, ok := desc.GetFloat32(n, start)
 		if !ok {
 			return nil, false
 		}
-		tb.PutFloat32(n, v+1)
+		// increment the finest precision we can represent on disk (little endian)
+		tb.PutFloat32(n, math.Float32frombits(math.Float32bits(v)+1))
 	case val.Float64Enc:
-		v, ok := r.Desc.GetFloat64(n, r.Tup)
+		v, ok := desc.GetFloat64(n, start)
 		if !ok {
 			return nil, false
 		}
-		tb.PutFloat64(n, v+1)
+		// increment the finest precision we can represent on disk (little endian)
+		tb.PutFloat64(n, math.Float64frombits(math.Float64bits(v)+1))
 	case val.DecimalEnc:
-		v, ok := r.Desc.GetDecimal(n, r.Tup)
+		v, ok := desc.GetDecimal(n, start)
 		if !ok {
 			return nil, false
 		}
@@ -320,7 +330,7 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, bool) {
 		return nil, false
 	}
 	stop := tb.Build(pool)
-	if r.Desc.Compare(r.Tup, stop) >= 0 {
+	if desc.Compare(start, stop) >= 0 {
 		// If cmp == 0, we lost precision serializing.
 		// If cmp > 0, we overflowed and |stop| < |start|.
 		// |stop| has to be strictly greater than |start|

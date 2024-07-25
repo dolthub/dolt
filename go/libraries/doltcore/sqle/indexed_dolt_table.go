@@ -29,7 +29,7 @@ import (
 type IndexedDoltTable struct {
 	*DoltTable
 	idx          index.DoltIndex
-	lb           index.LookupBuilder
+	lb           index.IndexScanBuilder
 	isDoltFormat bool
 	mu           *sync.Mutex
 }
@@ -45,6 +45,23 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
+
+func (idt *IndexedDoltTable) Index() index.DoltIndex {
+	return idt.idx
+}
+
+func (t *IndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		return index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch, t.isDoltFormat)
+	}
+	return t.lb, nil
+}
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(ctx, idt.DoltTable, lookup, idt.isDoltFormat)
@@ -63,13 +80,13 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 	}
 
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return idt.lb.NewRowIter(ctx, part)
+	return idt.lb.NewPartitionRowIter(ctx, part)
 }
 
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
@@ -80,13 +97,13 @@ func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewIndexReaderBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return idt.lb.NewRowIter(ctx, part)
+	return idt.lb.NewPartitionRowIter(ctx, part)
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
@@ -109,8 +126,25 @@ type WritableIndexedDoltTable struct {
 	*WritableDoltTable
 	idx          index.DoltIndex
 	isDoltFormat bool
-	lb           index.LookupBuilder
+	lb           index.IndexScanBuilder
 	mu           *sync.Mutex
+}
+
+func (t *WritableIndexedDoltTable) Index() index.DoltIndex {
+	return t.idx
+}
+
+func (t *WritableIndexedDoltTable) LookupBuilder(ctx *sql.Context) (index.IndexScanBuilder, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key, canCache, err := t.DataCacheKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if t.lb == nil || !canCache || t.lb.Key() != key {
+		return index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.DoltTable.projectedCols, t.DoltTable.sqlSch, t.isDoltFormat)
+	}
+	return t.lb, nil
 }
 
 func (t *WritableIndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -129,13 +163,13 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 		return nil, err
 	}
 	if t.lb == nil || !canCache || t.lb.Key() != key {
-		t.lb, err = index.NewLookupBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch, t.isDoltFormat)
+		t.lb, err = index.NewIndexReaderBuilder(ctx, t.DoltTable, t.idx, key, t.projectedCols, t.sqlSch, t.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return t.lb.NewRowIter(ctx, part)
+	return t.lb.NewPartitionRowIter(ctx, part)
 }
 
 // WithProjections implements sql.ProjectedTable
