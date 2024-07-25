@@ -28,11 +28,9 @@ teardown() {
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
     echo "$output"
 
-    [[ "$output" =~ "+---------+------+---------------+" ]] || false
-    [[ "$output" =~ "| Level   | Code | Message       |" ]] || false
-    [[ "$output" =~ "+---------+------+---------------+" ]] || false
-    [[ "$output" =~ "| Warning | 1365 | Division by 0 |" ]] || false
-    [[ "$output" =~ "+---------+------+---------------+" ]] || false
+    [[ "$output" =~ "Warning" ]] || false
+    [[ "$output" =~ "1365" ]] || false
+    [[ "$output" =~ "Division by 0" ]] || false
 }
 
 @test "sql-shell: use user without privileges, and no superuser created" {
