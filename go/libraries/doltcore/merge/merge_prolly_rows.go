@@ -2110,6 +2110,9 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 		if err == io.EOF {
 			return merged, false, nil
 		}
+		if err != nil {
+			return types.JSONDocument{}, true, err
+		}
 
 		switch threeWayDiff.Op {
 		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify, tree.DiffOpDivergentModifyResolved:

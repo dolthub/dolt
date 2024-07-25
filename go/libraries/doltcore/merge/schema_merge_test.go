@@ -16,6 +16,11 @@ package merge_test
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -104,6 +109,9 @@ func TestSchemaMerge(t *testing.T) {
 	})
 	t.Run("json merge tests", func(t *testing.T) {
 		testSchemaMerge(t, jsonMergeTests)
+	})
+	t.Run("large json merge tests", func(t *testing.T) {
+		testSchemaMerge(t, jsonMergeLargeDocumentTests(t))
 	})
 }
 
@@ -1392,13 +1400,12 @@ func createLargeDocumentForTesting(t *testing.T, ctx *sql.Context, ns tree.NodeS
 	leafDoc := make(map[string]interface{})
 	leafDoc["number"] = float64(1.0)
 	leafDoc["string"] = "dolt"
-	docExpression, err := json.NewJSONArray(expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), sqltypes.JSON))
-	require.NoError(t, err)
+	var docExpression sql.Expression = expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), sqltypes.JSON)
+	// require.NoError(t, err)
+	var err error
 
 	for level := 0; level < 8; level++ {
-		childObjectExpression, err := json.NewJSONObject(expression.NewLiteral("children", sqltypes.Text), docExpression)
-		require.NoError(t, err)
-		docExpression, err = json.NewJSONArrayAppend(docExpression, expression.NewLiteral("$", sqltypes.Text), childObjectExpression)
+		docExpression, err = json.NewJSONInsert(docExpression, expression.NewLiteral(fmt.Sprintf("$.level%d", level), sqltypes.Text), docExpression)
 		require.NoError(t, err)
 	}
 	doc, err := docExpression.Eval(ctx, nil)
@@ -1411,7 +1418,195 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	// Test for multiple diffs in the same chunk,
 	// multiple diffs in adjacent chunks (with a moved boundary)
 	// and multiple diffs in non-adjacent chunks.
-	return nil
+
+	ctx := sql.NewEmptyContext()
+	ns := tree.NewTestNodeStore()
+
+	largeObject := createLargeDocumentForTesting(t, ctx, ns)
+
+	insert := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
+		jsonVal, inRange, err := sqltypes.JSON.Convert(val)
+		require.NoError(t, err)
+		require.True(t, (bool)(inRange))
+		newDoc, changed, err := document.Insert(ctx, path, jsonVal.(sql.JSONWrapper))
+		require.NoError(t, err)
+		require.True(t, changed)
+		return newDoc
+	}
+
+	set := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
+		jsonVal, inRange, err := sqltypes.JSON.Convert(val)
+		require.NoError(t, err)
+		require.True(t, (bool)(inRange))
+		newDoc, changed, err := document.Replace(ctx, path, jsonVal.(sql.JSONWrapper))
+		require.NoError(t, err)
+		require.True(t, changed)
+		return newDoc
+	}
+
+	delete := func(document sqltypes.MutableJSON, path string) sqltypes.MutableJSON {
+		newDoc, changed, err := document.Remove(ctx, path)
+		require.True(t, changed)
+		require.NoError(t, err)
+		return newDoc
+	}
+
+	var largeJsonMergeTests = []schemaMergeTest{
+		{
+			name:     "json merge",
+			ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+			left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+			right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+			merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+			dataTests: []dataTest{
+				{
+					name:     "parallel insertion",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, insert(largeObject, "$.a", 1)),
+					right:    singleRow(1, 1, 2, insert(largeObject, "$.a", 1)),
+					merged:   singleRow(1, 2, 2, insert(largeObject, "$.a", 1)),
+				},
+				{
+					name:     "convergent insertion",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, insert(largeObject, "$.a", 1)),
+					right:    singleRow(1, 1, 2, insert(largeObject, "$.z", 2)),
+					merged:   singleRow(1, 2, 2, insert(insert(largeObject, "$.a", 1), "$.z", 2)),
+				},
+				{
+					name:     "multiple insertions",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, insert(insert(largeObject, "$.a1", 1), "$.z2", 2)),
+					right:    singleRow(1, 1, 2, insert(insert(largeObject, "$.a2", 3), "$.z1", 4)),
+					merged:   singleRow(1, 2, 2, insert(insert(insert(insert(largeObject, "$.z1", 4), "$.z2", 2), "$.a2", 3), "$.a1", 1)),
+				},
+				{
+					name:     "convergent insertion with escaped quotes in keys",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, insert(largeObject, `$."\"a\""`, 1)),
+					right:    singleRow(1, 1, 2, insert(largeObject, `$."\"z\""`, 2)),
+					merged:   singleRow(1, 2, 2, insert(insert(largeObject, `$."\"a\""`, 1), `$."\"z\""`, 2)),
+				},
+				{
+					name:     "parallel modification",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, set(largeObject, "$.level7", 1)),
+					right:    singleRow(1, 1, 2, set(largeObject, "$.level7", 1)),
+					merged:   singleRow(1, 2, 2, set(largeObject, "$.level7", 1)),
+				},
+				{
+					name:     "convergent modification",
+					ancestor: singleRow(1, 1, 1, insert(largeObject, "$.a", 1)),
+					left:     singleRow(1, 2, 1, set(insert(largeObject, "$.a", 1), "$.level7", 2)),
+					right:    singleRow(1, 1, 2, set(insert(largeObject, "$.a", 1), "$.a", 3)),
+					merged:   singleRow(1, 2, 2, set(insert(largeObject, "$.a", 3), "$.level7", 2)),
+					skip:     true, //doesn't terminate?
+				},
+				{
+					name:     `parallel deletion`,
+					ancestor: singleRow(1, 1, 1, insert(largeObject, "$.a", 1)),
+					left:     singleRow(1, 2, 1, largeObject),
+					right:    singleRow(1, 1, 2, largeObject),
+					merged:   singleRow(1, 2, 2, largeObject),
+				},
+				{
+					name:     `convergent deletion`,
+					ancestor: singleRow(1, 1, 1, insert(insert(largeObject, "$.a", 1), "$.z", 2)),
+					left:     singleRow(1, 2, 1, insert(largeObject, "$.a", 1)),
+					right:    singleRow(1, 1, 2, insert(largeObject, "$.z", 2)),
+					merged:   singleRow(1, 2, 2, largeObject),
+				},
+				{
+					name:         `divergent insertion`,
+					ancestor:     singleRow(1, 1, 1, largeObject),
+					left:         singleRow(1, 2, 1, insert(largeObject, "$.z", 1)),
+					right:        singleRow(1, 1, 2, insert(largeObject, "$.z", 2)),
+					dataConflict: true,
+				},
+				{
+					name:         `divergent modification`,
+					ancestor:     singleRow(1, 1, 1, largeObject),
+					left:         singleRow(1, 2, 1, set(largeObject, "$.level7", 1)),
+					right:        singleRow(1, 1, 2, set(largeObject, "$.level7", 2)),
+					dataConflict: true,
+				},
+				{
+					name:         `divergent modification and deletion`,
+					ancestor:     singleRow(1, 1, 1, insert(largeObject, "$.a", 1)),
+					left:         singleRow(1, 2, 1, insert(largeObject, "$.a", 2)),
+					right:        singleRow(1, 1, 2, largeObject),
+					dataConflict: true,
+				},
+				{
+					name:     `nested insertion`,
+					ancestor: singleRow(1, 1, 1, insert(largeObject, "$.level7.level4.new", map[string]interface{}{})),
+					left:     singleRow(1, 2, 1, insert(largeObject, "$.level7.level4.new", map[string]interface{}{"a": 1})),
+					right:    singleRow(1, 1, 2, insert(largeObject, "$.level7.level4.new", map[string]interface{}{"b": 2})),
+					merged:   singleRow(1, 2, 2, insert(largeObject, "$.level7.level4.new", map[string]interface{}{"a": 1, "b": 2})),
+				},
+				{
+					name:     `nested insertion with escaped quotes in keys`,
+					ancestor: singleRow(1, 1, 1, insert(largeObject, `$.level7.level4."\"new\""`, map[string]interface{}{})),
+					left:     singleRow(1, 2, 1, insert(largeObject, `$.level7.level4."\"new\""`, map[string]interface{}{"a": 1})),
+					right:    singleRow(1, 1, 2, insert(largeObject, `$.level7.level4."\"new\""`, map[string]interface{}{"b": 2})),
+					merged:   singleRow(1, 2, 2, insert(largeObject, `$.level7.level4."\"new\""`, map[string]interface{}{"a": 1, "b": 2})),
+				},
+				{
+					name:     "nested convergent modification",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, set(largeObject, "$.level7.level4", 1)),
+					right:    singleRow(1, 1, 2, set(largeObject, "$.level7.level5", 2)),
+					merged:   singleRow(1, 2, 2, set(set(largeObject, "$.level7.level5", 2), "$.level7.level4", 1)),
+					// skip:     true, // panics
+				},
+				{
+					name:     `nested deletion`,
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, delete(largeObject, "$.level7")),
+					right:    singleRow(1, 1, 2, delete(largeObject, "$.level6")),
+					merged:   singleRow(1, 2, 2, delete(delete(largeObject, "$.level6"), "$.level7")),
+					skip:     true, // doesn't terminate
+				},
+				{
+					name:     "complicated nested merge",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, delete(set(insert(largeObject, "$.added", 7), "$.level5.level1", 5), "$.level4")),
+					right:    singleRow(1, 1, 2, delete(set(insert(largeObject, "$.level6.added", 8), "$.level1", 6), "$.level5.level2")),
+					merged:   singleRow(1, 2, 2, delete(set(insert(delete(set(insert(largeObject, "$.added", 7), "$.level5.level1", 5), "$.level4"), "$.level6.added", 8), "$.level1", 6), "$.level5.level2")),
+				},
+				{
+					name:     "changing types",
+					ancestor: singleRow(1, 1, 1, largeObject),
+					left:     singleRow(1, 2, 1, set(largeObject, "$.level3.number", `"dolt"`)),
+					right:    singleRow(1, 1, 2, set(largeObject, "$.level4.string", 4)),
+					merged:   singleRow(1, 2, 2, set(set(largeObject, "$.level3.number", `"dolt"`), "$.level4.string", 4)),
+				},
+				{
+					name:         "changing types conflict",
+					ancestor:     singleRow(1, 1, 1, largeObject),
+					left:         singleRow(1, 2, 1, set(largeObject, "$.level4.string", []interface{}{})),
+					right:        singleRow(1, 1, 2, set(largeObject, "$.level4.string", 4)),
+					dataConflict: true,
+				},
+				{
+					name:         "object insert and modify conflict",
+					ancestor:     singleRow(1, 1, 1, largeObject),
+					left:         singleRow(1, 1, 1, insert(largeObject, "$.level5.a", 5)),
+					right:        singleRow(1, 1, 2, set(largeObject, "$.level5", 6)),
+					dataConflict: true,
+				},
+				{
+					name:         "object insert and delete conflict",
+					ancestor:     singleRow(1, 1, 1, largeObject),
+					left:         singleRow(1, 1, 1, insert(largeObject, "$.level5.a", 5)),
+					right:        singleRow(1, 1, 2, delete(largeObject, "$.level5")),
+					dataConflict: true,
+				},
+			},
+		},
+	}
+
+	return largeJsonMergeTests
 }
 
 func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {

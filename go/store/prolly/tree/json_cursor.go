@@ -40,7 +40,10 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 	if !cur2.Valid() {
 		return nil, nil
 	}
-	key := cur2.parent.CurrentKey()
+	key := cur2.CurrentKey()
+	if len(key) == 0 {
+		key = cur2.parent.CurrentKey()
+	}
 	err = errorIfNotSupportedLocation(key)
 	if err != nil {
 		return nil, err
@@ -73,6 +76,13 @@ func newJsonCursorFromCursor(ctx context.Context, cur *cursor) (*JsonCursor, err
 	previousKey, err := getPreviousKey(ctx, cur)
 	if err != nil {
 		return nil, err
+	}
+	if !cur.isLeaf() {
+		nd, err := fetchChild(ctx, cur.nrw, cur.currentRef())
+		if err != nil {
+			return nil, err
+		}
+		return newJsonCursorFromCursor(ctx, &cursor{nd: nd, parent: cur, nrw: cur.nrw})
 	}
 	jsonBytes := cur.currentValue()
 	jsonDecoder := ScanJsonFromMiddleWithKey(jsonBytes, previousKey)

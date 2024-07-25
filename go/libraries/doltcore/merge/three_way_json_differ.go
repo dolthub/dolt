@@ -39,8 +39,8 @@ type ThreeWayJsonDiff struct {
 	Op tree.DiffOp
 	// a partial set of document values are set
 	// depending on the diffOp
-	Key                       []byte
-	Base, Left, Right, Merged sql.JSONWrapper
+	Key                 []byte
+	Left, Right, Merged sql.JSONWrapper
 }
 
 func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, error) {
@@ -175,9 +175,8 @@ func (differ *ThreeWayJsonDiffer) processRightSideOnlyDiff() ThreeWayJsonDiff {
 
 	case tree.RemovedDiff:
 		result := ThreeWayJsonDiff{
-			Op:   tree.DiffOpRightDelete,
-			Key:  differ.rightCurrentDiff.Key,
-			Base: differ.rightCurrentDiff.From,
+			Op:  tree.DiffOpRightDelete,
+			Key: differ.rightCurrentDiff.Key,
 		}
 		differ.rightCurrentDiff = nil
 		return result
@@ -186,7 +185,6 @@ func (differ *ThreeWayJsonDiffer) processRightSideOnlyDiff() ThreeWayJsonDiff {
 		result := ThreeWayJsonDiff{
 			Op:    tree.DiffOpRightModify,
 			Key:   differ.rightCurrentDiff.Key,
-			Base:  differ.rightCurrentDiff.From,
 			Right: differ.rightCurrentDiff.To,
 		}
 		differ.rightCurrentDiff = nil
@@ -200,7 +198,6 @@ func (differ *ThreeWayJsonDiffer) processMergedDiff(op tree.DiffOp, merged sql.J
 	result := ThreeWayJsonDiff{
 		Op:     op,
 		Key:    differ.leftCurrentDiff.Key,
-		Base:   differ.leftCurrentDiff.From,
 		Left:   differ.leftCurrentDiff.To,
 		Right:  differ.rightCurrentDiff.To,
 		Merged: merged,
