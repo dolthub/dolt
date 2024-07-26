@@ -225,8 +225,7 @@ seed_and_start_serial_remote() {
 
     run dolt push altremote main
     [ "$status" -eq 1 ]
-    # NM4 - give a better error message.
-    [[ "$output" =~ "failed to get all chunks" ]] || false
+    [[ "$output" =~ "shallow repository missing chunks to complete push" ]] || false
 }
 
 @test "shallow-clone: depth 3 clone of serial history" {

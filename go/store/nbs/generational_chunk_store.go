@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -35,6 +36,8 @@ type GenerationalNBS struct {
 	newGen   *NomsBlockStore
 	ghostGen *GhostBlockStore
 }
+
+var ErrGhostChunkRequested = errors.New("requested chunk which is expected to be a ghost chunk")
 
 func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	if gcs.ghostGen == nil {
@@ -158,7 +161,42 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 		return nil
 	}
 
-	return gcs.newGen.GetManyCompressed(ctx, notInOldGen, found)
+	notFound := notInOldGen.Copy()
+	err = gcs.newGen.GetManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk CompressedChunk) {
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(notFound, chunk.Hash())
+		}()
+		found(ctx, chunk)
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(notFound) == 0 {
+		return nil
+	}
+
+	// We are definitely missing some chunks. Check if any are ghost chunks, mainly to give a better error message.
+	if gcs.ghostGen != nil {
+		// If any of the hashes are in the ghost store.
+		ghostFound := false
+		err := gcs.ghostGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
+			// This should be true for all chunks in the ghost store.
+			if chunk.IsGhost() {
+				ghostFound = true
+			}
+		})
+
+		if err != nil {
+			return err
+		}
+		if ghostFound {
+			return ErrGhostChunkRequested
+		}
+	}
+	return nil
 }
 
 // Has returns true iff the value at the address |h| is contained in the store
