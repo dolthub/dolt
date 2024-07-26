@@ -204,11 +204,12 @@ seed_and_start_serial_remote() {
     [ "$status" -eq 0 ]
 
     cd file-remote
-    dolt checkout -b branch
+    dolt branch other HEAD
 
     dolt checkout main
-
-    dolt merge branch
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Already up to date" ]] || false
 }
 
 @test "shallow-clone: push to a new remote should error" {

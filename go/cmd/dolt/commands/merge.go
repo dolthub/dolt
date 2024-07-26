@@ -144,24 +144,34 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
+	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
+	if err != nil {
+		cli.Println(err.Error())
+		return 0
+	}
+	if len(rows) != 1 {
+		cli.Println("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
+		return 1
+	}
+	mergeResultRow := rows[0]
+
+	upToDate, err := everythingUpToDate(mergeResultRow)
+	if err != nil {
+		cli.Println(err.Error())
+		return 1
+	}
+	if upToDate {
+		// Git CLI language.
+		cli.Println("Already up to date.")
+		return 0
+	}
+
 	// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
 	_, _, err = queryist.Query(sqlCtx, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
-	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
-	if err != nil {
-		cli.Println("merge finished, but failed to check for fast-forward")
-		cli.Println(err.Error())
-		return 0
-	}
-
-	if len(rows) != 1 {
-		cli.Println("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
-		return 1
-	}
-	row := rows[0]
 
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
@@ -176,7 +186,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			cli.Println(mergeHashErr.Error())
 		}
 
-		fastFwd := getFastforward(row, dprocedures.MergeProcFFIndex)
+		fastFwd := getFastforward(mergeResultRow, dprocedures.MergeProcFFIndex)
 
 		if apr.Contains(cli.NoCommitFlag) {
 			return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
@@ -705,4 +715,29 @@ func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, 
 	}
 
 	return 0
+}
+
+func everythingUpToDate(row sql.Row) (bool, error) {
+	if row == nil {
+		return false, fmt.Errorf("Runtime error: nil row returned from merge operation")
+	}
+
+	// We don't currently define these in a readily accessible way, so we'll just hard-code the column indexes.
+	// Confident we'll never change these.
+	hashColumn := 0
+	msgColumn := 3
+
+	if hash, ok := row[hashColumn].(string); ok {
+		if msg, ok := row[msgColumn].(string); ok {
+			if hash == "" && msg == "Everything up-to-date" {
+				return true, nil
+			}
+		} else {
+			return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
+		}
+	} else {
+		return false, fmt.Errorf("Runtime error: merge operation returned unexpected hash column type: %v", row[hashColumn])
+	}
+
+	return false, nil
 }
