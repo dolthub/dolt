@@ -271,6 +271,10 @@ func ConfigureServices(
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
+			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsBootstrapEnabled); err != nil {
+				// unless otherwise specified by config, enable server bootstrapping
+				sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 1)
+			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,
