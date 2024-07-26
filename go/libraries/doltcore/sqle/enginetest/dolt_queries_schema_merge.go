@@ -1961,6 +1961,27 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dropping column on right shifts column index between compatible types",
+		AncSetUpScript: []string{
+			"set @@autocommit=0;",
+			"CREATE TABLE t (id int PRIMARY KEY, a int, b char(20), c char(20), INDEX(c));",
+			`INSERT INTO t VALUES (1, 1, "2", "3")`,
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t DROP COLUMN b;",
+			`UPDATE t SET c = "4";`,
+		},
+		LeftSetUpScript: []string{
+			"UPDATE t SET a = 2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
 
 	// Unsupported automatic merge cases
 	{
