@@ -878,6 +878,9 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 // along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
 // value will be false and the strings will be empty.
 func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
+	sqlCtx.Session.LockWarnings()
+	defer sqlCtx.Session.UnlockWarnings()
+
 	_, resp, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
@@ -917,6 +920,9 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 // isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
 // with a branch. If you are not, you will get an error.
 func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
+	sqlCtx.Session.LockWarnings()
+	defer sqlCtx.Session.UnlockWarnings()
+
 	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 
 	if err != nil {
@@ -948,6 +954,8 @@ func newCompleter(
 
 	sqlCtx := sql.NewContext(subCtx, sql.WithSession(ctx.Session))
 
+	sqlCtx.Session.LockWarnings()
+	defer sqlCtx.Session.UnlockWarnings()
 	_, iter, err := qryist.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err
