@@ -1,0 +1,3 @@
+go 1.22.5
+
+replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
