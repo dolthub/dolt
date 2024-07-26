@@ -65,6 +65,11 @@ var branchColors = []string{
 	"\033[7m",    // Reverse
 }
 
+type BranchPathType struct {
+	Start int
+	End   int
+}
+
 // get the children of commits, and initialize the x and y coordinates of the commits
 func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithChildren {
 	childrenMap := make(map[string][]string)
@@ -86,159 +91,6 @@ func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithCh
 	}
 
 	return commitsWithChildren
-}
-
-type BranchPathType struct {
-	Start         int
-	End           int
-	EndCommitHash string
-	BranchOrder   int
-}
-
-func min(values ...int) int {
-	if len(values) == 0 {
-		return math.MaxInt
-	}
-	minVal := values[0]
-	for _, v := range values {
-		if v < minVal {
-			minVal = v
-		}
-	}
-	return minVal
-}
-
-// compute the X coordinate of each commit
-func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) {
-	// each column might have multiple branch paths, and the columns slice stores the branch paths of each column
-	columns := [][]BranchPathType{}
-	commitXs := make(map[string]int)
-
-	commitYs := make(map[string]int)
-	for index, commit := range commits {
-		commitYs[commit.Commit.commitHash] = index
-	}
-
-	updateColumns := func(col, end int, endCommitHash string) {
-		columns[col][len(columns[col])-1].End = end
-		columns[col][len(columns[col])-1].EndCommitHash = endCommitHash
-	}
-
-	branchOrder := 0
-
-	for index, commit := range commits {
-		var branchChildren []string
-		for _, child := range commit.Children {
-			if commitsMap[child].Commit.parentHashes[0] == commit.Commit.commitHash {
-				branchChildren = append(branchChildren, child)
-			}
-		}
-
-		isLastCommitOnBranch := len(commit.Children) == 0
-		isBranchOutCommit := len(branchChildren) > 0
-
-		commitX := -1
-
-		isFirstCommit := len(commit.Commit.parentHashes) == 0
-
-		if isLastCommitOnBranch {
-			columns = append(columns, []BranchPathType{
-				{
-					Start:         index,
-					End:           index,
-					EndCommitHash: commit.Commit.commitHash,
-					BranchOrder:   branchOrder,
-				},
-			})
-			branchOrder++
-			commitX = len(columns) - 1
-		} else if isBranchOutCommit {
-			// in the case of a branch out commit, the x coordinate of the commit is the minimum x coordinate of its children
-			var branchChildrenXs []int
-			for _, childHash := range branchChildren {
-				if x, ok := commitXs[childHash]; ok {
-					branchChildrenXs = append(branchChildrenXs, x)
-				}
-			}
-
-			commitX = min(branchChildrenXs...)
-
-			updateColumns(commitX, index, commit.Commit.commitHash)
-
-			// update the path that branches out from the current commit by setting their end to be one position before the current commit
-			for _, childX := range branchChildrenXs {
-				if childX != commitX {
-					updateColumns(childX, index-1, commit.Commit.commitHash)
-				}
-			}
-		} else {
-			minChildY := math.MaxInt
-			maxChildX := -1
-
-			for _, child := range commit.Children {
-				ChildY := commitYs[child]
-				childY := commitXs[child]
-
-				if ChildY < minChildY {
-					minChildY = ChildY
-				}
-
-				if childY > maxChildX {
-					maxChildX = childY
-				}
-			}
-
-			colFitAtEnd := -1
-			for i := maxChildX + 1; i < len(columns); i++ {
-				if minChildY >= columns[i][len(columns[i])-1].End {
-					colFitAtEnd = i - (maxChildX + 1)
-					break
-				}
-			}
-
-			col := -1
-			if colFitAtEnd != -1 {
-				col = maxChildX + 1 + colFitAtEnd
-			}
-
-			if col == -1 {
-				columns = append(columns, []BranchPathType{
-					{
-						Start: minChildY + 1,
-						End: func() int {
-							if isFirstCommit {
-								return index
-							} else {
-								return math.MaxInt
-							}
-						}(),
-						EndCommitHash: commit.Commit.commitHash,
-						BranchOrder:   branchOrder,
-					},
-				})
-				branchOrder++
-				commitX = len(columns) - 1
-			} else {
-				commitX = col
-				columns[col] = append(columns[col], BranchPathType{
-					Start: minChildY + 1,
-					End: func() int {
-						if isFirstCommit {
-							return index
-						} else {
-							return math.MaxInt
-						}
-					}(),
-					EndCommitHash: commit.Commit.commitHash,
-					BranchOrder:   branchOrder,
-				})
-				branchOrder++
-			}
-		}
-
-		commitXs[commit.Commit.commitHash] = commitX
-		commits[index].X = commitX
-	}
 }
 
 // wrap the commit message in a constrained width to better align the commit message with the graph
@@ -270,6 +122,115 @@ func wrapTextOnWidth(text string, width int) (int, []string) {
 	return totalRows, wrappedLines
 }
 
+func min(values ...int) int {
+	if len(values) == 0 {
+		return math.MaxInt
+	}
+	minVal := values[0]
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+	}
+	return minVal
+}
+
+// compute the X coordinate of each commit
+func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) {
+	// each column might have multiple branch paths, and the columns slice stores the branch paths of each column
+	columns := [][]BranchPathType{}
+
+	updateColumns := func(col, end int) {
+		columns[col][len(columns[col])-1].End = end
+	}
+
+	for index, commit := range commits {
+		var branchChildren []string
+		for _, child := range commit.Children {
+			if commitsMap[child].Commit.parentHashes[0] == commit.Commit.commitHash {
+				branchChildren = append(branchChildren, child)
+			}
+		}
+
+		isLastCommitOnBranch := len(commit.Children) == 0
+		isBranchOutCommit := len(branchChildren) > 0
+
+		commitX := -1
+
+		if isLastCommitOnBranch {
+			columns = append(columns, []BranchPathType{
+				{
+					Start: index,
+					End:   index,
+				},
+			})
+			commitX = len(columns) - 1
+		} else if isBranchOutCommit {
+			// in the case of a branch out commit, the x coordinate of the commit is the minimum x coordinate of its children
+			var branchChildrenXs []int
+			for _, childHash := range branchChildren {
+				if child, ok := commitsMap[childHash]; ok {
+					branchChildrenXs = append(branchChildrenXs, child.X)
+				}
+			}
+
+			commitX = min(branchChildrenXs...)
+
+			updateColumns(commitX, index)
+
+			// update the path that branches out from the current commit by setting their end to be one position before the current commit
+			for _, childX := range branchChildrenXs {
+				if childX != commitX {
+					updateColumns(childX, index-1)
+				}
+			}
+		} else {
+			// Find an available column so the commit can connect to its children (merge commit) without overlapping with existing branches on columns
+			// Otherwise, put the commit in a new column
+
+			// minChildY is the highest pos of child commit, maxChildX is the right most pos of child commit
+			minChildY := math.MaxInt
+			maxChildX := -1
+			for _, child := range commit.Children {
+				if commitsMap[child].Y < minChildY {
+					minChildY = commitsMap[child].Y
+				}
+				if commitsMap[child].X > maxChildX {
+					maxChildX = commitsMap[child].X
+				}
+			}
+
+			// find the first column that has no branches that overlap with the current commit
+			col := -1
+			for i := maxChildX + 1; i < len(columns); i++ {
+				if minChildY >= columns[i][len(columns[i])-1].End {
+					col = i
+					break
+				}
+			}
+
+			// if no column is found, put the commit in a new column
+			if col == -1 {
+				columns = append(columns, []BranchPathType{
+					{
+						Start: minChildY + 1,
+						End:   index,
+					},
+				})
+				commitX = len(columns) - 1
+			} else {
+				commitX = col
+				columns[col] = append(columns[col], BranchPathType{
+					Start: minChildY + 1,
+					End:   index,
+				})
+			}
+		}
+
+		commits[index].X = commitX
+	}
+}
+
 func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line string, commit CommitInfo, color string, printRef bool) {
 	graphLine := strings.Join(graph[posY], "")
 	emptySpace := strings.Repeat(" ", posX-len(graph[posY]))
@@ -294,6 +255,22 @@ func printCommitMetadata(graph [][]string, pager *outputpager.Pager, posY, posX 
 	pager.Writer.Write([]byte(strings.Join(graph[posY+3], "")))
 	pager.Writer.Write([]byte("\n"))
 
+}
+
+func trimTrailing(row []string) []string {
+	lastIndex := len(row) - 1
+
+	for lastIndex >= 0 && strings.TrimSpace(row[lastIndex]) == "" {
+		lastIndex--
+	}
+
+	return row[:lastIndex+1]
+}
+
+// the height that a commit will take up in the graph
+// 4 lines for commit metadata (commit hash, author, date, and an empty line) + number of lines in the commit message
+func getHeightOfCommit(commit *CommitInfoWithChildren) int {
+	return 4 + len(commit.formattedMessage)
 }
 
 // print the commit messages in the graph matrix
@@ -354,22 +331,6 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 		posY += int(math.Max(float64(5+rowNum), maxDistanceFromParent))
 		commit.formattedMessage = formattedMessage
 	}
-}
-
-func trimTrailing(row []string) []string {
-	lastIndex := len(row) - 1
-
-	for lastIndex >= 0 && strings.TrimSpace(row[lastIndex]) == "" {
-		lastIndex--
-	}
-
-	return row[:lastIndex+1]
-}
-
-// the height that a commit will take up in the graph
-// 4 lines for commit metadata (commit hash, author, date, and an empty line) + number of lines in the commit message
-func getHeightOfCommit(commit *CommitInfoWithChildren) int {
-	return 4 + len(commit.formattedMessage)
 }
 
 func logGraph(pager *outputpager.Pager, commitInfos []CommitInfo) {
