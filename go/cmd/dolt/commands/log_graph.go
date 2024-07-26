@@ -1,3 +1,17 @@
+// Copyright 2019 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package commands
 
 import (
@@ -5,21 +19,10 @@ import (
 	"math"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
-
-// Define the structure of the commit data
-type Commit struct {
-	Hash        string
-	Parents     []string
-	Children    []string
-	Committer   string
-	Message     string
-	CommitDate  string
-	CommitColor string
-	X           int
-	Y           int
-}
 
 type CommitInfoWithChildren struct {
 	Commit           CommitInfo
@@ -231,25 +234,25 @@ func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*Co
 	}
 }
 
-func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line string, commit CommitInfo, color string, printRef bool) {
+func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line string, commit CommitInfo, color, decoration string) {
 	graphLine := strings.Join(graph[posY], "")
 	emptySpace := strings.Repeat(" ", posX-len(graph[posY]))
 	pager.Writer.Write([]byte(fmt.Sprintf("%s%s%s %s", graphLine, emptySpace, color, line)))
-	if printRef {
-		printRefs(pager, &commit, "")
+	if decoration != "no" {
+		printRefs(pager, &commit, decoration)
 	}
 	pager.Writer.Write([]byte("\n"))
 }
 
-func printCommitMetadata(graph [][]string, pager *outputpager.Pager, posY, posX int, commit *CommitInfoWithChildren) {
+func printCommitMetadata(graph [][]string, pager *outputpager.Pager, posY, posX int, commit *CommitInfoWithChildren, decoration string) {
 	// print commit hash
-	printLine(graph, posX, posY, pager, fmt.Sprintf("commit %s", commit.Commit.commitHash), commit.Commit, "\033[33m", true)
+	printLine(graph, posX, posY, pager, fmt.Sprintf("commit %s", commit.Commit.commitHash), commit.Commit, "\033[33m", decoration)
 
 	// print author
-	printLine(graph, posX, posY+1, pager, fmt.Sprintf("Author %s", commit.Commit.commitMeta.Name), commit.Commit, "\033[37m", false)
+	printLine(graph, posX, posY+1, pager, fmt.Sprintf("Author %s", commit.Commit.commitMeta.Name), commit.Commit, "\033[37m", "no")
 
 	// print date
-	printLine(graph, posX, posY+2, pager, fmt.Sprintf("Date %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "\033[37m", false)
+	printLine(graph, posX, posY+2, pager, fmt.Sprintf("Date %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "\033[37m", "no")
 
 	// print the line between the commit metadata and the commit message
 	pager.Writer.Write([]byte(strings.Join(graph[posY+3], "")))
@@ -274,7 +277,9 @@ func getHeightOfCommit(commit *CommitInfoWithChildren) int {
 }
 
 // print the commit messages in the graph matrix
-func appendMessage(graph [][]string, pager *outputpager.Pager, commits []*CommitInfoWithChildren) {
+func appendMessage(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*CommitInfoWithChildren) {
+	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+
 	for i := 0; i < len(commits)-1; i++ {
 		startY := commits[i].Y
 		endY := commits[i+1].Y
@@ -288,12 +293,12 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, commits []*Commit
 			}
 		}
 
-		printCommitMetadata(graph, pager, startY, startX, commits[i])
+		printCommitMetadata(graph, pager, startY, startX, commits[i], decoration)
 
 		// print the graph with commit message
 		for i, line := range commits[i].formattedMessage {
 			y := startY + 4 + i
-			printLine(graph, startX, y, pager, line, commits[i].Commit, "\033[37m", false)
+			printLine(graph, startX, y, pager, line, commits[i].Commit, "\033[37m", "no")
 		}
 
 		// print the remaining lines of the graph of the current commit
@@ -304,7 +309,7 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, commits []*Commit
 	}
 
 	last_commit_y := commits[len(commits)-1].Y
-	printCommitMetadata(graph, pager, last_commit_y, len(graph[last_commit_y]), commits[len(commits)-1])
+	printCommitMetadata(graph, pager, last_commit_y, len(graph[last_commit_y]), commits[len(commits)-1], decoration)
 
 	for _, line := range commits[len(commits)-1].formattedMessage {
 		pager.Writer.Write([]byte(fmt.Sprintf("  \033[37m%s", line)))
@@ -333,7 +338,7 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 	}
 }
 
-func logGraph(pager *outputpager.Pager, commitInfos []CommitInfo) {
+func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitInfos []CommitInfo) {
 	commits := mapCommitsWithChildrenAndPosition(commitInfos)
 	commitsMap := make(map[string]*CommitInfoWithChildren)
 	for _, commit := range commits {
@@ -420,6 +425,5 @@ func logGraph(pager *outputpager.Pager, commitInfos []CommitInfo) {
 		graph[i] = line
 	}
 
-	appendMessage(graph, pager, commits)
-
+	appendMessage(graph, pager, apr, commits)
 }
