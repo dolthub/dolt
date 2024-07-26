@@ -954,6 +954,8 @@ func newCompleter(
 
 	sqlCtx := sql.NewContext(subCtx, sql.WithSession(ctx.Session))
 
+	sqlCtx.Session.LockWarnings()
+	defer sqlCtx.Session.UnlockWarnings()
 	_, iter, err := qryist.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err
