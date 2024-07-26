@@ -147,12 +147,6 @@ func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, ne
 		return err
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			currKey, err = m.leftBuilder.SecondaryKeyFromRow(ctx, key, currValue)
-			_ = currKey
-		}
-	}()
 	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
