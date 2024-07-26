@@ -25,6 +25,9 @@ teardown() {
 # bats test_tags=no_lambda
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+     skip "session ctx in shell is no the same as session in server"
+    fi
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
     echo "$output"
 
