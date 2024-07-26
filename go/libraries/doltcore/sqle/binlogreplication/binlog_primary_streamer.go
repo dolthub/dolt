@@ -15,7 +15,6 @@
 package binlogreplication
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -167,26 +166,6 @@ func (streamer *binlogStreamer) streamNextEvents(_ *sql.Context, conn *mysql.Con
 	return nil
 }
 
-// openBinlogFileForReading opens the specified |logfile| for reading and reads the first four bytes to make sure they
-// are the expected binlog file magic numbers. If any problems are encountered opening the file or reading the first
-// four bytes, an error is returned.
-func openBinlogFileForReading(logfile string) (*os.File, error) {
-	file, err := os.Open(logfile)
-	if err != nil {
-		return nil, err
-	}
-	buffer := make([]byte, len(binlogFileMagicNumber))
-	bytesRead, err := file.Read(buffer)
-	if err != nil {
-		return nil, err
-	}
-	if bytesRead != len(binlogFileMagicNumber) || string(buffer) != string(binlogFileMagicNumber) {
-		return nil, fmt.Errorf("invalid magic number in binlog file!")
-	}
-
-	return file, nil
-}
-
 // binlogStreamerManager manages a collection of binlogStreamers, one for reach connected replica,
 // and implements the doltdb.DatabaseUpdateListener interface to receive notifications of database
 // changes that need to be turned into binlog events and then sent to connected replicas.
@@ -242,101 +221,12 @@ func (m *binlogStreamerManager) StartStream(ctx *sql.Context, conn *mysql.Conn, 
 	m.addStreamer(streamer)
 	defer m.removeStreamer(streamer)
 
-	file, err := m.findLogFileForPosition(executedGtids)
+	file, err := m.logManager.findLogFileForPosition(executedGtids)
 	if err != nil {
 		return err
 	}
 
 	return streamer.startStream(ctx, conn, executedGtids, binlogFormat, &binlogEventMeta, file)
-}
-
-// findLogFileForPosition searches through the available binlog files on disk for the first log file that
-// contains GTIDs that are NOT present in |executedGtids|. This is determined by reading the first GTID event
-// from each log file and selecting the previous file when the first GTID not in |executedGtids| is found. If
-// the first GTID event in all available logs files is in |executedGtids|, then the current log file is returned.
-func (m *binlogStreamerManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (string, error) {
-	files, err := m.logManager.logFilesOnDiskForBranch(BinlogBranch)
-	if err != nil {
-		return "", err
-	}
-
-	for i, f := range files {
-		binlogFilePath := filepath.Join(m.logManager.binlogDirectory, f)
-		file, err := openBinlogFileForReading(binlogFilePath)
-		if err != nil {
-			return "", err
-		}
-
-		binlogEvent, err := readFirstGtidEventFromFile(file)
-		if fileCloseErr := file.Close(); fileCloseErr != nil {
-			logrus.Errorf("unable to cleanly close binlog file %s: %s", f, err.Error())
-		}
-		if err == io.EOF {
-			continue
-		} else if err != nil {
-			return "", err
-		}
-
-		if binlogEvent.IsGTID() {
-			gtid, _, err := binlogEvent.GTID(m.logManager.binlogFormat)
-			if err != nil {
-				return "", err
-			}
-			// If the first GTID in this file is contained in the set of GTIDs that the replica
-			// has already executed, then move on to check the next file.
-			if executedGtids.ContainsGTID(gtid) {
-				continue
-			}
-
-			// If we found an unexecuted GTID in the first binlog file, return the first file,
-			// otherwise return the previous file
-			if i == 0 {
-				return binlogFilePath, nil
-			} else {
-				return filepath.Join(m.logManager.binlogDirectory, files[i-1]), nil
-			}
-		}
-	}
-
-	// If we don't find any GTIDs that are missing from |executedGtids|, then return the current
-	// log file so the streamer can reply events from it, potentially finding GTIDs later in the
-	// file that need to be sent to the connected replica, or waiting for new events to be written.
-	return m.logManager.currentBinlogFilepath(), nil
-}
-
-func readBinlogEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
-	headerBuffer := make([]byte, 4+1+4+4+4+2)
-	_, err := file.Read(headerBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	// Event Header:
-	//timestamp := headerBuffer[0:4]
-	//eventType := headerBuffer[4]
-	//serverId := binary.LittleEndian.Uint32(headerBuffer[5:5+4])
-	eventSize := binary.LittleEndian.Uint32(headerBuffer[9 : 9+4])
-
-	payloadBuffer := make([]byte, eventSize-uint32(len(headerBuffer)))
-	_, err = file.Read(payloadBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return mysql.NewMysql56BinlogEvent(append(headerBuffer, payloadBuffer...)), nil
-}
-
-func readFirstGtidEventFromFile(file *os.File) (mysql.BinlogEvent, error) {
-	for {
-		binlogEvent, err := readBinlogEventFromFile(file)
-		if err != nil {
-			return nil, err
-		}
-
-		if binlogEvent.IsGTID() {
-			return binlogEvent, nil
-		}
-	}
 }
 
 // addStreamer adds |streamer| to the slice of streamers managed by this binlogStreamerManager.

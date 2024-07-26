@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,10 +33,6 @@ import (
 )
 
 var binlogDirectory = filepath.Join(".dolt", "binlog")
-
-// binlogFileMagicNumber holds the four bytes that start off every
-// MySQL binlog file and identify the file as a MySQL binlog.
-var binlogFileMagicNumber = []byte{0xfe, 0x62, 0x69, 0x6e}
 
 // logManager is responsible for the binary log files on disk, including actually writing events to the log files,
 // rotating the log files, listing the available log files, purging old log files, and keeping track of what GTIDs
@@ -234,6 +229,60 @@ func (lm *logManager) initializePurgedGtids() error {
 	return sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
 }
 
+// findLogFileForPosition searches through the available binlog files on disk for the first log file that
+// contains GTIDs that are NOT present in |executedGtids|. This is determined by reading the first GTID event
+// from each log file and selecting the previous file when the first GTID not in |executedGtids| is found. If
+// the first GTID event in all available logs files is in |executedGtids|, then the current log file is returned.
+func (lm *logManager) findLogFileForPosition(executedGtids mysql.GTIDSet) (string, error) {
+	files, err := lm.logFilesOnDiskForBranch(BinlogBranch)
+	if err != nil {
+		return "", err
+	}
+
+	for i, f := range files {
+		binlogFilePath := filepath.Join(lm.binlogDirectory, f)
+		file, err := openBinlogFileForReading(binlogFilePath)
+		if err != nil {
+			return "", err
+		}
+
+		binlogEvent, err := readFirstGtidEventFromFile(file)
+		if fileCloseErr := file.Close(); fileCloseErr != nil {
+			logrus.Errorf("unable to cleanly close binlog file %s: %s", f, err.Error())
+		}
+		if err == io.EOF {
+			continue
+		} else if err != nil {
+			return "", err
+		}
+
+		if binlogEvent.IsGTID() {
+			gtid, _, err := binlogEvent.GTID(lm.binlogFormat)
+			if err != nil {
+				return "", err
+			}
+			// If the first GTID in this file is contained in the set of GTIDs that the replica
+			// has already executed, then move on to check the next file.
+			if executedGtids.ContainsGTID(gtid) {
+				continue
+			}
+
+			// If we found an unexecuted GTID in the first binlog file, return the first file,
+			// otherwise return the previous file
+			if i == 0 {
+				return binlogFilePath, nil
+			} else {
+				return filepath.Join(lm.binlogDirectory, files[i-1]), nil
+			}
+		}
+	}
+
+	// If we don't find any GTIDs that are missing from |executedGtids|, then return the current
+	// log file so the streamer can reply events from it, potentially finding GTIDs later in the
+	// file that need to be sent to the connected replica, or waiting for new events to be written.
+	return lm.currentBinlogFilepath(), nil
+}
+
 // findFirstGtidInFile opens the file with the base name |filename| in the binlog directory and
 // reads the events until a GTID event is found, then extracts the GTID value and returns it.
 func (lm *logManager) findFirstGtidInFile(filename string) (gtid mysql.GTID, err error) {
@@ -327,6 +376,8 @@ func (lm *logManager) previousLogFile() (filename string, err error) {
 	return formatBinlogFilename(branch, sequence-1), nil
 }
 
+// TODO: consider moving these to the helper function file
+
 func (lm *logManager) logFilesOnDisk() (files []string, err error) {
 	err = lm.fs.Iter(binlogDirectory, false, func(path string, size int64, isDir bool) (stop bool) {
 		base := filepath.Base(path)
@@ -408,13 +459,6 @@ func (lm *logManager) RotateLogFile() error {
 	// Open and initialize a new binlog file
 	lm.currentBinlogFileName = nextLogFile
 	return lm.initializeCurrentLogFile(lm.binlogFormat, lm.binlogEventMeta)
-}
-
-func (lm *logManager) PurgeLogFiles() error {
-	// TODO: implement support for purging older binlog files
-	//       This also requires setting gtid_purged
-	// https://dev.mysql.com/doc/refman/8.0/en/replication-options-gtids.html#sysvar_gtid_purged
-	return nil
 }
 
 // initializeCurrentLogFile creates and opens the current binlog file for append only writing, writes the first four
@@ -547,17 +591,10 @@ func (lm *logManager) resolveLogFile(filename string) string {
 	return filepath.Join(lm.binlogDirectory, filename)
 }
 
+// TODO: Consider moving lookup SystemVar helper functions into a separate file
+
 func (lm *logManager) currentBinlogFilepath() string {
 	return lm.resolveLogFile(lm.currentBinlogFileName)
-}
-
-// fileExists returns true if the specified |filename| exists on disk and is not a directory, otherwise returns false.
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
 }
 
 // lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
@@ -589,37 +626,4 @@ func lookupBinlogExpireLogsSeconds() (int, error) {
 	}
 
 	return int(int32Value.(int32)), nil
-}
-
-// formatBinlogFilename formats a binlog filename using the specified |branch| and |sequence| number. The
-// returned filename will be of the form "binlog-main.000001".
-func formatBinlogFilename(branch string, sequence int) string {
-	return fmt.Sprintf("binlog-%s.%06d", branch, sequence)
-}
-
-// parseBinlogFilename parses a binlog filename, of the form "binlog-main.000001", into its branch and
-// sequence number.
-func parseBinlogFilename(filename string) (branch string, sequence int, err error) {
-	if !strings.HasPrefix(filename, "binlog-") {
-		return "", 0, fmt.Errorf("invalid binlog filename: %s; must start with 'binlog-'", filename)
-	}
-
-	filename = strings.TrimPrefix(filename, "binlog-")
-
-	splits := strings.Split(filename, ".")
-	if len(splits) != 2 {
-		return "", 0, fmt.Errorf(
-			"unable to parse binlog filename: %s; expected format 'binlog-branch.sequence'", filename)
-	}
-
-	branch = splits[0]
-	sequenceString := splits[1]
-
-	sequence, err = strconv.Atoi(sequenceString)
-	if err != nil {
-		return "", 0, fmt.Errorf(
-			"unable to parse binlog sequence number: %s; %s", sequenceString, err.Error())
-	}
-
-	return branch, sequence, nil
 }
