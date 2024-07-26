@@ -126,31 +126,6 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
 }
 
-@test "shallow-clone: shallow clone can't push to empty remote" {
-    seed_local_remote
-
-    mkdir alt_remote
-    cd alt_remote
-    dolt init
-    cd ..
-
-    cd remote
-    dolt remote add origin file://../file-remote
-    dolt push origin main
-    cd ..
-
-    mkdir clones
-    cd clones
-    dolt clone --depth 1 file://../file-remote
-    cd file-remote
-
-    dolt remote add alt_remote file://../../alt_remote
-
-    run dolt push alt_remote main:main
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "shallow repository missing chunks to complete push" ]] || false
-}
-
 @test "shallow-clone: dolt gc works" {
     seed_and_start_serial_remote
 
@@ -250,8 +225,7 @@ seed_and_start_serial_remote() {
 
     run dolt push altremote main
     [ "$status" -eq 1 ]
-    # NM4 - give a better error message.
-    [[ "$output" =~ "failed to get all chunks" ]] || false
+    [[ "$output" =~ "shallow repository missing chunks to complete push" ]] || false
 }
 
 @test "shallow-clone: depth 3 clone of serial history" {
