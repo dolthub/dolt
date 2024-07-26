@@ -103,8 +103,6 @@ func (t *DoltTable) SkipIndexCosting() bool {
 }
 
 func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expression) (sql.IndexLookup, *sql.FuncDepSet, sql.Expression, bool, error) {
-	return sql.IndexLookup{}, nil, nil, false, nil
-
 	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return sql.IndexLookup{}, nil, nil, false, err
@@ -185,10 +183,13 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 					if err := rb.Equals(ctx, matchIdx, c2.Lit.Value()); err != nil {
 						return sql.IndexLookup{}, nil, nil, false, nil
 					}
-				} else if leftoverExpr == nil {
-					leftoverExpr = c2.Gf
-				} else {
-					leftoverExpr = expression.NewAnd(leftoverExpr, c2.Gf)
+				}
+				if !matched || !expression.PreciseComparison(c2.Eq) {
+					if leftoverExpr == nil {
+						leftoverExpr = c2.Eq
+					} else {
+						leftoverExpr = expression.NewAnd(leftoverExpr, c2.Eq)
+					}
 				}
 			}
 			ret, err := rb.Build(ctx)
