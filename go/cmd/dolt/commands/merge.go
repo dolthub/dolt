@@ -161,8 +161,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 	if upToDate {
-		// Git CLI language.
-		cli.Println("Already up to date.")
+		// dolt uses "Everything up-to-date" message, but Git CLI uses "Already up to date".
+		cli.Println(doltdb.ErrUpToDate.Error())
 		return 0
 	}
 
@@ -729,7 +729,7 @@ func everythingUpToDate(row sql.Row) (bool, error) {
 
 	if hash, ok := row[hashColumn].(string); ok {
 		if msg, ok := row[msgColumn].(string); ok {
-			if hash == "" && msg == "Everything up-to-date" {
+			if hash == "" && msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
 				return true, nil
 			}
 		} else {

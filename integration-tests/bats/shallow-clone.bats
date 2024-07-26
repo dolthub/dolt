@@ -209,7 +209,7 @@ seed_and_start_serial_remote() {
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already up to date" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "shallow-clone: push to a new remote should error" {
