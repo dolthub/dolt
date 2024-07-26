@@ -145,8 +145,12 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 
 		conn, err = mysql.Connect(ctx, &connParams)
 		if err != nil {
+			logrus.Warnf("failed connection attempt to source (%s): %s",
+				replicaSourceInfo.Host, err.Error())
+
 			if connectionAttempts >= maxConnectionAttempts {
-				ctx.GetLogger().Errorf("Exceeded max connection attempts (%d) to source server", maxConnectionAttempts)
+				ctx.GetLogger().Errorf("Exceeded max connection attempts (%d) to source (%s)",
+					maxConnectionAttempts, replicaSourceInfo.Host)
 				return nil, err
 			}
 			// If there was an error connecting (and we haven't used up all our retry attempts), listen for a
@@ -916,12 +920,23 @@ func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
 // loadReplicaServerId loads the @@GLOBAL.server_id system variable needed to register the replica with the source,
 // and returns an error specific to replication configuration if the variable is not set to a valid value.
 func loadReplicaServerId() (uint32, error) {
-	_, value, ok := sql.SystemVariables.GetGlobal("server_id")
+	serverIdVar, value, ok := sql.SystemVariables.GetGlobal("server_id")
 	if !ok {
 		return 0, fmt.Errorf("no server_id global system variable set")
 	}
 
+	// Persisted values stored in .dolt/config.json can cause string values to be stored in
+	// system variables, so attempt to convert the value if we can't directly cast it to a uint32.
 	serverId, ok := value.(uint32)
+	if !ok {
+		var err error
+		value, _, err = serverIdVar.GetType().Convert(value)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	serverId, ok = value.(uint32)
 	if !ok || serverId == 0 {
 		return 0, fmt.Errorf("invalid server ID configured for @@GLOBAL.server_id (%v); "+
 			"must be an integer greater than zero and less than 4,294,967,296", serverId)

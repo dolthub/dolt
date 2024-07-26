@@ -28,7 +28,7 @@ import (
 // data types can be successfully replicated.
 func TestBinlogReplicationForAllTypes(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing

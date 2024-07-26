@@ -49,6 +49,12 @@ var doltLogFile, mysqlLogFile *os.File
 var testDir string
 var originalWorkingDir string
 
+// doltReplicaSystemVars are the common system variables that need
+// to be set on a Dolt replica before replication is turned on.
+var doltReplicaSystemVars = map[string]string{
+	"server_id": "42",
+}
+
 func teardown(t *testing.T) {
 	if mySqlProcess != nil {
 		stopMySqlServer(t)
@@ -92,7 +98,7 @@ func teardown(t *testing.T) {
 // Dolt replica.
 func TestBinlogReplicationSanityCheck(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
@@ -129,7 +135,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 // process the events without errors.
 func TestFlushLogs(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
@@ -153,7 +159,7 @@ func TestFlushLogs(t *testing.T) {
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// RESET REPLICA returns an error if replication is running
@@ -205,7 +211,7 @@ func TestResetReplica(t *testing.T) {
 // for various error conditions.
 func TestStartReplicaErrors(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 
 	// START REPLICA returns an error when no replication source is configured
 	_, err := replicaDatabase.Queryx("START REPLICA;")
@@ -248,14 +254,13 @@ func TestShowReplicaStatus(t *testing.T) {
 // warnings are logged when STOP REPLICA is invoked when replication is not running.
 func TestStopReplica(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 
 	// STOP REPLICA logs a warning if replication is not running
 	replicaDatabase.MustExec("STOP REPLICA;")
 	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 
 	// Start replication with bad connection params
-	replicaDatabase.MustExec("SET @@GLOBAL.server_id=52;")
 	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
 	replicaDatabase.MustExec("START REPLICA;")
 	time.Sleep(200 * time.Millisecond)
@@ -290,7 +295,7 @@ func TestStopReplica(t *testing.T) {
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
 func TestDoltCommits(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// First transaction (DDL)
@@ -370,7 +375,7 @@ func TestDoltCommits(t *testing.T) {
 // enabled and disabled.
 func TestForeignKeyChecks(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// Test that we can execute statement-based replication that requires foreign_key_checks
@@ -427,7 +432,7 @@ func TestForeignKeyChecks(t *testing.T) {
 // TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
 func TestCharsetsAndCollations(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplication(t, mySqlPort)
 
 	// Use non-default charset/collations to create data on the primary
@@ -691,7 +696,6 @@ func startReplication(t *testing.T, port int) {
 // pauses for |delay| before creating the test database, db01, on the primary, and ensures it
 // gets replicated to the replica.
 func startReplicationWithDelay(t *testing.T, port int, delay time.Duration) {
-	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
 			"SOURCE_USER='replicator', SOURCE_PASSWORD='Zqr8_blrGm1!', "+

@@ -36,7 +36,7 @@ var proxyPort int
 // reestablished if it drops.
 func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	configureToxiProxy(t)
 	configureFastConnectionRetry(t)
 	startReplication(t, proxyPort)
