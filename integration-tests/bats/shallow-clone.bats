@@ -165,7 +165,7 @@ seed_and_start_serial_remote() {
     dolt merge branch
 }
 
-@test "shallow-clone: simple m erge" {
+@test "shallow-clone: simple merge" {
     seed_local_remote
     cd remote
     dolt remote add origin file://../file-remote
@@ -187,6 +187,26 @@ seed_and_start_serial_remote() {
 
     dolt sql -q "insert into vals values (7, 'seven')"
     dolt commit -a -m "Added Val: 7 -> seven"
+
+    dolt merge branch
+}
+
+@test "shallow-clone: no-op merge" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
+    [ "$status" -eq 0 ]
+
+    cd file-remote
+    dolt checkout -b branch
+
+    dolt checkout main
 
     dolt merge branch
 }
