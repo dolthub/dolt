@@ -17,10 +17,11 @@ package binlogreplication
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/vitess/go/mysql"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/dolthub/vitess/go/mysql"
 )
 
 // binlogFileMagicNumber holds the four bytes that start off every
