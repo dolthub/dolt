@@ -27,7 +27,7 @@ import (
 )
 
 // GetMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
-func GetMutableSecondaryIdxs(ctx *sql.Context, sch schema.Schema, tableName string, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
 	for i, index := range sch.Indexes().AllIndexes() {
 		idx, err := indexes.GetIndex(ctx, sch, nil, index.Name())
@@ -38,7 +38,7 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, sch schema.Schema, tableName stri
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		mods[i], err = NewMutableSecondaryIdx(ctx, m, sch, tableName, index)
+		mods[i], err = NewMutableSecondaryIdx(ctx, m, ourSch, sch, tableName, index)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +49,7 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, sch schema.Schema, tableName stri
 // GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
 // is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
 // merging a schema that has a new index, but the index does not exist on the index set being modified.
-func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
 
@@ -87,7 +87,7 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tab
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		newMutableSecondaryIdx, err := NewMutableSecondaryIdx(ctx, m, sch, tableName, index)
+		newMutableSecondaryIdx, err := NewMutableSecondaryIdx(ctx, m, ourSch, sch, tableName, index)
 		if err != nil {
 			return nil, err
 		}
@@ -102,29 +102,31 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tab
 // provides the InsertEntry, UpdateEntry, and DeleteEntry functions which can be
 // used to modify the index based on a modification to corresponding primary row.
 type MutableSecondaryIdx struct {
-	Name    string
-	mut     *prolly.MutableMap
-	builder index.SecondaryKeyBuilder
+	Name                       string
+	mut                        *prolly.MutableMap
+	leftBuilder, mergedBuilder index.SecondaryKeyBuilder
 }
 
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
-func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, sch schema.Schema, tableName string, def schema.Index) (MutableSecondaryIdx, error) {
-	b, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, ourSch, mergedSch schema.Schema, tableName string, def schema.Index) (MutableSecondaryIdx, error) {
+	leftBuilder, err := index.NewSecondaryKeyBuilder(ctx, tableName, ourSch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+	mergedBuilder, err := index.NewSecondaryKeyBuilder(ctx, tableName, mergedSch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
 	if err != nil {
 		return MutableSecondaryIdx{}, err
 	}
 
 	return MutableSecondaryIdx{
-		Name:    def.Name(),
-		mut:     idx.Mutate(),
-		builder: b,
+		Name:          def.Name(),
+		mut:           idx.Mutate(),
+		leftBuilder:   leftBuilder,
+		mergedBuilder: mergedBuilder,
 	}, nil
 }
 
 // InsertEntry inserts a secondary index entry given the key and new value
 // of the primary row.
 func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.Tuple) error {
-	newKey, err := m.builder.SecondaryKeyFromRow(ctx, key, newValue)
+	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
 	}
@@ -140,12 +142,12 @@ func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.
 // UpdateEntry modifies the corresponding secondary index entry given the key
 // and curr/new values of the primary row.
 func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, newValue val.Tuple) error {
-	currKey, err := m.builder.SecondaryKeyFromRow(ctx, key, currValue)
+	currKey, err := m.leftBuilder.SecondaryKeyFromRow(ctx, key, currValue)
 	if err != nil {
 		return err
 	}
 
-	newKey, err := m.builder.SecondaryKeyFromRow(ctx, key, newValue)
+	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
 	}
@@ -159,7 +161,7 @@ func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, ne
 
 // DeleteEntry deletes a secondary index entry given they key and value of the primary row.
 func (m MutableSecondaryIdx) DeleteEntry(ctx context.Context, key val.Tuple, value val.Tuple) error {
-	currKey, err := m.builder.SecondaryKeyFromRow(ctx, key, value)
+	currKey, err := m.leftBuilder.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
 	}

@@ -224,7 +224,7 @@ func AddDoltSystemVariables() {
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemBoolType(dsess.DoltStatsBootstrapEnabled),
-			Default: int8(1),
+			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsMemoryOnly,

@@ -25,7 +25,7 @@ import (
 // filtering option is correctly applied and honored.
 func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Ignore replication events for db01.t2. Also tests that the first filter setting is overwritten by
@@ -76,7 +76,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 // filtering option is correctly applied and honored.
 func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Do replication events for db01.t1. Also tests that the first filter setting is overwritten by
@@ -127,7 +127,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 // replication filtering options are correctly applied and honored when used together.
 func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Do replication events for db01.t1, and db01.t2

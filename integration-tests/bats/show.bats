@@ -234,3 +234,39 @@ assert_has_key_value() {
     [ $status -eq 1 ]
     [[ "$output" =~ "branch not found: branch1" ]] || false
 }
+
+@test "show: primary index leaf" {
+    dolt sql <<EOF
+create table test(pk int primary key, t text, j json);
+insert into test values (0, "Hello", "{}"), (1, "World", "[]");
+EOF
+    run dolt show "#9heeqrj6idph7snnko484sqnobu2r46i"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "{ key: 00000000 value:  #0isi5776c0lu0d7rvsnfl80gsdisilsa,  #e6sucun84ck3bgc1p9lorkibp30mvd2f }" ]] || false
+    [[ "$output" =~ "{ key: 01000000 value:  #8scr7d6rtnafqovoa7d06em7jkpil9gg,  #8arugs9qup4pvpmqbf64lpkm9f6cdv74 }" ]] || false
+}
+
+@test "show: blob" {
+    dolt sql <<EOF
+create table test(pk int primary key, t text, j json);
+insert into test values (0, "Hello", "{}"), (1, "World", "[]");
+EOF
+    run dolt show "#0isi5776c0lu0d7rvsnfl80gsdisilsa"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "Blob - Hello" ]] || false
+}
+
+@test "show: primary index non-leaf" {
+    dolt sql <<EOF
+create table test(pk int primary key);
+insert into test values (1);
+EOF
+    for i in {1..10}; do dolt sql -q "insert ignore into test select pk*2+$i from test;"; done
+    run dolt show "#r9g8a8r570drje8lbnn72jftu49gkq9t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "{ key: d5010000 ref: #5eiul2kmip341rse0besd0bv0u07jhf1 }" ]] || false
+    [[ "$output" =~ "{ key: f40b0000 ref: #vpuf5ccvph0i6stls48a0bj7as5k2aka }" ]] || false
+}

@@ -3622,6 +3622,20 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'WORKING'",
+				Expected: []sql.Row{
+					{"WORKING", "newRenamedEmptyTable"},
+					{"WORKING", "regularTable"},
+				},
+			},
+			{
+				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'STAGED'",
+				Expected: []sql.Row{
+					{"STAGED", "addedTable"},
+					{"STAGED", "droppedTable"},
+				},
+			},
+			{
 				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
 				Expected: []sql.Row{
 					{"WORKING", "newRenamedEmptyTable"},
@@ -4859,6 +4873,44 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					// TODO: Missing rows here see TestDiffSystemTable tests
 					{100, 101, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "working and staged commits",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"call dolt_commit('-Am', 'created table');",
+			"set @Commit0 = HASHOF('HEAD');",
+			"insert into t values (1, 2, 3);",
+			"call dolt_add('.');",
+			"insert into t values (4, 5, 6);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT=@Commit0;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT=@Commit0;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT='STAGED';",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT='WORKING';",
+				Expected: []sql.Row{
+					{nil, nil, nil, 4, 5, 6, "removed"},
 				},
 			},
 		},

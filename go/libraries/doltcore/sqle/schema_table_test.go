@@ -16,10 +16,12 @@ package sqle
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
-func TestAncientSchemaTableError(t *testing.T) {
+func TestAncientSchemaTableMigration(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -45,10 +47,47 @@ func TestAncientSchemaTableError(t *testing.T) {
 	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
-	_, _, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot migrate dolt_schemas table from v0.19.1 or earlier")
+	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	require.NoError(t, err)
+	require.True(t, found)
 
+	wrapper, ok := sqlTbl.(*SchemaTable)
+	require.True(t, ok)
+	require.NotNil(t, wrapper.backingTable)
+	// unmodified dolt_schemas table.
+	require.Equal(t, 3, len(wrapper.backingTable.Schema()))
+
+	inserter := wrapper.backingTable.Inserter(ctx)
+	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
+	require.NoError(t, err)
+	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
+	require.NoError(t, err)
+	err = inserter.Close(ctx)
+	require.NoError(t, err)
+
+	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
+	require.NoError(t, err)
+
+	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
+	require.NoError(t, err)
+
+	var rows []sql.Row
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+
+		require.NoError(t, err)
+		rows = append(rows, row)
+	}
+
+	require.NoError(t, iter.Close(ctx))
+	expectedRows := []sql.Row{
+		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
+		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
+	}
+	assert.Equal(t, expectedRows, rows)
 }
 
 func TestV1SchemasTable(t *testing.T) {

@@ -30,17 +30,17 @@ teardown() {
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ "$output" =~ 'CREATE DATABASE `colldb`' ]] || false
     [[ "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
 
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ ! "$output" =~ 'CREATE DATABASE `colldb`' ]] || false
     [[ ! "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE DATABASE `colldb`" ]] || false
+    [[ "$output" =~ 'CREATE DATABASE `colldb`' ]] || false
     [[ "$output" =~ "40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci" ]] || false
 
     run dolt diff --summary
@@ -58,6 +58,18 @@ EOF
     run dolt diff -r sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ALTER DATABASE \`colldb\` COLLATE='utf8mb4_spanish_ci';" ]] || false
+}
+
+@test "diff: db collation diff regression test" {
+    dolt sql -q "create database COLLDB"
+    cd COLLDB
+
+    dolt sql -q "alter database COLLDB collate utf8mb4_spanish_ci"
+    # regression test for dolt diff failing when database name starts or ends with any of the characters in __DATABASE__
+
+    run dolt diff -r sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ALTER DATABASE \`COLLDB\` COLLATE='utf8mb4_spanish_ci';" ]] || false
 }
 
 @test "diff: row, line, in-place, context diff modes" {

@@ -91,14 +91,29 @@ teardown() {
     [ "${lines[1]}" = "8" ]
 }
 
-@test "stats: bootrap on engine startup" {
+@test "stats: bootrap on server startup" {
     cd repo2
 
-    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 1;"
     dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    start_sql_server
+    stop_sql_server
+
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "2" ]
+}
+
+@test "stats: only bootrap server startup" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    dolt gc
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
 }
 
 @test "stats: deletes refresh" {
@@ -367,6 +382,8 @@ EOF
     dolt init
     dolt sql -q "create table f (id int primary key, hostname int)"
     dolt table import -u --continue f data.csv
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 1;"
 
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]

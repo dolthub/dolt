@@ -24,7 +24,7 @@ import (
 // applied by a replica.
 func TestBinlogReplicationMultiDb(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary to db01 and db02
@@ -126,7 +126,7 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 // multiple DBs are applied correctly to a replica.
 func TestBinlogReplicationMultiDbTransactions(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary to db01 and db02

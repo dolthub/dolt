@@ -1083,6 +1083,13 @@ var secondaryIndexTests = []schemaMergeTest{
 		skipOldFmt:          true,
 		skipFlipOnOldFormat: true,
 	},
+	{
+		name:     "dropping column on right shifts column index between incompatible types (see pr/8154)",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b tinyint, c int, INDEX(c))"), row(1, 1, 2, 3)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b tinyint, c int, INDEX (c))"), row(1, 2, 2, 3)),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, c int, INDEX (c))"), row(1, 1, 4)),
+		merged:   *tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, c int, INDEX (c))"), row(1, 2, 4)),
+	},
 }
 
 var simpleConflictTests = []schemaMergeTest{

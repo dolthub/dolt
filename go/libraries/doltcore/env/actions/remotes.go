@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")
@@ -41,6 +42,7 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
 var ErrUnknownPushErr = errors.New("unknown push error")
+var ErrShallowPushImpossible = errors.New("shallow repository missing chunks to complete push")
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats)
 type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats)
@@ -68,6 +70,10 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	}
 
 	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh, nil)
+
+	if errors.Is(err, nbs.ErrGhostChunkRequested) {
+		err = ErrShallowPushImpossible
+	}
 
 	if err != nil {
 		return err
@@ -241,7 +247,7 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	case nil:
 		cli.Println()
 		return nil
-	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace:
+	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace, ErrShallowPushImpossible:
 		return err
 	default:
 		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())

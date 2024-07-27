@@ -20,8 +20,12 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -285,10 +289,137 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		level -= 1
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
+	case serial.ProllyTreeNodeFileID:
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		level++
+
+		_ = OutputProllyNodeBytes(ret, serial.Message(sm))
+
+		level -= 1
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
+	case serial.BlobFileID:
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		level++
+		_ = OutputBlobNodeBytes(ret, level, serial.Message(sm))
+		level -= 1
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
 	default:
 
 		return fmt.Sprintf("SerialMessage (HumanReadableString not implemented), [%v]: %s", id, strings.ToUpper(hex.EncodeToString(sm)))
 	}
+}
+
+func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Message) error {
+	keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	if err != nil {
+		return err
+	}
+	isLeaf := treeLevel == 0
+
+	if isLeaf {
+		printWithIndendationLevel(indentationLevel, w, "Blob - ")
+		w.Write(values.GetItem(0, msg))
+		w.WriteString("\n")
+		return nil
+	}
+
+	for i := 0; i < int(count); i++ {
+		k := keys.GetItem(i, msg)
+		kt := val.Tuple(k)
+
+		w.Write([]byte("\n    { key: "))
+		for j := 0; j < kt.Count(); j++ {
+			if j > 0 {
+				w.Write([]byte(", "))
+			}
+
+			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
+		}
+
+		ref := hash.New(values.GetItem(i, msg))
+
+		w.Write([]byte(" ref: #"))
+		w.Write([]byte(ref.String()))
+		w.Write([]byte(" }"))
+	}
+
+	w.Write([]byte("\n"))
+	return nil
+}
+
+func OutputProllyNodeBytes(w io.Writer, msg serial.Message) error {
+	keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	if err != nil {
+		return err
+	}
+	isLeaf := treeLevel == 0
+
+	node, err := serial.TryGetRootAsProllyTreeNode(msg, serial.MessagePrefixSz)
+	if err != nil {
+		return err
+	}
+
+	addresses := make([][]byte, node.ValueAddressOffsetsLength())
+	for i := 0; i < node.ValueAddressOffsetsLength(); i++ {
+		offset := node.ValueAddressOffsets(i)
+		addresses[i] = node.ValueItemsBytes()[offset : offset+20]
+	}
+
+	for i := 0; i < int(count); i++ {
+		k := keys.GetItem(i, msg)
+		kt := val.Tuple(k)
+
+		w.Write([]byte("\n    { key: "))
+		for j := 0; j < kt.Count(); j++ {
+			if j > 0 {
+				w.Write([]byte(", "))
+			}
+
+			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
+		}
+
+		if isLeaf {
+			v := values.GetItem(i, msg)
+			vt := val.Tuple(v)
+
+			w.Write([]byte(" value: "))
+			for j := 0; j < vt.Count(); j++ {
+				if j > 0 {
+					w.Write([]byte(", "))
+				}
+				field := vt.GetField(j)
+				if len(field) == hash.ByteLen {
+					// This value may be an address. Check to see if it's in `addresses`
+					isAddress := slices.ContainsFunc(addresses, func(address []byte) bool {
+						return slices.Equal(address, field)
+					})
+					if isAddress {
+						ref := hash.New(field)
+
+						w.Write([]byte(" #"))
+						w.Write([]byte(ref.String()))
+						continue
+					}
+				}
+				w.Write([]byte(hex.EncodeToString(field)))
+			}
+
+			w.Write([]byte(" }"))
+		} else {
+			ref := hash.New(values.GetItem(i, msg))
+
+			w.Write([]byte(" ref: #"))
+			w.Write([]byte(ref.String()))
+			w.Write([]byte(" }"))
+		}
+	}
+
+	w.Write([]byte("\n"))
+	return nil
 }
 
 func (sm SerialMessage) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
