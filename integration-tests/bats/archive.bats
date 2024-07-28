@@ -46,14 +46,8 @@ make_updates() {
 }
 
 @test "archive: require gc first" {
-
-  cp -R .dolt /Users/neil/Documents/data_dir_1/db1
-
   run dolt admin archive
   [ "$status" -eq 1 ]
-  echo "----------------------"
-  echo "$output"
-  echo "----------------------"
   [[ "$output" =~ "Run 'dolt gc' first" ]] || false
 }
 
@@ -193,4 +187,30 @@ make_updates() {
   # dolt log --stat will load every single chunk. 66 manually verified.
   commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
   [ "$commits" -eq "66" ]
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive backup no go" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+
+  dolt gc
+  dolt admin archive
+
+  dolt backup add bac1 file://../bac1
+  run dolt backup sync bac1
+
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+
+  # currently the cli and stored procedures are different code paths.
+  run dolt sql -q "call dolt_backup('sync', 'bac1')"
+  [ "$status" -eq 1 ]
+  # NM4 - TODO. This message is cryptic, but plumbing the error through is awkward.
+  [[ "$output" =~ "Archive chunk source" ]] || false
 }

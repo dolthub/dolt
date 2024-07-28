@@ -267,6 +267,14 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 }
 
 func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
+	metadata, err := env.GetMultiEnvStorageMetadata(dEnv.FS)
+	if err != nil {
+		return nil
+	}
+	if metadata.ArchiveFilesPresent() {
+		return errhand.BuildDError("error: archive files present. Please revert them with the --revert flag before running this command.").Build()
+	}
+
 	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
