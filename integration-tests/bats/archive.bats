@@ -46,8 +46,14 @@ make_updates() {
 }
 
 @test "archive: require gc first" {
+
+  cp -R .dolt /Users/neil/Documents/data_dir_1/db1
+
   run dolt admin archive
   [ "$status" -eq 1 ]
+  echo "----------------------"
+  echo "$output"
+  echo "----------------------"
   [[ "$output" =~ "Run 'dolt gc' first" ]] || false
 }
 
@@ -154,7 +160,7 @@ make_updates() {
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
 # bats test_tags=no_lambda
-@test "archive: archive --revert" {
+@test "archive: archive --revert (fast)" {
   # We need at least 25 chunks to create an archive.
   for ((j=1; j<=10; j++))
   do
@@ -163,6 +169,25 @@ make_updates() {
   done
   dolt gc
   dolt admin archive
+  dolt admin archive --revert
+
+  # dolt log --stat will load every single chunk. 66 manually verified.
+  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
+  [ "$commits" -eq "66" ]
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive --revert (rebuild)" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt admin archive
+  dolt gc                         # This will delete the unused table files.
   dolt admin archive --revert
 
   # dolt log --stat will load every single chunk. 66 manually verified.

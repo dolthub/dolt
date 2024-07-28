@@ -40,47 +40,57 @@ const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chu
 const maxSamples = 1000
 const minSamples = 25
 
-func UnArchive(ctx context.Context, cs chunks.ChunkStore, progress chan interface{}) error {
+func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, progress chan interface{}) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		outPath, _ := gs.oldGen.Path()
 		oldgen := gs.oldGen.tables.upstream
 
 		swapMap := make(map[hash.Hash]hash.Hash)
 
-		for _, ogcs := range oldgen {
+		revertMap := smd.RevertMap()
+
+		for id, ogcs := range oldgen {
 			if arc, ok := ogcs.(archiveChunkSource); ok {
-				classicTable, err := NewCmpChunkTableWriter("")
+				orginTfId := revertMap[id]
+				exists, err := smd.LoseOldGenTableExists(orginTfId)
 				if err != nil {
 					return err
 				}
-
-				err = arc.iterate(ctx, func(chk chunks.Chunk) error {
-					cmpChk := ChunkToCompressedChunk(chk)
-					err := classicTable.AddCmpChunk(cmpChk)
+				if exists {
+					// We have a fast path to follow because oritinal table file is still on disk.
+					swapMap[arc.hash()] = orginTfId
+				} else {
+					// We don't have the original table file id, so we have to create a new one.
+					classicTable, err := NewCmpChunkTableWriter("")
 					if err != nil {
 						return err
 					}
 
-					progress <- fmt.Sprintf("UnArchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
-					return nil
-				})
+					err = arc.iterate(ctx, func(chk chunks.Chunk) error {
+						cmpChk := ChunkToCompressedChunk(chk)
+						err := classicTable.AddCmpChunk(cmpChk)
+						if err != nil {
+							return err
+						}
 
-				if err != nil {
-					return err
+						progress <- fmt.Sprintf("UnArchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
+						return nil
+					})
+					if err != nil {
+						return err
+					}
+
+					id, err := classicTable.Finish()
+					if err != nil {
+						return err
+					}
+					err = classicTable.FlushToFile(filepath.Join(outPath, id))
+					if err != nil {
+						return err
+					}
+
+					swapMap[arc.hash()] = hash.Parse(id)
 				}
-
-				id, err := classicTable.Finish()
-				if err != nil {
-					return err
-				}
-				err = classicTable.FlushToFile(filepath.Join(outPath, id))
-				if err != nil {
-					return err
-				}
-
-				swapMap[arc.hash()] = hash.Parse(id)
-
-				progress <- fmt.Sprintf("UnArchiving Finished: %s", id)
 			}
 		}
 

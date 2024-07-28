@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type StorageType int
@@ -42,12 +43,14 @@ type ArchiveMetadata struct {
 }
 
 type StorageArtifact struct {
+	id          hash.Hash
 	path        string
 	storageType StorageType
 	arcMetadata *ArchiveMetadata
 }
 
 type StorageMetadata struct {
+	root      string
 	artifacts []StorageArtifact
 }
 
@@ -60,6 +63,30 @@ func (sm *StorageMetadata) ArchiveFilesPresent() bool {
 	return false
 }
 
+// RevertMap returns a map of Archive file ids to their origin TableFile ids.
+func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
+	revertMap := make(map[hash.Hash]hash.Hash)
+	for _, artifact := range sm.artifacts {
+		if artifact.storageType == Archive {
+			md := artifact.arcMetadata
+			revertMap[artifact.id] = hash.Parse(md.originalTableFileId)
+		}
+	}
+	return revertMap
+}
+
+func (sm *StorageMetadata) LoseOldGenTableExists(id hash.Hash) (bool, error) {
+	path := filepath.Join(sm.root, ".dolt", "noms", "oldgen", id.String())
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // GetStorageMetadata returns metadata about the local filesystem storage for a single database. The path given must be
 // the path to DB directory - ie, containing the .dolt directory.
 func GetStorageMetadata(path string) (StorageMetadata, error) {
@@ -68,11 +95,17 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 		return StorageMetadata{}, err
 	}
 
+	// TODO: new gen and journal information in storage metadata will be useful in the future.
 	//	newGen := filepath.Join(path, ".dolt", "noms")
 	//	newgenManifest := filepath.Join(newGen, "manifest")
 
 	oldgen := filepath.Join(path, ".dolt", "noms", "oldgen")
 	oldgenManifest := filepath.Join(oldgen, "manifest")
+
+	// If there is not oldgen manifest, then GC has never been run. Which is fine. We just don't have any oldgen.
+	if _, err := os.Stat(oldgenManifest); err != nil {
+		return StorageMetadata{}, nil
+	}
 
 	// create a io.Reader for the manifest file
 	manifestReader, err := os.Open(oldgenManifest)
@@ -98,6 +131,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 		if err == nil {
 			// exists.  Not an archive.
 			artifacts = append(artifacts, StorageArtifact{
+				id:          hash.Parse(tfName),
 				path:        fullPath,
 				storageType: TableFileOldGen,
 			})
@@ -118,6 +152,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 				}
 
 				artifacts = append(artifacts, StorageArtifact{
+					id:          hash.Parse(tfName),
 					path:        arcPath,
 					storageType: Archive,
 					arcMetadata: arcMetadata,
@@ -132,7 +167,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 		}
 	}
 
-	return StorageMetadata{artifacts}, nil
+	return StorageMetadata{path, artifacts}, nil
 }
 
 func validateDir(path string) error {

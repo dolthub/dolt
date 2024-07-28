@@ -92,11 +92,25 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 1
 	}
 
+	storageMetadata, err := env.GetMultiEnvStorageMetadata(dEnv.FS)
+	if err != nil {
+		cli.PrintErrln(err)
+		return 1
+	}
+	if len(storageMetadata) != 1 {
+		cli.PrintErrln("Runtime error: Multiple databases found where one expected")
+		return 1
+	}
+	var ourDbMD nbs.StorageMetadata
+	for _, md := range storageMetadata {
+		ourDbMD = md
+	}
+
 	progress := make(chan interface{}, 32)
 	handleProgress(ctx, progress)
 
 	if apr.Contains(revertFlag) {
-		err := nbs.UnArchive(ctx, cs, progress)
+		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
 		if err != nil {
 			cli.PrintErrln(err)
 			return 1
