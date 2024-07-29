@@ -107,6 +107,8 @@ make_updates() {
   [ "$commits" -eq "186" ]
 }
 
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
 @test "archive: archive multiple times" {
   # We need at least 25 chunks to create an archive.
   for ((j=1; j<=10; j++))
