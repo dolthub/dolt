@@ -97,7 +97,7 @@ func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithCh
 }
 
 // wrap the commit message in a constrained width to better align the commit message with the graph
-func wrapTextOnWidth(text string, width int) (int, []string) {
+func wrapTextOnWidth(text string, width int) []string {
 	lines := strings.Split(text, "\n")
 	totalRows := 0
 	wrappedLines := make([]string, 0)
@@ -122,7 +122,7 @@ func wrapTextOnWidth(text string, width int) (int, []string) {
 			totalRows++
 		}
 	}
-	return totalRows, wrappedLines
+	return wrappedLines
 }
 
 func min(values ...int) int {
@@ -255,17 +255,21 @@ func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line 
 }
 
 func printCommitMetadata(graph [][]string, pager *outputpager.Pager, posY, posX int, commit *CommitInfoWithChildren, decoration string) {
-	// print commit hash
 	printLine(graph, posX, posY, pager, fmt.Sprintf("commit %s", commit.Commit.commitHash), commit.Commit, "\033[33m", decoration)
 
-	// print author
-	printLine(graph, posX, posY+1, pager, fmt.Sprintf("Author %s", commit.Commit.commitMeta.Name), commit.Commit, "\033[37m", "no")
+	printMergeInfo := 0
+	if len(commit.Commit.parentHashes) > 1 {
+		printMergeInfo = 1
+	}
+	if printMergeInfo == 1 {
+		printLine(graph, posX, posY+1, pager, fmt.Sprintf("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, "\033[37m", "no")
+	}
 
-	// print date
-	printLine(graph, posX, posY+2, pager, fmt.Sprintf("Date %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "\033[37m", "no")
+	printLine(graph, posX, posY+1+printMergeInfo, pager, fmt.Sprintf("Author: %s <%s>", commit.Commit.commitMeta.Name, commit.Commit.commitMeta.Email), commit.Commit, "\033[37m", "no")
 
-	// print the line between the commit metadata and the commit message
-	pager.Writer.Write([]byte(strings.Join(graph[posY+3], "")))
+	printLine(graph, posX, posY+2+printMergeInfo, pager, fmt.Sprintf("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "\033[37m", "no")
+
+	pager.Writer.Write([]byte(strings.Join(graph[posY+3+printMergeInfo], "")))
 	pager.Writer.Write([]byte("\n"))
 
 }
@@ -282,8 +286,13 @@ func trimTrailing(row []string) []string {
 
 // the height that a commit will take up in the graph
 // 4 lines for commit metadata (commit hash, author, date, and an empty line) + number of lines in the commit message
+// if the commit is a merge commit, add one more line for the "Merge:" line
 func getHeightOfCommit(commit *CommitInfoWithChildren) int {
-	return 4 + len(commit.formattedMessage)
+	height := 4 + len(commit.formattedMessage)
+	if len(commit.Commit.parentHashes) > 1 {
+		height = height + 1
+	}
+	return height
 }
 
 // print the commit messages in the graph matrix
@@ -305,14 +314,16 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, apr *argparser.Ar
 
 		printCommitMetadata(graph, pager, startY, startX, commits[i], decoration)
 
+		commitInfoHeight := getHeightOfCommit(commits[i])
+
 		// print the graph with commit message
 		for i, line := range commits[i].formattedMessage {
-			y := startY + 4 + i
-			printLine(graph, startX, y, pager, line, commits[i].Commit, "\033[37m", "no")
+			y := startY + commitInfoHeight - len(commits[i].formattedMessage) + i
+			printLine(graph, startX, y, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
 		}
 
 		// print the remaining lines of the graph of the current commit
-		for j := startY + 4 + len(commits[i].formattedMessage); j < endY; j++ {
+		for j := startY + commitInfoHeight; j < endY; j++ {
 			pager.Writer.Write([]byte(strings.Join(graph[j], "")))
 			pager.Writer.Write([]byte("\n"))
 		}
@@ -334,7 +345,7 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 		// one empty column between each branch path
 		commit.X = commit.X * 2
 		commit.Y = posY
-		rowNum, formattedMessage := wrapTextOnWidth(commit.Commit.commitMeta.Description, width)
+		formattedMessage := wrapTextOnWidth(commit.Commit.commitMeta.Description, width)
 		commit.formattedMessage = formattedMessage
 
 		// make sure there is enough space for the diagonal line connecting to the parent
@@ -344,7 +355,8 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 			maxDistanceFromParent = math.Max(math.Abs(float64(commits[i+1].X-commit.X)), maxDistanceFromParent)
 		}
 
-		posY += int(math.Max(float64(5+rowNum), maxDistanceFromParent))
+		commitInfoHeight := getHeightOfCommit(commit)
+		posY += int(math.Max(float64(commitInfoHeight+1), maxDistanceFromParent))
 	}
 }
 
@@ -354,8 +366,8 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 	for _, commit := range commits {
 		commitsMap[commit.Commit.commitHash] = commit
 	}
-	commits, commitsMap = computeColumnEnds(commits, commitsMap)
 
+	commits, commitsMap = computeColumnEnds(commits, commitsMap)
 	expandGraph(commits, 80)
 
 	// Create a 2D slice to represent the graph
