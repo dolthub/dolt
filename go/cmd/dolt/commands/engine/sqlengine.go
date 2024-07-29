@@ -42,8 +42,8 @@ import (
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	drowexec "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -195,7 +195,7 @@ func NewSqlEngine(
 	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
-	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(drowexec.Builder{})
+	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()
