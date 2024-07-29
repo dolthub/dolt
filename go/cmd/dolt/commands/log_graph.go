@@ -139,9 +139,12 @@ func min(values ...int) int {
 }
 
 // compute the X coordinate of each commit
-func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) {
+func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) ([]*CommitInfoWithChildren, map[string]*CommitInfoWithChildren) {
 	// each column might have multiple branch paths, and the columns slice stores the branch paths of each column
 	columns := [][]BranchPathType{}
+	xPositions := make(map[string]int)
+	newCommitMap := make(map[string]*CommitInfoWithChildren)
+	commitsWithXPos := make([]*CommitInfoWithChildren, len(commits))
 
 	updateColumns := func(col, end int) {
 		columns[col][len(columns[col])-1].End = end
@@ -172,8 +175,8 @@ func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*Co
 			// in the case of a branch out commit, the x coordinate of the commit is the minimum x coordinate of its children
 			var branchChildrenXs []int
 			for _, childHash := range branchChildren {
-				if child, ok := commitsMap[childHash]; ok {
-					branchChildrenXs = append(branchChildrenXs, child.X)
+				if childX, ok := xPositions[childHash]; ok {
+					branchChildrenXs = append(branchChildrenXs, childX)
 				}
 			}
 
@@ -198,8 +201,8 @@ func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*Co
 				if commitsMap[child].Y < minChildY {
 					minChildY = commitsMap[child].Y
 				}
-				if commitsMap[child].X > maxChildX {
-					maxChildX = commitsMap[child].X
+				if xPositions[child] > maxChildX {
+					maxChildX = xPositions[child]
 				}
 			}
 
@@ -229,9 +232,16 @@ func computeColumns(commits []*CommitInfoWithChildren, commitsMap map[string]*Co
 				})
 			}
 		}
-
-		commits[index].X = commitX
+		xPositions[commit.Commit.commitHash] = commitX
+		commitsWithXPos[index] = &CommitInfoWithChildren{
+			Commit:   commit.Commit,
+			Children: commit.Children,
+			X:        commitX,
+			Y:        commit.Y,
+		}
+		newCommitMap[commit.Commit.commitHash] = commitsWithXPos[index]
 	}
+	return commitsWithXPos, newCommitMap
 }
 
 func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line string, commit CommitInfo, color, decoration string) {
@@ -325,6 +335,7 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 		commit.X = commit.X * 2
 		commit.Y = posY
 		rowNum, formattedMessage := wrapTextOnWidth(commit.Commit.commitMeta.Description, width)
+		commit.formattedMessage = formattedMessage
 
 		// make sure there is enough space for the diagonal line connecting to the parent
 		// this is an approximation, assume that there will be enough space if parent is not the next commit
@@ -334,7 +345,6 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 		}
 
 		posY += int(math.Max(float64(5+rowNum), maxDistanceFromParent))
-		commit.formattedMessage = formattedMessage
 	}
 }
 
@@ -344,7 +354,7 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 	for _, commit := range commits {
 		commitsMap[commit.Commit.commitHash] = commit
 	}
-	computeColumns(commits, commitsMap)
+	commits, commitsMap = computeColumnEnds(commits, commitsMap)
 
 	expandGraph(commits, 80)
 
@@ -379,9 +389,10 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 			if parent, ok := commitsMap[parentHash]; ok {
 				// the parent is on the same branch/column
 				if parent.X == commit.X {
+					color := branchColors[x/2%len(branchColors)]
 					for yy := commit.Y + 1; yy < parent.Y; yy++ {
 						if graph[yy][x] == " " {
-							graph[yy][x] = fmt.Sprintf("%s|", branchColors[x/2])
+							graph[yy][x] = fmt.Sprintf("%s|", color)
 						}
 					}
 				}
@@ -389,14 +400,15 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 				// the first part is draw a diagonal line from the parent to the column of the current commit
 				// the second part is extending the path to the current commit along the y-axis
 				if parent.X < commit.X {
+					color := branchColors[x/2%len(branchColors)]
 					for xx := parent.X + 1; xx < commit.X; xx++ {
 						if graph[parent.Y+parent.X+1-xx][xx] == " " {
-							graph[parent.Y+parent.X+1-xx][xx] = fmt.Sprintf("%s/", branchColors[x/2])
+							graph[parent.Y+parent.X+1-xx][xx] = fmt.Sprintf("%s/", color)
 						}
 					}
 					for yy := parent.Y + parent.X + 1 - commit.X; yy > commit.Y; yy-- {
 						if graph[yy][x] == " " {
-							graph[yy][x] = fmt.Sprintf("%s|", branchColors[x/2])
+							graph[yy][x] = fmt.Sprintf("%s|", color)
 						}
 					}
 				}
@@ -404,14 +416,15 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 				// the first part is draw a diagonal line from the current commit to the column of the parent commit
 				// the second part is extending the path to the parent commit along the y-axis
 				if parent.X > commit.X {
+					color := branchColors[parent.X/2%len(branchColors)]
 					for xx := commit.X + 1; xx < parent.X; xx++ {
 						if graph[commit.Y+xx-commit.X-1][xx] == " " {
-							graph[commit.Y+xx-commit.X-1][xx] = fmt.Sprintf("%s\\", branchColors[parent.X/2])
+							graph[commit.Y+xx-commit.X-1][xx] = fmt.Sprintf("%s\\", color)
 						}
 					}
 					for yy := commit.Y + parent.X - (commit.X + 1); yy < parent.Y; yy++ {
 						if graph[yy][parent.X] == " " {
-							graph[yy][parent.X] = fmt.Sprintf("%s|", branchColors[parent.X/2])
+							graph[yy][parent.X] = fmt.Sprintf("%s|", color)
 						}
 					}
 				}
