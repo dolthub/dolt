@@ -305,6 +305,73 @@ func ConfigureServices(
 	}
 	controller.Register(PersistNondeterministicSystemVarDefaults)
 
+	InitBinlogging := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
+			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
+			if !ok {
+				return fmt.Errorf("unexpected type of binlog controller: %T", primaryController)
+			}
+
+			_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
+			if !ok {
+				return fmt.Errorf("unable to load @@log_bin system variable")
+			}
+			logBin, ok := logBinValue.(int8)
+			if !ok {
+				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
+			}
+
+			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
+			if !ok {
+				return fmt.Errorf("unable to load @@log_bin_branch system variable")
+			}
+			logBinBranch, ok := logBinBranchValue.(string)
+			if !ok {
+				return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
+			}
+			if logBinBranch != "" {
+				// If an invalid branch has been configured, let the server start up so that it's
+				// easier for customers to correct the value, but log a warning and don't enable
+				// binlog replication.
+				if strings.Contains(logBinBranch, "/") {
+					logrus.Warnf("branch names containing '/' are not supported "+
+						"for binlog replication. Not enabling binlog replication; fix "+
+						"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
+					return nil
+				}
+
+				binlogreplication.BinlogBranch = logBinBranch
+			}
+
+			if logBin == 1 {
+				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
+				binlogProducer, err := binlogreplication.NewBinlogProducer(dEnv.FS)
+				if err != nil {
+					return err
+				}
+
+				logManager, err := binlogreplication.NewLogManager(fs)
+				if err != nil {
+					return err
+				}
+				binlogProducer.LogManager(logManager)
+				doltdb.RegisterDatabaseUpdateListener(binlogProducer)
+				doltBinlogPrimaryController.BinlogProducer(binlogProducer)
+
+				// Register binlog hooks for database creation/deletion
+				provider := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider
+				if doltProvider, ok := provider.(*sqle.DoltDatabaseProvider); ok {
+					doltProvider.AddInitDatabaseHook(binlogreplication.NewBinlogInitDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
+					doltProvider.AddDropDatabaseHook(binlogreplication.NewBinlogDropDatabaseHook(nil, doltdb.DatabaseUpdateListeners))
+				}
+			}
+
+			return nil
+		},
+	}
+	controller.Register(InitBinlogging)
+
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	InitSuperUser := &svcs.AnonService{
 		InitF: func(context.Context) error {

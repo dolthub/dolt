@@ -25,7 +25,7 @@ import (
 func TestBinlogReplicationMultiDb(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary to db01 and db02
 	primaryDatabase.MustExec("create database db02;")
@@ -127,7 +127,7 @@ func TestBinlogReplicationMultiDb(t *testing.T) {
 func TestBinlogReplicationMultiDbTransactions(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary to db01 and db02
 	primaryDatabase.MustExec("create database db02;")

@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -154,8 +153,6 @@ func NewSqlEngine(
 	if err := configureBinlogPrimaryController(engine); err != nil {
 		return nil, err
 	}
-	pro.AddInitDatabaseHook(dblr.NewBinlogInitDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
-	pro.AddDropDatabaseHook(dblr.NewBinlogDropDatabaseHook(ctx, doltdb.DatabaseUpdateListeners))
 
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
@@ -351,38 +348,6 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 func configureBinlogPrimaryController(engine *gms.Engine) error {
 	primaryController := dblr.NewDoltBinlogPrimaryController()
 	engine.Analyzer.Catalog.BinlogPrimaryController = primaryController
-
-	_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
-	if !ok {
-		return fmt.Errorf("unable to load @@log_bin system variable")
-	}
-	logBin, ok := logBinValue.(int8)
-	if !ok {
-		return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
-	}
-	if logBin == 1 {
-		logrus.Debug("Enabling binary logging")
-		binlogProducer, err := dblr.NewBinlogProducer(primaryController.StreamerManager())
-		if err != nil {
-			return err
-		}
-		doltdb.RegisterDatabaseUpdateListener(binlogProducer)
-		primaryController.BinlogProducer = binlogProducer
-	}
-
-	_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
-	if !ok {
-		return fmt.Errorf("unable to load @@log_bin_branch system variable")
-	}
-	logBinBranch, ok := logBinBranchValue.(string)
-	if !ok {
-		return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
-	}
-	if logBinBranch != "" {
-		logrus.Debugf("Setting binary logging branch to %s", logBinBranch)
-		dblr.BinlogBranch = logBinBranch
-	}
-
 	return nil
 }
 

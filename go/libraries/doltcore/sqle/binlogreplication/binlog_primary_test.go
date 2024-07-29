@@ -16,6 +16,8 @@ package binlogreplication
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -33,13 +35,74 @@ var doltReplicationPrimarySystemVars = map[string]string{
 	"gtid_mode":                "ON",
 }
 
+// TestBinlogPrimary_BinlogNotEnabled tests that when binary logging is NOT enabled, primary commands such as
+// SHOW BINARY LOGS still work, and that attempts to start replication fail with an error.
+func TestBinlogPrimary_BinlogNotEnabled(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, map[string]string{
+		"enforce_gtid_consistency": "ON",
+		"gtid_mode":                "ON",
+	})
+	setupForDoltToMySqlReplication()
+
+	// When binary logging is NOT enabled, binary log commands such as SHOW MASTER STATUS, SHOW BINARY LOG STATUS,
+	// and SHOW BINARY LOGS should not error out.
+	requirePrimaryResults(t, "SHOW MASTER STATUS", [][]any{})
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{})
+	requirePrimaryResults(t, "SHOW BINARY LOGS", [][]any{})
+
+	startReplicationAndCreateTestDb(t, doltPort)
+	status := queryReplicaStatus(t)
+	require.Equal(t, "13120", status["Last_IO_Errno"])
+	require.Contains(t, status["Last_IO_Error"],
+		"Source command COM_REGISTER_REPLICA failed: unknown error: no binlog currently being recorded")
+}
+
+// TestBinlogPrimary_GtidModeNotEnabled asserts that when @@gtid_mode is NOT enabled,
+// attempting to start replication will fail with an error visible in the replica's status.
+func TestBinlogPrimary_GtidModeNotEnabled(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, map[string]string{"log_bin": "1"})
+	setupForDoltToMySqlReplication()
+
+	requirePrimaryResults(t, "SHOW MASTER STATUS", [][]any{{"binlog-main.000001", "151", "", "", ""}})
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{{"binlog-main.000001", "151", "", "", ""}})
+	requirePrimaryResults(t, "SHOW BINARY LOGS", [][]any{{"binlog-main.000001", "151", "No"}})
+
+	startReplication(t, doltPort)
+	time.Sleep(500 * time.Millisecond)
+	status := queryReplicaStatus(t)
+	require.Equal(t, "13117", status["Last_IO_Errno"])
+	require.Contains(t, status["Last_IO_Error"],
+		"The replication receiver thread cannot start because the source has GTID_MODE = OFF and this server has GTID_MODE = ON")
+}
+
+// TestBinlogPrimary_EnforceGtidConsistencyNotEnabled asserts that when @@enforce_gtid_consistency is NOT enabled,
+// attempting to start replication will fail with an error visible in the replica's status.
+func TestBinlogPrimary_EnforceGtidConsistencyNotEnabled(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, map[string]string{"log_bin": "1", "gtid_mode": "ON"})
+	setupForDoltToMySqlReplication()
+
+	requirePrimaryResults(t, "SHOW MASTER STATUS", [][]any{{"binlog-main.000001", "151", "", "", ""}})
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{{"binlog-main.000001", "151", "", "", ""}})
+	requirePrimaryResults(t, "SHOW BINARY LOGS", [][]any{{"binlog-main.000001", "151", "No"}})
+
+	startReplication(t, doltPort)
+	time.Sleep(500 * time.Millisecond)
+	status := queryReplicaStatus(t)
+	require.Equal(t, "13114", status["Last_IO_Errno"])
+	require.Contains(t, status["Last_IO_Error"],
+		"@@enforce_gtid_consistency must be enabled for binlog replication")
+}
+
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
 // binlog events from a wide variety of SQL data types.
 func TestBinlogPrimary(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (" +
 		"pk int primary key, " +
@@ -124,7 +187,181 @@ func TestBinlogPrimary(t *testing.T) {
 	})
 
 	requirePrimaryResults(t, "SHOW BINARY LOG STATUS", [][]any{
-		{"binlog-main.000001", "2226", "", "", uuid + ":1-3"}})
+		{"binlog-main.000001", "2377", "", "", uuid + ":1-3"}})
+}
+
+// TestBinlogPrimary_Rotation tests how a Dolt primary server handles rotating the binary log file when the
+// size threshold is reached.
+func TestBinlogPrimary_Rotation(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplicationAndCreateTestDb(t, doltPort)
+
+	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB)
+	primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
+
+	// Generate enough data to trigger a logfile rotation
+	primaryDatabase.MustExec("create table t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "SELECT MAX(n) FROM t;", [][]any{{"99"}})
+
+	// Check the binary log file status and ensure the file has been rotated
+	uuid := queryPrimaryServerUuid(t)
+	requirePrimaryResults(t, "show binary log status;", [][]any{
+		{"binlog-main.000003", "1027", "", "", uuid + ":1-102"},
+	})
+
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "10318", "No"},
+		{"binlog-main.000002", "10481", "No"},
+		{"binlog-main.000003", "1027", "No"},
+	})
+}
+
+// TestBinlogPrimary_AutoPurging tests that the primary server correctly purges binary log files older than
+// @@binlog_expire_logs_seconds on restart.
+func TestBinlogPrimary_AutoPurging(t *testing.T) {
+	defer teardown(t)
+	mapCopy := copyMap(doltReplicationPrimarySystemVars)
+	mapCopy["binlog_expire_logs_seconds"] = "1"
+	startSqlServersWithDoltSystemVars(t, mapCopy)
+	setupForDoltToMySqlReplication()
+
+	// Generate binary log content
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("create table db01.t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into db01.t values (%d);", i))
+	}
+	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
+		{"binlog-main.000001", "21346", "No"},
+	})
+
+	// Restart and confirm the binary log has been purged
+	stopDoltSqlServer(t)
+	time.Sleep(1 * time.Second)
+	mustRestartDoltPrimaryServer(t)
+	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
+		{"binlog-main.000002", "191", "No"},
+	})
+
+	// Check the value of @@gtid_purged
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{
+		{fmt.Sprintf("%s:1-102", queryPrimaryServerUuid(t))},
+	})
+
+	// Verify the replica reports an error about the GTIDs not being available
+	startReplicationAndCreateTestDb(t, doltPort)
+	status := queryReplicaStatus(t)
+	require.Equal(t, "13114", status["Last_IO_Errno"])
+	require.Contains(t, status["Last_IO_Error"],
+		"Got fatal error 1236 from source when reading data from binary log: "+
+			"'Cannot replicate because the source purged required binary logs.")
+}
+
+// TestBinlogPrimary_InitializeGTIDPurged asserts that @@gtid_purged is set correctly in a variety of
+// scenarios, such as when a fresh server starts up, or when a server is restarted multiple times.
+func TestBinlogPrimary_InitializeGTIDPurged(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+
+	// On a fresh server, @@gtid_purged and @@gtid_executed should be empty
+	requirePrimaryResults(t, "SELECT @@gtid_executed;", [][]any{{""}})
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{{""}})
+
+	// Create a GTID in the first binary log file, and restart the server to rotate to a new binary log file
+	// After the first restart, @@gtid_purged should be empty and @@gtid_executed should be the first GTID
+	primaryDatabase.MustExec("CREATE DATABASE db01;")
+	stopDoltSqlServer(t)
+	mustRestartDoltPrimaryServer(t)
+	requirePrimaryResults(t, "SELECT @@gtid_executed;", [][]any{
+		{fmt.Sprintf("%s:1", queryPrimaryServerUuid(t))},
+	})
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{{""}})
+
+	// Manually remove the first binary log file, containing GTID 1 and restart the server
+	// When no GTID is found in any available logs, @@gtid_purged should be set to @@gtid_executed
+	require.NoError(t, os.Remove(filepath.Join(testDir, "dolt", ".dolt", "binlog", "binlog-main.000001")))
+	stopDoltSqlServer(t)
+	mustRestartDoltPrimaryServer(t)
+	requirePrimaryResults(t, "SELECT @@gtid_executed;", [][]any{
+		{fmt.Sprintf("%s:1", queryPrimaryServerUuid(t))},
+	})
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{
+		{fmt.Sprintf("%s:1", queryPrimaryServerUuid(t))},
+	})
+
+	// Create a new GTID in the current binary log file, restart, and test @@gtid_executed and @@gtid_purged
+	primaryDatabase.MustExec("CREATE DATABASE db02;")
+	stopDoltSqlServer(t)
+	mustRestartDoltPrimaryServer(t)
+	requirePrimaryResults(t, "SELECT @@gtid_executed;", [][]any{
+		{fmt.Sprintf("%s:1-2", queryPrimaryServerUuid(t))},
+	})
+	requirePrimaryResults(t, "SELECT @@gtid_purged;", [][]any{
+		{fmt.Sprintf("%s:1", queryPrimaryServerUuid(t))},
+	})
+}
+
+// TestBinlogPrimary_ReplicaAndPrimaryRestart tests that a replica can disconnect and reconnect to the primary to
+// restart the replication stream, even when the primary has been restarted and log files have rotated.
+func TestBinlogPrimary_ReplicaAndPrimaryRestart(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
+	setupForDoltToMySqlReplication()
+	startReplicationAndCreateTestDb(t, doltPort)
+
+	// Change the binlog rotation threshold on the primary to 10KB (instead of the default 1GB) so
+	// that log files will rotate more often
+	primaryDatabase.MustExec("SET @@GLOBAL.max_binlog_size = 10240;")
+
+	// Create a table on the primary and assert that it gets replicated
+	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "show tables;", [][]any{{"t1"}})
+
+	// Assert that the executed GTID position on the replica contains GTIDs 1 and 2
+	serverUuid := queryPrimaryServerUuid(t)
+	status := queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":1-2", status["Executed_Gtid_Set"])
+
+	// Stop the MySQL replica server and wait for a few seconds
+	stopMySqlServer(t)
+	time.Sleep(2_000 * time.Millisecond)
+
+	// Generate enough data to trigger a logfile rotation
+	primaryDatabase.MustExec("create table t (n int);")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i))
+	}
+
+	// Stop the primary and restart it to test that it creates a new log file and
+	// applies a rotate event to the last log file
+	stopDoltSqlServer(t)
+
+	// Restart the Dolt primary server
+	mustRestartDoltPrimaryServer(t)
+
+	// Generate more data on the primary after restarting
+	primaryDatabase.MustExec("use db01;")
+	for i := range 100 {
+		primaryDatabase.MustExec(fmt.Sprintf("insert into t values (%d);", i+100))
+	}
+
+	// Restart the MySQL replica and reconnect to the Dolt primary
+	mustRestartMySqlReplicaServer(t)
+	startReplicationAndCreateTestDb(t, doltPort)
+	waitForReplicaToCatchUp(t)
+
+	// Assert the executed GTID position now contains all GTIDs
+	status = queryReplicaStatus(t)
+	require.Equal(t, serverUuid+":1-203", status["Executed_Gtid_Set"])
+	requireReplicaResults(t, "SELECT MAX(n) FROM t;", [][]any{{"199"}})
 }
 
 // TestBinlogPrimary_Heartbeats tests that heartbeats sent from the primary to the replica are well-formed and
@@ -138,7 +375,7 @@ func TestBinlogPrimary_Heartbeats(t *testing.T) {
 	// Start replication, with a 45s delay before any commands are sent to the primary.
 	// This gives enough time for the first heartbeat event to be sent, before any user
 	// initiated binlog events, so we can test that scenario.
-	startReplicationWithDelay(t, doltPort, 45*time.Second)
+	startReplicationAndCreateTestDbWithDelay(t, doltPort, 45*time.Second)
 
 	// Insert a row every second, for 70s, which gives the server a chance to send two heartbeats
 	primaryDatabase.MustExec("create table db01.heartbeatTest(pk int);")
@@ -169,7 +406,7 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
@@ -187,7 +424,6 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 
 	// Make a change while the replica is stopped to test that the server
 	// doesn't error out when a registered replica is not available.
-	// NOTE: This won't be replicated until we start persisting the binlog to disk
 	primaryDatabase.MustExec("insert into db01.t1 values (1, 'one');")
 
 	// Restart the MySQL replica and reconnect to the Dolt primary
@@ -197,21 +433,16 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	require.NoError(t, err)
 	replicaDatabase = primaryDatabase
 	primaryDatabase = prevPrimaryDatabase
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
-	// We can't use waitForReplicaToCatchUp here, because it won't get the statement
-	// that was executed while the replica was stopped. Once we support replaying binlog
-	// events from a log file, we can switch this to waitForReplicaToCatchUp(t)
-	waitForReplicaToHaveLatestGtid(t)
+	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "show tables;", [][]any{{"t1"}, {"t2"}})
 
-	// Assert the executed GTID position now contains GTID #2 and GTID #4
-	// (#1 isn't present, because it was executed before we turned on replication,
-	// and #3 isn't present, because it was executed while the replica was stopped)
+	// Assert the executed GTID position now contains all GTIDs
 	status = queryReplicaStatus(t)
-	require.Equal(t, serverUuid+":1-2:4", status["Executed_Gtid_Set"])
+	require.Equal(t, serverUuid+":1-4", status["Executed_Gtid_Set"])
 }
 
 // TestBinlogPrimary_PrimaryRestart tests that a Dolt primary server can be restarted and that a replica
@@ -220,7 +451,12 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
+
+	// Only one binary log file should be present on a fresh server
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "263", "No"},
+	})
 
 	// Create a table on the primary and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255));")
@@ -235,15 +471,16 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	// Stop the Dolt primary server
 	stopDoltSqlServer(t)
 	time.Sleep(2_000 * time.Millisecond)
-	prevReplicaDatabase := replicaDatabase
 
 	// Restart the Dolt primary server
-	var err error
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
-	require.NoError(t, err)
-	primaryDatabase = replicaDatabase
-	replicaDatabase = prevReplicaDatabase
+	mustRestartDoltPrimaryServer(t)
 	waitForReplicaToReconnect(t)
+
+	// A new binary log file is created on each server restart
+	requirePrimaryResults(t, "show binary logs;", [][]any{
+		{"binlog-main.000001", "549", "No"},
+		{"binlog-main.000002", "191", "No"},
+	})
 
 	// Create another table and assert that it gets replicated
 	primaryDatabase.MustExec("create table db01.t2 (pk int primary key, c1 varchar(255));")
@@ -255,33 +492,46 @@ func TestBinlogPrimary_PrimaryRestart(t *testing.T) {
 	require.Equal(t, serverUuid+":1-3", status["Executed_Gtid_Set"])
 }
 
-// TestBinlogPrimary_OptIn asserts that binary logging does not work when the log_bin system variable is not set.
-func TestBinlogPrimary_OptIn(t *testing.T) {
+// TestBinlogPrimary_PrimaryRestartBeforeReplicaConnects tests that a MySQL replica can connect to a Dolt primary
+// when the Dolt primary has multiple binlog files and the replica needs events from a non-current binlog file.
+func TestBinlogPrimary_PrimaryRestartBeforeReplicaConnects(t *testing.T) {
 	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, map[string]string{
-		"enforce_gtid_consistency": "ON",
-		"gtid_mode":                "ON",
-	})
+	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
 
-	// Ensure that log_bin is disabled before having the replica try to connect
-	requirePrimaryResults(t, "select @@log_bin;", [][]any{{"0"}})
+	// Create a test database to trigger the first GTID binlog event
+	primaryDatabase.MustExec("CREATE DATABASE db02;")
+
+	// Restart the Dolt primary server to trigger a binlog file rotation
+	stopDoltSqlServer(t)
+	mustRestartDoltPrimaryServer(t)
+
+	// Start replication and verify the replica receives the CREATE DATABASE event from the first binlog file
 	startReplication(t, doltPort)
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "SHOW DATABASES;", [][]any{
+		{"db02"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"},
+	})
 
-	// MySQL doesn't return errors directly from the START REPLICA statement; instead,
-	// callers must check the replica status information for errors
-	replicaStatus := queryReplicaStatus(t)
-	require.Equal(t, "Source command COM_REGISTER_REPLICA failed: unknown error: no binlog currently being recorded; "+
-		"make sure the server is started with @@log_bin enabled (Errno: 1105)", replicaStatus["Last_IO_Error"])
+	// Verify that the Dolt primary server has two binary log files
+	requirePrimaryResults(t, "SHOW BINARY LOGS;", [][]any{
+		{"binlog-main.000001", "312", "No"},
+		{"binlog-main.000002", "191", "No"},
+	})
+}
 
-	// Create a database and assert that it does not get replicated
-	primaryDatabase.MustExec("create database newDb;")
+// TestBinlogPrimary_DisallowBranchesWithSlashes asserts that trying to set @@log_bin_branch to
+// a branch name containing a slash results in an error.
+func TestBinlogPrimary_DisallowBranchesWithSlashes(t *testing.T) {
+	defer teardown(t)
+	mapCopy := copyMap(doltReplicationPrimarySystemVars)
+	mapCopy["log_bin_branch"] = "'branch/withslash'"
+	startSqlServersWithDoltSystemVars(t, mapCopy)
+	setupForDoltToMySqlReplication()
 
-	// Note that we use a sleep here, instead of waitForReplicaToCatchUp, since
-	// replication is not enabled in this test
-	time.Sleep(200 * time.Millisecond)
-	requireReplicaResults(t, "show databases;",
-		[][]any{{"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
+	// Because the replication branch was invalid, the binary log status should be
+	// empty, indicating that no binary logs are being recorded.
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS;", [][]any{})
 }
 
 // TestBinlogPrimary_ChangeReplicationBranch asserts that the log_bin_branch system variable can
@@ -292,7 +542,7 @@ func TestBinlogPrimary_ChangeReplicationBranch(t *testing.T) {
 	mapCopy["log_bin_branch"] = "branch1"
 	startSqlServersWithDoltSystemVars(t, mapCopy)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// No events should be generated when we're not updating the configured replication branch
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
@@ -327,7 +577,7 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Create a table
 	primaryDatabase.MustExec("create table db01.t1 (pk int primary key, c1 varchar(255) NOT NULL comment 'foo bar baz');")
@@ -377,7 +627,7 @@ func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Create table
 	primaryDatabase.MustExec("set @@autocommit=0;")
@@ -410,7 +660,7 @@ func TestBinlogPrimary_Rollback(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Create a test table
 	primaryDatabase.MustExec("set @@autocommit=0;")
@@ -435,7 +685,7 @@ func TestBinlogPrimary_MultipleTablesManualCommit(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Insert to multiple tables in a single SQL transaction
 	primaryDatabase.MustExec("set @@autocommit=0;")
@@ -481,7 +731,7 @@ func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	// Test CREATE DATABASE
 	primaryDatabase.MustExec("create database foobar1;")
@@ -512,7 +762,7 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 
@@ -552,7 +802,7 @@ func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -582,7 +832,7 @@ func TestBinlogPrimary_KeylessTables(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (c1 varchar(100), c2 int, c3 int unsigned);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -618,7 +868,7 @@ func TestBinlogPrimary_Merge(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int, c2 year);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -651,7 +901,7 @@ func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -688,7 +938,7 @@ func TestBinlogPrimary_Revert(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -725,7 +975,7 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicationPrimarySystemVars)
 	setupForDoltToMySqlReplication()
-	startReplication(t, doltPort)
+	startReplicationAndCreateTestDb(t, doltPort)
 
 	primaryDatabase.MustExec("create table db01.t (pk varchar(100) primary key, c1 int);")
 	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
@@ -843,4 +1093,26 @@ func waitForReplicaToReconnect(t *testing.T) {
 			t.Fatalf("Unable to detect replica reconnect after 60s")
 		}
 	}
+}
+
+// mustRestartDoltPrimaryServer starts up the Dolt sql-server, after it has already been stopped before this function
+// is called, and configures it as the primary database.
+func mustRestartDoltPrimaryServer(t *testing.T) {
+	var err error
+	prevReplicaDatabase := replicaDatabase
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+	primaryDatabase = replicaDatabase
+	replicaDatabase = prevReplicaDatabase
+}
+
+// mustRestartMySqlReplicaServer starts up the MySQL server, after it has already been stopped before this function
+// is called, and configures it as the replica database.
+func mustRestartMySqlReplicaServer(t *testing.T) {
+	var err error
+	prevPrimaryDatabase := primaryDatabase
+	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	require.NoError(t, err)
+	replicaDatabase = primaryDatabase
+	primaryDatabase = prevPrimaryDatabase
 }

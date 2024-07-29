@@ -27,7 +27,7 @@ import (
 func TestBinlogReplicationServerRestart(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	primaryDatabase.MustExec("create table t (pk int auto_increment primary key)")
 
