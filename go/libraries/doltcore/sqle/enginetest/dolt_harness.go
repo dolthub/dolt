@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"runtime"
 	"strings"
 	"testing"
@@ -35,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	drowexec "github.com/dolthub/dolt/go/libraries/doltcore/sqle/rowexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -252,7 +252,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(drowexec.Builder{})
+		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 		d.engine = e
 
 		ctx := enginetest.NewContext(d)
