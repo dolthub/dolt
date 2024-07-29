@@ -520,6 +520,20 @@ func TestBinlogPrimary_PrimaryRestartBeforeReplicaConnects(t *testing.T) {
 	})
 }
 
+// TestBinlogPrimary_DisallowBranchesWithSlashes asserts that trying to set @@log_bin_branch to
+// a branch name containing a slash results in an error.
+func TestBinlogPrimary_DisallowBranchesWithSlashes(t *testing.T) {
+	defer teardown(t)
+	mapCopy := copyMap(doltReplicationPrimarySystemVars)
+	mapCopy["log_bin_branch"] = "'branch/withslash'"
+	startSqlServersWithDoltSystemVars(t, mapCopy)
+	setupForDoltToMySqlReplication()
+
+	// Because the replication branch was invalid, the binary log status should be
+	// empty, indicating that no binary logs are being recorded.
+	requirePrimaryResults(t, "SHOW BINARY LOG STATUS;", [][]any{})
+}
+
 // TestBinlogPrimary_ChangeReplicationBranch asserts that the log_bin_branch system variable can
 // be used to control what branch is replicated.
 func TestBinlogPrimary_ChangeReplicationBranch(t *testing.T) {

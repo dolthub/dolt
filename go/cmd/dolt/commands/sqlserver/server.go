@@ -321,8 +321,31 @@ func ConfigureServices(
 			if !ok {
 				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
 			}
+
+			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
+			if !ok {
+				return fmt.Errorf("unable to load @@log_bin_branch system variable")
+			}
+			logBinBranch, ok := logBinBranchValue.(string)
+			if !ok {
+				return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
+			}
+			if logBinBranch != "" {
+				// If an invalid branch has been configured, let the server start up so that it's
+				// easier for customers to correct the value, but log a warning and don't enable
+				// binlog replication.
+				if strings.Contains(logBinBranch, "/") {
+					logrus.Warnf("branch names containing '/' are not supported "+
+						"for binlog replication. Not enabling binlog replication; fix "+
+						"@@log_bin_branch value and restart Dolt (current value: %s)", logBinBranch)
+					return nil
+				}
+
+				binlogreplication.BinlogBranch = logBinBranch
+			}
+
 			if logBin == 1 {
-				logrus.Info("Enabling binary logging")
+				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
 				binlogProducer, err := binlogreplication.NewBinlogProducer(dEnv.FS)
 				if err != nil {
 					return err
@@ -344,18 +367,6 @@ func ConfigureServices(
 				}
 			}
 
-			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
-			if !ok {
-				return fmt.Errorf("unable to load @@log_bin_branch system variable")
-			}
-			logBinBranch, ok := logBinBranchValue.(string)
-			if !ok {
-				return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
-			}
-			if logBinBranch != "" {
-				logrus.Debugf("Setting binary logging branch to %s", logBinBranch)
-				binlogreplication.BinlogBranch = logBinBranch
-			}
 			return nil
 		},
 	}
