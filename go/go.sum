@@ -183,8 +183,6 @@ github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
 github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e h1:kPsT4a47cw1+y/N5SSCkma7FhAPw7KeGmD6c9PBZW9Y=
 github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e/go.mod h1:KPUcpx070QOfJK1gNe0zx4pA5sicIK1GMikIGLKC168=
-github.com/dolthub/go-mysql-server v0.18.2-0.20240726192758-72470d302577 h1:k1zmiHU6vXi9xn5EtSRrAuys4YvRl0bOUCce4afEbsU=
-github.com/dolthub/go-mysql-server v0.18.2-0.20240726192758-72470d302577/go.mod h1:P6bG0p+3mH4LS4DLo3BySh10ZJTDqgWyfWBu8gGE3eU=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240729182701-b4cec29302d1 h1:ydrib93syT0bpnYjgeKuLkn0R0B++lPNWMN9knWGMJY=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240729182701-b4cec29302d1/go.mod h1:ctH+JB+7+NeXPOfcujw/dzzPPgT9Byb/nOE44RRAztg=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
@@ -199,8 +197,6 @@ github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81 h1:7/v8q9X
 github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81/go.mod h1:siLfyv2c92W1eN/R4QqG/+RjjX5W2+gCTRjZxBjI3TY=
 github.com/dolthub/swiss v0.1.0 h1:EaGQct3AqeP/MjASHLiH6i4TAmgbG/c4rA6a1bzCOPc=
 github.com/dolthub/swiss v0.1.0/go.mod h1:BeucyB08Vb1G9tumVN3Vp/pyY4AMUnr9p7Rz7wJ7kAQ=
-github.com/dolthub/vitess v0.0.0-20240711213744-4232e1c4edae h1:SAYP6+hzkoYLWVzQTwQO0QbhVOwMsgy0dpRcL/QriS8=
-github.com/dolthub/vitess v0.0.0-20240711213744-4232e1c4edae/go.mod h1:uBvlRluuL+SbEWTCZ68o0xvsdYZER3CEG/35INdzfJM=
 github.com/dolthub/vitess v0.0.0-20240723185540-9f8cd7c03829 h1:/SEo3jm8zy0EVKIUPRcfagB9drQYI4KwQlSU/DNVRAQ=
 github.com/dolthub/vitess v0.0.0-20240723185540-9f8cd7c03829/go.mod h1:uBvlRluuL+SbEWTCZ68o0xvsdYZER3CEG/35INdzfJM=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
