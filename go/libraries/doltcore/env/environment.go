@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"

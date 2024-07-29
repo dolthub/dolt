@@ -23,10 +23,10 @@ import (
 	"io"
 	"math/bits"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
