@@ -66,7 +66,6 @@ func (sms StorageMetadataMap) ArchiveFilesPresent() bool {
 }
 
 func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, error) {
-
 	dbMap := make(map[string]filesys.Filesys)
 
 	path, err := dataDirFS.Abs("")
