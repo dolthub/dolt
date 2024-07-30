@@ -930,13 +930,13 @@ func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (
 		return dsess.RevisionTypeBranch, caseSensitiveBranchName, nil
 	}
 
-	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
+	caseSensitiveTagName, isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
 		return dsess.RevisionTypeNone, "", err
 	}
 
 	if isTag {
-		return dsess.RevisionTypeTag, resolvedRevSpec, nil
+		return dsess.RevisionTypeTag, caseSensitiveTagName, nil
 	}
 
 	if doltdb.IsValidCommitHash(resolvedRevSpec) {
@@ -1401,21 +1401,21 @@ func isRemoteBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName strin
 }
 
 // isTag returns whether a tag with the given name is in scope for the database given
-func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, error) {
+func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (string, bool, error) {
 	ddbs := db.DoltDatabases()
 
 	for _, ddb := range ddbs {
-		tagExists, err := ddb.HasTag(ctx, tagName)
+		tName, tagExists, err := ddb.HasTag(ctx, tagName)
 		if err != nil {
-			return false, err
+			return "", false, err
 		}
 
 		if tagExists {
-			return true, nil
+			return tName, true, nil
 		}
 	}
 
-	return false, nil
+	return "", false, nil
 }
 
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec

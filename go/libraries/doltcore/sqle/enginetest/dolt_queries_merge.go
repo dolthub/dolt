@@ -4353,10 +4353,8 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 // This enables us to test merges in both directions, since the merge code is asymmetric and some code paths currently
 // only run on the left side of the merge.
 func convertMergeScriptTest(mst MergeScriptTest, flipSides bool) queries.ScriptTest {
-	setupScript := make([]string, 100)
-
 	// Ancestor setup
-	setupScript = append(setupScript, mst.AncSetUpScript...)
+	setupScript := mst.AncSetUpScript
 	setupScript = append(setupScript, "CALL DOLT_COMMIT('-Am', 'ancestor commit');")
 	setupScript = append(setupScript, "CALL DOLT_BRANCH('right');")
 

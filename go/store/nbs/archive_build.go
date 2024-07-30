@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,80 @@ const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chu
 const maxSamples = 1000
 const minSamples = 25
 
+func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, progress chan interface{}) error {
+	if gs, ok := cs.(*GenerationalNBS); ok {
+		outPath, _ := gs.oldGen.Path()
+		oldgen := gs.oldGen.tables.upstream
+
+		swapMap := make(map[hash.Hash]hash.Hash)
+
+		revertMap := smd.RevertMap()
+
+		for id, ogcs := range oldgen {
+			if arc, ok := ogcs.(archiveChunkSource); ok {
+				orginTfId := revertMap[id]
+				exists, err := smd.oldGenTableExists(orginTfId)
+				if err != nil {
+					return err
+				}
+				if exists {
+					// We have a fast path to follow because oritinal table file is still on disk.
+					swapMap[arc.hash()] = orginTfId
+				} else {
+					// We don't have the original table file id, so we have to create a new one.
+					classicTable, err := NewCmpChunkTableWriter("")
+					if err != nil {
+						return err
+					}
+
+					err = arc.iterate(ctx, func(chk chunks.Chunk) error {
+						cmpChk := ChunkToCompressedChunk(chk)
+						err := classicTable.AddCmpChunk(cmpChk)
+						if err != nil {
+							return err
+						}
+
+						progress <- fmt.Sprintf("Unarchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
+						return nil
+					})
+					if err != nil {
+						return err
+					}
+
+					id, err := classicTable.Finish()
+					if err != nil {
+						return err
+					}
+					err = classicTable.FlushToFile(filepath.Join(outPath, id))
+					if err != nil {
+						return err
+					}
+
+					swapMap[arc.hash()] = hash.Parse(id)
+				}
+			}
+		}
+
+		if len(swapMap) > 0 {
+			//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
+			specs, err := gs.oldGen.tables.toSpecs()
+			newSpecs := make([]tableSpec, 0, len(specs))
+			for _, spec := range specs {
+				if newSpec, exists := swapMap[spec.name]; exists {
+					newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
+				} else {
+					newSpecs = append(newSpecs, spec)
+				}
+			}
+			err = gs.oldGen.swapTables(ctx, newSpecs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, progress chan interface{}) (err error) {
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
 	var stats Stats
@@ -50,12 +125,16 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		swapMap := make(map[hash.Hash]hash.Hash)
 
 		for tf, ogcs := range oldgen {
-			// NM4 - We should probably provide a way to pick a particular table file to build an archive for.
+			if _, ok := ogcs.(archiveChunkSource); ok {
+				continue
+			}
 
 			idx, err := ogcs.index()
 			if err != nil {
 				return err
 			}
+
+			originalSize := idx.tableFileSize()
 
 			archivePath := ""
 			archiveName := hash.Hash{}
@@ -64,12 +143,26 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				return err
 			}
 
+			fileInfo, err := os.Stat(archivePath)
+			if err != nil {
+				progress <- "Failed to stat archive file"
+				return err
+			}
+			archiveSize := fileInfo.Size()
+
 			err = verifyAllChunks(idx, archivePath, progress)
 			if err != nil {
 				return err
 			}
 
+			percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
+			progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
+
 			swapMap[tf] = archiveName
+		}
+
+		if len(swapMap) == 0 {
+			return fmt.Errorf("No tables found to archive. Run 'dolt gc' first")
 		}
 
 		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.

@@ -124,6 +124,7 @@ var doltSubCommands = []cli.Command{
 	commands.QueryDiff{},
 	commands.ReflogCmd{},
 	commands.RebaseCmd{},
+	commands.ArchiveCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -149,6 +150,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	docscmds.Commands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
+	commands.ArchiveCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{

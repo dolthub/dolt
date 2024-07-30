@@ -94,12 +94,12 @@ func (c *covStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 }
 
 type nonCovStrictSecondaryLookupGen struct {
-	pri   prolly.Map
-	sec   prolly.Map
-	sch   schema.Schema
-	k, v  val.Tuple
-	pkMap val.OrdinalMapping
-	pkBld *val.TupleBuilder
+	pri        prolly.Map
+	sec        prolly.Map
+	prefixDesc val.TupleDesc
+	sch        schema.Schema
+	pkMap      val.OrdinalMapping
+	pkBld      *val.TupleBuilder
 }
 
 func (c *nonCovStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
@@ -124,11 +124,14 @@ func (c *nonCovStrictSecondaryLookupGen) NodeStore() tree.NodeStore {
 
 func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly.MapIter, error) {
 	var idxKey val.Tuple
-	if err := c.sec.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
+	if err := c.sec.GetPrefix(ctx, k, c.prefixDesc, func(key val.Tuple, value val.Tuple) error {
 		idxKey = key
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if idxKey == nil {
+		return &strictLookupIter{}, nil
 	}
 	for to := range c.pkMap {
 		from := c.pkMap.MapOrdinal(to)
@@ -137,7 +140,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 	pk := c.pkBld.Build(sharePool)
 
 	iter := &strictLookupIter{k: pk}
-	if err := c.pri.Get(ctx, c.k, func(key val.Tuple, value val.Tuple) error {
+	if err := c.pri.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
 		iter.v = value
 		return nil
 	}); err != nil {
@@ -150,7 +153,6 @@ type covLaxSecondaryLookupGen struct {
 	m          prolly.Map
 	index      *doltIndex
 	prefixDesc val.TupleDesc
-	k, v       val.Tuple
 	nullSafe   []bool
 }
 
@@ -182,7 +184,7 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 	}
 
 	var err error
-	if c.prefixDesc.Count() == c.m.KeyDesc().Count() {
+	if c.prefixDesc.Count() >= c.m.KeyDesc().Count()-1 {
 		// key range optimization only works for full length key
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
@@ -204,7 +206,6 @@ type nonCovLaxSecondaryLookupGen struct {
 	pri        prolly.Map
 	sec        prolly.Map
 	sch        schema.Schema
-	k, v       val.Tuple
 	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
@@ -297,7 +298,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 	var err error
 	if c.prefixDesc.Count() == c.sec.KeyDesc().Count() {
 		// key range optimization only works if full key
-		// keyless indexs should include all rows
+		// keyless indexes should include all rows
 		start := k
 		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {

@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const binlogPositionDirectory = ".doltcfg"
@@ -38,18 +39,15 @@ type binlogPositionStore struct {
 	mu sync.Mutex
 }
 
-// Load loads a mysql.Position instance from the .doltcfg/binlog-position file at the root of the provider's filesystem.
+// Load loads a mysql.Position instance from the .doltcfg/binlog-position file at the root of the specified |filesystem|.
 // This file MUST be stored at the root of the provider's filesystem, and NOT inside a nested database's .doltcfg directory,
 // since the binlog position contains events that cover all databases in a SQL server. The returned mysql.Position
 // represents the set of GTIDs that have been successfully executed and applied on this replica. Currently only the
 // default binlog channel ("") is supported. If no .doltcfg/binlog-position file is stored, this method returns a nil
 // mysql.Position and a nil error. If any errors are encountered, a nil mysql.Position and an error are returned.
-func (store *binlogPositionStore) Load(ctx *sql.Context) (*mysql.Position, error) {
+func (store *binlogPositionStore) Load(filesys filesys.Filesys) (*mysql.Position, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	filesys := doltSession.Provider().FileSystem()
 
 	doltDirExists, _ := filesys.Exists(binlogPositionDirectory)
 	if !doltDirExists {

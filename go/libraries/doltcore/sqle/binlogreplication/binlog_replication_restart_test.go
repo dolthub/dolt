@@ -26,8 +26,8 @@ import (
 // server process can be restarted and replica can be restarted without problems.
 func TestBinlogReplicationServerRestart(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	primaryDatabase.MustExec("create table t (pk int auto_increment primary key)")
 

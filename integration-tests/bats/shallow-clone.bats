@@ -142,6 +142,76 @@ seed_and_start_serial_remote() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
 }
+
+@test "shallow-clone: fast forward merge" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
+    [ "$status" -eq 0 ]
+
+    cd file-remote
+    dolt checkout -b branch
+
+    dolt sql -q "insert into vals values (6, 'six')"
+    dolt commit -a -m "Added Val: 6 -> six"
+
+    dolt checkout main
+    dolt merge branch
+}
+
+@test "shallow-clone: simple merge" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
+    [ "$status" -eq 0 ]
+
+    cd file-remote
+    dolt checkout -b branch
+
+    dolt sql -q "insert into vals values (6, 'six')"
+    dolt commit -a -m "Added Val: 6 -> six"
+
+    dolt checkout main
+
+    dolt sql -q "insert into vals values (7, 'seven')"
+    dolt commit -a -m "Added Val: 7 -> seven"
+
+    dolt merge branch
+}
+
+@test "shallow-clone: no-op merge" {
+    seed_local_remote
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
+    [ "$status" -eq 0 ]
+
+    cd file-remote
+    dolt branch other HEAD
+
+    dolt checkout main
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+}
+
 @test "shallow-clone: push to a new remote should error" {
     seed_and_start_serial_remote
 
@@ -155,8 +225,7 @@ seed_and_start_serial_remote() {
 
     run dolt push altremote main
     [ "$status" -eq 1 ]
-    # NM4 - give a better error message.
-    [[ "$output" =~ "failed to get all chunks" ]] || false
+    [[ "$output" =~ "shallow repository missing chunks to complete push" ]] || false
 }
 
 @test "shallow-clone: depth 3 clone of serial history" {
@@ -679,7 +748,6 @@ seed_and_start_complex_remote() {
 #   - Pull when there are remote changes on main
 # - Sensible error when branching/checking out a commit which they don't have.
 # - merge base errors
-# - GC works? or gives a decent error message?
 # - reset work to a commit we have, and errors when we don't have the commit.
 # - Sensible error when we attempt to use HEAD~51 or something.
 # - Don't serve from a shallow repository

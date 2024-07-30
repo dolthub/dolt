@@ -33,7 +33,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/vitess/go/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
@@ -48,6 +47,12 @@ var doltLogFilePath, oldDoltLogFilePath, mysqlLogFilePath string
 var doltLogFile, mysqlLogFile *os.File
 var testDir string
 var originalWorkingDir string
+
+// doltReplicaSystemVars are the common system variables that need
+// to be set on a Dolt replica before replication is turned on.
+var doltReplicaSystemVars = map[string]string{
+	"server_id": "42",
+}
 
 func teardown(t *testing.T) {
 	if mySqlProcess != nil {
@@ -74,6 +79,9 @@ func teardown(t *testing.T) {
 		printFile(doltLogFilePath)
 		fmt.Printf("\nMySQL server log from %s:\n", mysqlLogFilePath)
 		printFile(mysqlLogFilePath)
+		mysqlErrorLogFilePath := filepath.Join(filepath.Dir(mysqlLogFilePath), "error_log.err")
+		fmt.Printf("\nMySQL server error log from %s:\n", mysqlErrorLogFilePath)
+		printFile(mysqlErrorLogFilePath)
 	} else {
 		// clean up temp files on clean test runs
 		defer os.RemoveAll(testDir)
@@ -92,8 +100,8 @@ func teardown(t *testing.T) {
 // Dolt replica.
 func TestBinlogReplicationSanityCheck(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
@@ -118,7 +126,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 	require.ErrorContains(t, err, "User not found")
 
 	// After starting replication, the system account is locked
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	err = db.Ping()
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Access denied for user")
@@ -129,8 +137,8 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 // process the events without errors.
 func TestFlushLogs(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Make changes on the primary and verify on the replica
 	primaryDatabase.MustExec("create table t (pk int primary key)")
@@ -153,8 +161,8 @@ func TestFlushLogs(t *testing.T) {
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// RESET REPLICA returns an error if replication is running
 	_, err := replicaDatabase.Queryx("RESET REPLICA")
@@ -193,7 +201,7 @@ func TestResetReplica(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Start replication again and verify that we can still query replica status
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	replicaStatus := showReplicaStatus(t)
 	require.Equal(t, "0", replicaStatus["Last_Errno"])
 	require.Equal(t, "", replicaStatus["Last_Error"])
@@ -205,7 +213,7 @@ func TestResetReplica(t *testing.T) {
 // for various error conditions.
 func TestStartReplicaErrors(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 
 	// START REPLICA returns an error when no replication source is configured
 	_, err := replicaDatabase.Queryx("START REPLICA;")
@@ -227,7 +235,7 @@ func TestStartReplicaErrors(t *testing.T) {
 	require.Nil(t, rows)
 
 	// START REPLICA logs a warning if replication is already running
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	replicaDatabase.MustExec("START REPLICA;")
 	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
 }
@@ -248,14 +256,13 @@ func TestShowReplicaStatus(t *testing.T) {
 // warnings are logged when STOP REPLICA is invoked when replication is not running.
 func TestStopReplica(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 
 	// STOP REPLICA logs a warning if replication is not running
 	replicaDatabase.MustExec("STOP REPLICA;")
 	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 
 	// Start replication with bad connection params
-	replicaDatabase.MustExec("SET @@GLOBAL.server_id=52;")
 	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
 	replicaDatabase.MustExec("START REPLICA;")
 	time.Sleep(200 * time.Millisecond)
@@ -270,7 +277,7 @@ func TestStopReplica(t *testing.T) {
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	// START REPLICA and verify status
-	startReplication(t, mySqlPort)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 	time.Sleep(100 * time.Millisecond)
 	status = showReplicaStatus(t)
 	require.True(t, status["Replica_IO_Running"] == "Connecting" || status["Replica_IO_Running"] == "Yes")
@@ -290,8 +297,8 @@ func TestStopReplica(t *testing.T) {
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
 func TestDoltCommits(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// First transaction (DDL)
 	primaryDatabase.MustExec("create table t1 (pk int primary key);")
@@ -370,8 +377,8 @@ func TestDoltCommits(t *testing.T) {
 // enabled and disabled.
 func TestForeignKeyChecks(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Test that we can execute statement-based replication that requires foreign_key_checks
 	// being turned off (referenced table doesn't exist yet).
@@ -427,8 +434,8 @@ func TestForeignKeyChecks(t *testing.T) {
 // TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
 func TestCharsetsAndCollations(t *testing.T) {
 	defer teardown(t)
-	startSqlServers(t)
-	startReplication(t, mySqlPort)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
 
 	// Use non-default charset/collations to create data on the primary
 	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
@@ -455,10 +462,11 @@ func TestCharsetsAndCollations(t *testing.T) {
 // Test Helper Functions
 //
 
-// waitForReplicaToCatchUp waits (up to 60s) for the replica to catch up with the primary database. The
+// waitForReplicaToCatchUp waits (up to 30s) for the replica to catch up with the primary database. The
 // lag is measured by checking that gtid_executed is the same on the primary and replica.
 func waitForReplicaToCatchUp(t *testing.T) {
-	timeLimit := 60 * time.Second
+	timeLimit := 30 * time.Second
+
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		replicaGtid := queryGtid(t, replicaDatabase)
@@ -475,45 +483,6 @@ func waitForReplicaToCatchUp(t *testing.T) {
 	// Log some status of the replica, before failing the test
 	outputShowReplicaStatus(t)
 	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
-}
-
-// waitForReplicaToHaveLatestGtid waits (up to 10s) for the replica to contain the
-// most recent GTID executed from the primary. Both the primary and replica are queried
-// for the value of @@gtid_executed to determine if the replica contains the most recent
-// transaction from the primary.
-func waitForReplicaToHaveLatestGtid(t *testing.T) {
-	timeLimit := 10 * time.Second
-	endTime := time.Now().Add(timeLimit)
-	for time.Now().Before(endTime) {
-		replicaGtid := queryGtid(t, replicaDatabase)
-		primaryGtid := queryGtid(t, primaryDatabase)
-
-		replicaGtidSet, err := mysql.ParseMysql56GTIDSet(replicaGtid)
-		require.NoError(t, err)
-
-		idx := strings.Index(primaryGtid, ":")
-		require.True(t, idx > 0)
-		uuid := primaryGtid[:idx]
-		sequencePortion := primaryGtid[idx+1:]
-		if strings.Contains(sequencePortion, ":") {
-			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, ":")+1:]
-		}
-		if strings.Contains(sequencePortion, "-") {
-			sequencePortion = sequencePortion[strings.LastIndex(sequencePortion, "-")+1:]
-		}
-
-		latestGtid, err := mysql.ParseGTID("MySQL56", uuid+":"+sequencePortion)
-		require.NoError(t, err)
-
-		if replicaGtidSet.ContainsGTID(latestGtid) {
-			return
-		} else {
-			fmt.Printf("replica does not contain latest GTID from the primary yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
-
-	t.Fatal("replica did not synchronize the latest GTID from the primary within " + timeLimit.String())
 }
 
 // waitForReplicaToReachGtid waits (up to 10s) for the replica's @@gtid_executed sys var to show that
@@ -681,23 +650,27 @@ func stopDoltSqlServer(t *testing.T) {
 	}
 }
 
-// startReplication starts up replication on the replica, connecting to |port| on the primary,
-// creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
-func startReplication(t *testing.T, port int) {
-	startReplicationWithDelay(t, port, 100*time.Millisecond)
-}
-
-// startReplication starts up replication on the replica, connecting to |port| on the primary,
-// pauses for |delay| before creating the test database, db01, on the primary, and ensures it
-// gets replicated to the replica.
-func startReplicationWithDelay(t *testing.T, port int, delay time.Duration) {
-	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
+// startReplication configures the replication source on the replica and runs the START REPLICA statement.
+func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
 			"SOURCE_USER='replicator', SOURCE_PASSWORD='Zqr8_blrGm1!', "+
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
 	replicaDatabase.MustExec("start replica;")
+}
+
+// startReplicationAndCreateTestDb starts up replication on the replica, connecting to |port| on the primary,
+// creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
+func startReplicationAndCreateTestDb(t *testing.T, port int) {
+	startReplicationAndCreateTestDbWithDelay(t, port, 100*time.Millisecond)
+}
+
+// startReplicationAndCreateTestDbWithDelay starts up replication on the replica, connecting to |port| on the primary,
+// pauses for |delay| before creating the test database, db01, on the primary, and ensures it
+// gets replicated to the replica.
+func startReplicationAndCreateTestDbWithDelay(t *testing.T, port int, delay time.Duration) {
+	startReplication(t, port)
 	time.Sleep(delay)
 
 	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to
@@ -820,9 +793,8 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		"--server-id=11223344",
 		fmt.Sprintf("--socket=mysql-%v.sock", mySqlPort),
 		"--general_log_file="+dir+"general_log",
-		"--log-bin="+dir+"log_bin",
 		"--slow_query_log_file="+dir+"slow_query_log",
-		"--log-error="+dir+"log_error",
+		"--log-error="+dir+"error_log",
 		fmt.Sprintf("--pid-file="+dir+"pid-%v.pid", mySqlPort))
 
 	mysqlLogFilePath = filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))

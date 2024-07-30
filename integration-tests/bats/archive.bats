@@ -28,7 +28,7 @@ make_inserts() {
 make_updates() {
   for ((i=1; i<=10; i++))
   do
-        dolt sql -q "
+    dolt sql -q	"
     SET @max_id = (SELECT MAX(i) FROM tbl);
     SET @random_id = FLOOR(1 + RAND() * @max_id);
     UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
@@ -40,9 +40,15 @@ make_updates() {
   make_updates
   dolt gc
 
-  run dolt admin archive
+  run dolt archive
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Not enough samples to build default dictionary" ]] || false
+}
+
+@test "archive: require gc first" {
+  run dolt archive
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Run 'dolt gc' first" ]] || false
 }
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
@@ -56,7 +62,7 @@ make_updates() {
   done
 
   dolt gc
-  dolt admin archive
+  dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
@@ -91,7 +97,7 @@ make_updates() {
   done
   dolt gc
 
-  dolt admin archive
+  dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "3" ]
@@ -101,3 +107,112 @@ make_updates() {
   [ "$commits" -eq "186" ]
 }
 
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive multiple times" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt archive
+
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+
+  dolt gc
+  dolt archive
+
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "2" ]
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive with remotesrv no go" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+
+  dolt archive
+
+  run dolt sql-server --remotesapi-port=12321
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+
+  run remotesrv --repo-mode
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive --revert (fast)" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt archive
+  dolt archive --revert
+
+  # dolt log --stat will load every single chunk. 66 manually verified.
+  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
+  [ "$commits" -eq "66" ]
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive --revert (rebuild)" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+  dolt gc
+  dolt archive
+  dolt gc                         # This will delete the unused table files.
+  dolt archive --revert
+
+  # dolt log --stat will load every single chunk. 66 manually verified.
+  commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
+  [ "$commits" -eq "66" ]
+}
+
+# This test runs over 45 seconds, resulting in a timeout in lambdabats
+# bats test_tags=no_lambda
+@test "archive: archive backup no go" {
+  # We need at least 25 chunks to create an archive.
+  for ((j=1; j<=10; j++))
+  do
+    make_updates
+    make_inserts
+  done
+
+  dolt gc
+  dolt archive
+
+  dolt backup add bac1 file://../bac1
+  run dolt backup sync bac1
+
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "archive files present" ]] || false
+
+  # currently the cli and stored procedures are different code paths.
+  run dolt sql -q "call dolt_backup('sync', 'bac1')"
+  [ "$status" -eq 1 ]
+  # NM4 - TODO. This message is cryptic, but plumbing the error through is awkward.
+  [[ "$output" =~ "Archive chunk source" ]] || false
+}
