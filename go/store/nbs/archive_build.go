@@ -134,6 +134,8 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				return err
 			}
 
+			originalSize := idx.tableFileSize()
+
 			archivePath := ""
 			archiveName := hash.Hash{}
 			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress, &stats)
@@ -141,10 +143,20 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				return err
 			}
 
+			fileInfo, err := os.Stat(archivePath)
+			if err != nil {
+				progress <- "Failed to stat archive file"
+				return err
+			}
+			archiveSize := fileInfo.Size()
+
 			err = verifyAllChunks(idx, archivePath, progress)
 			if err != nil {
 				return err
 			}
+
+			percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
+			progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
 
 			swapMap[tf] = archiveName
 		}

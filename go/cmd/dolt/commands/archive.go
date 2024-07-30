@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package admin
+package commands
 
 import (
 	"context"
@@ -165,7 +165,7 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 				}
 				switch v := msg.(type) {
 				case string:
-					cli.Printf("LOG: %s\n", v)
+					cli.Printf("%s\n", v)
 				case nbs.ArchiveBuildProgressMsg:
 					if v.Total == v.Completed {
 						p.Printf("%s: Done\n", v.Stage)
