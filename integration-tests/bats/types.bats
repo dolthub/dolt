@@ -329,7 +329,7 @@ SQL
 
     # check information_schema.COLUMNS table
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,date,,,,,,,,date,"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,date,,,,,0,,,date,"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: DATETIME" {
@@ -378,7 +378,7 @@ SQL
 
     # check information_schema.COLUMNS table
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,datetime,,,,,0,,,datetime(6),"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,datetime,,,,,6,,,datetime(6),"","","insert,references,select,update","","",' ]] || false
 
     dolt sql <<SQL
 drop table test;
