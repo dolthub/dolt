@@ -85,7 +85,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 		return nil, err
 	}
 	if storageMetadata.ArchiveFilesPresent() {
-		return nil, errors.New("archive files present")
+		return nil, errors.New("archive files present. Please run `dolt archive --revert` before running the server.")
 	}
 
 	s := new(Server)

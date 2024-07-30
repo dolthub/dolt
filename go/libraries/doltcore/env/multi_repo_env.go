@@ -54,6 +54,8 @@ type MultiRepoEnv struct {
 	dialProvider dbfactory.GRPCDialProvider
 }
 
+// StorageMetadataMap is a map of table file and archive paths to their metadata. It is used to surface specific
+// information about the storage of a database without loading the storage files themselves.
 type StorageMetadataMap map[string]nbs.StorageMetadata
 
 func (sms StorageMetadataMap) ArchiveFilesPresent() bool {
@@ -84,16 +86,17 @@ func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, 
 
 		dir := filepath.Base(path)
 
-		newFs, er2 := dataDirFS.WithWorkingDir(dir)
-		if er2 != nil {
+		newFs, err := dataDirFS.WithWorkingDir(dir)
+		if err != nil {
 			return false
 		}
-		path, er2 = newFs.Abs("")
-		if er2 != nil {
+		path, err = newFs.Abs("")
+		if err != nil {
 			return false
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 
+		// For an incomplete environment, the .Valid() check basically just checks if there is a .dolt directory.
 		falseEnv := IncompleteEnv(newFs)
 		if !falseEnv.Valid() {
 			return false

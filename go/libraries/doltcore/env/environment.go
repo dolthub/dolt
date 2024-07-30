@@ -95,6 +95,10 @@ type DoltEnv struct {
 	UserPassConfig *creds.DoltCredsForPass
 }
 
+// IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
+// of and database is correct on disk, but don't want to actually load the database.
+//
+// Callers of this method should not expect the returned DoltEnv to be useful as a database for running queries.
 func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
 	return &DoltEnv{
 		Version:     doltversion.Version,

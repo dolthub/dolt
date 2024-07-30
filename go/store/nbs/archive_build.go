@@ -52,7 +52,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 		for id, ogcs := range oldgen {
 			if arc, ok := ogcs.(archiveChunkSource); ok {
 				orginTfId := revertMap[id]
-				exists, err := smd.LoseOldGenTableExists(orginTfId)
+				exists, err := smd.oldGenTableExists(orginTfId)
 				if err != nil {
 					return err
 				}

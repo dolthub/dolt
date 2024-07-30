@@ -68,7 +68,7 @@ func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
 	return revertMap
 }
 
-func (sm *StorageMetadata) LoseOldGenTableExists(id hash.Hash) (bool, error) {
+func (sm *StorageMetadata) oldGenTableExists(id hash.Hash) (bool, error) {
 	path := filepath.Join(sm.root, ".dolt", "noms", "oldgen", id.String())
 	_, err := os.Stat(path)
 	if err != nil {
