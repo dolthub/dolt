@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,6 +52,76 @@ type MultiRepoEnv struct {
 	fs           filesys.Filesys
 	cfg          config.ReadWriteConfig
 	dialProvider dbfactory.GRPCDialProvider
+}
+
+// StorageMetadataMap is a map of table file and archive paths to their metadata. It is used to surface specific
+// information about the storage of a database without loading the storage files themselves.
+type StorageMetadataMap map[string]nbs.StorageMetadata
+
+func (sms StorageMetadataMap) ArchiveFilesPresent() bool {
+	for _, sm := range sms {
+		if sm.ArchiveFilesPresent() {
+			return true
+		}
+	}
+	return false
+}
+
+func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, error) {
+	dbMap := make(map[string]filesys.Filesys)
+
+	path, err := dataDirFS.Abs("")
+	if err != nil {
+		return nil, err
+	}
+	envName := getRepoRootDir(path, string(os.PathSeparator))
+	dbName := dbfactory.DirToDBName(envName)
+	dbMap[dbName] = dataDirFS
+
+	// If there are other directories in the directory, try to load them as additional databases
+	dataDirFS.Iter(".", false, func(path string, _ int64, isDir bool) (stop bool) {
+		if !isDir {
+			return false
+		}
+
+		dir := filepath.Base(path)
+
+		newFs, err := dataDirFS.WithWorkingDir(dir)
+		if err != nil {
+			return false
+		}
+		path, err = newFs.Abs("")
+		if err != nil {
+			return false
+		}
+		envName := getRepoRootDir(path, string(os.PathSeparator))
+
+		// For an incomplete environment, the .Valid() check basically just checks if there is a .dolt directory.
+		falseEnv := IncompleteEnv(newFs)
+		if !falseEnv.Valid() {
+			return false
+		}
+
+		dbName := dbfactory.DirToDBName(envName)
+		dbMap[dbName] = dataDirFS
+
+		return false
+	})
+
+	sms := make(StorageMetadataMap)
+	for _, fs := range dbMap {
+		fsStr, err := fs.Abs("")
+		if err != nil {
+			return nil, err
+		}
+
+		sm, err := nbs.GetStorageMetadata(fsStr)
+		if err != nil {
+			return nil, err
+		}
+		sms[fsStr] = sm
+	}
+	return sms, nil
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.

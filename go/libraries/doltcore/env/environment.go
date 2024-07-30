@@ -25,6 +25,7 @@ import (
 
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -92,6 +93,23 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	UserPassConfig *creds.DoltCredsForPass
+}
+
+// IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
+// of and database is correct on disk, but don't want to actually load the database.
+//
+// Callers of this method should not expect the returned DoltEnv to be useful as a database for running queries.
+func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
+	return &DoltEnv{
+		Version:     doltversion.Version,
+		Config:      nil,
+		RepoState:   nil,
+		RSLoadErr:   nil,
+		DoltDB:      nil,
+		DBLoadError: nil,
+		FS:          FS,
+		urlStr:      "",
+	}
 }
 
 func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error) {

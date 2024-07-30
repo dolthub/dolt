@@ -53,6 +53,7 @@ table files into archives. Currently, for safety, table files are left in place.
 }
 
 const groupChunksFlag = "group-chunks"
+const revertFlag = "revert"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -69,9 +70,9 @@ func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
 func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(groupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
+	ap.SupportsFlag(revertFlag, "", "Return to unpurged table files, or rebuilt table files from archives")
 	/* TODO: Implement these flags
 	ap.SupportsFlag("purge", "", "remove table files after archiving")
-	ap.SupportsFlag("revert", "", "Return to unpurged table files, or rebuilt table files from archives")
 	*/
 	return ap
 }
@@ -91,36 +92,58 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 1
 	}
 
-	datasets, err := db.Datasets(ctx)
+	storageMetadata, err := env.GetMultiEnvStorageMetadata(dEnv.FS)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
 	}
-
-	hs := hash.NewHashSet()
-	err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
-		hs.Insert(hash)
-		return nil
-	})
-
-	groupings := nbs.NewChunkRelations()
-	if apr.Contains(groupChunksFlag) {
-		err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
-		if err != nil {
-			cli.PrintErrln(err)
-			return 1
-		}
+	if len(storageMetadata) != 1 {
+		cli.PrintErrln("Runtime error: Multiple databases found where one expected")
+		return 1
+	}
+	var ourDbMD nbs.StorageMetadata
+	for _, md := range storageMetadata {
+		ourDbMD = md
 	}
 
 	progress := make(chan interface{}, 32)
 	handleProgress(ctx, progress)
 
-	err = nbs.BuildArchive(ctx, cs, &groupings, progress)
-	if err != nil {
-		cli.PrintErrln(err)
-		return 1
-	}
+	if apr.Contains(revertFlag) {
+		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
+	} else {
+		datasets, err := db.Datasets(ctx)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
 
+		hs := hash.NewHashSet()
+		err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
+			hs.Insert(hash)
+			return nil
+		})
+
+		groupings := nbs.NewChunkRelations()
+		if apr.Contains(groupChunksFlag) {
+			err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
+			if err != nil {
+				cli.PrintErrln(err)
+				return 1
+			}
+		}
+
+		err = nbs.BuildArchive(ctx, cs, &groupings, progress)
+		if err != nil {
+			cli.PrintErrln(err)
+			return 1
+		}
+
+	}
 	return 0
 }
 

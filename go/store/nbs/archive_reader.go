@@ -15,8 +15,10 @@
 package nbs
 
 import (
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/bits"
@@ -24,6 +26,7 @@ import (
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -100,6 +103,38 @@ func (f footer) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
+func newArchiveMetadata(reader io.ReaderAt, fileSize uint64) (*ArchiveMetadata, error) {
+	footer, err := loadFooter(reader, fileSize)
+	if err != nil {
+		return nil, err
+	}
+
+	if footer.formatVersion != archiveFormatVersion {
+		return nil, ErrInvalidFormatVersion
+	}
+
+	metaSpan := footer.metadataSpan()
+	metaRdr := io.NewSectionReader(reader, int64(metaSpan.offset), int64(metaSpan.length))
+
+	// Read the data into a byte slice
+	metaData := make([]byte, metaSpan.length)
+	_, err = metaRdr.Read(metaData)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]string
+
+	// Unmarshal the JSON data into the map. TODO - use json tags.
+	err = json.Unmarshal(metaData, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ArchiveMetadata{
+		originalTableFileId: result[amdkOriginTableFile],
+	}, nil
+}
+
 func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {
 	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
@@ -155,6 +190,20 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	}, nil
 }
 
+// clone returns a new archiveReader with a new (provided) reader. All other fields are immutable or thread safe,
+// so they are copied.
+func (ar archiveReader) clone(newReader io.ReaderAt) archiveReader {
+	return archiveReader{
+		reader:    newReader,
+		prefixes:  ar.prefixes,
+		spanIndex: ar.spanIndex,
+		chunkRefs: ar.chunkRefs,
+		suffixes:  ar.suffixes,
+		footer:    ar.footer,
+		dictCache: ar.dictCache, // cache is thread safe.
+	}
+}
+
 func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 
@@ -195,30 +244,30 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 }
 
 // search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
-func (ai archiveReader) search(hash hash.Hash) int {
+func (ar archiveReader) search(hash hash.Hash) int {
 	prefix := hash.Prefix()
-	possibleMatch := prollyBinSearch(ai.prefixes, prefix)
+	possibleMatch := prollyBinSearch(ar.prefixes, prefix)
 	targetSfx := hash.Suffix()
 
-	if possibleMatch < 0 || possibleMatch >= len(ai.prefixes) {
+	if possibleMatch < 0 || possibleMatch >= len(ar.prefixes) {
 		return -1
 	}
 
-	for idx := possibleMatch; idx < len(ai.prefixes) && ai.prefixes[idx] == prefix; idx++ {
-		if ai.getSuffixByID(uint32(idx)) == suffix(targetSfx) {
+	for idx := possibleMatch; idx < len(ar.prefixes) && ar.prefixes[idx] == prefix; idx++ {
+		if ar.getSuffixByID(uint32(idx)) == suffix(targetSfx) {
 			return idx
 		}
 	}
 	return -1
 }
 
-func (ai archiveReader) has(hash hash.Hash) bool {
-	return ai.search(hash) >= 0
+func (ar archiveReader) has(hash hash.Hash) bool {
+	return ar.search(hash) >= 0
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
-func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
-	dict, data, err := ai.getRaw(hash)
+func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
+	dict, data, err := ar.getRaw(hash)
 	if err != nil || data == nil {
 		return nil, err
 	}
@@ -235,21 +284,21 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	return result, nil
 }
 
-func (ai archiveReader) count() uint32 {
-	return ai.footer.chunkCount
+func (ar archiveReader) count() uint32 {
+	return ar.footer.chunkCount
 }
 
-func (ai archiveReader) close() error {
-	if closer, ok := ai.reader.(io.Closer); ok {
+func (ar archiveReader) close() error {
+	if closer, ok := ar.reader.(io.Closer); ok {
 		return closer.Close()
 	}
 	return nil
 }
 
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
-func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
+func (ar archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 	buff := make([]byte, bs.length)
-	_, err := ai.reader.ReadAt(buff[:], int64(bs.offset))
+	_, err := ar.reader.ReadAt(buff[:], int64(bs.offset))
 	if err != nil {
 		return nil, err
 	}
@@ -260,19 +309,19 @@ func (ai archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 // no error is returned in this case. Errors will only be returned if there is an io error.
 //
 // The data returned is still compressed, regardless of the dictionary being present or not.
-func (ai archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte, err error) {
-	idx := ai.search(hash)
+func (ar archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte, err error) {
+	idx := ar.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
 	}
 
-	dictId, dataId := ai.getChunkRef(idx)
+	dictId, dataId := ar.getChunkRef(idx)
 	if dictId != 0 {
-		if cached, cacheHit := ai.dictCache.Get(dictId); cacheHit {
+		if cached, cacheHit := ar.dictCache.Get(dictId); cacheHit {
 			dict = cached
 		} else {
-			byteSpan := ai.getByteSpanByID(dictId)
-			dictBytes, err := ai.readByteSpan(byteSpan)
+			byteSpan := ar.getByteSpanByID(dictId)
+			dictBytes, err := ar.readByteSpan(byteSpan)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -287,12 +336,12 @@ func (ai archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte,
 				return nil, nil, e2
 			}
 
-			ai.dictCache.Add(dictId, dict)
+			ar.dictCache.Add(dictId, dict)
 		}
 	}
 
-	byteSpan := ai.getByteSpanByID(dataId)
-	data, err = ai.readByteSpan(byteSpan)
+	byteSpan := ar.getByteSpanByID(dataId)
+	data, err = ar.readByteSpan(byteSpan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -300,47 +349,70 @@ func (ai archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte,
 }
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index. Assumes good input!
-func (ai archiveReader) getChunkRef(idx int) (dict, data uint32) {
+func (ar archiveReader) getChunkRef(idx int) (dict, data uint32) {
 	// Chunk refs are stored as pairs of uint32s, so we need to double the index.
 	idx *= 2
-	return ai.chunkRefs[idx], ai.chunkRefs[idx+1]
+	return ar.chunkRefs[idx], ar.chunkRefs[idx+1]
 }
 
 // getByteSpanByID returns the byte span for the chunk at the given index. Assumes good input!
-func (ai archiveReader) getByteSpanByID(id uint32) byteSpan {
+func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
 	if id == 0 {
 		return byteSpan{}
 	}
 	// This works because byteOffSpan[0] == 0. See initialization.
-	offset := ai.spanIndex[id-1]
-	length := ai.spanIndex[id] - offset
+	offset := ar.spanIndex[id-1]
+	length := ar.spanIndex[id] - offset
 	return byteSpan{offset: offset, length: length}
 }
 
 // getSuffixByID returns the suffix for the chunk at the given index. Assumes good input!
-func (ai archiveReader) getSuffixByID(id uint32) suffix {
+func (ar archiveReader) getSuffixByID(id uint32) suffix {
 	start := id * hash.SuffixLen
-	return suffix(ai.suffixes[start : start+hash.SuffixLen])
+	return suffix(ar.suffixes[start : start+hash.SuffixLen])
 }
 
-func (ai archiveReader) getMetadata() ([]byte, error) {
-	return ai.readByteSpan(ai.footer.metadataSpan())
+func (ar archiveReader) getMetadata() ([]byte, error) {
+	return ar.readByteSpan(ar.footer.metadataSpan())
 }
 
 // verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
 // the data section, which could be sizable.
-func (ai archiveReader) verifyDataCheckSum() error {
-	return verifyCheckSum(ai.reader, ai.footer.dataSpan(), ai.footer.dataCheckSum)
+func (ar archiveReader) verifyDataCheckSum() error {
+	return verifyCheckSum(ar.reader, ar.footer.dataSpan(), ar.footer.dataCheckSum)
 }
 
 // verifyIndexCheckSum verifies the checksum of the index section of the archive.
-func (ai archiveReader) verifyIndexCheckSum() error {
-	return verifyCheckSum(ai.reader, ai.footer.totalIndexSpan(), ai.footer.indexCheckSum)
+func (ar archiveReader) verifyIndexCheckSum() error {
+	return verifyCheckSum(ar.reader, ar.footer.totalIndexSpan(), ar.footer.indexCheckSum)
 }
 
 // verifyMetaCheckSum verifies the checksum of the metadata section of the archive.
-func (ai archiveReader) verifyMetaCheckSum() error {
-	return verifyCheckSum(ai.reader, ai.footer.metadataSpan(), ai.footer.metaCheckSum)
+func (ar archiveReader) verifyMetaCheckSum() error {
+	return verifyCheckSum(ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum)
+}
+
+func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error) error {
+	for i := uint32(0); i < ar.footer.chunkCount; i++ {
+		var hasBytes [hash.ByteLen]byte
+
+		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.prefixes[i])
+		suf := ar.getSuffixByID(i)
+		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
+		h := hash.New(hasBytes[:])
+
+		data, err := ar.get(h)
+		if err != nil {
+			return err
+		}
+
+		chk := chunks.NewChunkWithHash(h, data)
+		err = cb(chk)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func verifyCheckSum(reader io.ReaderAt, span byteSpan, checkSum sha512Sum) error {
