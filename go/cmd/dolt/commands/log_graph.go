@@ -33,39 +33,12 @@ type CommitInfoWithChildren struct {
 }
 
 var branchColors = []string{
-	"\033[31m",   // Red
-	"\033[32m",   // Green
-	"\033[34m",   // Blue
-	"\033[35m",   // Magenta
-	"\033[36m",   // Cyan
-	"\033[39m",   // Default
-	"\033[1;31m", // Bold Red
-	"\033[1;32m", // Bold Green
-	"\033[1;33m", // Bold Yellow
-	"\033[1;34m", // Bold Blue
-	"\033[1;35m", // Bold Magenta
-	"\033[1;36m", // Bold Cyan
-	"\033[1;37m", // Bold White
-	"\033[1;39m", // Bold Default
-	"\033[2;31m", // Faint Red
-	"\033[2;32m", // Faint Green
-	"\033[2;33m", // Faint Yellow
-	"\033[2;34m", // Faint Blue
-	"\033[2;35m", // Faint Magenta
-	"\033[2;36m", // Faint Cyan
-	"\033[2;37m", // Faint White
-	"\033[2;39m", // Faint Default
-	"\033[41m",   // Background Red
-	"\033[42m",   // Background Green
-	"\033[43m",   // Background Yellow
-	"\033[44m",   // Background Blue
-	"\033[45m",   // Background Magenta
-	"\033[46m",   // Background Cyan
-	"\033[47m",   // Background White
-	"\033[49m",   // Background Default
-	"\033[2m",    // Faint
-	"\033[2;3m",  // Faint Italic
-	"\033[7m",    // Reverse
+	"\033[31m", // Red
+	"\033[32m", // Green
+	"\033[34m", // Blue
+	"\033[35m", // Magenta
+	"\033[36m", // Cyan
+	"\033[39m", // Default
 }
 
 type BranchPathType struct {
@@ -331,9 +304,8 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, apr *argparser.Ar
 
 	last_commit_y := commits[len(commits)-1].Y
 	printCommitMetadata(graph, pager, last_commit_y, len(graph[last_commit_y]), commits[len(commits)-1], decoration)
-
 	for _, line := range commits[len(commits)-1].formattedMessage {
-		pager.Writer.Write([]byte(fmt.Sprintf("  \033[37m%s", line)))
+		pager.Writer.Write([]byte(fmt.Sprintf("\t\033[37m%s", line)))
 		pager.Writer.Write([]byte("\n"))
 	}
 }

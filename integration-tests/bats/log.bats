@@ -826,3 +826,89 @@ teardown() {
     [[ "$output" =~ "merge main" ]] || false
     [ "${#lines[@]}" -eq 5 ]
 }
+
+@test "log --graph: basic graph log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1"
+   
+    # Run the dolt log --graph command
+    run dolt log --graph
+    [ "$status" -eq 0 ]
+    
+    # Check the output with patterns
+    echo "${lines[0]}"
+    echo "${lines[1]}"
+    echo "${lines[2]}"
+    echo "${lines[3]}"
+    echo "${lines[4]}"
+    echo "${lines[5]}"
+    echo "${lines[6]}"
+    echo "${lines[7]}"
+    echo "${lines[8]}"
+    echo "${lines[9]}"
+    echo "${lines[10]}"
+
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(echo "${lines[0]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| Author:" ]] || false                          # | Author: 
+    [[ $(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| Date:" ]] || false                            # | Date: 
+    [[ $(echo "${lines[3]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                  # | 
+    [[ $(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1" ]] || false                           # |    commit 1 
+    [[ $(echo "${lines[5]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                  # | 
+    [[ $(echo "${lines[6]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(echo "${lines[7]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Author:" ]] || false                            #   Author: 
+    [[ $(echo "${lines[8]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Date:" ]] || false                              #   Date: 
+    [[ $(echo "${lines[9]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Initialize data repository" ]] || false        #      Initialize data repository
+}
+
+
+@test "log --graph: graph with merges" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt commit --allow-empty -m "commit 2 MAIN"
+    dolt merge branchA -m "Merge branchA into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+    
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(echo "${lines[0]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "*\  commit " ]] || false                        # *\  commit xxx
+    [[ $(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Merge:" ]] || false                         # | | Merge:
+    [[ $(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(echo "${lines[3]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                                # | | 
+    [[ $(echo "${lines[5]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Merge branchA into main" ]] || false            # | |    Merge branchA into main 
+    [[ $(echo "${lines[6]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                                # | | 
+    [[ $(echo "${lines[7]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* | commit " ]] || false                        # * | commit xxx
+    [[ $(echo "${lines[8]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(echo "${lines[9]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(echo "${lines[10]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
+    [[ $(echo "${lines[11]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 2 MAIN" ]] || false                     # | |    commit 2 MAIN
+    [[ $(echo "${lines[12]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
+    [[ $(echo "${lines[13]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| * commit " ]] || false                       # | * commit xxx
+    [[ $(echo "${lines[14]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                       # | | Author: 
+    [[ $(echo "${lines[15]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                         # | | Date: 
+    [[ $(echo "${lines[16]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | |  
+    [[ $(echo "${lines[17]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
+    [[ $(echo "${lines[18]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
+    [[ $(echo "${lines[19]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "*/ commit" ]] || false                         # */ commit xxx
+    [[ $(echo "${lines[20]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|  Author:" ]] || false                        # |  Author: 
+    [[ $(echo "${lines[21]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|  Date:" ]] || false                          # |  Date: 
+    [[ $(echo "${lines[22]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                 # |  
+    [[ $(echo "${lines[23]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
+    [[ $(echo "${lines[24]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                 # | 
+    [[ $(echo "${lines[25]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit" ]] || false                          # * commit
+    [[ $(echo "${lines[26]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Author:" ]] || false                           #   Author:
+    [[ $(echo "${lines[27]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Date:" ]] || false                             #   Date:
+    [[ $(echo "${lines[28]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Initialize data repository" ]] || false        #     Initialize data repository
+}
