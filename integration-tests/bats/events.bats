@@ -257,12 +257,22 @@ SQL
 }
 
 @test "events: restarting a sql-server correctly schedules existing events" {
-    # Create the recurring event and make sure it runs at least once
-    dolt sql -q "CREATE EVENT eventTest1 ON SCHEDULE EVERY 1 SECOND STARTS CURRENT_TIMESTAMP DO INSERT INTO totals (int_col) VALUES (111);"
-    sleep 1
+    # Create the recurring event and verify that it's enabled
+    dolt sql -q "CREATE EVENT eventTest1 ON SCHEDULE EVERY 1 SECOND STARTS '2020-02-20 00:00:00' DO INSERT INTO totals (int_col) VALUES (111);"
+    run dolt sql -q "SHOW EVENTS"
+    [ $status -eq 0 ]
+    [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
+
+    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it executed
+    sleep 2
     run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
     [[ $output =~ "| 1  " ]] || false
+
+    # Verify that the event is still enabled
+    run dolt sql -q "SHOW EVENTS"
+    [ $status -eq 0 ]
+    [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
 
     # Stop the sql-server, truncate the totals table, and assert it's empty
     stop_sql_server 1
@@ -271,9 +281,18 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "| false  " ]] || false
 
-    # Restart the server and assert that the event gets scheduled and executed again
+    # Restart the server and assert that the event is still enabled
     start_sql_server
-    sleep 1
+    run dolt sql -q "SHOW EVENTS;"
+    [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
+
+    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it is still enabled
+    sleep 2
+    run dolt sql -q "SHOW EVENTS"
+    [ $status -eq 0 ]
+    [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
+
+    # Verify that the event executed and inserted a row in the totals table
     run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
     [[ $output =~ "| 1  " ]] || false

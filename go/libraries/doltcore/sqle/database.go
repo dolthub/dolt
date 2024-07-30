@@ -1829,10 +1829,12 @@ func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
 
 // SaveEvent implements sql.EventDatabase.
 func (db Database) SaveEvent(ctx *sql.Context, event sql.EventDefinition) (bool, error) {
-	// If the database is not the default branch database, then the event is disabled.
+	// If the database is NOT on the DefaultInitBranch, then we disable the event, since
+	// events only run from a single branch. We check this by looking at the database's
+	// revision and ensuring it either matches DefaultInitBranch or is empty.
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
-	if db.revision != env.DefaultInitBranch && event.Status == sql.EventStatus_Enable.String() {
-		// using revision database name
+	if (db.revision != env.DefaultInitBranch && db.revision != "") && event.Status == sql.EventStatus_Enable.String() {
+		ctx.GetLogger().Debugf("disabling event %s (db.revision == %s)", event.Name, db.revision)
 		event.Status = sql.EventStatus_Disable.String()
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
