@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@actions/core": "^1.9.1",
-    "@aws-sdk/client-ses": "^3.441.0"
+    "@aws-sdk/client-ses": "^3.621.0"
   }
 }
