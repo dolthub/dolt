@@ -21,7 +21,6 @@ import (
 var Commands = cli.NewHiddenSubCommandHandler("admin", "Commands for directly working with Dolt storage for purposes of testing or database recovery", []cli.Command{
 	SetRefCmd{},
 	ShowRootCmd{},
-	ArchiveCmd{},
 
 	ZstdCmd{},
 })
