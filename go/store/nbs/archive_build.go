@@ -73,7 +73,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 							return err
 						}
 
-						progress <- fmt.Sprintf("UnArchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
+						progress <- fmt.Sprintf("Unarchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
 						return nil
 					})
 					if err != nil {
