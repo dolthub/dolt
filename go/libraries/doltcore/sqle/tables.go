@@ -99,7 +99,7 @@ type DoltTable struct {
 }
 
 func (t *DoltTable) TableName() doltdb.TableName {
-	return t.TableName()
+	return doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()}
 }
 
 func (t *DoltTable) SkipIndexCosting() bool {
