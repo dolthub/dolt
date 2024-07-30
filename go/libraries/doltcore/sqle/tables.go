@@ -108,7 +108,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		return sql.IndexLookup{}, nil, nil, false, err
 	}
 
-	schHash, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
+	schHash, err := doltdb.GetSchemaHash(ctx, root, doltdb.TableName{Name: t.tableName}, t.overriddenSchema)
 	if err != nil {
 		return sql.IndexLookup{}, nil, nil, false, err
 	}
@@ -180,7 +180,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 					}
 				}
 				if matched {
-					if err := rb.Equals(ctx, matchIdx, c2.Lit.Value()); err != nil {
+					if err := rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
 						return sql.IndexLookup{}, nil, nil, false, nil
 					}
 				}
@@ -219,9 +219,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 	if err != nil {
 		return nil, err
 	}
-	if tbl.GetOverriddenSchema() != nil {
-		print()
-	}
+
 	return &DoltTable{
 		tableName:        name,
 		db:               db,
@@ -346,7 +344,7 @@ func (t *DoltTable) IndexCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, 
 		return doltdb.DataCacheKey{}, false, err
 	}
 
-	key, err := root.GetTableSchemaHash(ctx, doltdb.TableName{Name: t.tableName}, t.overriddenSchema != nil)
+	key, err := doltdb.GetSchemaHash(ctx, root, doltdb.TableName{Name: t.tableName}, t.overriddenSchema)
 	if err != nil {
 		return doltdb.DataCacheKey{}, false, err
 	}

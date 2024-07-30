@@ -78,7 +78,7 @@ type RootValue interface {
 	// GetTableHash returns the hash of the given case-sensitive table name.
 	GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error)
 	// GetTableSchemaHash returns the hash of the given table's schema.
-	GetTableSchemaHash(ctx context.Context, tName TableName, overridden bool) (hash.Hash, error)
+	GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error)
 	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
 	// HandlePostMerge handles merging for any root elements that are not handled by the standard merge workflow. This
@@ -295,12 +295,12 @@ func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, 
 	return root, nil
 }
 
-func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName, overridden bool) (hash.Hash, error) {
+func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error) {
 	if root.schemaHashes == nil {
 		root.schemaHashes = make(map[TableName]hash.Hash)
 	}
 	key, ok := root.schemaHashes[tName]
-	if !ok || overridden {
+	if !ok {
 		tab, ok, err := root.GetTable(ctx, tName)
 		if err != nil {
 			return hash.Hash{}, err
@@ -311,9 +311,6 @@ func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName, 
 		key, err = tab.GetSchemaHash(ctx)
 		if err != nil {
 			return hash.Hash{}, err
-		}
-		if !overridden {
-			root.schemaHashes[tName] = key
 		}
 	}
 	return key, nil
@@ -504,7 +501,6 @@ func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 		return nil, err
 	}
 
-	// TODO: schema
 	return root.putTable(ctx, TableName{Name: tName}, ref, hash.Hash{})
 }
 
@@ -1186,10 +1182,28 @@ func FilterIgnoredTables(ctx context.Context, tables []TableName, roots Roots) (
 	return ignoredTables, nil
 }
 
+// GetSchemaHash returns the schema hash for a given table name. If |overrideSch|
+// is present, the root value is not considered immutable and we manually calculate
+// the schema hash for safety.
+func GetSchemaHash(ctx context.Context, root RootValue, name TableName, overrideSch schema.Schema) (hash.Hash, error) {
+	if overrideSch != nil {
+		// root value schemas are not immutable when override schema is present
+		tab, ok, err := root.GetTable(ctx, name)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		if !ok {
+			return hash.Hash{}, nil
+		}
+		return tab.GetSchemaHash(ctx)
+	}
+	return root.GetTableSchemaHash(ctx, name)
+}
+
 // ValidateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string, table *Table) error {
 	prevTName := TableName{Name: tableName}
-	prevHash, err := root.GetTableSchemaHash(ctx, prevTName, table.overriddenSchema != nil)
+	prevHash, err := GetSchemaHash(ctx, root, prevTName, table.overriddenSchema)
 	if err != nil {
 		return err
 	}
