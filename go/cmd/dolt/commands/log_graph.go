@@ -315,22 +315,14 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, apr *argparser.Ar
 // expand the graph based on the length of the commit message
 func expandGraph(commits []*CommitInfoWithChildren, width int) {
 	posY := 0
-	for i, commit := range commits {
+	for _, commit := range commits {
 		// one empty column between each branch path
 		commit.X = commit.X * 2
 		commit.Y = posY
 		formattedMessage := wrapTextOnWidth(commit.Commit.commitMeta.Description, width)
 		commit.formattedMessage = formattedMessage
 
-		// make sure there is enough space for the diagonal line connecting to the parent
-		// this is an approximation, assume that there will be enough space if parent is not the next commit
-		maxDistanceFromParent := float64(0)
-		if i < len(commits)-1 && commits[i+1].Commit.commitHash == commit.Commit.parentHashes[0] {
-			maxDistanceFromParent = math.Max(math.Abs(float64(commits[i+1].X-commit.X)), maxDistanceFromParent)
-		}
-
-		commitInfoHeight := getHeightOfCommit(commit)
-		posY += int(math.Max(float64(commitInfoHeight+1), maxDistanceFromParent))
+		posY += getHeightOfCommit(commit) + 1
 	}
 }
 
@@ -387,14 +379,35 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 				// the second part is extending the path to the current commit along the y-axis
 				if parent.X < commit.X {
 					color := branchColors[x/2%len(branchColors)]
-					for xx := parent.X + 1; xx < commit.X; xx++ {
-						if graph[parent.Y+parent.X+1-xx][xx] == " " {
+					distanceX := commit.X - parent.X
+					distanceY := parent.Y - commit.Y
+					if distanceX > distanceY {
+						//       * child commit
+						//	    /
+						//	   /
+						// *--/  parent commit
+						for xx := 0; xx < distanceY; xx++ {
+							graph[parent.Y-xx][parent.X+distanceX-distanceY+xx] = fmt.Sprintf("%s/", color)
+						}
+						for xx := parent.X; xx < parent.X+(distanceX-distanceY); xx++ {
+							if graph[parent.Y][xx] == " " {
+								graph[parent.Y][xx] = fmt.Sprintf("%s-", color)
+							}
+						}
+					} else {
+						//    * child commit
+						//	  |
+						//	  |
+						//	  /
+						//	 /
+						// */  parent commit
+						for xx := parent.X + 1; xx < commit.X; xx++ {
 							graph[parent.Y+parent.X+1-xx][xx] = fmt.Sprintf("%s/", color)
 						}
-					}
-					for yy := parent.Y + parent.X + 1 - commit.X; yy > commit.Y; yy-- {
-						if graph[yy][x] == " " {
-							graph[yy][x] = fmt.Sprintf("%s|", color)
+						for yy := parent.Y + parent.X + 1 - commit.X; yy > commit.Y; yy-- {
+							if graph[yy][x] == " " {
+								graph[yy][x] = fmt.Sprintf("%s|", color)
+							}
 						}
 					}
 				}
@@ -403,14 +416,36 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 				// the second part is extending the path to the parent commit along the y-axis
 				if parent.X > commit.X {
 					color := branchColors[parent.X/2%len(branchColors)]
-					for xx := commit.X + 1; xx < parent.X; xx++ {
-						if graph[commit.Y+xx-commit.X-1][xx] == " " {
+					distanceX := parent.X - commit.X
+					distanceY := parent.Y - commit.Y
+					if distanceY > distanceX {
+						//  * child commit
+						//   \
+						//    \
+						//    |
+						//    |
+						//    * parent commit
+						for xx := commit.X + 1; xx < parent.X; xx++ {
 							graph[commit.Y+xx-commit.X-1][xx] = fmt.Sprintf("%s\\", color)
 						}
-					}
-					for yy := commit.Y + parent.X - (commit.X + 1); yy < parent.Y; yy++ {
-						if graph[yy][parent.X] == " " {
-							graph[yy][parent.X] = fmt.Sprintf("%s|", color)
+						for yy := commit.Y + parent.X - (commit.X + 1); yy < parent.Y; yy++ {
+							if graph[yy][parent.X] == " " {
+								graph[yy][parent.X] = fmt.Sprintf("%s|", color)
+							}
+						}
+					} else {
+						//  *---\ child commit
+						//   	 \
+						//        \
+						//         \
+						//          * parent commit
+						for yy := 0; yy < distanceY; yy++ {
+							graph[parent.Y-yy][parent.X-yy] = fmt.Sprintf("%s\\", color)
+						}
+						for xx := commit.X + 1; xx < parent.X-distanceY; xx++ {
+							if graph[commit.Y][xx] == " " {
+								graph[commit.Y][xx] = fmt.Sprintf("%s-", color)
+							}
 						}
 					}
 				}
