@@ -40,7 +40,10 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 	if !cur2.Valid() {
 		return nil, nil
 	}
-	key := cur2.parent.CurrentKey()
+	key := cur2.CurrentKey()
+	if len(key) == 0 {
+		key = cur2.parent.CurrentKey()
+	}
 	err = errorIfNotSupportedLocation(key)
 	if err != nil {
 		return nil, err
@@ -53,24 +56,40 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 // in the document. If the location does not exist in the document, the resulting JsonCursor
 // will be at the location where the value would be if it was inserted.
 func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLocation, forRemoval bool) (jCur *JsonCursor, found bool, err error) {
-	cur, err := newCursorAtKey(ctx, ns, root, startKey.key, jsonLocationOrdering{})
+	jcur, err := newJsonCursorAtStartOfChunk(ctx, ns, root, startKey.key)
 	if err != nil {
 		return nil, false, err
 	}
+	found, err = jcur.AdvanceToLocation(ctx, startKey, forRemoval)
+	return jcur, found, err
+}
+
+func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root Node, startKey []byte) (jCur *JsonCursor, err error) {
+	cur, err := newCursorAtKey(ctx, ns, root, startKey, jsonLocationOrdering{})
+	if err != nil {
+		return nil, err
+	}
+	return newJsonCursorFromCursor(ctx, cur)
+}
+
+func newJsonCursorFromCursor(ctx context.Context, cur *cursor) (*JsonCursor, error) {
 	previousKey, err := getPreviousKey(ctx, cur)
 	if err != nil {
-		return nil, false, err
+		return nil, err
+	}
+	if !cur.isLeaf() {
+		nd, err := fetchChild(ctx, cur.nrw, cur.currentRef())
+		if err != nil {
+			return nil, err
+		}
+		return newJsonCursorFromCursor(ctx, &cursor{nd: nd, parent: cur, nrw: cur.nrw})
 	}
 	jsonBytes := cur.currentValue()
 	jsonDecoder := ScanJsonFromMiddleWithKey(jsonBytes, previousKey)
 
 	jcur := JsonCursor{cur: cur, jsonScanner: jsonDecoder}
 
-	found, err = jcur.AdvanceToLocation(ctx, startKey, forRemoval)
-	if err != nil {
-		return nil, found, err
-	}
-	return &jcur, found, nil
+	return &jcur, nil
 }
 
 func (j JsonCursor) Valid() bool {

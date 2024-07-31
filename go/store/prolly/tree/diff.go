@@ -128,6 +128,13 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 }
 
 func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
+	return td.next(ctx, true)
+}
+
+// next finds the next diff and then conditionally advances the cursors past the modified chunks.
+// In most cases, we want to advance the cursors, but in some circumstances the caller may want to access the cursors
+// and then advance them manually.
+func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff, err error) {
 	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
@@ -136,16 +143,16 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 
 		switch {
 		case cmp < 0:
-			return sendRemoved(ctx, td.from)
+			return sendRemoved(ctx, td.from, advanceCursors)
 
 		case cmp > 0:
-			return sendAdded(ctx, td.to)
+			return sendAdded(ctx, td.to, advanceCursors)
 
 		case cmp == 0:
 			// If the cursor schema has changed, then all rows should be considered modified.
 			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
 			if td.considerAllRowsModified || !equalcursorValues(td.from, td.to) {
-				return sendModified(ctx, td.from, td.to)
+				return sendModified(ctx, td.from, td.to, advanceCursors)
 			}
 
 			// advance both cursors since we have already determined that they are equal. This needs to be done because
@@ -166,42 +173,46 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 	}
 
 	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
-		return sendRemoved(ctx, td.from)
+		return sendRemoved(ctx, td.from, advanceCursors)
 	}
 	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
-		return sendAdded(ctx, td.to)
+		return sendAdded(ctx, td.to, advanceCursors)
 	}
 
 	return Diff{}, io.EOF
 }
 
-func sendRemoved(ctx context.Context, from *cursor) (diff Diff, err error) {
+func sendRemoved(ctx context.Context, from *cursor, advanceCursors bool) (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
 		Key:  from.CurrentKey(),
 		From: from.currentValue(),
 	}
 
-	if err = from.advance(ctx); err != nil {
-		return Diff{}, err
+	if advanceCursors {
+		if err = from.advance(ctx); err != nil {
+			return Diff{}, err
+		}
 	}
 	return
 }
 
-func sendAdded(ctx context.Context, to *cursor) (diff Diff, err error) {
+func sendAdded(ctx context.Context, to *cursor, advanceCursors bool) (diff Diff, err error) {
 	diff = Diff{
 		Type: AddedDiff,
 		Key:  to.CurrentKey(),
 		To:   to.currentValue(),
 	}
 
-	if err = to.advance(ctx); err != nil {
-		return Diff{}, err
+	if advanceCursors {
+		if err = to.advance(ctx); err != nil {
+			return Diff{}, err
+		}
 	}
 	return
 }
 
-func sendModified(ctx context.Context, from, to *cursor) (diff Diff, err error) {
+func sendModified(ctx context.Context, from, to *cursor, advanceCursors bool) (diff Diff, err error) {
 	diff = Diff{
 		Type: ModifiedDiff,
 		Key:  from.CurrentKey(),
@@ -209,11 +220,13 @@ func sendModified(ctx context.Context, from, to *cursor) (diff Diff, err error) 
 		To:   to.currentValue(),
 	}
 
-	if err = from.advance(ctx); err != nil {
-		return Diff{}, err
-	}
-	if err = to.advance(ctx); err != nil {
-		return Diff{}, err
+	if advanceCursors {
+		if err = from.advance(ctx); err != nil {
+			return Diff{}, err
+		}
+		if err = to.advance(ctx); err != nil {
+			return Diff{}, err
+		}
 	}
 	return
 }

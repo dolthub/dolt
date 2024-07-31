@@ -19,9 +19,12 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
+	"io"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	sqljson "github.com/dolthub/go-mysql-server/sql/expression/function/json"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
@@ -205,7 +208,7 @@ func (i IndexedJsonDocument) tryInsert(ctx context.Context, path string, val sql
 	return i.insertIntoCursor(ctx, keyPath, jsonCursor, val)
 }
 
-func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
 	cursorPath := jsonCursor.GetCurrentPath()
 
 	// If the inserted path is equivalent to "$" (which also includes "$[0]" on non-arrays), do nothing.
@@ -241,7 +244,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 			jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 			if err != nil {
-				return nil, false, err
+				return IndexedJsonDocument{}, false, err
 			}
 
 			originalValue, err := jsonCursor.NextValue(ctx)
@@ -251,7 +254,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 			insertedValueBytes, err := types.MarshallJson(val)
 			if err != nil {
-				return nil, false, err
+				return IndexedJsonDocument{}, false, err
 			}
 
 			jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf("[%s,%s]", originalValue, insertedValueBytes)))
@@ -259,7 +262,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 			newRoot, err := jsonChunker.Done(ctx)
 			if err != nil {
-				return nil, false, err
+				return IndexedJsonDocument{}, false, err
 			}
 
 			return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
@@ -285,14 +288,14 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 	insertedValueBytes, err := types.MarshallJson(val)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	// The key is guaranteed to not exist in the source doc. The cursor is pointing to the start of the subsequent object,
 	// which will be the insertion point for the added value.
 	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	// If required, adds a comma before writing the value.
@@ -313,7 +316,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 
 	newRoot, err := jsonChunker.Done(ctx)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
@@ -343,10 +346,17 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 	if err != nil {
 		return nil, false, err
 	}
+	return i.removeWithLocation(ctx, keyPath)
+}
 
+func (i IndexedJsonDocument) RemoveWithKey(ctx context.Context, key []byte) (IndexedJsonDocument, bool, error) {
+	return i.removeWithLocation(ctx, jsonPathFromKey(key))
+}
+
+func (i IndexedJsonDocument) removeWithLocation(ctx context.Context, keyPath jsonLocation) (IndexedJsonDocument, bool, error) {
 	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, true)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 	if !found {
 		// The key does not exist in the document.
@@ -356,7 +366,7 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 	// The cursor is now pointing to the end of the value prior to the one being removed.
 	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	startofRemovedLocation := jsonCursor.GetCurrentPath()
@@ -367,7 +377,7 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 	keyPath.setScannerState(endOfValue)
 	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	// If removing the first element of an object/array, skip past the comma, and set the chunker as if it's
@@ -379,7 +389,7 @@ func (i IndexedJsonDocument) tryRemove(ctx context.Context, path string) (types.
 
 	newRoot, err := jsonChunker.Done(ctx)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
@@ -406,10 +416,17 @@ func (i IndexedJsonDocument) trySet(ctx context.Context, path string, val sql.JS
 	if err != nil {
 		return nil, false, err
 	}
+	return i.setWithLocation(ctx, keyPath, val)
+}
 
+func (i IndexedJsonDocument) SetWithKey(ctx context.Context, key []byte, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
+	return i.setWithLocation(ctx, jsonPathFromKey(key), val)
+}
+
+func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLocation, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
 	jsonCursor, found, err := newJsonCursor(ctx, i.m.NodeStore, i.m.Root, keyPath, false)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	// The supplied path may be 0-indexing into a scalar, which is the same as referencing the scalar. Remove
@@ -480,24 +497,24 @@ func (i IndexedJsonDocument) tryReplace(ctx context.Context, path string, val sq
 	return i.replaceIntoCursor(ctx, keyPath, jsonCursor, val)
 }
 
-func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath jsonLocation, jsonCursor *JsonCursor, val sql.JSONWrapper) (IndexedJsonDocument, bool, error) {
 
 	// The cursor is now pointing to the start of the value being replaced.
 	jsonChunker, err := newJsonChunker(ctx, jsonCursor, i.m.NodeStore)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	// Advance the cursor to the end of the value being removed.
 	keyPath.setScannerState(endOfValue)
 	_, err = jsonCursor.AdvanceToLocation(ctx, keyPath, false)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	insertedValueBytes, err := types.MarshallJson(val)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	jsonChunker.appendJsonToBuffer(insertedValueBytes)
@@ -505,7 +522,7 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 
 	newRoot, err := jsonChunker.Done(ctx)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	return NewIndexedJsonDocument(ctx, newRoot, i.m.NodeStore), true, nil
@@ -547,4 +564,186 @@ func (i IndexedJsonDocument) String() string {
 func (i IndexedJsonDocument) GetBytes() (bytes []byte, err error) {
 	// TODO: Add context parameter to JSONBytes.GetBytes
 	return getBytesFromIndexedJsonMap(i.ctx, i.m)
+}
+
+func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error) {
+	stopIterationError := fmt.Errorf("stop")
+	var firstCharacter byte
+	err := i.m.WalkNodes(ctx, func(ctx context.Context, nd Node) error {
+		if nd.IsLeaf() {
+			firstCharacter = nd.GetValue(0)[0]
+			return stopIterationError
+		}
+		return nil
+	})
+	if err != stopIterationError {
+		return 0, err
+	}
+	return firstCharacter, nil
+}
+
+type jsonTypeCategory int
+
+const (
+	jsonTypeNull jsonTypeCategory = iota
+	jsonTypeNumber
+	jsonTypeString
+	JsonTypeObject
+	jsonTypeArray
+	jsonTypeBoolean
+)
+
+func getTypeCategoryOfValue(val interface{}) (jsonTypeCategory, error) {
+	if val == nil {
+		return jsonTypeNull, nil
+	}
+	switch val.(type) {
+	case map[string]interface{}:
+		return JsonTypeObject, nil
+	case []interface{}:
+		return jsonTypeArray, nil
+	case bool:
+		return jsonTypeBoolean, nil
+	case string:
+		return jsonTypeString, nil
+	case decimal.Decimal, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64:
+		return jsonTypeNumber, nil
+	}
+	return 0, fmt.Errorf("expected json value, got %v", val)
+}
+
+// getTypeCategoryFromFirstCharacter returns the type of a JSON object by inspecting its first byte.
+func getTypeCategoryFromFirstCharacter(c byte) jsonTypeCategory {
+	switch c {
+	case '{':
+		return JsonTypeObject
+	case '[':
+		return jsonTypeArray
+	case 'n':
+		return jsonTypeNull
+	case 't', 'f':
+		return jsonTypeBoolean
+	case '"':
+		return jsonTypeString
+	default:
+		return jsonTypeNumber
+	}
+}
+
+func (i IndexedJsonDocument) getTypeCategory() (jsonTypeCategory, error) {
+	firstCharacter, err := i.getFirstCharacter(i.ctx)
+	if err != nil {
+		return 0, err
+	}
+	return getTypeCategoryFromFirstCharacter(firstCharacter), nil
+}
+
+func GetTypeCategory(wrapper sql.JSONWrapper) (jsonTypeCategory, error) {
+	switch doc := wrapper.(type) {
+	case IndexedJsonDocument:
+		return doc.getTypeCategory()
+	case *types.LazyJSONDocument:
+		return getTypeCategoryFromFirstCharacter(doc.Bytes[0]), nil
+	default:
+		val, err := doc.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		return getTypeCategoryOfValue(val)
+	}
+}
+
+// Type implements types.ComparableJson
+func (i IndexedJsonDocument) Type(ctx context.Context) (string, error) {
+	firstCharacter, err := i.getFirstCharacter(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	switch firstCharacter {
+	case '{':
+		return "OBJECT", nil
+	case '[':
+		return "ARRAY", nil
+	}
+	// At this point the value must be a scalar, so it's okay to just load the whole thing.
+	val, err := i.ToInterface()
+	if err != nil {
+		return "", err
+	}
+	return sqljson.TypeOfJsonValue(val), nil
+}
+
+// Compare implements types.ComparableJson
+func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
+	thisTypeCategory, err := i.getTypeCategory()
+	if err != nil {
+		return 0, err
+	}
+
+	otherIndexedDocument, ok := other.(IndexedJsonDocument)
+	if !ok {
+		val, err := i.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		otherVal := other
+		if otherWrapper, ok := other.(sql.JSONWrapper); ok {
+			otherVal, err = otherWrapper.ToInterface()
+			if err != nil {
+				return 0, err
+			}
+		}
+		return types.CompareJSON(val, otherVal)
+	}
+
+	otherTypeCategory, err := otherIndexedDocument.getTypeCategory()
+	if err != nil {
+		return 0, err
+	}
+	if thisTypeCategory < otherTypeCategory {
+		return -1, nil
+	}
+	if thisTypeCategory > otherTypeCategory {
+		return 1, nil
+	}
+	switch thisTypeCategory {
+	case jsonTypeNull:
+		return 0, nil
+	case jsonTypeArray, JsonTypeObject:
+		// To compare two values that are both arrays or both objects, we must locate the first location
+		// where they differ.
+
+		jsonDiffer, err := NewIndexedJsonDiffer(i.ctx, i, otherIndexedDocument)
+		if err != nil {
+			return 0, err
+		}
+		firstDiff, err := jsonDiffer.Next(i.ctx)
+		if err == io.EOF {
+			// The two documents have no differences.
+			return 0, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		switch firstDiff.Type {
+		case AddedDiff:
+			// A key is present in other but not this.
+			return -1, nil
+		case RemovedDiff:
+			return 1, nil
+		case ModifiedDiff:
+			// Since both modified values have already been loaded into memory,
+			// We can just compare them.
+			return types.JSON.Compare(firstDiff.From, firstDiff.To)
+		default:
+			panic("Impossible diff type")
+		}
+	default:
+		val, err := i.ToInterface()
+		if err != nil {
+			return 0, err
+		}
+		return types.CompareJSON(val, other)
+	}
 }
