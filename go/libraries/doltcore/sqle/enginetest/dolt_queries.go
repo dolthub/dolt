@@ -736,6 +736,32 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_diff.from_commit test",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))",
+			"call dolt_add('test')",
+			"call dolt_commit('-m', 'added test table')",
+			"INSERT INTO test (pk, c1) VALUES (1,1),(2,2),(3,3)",
+			"call dolt_add('test')",
+			"call dolt_commit('-m', 'add rows 1-3')",
+			"UPDATE  test SET c1=4 WHERE pk=2",
+			"UPDATE  test SET c1=5 WHERE pk=3",
+			"call dolt_add('test')",
+			"call dolt_commit('-m', 'modified')",
+			"UPDATE test SET c1=2 WHERE pk=2",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE to_commit=\"WORKING\" and from_commit=hashof(\"main\") ORDER BY to_pk;",
+				Expected: []sql.Row{{2, 2, 2, 4, "modified"}},
+			},
+			{
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE from_commit=hashof(\"main\") ORDER BY to_pk;",
+				Expected: []sql.Row{{2, 2, 2, 4, "modified"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_hashof_db tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",

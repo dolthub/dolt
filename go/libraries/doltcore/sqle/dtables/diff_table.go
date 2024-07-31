@@ -18,9 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -281,7 +280,7 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 // TODO the structure of the diff iterator doesn't appear to accommodate
 // several children for a parent hash.
 func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	exactName, _, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
+	exactName, tbl, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -292,6 +291,23 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 	cmHashToTblInfo := make(map[hash.Hash]TblInfoAtCommit)
 	var pCommits []*doltdb.Commit
 	for i, hs := range hashes {
+		headHash, err := dt.head.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		if hs.Equal(headHash) {
+			// from_commit = 'HEAD' needs to match with 'WORKING'
+			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
+			if err != nil {
+				return nil, err
+			}
+			toCmInfo := TblInfoAtCommit{"WORKING", nil, tbl, wrTblHash}
+			cmHashToTblInfo[hs] = toCmInfo
+			parentHashes = append(parentHashes, hs)
+			pCommits = append(pCommits, dt.head)
+			continue
+		}
+
 		cm := commits[i]
 
 		// scope check
