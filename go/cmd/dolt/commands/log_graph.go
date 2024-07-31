@@ -17,7 +17,6 @@ package commands
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -68,12 +67,6 @@ func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithCh
 	}
 
 	return commitsWithChildren
-}
-
-// RemoveColorCodes removes ANSI color codes from a string
-func RemoveColorCodes(input string) string {
-	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return re.ReplaceAllString(input, "")
 }
 
 // wrap the commit message in a constrained width to better align the commit message with the graph
@@ -226,16 +219,10 @@ func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]
 
 func printLine(graph [][]string, posX, posY int, pager *outputpager.Pager, line string, commit CommitInfo, color, decoration string) {
 	graphLine := strings.Join(graph[posY], "")
-	if len(graph[posY]) > posX {
-		fmt.Println("Error: graph line is shorter than the x position of the commit")
-		fmt.Println("graph line:", graph[posY], "end")
-		fmt.Println("x position: ", posX)
-		fmt.Println("length of graph line: ", len(graph[posY]))
-	} else {
-		emptySpace := strings.Repeat(" ", posX-len(graph[posY]))
-		pager.Writer.Write([]byte(fmt.Sprintf("%s%s%s %s", graphLine, emptySpace, color, line)))
 
-	}
+	emptySpace := strings.Repeat(" ", posX-len(graph[posY]))
+	pager.Writer.Write([]byte(fmt.Sprintf("%s%s%s %s", graphLine, emptySpace, color, line)))
+
 	if decoration != "no" {
 		printRefs(pager, &commit, decoration)
 	}
@@ -305,8 +292,8 @@ func appendMessage(graph [][]string, pager *outputpager.Pager, apr *argparser.Ar
 		commitInfoHeight := getHeightOfCommit(commits[i])
 
 		// print the graph with commit message
-		for i, line := range commits[i].formattedMessage {
-			y := startY + commitInfoHeight - len(commits[i].formattedMessage) + i
+		for j, line := range commits[i].formattedMessage {
+			y := startY + commitInfoHeight - len(commits[i].formattedMessage) + j
 			printLine(graph, startX, y, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
 		}
 

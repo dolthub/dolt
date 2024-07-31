@@ -761,7 +761,7 @@ teardown() {
     dolt commit -Am "insert into test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 +" ]] || false
     [[ "$out" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
 
@@ -769,7 +769,7 @@ teardown() {
     dolt commit -Am "update test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 *" ]] || false
     [[ "$out" =~ " 1 tables changed, 0 rows added(+), 1 rows modified(*), 0 rows deleted(-)" ]] || false
 
@@ -777,7 +777,7 @@ teardown() {
     dolt commit -Am "delete from test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 -" ]] || false
     [[ "$out" =~ " 1 tables changed, 0 rows added(+), 0 rows modified(*), 1 rows deleted(-)" ]] || false
 
@@ -797,11 +797,11 @@ teardown() {
     run dolt log --stat --oneline
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    l1=$(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l1=$(remove_color_codes "${lines[1]}") # remove special characters for color
     [[ "$l1" =~ " test | 1 +" ]] || false
-    l2=$(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l2=$(remove_color_codes "${lines[2]}") # remove special characters for color
     [[ "$output" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
-    l3=$(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l3=$(remove_color_codes "${lines[4]}") # remove special characters for color
     [[ "$l3" =~ " test added" ]] || false
 }
 
@@ -827,6 +827,11 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
 }
 
+remove_color_codes() {
+    echo "$1" | sed -E 's/\x1b\[[0-9;]*m//g'
+}
+
+
 @test "log --graph: basic graph log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
@@ -837,29 +842,17 @@ teardown() {
     [ "$status" -eq 0 ]
     
     # Check the output with patterns
-    echo "${lines[0]}"
-    echo "${lines[1]}"
-    echo "${lines[2]}"
-    echo "${lines[3]}"
-    echo "${lines[4]}"
-    echo "${lines[5]}"
-    echo "${lines[6]}"
-    echo "${lines[7]}"
-    echo "${lines[8]}"
-    echo "${lines[9]}"
-    echo "${lines[10]}"
-
     [[ "${lines[0]}" =~ \* ]] || false
-    [[ $(echo "${lines[0]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit " ]] || false                          # * commit xxx
-    [[ $(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| Author:" ]] || false                          # | Author: 
-    [[ $(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| Date:" ]] || false                            # | Date: 
-    [[ $(echo "${lines[3]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                  # | 
-    [[ $(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1" ]] || false                           # |    commit 1 
-    [[ $(echo "${lines[5]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                  # | 
-    [[ $(echo "${lines[6]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit " ]] || false                          # * commit xxx
-    [[ $(echo "${lines[7]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Author:" ]] || false                            #   Author: 
-    [[ $(echo "${lines[8]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Date:" ]] || false                              #   Date: 
-    [[ $(echo "${lines[9]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Initialize data repository" ]] || false        #      Initialize data repository
+    [[ $(remove_color_codes "${lines[0]}") =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(remove_color_codes "${lines[1]}") =~ "| Author:" ]] || false                          # | Author: 
+    [[ $(remove_color_codes "${lines[2]}") =~ "| Date:" ]] || false                            # | Date: 
+    [[ $(remove_color_codes "${lines[3]}") =~ "|" ]] || false                                  # | 
+    [[ $(remove_color_codes "${lines[4]}") =~ "commit 1" ]] || false                           # |    commit 1 
+    [[ $(remove_color_codes "${lines[5]}") =~ "|" ]] || false                                  # | 
+    [[ $(remove_color_codes "${lines[6]}") =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(remove_color_codes "${lines[7]}") =~ "Author:" ]] || false                            #   Author: 
+    [[ $(remove_color_codes "${lines[8]}") =~ "Date:" ]] || false                              #   Date: 
+    [[ $(remove_color_codes "${lines[9]}") =~ "Initialize data repository" ]] || false         #      Initialize data repository
 }
 
 
@@ -882,33 +875,33 @@ teardown() {
     
     # Check the output with patterns
     [[ "${lines[0]}" =~ \* ]] || false
-    [[ $(echo "${lines[0]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "*\  commit " ]] || false                        # *\  commit xxx
-    [[ $(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Merge:" ]] || false                         # | | Merge:
-    [[ $(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                        # | | Author: 
-    [[ $(echo "${lines[3]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                          # | | Date: 
-    [[ $(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                                # | | 
-    [[ $(echo "${lines[5]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Merge branchA into main" ]] || false            # | |    Merge branchA into main 
-    [[ $(echo "${lines[6]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                                # | | 
-    [[ $(echo "${lines[7]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* | commit " ]] || false                        # * | commit xxx
-    [[ $(echo "${lines[8]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                        # | | Author: 
-    [[ $(echo "${lines[9]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                          # | | Date: 
-    [[ $(echo "${lines[10]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
-    [[ $(echo "${lines[11]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 2 MAIN" ]] || false                     # | |    commit 2 MAIN
-    [[ $(echo "${lines[12]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
-    [[ $(echo "${lines[13]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| * commit " ]] || false                       # | * commit xxx
-    [[ $(echo "${lines[14]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Author:" ]] || false                       # | | Author: 
-    [[ $(echo "${lines[15]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| | Date:" ]] || false                         # | | Date: 
-    [[ $(echo "${lines[16]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | |  
-    [[ $(echo "${lines[17]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
-    [[ $(echo "${lines[18]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "| |" ]] || false                               # | | 
-    [[ $(echo "${lines[19]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "*/ commit" ]] || false                         # */ commit xxx
-    [[ $(echo "${lines[20]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|  Author:" ]] || false                        # |  Author: 
-    [[ $(echo "${lines[21]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|  Date:" ]] || false                          # |  Date: 
-    [[ $(echo "${lines[22]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                 # |  
-    [[ $(echo "${lines[23]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
-    [[ $(echo "${lines[24]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "|" ]] || false                                 # | 
-    [[ $(echo "${lines[25]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "* commit" ]] || false                          # * commit
-    [[ $(echo "${lines[26]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Author:" ]] || false                           #   Author:
-    [[ $(echo "${lines[27]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Date:" ]] || false                             #   Date:
-    [[ $(echo "${lines[28]}" | sed -E 's/\x1b\[[0-9;]*m//g') =~ "Initialize data repository" ]] || false        #     Initialize data repository
+    [[ $(remove_color_codes "${lines[0]}") =~ "*\  commit " ]] || false                        # *\  commit xxx
+    [[ $(remove_color_codes "${lines[1]}") =~ "| | Merge:" ]] || false                         # | | Merge:
+    [[ $(remove_color_codes "${lines[2]}") =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(remove_color_codes "${lines[3]}") =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(remove_color_codes "${lines[4]}") =~ "| |" ]] || false                                # | | 
+    [[ $(remove_color_codes "${lines[5]}") =~ "Merge branchA into main" ]] || false            # | |    Merge branchA into main 
+    [[ $(remove_color_codes "${lines[6]}") =~ "| |" ]] || false                                # | | 
+    [[ $(remove_color_codes "${lines[7]}") =~ "* | commit " ]] || false                        # * | commit xxx
+    [[ $(remove_color_codes "${lines[8]}") =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(remove_color_codes "${lines[9]}") =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(remove_color_codes "${lines[10]}") =~ "| |" ]] || false                               # | | 
+    [[ $(remove_color_codes "${lines[11]}") =~ "commit 2 MAIN" ]] || false                     # | |    commit 2 MAIN
+    [[ $(remove_color_codes "${lines[12]}") =~ "| |" ]] || false                               # | | 
+    [[ $(remove_color_codes "${lines[13]}") =~ "| * commit " ]] || false                       # | * commit xxx
+    [[ $(remove_color_codes "${lines[14]}") =~ "| | Author:" ]] || false                       # | | Author: 
+    [[ $(remove_color_codes "${lines[15]}") =~ "| | Date:" ]] || false                         # | | Date: 
+    [[ $(remove_color_codes "${lines[16]}") =~ "| |" ]] || false                               # | |  
+    [[ $(remove_color_codes "${lines[17]}") =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
+    [[ $(remove_color_codes "${lines[18]}") =~ "| |" ]] || false                               # | | 
+    [[ $(remove_color_codes "${lines[19]}") =~ "*/ commit" ]] || false                         # */ commit xxx
+    [[ $(remove_color_codes "${lines[20]}") =~ "|  Author:" ]] || false                        # |  Author: 
+    [[ $(remove_color_codes "${lines[21]}") =~ "|  Date:" ]] || false                          # |  Date: 
+    [[ $(remove_color_codes "${lines[22]}") =~ "|" ]] || false                                 # |  
+    [[ $(remove_color_codes "${lines[23]}") =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
+    [[ $(remove_color_codes "${lines[24]}") =~ "|" ]] || false                                 # | 
+    [[ $(remove_color_codes "${lines[25]}") =~ "* commit" ]] || false                          # * commit
+    [[ $(remove_color_codes "${lines[26]}") =~ "Author:" ]] || false                           #   Author:
+    [[ $(remove_color_codes "${lines[27]}") =~ "Date:" ]] || false                             #   Date:
+    [[ $(remove_color_codes "${lines[28]}") =~ "Initialize data repository" ]] || false        #     Initialize data repository
 }
