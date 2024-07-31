@@ -626,7 +626,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		ctx.GetLogger().Errorf(msg)
 		DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 	}
-	schema, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
+	schema, tableName, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)
 	if err != nil {
 		return err
 	}
@@ -640,7 +640,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 		ctx.GetLogger().Debugf(" - Inserted Rows (table: %s)", tableMap.Name)
 	}
 
-	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableMap.Name, tableMap.Database, foreignKeyChecksDisabled)
+	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableName, tableMap.Database, foreignKeyChecksDisabled)
 	if err != nil {
 		return err
 	}
@@ -716,21 +716,22 @@ func closeWriteSession(ctx *sql.Context, engine *gms.Engine, databaseName string
 	return sqlDatabase.DbData().Ddb.UpdateWorkingSet(ctx, newWorkingSet.Ref(), newWorkingSet, hash, newWorkingSet.Meta(), nil)
 }
 
-// getTableSchema returns a sql.Schema for the specified table in the specified database.
-func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (sql.Schema, error) {
+// getTableSchema returns a sql.Schema for the case-insensitive |tableName| in the database named
+// |databaseName|, along with the exact, case-sensitive table name.
+func getTableSchema(ctx *sql.Context, engine *gms.Engine, tableName, databaseName string) (sql.Schema, string, error) {
 	database, err := engine.Analyzer.Catalog.Database(ctx, databaseName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	table, ok, err := database.GetTableInsensitive(ctx, tableName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !ok {
-		return nil, fmt.Errorf("unable to find table %q", tableName)
+		return nil, "", fmt.Errorf("unable to find table %q", tableName)
 	}
 
-	return table.Schema(), nil
+	return table.Schema(), table.Name(), nil
 }
 
 // getTableWriter returns a WriteSession and a TableWriter for writing to the specified |table| in the specified |database|.

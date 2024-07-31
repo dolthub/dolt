@@ -97,18 +97,30 @@ func teardown(t *testing.T) {
 
 // TestBinlogReplicationSanityCheck performs the simplest possible binlog replication test. It starts up
 // a MySQL primary and a Dolt replica, and asserts that a CREATE TABLE statement properly replicates to the
-// Dolt replica.
+// Dolt replica, along with simple insert, update, and delete statements.
 func TestBinlogReplicationSanityCheck(t *testing.T) {
 	defer teardown(t)
 	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
 	startReplicationAndCreateTestDb(t, mySqlPort)
 
-	// Make changes on the primary and verify on the replica
-	primaryDatabase.MustExec("create table t (pk int primary key)")
+	// Create a table on the primary and verify on the replica
+	primaryDatabase.MustExec("create table tableT (pk int primary key)")
 	waitForReplicaToCatchUp(t)
-	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
-	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+	assertCreateTableStatement(t, replicaDatabase, "tableT",
+		"CREATE TABLE tableT ( pk int NOT NULL, PRIMARY KEY (pk)) "+
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin")
 	assertRepoStateFileExists(t, "db01")
+
+	// Insert/Update/Delete on the primary
+	primaryDatabase.MustExec("insert into tableT values(100), (200)")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"100"}, {"200"}})
+	primaryDatabase.MustExec("delete from tableT where pk = 100")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"200"}})
+	primaryDatabase.MustExec("update tableT set pk = 300")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"300"}})
 }
 
 // TestBinlogSystemUserIsLocked tests that the binlog applier user is locked and cannot be used to connect to the server.
