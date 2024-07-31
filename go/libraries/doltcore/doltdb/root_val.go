@@ -77,6 +77,8 @@ type RootValue interface {
 	GetTable(ctx context.Context, tName TableName) (*Table, bool, error)
 	// GetTableHash returns the hash of the given case-sensitive table name.
 	GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error)
+	// GetTableSchemaHash returns the hash of the given table's schema.
+	GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error)
 	// GetTableNames retrieves the lists of all tables for a RootValue
 	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
 	// HandlePostMerge handles merging for any root elements that are not handled by the standard merge workflow. This
@@ -124,6 +126,8 @@ type rootValue struct {
 	rootHash hash.Hash             // cache the first load
 	// tablesHash is a digest of the table names
 	tablesHash uint64
+	// schemaHashes keeps a list of table schema hashes
+	schemaHashes map[TableName]hash.Hash
 }
 
 var _ RootValue = (*rootValue)(nil)
@@ -167,7 +171,7 @@ var NewRootValue = func(ctx context.Context, vrw types.ValueReadWriter, ns tree.
 		}
 	}
 
-	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, 0}, nil
+	return &rootValue{vrw, ns, storage, nil, hash.Hash{}, 0, nil}, nil
 }
 
 // EmptyRootValue returns an empty RootValue. This is a variable as it's changed in Doltgres.
@@ -289,6 +293,27 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 
 func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error) {
 	return root, nil
+}
+
+func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error) {
+	if root.schemaHashes == nil {
+		root.schemaHashes = make(map[TableName]hash.Hash)
+	}
+	key, ok := root.schemaHashes[tName]
+	if !ok {
+		tab, ok, err := root.GetTable(ctx, tName)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		if !ok {
+			return hash.Hash{}, nil
+		}
+		key, err = tab.GetSchemaHash(ctx)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+	return key, nil
 }
 
 func (root *rootValue) HasTable(ctx context.Context, tName TableName) (bool, error) {
@@ -476,8 +501,7 @@ func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 		return nil, err
 	}
 
-	// TODO: schema
-	return root.putTable(ctx, TableName{Name: tName}, ref)
+	return root.putTable(ctx, TableName{Name: tName}, ref, hash.Hash{})
 }
 
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
@@ -711,7 +735,7 @@ func (root *rootValue) IterTables(ctx context.Context, cb func(name TableName, t
 }
 
 func (root *rootValue) withStorage(st rootValueStorage) *rootValue {
-	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0}
+	return &rootValue{root.vrw, root.ns, st, nil, hash.Hash{}, 0, nil}
 }
 
 func (root *rootValue) NomsValue() types.Value {
@@ -782,14 +806,19 @@ func (root *rootValue) PutTable(ctx context.Context, tName TableName, table *Tab
 		return nil, err
 	}
 
-	return root.putTable(ctx, tName, tableRef)
+	schHash, err := table.GetSchemaHash(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return root.putTable(ctx, tName, tableRef, schHash)
 }
 
 func RefFromNomsTable(ctx context.Context, table *Table) (types.Ref, error) {
 	return durable.RefFromNomsTable(ctx, table.table)
 }
 
-func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.Ref) (RootValue, error) {
+func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.Ref, schHash hash.Hash) (RootValue, error) {
 	if !IsValidTableName(tName.Name) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
@@ -802,6 +831,16 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 			return nil, err
 		}
 	}
+	var preserveSchHash bool
+	if preserveTablesHash {
+		// XXX: in practice, we could reuse schema hash maps between
+		// root values on table create/delete. We will fail to resolve
+		// the table upstream of schema hash checking optimizations.
+		// This has little perf benefit right now.
+		if prevHash, ok := root.schemaHashes[tName]; ok {
+			preserveSchHash = prevHash == schHash
+		}
+	}
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.VRW(), root.NodeStore(), []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
@@ -812,6 +851,10 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 	if preserveTablesHash {
 		// maintain |tablesHash| if we are replacing a table,
 		ret.tablesHash = root.tablesHash
+	}
+	if preserveSchHash {
+		// certain updates can safely reuse the previous map
+		ret.schemaHashes = root.schemaHashes
 	}
 	return ret, nil
 }
@@ -1139,14 +1182,32 @@ func FilterIgnoredTables(ctx context.Context, tables []TableName, roots Roots) (
 	return ignoredTables, nil
 }
 
+// GetSchemaHash returns the schema hash for a given table name. If |overrideSch|
+// is present, the root value is not considered immutable and we manually calculate
+// the schema hash for safety.
+func GetSchemaHash(ctx context.Context, root RootValue, name TableName, overrideSch schema.Schema) (hash.Hash, error) {
+	if overrideSch != nil {
+		// root value schemas are not immutable when override schema is present
+		tab, ok, err := root.GetTable(ctx, name)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		if !ok {
+			return hash.Hash{}, nil
+		}
+		return tab.GetSchemaHash(ctx)
+	}
+	return root.GetTableSchemaHash(ctx, name)
+}
+
 // ValidateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string, table *Table) error {
-	prev, ok, err := root.GetTable(ctx, TableName{Name: tableName})
+	prevTName := TableName{Name: tableName}
+	prevHash, err := GetSchemaHash(ctx, root, prevTName, table.overriddenSchema)
 	if err != nil {
 		return err
 	}
-	if ok {
-		prevHash, err := prev.GetSchemaHash(ctx)
+	if !prevHash.IsEmpty() {
 		if err != nil {
 			return err
 		}

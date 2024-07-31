@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
 // SessionCache caches various pieces of expensive to compute information to speed up future lookups in the session.
@@ -38,6 +39,8 @@ type SessionCache struct {
 
 	// writers are keyed by table schema hash
 	writers map[doltdb.DataCacheKey]*WriterState
+	// strictLookups are keyed by table schema hash
+	strictLookups map[doltdb.DataCacheKey][]index.LookupMeta
 	// checks is keyed by table schema hash
 	checks map[doltdb.DataCacheKey][]sql.CheckDefinition
 
@@ -186,6 +189,31 @@ func (c *SessionCache) GetCachedTable(key doltdb.DataCacheKey, tableName TableCa
 
 	table, ok := tablesForKey[tableName.ToLower()]
 	return table, ok
+}
+
+// GetCachedStrictLookup returns a cached set of |sql.IndexLookup|s for the table named, and whether the cache was present
+func (c *SessionCache) GetCachedStrictLookup(key doltdb.DataCacheKey) ([]index.LookupMeta, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	schemaState, ok := c.strictLookups[key]
+	return schemaState, ok
+}
+
+// CacheStrictLookup caches a set of |sql.IndexLookup|s for the table named
+func (c *SessionCache) CacheStrictLookup(key doltdb.DataCacheKey, state []index.LookupMeta) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.strictLookups == nil {
+		c.strictLookups = make(map[doltdb.DataCacheKey][]index.LookupMeta)
+	}
+	if len(c.strictLookups) > maxCachedKeys {
+		for k := range c.strictLookups {
+			delete(c.strictLookups, k)
+		}
+	}
+
+	c.strictLookups[key] = state
 }
 
 // GetCachedWriterState returns the cached WriterState for the table named, and whether the cache was present
