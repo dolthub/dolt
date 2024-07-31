@@ -165,22 +165,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 			order:                         sql.IndexOrderNone,
 			constrainedToLookupExpression: false,
 		}),
-			NewCommitIndex(&doltIndex{
-				id:      FromCommitIndexId,
-				tblName: doltdb.DoltDiffTablePrefix + tbl,
-				dbName:  db,
-				columns: []schema.Column{
-					schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
-				},
-				indexSch:                      sch,
-				tableSch:                      sch,
-				unique:                        true,
-				comment:                       "",
-				vrw:                           t.ValueReadWriter(),
-				ns:                            t.NodeStore(),
-				order:                         sql.IndexOrderNone,
-				constrainedToLookupExpression: false,
-			}),
 		)
 	}
 	return indexes, nil
