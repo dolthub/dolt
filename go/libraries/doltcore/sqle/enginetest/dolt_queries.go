@@ -5246,7 +5246,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (a, b) values (100, 100)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 100}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 5}}},
 			},
 			{
 				Query:            "alter table t auto_increment = 50",
@@ -7201,7 +7201,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "insert into t values (100), (1000)",
 				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 2, InsertID: 0x64}},
+					{types.OkResult{RowsAffected: 2, InsertID: 1}},
 				},
 			},
 			{
