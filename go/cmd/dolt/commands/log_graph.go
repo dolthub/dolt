@@ -39,13 +39,13 @@ import (
 *   Create a 2D matrix to store the branch paths, this matrix will help us find the available column for the commits.
 *   In each column, there will be multiple branch paths, and each path is represented by a pair of positions of start and end commits on the branch.
 *   For example:
-*    * Head commit (main branch)
-*    *  Merge branch A into main
-*      *  Commit on branch A
-*    *  Parent commit 1
-*    *  Merge branch B into main
-*	    *  Commit on branch B
-*	  *  Parent commit 2
+*    0 * Head commit (main branch)
+*    1 *  Merge branch A into main
+*    2  *  Commit on branch A
+*    3 *  Parent commit 1
+*    4 *  Merge branch B into main
+*	 5  *  Commit on branch B
+*	 6 *  Parent commit 2
 *   Branches in this will be stored in columns as:
 *   Column 0: [[0,6]], there's only one branch path in this column, from the head commit to the parent commit 2
 *   Column 1: [[2,2], [5,5]], there are two branch paths in this column
@@ -53,9 +53,10 @@ import (
 *   Note that we are calculating the positions in the sorted order, so the child commits are always calculated before their parents.
 *	 There are 3 types of commits:
 *   1. The commit has no children, this is a head commit on a branch. It will be put in a new column
-*	2. The commit has branch children (the children has this commit as first parent), the x coordinate of the commit is the minimum x coordinate (leftmost position) of its children.
+*	2. The commit has branch children (at least one child has this commit as first parent), this commit will put in the column of the left most branch children.
 *   3. The commit has no branch children but merge children, searching in the columns matrix to find the first column that has no branches that will overlap with the current commit.
-*
+*		- In the last example, when determining where to put the commit on branch B, we should have the columns matrix as: [[[0,6]], [[2,2]]]. Potential column index options for this commit is 0, 1, or we can create a new column: 2.
+*		- Look at the children of this current commit, which is the merge commit and it's on column 0. So we can start from column 1,and since the path in column 1 ends at row 2, this commits can be put in column 1.
 *
 * - Draw the graph.
 *   Once we have the positions of the commits, we can draw the graph.
@@ -63,19 +64,19 @@ import (
 *   Same as the calculation part, we have 3 types of paths:
 *   1. The parent is on the same branch/column, draw a vertical line from the parent to the current commit.
 *   2. The parent is on the left side of the current commit. Draw a diagonal line from the parent to the column of the current commit, then draw a horizontal line or a vertical line depending on the vertical and horizontal distance of the two.
-*          a. the horizontal distance is greater than the vertical distance	    b. the vertical distance is greater than the horizontal distance
-*              	   * child commit             										          * child commit
-*            	      /                                  										  |
-*           	     /																	   		 /
-*       	   *----  parent commit                   										    * parent commit
+*          a. the horizontal distance is greater than the vertical distance                               b. the vertical distance is greater than the horizontal distance
+*                                    * child commit                                                                                      * child commit
+*                                   /                                                                                                    |
+*                                  /                                                                                                    /
+*                            *----  parent commit                                                                                      * parent commit
 *
 *   3. The parent is on the right side of the current commit, draw a diagonal line from the parent to the column of the current commit, then draw a horizontal line to the parent.
-*			a. the vertical distance is greater than the horizontal distance	    b. the horizontal distance is greater than the vertical distance
-*              * child commit 					 										* --- child commit
-* 				 \								     										  \
-* 				  \                                 									       \
-* 				  |                                     									    \
-* 				  * parent commit                          										 * parent commit
+*          a. the vertical distance is greater than the horizontal distance	                              b. the horizontal distance is greater than the vertical distance
+*                           * child commit                                                                                          * --- child commit
+*                            \                                                                                                            \
+*                             \                                                                                                            \
+*                             |                                                                                                             \
+*                             * parent commit                                                                                                * parent commit
 *
 * ------------
 * Sample output
