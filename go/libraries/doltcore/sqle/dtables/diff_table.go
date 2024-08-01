@@ -296,7 +296,9 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 			return nil, err
 		}
 		if hs.Equal(headHash) {
-			// from_commit = 'HEAD' needs to match with 'WORKING'
+			// If from_commit specifies the 'HEAD' commit, we need to include
+			// the working root in the parent commits because 'WORKING' is one step
+			// above 'HEAD'.
 			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
 			if err != nil {
 				return nil, err
