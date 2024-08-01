@@ -832,7 +832,7 @@ remove_color_codes() {
 }
 
 
-@test "log --graph: basic graph log" {
+@test "log: --graph: basic graph log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
     dolt commit -m "commit 1"
@@ -856,7 +856,7 @@ remove_color_codes() {
 }
 
 
-@test "log --graph: graph with merges" {
+@test "log: --graph: graph with merges" {
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
       skip "needs checkout which is unsupported for remote-engine"
     fi
