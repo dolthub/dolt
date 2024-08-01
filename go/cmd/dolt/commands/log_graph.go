@@ -202,35 +202,6 @@ func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithCh
 	return commitsWithChildren
 }
 
-// wrapTextOnWidth wraps the commit message in a constrained width to better align the commit message with the graph
-func indentWithWrap(text string, width int) []string {
-	lines := strings.Split(text, "\n")
-	totalRows := 0
-	wrappedLines := make([]string, 0)
-
-	for _, line := range lines {
-		words := strings.Fields(line)
-		currentLine := ""
-		for _, word := range words {
-			if len(currentLine)+len(word)+1 > width {
-				wrappedLines = append(wrappedLines, currentLine)
-				totalRows++
-				currentLine = word
-			} else {
-				if currentLine != "" {
-					currentLine += " "
-				}
-				currentLine += word
-			}
-		}
-		if currentLine != "" {
-			wrappedLines = append(wrappedLines, currentLine)
-			totalRows++
-		}
-	}
-	return wrappedLines
-}
-
 func minVal(values ...int) int {
 	if len(values) == 0 {
 		return math.MaxInt
@@ -446,7 +417,7 @@ func expandGraph(commits []*CommitInfoWithChildren, width int) {
 		// one empty column between each branch path
 		commit.Col = commit.Col * 2
 		commit.Row = posY
-		formattedMessage := indentWithWrap(commit.Commit.commitMeta.Description, width)
+		formattedMessage := strings.Split(commit.Commit.commitMeta.Description, "\n")
 		commit.formattedMessage = formattedMessage
 
 		posY += getHeightOfCommit(commit) + 1
