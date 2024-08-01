@@ -16,39 +16,93 @@ package binlogreplication
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
-// persistReplicationConfiguration saves the specified |replicaSourceInfo| to disk; if any problems are encountered
-// while saving to disk, an error is returned.
-func persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
-	}
-	engine := server.Engine
+// replicationRunningStateDirectory is the directory where the "replica-running" file is stored to indicate that
+// replication on a replica was running the last time the server was running.
+const replicationRunningStateDirectory = ".doltcfg"
 
-	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+// replicaRunningFilename holds the name of the file that indicates replication was running on a replica server.
+const replicaRunningFilename = "replica-running"
+
+// replicaRunningState indicates if a replica was actively running replication.
+type replicaRunningState int
+
+const (
+	running replicaRunningState = iota
+	notRunning
+)
+
+// persistReplicationConfiguration saves the specified |replicaSourceInfo| to the "mysql"
+// database |mysqlDb|. If any problems are encountered while saving to disk, an error is returned.
+func persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_db.ReplicaSourceInfo, mysqlDb *mysql_db.MySQLDb) error {
 	ed := mysqlDb.Editor()
 	defer ed.Close()
 	ed.PutReplicaSourceInfo(replicaSourceInfo)
 	return mysqlDb.Persist(ctx, ed)
 }
 
-// loadReplicationConfiguration loads the replication configuration for default channel ("").
-func loadReplicationConfiguration(_ *sql.Context) (*mysql_db.ReplicaSourceInfo, error) {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return nil, fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
+// loadReplicationRunningState loads the replication running state from disk by looking for a "replica-running" file
+// in the .doltcfg directory. An error is returned if any problems were encountered loading the state from disk.
+func loadReplicationRunningState(ctx *sql.Context) (replicaRunningState, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	filesys := doltSession.Provider().FileSystem()
+
+	replicationRunningStateFilepath, err := filesys.Abs(
+		filepath.Join(replicationRunningStateDirectory, replicaRunningFilename))
+	if err != nil {
+		return notRunning, err
 	}
-	engine := server.Engine
-	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+
+	if replicaRunning, _ := filesys.Exists(replicationRunningStateFilepath); replicaRunning {
+		return running, nil
+	} else {
+		return notRunning, nil
+	}
+}
+
+// persistReplicaRunningState records the running |state| of a replica to disk by creating a "replica-running" empty
+// file in the .doltcfg directory. An error is returned if any problems were encountered saving the state to disk.
+func persistReplicaRunningState(ctx *sql.Context, state replicaRunningState) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	filesys := doltSession.Provider().FileSystem()
+
+	// TODO: Do we need to create this dir if it doesn't exist?
+	//       Could reuse code from binlogPositionStore if so.
+	//filesys.Exists(replicationRunningStateDirectory)
+
+	// TODO: a helper function could create this path?
+	replicationRunningStateFilepath, err := filesys.Abs(
+		filepath.Join(replicationRunningStateDirectory, replicaRunningFilename))
+	if err != nil {
+		return err
+	}
+
+	switch state {
+	case running:
+		return createEmptyFile(replicationRunningStateFilepath)
+	case notRunning:
+		_, err = os.Stat(replicationRunningStateFilepath)
+		if os.IsNotExist(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		return os.Remove(replicationRunningStateFilepath)
+	default:
+		return fmt.Errorf("unsupported replica running state: %v", state)
+	}
+}
+
+// loadReplicationConfiguration loads the replication configuration for default channel ("") from
+// the "mysql" database, |mysqlDb|.
+func loadReplicationConfiguration(_ *sql.Context, mysqlDb *mysql_db.MySQLDb) (*mysql_db.ReplicaSourceInfo, error) {
 	rd := mysqlDb.Reader()
 	defer rd.Close()
 
@@ -62,30 +116,36 @@ func loadReplicationConfiguration(_ *sql.Context) (*mysql_db.ReplicaSourceInfo, 
 	return nil, nil
 }
 
-// deleteReplicationConfiguration deletes all replication configuration for the default channel ("").
-func deleteReplicationConfiguration(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("no SQL server running; " +
-			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
-	}
-	engine := server.Engine
-	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+// deleteReplicationConfiguration deletes all replication configuration for the default channel ("")
+// from the specified "mysql" database, |mysqlDb|.
+func deleteReplicationConfiguration(ctx *sql.Context, mysqlDb *mysql_db.MySQLDb) error {
 	ed := mysqlDb.Editor()
 	defer ed.Close()
 
 	ed.RemoveReplicaSourceInfo(mysql_db.ReplicaSourceInfoPrimaryKey{})
 
-	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx, ed)
+	return mysqlDb.Persist(ctx, ed)
 }
 
-// persistSourceUuid saves the specified |sourceUuid| to a persistent storage location.
-func persistSourceUuid(ctx *sql.Context, sourceUuid string) error {
-	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
+// persistSourceUuid saves the specified |sourceUuid| to the "mysql" database, |mysqlDb|.
+func persistSourceUuid(ctx *sql.Context, sourceUuid string, mysqlDb *mysql_db.MySQLDb) error {
+	replicaSourceInfo, err := loadReplicationConfiguration(ctx, mysqlDb)
 	if err != nil {
 		return err
 	}
 
 	replicaSourceInfo.Uuid = sourceUuid
-	return persistReplicationConfiguration(ctx, replicaSourceInfo)
+	return persistReplicationConfiguration(ctx, replicaSourceInfo, mysqlDb)
+}
+
+// createEmptyFile creates an empty file at |fullFilepath| if a file does not exist already. If a file does exist
+// at that path, no action is taken.
+func createEmptyFile(fullFilepath string) (err error) {
+	_, err = os.Stat(fullFilepath)
+	if os.IsNotExist(err) {
+		var emptyFile *os.File
+		emptyFile, err = os.Create(fullFilepath)
+		defer emptyFile.Close()
+	}
+	return err
 }

@@ -123,6 +123,72 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"300"}})
 }
 
+// TestAutoRestartReplica tests that a Dolt replica automatically starts up replication if
+// replication was running when the replica was shut down.
+func TestAutoRestartReplica(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+
+	// Assert that replication is not running yet
+	status := queryReplicaStatus(t)
+	require.Equal(t, "0", status["Last_IO_Errno"])
+	require.Equal(t, "", status["Last_IO_Error"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+
+	// Start up replication and replicate some test data
+	startReplicationAndCreateTestDb(t, mySqlPort)
+	primaryDatabase.MustExec("create table db01.autoRestartTest(pk int primary key);")
+	waitForReplicaToCatchUp(t)
+	primaryDatabase.MustExec("insert into db01.autoRestartTest values (100);")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db01.autoRestartTest;", [][]any{{"100"}})
+
+	// Test for the presence of the replica-running state file
+	require.True(t, fileExists(filepath.Join(testDir, "dolt", ".doltcfg", "replica-running")))
+
+	// Restart the Dolt replica
+	stopDoltSqlServer(t)
+	var err error
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+
+	// Assert that some test data replicates correctly
+	primaryDatabase.MustExec("insert into db01.autoRestartTest values (200);")
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db01.autoRestartTest;",
+		[][]any{{"100"}, {"200"}})
+
+	// SHOW REPLICA STATUS should show that replication is running, with no errors
+	status = queryReplicaStatus(t)
+	require.Equal(t, "0", status["Last_IO_Errno"])
+	require.Equal(t, "", status["Last_IO_Error"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "Yes", status["Replica_IO_Running"])
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// Stop replication and assert the replica-running marker file is removed
+	replicaDatabase.MustExec("stop replica")
+	require.False(t, fileExists(filepath.Join(testDir, "dolt", ".doltcfg", "replica-running")))
+
+	// Restart the Dolt replica
+	stopDoltSqlServer(t)
+	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	require.NoError(t, err)
+
+	// SHOW REPLICA STATUS should show that replication is NOT running, with no errors
+	status = queryReplicaStatus(t)
+	require.Equal(t, "0", status["Last_IO_Errno"])
+	require.Equal(t, "", status["Last_IO_Error"])
+	require.Equal(t, "0", status["Last_SQL_Errno"])
+	require.Equal(t, "", status["Last_SQL_Error"])
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
+}
+
 // TestBinlogSystemUserIsLocked tests that the binlog applier user is locked and cannot be used to connect to the server.
 func TestBinlogSystemUserIsLocked(t *testing.T) {
 	defer teardown(t)
@@ -1038,7 +1104,7 @@ func runDoltCommand(doltDataDir string, goDirPath string, doltArgs ...string) er
 // available.
 func waitForSqlServerToStart(database *sqlx.DB) error {
 	fmt.Printf("Waiting for server to start...\n")
-	for counter := 0; counter < 20; counter++ {
+	for counter := 0; counter < 30; counter++ {
 		if database.Ping() == nil {
 			return nil
 		}

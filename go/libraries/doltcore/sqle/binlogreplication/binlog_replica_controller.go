@@ -15,13 +15,15 @@
 package binlogreplication
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/sirupsen/logrus"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
@@ -65,6 +67,7 @@ type doltBinlogReplicaController struct {
 
 	// operationMutex blocks concurrent access to the START/STOP/RESET REPLICA operations
 	operationMutex *sync.Mutex
+	engine         *sqle.Engine
 }
 
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)
@@ -113,7 +116,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return fmt.Errorf("unable to start replication: %s", err.Error())
 	}
 
-	configuration, err := loadReplicationConfiguration(ctx)
+	configuration, err := loadReplicationConfiguration(ctx, d.engine.Analyzer.Catalog.MySQLDb)
 	if err != nil {
 		return err
 	} else if configuration == nil {
@@ -143,6 +146,13 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 
 	ctx.GetLogger().Info("starting binlog replication...")
 	d.applier.Go(d.ctx)
+
+	// Attempt to record that the replica has started replication so that it will
+	// start automatically the next time the replica server is started.
+	if err := persistReplicaRunningState(ctx, running); err != nil {
+		ctx.GetLogger().Errorf("unable to persist replica running state: %s", err.Error())
+	}
+
 	return nil
 }
 
@@ -151,11 +161,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
 // locked, it will be given super user privs and locked.
 func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("unable to access a running SQL server")
-	}
-	mySQLDb := server.Engine.Analyzer.Catalog.MySQLDb
+	mySQLDb := d.engine.Analyzer.Catalog.MySQLDb
 	ed := mySQLDb.Editor()
 	defer ed.Close()
 
@@ -201,12 +207,18 @@ func (d *doltBinlogReplicaController) StopReplica(ctx *sql.Context) error {
 		status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 	})
 
+	// Attempt to record that the replica has stopped replication so that it will not
+	// start automatically the next time the replica server is started.
+	if err := persistReplicaRunningState(ctx, notRunning); err != nil {
+		ctx.GetLogger().Errorf("unable to persist replica running state: %s", err.Error())
+	}
+
 	return nil
 }
 
 // SetReplicationSourceOptions implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Context, options []binlogreplication.ReplicationOption) error {
-	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
+	replicaSourceInfo, err := loadReplicationConfiguration(ctx, d.engine.Analyzer.Catalog.MySQLDb)
 	if err != nil {
 		return err
 	}
@@ -267,7 +279,7 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 	}
 
 	// Persist the updated replica source configuration to disk
-	return persistReplicationConfiguration(ctx, replicaSourceInfo)
+	return persistReplicationConfiguration(ctx, replicaSourceInfo, d.engine.Analyzer.Catalog.MySQLDb)
 }
 
 // SetReplicationFilterOptions implements the BinlogReplicaController interface.
@@ -308,19 +320,19 @@ func (d *doltBinlogReplicaController) SetReplicationFilterOptions(_ *sql.Context
 
 // GetReplicaStatus implements the BinlogReplicaController interface
 func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlogreplication.ReplicaStatus, error) {
-	replicaSourceInfo, err := loadReplicationConfiguration(ctx)
+	replicaSourceInfo, err := loadReplicationConfiguration(ctx, d.engine.Analyzer.Catalog.MySQLDb)
 	if err != nil {
 		return nil, err
-	}
-
-	if replicaSourceInfo == nil {
-		return nil, nil
 	}
 
 	// Lock to read status consistently
 	d.statusMutex.Lock()
 	defer d.statusMutex.Unlock()
 	var copy = d.status
+
+	if replicaSourceInfo == nil {
+		return &copy, nil
+	}
 
 	copy.SourceUser = replicaSourceInfo.User
 	copy.SourceHost = replicaSourceInfo.Host
@@ -359,7 +371,7 @@ func (d *doltBinlogReplicaController) ResetReplica(ctx *sql.Context, resetAll bo
 	})
 
 	if resetAll {
-		err := deleteReplicationConfiguration(ctx)
+		err := deleteReplicationConfiguration(ctx, d.engine.Analyzer.Catalog.MySQLDb)
 		if err != nil {
 			return err
 		}
@@ -409,6 +421,31 @@ func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 	d.status.LastSqlErrorTimestamp = &currentTime
 	d.status.LastSqlErrNumber = errno
 	d.status.LastSqlError = message
+}
+
+func (d *doltBinlogReplicaController) AutoStartIfEnabled(_ context.Context) error {
+	logrus.Error("ReplicaController:AutoStartIfEnabled")
+
+	runningState, err := loadReplicationRunningState(d.ctx)
+	if err != nil {
+		logrus.Errorf("Unable to load replication running state: %s", err.Error())
+		return err
+	}
+
+	if runningState == notRunning {
+		logrus.Trace("no previous replication running state; not auto starting replication")
+		return nil
+	}
+
+	logrus.Info("auto-starting binlog replication from source...")
+	return d.StartReplica(d.ctx)
+}
+
+// SetEngine sets the SQL engine this replica will use when running replicated statements and
+// when loading the Catalog to find the "mysql" database.
+func (d *doltBinlogReplicaController) SetEngine(engine *sqle.Engine) {
+	d.engine = engine
+	d.applier.engine = engine
 }
 
 //
