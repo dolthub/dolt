@@ -73,11 +73,12 @@ func persistReplicaRunningState(ctx *sql.Context, state replicaRunningState) err
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	filesys := doltSession.Provider().FileSystem()
 
-	// TODO: Do we need to create this dir if it doesn't exist?
-	//       Could reuse code from binlogPositionStore if so.
-	//filesys.Exists(replicationRunningStateDirectory)
+	// The .doltcfg dir may not exist yet, so create it if necessary.
+	err := createDoltCfgDir(filesys)
+	if err != nil {
+		return err
+	}
 
-	// TODO: a helper function could create this path?
 	replicationRunningStateFilepath, err := filesys.Abs(
 		filepath.Join(replicationRunningStateDirectory, replicaRunningFilename))
 	if err != nil {

@@ -193,6 +193,13 @@ func (d *doltBinlogReplicaController) SetExecutionContext(ctx *sql.Context) {
 	d.ctx = ctx
 }
 
+// SetEngine sets the SQL engine this replica will use when running replicated statements and
+// when loading the Catalog to find the "mysql" database.
+func (d *doltBinlogReplicaController) SetEngine(engine *sqle.Engine) {
+	d.engine = engine
+	d.applier.engine = engine
+}
+
 // StopReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StopReplica(ctx *sql.Context) error {
 	if d.applier.IsRunning() == false {
@@ -423,9 +430,11 @@ func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 	d.status.LastSqlError = message
 }
 
-func (d *doltBinlogReplicaController) AutoStartIfEnabled(_ context.Context) error {
-	logrus.Error("ReplicaController:AutoStartIfEnabled")
-
+// AutoStart starts up replication if replication was running before the server was shutdown. If
+// replication is not configured, hasn't been started, or has been stopped before the server was
+// shutdown, then this method will not start replication. This method should only be called during
+// the server startup process and should not be invoked after that.
+func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
 	runningState, err := loadReplicationRunningState(d.ctx)
 	if err != nil {
 		logrus.Errorf("Unable to load replication running state: %s", err.Error())
@@ -439,13 +448,6 @@ func (d *doltBinlogReplicaController) AutoStartIfEnabled(_ context.Context) erro
 
 	logrus.Info("auto-starting binlog replication from source...")
 	return d.StartReplica(d.ctx)
-}
-
-// SetEngine sets the SQL engine this replica will use when running replicated statements and
-// when loading the Catalog to find the "mysql" database.
-func (d *doltBinlogReplicaController) SetEngine(engine *sqle.Engine) {
-	d.engine = engine
-	d.applier.engine = engine
 }
 
 //
