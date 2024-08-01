@@ -831,7 +831,6 @@ remove_color_codes() {
     echo "$1" | sed -E 's/\x1b\[[0-9;]*m//g'
 }
 
-
 @test "log: --graph: basic graph log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
@@ -872,11 +871,11 @@ remove_color_codes() {
 
     run dolt log --graph  
     [ "$status" -eq 0 ]
-    
+
     # Check the output with patterns
     [[ "${lines[0]}" =~ \* ]] || false
-    [[ $(remove_color_codes "${lines[0]}") =~ "*\  commit " ]] || false                        # *\  commit xxx
-    [[ $(remove_color_codes "${lines[1]}") =~ "| | Merge:" ]] || false                         # | | Merge:
+    [[ $(remove_color_codes "${lines[0]}") =~ "*   commit " ]] || false                        # *   commit xxx
+    [[ $(remove_color_codes "${lines[1]}") =~ "|\  Merge:" ]] || false                         # |\  Merge:
     [[ $(remove_color_codes "${lines[2]}") =~ "| | Author:" ]] || false                        # | | Author: 
     [[ $(remove_color_codes "${lines[3]}") =~ "| | Date:" ]] || false                          # | | Date: 
     [[ $(remove_color_codes "${lines[4]}") =~ "| |" ]] || false                                # | | 
@@ -893,10 +892,10 @@ remove_color_codes() {
     [[ $(remove_color_codes "${lines[15]}") =~ "| | Date:" ]] || false                         # | | Date: 
     [[ $(remove_color_codes "${lines[16]}") =~ "| |" ]] || false                               # | |  
     [[ $(remove_color_codes "${lines[17]}") =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
-    [[ $(remove_color_codes "${lines[18]}") =~ "| |" ]] || false                               # | | 
-    [[ $(remove_color_codes "${lines[19]}") =~ "*/ commit" ]] || false                         # */ commit xxx
-    [[ $(remove_color_codes "${lines[20]}") =~ "|  Author:" ]] || false                        # |  Author: 
-    [[ $(remove_color_codes "${lines[21]}") =~ "|  Date:" ]] || false                          # |  Date: 
+    [[ $(remove_color_codes "${lines[18]}") =~ "|/" ]] || false                                # |/ 
+    [[ $(remove_color_codes "${lines[19]}") =~ "* commit" ]] || false                          # *  commit xxx
+    [[ $(remove_color_codes "${lines[20]}") =~ "| Author:" ]] || false                         # |  Author: 
+    [[ $(remove_color_codes "${lines[21]}") =~ "| Date:" ]] || false                           # |  Date: 
     [[ $(remove_color_codes "${lines[22]}") =~ "|" ]] || false                                 # |  
     [[ $(remove_color_codes "${lines[23]}") =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
     [[ $(remove_color_codes "${lines[24]}") =~ "|" ]] || false                                 # | 
