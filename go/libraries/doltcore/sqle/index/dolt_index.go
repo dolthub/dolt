@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync/atomic"
 
@@ -1250,6 +1251,93 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 	}
 	return pranges, nil
+}
+
+// TODO: doc
+func RawIndexIterator(ctx *sql.Context, table DoltTableable, projections []uint64, pkSch sql.PrimaryKeySchema, lookup sql.IndexLookup, startExprs, stopExprs []sql.Expression) (sql.RowIter, error) {
+	idx := lookup.Index.(*doltIndex)
+	durableState, err := idx.getDurableState(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+	secondary := durable.ProllyMapFromIndex(durableState.Secondary)
+	keyDesc, valDesc := secondary.Descriptors()
+	var keyMap, valMap, ordMap val.OrdinalMapping
+	if idx.IsPrimaryKey() {
+		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
+	} else {
+		keyMap, ordMap = coveringIndexMapping(idx, projections)
+	}
+
+	returnIter := prollyCoveringIndexIter{
+		idx:         idx,
+		indexIter:   nil, // This is filled in further down
+		keyDesc:     keyDesc,
+		valDesc:     valDesc,
+		keyMap:      keyMap,
+		valMap:      valMap,
+		ordMap:      ordMap,
+		sqlSch:      pkSch.Schema,
+		projections: projections,
+		ns:          secondary.NodeStore(),
+	}
+
+	searchRow := make(sql.Row, len(projections))
+	var findStartErr error
+	findStart := func(nd tree.Node) int {
+		// TODO: should implement sort.Search directly so that we can properly handle error values
+		return sort.Search(nd.Count(), func(i int) (in bool) {
+			key := val.Tuple(nd.GetKey(i))
+			value := val.Tuple(nd.GetValue(i))
+			if err := returnIter.writeRowFromTuples(ctx, key, value, searchRow); err != nil {
+				findStartErr = err
+			} else {
+				allTrue := true
+				for _, expr := range startExprs {
+					res, err := expr.Eval(ctx, searchRow)
+					if err != nil {
+						findStartErr = err
+					}
+					allTrue = allTrue && res.(bool)
+				}
+				return allTrue
+			}
+			return
+		})
+	}
+	var findStopErr error
+	findStop := func(nd tree.Node) (idx int) {
+		return sort.Search(nd.Count(), func(i int) (out bool) {
+			key := val.Tuple(nd.GetKey(i))
+			value := val.Tuple(nd.GetValue(i))
+			if err := returnIter.writeRowFromTuples(ctx, key, value, searchRow); err != nil {
+				findStopErr = err
+			} else {
+				allTrue := true
+				for _, expr := range stopExprs {
+					res, err := expr.Eval(ctx, searchRow)
+					if err != nil {
+						findStopErr = err
+					}
+					allTrue = allTrue && res.(bool)
+				}
+				return allTrue
+			}
+			return
+		})
+	}
+
+	returnIter.indexIter, err = tree.OrderedTreeIterFromCursors[val.Tuple, val.Tuple](ctx, secondary.Tuples().Root, secondary.NodeStore(), findStart, findStop)
+	if err != nil {
+		return nil, err
+	}
+	if findStartErr != nil {
+		return nil, findStartErr
+	}
+	if findStopErr != nil {
+		return nil, findStopErr
+	}
+	return returnIter, nil
 }
 
 func rangeCutIsBinding(c sql.RangeCut) bool {
