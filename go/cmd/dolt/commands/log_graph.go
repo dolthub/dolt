@@ -172,7 +172,7 @@ var branchColors = []string{
 	"\033[34m", // Blue
 	"\033[35m", // Magenta
 	"\033[36m", // Cyan
-	"\033[39m", // Default
+	"\033[37m", // White
 }
 
 type BranchPath struct {
@@ -411,7 +411,7 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 }
 
 // expandGraph expands the graph based on the length of the commit message
-func expandGraph(commits []*CommitInfoWithChildren, width int) {
+func expandGraph(commits []*CommitInfoWithChildren) {
 	posY := 0
 	for _, commit := range commits {
 		// one empty column between each branch path
@@ -522,7 +522,7 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 	}
 
 	commits, commitsMap = computeColumnEnds(commits, commitsMap)
-	expandGraph(commits, 80)
+	expandGraph(commits)
 
 	graph := drawCommitDotsAndBranchPaths(commits, commitsMap)
 
