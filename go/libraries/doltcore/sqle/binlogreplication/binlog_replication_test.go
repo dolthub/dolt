@@ -267,11 +267,11 @@ func TestResetReplica(t *testing.T) {
 	rows, err = replicaDatabase.Queryx("RESET REPLICA ALL;")
 	require.NoError(t, err)
 	require.NoError(t, rows.Close())
-
-	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	require.False(t, rows.Next())
-	require.NoError(t, rows.Close())
+	status = queryReplicaStatus(t)
+	require.Equal(t, "", status["Source_Host"])
+	require.Equal(t, "", status["Source_User"])
+	require.Equal(t, "No", status["Replica_IO_Running"])
+	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
 	require.NoError(t, err)
