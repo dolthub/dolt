@@ -159,7 +159,7 @@ import (
 *
 */
 
-type CommitInfoWithChildren struct {
+type commitInfoWithChildren struct {
 	Commit           CommitInfo
 	Children         []string
 	Col              int
@@ -176,13 +176,13 @@ var branchColors = []string{
 	"\033[37m", // White
 }
 
-type BranchPath struct {
+type branchPath struct {
 	Start int
 	End   int
 }
 
 // mapCommitsWithChildrenAndPosition gets the children of commits, and initialize the x and y coordinates of the commits
-func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithChildren {
+func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*commitInfoWithChildren {
 	childrenMap := make(map[string][]string)
 	for _, commit := range commits {
 		for _, parent := range commit.parentHashes {
@@ -190,9 +190,9 @@ func mapCommitsWithChildrenAndPosition(commits []CommitInfo) []*CommitInfoWithCh
 		}
 	}
 
-	var commitsWithChildren []*CommitInfoWithChildren
+	var commitsWithChildren []*commitInfoWithChildren
 	for index, commit := range commits {
-		commitsWithChildren = append(commitsWithChildren, &CommitInfoWithChildren{
+		commitsWithChildren = append(commitsWithChildren, &commitInfoWithChildren{
 			Commit:   commit,
 			Children: childrenMap[commit.commitHash],
 			Col:      -1,
@@ -217,11 +217,11 @@ func minVal(values ...int) int {
 }
 
 // computeColumnEnds compute the column coordinate of each commit
-func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) ([]*CommitInfoWithChildren, map[string]*CommitInfoWithChildren) {
-	columns := [][]BranchPath{}
+func computeColumnEnds(commits []*commitInfoWithChildren, commitsMap map[string]*commitInfoWithChildren) ([]*commitInfoWithChildren, map[string]*commitInfoWithChildren) {
+	columns := [][]branchPath{}
 	colPositions := make(map[string]int)
-	newCommitMap := make(map[string]*CommitInfoWithChildren)
-	commitsWithColPos := make([]*CommitInfoWithChildren, len(commits))
+	newCommitMap := make(map[string]*commitInfoWithChildren)
+	commitsWithColPos := make([]*commitInfoWithChildren, len(commits))
 
 	updateColumns := func(col, end int) {
 		columns[col][len(columns[col])-1].End = end
@@ -241,7 +241,7 @@ func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]
 		commitColInd := -1
 
 		if isLastCommitOnBranch {
-			columns = append(columns, []BranchPath{
+			columns = append(columns, []branchPath{
 				{
 					Start: index,
 					End:   index,
@@ -290,7 +290,7 @@ func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]
 				}
 			}
 			if col == -1 {
-				columns = append(columns, []BranchPath{
+				columns = append(columns, []branchPath{
 					{
 						Start: minChildRowInd + 1,
 						End:   index,
@@ -299,14 +299,14 @@ func computeColumnEnds(commits []*CommitInfoWithChildren, commitsMap map[string]
 				commitColInd = len(columns) - 1
 			} else {
 				commitColInd = col
-				columns[col] = append(columns[col], BranchPath{
+				columns[col] = append(columns[col], branchPath{
 					Start: minChildRowInd + 1,
 					End:   index,
 				})
 			}
 		}
 		colPositions[commit.Commit.commitHash] = commitColInd
-		commitsWithColPos[index] = &CommitInfoWithChildren{
+		commitsWithColPos[index] = &commitInfoWithChildren{
 			Commit:   commit.Commit,
 			Children: commit.Children,
 			Col:      commitColInd,
@@ -329,7 +329,7 @@ func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line st
 	pager.Writer.Write([]byte("\n"))
 }
 
-func printCommitMetadata(graph [][]string, pager *outputpager.Pager, row, col int, commit *CommitInfoWithChildren, decoration string) {
+func printCommitMetadata(graph [][]string, pager *outputpager.Pager, row, col int, commit *commitInfoWithChildren, decoration string) {
 	printLine(graph, col, row, pager, fmt.Sprintf("commit %s", commit.Commit.commitHash), commit.Commit, "\033[33m", decoration)
 
 	printMergeInfo := 0
@@ -362,7 +362,7 @@ func trimTrailing(row []string) []string {
 // the height that a commit will take up in the graph
 // 4 lines for commit metadata (commit hash, author, date, and an empty line) + number of lines in the commit message
 // if the commit is a merge commit, add one more line for the "Merge:" line
-func getHeightOfCommit(commit *CommitInfoWithChildren) int {
+func getHeightOfCommit(commit *commitInfoWithChildren) int {
 	height := 4 + len(commit.formattedMessage)
 	if len(commit.Commit.parentHashes) > 1 {
 		height = height + 1
@@ -371,7 +371,7 @@ func getHeightOfCommit(commit *CommitInfoWithChildren) int {
 }
 
 // printGraphAndCommitsInfo prints the commit messages in the graph matrix
-func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*CommitInfoWithChildren) {
+func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
 	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 
 	for i := 0; i < len(commits)-1; i++ {
@@ -412,7 +412,7 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 }
 
 // expandGraph expands the graph based on the length of the commit message
-func expandGraph(commits []*CommitInfoWithChildren) {
+func expandGraph(commits []*commitInfoWithChildren) {
 	posY := 0
 	for _, commit := range commits {
 		// one empty column between each branch path
@@ -425,7 +425,7 @@ func expandGraph(commits []*CommitInfoWithChildren) {
 	}
 }
 
-func drawCommitDotsAndBranchPaths(commits []*CommitInfoWithChildren, commitsMap map[string]*CommitInfoWithChildren) [][]string {
+func drawCommitDotsAndBranchPaths(commits []*commitInfoWithChildren, commitsMap map[string]*commitInfoWithChildren) [][]string {
 	maxWidth, maxHeigh := 0, 0
 	for _, commit := range commits {
 		if commit.Col > maxWidth {
@@ -517,7 +517,7 @@ func drawCommitDotsAndBranchPaths(commits []*CommitInfoWithChildren, commitsMap 
 
 func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitInfos []CommitInfo) {
 	commits := mapCommitsWithChildrenAndPosition(commitInfos)
-	commitsMap := make(map[string]*CommitInfoWithChildren)
+	commitsMap := make(map[string]*commitInfoWithChildren)
 	for _, commit := range commits {
 		commitsMap[commit.Commit.commitHash] = commit
 	}

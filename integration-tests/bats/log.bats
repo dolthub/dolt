@@ -904,3 +904,105 @@ remove_color_codes() {
     [[ $(remove_color_codes "${lines[27]}") =~ "Date:" ]] || false                             #   Date:
     [[ $(remove_color_codes "${lines[28]}") =~ "Initialize data repository" ]] || false        #     Initialize data repository
 }
+
+
+@test "log: --graph: graph with multiple branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt checkout -b branchB
+    dolt commit --allow-empty -m "commit 1 branchB"
+    dolt checkout main
+    dolt checkout -b branchC
+    dolt commit --allow-empty -m "commit 1 branchC"
+    dolt checkout main
+    dolt checkout -b branchD
+    dolt commit --allow-empty -m "commit 1 branchD"
+    dolt checkout main
+    dolt sql -q "insert into testtable values (1)"
+    dolt commit -Am "insert into testtable"
+    dolt merge branchA -m "Merge branchA into main"
+    dolt merge branchB -m "Merge branchB into main"
+    dolt merge branchC -m "Merge branchC into main"
+    dolt merge branchD -m "Merge branchD into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+
+    # Check the output with patterns
+    [[ $(remove_color_codes "${lines[0]}")  =~ "*   commit" ]] || false                         
+    [[ $(remove_color_codes "${lines[1]}")  =~ "|\  Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[2]}")  =~ "| | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[3]}")  =~ "| | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[4]}")  =~ "| |" ]] || false                                
+    [[ $(remove_color_codes "${lines[5]}")  =~ "| |" ]] || false            
+    [[ $(remove_color_codes "${lines[6]}")  =~ "| |" ]] || false                                
+    [[ $(remove_color_codes "${lines[7]}")  =~ "* |   commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[8]}")  =~ "|\|   Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[9]}")  =~ "| \   Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[10]}") =~ "| |\  Date:" ]] || false                          
+    [[ $(remove_color_codes "${lines[11]}") =~ "| | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[12]}") =~ "| | |" ]] || false             
+    [[ $(remove_color_codes "${lines[13]}") =~ "| | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[14]}") =~ "* | |   commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[15]}") =~ "|\| |   Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[16]}") =~ "| \ |   Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[17]}") =~ "| |\|   Date:" ]] || false                        
+    [[ $(remove_color_codes "${lines[18]}") =~ '| | \' ]] || false                               
+    [[ $(remove_color_codes "${lines[19]}") =~ "| | |\ " ]] || false             
+    [[ $(remove_color_codes "${lines[20]}") =~ "| | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[21]}") =~ "* | | | commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[22]}") =~ "|\| | | Merge:" ]] || false                          
+    [[ $(remove_color_codes "${lines[23]}") =~ "| \ | | Author:" ]] || false                      
+    [[ $(remove_color_codes "${lines[24]}") =~ "| |\| | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[25]}") =~ "| | \ |" ]] || false                         
+    [[ $(remove_color_codes "${lines[26]}") =~ "| | |\|" ]] || false           
+    [[ $(remove_color_codes "${lines[27]}") =~ '| | | \' ]] || false                                 
+    [[ $(remove_color_codes "${lines[28]}") =~ "* | | |\  commit " ]] || false                      
+    [[ $(remove_color_codes "${lines[29]}") =~ "| | | | | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[30]}") =~ "| | | | | Date:" ]] || false                          
+    [[ $(remove_color_codes "${lines[31]}") =~ "| | | | |" ]] || false                             
+    [[ $(remove_color_codes "${lines[32]}") =~ "| | | | |" ]] || false             
+    [[ $(remove_color_codes "${lines[33]}") =~ "| | | | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[34]}") =~ "| * | | | commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[35]}") =~ "| | | | | Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[36]}") =~ "| | | | | Date:" ]] || false                         
+    [[ $(remove_color_codes "${lines[37]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[38]}") =~ "| | | | |" ]] || false            
+    [[ $(remove_color_codes "${lines[39]}") =~ "| | | | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[40]}") =~ "| | * | | commit" ]] || false                         
+    [[ $(remove_color_codes "${lines[41]}") =~ "| | | | | Author:" ]] || false                     
+    [[ $(remove_color_codes "${lines[42]}") =~ "| | | | | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[43]}") =~ "| | | | |" ]] || false                        
+    [[ $(remove_color_codes "${lines[44]}") =~ "| | | | |" ]] || false          
+    [[ $(remove_color_codes "${lines[45]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[46]}") =~ "| | | * | commit " ]] || false                       
+    [[ $(remove_color_codes "${lines[47]}") =~ "| | | | | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[48]}") =~ "| | | | | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[49]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[50]}") =~ "| | | | |" ]] || false            
+    [[ $(remove_color_codes "${lines[51]}") =~ "| | | | |" ]] || false                               
+    [[ $(remove_color_codes "${lines[52]}") =~ "| | | | * commit" ]] || false                        
+    [[ $(remove_color_codes "${lines[53]}") =~ "| | |/ /  Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[54]}") =~ "| | / /   Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[55]}") =~ "| |/ /" ]] || false                                 
+    [[ $(remove_color_codes "${lines[56]}") =~ "| / /" ]] || false            
+    [[ $(remove_color_codes "${lines[57]}") =~ "|/ /" ]] || false                                
+    [[ $(remove_color_codes "${lines[58]}") =~ "*-- commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[59]}") =~ "|   Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[60]}") =~ "|   Date:" ]] || false                         
+    [[ $(remove_color_codes "${lines[61]}") =~ "|" ]] || false                                 
+    [[ $(remove_color_codes "${lines[62]}") =~ "|" ]] || false            
+    [[ $(remove_color_codes "${lines[63]}") =~ "|" ]] || false                               
+    [[ $(remove_color_codes "${lines[64]}") =~ "* commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[65]}") =~ "Author:" ]] || false                          
+    [[ $(remove_color_codes "${lines[66]}") =~ "Date:" ]] || false                              
+    [[ $(remove_color_codes "${lines[67]}") =~ "Initialize data repository" ]] || false         
+}
