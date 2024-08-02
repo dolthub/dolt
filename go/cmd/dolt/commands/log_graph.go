@@ -34,7 +34,7 @@ import (
 * - Calculate the positions of the commits in the graph.
 *   The vertical position of each commit is determined by the order of the commits, but should be adjusted to the length of the commit message.
 *
-*   The calculation of horizontal position is more complex, but mostly depends on the parent-child relationship of the commits.
+*   The calculation of horizontal position is more complex, but mostly depends on the parent-child relationship of the commits. This is done in the function computeColumnEnds.
 *
 *   Create a 2D matrix to store the branch paths, this matrix will help us find the available column for the commits.
 *   In each column, there will be multiple branch paths, and each path is represented by a pair of positions of start and end commits on the branch.
@@ -58,7 +58,9 @@ import (
 *		- In the last example, when determining where to put the commit on branch B, we should have the columns matrix as: [[[0,6]], [[2,2]]]. Potential column index options for this commit is 0, 1, or we can create a new column: 2.
 *		- Look at the children of this current commit, which is the merge commit and it's on column 0. So we can start from column 1,and since the path in column 1 ends at row 2, this commits can be put in column 1.
 *
-* - Draw the graph.
+*   After both the vertical and horizontal positions are calculated, we will expand the graph based on the length of the commit message, this part is done in the function expandGraph.
+*
+* - Draw the graph. The graph is drawn in function drawCommitDotsAndBranchPaths.
 *   Once we have the positions of the commits, we can draw the graph.
 *   For each commit, draw the commit and the path to its parent(s).
 *   Same as the calculation part, we have 3 types of paths:
