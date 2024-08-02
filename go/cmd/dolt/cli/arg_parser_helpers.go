@@ -280,6 +280,7 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	} else {
 		ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
 		ap.SupportsFlag(StatFlag, "", "Shows the diffstat for each commit.")
+		ap.SupportsFlag(GraphFlag, "", "Shows the commit graph.")
 	}
 	return ap
 }
