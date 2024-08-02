@@ -761,7 +761,7 @@ teardown() {
     dolt commit -Am "insert into test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 +" ]] || false
     [[ "$out" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
 
@@ -769,7 +769,7 @@ teardown() {
     dolt commit -Am "update test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 *" ]] || false
     [[ "$out" =~ " 1 tables changed, 0 rows added(+), 1 rows modified(*), 0 rows deleted(-)" ]] || false
 
@@ -777,7 +777,7 @@ teardown() {
     dolt commit -Am "delete from test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    out=$(remove_color_codes "$output") # remove special characters for color
     [[ "$out" =~ " test | 1 -" ]] || false
     [[ "$out" =~ " 1 tables changed, 0 rows added(+), 0 rows modified(*), 1 rows deleted(-)" ]] || false
 
@@ -797,11 +797,11 @@ teardown() {
     run dolt log --stat --oneline
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    l1=$(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l1=$(remove_color_codes "${lines[1]}") # remove special characters for color
     [[ "$l1" =~ " test | 1 +" ]] || false
-    l2=$(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l2=$(remove_color_codes "${lines[2]}") # remove special characters for color
     [[ "$output" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
-    l3=$(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    l3=$(remove_color_codes "${lines[4]}") # remove special characters for color
     [[ "$l3" =~ " test added" ]] || false
 }
 
@@ -825,4 +825,184 @@ teardown() {
     [[ ! "$output" =~ "test" ]] || false
     [[ "$output" =~ "merge main" ]] || false
     [ "${#lines[@]}" -eq 5 ]
+}
+
+remove_color_codes() {
+    echo "$1" | sed -E 's/\x1b\[[0-9;]*m//g'
+}
+
+@test "log: --graph: basic graph log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1"
+   
+    # Run the dolt log --graph command
+    run dolt log --graph
+    [ "$status" -eq 0 ]
+    
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(remove_color_codes "${lines[0]}") =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(remove_color_codes "${lines[1]}") =~ "| Author:" ]] || false                          # | Author: 
+    [[ $(remove_color_codes "${lines[2]}") =~ "| Date:" ]] || false                            # | Date: 
+    [[ $(remove_color_codes "${lines[3]}") =~ "|" ]] || false                                  # | 
+    [[ $(remove_color_codes "${lines[4]}") =~ "commit 1" ]] || false                           # |    commit 1 
+    [[ $(remove_color_codes "${lines[5]}") =~ "|" ]] || false                                  # | 
+    [[ $(remove_color_codes "${lines[6]}") =~ "* commit " ]] || false                          # * commit xxx
+    [[ $(remove_color_codes "${lines[7]}") =~ "Author:" ]] || false                            #   Author: 
+    [[ $(remove_color_codes "${lines[8]}") =~ "Date:" ]] || false                              #   Date: 
+    [[ $(remove_color_codes "${lines[9]}") =~ "Initialize data repository" ]] || false         #      Initialize data repository
+}
+
+
+@test "log: --graph: graph with merges" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt commit --allow-empty -m "commit 2 MAIN"
+    dolt merge branchA -m "Merge branchA into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(remove_color_codes "${lines[0]}") =~ "*   commit " ]] || false                        # *   commit xxx
+    [[ $(remove_color_codes "${lines[1]}") =~ "|\  Merge:" ]] || false                         # |\  Merge:
+    [[ $(remove_color_codes "${lines[2]}") =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(remove_color_codes "${lines[3]}") =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(remove_color_codes "${lines[4]}") =~ "| |" ]] || false                                # | | 
+    [[ $(remove_color_codes "${lines[5]}") =~ "Merge branchA into main" ]] || false            # | |    Merge branchA into main 
+    [[ $(remove_color_codes "${lines[6]}") =~ "| |" ]] || false                                # | | 
+    [[ $(remove_color_codes "${lines[7]}") =~ "* | commit " ]] || false                        # * | commit xxx
+    [[ $(remove_color_codes "${lines[8]}") =~ "| | Author:" ]] || false                        # | | Author: 
+    [[ $(remove_color_codes "${lines[9]}") =~ "| | Date:" ]] || false                          # | | Date: 
+    [[ $(remove_color_codes "${lines[10]}") =~ "| |" ]] || false                               # | | 
+    [[ $(remove_color_codes "${lines[11]}") =~ "commit 2 MAIN" ]] || false                     # | |    commit 2 MAIN
+    [[ $(remove_color_codes "${lines[12]}") =~ "| |" ]] || false                               # | | 
+    [[ $(remove_color_codes "${lines[13]}") =~ "| * commit " ]] || false                       # | * commit xxx
+    [[ $(remove_color_codes "${lines[14]}") =~ "| | Author:" ]] || false                       # | | Author: 
+    [[ $(remove_color_codes "${lines[15]}") =~ "| | Date:" ]] || false                         # | | Date: 
+    [[ $(remove_color_codes "${lines[16]}") =~ "| |" ]] || false                               # | |  
+    [[ $(remove_color_codes "${lines[17]}") =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
+    [[ $(remove_color_codes "${lines[18]}") =~ "|/" ]] || false                                # |/ 
+    [[ $(remove_color_codes "${lines[19]}") =~ "* commit" ]] || false                          # *  commit xxx
+    [[ $(remove_color_codes "${lines[20]}") =~ "| Author:" ]] || false                         # |  Author: 
+    [[ $(remove_color_codes "${lines[21]}") =~ "| Date:" ]] || false                           # |  Date: 
+    [[ $(remove_color_codes "${lines[22]}") =~ "|" ]] || false                                 # |  
+    [[ $(remove_color_codes "${lines[23]}") =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
+    [[ $(remove_color_codes "${lines[24]}") =~ "|" ]] || false                                 # | 
+    [[ $(remove_color_codes "${lines[25]}") =~ "* commit" ]] || false                          # * commit
+    [[ $(remove_color_codes "${lines[26]}") =~ "Author:" ]] || false                           #   Author:
+    [[ $(remove_color_codes "${lines[27]}") =~ "Date:" ]] || false                             #   Date:
+    [[ $(remove_color_codes "${lines[28]}") =~ "Initialize data repository" ]] || false        #     Initialize data repository
+}
+
+
+@test "log: --graph: graph with multiple branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt checkout -b branchB
+    dolt commit --allow-empty -m "commit 1 branchB"
+    dolt checkout main
+    dolt checkout -b branchC
+    dolt commit --allow-empty -m "commit 1 branchC"
+    dolt checkout main
+    dolt checkout -b branchD
+    dolt commit --allow-empty -m "commit 1 branchD"
+    dolt checkout main
+    dolt sql -q "insert into testtable values (1)"
+    dolt commit -Am "insert into testtable"
+    dolt merge branchA -m "Merge branchA into main"
+    dolt merge branchB -m "Merge branchB into main"
+    dolt merge branchC -m "Merge branchC into main"
+    dolt merge branchD -m "Merge branchD into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+
+    # Check the output with patterns
+    [[ $(remove_color_codes "${lines[0]}")  =~ "*   commit" ]] || false                         
+    [[ $(remove_color_codes "${lines[1]}")  =~ "|\  Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[2]}")  =~ "| | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[3]}")  =~ "| | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[4]}")  =~ "| |" ]] || false                                
+    [[ $(remove_color_codes "${lines[5]}")  =~ "| |" ]] || false            
+    [[ $(remove_color_codes "${lines[6]}")  =~ "| |" ]] || false                                
+    [[ $(remove_color_codes "${lines[7]}")  =~ "* |   commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[8]}")  =~ "|\|   Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[9]}")  =~ "| \   Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[10]}") =~ "| |\  Date:" ]] || false                          
+    [[ $(remove_color_codes "${lines[11]}") =~ "| | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[12]}") =~ "| | |" ]] || false             
+    [[ $(remove_color_codes "${lines[13]}") =~ "| | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[14]}") =~ "* | |   commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[15]}") =~ "|\| |   Merge:" ]] || false                         
+    [[ $(remove_color_codes "${lines[16]}") =~ "| \ |   Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[17]}") =~ "| |\|   Date:" ]] || false                        
+    [[ $(remove_color_codes "${lines[18]}") =~ '| | \' ]] || false                               
+    [[ $(remove_color_codes "${lines[19]}") =~ "| | |\ " ]] || false             
+    [[ $(remove_color_codes "${lines[20]}") =~ "| | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[21]}") =~ "* | | | commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[22]}") =~ "|\| | | Merge:" ]] || false                          
+    [[ $(remove_color_codes "${lines[23]}") =~ "| \ | | Author:" ]] || false                      
+    [[ $(remove_color_codes "${lines[24]}") =~ "| |\| | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[25]}") =~ "| | \ |" ]] || false                         
+    [[ $(remove_color_codes "${lines[26]}") =~ "| | |\|" ]] || false           
+    [[ $(remove_color_codes "${lines[27]}") =~ '| | | \' ]] || false                                 
+    [[ $(remove_color_codes "${lines[28]}") =~ "* | | |\  commit " ]] || false                      
+    [[ $(remove_color_codes "${lines[29]}") =~ "| | | | | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[30]}") =~ "| | | | | Date:" ]] || false                          
+    [[ $(remove_color_codes "${lines[31]}") =~ "| | | | |" ]] || false                             
+    [[ $(remove_color_codes "${lines[32]}") =~ "| | | | |" ]] || false             
+    [[ $(remove_color_codes "${lines[33]}") =~ "| | | | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[34]}") =~ "| * | | | commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[35]}") =~ "| | | | | Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[36]}") =~ "| | | | | Date:" ]] || false                         
+    [[ $(remove_color_codes "${lines[37]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[38]}") =~ "| | | | |" ]] || false            
+    [[ $(remove_color_codes "${lines[39]}") =~ "| | | | |" ]] || false                                 
+    [[ $(remove_color_codes "${lines[40]}") =~ "| | * | | commit" ]] || false                         
+    [[ $(remove_color_codes "${lines[41]}") =~ "| | | | | Author:" ]] || false                     
+    [[ $(remove_color_codes "${lines[42]}") =~ "| | | | | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[43]}") =~ "| | | | |" ]] || false                        
+    [[ $(remove_color_codes "${lines[44]}") =~ "| | | | |" ]] || false          
+    [[ $(remove_color_codes "${lines[45]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[46]}") =~ "| | | * | commit " ]] || false                       
+    [[ $(remove_color_codes "${lines[47]}") =~ "| | | | | Author:" ]] || false                        
+    [[ $(remove_color_codes "${lines[48]}") =~ "| | | | | Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[49]}") =~ "| | | | |" ]] || false                                
+    [[ $(remove_color_codes "${lines[50]}") =~ "| | | | |" ]] || false            
+    [[ $(remove_color_codes "${lines[51]}") =~ "| | | | |" ]] || false                               
+    [[ $(remove_color_codes "${lines[52]}") =~ "| | | | * commit" ]] || false                        
+    [[ $(remove_color_codes "${lines[53]}") =~ "| | |/ /  Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[54]}") =~ "| | / /   Date:" ]] || false                           
+    [[ $(remove_color_codes "${lines[55]}") =~ "| |/ /" ]] || false                                 
+    [[ $(remove_color_codes "${lines[56]}") =~ "| / /" ]] || false            
+    [[ $(remove_color_codes "${lines[57]}") =~ "|/ /" ]] || false                                
+    [[ $(remove_color_codes "${lines[58]}") =~ "*-- commit " ]] || false                         
+    [[ $(remove_color_codes "${lines[59]}") =~ "|   Author:" ]] || false                         
+    [[ $(remove_color_codes "${lines[60]}") =~ "|   Date:" ]] || false                         
+    [[ $(remove_color_codes "${lines[61]}") =~ "|" ]] || false                                 
+    [[ $(remove_color_codes "${lines[62]}") =~ "|" ]] || false            
+    [[ $(remove_color_codes "${lines[63]}") =~ "|" ]] || false                               
+    [[ $(remove_color_codes "${lines[64]}") =~ "* commit " ]] || false                        
+    [[ $(remove_color_codes "${lines[65]}") =~ "Author:" ]] || false                          
+    [[ $(remove_color_codes "${lines[66]}") =~ "Date:" ]] || false                              
+    [[ $(remove_color_codes "${lines[67]}") =~ "Initialize data repository" ]] || false         
 }

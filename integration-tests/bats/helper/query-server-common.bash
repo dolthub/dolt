@@ -10,6 +10,12 @@ DEFAULT_DB=""
 wait_for_connection() {
   port=$1
   timeout=$2
+
+  if [ -n "$AWS_LAMBDA_FUNCTION_NAME" ]; then
+      timeout=$((timeout * 2))
+      echo "Running in AWS Lambda; increasing timeout to: $timeout"
+  fi
+
   user=${SQL_USER:-dolt}
   end_time=$((SECONDS+($timeout/1000)))
 
