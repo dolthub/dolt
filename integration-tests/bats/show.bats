@@ -270,3 +270,20 @@ EOF
     [[ "$output" =~ "{ key: d5010000 ref: #5eiul2kmip341rse0besd0bv0u07jhf1 }" ]] || false
     [[ "$output" =~ "{ key: f40b0000 ref: #vpuf5ccvph0i6stls48a0bj7as5k2aka }" ]] || false
 }
+
+@test "show: schema" {
+    dolt sql <<EOF
+create table test(pk int primary key);
+insert into test values (1);
+EOF
+    for i in {1..10}; do dolt sql -q "insert ignore into test select pk*2+$i from test;"; done
+    run dolt show "#svtgrd12uf2u1q492it1aod9i5cqssv9"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "Columns: [" ]] || false
+    [[ "$output" =~ "Primary Index: {" ]] || false
+    [[ "$output" =~ "Secondary Indexes: [" ]] || false
+    [[ "$output" =~ "Comment: " ]] || false
+    [[ "$output" =~ "Checks: [" ]] || false
+    [[ "$output" =~ "Collation: utf8mb4_0900_bin" ]] || false
+}
