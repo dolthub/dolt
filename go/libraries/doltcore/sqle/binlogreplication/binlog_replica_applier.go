@@ -886,12 +886,12 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 	}
 
 	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.Parser)
-	node, _, _, err := binder.Parse("SELECT "+strValue, false)
+	node, _, _, qFlags, err := binder.Parse("SELECT "+strValue, false)
 	if err != nil {
 		return nil, err
 	}
 
-	analyze, err := server.Engine.Analyzer.Analyze(ctx, node, nil)
+	analyze, err := server.Engine.Analyzer.Analyze(ctx, node, nil, qFlags)
 	if err != nil {
 		return nil, err
 	}

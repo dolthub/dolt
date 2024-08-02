@@ -821,7 +821,7 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 						// TODO: remove this check in the future
 						expected = nil
 					}
-					enginetest.TestQueryWithContext(t, ctx, e, harness, assertion.Query, expected, assertion.ExpectedColumns, assertion.Bindings)
+					enginetest.TestQueryWithContext(t, ctx, e, harness, assertion.Query, expected, assertion.ExpectedColumns, assertion.Bindings, nil)
 				}
 			})
 		}
