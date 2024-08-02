@@ -17,8 +17,9 @@ package commands
 import (
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 func TestMapCommitsWithChildrenAndPosition(t *testing.T) {
