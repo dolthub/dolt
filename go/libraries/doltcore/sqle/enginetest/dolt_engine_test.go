@@ -682,7 +682,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil)
+						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil, nil)
 					})
 				}
 			}

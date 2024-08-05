@@ -506,7 +506,7 @@ func RunVersionedViewsTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, testCase := range queries.VersionedViewTests {
 		t.Run(testCase.Query, func(t *testing.T) {
 			ctx := enginetest.NewContext(h)
-			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil)
+			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil, nil)
 		})
 	}
 }
@@ -639,21 +639,22 @@ func RunMultiDbTransactionsTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunMultiDbTransactionsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MultiDbTransactionTests {
-		func() {
-			h := h.NewHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		}()
+		//func() {
+		h := h.NewHarness(t)
+		defer h.Close()
+		enginetest.TestScriptPrepared(t, h, script)
+		//}()
 	}
 }
 
 func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltScripts {
-		go func() {
-			harness := harness.NewHarness(t)
-			defer harness.Close()
-			enginetest.TestScript(t, harness, script)
-		}()
+		//go func() {
+		harness := harness.NewHarness(t)
+
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+		//}()
 	}
 }
 
@@ -1426,7 +1427,7 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 
 					ctx = ctx.WithQuery(tt.query)
 					if tt.exp != nil {
-						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
 					}
 				})
 			}

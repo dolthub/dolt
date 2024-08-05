@@ -1565,12 +1565,12 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*noms.ReadRange, error) {
 	binder := planbuilder.New(ctx, eng.Analyzer.Catalog, eng.Parser)
-	parsed, _, _, err := binder.Parse(query, false)
+	parsed, _, _, qFlags, err := binder.Parse(query, false)
 	if err != nil {
 		return nil, err
 	}
 
-	analyzed, err := eng.Analyzer.Analyze(ctx, parsed, nil)
+	analyzed, err := eng.Analyzer.Analyze(ctx, parsed, nil, qFlags)
 	if err != nil {
 		return nil, err
 	}

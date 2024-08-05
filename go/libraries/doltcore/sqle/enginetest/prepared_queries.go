@@ -55,7 +55,7 @@ func DoltPreparedScripts(t *testing.T, harness enginetest.Harness) {
 			ctx := enginetest.NewContext(harness)
 			_, err := e.PrepareQuery(ctx, tt.Query)
 			require.NoError(t, err)
-			enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+			enginetest.TestQueryWithContext(t, ctx, e, harness, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings, nil)
 		})
 	}
 }

@@ -11,7 +11,7 @@ require (
 	github.com/bcicen/jstream v1.0.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20240802204753-c290ade4ea30
+	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240802195141-c31af05771a8
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240805192034-f695d9f43e13
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
@@ -166,5 +166,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
+
+replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.22.2

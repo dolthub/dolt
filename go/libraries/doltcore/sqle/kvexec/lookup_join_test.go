@@ -119,9 +119,9 @@ func TestLookupJoin(t *testing.T) {
 			}
 
 			binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, engine.Parser)
-			node, _, _, err := binder.Parse(tt.join, false)
+			node, _, _, qFlags, err := binder.Parse(tt.join, false)
 			require.NoError(t, err)
-			node, err = engine.EngineAnalyzer().Analyze(ctx, node, nil)
+			node, err = engine.EngineAnalyzer().Analyze(ctx, node, nil, qFlags)
 			require.NoError(t, err)
 
 			j := getJoin(node)
