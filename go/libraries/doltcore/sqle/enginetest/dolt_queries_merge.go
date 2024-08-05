@@ -174,6 +174,12 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"aTable", uint64(1)}},
 			},
 			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"aTable", false, "constraint violation"},
+				},
+			},
+			{
 				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
 				Expected: []sql.Row{
 					{doltCommit, "foreign key", "13F8480978D0556FA9AE6DF5745A7ACA", 2, -1, `{"Index": "bColumn", "Table": "aTable", "Columns": ["bColumn"], "OnDelete": "RESTRICT", "OnUpdate": "RESTRICT", "ForeignKey": "atable_ibfk_1", "ReferencedIndex": "", "ReferencedTable": "parent", "ReferencedColumns": ["pk"]}`},
@@ -1269,6 +1275,12 @@ var MergeScripts = []queries.ScriptTest{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
 				Expected: []sql.Row{{"foreign key", 1, 1}},
 			},
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"child", false, "constraint violation"},
+				},
+			},
 		},
 	},
 	{
@@ -1303,6 +1315,10 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations_child",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from dolt_status;",
 				Expected: []sql.Row{},
 			},
 			{
@@ -1349,6 +1365,12 @@ var MergeScripts = []queries.ScriptTest{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
 				Expected: []sql.Row{{true, "right", "refs/heads/main", "t"}},
 			},
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"child", false, "constraint violation"},
+				},
+			},
 		},
 	},
 	{
@@ -1380,6 +1402,12 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
+			},
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"child", false, "constraint violation"},
+				},
 			},
 		},
 	},
@@ -1413,6 +1441,12 @@ var MergeScripts = []queries.ScriptTest{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
 			},
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"child", false, "constraint violation"},
+				},
+			},
 		},
 	},
 	{
@@ -1444,6 +1478,12 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT violation_type, pk, col1, col2 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"unique index", 1, 1, 1}, {"unique index", 2, 1, 1}},
+			},
+			{
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"t", false, "constraint violation"},
+				},
 			},
 		},
 	},
