@@ -509,6 +509,11 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 func (b *binlogProducer) currentGtidPosition() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	if b.gtidPosition == nil {
+		return ""
+	}
+
 	return b.gtidPosition.String()
 }
 
