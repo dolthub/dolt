@@ -1318,7 +1318,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select * from dolt_status;",
+				Query:    "select * from dolt_status;",
 				Expected: []sql.Row{},
 			},
 			{
