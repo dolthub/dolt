@@ -311,7 +311,7 @@ func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 }
 
 // Analyze analyzes a node.
-func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node, qFlags *sql.QueryProps) (sql.Node, error) {
+func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node, qFlags *sql.QueryFlags) (sql.Node, error) {
 	return se.engine.Analyzer.Analyze(ctx, n, nil, qFlags)
 }
 
