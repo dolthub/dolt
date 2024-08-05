@@ -261,6 +261,10 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 	close(eventCh)
 	wg.Wait()
 
+	if err != nil {
+		return nil, err
+	}
+
 	cs, _ := doltdb.NewCommitSpec(branch)
 	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	if err != nil {
