@@ -259,6 +259,11 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 			case "schema conflict":
 				conflictsPresent = true
 				schemaConflictTables[tableName] = true
+
+			case "constraint violation":
+				conflictsPresent = true
+				constraintViolationTables[tableName] = true
+
 			default:
 				panic(fmt.Sprintf("table %s, unexpected merge status: %s", tableName, status))
 			}
