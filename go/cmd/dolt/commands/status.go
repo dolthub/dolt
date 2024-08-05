@@ -261,7 +261,6 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 				schemaConflictTables[tableName] = true
 
 			case "constraint violation":
-				conflictsPresent = true
 				constraintViolationTables[tableName] = true
 
 			default:
