@@ -237,22 +237,11 @@ func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
 	for _, tiArray := range tiArrays {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
-				if ti.GetTypeIdentifier() == PointTypeIdentifier ||
-					ti.GetTypeIdentifier() == LineStringTypeIdentifier ||
-					ti.GetTypeIdentifier() == PolygonTypeIdentifier ||
-					ti.GetTypeIdentifier() == GeometryTypeIdentifier {
-					t.Run(ti.String(), func(t *testing.T) {
-						newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
-						require.NoError(t, err)
-						require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
-					})
-				} else {
-					t.Run(ti.String(), func(t *testing.T) {
-						newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
-						require.NoError(t, err)
-						require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
-					})
-				}
+				t.Run(ti.String(), func(t *testing.T) {
+					newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
+					require.NoError(t, err)
+					require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
+				})
 			}
 		})
 	}

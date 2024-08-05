@@ -180,7 +180,7 @@ type encodedSchemaData struct {
 	Columns          []encodedColumn  `noms:"columns" json:"columns"`
 	IndexCollection  []encodedIndex   `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
-	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitEmpty"`
+	PkOrdinals       []int            `noms:"pkOrdinals,omitempty" json:"pkOrdinals,omitempty"`
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
 }
 
