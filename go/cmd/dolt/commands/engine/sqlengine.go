@@ -334,6 +334,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 		return err
 	}
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
+	dblr.DoltBinlogReplicaController.SetEngine(engine)
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil

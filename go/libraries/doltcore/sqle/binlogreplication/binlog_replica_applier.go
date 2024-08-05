@@ -63,6 +63,7 @@ type binlogReplicaApplier struct {
 	currentPosition       *mysql.Position // successfully executed GTIDs
 	filters               *filterConfiguration
 	running               atomic.Bool
+	engine                *gms.Engine
 }
 
 func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier {
@@ -117,7 +118,7 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 	var conn *mysql.Conn
 	var err error
 	for connectionAttempts := uint64(0); ; connectionAttempts++ {
-		replicaSourceInfo, err := loadReplicationConfiguration(ctx)
+		replicaSourceInfo, err := loadReplicationConfiguration(ctx, a.engine.Analyzer.Catalog.MySQLDb)
 
 		if replicaSourceInfo == nil {
 			err = ErrServerNotConfiguredAsReplica
@@ -259,11 +260,7 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 // replicaBinlogEventHandler runs a loop, processing binlog events until the applier's stop replication channel
 // receives a signal to stop.
 func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error {
-	server := sqlserver.GetRunningServer()
-	if server == nil {
-		return fmt.Errorf("unable to access a running SQL server")
-	}
-	engine := server.Engine
+	engine := a.engine
 
 	var conn *mysql.Conn
 	var eventProducer *binlogEventProducer
@@ -352,12 +349,12 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// A RAND_EVENT contains two seed values that set the rand_seed1 and rand_seed2 system variables that are
 		// used to compute the random number. For more details, see: https://mariadb.com/kb/en/rand_event/
 		// Note: it is written only before a QUERY_EVENT and is NOT used with row-based logging.
-		ctx.GetLogger().Debug("Received binlog event: Rand")
+		ctx.GetLogger().Trace("Received binlog event: Rand")
 
 	case event.IsXID():
 		// An XID event is generated for a COMMIT of a transaction that modifies one or more tables of an
 		// XA-capable storage engine. For more details, see: https://mariadb.com/kb/en/xid_event/
-		ctx.GetLogger().Debug("Received binlog event: XID")
+		ctx.GetLogger().Trace("Received binlog event: XID")
 		createCommit = true
 		commitToAllDatabases = true
 
@@ -376,7 +373,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			"query":    query.SQL,
 			"options":  fmt.Sprintf("0x%x", query.Options),
 			"sql_mode": fmt.Sprintf("0x%x", query.SqlMode),
-		}).Debug("Received binlog event: Query")
+		}).Trace("Received binlog event: Query")
 
 		// When executing SQL statements sent from the primary, we can't be sure what database was modified unless we
 		// look closely at the statement. For example, we could be connected to db01, but executed
@@ -427,7 +424,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		// pointing to the next file in the sequence. ROTATE_EVENT is generated locally and written to the binary log
 		// on the source server and it's also written when a FLUSH LOGS statement occurs on the source server.
 		// For more details, see: https://mariadb.com/kb/en/rotate_event/
-		ctx.GetLogger().Debug("Received binlog event: Rotate")
+		ctx.GetLogger().Trace("Received binlog event: Rotate")
 
 	case event.IsFormatDescription():
 		// This is a descriptor event that is written to the beginning of a binary log file, at position 4 (after
@@ -442,7 +439,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			"formatVersion": a.format.FormatVersion,
 			"serverVersion": a.format.ServerVersion,
 			"checksum":      a.format.ChecksumAlgorithm,
-		}).Debug("Received binlog event: FormatDescription")
+		}).Trace("Received binlog event: FormatDescription")
 
 	case event.IsPreviousGTIDs():
 		// Logged in every binlog to record the current replication state. Consists of the last GTID seen for each
@@ -453,7 +450,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		}
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"previousGtids": position.GTIDSet.String(),
-		}).Debug("Received binlog event: PreviousGTIDs")
+		}).Trace("Received binlog event: PreviousGTIDs")
 
 	case event.IsGTID():
 		// For global transaction ID, used to start a new transaction event group, instead of the old BEGIN query event,
@@ -468,12 +465,12 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"gtid":    gtid,
 			"isBegin": isBegin,
-		}).Debug("Received binlog event: GTID")
+		}).Trace("Received binlog event: GTID")
 		a.currentGtid = gtid
 		// if the source's UUID hasn't been set yet, set it and persist it
 		if a.replicationSourceUuid == "" {
 			uuid := fmt.Sprintf("%v", gtid.SourceServer())
-			err = persistSourceUuid(ctx, uuid)
+			err = persistSourceUuid(ctx, uuid, a.engine.Analyzer.Catalog.MySQLDb)
 			if err != nil {
 				return err
 			}
@@ -497,7 +494,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			"flags":     convertToHexString(tableMap.Flags),
 			"metadata":  tableMap.Metadata,
 			"types":     tableMap.Types,
-		}).Debug("Received binlog event: TableMap")
+		}).Trace("Received binlog event: TableMap")
 
 		if tableId == 0xFFFFFF {
 			// Table ID 0xFFFFFF is a special value that indicates table maps can be freed.
@@ -537,7 +534,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			// network by a primary to a replica to let it know that the primary is still alive, and is only sent
 			// when the primary has no binlog events to send to replica servers.
 			// For more details, see: https://mariadb.com/kb/en/heartbeat_log_event/
-			ctx.GetLogger().Debug("Received binlog event: Heartbeat")
+			ctx.GetLogger().Trace("Received binlog event: Heartbeat")
 		} else {
 			return fmt.Errorf("received unknown event: %v", event)
 		}
@@ -590,7 +587,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	default:
 		return fmt.Errorf("unsupported event type: %v", event)
 	}
-	ctx.GetLogger().Debugf("Received binlog event: %s", eventType)
+	ctx.GetLogger().Tracef("Received binlog event: %s", eventType)
 
 	tableId := event.TableID(*a.format)
 	tableMap, ok := a.tableMapsById[tableId]
@@ -609,7 +606,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 
 	ctx.GetLogger().WithFields(logrus.Fields{
 		"flags": fmt.Sprintf("%x", rows.Flags),
-	}).Debugf("Processing rows from %s event", eventType)
+	}).Tracef("Processing rows from %s event", eventType)
 
 	flags := rows.Flags
 	foreignKeyChecksDisabled := false
@@ -633,11 +630,11 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 
 	switch {
 	case event.IsDeleteRows():
-		ctx.GetLogger().Debugf(" - Deleted Rows (table: %s)", tableMap.Name)
+		ctx.GetLogger().Tracef(" - Deleted Rows (table: %s)", tableMap.Name)
 	case event.IsUpdateRows():
-		ctx.GetLogger().Debugf(" - Updated Rows (table: %s)", tableMap.Name)
+		ctx.GetLogger().Tracef(" - Updated Rows (table: %s)", tableMap.Name)
 	case event.IsWriteRows():
-		ctx.GetLogger().Debugf(" - Inserted Rows (table: %s)", tableMap.Name)
+		ctx.GetLogger().Tracef(" - Inserted Rows (table: %s)", tableMap.Name)
 	}
 
 	writeSession, tableWriter, err := getTableWriter(ctx, engine, tableName, tableMap.Database, foreignKeyChecksDisabled)
@@ -652,7 +649,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 			if err != nil {
 				return err
 			}
-			ctx.GetLogger().Debugf("     - Identity: %v ", sql.FormatRow(identityRow))
+			ctx.GetLogger().Tracef("     - Identity: %v ", sql.FormatRow(identityRow))
 		}
 
 		if len(row.Data) > 0 {
@@ -660,7 +657,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 			if err != nil {
 				return err
 			}
-			ctx.GetLogger().Debugf("     - Data: %v ", sql.FormatRow(dataRow))
+			ctx.GetLogger().Tracef("     - Data: %v ", sql.FormatRow(dataRow))
 		}
 
 		switch {
