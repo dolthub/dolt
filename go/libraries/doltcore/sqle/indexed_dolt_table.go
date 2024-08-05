@@ -175,7 +175,7 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 // WithProjections implements sql.ProjectedTable
 func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableIndexedDoltTable{
-		WritableDoltTable: t.WithProjections(colNames).(*WritableDoltTable),
+		WritableDoltTable: t.WritableDoltTable.WithProjections(colNames).(*WritableDoltTable),
 		idx:               t.idx,
 	}
 }
