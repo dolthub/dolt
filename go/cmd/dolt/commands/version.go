@@ -203,17 +203,15 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
 	client := github.NewClient(nil)
 	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
-	if err != nil || resp.StatusCode != 200 {
-		return "", errhand.BuildDError("error: failed to verify latest release").AddCause(err).Build()
-	}
-	releaseName := strings.TrimPrefix(*release.TagName, "v")
+	if err == nil && resp.StatusCode == 200 {
+		releaseName := strings.TrimPrefix(*release.TagName, "v")
 
-	err = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
-	if err != nil {
-		return "", errhand.BuildDError("error: failed to update version check file").AddCause(err).Build()
+		err = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
+		if err == nil {
+			return releaseName, nil
+		}
 	}
-
-	return releaseName, nil
+	return "", nil
 }
 
 // isOutOfDate compares the current version of Dolt to the given latest release version and returns true if the current

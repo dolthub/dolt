@@ -126,7 +126,7 @@ func (k prollyKeylessWriter) HasEdits(ctx context.Context) bool {
 }
 
 func (k prollyKeylessWriter) IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error) {
-	return k.IterRange(ctx, rng)
+	return k.mut.IterRange(ctx, rng)
 }
 
 func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) (hashId, value val.Tuple, err error) {

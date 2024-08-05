@@ -158,5 +158,5 @@ func (csMW *CSMetricWrapper) Close() error {
 }
 
 func (csMW *CSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
-	return csMW.PersistGhostHashes(ctx, refs)
+	return csMW.cs.PersistGhostHashes(ctx, refs)
 }

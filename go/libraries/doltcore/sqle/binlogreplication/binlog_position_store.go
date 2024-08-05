@@ -102,14 +102,8 @@ func (store *binlogPositionStore) Save(ctx *sql.Context, position *mysql.Positio
 	filesys := doltSession.Provider().FileSystem()
 
 	// The .doltcfg dir may not exist yet, so create it if necessary.
-	exists, isDir := filesys.Exists(binlogPositionDirectory)
-	if !exists {
-		err := filesys.MkDirs(binlogPositionDirectory)
-		if err != nil {
-			return fmt.Errorf("unable to save binlog position: %s", err)
-		}
-	} else if !isDir {
-		return fmt.Errorf("unable to save binlog position: %s exists as a file, not a dir", binlogPositionDirectory)
+	if err := createDoltCfgDir(filesys); err != nil {
+		return err
 	}
 
 	filePath, err := filesys.Abs(filepath.Join(binlogPositionDirectory, binlogPositionFilename))
@@ -132,4 +126,19 @@ func (store *binlogPositionStore) Delete(ctx *sql.Context) error {
 	filesys := doltSession.Provider().FileSystem()
 
 	return filesys.Delete(filepath.Join(binlogPositionDirectory, binlogPositionFilename), false)
+}
+
+// createDoltCfgDir creates the .doltcfg directory if it doesn't already exist.
+func createDoltCfgDir(filesys filesys.Filesys) error {
+	exists, isDir := filesys.Exists(binlogPositionDirectory)
+	if !exists {
+		err := filesys.MkDirs(binlogPositionDirectory)
+		if err != nil {
+			return fmt.Errorf("unable to save binlog metadata: %s", err)
+		}
+	} else if !isDir {
+		return fmt.Errorf("unable to save binlog metadata: %s exists as a file, not a dir", binlogPositionDirectory)
+	}
+
+	return nil
 }
