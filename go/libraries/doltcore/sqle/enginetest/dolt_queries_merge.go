@@ -1368,7 +1368,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"child", false, "constraint violation"},
+					{"t", false, "constraint violation"},
 				},
 			},
 		},
@@ -1406,7 +1406,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"child", false, "constraint violation"},
+					{"t", false, "constraint violation"},
 				},
 			},
 		},
@@ -1444,7 +1444,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"child", false, "constraint violation"},
+					{"t", false, "constraint violation"},
 				},
 			},
 		},
