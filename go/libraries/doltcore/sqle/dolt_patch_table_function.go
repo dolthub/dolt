@@ -632,7 +632,7 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromR
 	diffQuerySqlSch, projections := getDiffQuerySqlSchemaAndProjections(diffPKSch.Schema, columnsWithDiff)
 
 	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch)
-	ri := dtables.NewDiffPartitionRowIter(*dp, dbData.Ddb, j)
+	ri := dtables.NewDiffPartitionRowIter(dp, dbData.Ddb, j)
 
 	return diffQuerySqlSch, projections, ri, nil
 }

@@ -502,13 +502,13 @@ var _ sql.RowIter = (*diffPartitionRowIter)(nil)
 type diffPartitionRowIter struct {
 	ddb              *doltdb.DoltDB
 	joiner           *rowconv.Joiner
-	currentPartition *sql.Partition
+	currentPartition *DiffPartition
 	currentRowIter   *sql.RowIter
 }
 
-func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
+func NewDiffPartitionRowIter(partition *DiffPartition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
 	return &diffPartitionRowIter{
-		currentPartition: &partition,
+		currentPartition: partition,
 		ddb:              ddb,
 		joiner:           joiner,
 	}
@@ -520,8 +520,7 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, io.EOF
 		}
 		if itr.currentRowIter == nil {
-			dp := (*itr.currentPartition).(DiffPartition)
-			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
+			rowIter, err := itr.currentPartition.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
 			if err != nil {
 				return nil, err
 			}
