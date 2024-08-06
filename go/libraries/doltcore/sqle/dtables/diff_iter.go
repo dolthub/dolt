@@ -34,7 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type diffRowItr struct {
+// ldDiffRowItr is a sql.RowIter implementation which iterates over an LD formated DB in order to generate the
+// dolt_diff_{table} results. This is legacy code at this point, as the DOLT format is what we'll support going forward.
+type ldDiffRowItr struct {
 	ad             diff.RowDiffer
 	diffSrc        *diff.RowDiffSource
 	joiner         *rowconv.Joiner
@@ -43,7 +45,7 @@ type diffRowItr struct {
 	toCommitInfo   commitInfo
 }
 
-var _ sql.RowIter = &diffRowItr{}
+var _ sql.RowIter = &ldDiffRowItr{}
 
 type commitInfo struct {
 	name    types.String
@@ -52,7 +54,7 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*diffRowItr, error) {
+func newLdDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*ldDiffRowItr, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
 	if err != nil {
@@ -110,7 +112,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 	src := diff.NewRowDiffSource(rd, joiner, ctx.Warn)
 	src.AddInputRowConversion(fromConv, toConv)
 
-	return &diffRowItr{
+	return &ldDiffRowItr{
 		ad:             rd,
 		diffSrc:        src,
 		joiner:         joiner,
@@ -121,7 +123,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 }
 
 // Next returns the next row
-func (itr *diffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
+func (itr *ldDiffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	r, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
@@ -180,7 +182,7 @@ func (itr *diffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 // Close closes the iterator
-func (itr *diffRowItr) Close(*sql.Context) (err error) {
+func (itr *ldDiffRowItr) Close(*sql.Context) (err error) {
 	defer itr.ad.Close()
 	defer func() {
 		closeErr := itr.diffSrc.Close()
@@ -203,7 +205,6 @@ type prollyDiffIter struct {
 	fromSch, toSch             schema.Schema
 	targetFromSch, targetToSch schema.Schema
 	fromConverter, toConverter ProllyRowConverter
-	fromVD, toVD               val.TupleDesc
 	keyless                    bool
 
 	fromCm commitInfo2
@@ -285,8 +286,6 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		return prollyDiffIter{}, err
 	}
 
-	fromVD := fsch.GetValueDescriptor()
-	toVD := tsch.GetValueDescriptor()
 	keyless := schema.IsKeyless(targetFromSchema) && schema.IsKeyless(targetToSchema)
 	child, cancel := context.WithCancel(ctx)
 	iter := prollyDiffIter{
@@ -298,8 +297,6 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		targetToSch:   targetToSchema,
 		fromConverter: fromConverter,
 		toConverter:   toConverter,
-		fromVD:        fromVD,
-		toVD:          toVD,
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
