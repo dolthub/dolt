@@ -437,7 +437,7 @@ func execQuery(
 	format engine.PrintResultFormat,
 ) errhand.VerboseError {
 
-	sqlSch, rowIter, err := processQuery(sqlCtx, query, qryist)
+	sqlSch, rowIter, _, err := processQuery(sqlCtx, query, qryist)
 	if err != nil {
 		return formatQueryError("", err)
 	}
@@ -640,7 +640,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 
 		// store start time for query
 		ctx.SetQueryTime(time.Now())
-		sqlSch, rowIter, err := processParsedQuery(ctx, query, qryist, sqlStatement)
+		sqlSch, rowIter, _, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
 			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
 			if !continueOnErr {
@@ -795,7 +795,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			} else {
 				var sqlSch sql.Schema
 				var rowIter sql.RowIter
-				if sqlSch, rowIter, err = processQuery(sqlCtx, query, qryist); err != nil {
+				if sqlSch, rowIter, _, err = processQuery(sqlCtx, query, qryist); err != nil {
 					verr := formatQueryError("", err)
 					shell.Println(verr.Verbose())
 				} else if rowIter != nil {
@@ -881,7 +881,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 	sqlCtx.Session.LockWarnings()
 	defer sqlCtx.Session.UnlockWarnings()
 
-	_, resp, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
+	_, resp, _, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
 		return db, branch, false
@@ -923,7 +923,7 @@ func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
 	sqlCtx.Session.LockWarnings()
 	defer sqlCtx.Session.UnlockWarnings()
 
-	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
+	_, resp, _, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
@@ -956,7 +956,7 @@ func newCompleter(
 
 	sqlCtx.Session.LockWarnings()
 	defer sqlCtx.Session.UnlockWarnings()
-	_, iter, err := qryist.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
+	_, iter, _, err := qryist.Query(sqlCtx, "select table_schema, table_name, column_name from information_schema.columns;")
 	if err != nil {
 		return nil, err
 	}
@@ -1060,13 +1060,13 @@ func prepend(s string, ss []string) []string {
 
 // processQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
-func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Schema, sql.RowIter, error) {
+func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	} else if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	return processParsedQuery(ctx, query, qryist, sqlStatement)
 }
@@ -1074,42 +1074,42 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 // processParsedQuery processes a single query with the parsed statement provided. The Root of the sqlEngine
 // will be updated if necessary. Returns the schema and the row iterator for the results, which may be nil,
 // and an error if one occurs.
-func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, error) {
+func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Use:
-		sch, ri, err := qryist.Query(ctx, query)
+		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		cli.Println("Database changed")
-		return sch, nil, err
+		return sch, nil, nil, err
 	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
-		_, ri, err := qryist.Query(ctx, query)
+		_, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	case *sqlparser.DDL:
-		_, ri, err := qryist.Query(ctx, query)
+		_, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	case *sqlparser.Load:
 		if s.Local {
-			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
+			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
 		}
 		return qryist.Query(ctx, query)
 	default:

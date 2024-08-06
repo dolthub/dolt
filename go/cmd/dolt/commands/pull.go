@@ -118,7 +118,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	go func() {
 		defer close(errChan)
 		// allows pulls (merges) that create conflicts to stick
-		_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+		_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
 		if err != nil {
 			errChan <- err
 			return
@@ -130,13 +130,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 		}
 
-		_, rowIter, err := queryist.Query(sqlCtx, query)
+		_, rowIter, _, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return
 		}
 		// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
-		_, _, err = queryist.Query(sqlCtx, "COMMIT")
+		_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
 		if err != nil {
 			errChan <- err
 			return

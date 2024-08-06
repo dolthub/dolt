@@ -132,7 +132,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 	ctx := enginetest.NewContext(harness)
 
 	// Confirm that the system variable was correctly set.
-	_, iter, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
+	_, iter, _, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
@@ -191,7 +191,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 
 	// Verify that the inserts are seen by the engine.
 	{
-		_, iter, err := e.Query(ctx, "select count(*) from timestamps")
+		_, iter, _, err := e.Query(ctx, "select count(*) from timestamps")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 
 	// Verify that the insert operations are actually interleaved by inspecting the order that values were added to `timestamps`
 	{
-		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
+		_, iter, _, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -208,7 +208,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 	}
 
 	{
-		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
+		_, iter, _, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -696,7 +696,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	_, err = enginetest.RunSetupScripts(ctx, h.Engine(), setupScripts, true)
 	require.NoError(t, err)
 
-	_, iter, err := h.Engine().Query(ctx, "select hashof('HEAD~2');")
+	_, iter, _, err := h.Engine().Query(ctx, "select hashof('HEAD~2');")
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)

@@ -1981,7 +1981,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
-		_, iter, err := engine.Query(ctx, q)
+		_, iter, _, err := engine.Query(ctx, q)
 		require.NoError(t, err)
 		_, err = sql.RowIterToRows(ctx, iter)
 		//fmt.Printf("%s %d\n", tag, id)

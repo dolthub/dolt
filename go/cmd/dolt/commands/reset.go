@@ -116,7 +116,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	// process query through prepared statement to prevent sql injection
 	query, err := constructInterpolatedDoltResetQuery(apr)
-	_, _, err = queryist.Query(sqlCtx, query)
+	_, _, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
 		return handleResetError(err, usage)
 	}
@@ -205,7 +205,7 @@ func buildStatRows(rows []sql.Row) []StatRow {
 
 func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	// Printing here is best effort.  Fail silently
-	_, rowIter, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
+	_, rowIter, _, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
 	if err != nil {
 		return
 	}

@@ -263,7 +263,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
+	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		return nil
 	}
 
-	sch, iter, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}

@@ -84,13 +84,13 @@ func ExecuteSql(dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (do
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
 			var rowIter sql.RowIter
-			_, rowIter, execErr = engine.Query(ctx, query)
+			_, rowIter, _, execErr = engine.Query(ctx, query)
 			if execErr == nil {
 				execErr = drainIter(ctx, rowIter)
 			}
 		case *sqlparser.DDL, *sqlparser.AlterTable:
 			var rowIter sql.RowIter
-			_, rowIter, execErr = engine.Query(ctx, query)
+			_, rowIter, _, execErr = engine.Query(ctx, query)
 			if execErr == nil {
 				execErr = drainIter(ctx, rowIter)
 			}
@@ -163,7 +163,7 @@ func ExecuteSelect(dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sq
 		return nil, err
 	}
 
-	_, rowIter, err := engine.Query(ctx, query)
+	_, rowIter, _, err := engine.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}

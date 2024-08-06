@@ -105,7 +105,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		_, rowIter, err := queryist.Query(sqlCtx, query)
+		_, rowIter, _, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return

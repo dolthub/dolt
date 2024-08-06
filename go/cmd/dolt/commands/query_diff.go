@@ -121,7 +121,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	schema, rowIter, err := queryist.Query(sqlCtx, query)
+	schema, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
