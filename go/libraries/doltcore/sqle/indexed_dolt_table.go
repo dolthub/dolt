@@ -45,6 +45,14 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
+var _ sql.IndexAddressable = (*IndexedDoltTable)(nil)
+
+func (t *IndexedDoltTable) PreciseMatch() bool {
+	if t.idx.IsSpatial() || t.idx.IsFullText() || len(t.idx.PrefixLengths()) > 0 {
+		return false
+	}
+	return true
+}
 
 func (idt *IndexedDoltTable) Index() index.DoltIndex {
 	return idt.idx
@@ -112,6 +120,7 @@ var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.IndexAddressable = (*WritableIndexedDoltTable)(nil)
 
 func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *WritableIndexedDoltTable {
 	return &WritableIndexedDoltTable{
@@ -128,6 +137,13 @@ type WritableIndexedDoltTable struct {
 	isDoltFormat bool
 	lb           index.IndexScanBuilder
 	mu           *sync.Mutex
+}
+
+func (t *WritableIndexedDoltTable) PreciseMatch() bool {
+	if t.idx.IsSpatial() || t.idx.IsFullText() || len(t.idx.PrefixLengths()) > 0 {
+		return false
+	}
+	return true
 }
 
 func (t *WritableIndexedDoltTable) Index() index.DoltIndex {
