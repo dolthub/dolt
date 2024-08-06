@@ -3006,6 +3006,12 @@ SQL
     [[ "$output" =~ "aTable,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 
+    run dolt sql -q "SELECT * from dolt_status" -r=csv
+    log_status_eq "0"
+    [[ "$output" =~ "table_name,staged,status" ]] || false
+    [[ "$output" =~ "aTable,false,constraint violation" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
     run dolt sql -q "SELECT from_root_ish,violation_type,hex(dolt_row_hash) as dolt_row_hash,aColumn,bColumn,violation_info from dolt_constraint_violations_aTable" -r=csv
     log_status_eq "0"
     [[ "$output" =~ "from_root_ish,violation_type,dolt_row_hash,aColumn,bColumn,violation_info" ]] || false

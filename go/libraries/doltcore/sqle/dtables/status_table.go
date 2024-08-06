@@ -100,6 +100,15 @@ type statusTableRow struct {
 	status    string
 }
 
+func contains(str string, strs []string) bool {
+	for _, s := range strs {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rp := st.rootsProvider
 
@@ -114,26 +123,16 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 
 	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables))
-	for _, td := range stagedTables {
-		tblName := tableName(td)
-		if doltdb.IsFullTextTable(tblName) {
-			continue
-		}
-		rows = append(rows, statusTableRow{
-			tableName: tblName,
-			isStaged:  true,
-			status:    statusString(td),
-		})
+
+	cvTables, err := doltdb.TablesWithConstraintViolations(ctx, roots.Working)
+	if err != nil {
+		return nil, err
 	}
-	for _, td := range unstagedTables {
-		tblName := tableName(td)
-		if doltdb.IsFullTextTable(tblName) {
-			continue
-		}
+
+	for _, tbl := range cvTables {
 		rows = append(rows, statusTableRow{
-			tableName: tblName,
-			isStaged:  false,
-			status:    statusString(td),
+			tableName: tbl,
+			status:    "constraint violation",
 		})
 	}
 
@@ -164,6 +163,35 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		rows = append(rows, statusTableRow{
 			tableName: tbl,
 			status:    mergeConflictStatus,
+		})
+	}
+
+	for _, td := range stagedTables {
+		tblName := tableName(td)
+		if doltdb.IsFullTextTable(tblName) {
+			continue
+		}
+		if contains(tblName, cvTables) {
+			continue
+		}
+		rows = append(rows, statusTableRow{
+			tableName: tblName,
+			isStaged:  true,
+			status:    statusString(td),
+		})
+	}
+	for _, td := range unstagedTables {
+		tblName := tableName(td)
+		if doltdb.IsFullTextTable(tblName) {
+			continue
+		}
+		if contains(tblName, cvTables) {
+			continue
+		}
+		rows = append(rows, statusTableRow{
+			tableName: tblName,
+			isStaged:  false,
+			status:    statusString(td),
 		})
 	}
 
