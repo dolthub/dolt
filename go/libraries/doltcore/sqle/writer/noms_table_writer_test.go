@@ -181,7 +181,7 @@ func TestTableEditor(t *testing.T) {
 			// TODO: not clear why this is necessary, the call to ed.Close should update the working set already
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			_, rowIter, err := engine.Query(ctx, test.selectQuery)
+			_, rowIter, _, err := engine.Query(ctx, test.selectQuery)
 			require.NoError(t, err)
 
 			actualRows, err := sql.RowIterToRows(ctx, rowIter)
