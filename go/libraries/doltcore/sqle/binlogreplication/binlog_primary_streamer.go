@@ -94,7 +94,7 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 			err := streamer.streamNextEvents(ctx, conn,
 				*binlogFormat, binlogEventMeta, filepath.Dir(logfile), executedGtids)
 			if err == io.EOF {
-				logrus.Debug("End of binlog file! Pausing for new events...")
+				logrus.Trace("End of binlog file! Pausing for new events...")
 				time.Sleep(250 * time.Millisecond)
 			} else if err != nil {
 				return err
