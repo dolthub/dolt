@@ -1319,7 +1319,7 @@ func TestMergeableIndexes(t *testing.T) {
 			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)
 			require.NoError(t, err)
 
-			_, iter, err := engine.Query(sqlCtx, query)
+			_, iter, _, err := engine.Query(sqlCtx, query)
 			require.NoError(t, err)
 			res, err := sql.RowIterToRows(sqlCtx, iter)
 			require.NoError(t, err)
@@ -1525,7 +1525,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			finalRanges, err := ReadRangesFromQuery(sqlCtx, engine, query)
 			require.NoError(t, err)
 
-			_, iter, err := engine.Query(sqlCtx, query)
+			_, iter, _, err := engine.Query(sqlCtx, query)
 			require.NoError(t, err)
 
 			res, err := sql.RowIterToRows(sqlCtx, iter)
