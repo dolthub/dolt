@@ -500,7 +500,6 @@ func maybeTime(t *time.Time) interface{} {
 var _ sql.RowIter = (*diffPartitionRowIter)(nil)
 
 type diffPartitionRowIter struct {
-	diffPartitions   *DiffPartitions
 	ddb              *doltdb.DoltDB
 	joiner           *rowconv.Joiner
 	currentPartition *sql.Partition
@@ -518,13 +517,8 @@ func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner
 func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
 		if itr.currentPartition == nil {
-			nextPartition, err := itr.diffPartitions.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			itr.currentPartition = &nextPartition
+			return nil, io.EOF
 		}
-
 		if itr.currentRowIter == nil {
 			dp := (*itr.currentPartition).(DiffPartition)
 			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
@@ -538,12 +532,7 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err == io.EOF {
 			itr.currentPartition = nil
 			itr.currentRowIter = nil
-
-			if itr.diffPartitions == nil {
-				return nil, err
-			}
-
-			continue
+			return nil, err
 		} else if err != nil {
 			return nil, err
 		} else {
