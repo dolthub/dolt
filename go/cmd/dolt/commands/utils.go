@@ -308,7 +308,7 @@ func newLateBindingEngine(
 }
 
 func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
-	_, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return nil, err
 	}

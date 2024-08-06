@@ -956,7 +956,7 @@ func executeQueryWithEngine(ctx *sql.Context, engine *gms.Engine, query string) 
 		}).Warn("No current database selected")
 	}
 
-	_, iter, err := engine.Query(queryCtx, query)
+	_, iter, _, err := engine.Query(queryCtx, query)
 	if err != nil {
 		// Log any errors, except for commits with "nothing to commit"
 		if err.Error() != "nothing to commit" {

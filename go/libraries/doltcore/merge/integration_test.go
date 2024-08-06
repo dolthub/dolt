@@ -382,7 +382,7 @@ func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName strin
 }
 
 func executeQuery(ctx *sql.Context, eng *engine.SqlEngine, query string) error {
-	_, iter, err := eng.Query(ctx, query)
+	_, iter, _, err := eng.Query(ctx, query)
 	if err != nil {
 		return err
 	}

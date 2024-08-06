@@ -306,7 +306,7 @@ func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSessio
 }
 
 // Query execute a SQL statement and return values for printing.
-func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
+func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	return se.engine.Query(ctx, query)
 }
 

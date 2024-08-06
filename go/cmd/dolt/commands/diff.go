@@ -1204,7 +1204,7 @@ func diffDoltSchemasTable(
 		return errhand.BuildDError("Error building diff query").AddCause(err).Build()
 	}
 
-	_, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -1471,7 +1471,7 @@ func diffRows(
 		return errhand.BuildDError("Error building diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 	}
 
-	sch, rowIter, err := queryist.Query(sqlCtx, interpolatedQuery)
+	sch, rowIter, _, err := queryist.Query(sqlCtx, interpolatedQuery)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", interpolatedQuery).AddCause(err).Build()
 	} else if err != nil {
@@ -1510,7 +1510,7 @@ func diffRows(
 		if err != nil {
 			return errhand.BuildDError("Error closing row iterator:\n%s", interpolatedQuery).AddCause(err).Build()
 		}
-		_, rowIter, err = queryist.Query(sqlCtx, interpolatedQuery)
+		_, rowIter, _, err = queryist.Query(sqlCtx, interpolatedQuery)
 		defer rowIter.Close(sqlCtx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", interpolatedQuery).AddCause(err).Build()

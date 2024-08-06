@@ -1081,7 +1081,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 			//eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, dEnv)
 			eng, sqlCtx := newTestEngine(ctx, dEnv)
 
-			_, iter, err := eng.Query(sqlCtx, "create database test")
+			_, iter, _, err := eng.Query(sqlCtx, "create database test")
 			if err != nil {
 				panic(err)
 			}

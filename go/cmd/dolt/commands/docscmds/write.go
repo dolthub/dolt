@@ -130,7 +130,7 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 	}
 	sctx.SetCurrentDatabase(dbName)
 
-	_, iter, err = eng.Query(sctx, query)
+	_, iter, _, err = eng.Query(sctx, query)
 	if sql.ErrTableNotFound.Is(err) {
 		return "", errors.New("no dolt docs in this database")
 	}

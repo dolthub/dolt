@@ -120,14 +120,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// allows merges that create conflicts to stick
-	_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
 	if apr.Contains(cli.NoJsonMergeFlag) {
-		_, _, err = queryist.Query(sqlCtx, "set @@dolt_dont_merge_json = 1")
+		_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_dont_merge_json = 1")
 		if err != nil {
 			cli.Println(err.Error())
 			return 1
@@ -139,7 +139,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
-	_, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -167,7 +167,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
-	_, _, err = queryist.Query(sqlCtx, "COMMIT")
+	_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1

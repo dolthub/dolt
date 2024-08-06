@@ -45,7 +45,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *s
 	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
-	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
+	_, iter, _, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
 		pk bigint PRIMARY KEY,
 		v1 bigint,
 		v2 bigint,
@@ -55,7 +55,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *s
 	require.NoError(t, err)
 	require.NoError(t, drainIter(sqlCtx, iter))
 
-	_, iter, err = engine.Query(sqlCtx, insertQuery)
+	_, iter, _, err = engine.Query(sqlCtx, insertQuery)
 	require.NoError(t, err)
 	require.NoError(t, drainIter(sqlCtx, iter))
 

@@ -97,7 +97,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		_, _, err = queryist.Query(sqlCtx, query)
+		_, _, _, err = queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return

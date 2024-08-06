@@ -112,7 +112,7 @@ func TestLookupJoin(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, q := range tt.setup {
-				_, iter, err := engine.Query(ctx, q)
+				_, iter, _, err := engine.Query(ctx, q)
 				require.NoError(t, err)
 				_, err = sql.RowIterToRows(ctx, iter)
 				require.NoError(t, err)
