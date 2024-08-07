@@ -422,6 +422,9 @@ type coveringIndexImplBuilder struct {
 }
 
 func NewSequenceMapIter(ctx context.Context, ib IndexScanBuilder, ranges []prolly.Range, reverse bool) (prolly.MapIter, error) {
+	if len(ranges) == 0 {
+		return &strictLookupIter{}, nil
+	}
 	cur, err := ib.NewRangeMapIter(ctx, ranges[0], reverse)
 	if err != nil || len(ranges) < 2 {
 		return cur, err
