@@ -357,10 +357,10 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *s
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
 		defer pager.Stop()
-		if apr.Contains(cli.OneLineFlag) {
-			err = logCompact(pager, apr, commits, sqlCtx, queryist)
-		} else if apr.Contains(cli.GraphFlag) {
+		if apr.Contains(cli.GraphFlag) {
 			logGraph(pager, apr, commits)
+		} else if apr.Contains(cli.OneLineFlag) {
+			err = logCompact(pager, apr, commits, sqlCtx, queryist)
 		} else {
 			err = logDefault(pager, apr, commits, sqlCtx, queryist)
 		}
