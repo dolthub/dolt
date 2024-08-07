@@ -15,10 +15,10 @@
 package sqlutil
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -75,7 +75,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 func ToDoltSchema(
-	ctx context.Context,
+	ctx *sql.Context,
 	root doltdb.RootValue,
 	tableName string,
 	sqlSchema sql.PrimaryKeySchema,
@@ -107,7 +107,7 @@ func ToDoltSchema(
 	}
 
 	for i, col := range sqlSchema.Schema {
-		convertedCol, err := ToDoltCol(tags[i], col)
+		convertedCol, err := ToDoltCol(ctx, tags[i], col)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +135,7 @@ func ToDoltSchema(
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given
-func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
+func ToDoltCol(ctx *sql.Context, tag uint64, col *sql.Column) (schema.Column, error) {
 	var constraints []schema.ColConstraint
 	if !col.Nullable || col.PrimaryKey {
 		constraints = append(constraints, schema.NotNullConstraint{})
@@ -148,6 +148,12 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
+		if defaultVal != "NULL" && col.Default.IsLiteral() && !gmstypes.IsTime(col.Default.Type()) && !gmstypes.IsText(col.Default.Type()) {
+			v, err := col.Default.Eval(ctx, nil)
+			if err == nil {
+				defaultVal = fmt.Sprintf("'%v'", v)
+			}
+		}
 	} else {
 		generatedVal = col.Generated.String()
 	}
