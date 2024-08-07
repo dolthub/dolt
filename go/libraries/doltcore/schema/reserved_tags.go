@@ -115,3 +115,18 @@ const (
 	DoltIgnorePatternTag = iota + SystemTableReservedMin + uint64(8000)
 	DoltIgnoreIgnoredTag
 )
+
+// Tags for dolt_ci_workflows table
+const (
+	// WorkflowsIdTag is the tag of the id column in the workflows table
+	WorkflowsIdTag = iota + SystemTableReservedMin + uint64(9000)
+
+	// WorkflowsNameTag is the tag of the name column in the workflows table
+	WorkflowsNameTag
+
+	// WorkflowsCreatedAtTag is the tag of the created_at column in the workflows table
+	WorkflowsCreatedAtTag
+
+	// WorkflowsUpdatedAtTag is the tag of the updated_at column in the workflows table
+	WorkflowsUpdatedAtTag
+)
