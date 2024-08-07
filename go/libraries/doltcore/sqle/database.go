@@ -397,6 +397,38 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		return dt, true, nil
+	case strings.HasPrefix(lwrName, doltdb.DoltWorkspaceTablePrefix):
+		sess := dsess.DSessFromSess(ctx.Session)
+		/*
+			adapter := dsess.NewSessionStateAdapter(
+				sess, db.RevisionQualifiedName(),
+				concurrentmap.New[string, env.Remote](),
+				concurrentmap.New[string, env.BranchConfig](),
+				concurrentmap.New[string, env.Remote](),
+			)
+		*/
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		baseRoot, err := head.GetRootValue(ctx)
+
+		ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+		if err != nil {
+			return nil, false, err
+		}
+
+		suffix := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+
+		dt, err := dtables.NewWorkspaceTable(ctx, suffix, baseRoot, ws)
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	}
 
 	var dt sql.Table

@@ -1960,3 +1960,13 @@ func RunDoltReflogTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
 		}()
 	}
 }
+
+func RunDoltWorkspaceTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltWorkspaceScriptTests {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}

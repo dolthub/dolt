@@ -2052,3 +2052,8 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		wg.Wait()
 	}
 }
+
+func TestDoltWorkspace(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunDoltWorkspaceTests(t, harness)
+}

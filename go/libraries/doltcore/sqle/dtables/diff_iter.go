@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -200,6 +201,11 @@ type commitInfo2 struct {
 	ts   *time.Time
 }
 
+type nomsCommitInfo struct {
+	toCommit   commitInfo2
+	fromCommit commitInfo2
+}
+
 type prollyDiffIter struct {
 	from, to                   prolly.Map
 	fromSch, toSch             schema.Schema
@@ -207,8 +213,7 @@ type prollyDiffIter struct {
 	fromConverter, toConverter ProllyRowConverter
 	keyless                    bool
 
-	fromCm commitInfo2
-	toCm   commitInfo2
+	metadata interface{}
 
 	rows    chan sql.Row
 	errChan chan error
@@ -286,6 +291,8 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		return prollyDiffIter{}, err
 	}
 
+	md := nomsCommitInfo{toCommit: toCm, fromCommit: fromCm}
+
 	keyless := schema.IsKeyless(targetFromSchema) && schema.IsKeyless(targetToSchema)
 	child, cancel := context.WithCancel(ctx)
 	iter := prollyDiffIter{
@@ -298,8 +305,7 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		fromConverter: fromConverter,
 		toConverter:   toConverter,
 		keyless:       keyless,
-		fromCm:        fromCm,
-		toCm:          toCm,
+		metadata:      &md,
 		rows:          make(chan sql.Row, 64),
 		errChan:       make(chan error),
 		cancel:        cancel,
@@ -432,9 +438,14 @@ func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (r
 		}
 	}
 
+	commitInfo, ok := itr.metadata.(*nomsCommitInfo)
+	if !ok {
+		return nil, fmt.Errorf("Runtime Error: unexpected metadata type: %T", itr.metadata)
+	}
+
 	idx := tLen
-	row[idx] = itr.toCm.name
-	row[idx+1] = maybeTime(itr.toCm.ts)
+	row[idx] = commitInfo.toCommit.name
+	row[idx+1] = maybeTime(commitInfo.toCommit.ts)
 
 	if dif.Type != tree.AddedDiff {
 		err = itr.fromConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.From), row[tLen+2:tLen+2+fLen])
@@ -444,8 +455,8 @@ func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (r
 	}
 
 	idx = fLen + 2 + tLen
-	row[idx] = itr.fromCm.name
-	row[idx+1] = maybeTime(itr.fromCm.ts)
+	row[idx] = commitInfo.fromCommit.name
+	row[idx+1] = maybeTime(commitInfo.fromCommit.ts)
 	row[idx+2] = diffTypeString(dif)
 
 	return row, nil
