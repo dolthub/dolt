@@ -369,7 +369,7 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 // todo(andy): copy string fields
 func (itr prollyDiffIter) makeDiffRowItr(ctx context.Context, d tree.Diff) (*repeatingRowIter, error) {
 	if !itr.keyless {
-		r, err := itr.getDiffRow(ctx, d)
+		r, err := itr.getDiffTableRow(ctx, d)
 		if err != nil {
 			return nil, err
 		}
@@ -401,7 +401,7 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 		}
 	}
 
-	r, err = itr.getDiffRow(ctx, d)
+	r, err = itr.getDiffTableRow(ctx, d)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -409,7 +409,9 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 	return r, n, nil
 }
 
-func (itr prollyDiffIter) getDiffRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
+// getDiffTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
+// output schema is intended for dolt_diff_* tables and dolt_diff function.
+func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
 	tLen := schemaSize(itr.targetToSch)
 	fLen := schemaSize(itr.targetFromSch)
 
