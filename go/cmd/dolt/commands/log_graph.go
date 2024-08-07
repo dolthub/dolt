@@ -372,101 +372,100 @@ func getHeightOfCommit(commit *commitInfoWithChildren) int {
 	return height
 }
 
+func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
+	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+	// print the first commit
+	pager.Writer.Write([]byte(fmt.Sprintf("%s \033[33m commit %s ", strings.Join(graph[commits[0].Row], ""), commits[0].Commit.commitHash)))
+	if decoration != "no" {
+		printRefs(pager, &commits[0].Commit, decoration)
+	}
+	pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[0].formattedMessage, " "))))
+	previousRow := commits[0].Row
+	for i := 1; i < len(commits); i++ {
+		for j := previousRow + 1; j < commits[i].Row; j++ {
+			pager.Writer.Write([]byte(strings.Join(graph[j], "")))
+			pager.Writer.Write([]byte("\n"))
+		}
+
+		pager.Writer.Write([]byte(fmt.Sprintf("%s \033[33m commit %s ", strings.Join(graph[commits[i].Row], ""), commits[i].Commit.commitHash)))
+		if decoration != "no" {
+			printRefs(pager, &commits[i].Commit, decoration)
+		}
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[i].formattedMessage, " "))))
+		previousRow = commits[i].Row
+	}
+}
+
 // printGraphAndCommitsInfo prints the commit messages in the graph matrix
 func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
 	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-	oneLine := apr.Contains(cli.OneLineFlag)
-	if oneLine {
-		// print the first commit
-		pager.Writer.Write([]byte(fmt.Sprintf("%s \033[33m commit %s ", strings.Join(graph[commits[0].Row], ""), commits[0].Commit.commitHash)))
-		if decoration != "no" {
-			printRefs(pager, &commits[0].Commit, decoration)
-		}
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[0].formattedMessage, " "))))
-		previousRow := commits[0].Row
-		for i := 1; i < len(commits); i++ {
-			for j := previousRow + 1; j < commits[i].Row; j++ {
-				pager.Writer.Write([]byte(strings.Join(graph[j], "")))
-				pager.Writer.Write([]byte("\n"))
-			}
 
-			pager.Writer.Write([]byte(fmt.Sprintf("%s \033[33m commit %s ", strings.Join(graph[commits[i].Row], ""), commits[i].Commit.commitHash)))
-			if decoration != "no" {
-				printRefs(pager, &commits[i].Commit, decoration)
-			}
-			pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[i].formattedMessage, " "))))
-			previousRow = commits[i].Row
-		}
-	} else {
+	for i := 0; i < len(commits)-1; i++ {
+		startRow := commits[i].Row
+		endRow := commits[i+1].Row
+		startCol := commits[i].Col + 1
 
-		for i := 0; i < len(commits)-1; i++ {
-			startRow := commits[i].Row
-			endRow := commits[i+1].Row
-			startCol := commits[i].Col + 1
-
-			// find the maximum width of the graph in the range startRow to endRow
-			// this is used to align the commit message with the graph without overlapping with the graph
-			for j := startRow; j < endRow; j++ {
-				if len(graph[j]) > startCol {
-					startCol = len(graph[j])
-				}
-			}
-
-			printCommitMetadata(graph, pager, startRow, startCol, commits[i], decoration)
-
-			commitInfoHeight := getHeightOfCommit(commits[i])
-
-			for j, line := range commits[i].formattedMessage {
-				y := startRow + commitInfoHeight - len(commits[i].formattedMessage) + j
-				printLine(graph, startCol, y, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
-			}
-
-			// print the remaining lines of the graph of the current commit
-			for j := startRow + commitInfoHeight; j < endRow; j++ {
-				pager.Writer.Write([]byte(strings.Join(graph[j], "")))
-				pager.Writer.Write([]byte("\n"))
+		// find the maximum width of the graph in the range startRow to endRow
+		// this is used to align the commit message with the graph without overlapping with the graph
+		for j := startRow; j < endRow; j++ {
+			if len(graph[j]) > startCol {
+				startCol = len(graph[j])
 			}
 		}
 
-		last_commit_row := commits[len(commits)-1].Row
-		printCommitMetadata(graph, pager, last_commit_row, len(graph[last_commit_row]), commits[len(commits)-1], decoration)
-		for _, line := range commits[len(commits)-1].formattedMessage {
-			pager.Writer.Write([]byte(fmt.Sprintf("\t\033[37m%s", line)))
+		printCommitMetadata(graph, pager, startRow, startCol, commits[i], decoration)
+
+		commitInfoHeight := getHeightOfCommit(commits[i])
+
+		for j, line := range commits[i].formattedMessage {
+			y := startRow + commitInfoHeight - len(commits[i].formattedMessage) + j
+			printLine(graph, startCol, y, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
+		}
+
+		// print the remaining lines of the graph of the current commit
+		for j := startRow + commitInfoHeight; j < endRow; j++ {
+			pager.Writer.Write([]byte(strings.Join(graph[j], "")))
 			pager.Writer.Write([]byte("\n"))
 		}
 	}
 
+	last_commit_row := commits[len(commits)-1].Row
+	printCommitMetadata(graph, pager, last_commit_row, len(graph[last_commit_row]), commits[len(commits)-1], decoration)
+	for _, line := range commits[len(commits)-1].formattedMessage {
+		pager.Writer.Write([]byte(fmt.Sprintf("\t\033[37m%s", line)))
+		pager.Writer.Write([]byte("\n"))
+	}
 }
 
-// expandGraph expands the graph based on the length of the commit message
-func expandGraph(commits []*commitInfoWithChildren, oneLine bool, commitsMap map[string]*commitInfoWithChildren) {
+// expandGraphBasedOnGraphShape expands the graph based on the shape of the graph, to give diagonal lines enough space to be drawn
+func expandGraphBasedOnGraphShape(commits []*commitInfoWithChildren, commitsMap map[string]*commitInfoWithChildren) {
 	posY := 0
-	if oneLine {
-		for i, commit := range commits {
-			// one empty column between each branch path
-			commit.Col = commit.Col * 2
-			formattedMessage := []string{strings.Replace(commit.Commit.commitMeta.Description, "\n", " ", -1)}
-			commit.formattedMessage = formattedMessage
-			fmt.Println("commit", commit.Commit.commitHash)
-			if i > 0 {
-				posY += 1
-				for _, childHash := range commit.Children {
-					if child, ok := commitsMap[childHash]; ok {
-						horizontalDistance := math.Abs(float64(commit.Col - child.Col))
-						verticalDistance := math.Abs(float64(posY + 1 - child.Row))
-						fmt.Println("child", child.Commit.commitHash, "horizontalDistance", horizontalDistance, "verticalDistance", verticalDistance, "posY+1", posY, "child.Row", child.Row)
-						if horizontalDistance+float64(child.Row) > float64(posY) {
-							posY = int(horizontalDistance + float64(child.Row))
-						}
+	for i, commit := range commits {
+		// one empty column between each branch path
+		commit.Col = commit.Col * 2
+		formattedMessage := []string{strings.Replace(commit.Commit.commitMeta.Description, "\n", " ", -1)}
+		commit.formattedMessage = formattedMessage
+		if i > 0 {
+			posY += 1
+			for _, childHash := range commit.Children {
+				if child, ok := commitsMap[childHash]; ok {
+					horizontalDistance := math.Abs(float64(commit.Col - child.Col))
+					if horizontalDistance+float64(child.Row) > float64(posY) {
+						posY = int(horizontalDistance + float64(child.Row))
 					}
 				}
-
 			}
-			commit.Row = posY
-			fmt.Println(commit.Commit.commitHash, posY)
 		}
-		return
+		commit.Row = posY
 	}
+	return
+}
+
+// expandGraphBasedOnCommitMetaDataHeight expands the graph based on the length of the commit metadata
+// the height of the commit is determined by the length of the commit message, if the commit is a merge commit, author, and date
+func expandGraphBasedOnCommitMetaDataHeight(commits []*commitInfoWithChildren) {
+	posY := 0
+
 	for _, commit := range commits {
 		// one empty column between each branch path
 		commit.Col = commit.Col * 2
@@ -578,7 +577,11 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 
 	commits, commitsMap = computeColumnEnds(commits, commitsMap)
 	oneLine := apr.Contains(cli.OneLineFlag)
-	expandGraph(commits, oneLine, commitsMap)
+	if oneLine {
+		expandGraphBasedOnGraphShape(commits, commitsMap)
+	} else {
+		expandGraphBasedOnCommitMetaDataHeight(commits)
+	}
 
 	graph := drawCommitDotsAndBranchPaths(commits, commitsMap)
 
@@ -587,6 +590,9 @@ func logGraph(pager *outputpager.Pager, apr *argparser.ArgParseResults, commitIn
 		line = trimTrailing(line)
 		graph[i] = line
 	}
-
-	printGraphAndCommitsInfo(graph, pager, apr, commits)
+	if oneLine {
+		printOneLineGraph(graph, pager, apr, commits)
+	} else {
+		printGraphAndCommitsInfo(graph, pager, apr, commits)
+	}
 }

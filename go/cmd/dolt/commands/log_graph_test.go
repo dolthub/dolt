@@ -90,7 +90,7 @@ func TestDrawCommitDotsAndBranchPaths(t *testing.T) {
 	}
 
 	commits, commitsMap = computeColumnEnds(commits, commitsMap)
-	expandGraph(commits, false, commitsMap)
+	expandGraphBasedOnCommitMetaDataHeight(commits)
 
 	graph := drawCommitDotsAndBranchPaths(commits, commitsMap)
 
@@ -104,7 +104,7 @@ func TestDrawCommitDotsAndBranchPaths(t *testing.T) {
 
 }
 
-func TestExpandGraph(t *testing.T) {
+func TestExpandGraphBasedOnCommitMetaDataHeight(t *testing.T) {
 	commits := []*commitInfoWithChildren{
 		{
 			Commit: CommitInfo{
@@ -127,11 +127,8 @@ func TestExpandGraph(t *testing.T) {
 			Row: 1,
 		},
 	}
-	commitsMap := map[string]*commitInfoWithChildren{
-		"hash1": commits[0],
-		"hash2": commits[1],
-	}
-	expandGraph(commits, false, commitsMap)
+
+	expandGraphBasedOnCommitMetaDataHeight(commits)
 	require.Equal(t, 0, commits[0].Col)
 	require.Equal(t, 0, commits[0].Row)
 	require.Equal(t, 3, len(commits[0].formattedMessage))
