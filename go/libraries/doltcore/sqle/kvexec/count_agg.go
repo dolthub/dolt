@@ -15,12 +15,14 @@
 package kvexec
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/prolly"
 )
 
 func newCountAggregationKvIter(srcIter prolly.MapIter, sch schema.Schema, e sql.Expression) (sql.RowIter, bool, error) {
