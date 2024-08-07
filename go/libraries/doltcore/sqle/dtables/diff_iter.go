@@ -409,6 +409,45 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 	return r, n, nil
 }
 
+// getWorkspaceTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
+// output schema is intended for dolt_workspace_* tables.
+func (itr prollyDiffIter) getWorkspaceTableRow(ctx context.Context, rowId int, staged bool, dif tree.Diff) (row sql.Row, err error) {
+	tLen := schemaSize(itr.targetToSch)
+	fLen := schemaSize(itr.targetFromSch)
+
+	if fLen == 0 && dif.Type == tree.AddedDiff {
+		fLen = tLen
+	} else if tLen == 0 && dif.Type == tree.RemovedDiff {
+		tLen = fLen
+	}
+	//
+	row = make(sql.Row, 2+tLen+fLen)
+
+	row[0] = rowId
+	row[1] = staged
+
+	//row[idx+2] = diffTypeString(dif) // NM4 - I guess we'll need a diff type column.
+
+	idx := 2
+
+	if dif.Type != tree.RemovedDiff {
+		err = itr.toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To), row[idx:tLen])
+		if err != nil {
+			return nil, err
+		}
+	}
+	idx += tLen
+
+	if dif.Type != tree.AddedDiff {
+		err = itr.fromConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.From), row[idx:idx+fLen])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return row, nil
+}
+
 // getDiffTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
 // output schema is intended for dolt_diff_* tables and dolt_diff function.
 func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
