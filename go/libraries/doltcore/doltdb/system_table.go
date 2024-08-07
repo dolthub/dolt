@@ -163,6 +163,7 @@ var writeableSystemTables = []string{
 	ProceduresTableName,
 	IgnoreTableName,
 	RebaseTableName,
+	WorkflowsTableName,
 }
 
 var persistedSystemTables = []string{
@@ -316,6 +317,23 @@ const (
 
 	// StatisticsTableName is the statistics system table name
 	StatisticsTableName = "dolt_statistics"
+)
+
+const (
+	// WorkflowsTableName is the dolt CI system table name
+	WorkflowsTableName = "dolt_ci_workflows"
+
+	// WorkflowsIdPkColName is the name of the column storing the id of the row entry.
+	WorkflowsIdPkColName = "id"
+
+	// WorkflowsNameColName is the name of the column storing the name of the workflow.
+	WorkflowsNameColName = "name"
+
+	// WorkflowsCreatedAtColName is the name of the column storing the creation time of the row entry.
+	WorkflowsCreatedAtColName = "created_at"
+
+	// WorkflowsUpdatedAtColName is the name of the column storing the update time of the row entry.
+	WorkflowsUpdatedAtColName = "updated_at"
 )
 
 const (
