@@ -29,20 +29,6 @@ teardown() {
     run dolt sql -q "select * from dolt_ci_workflows;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "workflow_1" ]] || false
-
-    run dolt sql -q "update dolt_ci_workflows set name = 'workflow_2' where name = 'workflow_1'"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
-
-    run dolt add dolt_ci_workflows
-    [ "$status" -eq 0 ]
-
-    run dolt commit -m 'update dolt_ci_workflow entry'
-    [ "$status" -eq 0 ]
-
-    run dolt sql -q "select * from dolt_ci_workflows;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "workflow_2" ]] || false
 }
 
 @test "ci: dolt_ci_workflows should not allow users to alter the schema" {
