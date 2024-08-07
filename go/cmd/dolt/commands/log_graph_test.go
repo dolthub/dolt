@@ -136,3 +136,95 @@ func TestExpandGraphBasedOnCommitMetaDataHeight(t *testing.T) {
 	require.Equal(t, 8, commits[1].Row)
 	require.Equal(t, 1, len(commits[1].formattedMessage))
 }
+
+func TestExpandGraphBasedOnGraphShape(t *testing.T) {
+	// Test with two commits, one parent and one branch child, the graph is two dots in the same column
+	commits := []*commitInfoWithChildren{
+		{
+			Commit: CommitInfo{
+				commitHash: "hash1",
+				commitMeta: &datas.CommitMeta{
+					Description: "This is a longer commit message\nthat spans multiple lines\nfor testing purposes",
+				},
+				parentHashes: []string{"hash2"},
+			},
+			Children: []string{},
+			Row:      0,
+		},
+		{
+			Commit: CommitInfo{
+				commitHash: "hash2",
+				commitMeta: &datas.CommitMeta{
+					Description: "Short commit message",
+				},
+				parentHashes: []string{},
+			},
+			Children: []string{"hash1"},
+			Row:      1,
+		},
+	}
+	commitsMap := map[string]*commitInfoWithChildren{
+		"hash1": commits[0],
+		"hash2": commits[1],
+	}
+
+	commits, commitsMap = computeColumnEnds(commits, commitsMap)
+	expandGraphBasedOnGraphShape(commits, commitsMap)
+
+	require.Equal(t, 0, commits[0].Col)
+	require.Equal(t, 0, commits[0].Row)
+	require.Equal(t, 0, commits[1].Col)
+	require.Equal(t, 1, commits[1].Row)
+
+	// Test with three commits, with one merge commit
+	commits = []*commitInfoWithChildren{
+		{
+			Commit: CommitInfo{
+				commitHash: "hash1",
+				commitMeta: &datas.CommitMeta{
+					Description: "This is a longer commit message\nthat spans multiple lines\nfor testing purposes",
+				},
+				parentHashes: []string{"hash2", "hash3"},
+			},
+			Children: []string{},
+			Row:      0,
+		},
+		{
+			Commit: CommitInfo{
+				commitHash: "hash2",
+				commitMeta: &datas.CommitMeta{
+					Description: "Short commit message",
+				},
+				parentHashes: []string{},
+			},
+			Children: []string{"hash1"},
+			Row:      1,
+		},
+		{
+			Commit: CommitInfo{
+				commitHash: "hash3",
+				commitMeta: &datas.CommitMeta{
+					Description: "Short commit message",
+				},
+				parentHashes: []string{},
+			},
+			Children: []string{"hash1"},
+			Row:      3,
+		},
+	}
+
+	commitsMap = map[string]*commitInfoWithChildren{
+		"hash1": commits[0],
+		"hash2": commits[1],
+	}
+	commits, commitsMap = computeColumnEnds(commits, commitsMap)
+	expandGraphBasedOnGraphShape(commits, commitsMap)
+
+	require.Equal(t, 0, commits[0].Col)
+	require.Equal(t, 0, commits[0].Row)
+	require.Equal(t, 0, commits[1].Col)
+	require.Equal(t, 1, commits[1].Row)
+	require.Equal(t, 2, commits[2].Col)
+	require.Equal(t, 2, commits[2].Row)
+
+}

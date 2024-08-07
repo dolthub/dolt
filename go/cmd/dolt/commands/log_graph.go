@@ -458,7 +458,6 @@ func expandGraphBasedOnGraphShape(commits []*commitInfoWithChildren, commitsMap 
 		}
 		commit.Row = posY
 	}
-	return
 }
 
 // expandGraphBasedOnCommitMetaDataHeight expands the graph based on the length of the commit metadata
@@ -552,7 +551,7 @@ func drawCommitDotsAndBranchPaths(commits []*commitInfoWithChildren, commitsMap 
 							}
 						}
 					} else {
-						for i := 1; i < verticalDistance; i++ {
+						for i := 0; i < verticalDistance; i++ {
 							graph[parentRow-i][parentCol-i] = fmt.Sprintf("%s\\", color)
 						}
 						for i := col + 1; i < parent.Col-verticalDistance+1; i++ {

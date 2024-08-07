@@ -10,6 +10,10 @@ teardown() {
     teardown_common
 }
 
+remove_color_codes() {
+    echo "$1" | sed -E 's/\x1b\[[0-9;]*m//g'
+}
+
 @test "log: on initialized repo" {
     run dolt log
     [ "$status" -eq 0 ]
@@ -827,10 +831,6 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
 }
 
-remove_color_codes() {
-    echo "$1" | sed -E 's/\x1b\[[0-9;]*m//g'
-}
-
 @test "log: --graph: basic graph log" {
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
@@ -852,8 +852,16 @@ remove_color_codes() {
     [[ $(remove_color_codes "${lines[7]}") =~ "Author:" ]] || false                            #   Author: 
     [[ $(remove_color_codes "${lines[8]}") =~ "Date:" ]] || false                              #   Date: 
     [[ $(remove_color_codes "${lines[9]}") =~ "Initialize data repository" ]] || false         #      Initialize data repository
-}
 
+    run dolt log --graph --oneline
+    [ "$status" -eq 0 ]
+
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ ! "$output" =~ "Author" ]] || false
+    [[ ! "$output" =~ "Date" ]] || false
+    [[ $(remove_color_codes "${lines[0]}") =~ "*  commit" ]] || false                      # * commit 1
+    [[ $(remove_color_codes "${lines[1]}") =~ "*  commit" ]] || false                      # * commit  Initialize data repository
+}
 
 @test "log: --graph: graph with merges" {
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
@@ -903,8 +911,18 @@ remove_color_codes() {
     [[ $(remove_color_codes "${lines[26]}") =~ "Author:" ]] || false                           #   Author:
     [[ $(remove_color_codes "${lines[27]}") =~ "Date:" ]] || false                             #   Date:
     [[ $(remove_color_codes "${lines[28]}") =~ "Initialize data repository" ]] || false        #     Initialize data repository
-}
 
+    run dolt log --graph --oneline
+    [ "$status" -eq 0 ]
+ 
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(remove_color_codes "${lines[0]}") =~ "*  commit " ]] || false                        # * commit Merge branchA into main
+    [[ $(remove_color_codes "${lines[1]}") =~ "*\ " ]] || false                               # *\
+    [[ $(remove_color_codes "${lines[2]}") =~ "| *  commit" ]] || false                       # | * commit 2 MAIN  
+    [[ $(remove_color_codes "${lines[3]}") =~ "|/" ]] || false                                # |/  
+    [[ $(remove_color_codes "${lines[4]}") =~ "*  commit" ]] || false                         # * commit 1 MAIN
+    [[ $(remove_color_codes "${lines[5]}") =~ "*  commit" ]] || false                         # * Initialize data repository
+}
 
 @test "log: --graph: graph with multiple branches" {
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
@@ -1004,5 +1022,32 @@ remove_color_codes() {
     [[ $(remove_color_codes "${lines[64]}") =~ "* commit " ]] || false                        
     [[ $(remove_color_codes "${lines[65]}") =~ "Author:" ]] || false                          
     [[ $(remove_color_codes "${lines[66]}") =~ "Date:" ]] || false                              
-    [[ $(remove_color_codes "${lines[67]}") =~ "Initialize data repository" ]] || false         
+    [[ $(remove_color_codes "${lines[67]}") =~ "Initialize data repository" ]] || false       
+
+    run dolt log --graph --oneline  
+    [ "$status" -eq 0 ]  
+
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ $(remove_color_codes "${lines[0]}") =~ "*  commit " ]] || false                        # * commit Merge branchD into main
+    [[ $(remove_color_codes "${lines[1]}") =~ "*\  commit" ]] || false                        # *\  commit Merge branchC into main
+    [[ $(remove_color_codes "${lines[2]}") =~ "*\|  commit" ]] || false                       # *\|  commit Merge branchB into main
+    [[ $(remove_color_codes "${lines[3]}") =~ "*\\\\  commit" ]] || false                     # *\\  commit Merge branchA into main
+    [[ $(remove_color_codes "${lines[4]}") =~ "*\\\\\\  commit" ]] || false                   # *\\\  insert into testtable
+    [[ $(remove_color_codes "${lines[5]}") =~ "| *\|" ]] || false                             # | *\|  commit 1 branchD
+    [[ $(remove_color_codes "${lines[6]}") =~ "| |\*" ]] || false                             # | |\*  commit 1 branchC
+    [[ $(remove_color_codes "${lines[7]}") =~ "| | \\\\" ]] || false                          # | | \\
+    [[ $(remove_color_codes "${lines[8]}") =~ "| | |\*  commit" ]] || false                   # | | |\*  commit 1 branchB
+    [[ $(remove_color_codes "${lines[9]}") =~ "| | | \\" ]] || false                          # | | | \
+    [[ $(remove_color_codes "${lines[10]}") =~ "| | | |\\" ]] || false                        # | | | |\
+    [[ $(remove_color_codes "${lines[11]}") =~ "| | | | *  commit" ]] || false                # | | | | *  commit 1 BRANCHA
+    [[ $(remove_color_codes "${lines[12]}") =~ "| | | |/" ]] || false                         # | | | |/
+    [[ $(remove_color_codes "${lines[13]}") =~ "| | | /" ]] || false                          # | | | /
+    [[ $(remove_color_codes "${lines[14]}") =~ "| | |/" ]] || false                           # | | |/
+    [[ $(remove_color_codes "${lines[15]}") =~ "| | /" ]] || false                            # | | /
+    [[ $(remove_color_codes "${lines[16]}") =~ "| |/" ]] || false                             # | |/
+    [[ $(remove_color_codes "${lines[17]}") =~ "| /" ]] || false                              # | /
+    [[ $(remove_color_codes "${lines[18]}") =~ "|/" ]] || false                               # |/
+    [[ $(remove_color_codes "${lines[19]}") =~ "*  commit" ]] || false                        # *  commit Initialize data repository
+
 }
