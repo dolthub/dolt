@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 	stypes "github.com/dolthub/dolt/go/store/types"
 )
 
@@ -44,110 +42,15 @@ var _ sql.InsertableTable = (*WorkflowsTable)(nil)
 
 var _ sql.ReplaceableTable = (*WorkflowsTable)(nil)
 
-var _ sql.IndexAddressableTable = (*WorkflowsTable)(nil)
-
 // WorkflowsTable is a sql.Table implementation that implements a system table which stores dolt CI workflows
 type WorkflowsTable struct {
-	ddb               *doltdb.DoltDB
-	backingTable      VersionableTable
-	head              *doltdb.Commit
-	headHash          hash.Hash
-	headCommitClosure *prolly.CommitClosure
-}
-
-func (w *WorkflowsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	if lookup.Index.ID() == index.CommitHashIndexId {
-		return w.commitHashPartitionIter(ctx, lookup)
-	}
-
-	return w.Partitions(ctx)
-}
-
-func (w *WorkflowsTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	hashStrs, ok := index.LookupToPointSelectStr(lookup)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
-	}
-	hashes, commits, metas := index.HashesToCommits(ctx, w.ddb, hashStrs, nil, false)
-	if len(hashes) == 0 {
-		return sql.PartitionsToPartitionIter(), nil
-	}
-	var partitions []sql.Partition
-	for i, h := range hashes {
-		height, err := commits[i].Height()
-		if err != nil {
-			return nil, err
-		}
-
-		ok, err = w.CommitIsInScope(ctx, height, h)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-
-		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
-
-	}
-	return sql.PartitionsToPartitionIter(partitions...), nil
-}
-
-// CommitIsInScope returns true if a given commit hash is head or is
-// visible from the current head's ancestry graph.
-func (w *WorkflowsTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	headHash, err := w.HeadHash()
-	if err != nil {
-		return false, err
-	}
-	if headHash == h {
-		return true, nil
-	}
-	cc, err := w.HeadCommitClosure(ctx)
-	if err != nil {
-		return false, err
-	}
-	return cc.ContainsKey(ctx, h, height)
-}
-
-func (w *WorkflowsTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-	if w.headCommitClosure == nil {
-		cc, err := w.head.GetCommitClosure(ctx)
-		w.headCommitClosure = &cc
-		if err != nil {
-			return nil, err
-		}
-	}
-	return w.headCommitClosure, nil
-}
-
-func (w *WorkflowsTable) HeadHash() (hash.Hash, error) {
-	if w.headHash.IsEmpty() {
-		var err error
-		w.headHash, err = w.head.HashOf()
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
-	return w.headHash, nil
-}
-
-func (w *WorkflowsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	nw := *w
-	return &nw
-}
-
-func (w *WorkflowsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return nil, nil
-}
-
-func (w *WorkflowsTable) PreciseMatch() bool {
-	return true
+	ddb          *doltdb.DoltDB
+	backingTable VersionableTable
 }
 
 // NewWorkflowsTable creates a WorkflowsTable
-func NewWorkflowsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable VersionableTable, head *doltdb.Commit) sql.Table {
-	return &WorkflowsTable{ddb: ddb, backingTable: backingTable, head: head}
+func NewWorkflowsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable VersionableTable) sql.Table {
+	return &WorkflowsTable{ddb: ddb, backingTable: backingTable}
 }
 
 // NewEmptyWorkflowsTable creates a WorkflowsTable
