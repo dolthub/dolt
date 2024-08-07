@@ -422,7 +422,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt, found = dtables.NewEmptyWorkflowsTable(ctx), true
 		} else {
 			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable, head), true
+			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
 		}
 	case doltdb.LogTableName:
 		if head == nil {
