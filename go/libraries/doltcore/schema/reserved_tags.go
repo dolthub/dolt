@@ -126,4 +126,13 @@ const (
 
 	// WorkflowsUpdatedAtTag is the tag of the updated_at column in the workflows table
 	WorkflowsUpdatedAtTag
+
+	// WorkflowEventsIdTag is the tag of the id column in the workflow events table
+	WorkflowEventsIdTag
+
+	// WorkflowEventsWorkflowNameFkTag is the tag of the workflow name fk column in the workflow events table
+	WorkflowEventsWorkflowNameFkTag
+
+	// WorkflowEventsEventTypeTag is the tag of the events typ column in the workflow events table
+	WorkflowEventsEventTypeTag
 )
