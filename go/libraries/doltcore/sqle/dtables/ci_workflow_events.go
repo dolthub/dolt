@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -22,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -40,15 +42,146 @@ var _ sql.InsertableTable = (*WorkflowEventsTable)(nil)
 
 var _ sql.ReplaceableTable = (*WorkflowEventsTable)(nil)
 
+var _ sql.ForeignKeyTable = (*WorkflowEventsTable)(nil)
+
 // WorkflowEventsTable is a sql.Table implementation that implements a system table which stores dolt CI workflow events
 type WorkflowEventsTable struct {
-	ddb          *doltdb.DoltDB
-	backingTable VersionableTable
+	dbName            string
+	ddb               *doltdb.DoltDB
+	backingTable      VersionableTable
+	head              *doltdb.Commit
+	headHash          hash.Hash
+	headCommitClosure *prolly.CommitClosure
+}
+
+func (w *WorkflowEventsTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	hashStrs, ok := index.LookupToPointSelectStr(lookup)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+	}
+	hashes, commits, metas := index.HashesToCommits(ctx, w.ddb, hashStrs, nil, false)
+	if len(hashes) == 0 {
+		return sql.PartitionsToPartitionIter(), nil
+	}
+	var partitions []sql.Partition
+	for i, h := range hashes {
+		height, err := commits[i].Height()
+		if err != nil {
+			return nil, err
+		}
+
+		ok, err = w.CommitIsInScope(ctx, height, h)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+
+		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
+
+	}
+	return sql.PartitionsToPartitionIter(partitions...), nil
+}
+
+// CommitIsInScope returns true if a given commit hash is head or is
+// visible from the current head's ancestry graph.
+func (w *WorkflowEventsTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
+	headHash, err := w.HeadHash()
+	if err != nil {
+		return false, err
+	}
+	if headHash == h {
+		return true, nil
+	}
+	cc, err := w.HeadCommitClosure(ctx)
+	if err != nil {
+		return false, err
+	}
+	return cc.ContainsKey(ctx, h, height)
+}
+
+func (w *WorkflowEventsTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
+	if w.headCommitClosure == nil {
+		cc, err := w.head.GetCommitClosure(ctx)
+		w.headCommitClosure = &cc
+		if err != nil {
+			return nil, err
+		}
+	}
+	return w.headCommitClosure, nil
+}
+
+func (w *WorkflowEventsTable) HeadHash() (hash.Hash, error) {
+	if w.headHash.IsEmpty() {
+		var err error
+		w.headHash, err = w.head.HashOf()
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+	return w.headHash, nil
+}
+
+func (w *WorkflowEventsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == index.CommitHashIndexId {
+		return w.commitHashPartitionIter(ctx, lookup)
+	}
+
+	return w.Partitions(ctx)
+}
+
+func (w *WorkflowEventsTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
+	nw := *w
+	return &nw
+}
+
+func (w *WorkflowEventsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltCommitIndexes(w.dbName, w.Name(), w.ddb, true)
+}
+
+func (w *WorkflowEventsTable) PreciseMatch() bool {
+	return true
+}
+
+func (w *WorkflowEventsTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w *WorkflowEventsTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
+	//TODO implement me
+	panic("implement me")
 }
 
 // NewWorkflowEventsTable creates a WorkflowEventsTable
-func NewWorkflowEventsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable VersionableTable) sql.Table {
-	return &WorkflowEventsTable{ddb: ddb, backingTable: backingTable}
+func NewWorkflowEventsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, backingTable VersionableTable, head *doltdb.Commit) sql.Table {
+	return &WorkflowEventsTable{ddb: ddb, backingTable: backingTable, head: head}
 }
 
 // NewEmptyWorkflowEventsTable creates a WorkflowEventsTable
