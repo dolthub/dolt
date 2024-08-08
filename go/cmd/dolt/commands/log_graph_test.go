@@ -94,13 +94,13 @@ func TestDrawCommitDotsAndBranchPaths(t *testing.T) {
 
 	graph := drawCommitDotsAndBranchPaths(commits, commitsMap)
 
-	require.Equal(t, "\x1b[37m*", graph[0][0])
-	require.Equal(t, "\x1b[31m|", graph[1][0])
-	require.Equal(t, "\x1b[31m|", graph[2][0])
-	require.Equal(t, "\x1b[31m|", graph[3][0])
-	require.Equal(t, "\x1b[31m|", graph[4][0])
-	require.Equal(t, "\x1b[31m|", graph[5][0])
-	require.Equal(t, "\x1b[37m*", graph[6][0])
+	require.Equal(t, "*", graph[0][0])
+	require.Equal(t, "|", graph[1][0])
+	require.Equal(t, "|", graph[2][0])
+	require.Equal(t, "|", graph[3][0])
+	require.Equal(t, "|", graph[4][0])
+	require.Equal(t, "|", graph[5][0])
+	require.Equal(t, "*", graph[6][0])
 
 }
 
