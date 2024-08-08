@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/fatih/color"
 )
 
 /**
@@ -169,13 +170,13 @@ type commitInfoWithChildren struct {
 	formattedMessage []string
 }
 
-var branchColors = []string{
-	"\033[31m", // Red
-	"\033[32m", // Green
-	"\033[34m", // Blue
-	"\033[35m", // Magenta
-	"\033[36m", // Cyan
-	"\033[37m", // White
+var branchColors = []*color.Color{
+	color.New(color.FgRed),
+	color.New(color.FgGreen),
+	color.New(color.FgBlue),
+	color.New(color.FgMagenta),
+	color.New(color.FgCyan),
+	color.New(color.FgWhite),
 }
 
 type branchPath struct {
@@ -319,11 +320,11 @@ func computeColumnEnds(commits []*commitInfoWithChildren, commitsMap map[string]
 	return commitsWithColPos, newCommitMap
 }
 
-func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line string, commit CommitInfo, color, decoration string) {
+func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line string, commit CommitInfo, decoration string) {
 	graphLine := strings.Join(graph[row], "")
 
 	emptySpace := strings.Repeat(" ", col-len(graph[row]))
-	pager.Writer.Write([]byte(fmt.Sprintf("%s%s%s %s", graphLine, emptySpace, color, line)))
+	pager.Writer.Write([]byte(fmt.Sprintf("%s%s%s %s", graphLine, emptySpace, line)))
 
 	if decoration != "no" {
 		printRefs(pager, &commit, decoration)
@@ -332,19 +333,19 @@ func printLine(graph [][]string, col, row int, pager *outputpager.Pager, line st
 }
 
 func printCommitMetadata(graph [][]string, pager *outputpager.Pager, row, col int, commit *commitInfoWithChildren, decoration string) {
-	printLine(graph, col, row, pager, fmt.Sprintf("commit %s", commit.Commit.commitHash), commit.Commit, "\033[33m", decoration)
+	printLine(graph, col, row, pager, color.YellowString("commit %s", commit.Commit.commitHash), commit.Commit, decoration)
 
 	printMergeInfo := 0
 	if len(commit.Commit.parentHashes) > 1 {
 		printMergeInfo = 1
 	}
 	if printMergeInfo == 1 {
-		printLine(graph, col, row+1, pager, fmt.Sprintf("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, "\033[37m", "no")
+		printLine(graph, col, row+1, pager, color.WhiteString("Merge: %s", strings.Join(commit.Commit.parentHashes, " ")), commit.Commit, "no")
 	}
 
-	printLine(graph, col, row+1+printMergeInfo, pager, fmt.Sprintf("Author: %s <%s>", commit.Commit.commitMeta.Name, commit.Commit.commitMeta.Email), commit.Commit, "\033[37m", "no")
+	printLine(graph, col, row+1+printMergeInfo, pager, color.WhiteString("Author: %s <%s>", commit.Commit.commitMeta.Name, commit.Commit.commitMeta.Email), commit.Commit, "no")
 
-	printLine(graph, col, row+2+printMergeInfo, pager, fmt.Sprintf("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "\033[37m", "no")
+	printLine(graph, col, row+2+printMergeInfo, pager, color.WhiteString("Date: %s", commit.Commit.commitMeta.FormatTS()), commit.Commit, "no")
 
 	pager.Writer.Write([]byte(strings.Join(graph[row+3+printMergeInfo], "")))
 	pager.Writer.Write([]byte("\n"))
@@ -375,11 +376,11 @@ func getHeightOfCommit(commit *commitInfoWithChildren) int {
 func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []*commitInfoWithChildren) {
 	decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 	// print the first commit
-	pager.Writer.Write([]byte(fmt.Sprintf("%s \033[33m commit %s ", strings.Join(graph[commits[0].Row], ""), commits[0].Commit.commitHash)))
+	pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[0].Row], ""), color.YellowString("commit %s ", commits[0].Commit.commitHash))))
 	if decoration != "no" {
 		printRefs(pager, &commits[0].Commit, decoration)
 	}
-	pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[0].formattedMessage, " "))))
+	pager.Writer.Write([]byte(color.WhiteString("%s\n", strings.Join(commits[0].formattedMessage, " "))))
 
 	previousRow := commits[0].Row
 	for i := 1; i < len(commits); i++ {
@@ -421,7 +422,7 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 
 		for j, line := range commits[i].formattedMessage {
 			row := startRow + commitInfoHeight - len(commits[i].formattedMessage) + j
-			printLine(graph, startCol, row, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
+			printLine(graph, startCol, row, pager, color.WhiteString("\t%s", line), commits[i].Commit, "no")
 		}
 
 		// print the remaining lines of the graph of the current commit
@@ -504,57 +505,57 @@ func drawCommitDotsAndBranchPaths(commits []*commitInfoWithChildren, commitsMap 
 				parentCol := parent.Col
 				parentRow := parent.Row
 				if parentCol == col {
-					color := branchColors[col/2%len(branchColors)]
+					branchColor := branchColors[col/2%len(branchColors)]
 					for r := row + 1; r < parentRow; r++ {
 						if graph[r][col] == " " {
-							graph[r][col] = fmt.Sprintf("%s|", color)
+							graph[r][col] = branchColor.Sprintf("|")
 						}
 					}
 				}
 				if parentCol < col {
-					color := branchColors[col/2%len(branchColors)]
+					branchColor := branchColors[col/2%len(branchColors)]
 					horizontalDistance := col - parentCol
 					verticalDistance := parentRow - row
 					if horizontalDistance > verticalDistance {
 						for i := 1; i < verticalDistance; i++ {
-							graph[parentRow-i][parentCol+horizontalDistance-verticalDistance+i] = fmt.Sprintf("%s/", color)
+							graph[parentRow-i][parentCol+horizontalDistance-verticalDistance+i] = branchColor.Sprintf("/")
 						}
 						for i := parentCol; i < parentCol+(horizontalDistance-verticalDistance)+1; i++ {
 							if graph[parentRow][i] == " " {
-								graph[parentRow][i] = fmt.Sprintf("%s-", color)
+								graph[parentRow][i] = branchColor.Sprintf("-")
 							}
 						}
 					} else {
 						for i := parentCol + 1; i < col; i++ {
-							graph[parentRow+parentCol-i][i] = fmt.Sprintf("%s/", color)
+							graph[parentRow+parentCol-i][i] = branchColor.Sprintf("/")
 						}
 						for i := parentRow + parentCol - col; i > row; i-- {
 							if graph[i][col] == " " {
-								graph[i][col] = fmt.Sprintf("%s|", color)
+								graph[i][col] = branchColor.Sprintf("|")
 							}
 						}
 					}
 				}
 				if parentCol > col {
-					color := branchColors[parentCol/2%len(branchColors)]
+					branchColor := branchColors[parentCol/2%len(branchColors)]
 					horizontalDistance := parentCol - col
 					verticalDistance := parentRow - row
 					if verticalDistance > horizontalDistance {
 						for i := col + 1; i < parentCol; i++ {
-							graph[row+i-col][i] = fmt.Sprintf("%s\\", color)
+							graph[row+i-col][i] = branchColor.Sprintf("\\")
 						}
 						for i := row + parentCol - col; i < parentRow; i++ {
 							if graph[i][parent.Col] == " " {
-								graph[i][parent.Col] = fmt.Sprintf("%s|", color)
+								graph[i][parent.Col] = branchColor.Sprintf("|")
 							}
 						}
 					} else {
 						for i := 0; i < verticalDistance; i++ {
-							graph[parentRow-i][parentCol-i] = fmt.Sprintf("%s\\", color)
+							graph[parentRow-i][parentCol-i] = branchColor.Sprintf("\\")
 						}
 						for i := col + 1; i < parent.Col-verticalDistance+1; i++ {
 							if graph[row][i] == " " {
-								graph[row][i] = fmt.Sprintf("%s-", color)
+								graph[row][i] = branchColor.Sprintf("s-")
 							}
 						}
 					}
