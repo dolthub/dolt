@@ -17,11 +17,9 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       fail-fast: true
-      matrix:
-        os: [ ubuntu-22.04 ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
