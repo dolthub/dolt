@@ -51,7 +51,7 @@ func TestCountAgg(t *testing.T) {
 			setup: []string{
 				"create table xy (x int primary key, y int)",
 			},
-			query:     "select count(1) from xy where x = 1",
+			query:     "select count(1) from xy where y = 1",
 			doRowexec: false,
 		},
 		{
@@ -72,12 +72,12 @@ func TestCountAgg(t *testing.T) {
 			doRowexec: false,
 		},
 		{
-			name: "reject in subquery with non-nil scope",
+			name: "accept in subquery with non-nil scope",
 			setup: []string{
 				"create table xy (x int primary key, y int, key y_idx(y))",
 			},
 			query:     "select  1, (select count(y) from xy) cnt",
-			doRowexec: false,
+			doRowexec: true,
 		},
 		{
 			name: "reject complex count expressi	on",
