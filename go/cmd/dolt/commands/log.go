@@ -294,6 +294,7 @@ func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist
 }
 
 func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) error {
+	color.NoColor = false
 	for _, comm := range commits {
 		if len(comm.parentHashes) < apr.GetIntOrDefault(cli.MinParentsFlag, 0) {
 			return nil
@@ -355,7 +356,6 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *s
 	if cli.ExecuteWithStdioRestored == nil {
 		return nil
 	}
-	color.NoColor = false
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
 		defer pager.Stop()
@@ -434,6 +434,7 @@ func printDiffStats(diffStats map[string]*merge.MergeStats, pager *outputpager.P
 // visualizeChangesForLog generates the string with the appropriate symbols to represent the changes in a commit with
 // the corresponding color suitable for writing to a pager
 func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
+	color.NoColor = false
 	const maxVisLen = 30 //can be a bit longer due to min len and rounding
 
 	resultStr := ""
