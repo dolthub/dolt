@@ -152,7 +152,7 @@ func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTa
 
 // PreciseMatch implements sql.IndexAddressable
 func (dt *UnscopedDiffTable) PreciseMatch() bool {
-	return true
+	return false
 }
 
 func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
