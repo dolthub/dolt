@@ -78,7 +78,7 @@ func getBlobValues(msg serial.Message) (values ItemAccess, err error) {
 	}
 	if b.TreeLevel() > 0 {
 		values.bufStart = lookupVectorOffset(blobAddressArrayVOffset, b.Table())
-		values.bufLen = uint16(b.AddressArrayLength() * uint16Size)
+		values.bufLen = uint16(b.AddressArrayLength())
 		values.itemWidth = hash.ByteLen
 	} else {
 		values.bufStart = lookupVectorOffset(blobPayloadBytesVOffset, b.Table())

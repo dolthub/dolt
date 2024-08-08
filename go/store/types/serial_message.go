@@ -388,7 +388,7 @@ func printIndex(level int, ret *strings.Builder, index *serial.Index) {
 }
 
 func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Message) error {
-	keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	_, values, treeLevel, count, err := message.UnpackFields(msg)
 	if err != nil {
 		return err
 	}
@@ -402,21 +402,8 @@ func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Me
 	}
 
 	for i := 0; i < int(count); i++ {
-		k := keys.GetItem(i, msg)
-		kt := val.Tuple(k)
-
-		w.Write([]byte("\n    { key: "))
-		for j := 0; j < kt.Count(); j++ {
-			if j > 0 {
-				w.Write([]byte(", "))
-			}
-
-			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
-		}
-
+		w.Write([]byte("\n    { ref: #"))
 		ref := hash.New(values.GetItem(i, msg))
-
-		w.Write([]byte(" ref: #"))
 		w.Write([]byte(ref.String()))
 		w.Write([]byte(" }"))
 	}
