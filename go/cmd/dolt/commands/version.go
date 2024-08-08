@@ -164,6 +164,8 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		}
 
 		latestRelease = strings.ReplaceAll(string(vCheck), "\n", "")
+		cli.Printf("latest release: %s\n", latestRelease)
+		// At this point... latestRelease is "bad version", just like we expect
 		lastCheckDate, _ := dEnv.FS.LastModified(path)
 		if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
 			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
@@ -172,10 +174,15 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 			}
 		} else {
 			if !isVersionFormattedCorrectly(latestRelease) {
+				cli.Println("version_check file is NOT formatted correctly!!")
+				// The code goes into this path, as expected, and tries to download the latest release version
+				// For some reason... it isn't able to download or set it?
 				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
 				if verr != nil {
 					return verr
 				}
+			} else {
+				cli.Println("version_check file is formatted correctly")
 			}
 		}
 	} else {
@@ -186,6 +193,10 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	}
 
 	// if there were new releases in the last week, the latestRelease stored might be behind the current version built
+	// TODO: Remove this debugging output
+	cli.Printf("current version: %s\n", curVersion)
+	cli.Printf("latest release: %s\n", latestRelease)
+
 	isOutOfDate, verr := isOutOfDate(curVersion, latestRelease)
 	if verr != nil {
 		return verr
@@ -210,24 +221,36 @@ func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errh
 		if err == nil {
 			return releaseName, nil
 		}
+	} else {
+		// NOTE: It seems like on the GitHub runners, we get an error or different response when trying to download
+		//       the latest version number.
+		// TODO: We should have a check in isOutOfDate where we only attempt to parse the latest release version number
+		//       when it is not the empty string.
+		cli.Printf("Failed to get latest release: %s (status: %d)\n", err, resp.StatusCode)
 	}
+
 	return "", nil
 }
 
 // isOutOfDate compares the current version of Dolt to the given latest release version and returns true if the current
 // version is out of date.
 func isOutOfDate(curVersion, latestRelease string) (bool, errhand.VerboseError) {
+	// latestRelease starts off as "bad version", but by the time it gets here, it's ""
+
 	curVersionParts := strings.Split(curVersion, ".")
 	latestReleaseParts := strings.Split(latestRelease, ".")
+
+	// TODO: This is where the error is coming from!
+	//       Why does this happen in MacOS CI, but not on a MacOS (or in Lambda CI?)
 
 	for i := 0; i < len(curVersionParts) && i < len(latestReleaseParts); i++ {
 		curPart, err := strconv.Atoi(curVersionParts[i])
 		if err != nil {
-			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+			return false, errhand.BuildDError("error 1: failed to parse version number").AddCause(err).Build()
 		}
 		latestPart, err := strconv.Atoi(latestReleaseParts[i])
 		if err != nil {
-			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+			return false, errhand.BuildDError("error 2: failed to parse version number").AddCause(err).Build()
 		}
 		if latestPart > curPart {
 			return true, nil

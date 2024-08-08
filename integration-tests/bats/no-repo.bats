@@ -159,8 +159,14 @@ teardown() {
 @test "no-repo: dolt version with bad version_check.txt does not print error" {
     echo "bad version" > $DOLT_ROOT_PATH/.dolt/version_check.txt
 
+    echo "dolt root path: $DOLT_ROOT_PATH"
+
+    run cat $DOLT_ROOT_PATH/.dolt/version_check.txt
+    echo "cat output: $output"
+
     run dolt version
     [ "$status" -eq 0 ]
+    echo "dolt version output: $output"
     [[ ! "$output" =~ "failed to parse version number" ]] || false
 }
 
