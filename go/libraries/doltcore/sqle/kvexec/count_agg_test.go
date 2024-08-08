@@ -80,7 +80,7 @@ func TestCountAgg(t *testing.T) {
 			doRowexec: true,
 		},
 		{
-			name: "reject complex count expressi	on",
+			name: "reject complex count expression",
 			setup: []string{
 				"create table xy (x int primary key, y int, key y_idx(y))",
 			},

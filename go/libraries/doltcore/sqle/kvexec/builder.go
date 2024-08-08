@@ -59,16 +59,14 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			}
 		}
 	case *plan.GroupBy:
-		// no grouping
-		// only COUNT expression
-		// table or ita as child
-		// simple count expression
-		// no filter
 		if len(n.GroupByExprs) == 0 && len(n.SelectedExprs) == 1 {
 			if cnt, ok := n.SelectedExprs[0].(*aggregation.Count); ok {
 				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
 					iter, ok, err := newCountAggregationKvIter(srcIter, srcSchema, cnt.Child)
 					if ok && err == nil {
+						// (1) no grouping expressions (returns one row)
+						// (2) only one COUNT expression with a literal or field reference
+						// (3) table or ita as child (no filters)
 						return iter, nil
 					}
 				}

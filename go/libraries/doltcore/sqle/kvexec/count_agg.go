@@ -81,6 +81,8 @@ func (l *countAggKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		k, v, err := l.srcIter.Next(ctx)
 		if err == io.EOF {
 			break
+		} else if err != nil {
+			return nil, err
 		}
 		if l.nullable {
 			if l.isKeyRef && k.FieldIsNull(l.idx) ||
