@@ -320,7 +320,7 @@ const (
 )
 
 const (
-	// WorkflowsTableName is the dolt CI system table name
+	// WorkflowsTableName is the dolt CI workflows system table name
 	WorkflowsTableName = "dolt_ci_workflows"
 
 	// WorkflowsNameColName is the name of the column storing the name of the workflow.
@@ -331,6 +331,18 @@ const (
 
 	// WorkflowsUpdatedAtColName is the name of the column storing the update time of the row entry.
 	WorkflowsUpdatedAtColName = "updated_at"
+
+	// WorkflowEventsTableName is the dolt CI workflow events system table name
+	WorkflowEventsTableName = "dolt_ci_workflow_events"
+
+	// WorkflowEventsIdPkColName is the name of the primary key id column on the workflow events table.
+	WorkflowEventsIdPkColName = "id"
+
+	// WorkflowEventsWorkflowNameFkColName is the name of the workflows name foreign key in the workflow events table.
+	WorkflowEventsWorkflowNameFkColName = "workflow_name_fk"
+
+	// WorkflowEventsEventTypeColName is the name of the event type column in the workflow events table.
+	WorkflowEventsEventTypeColName = "event_type"
 )
 
 const (
