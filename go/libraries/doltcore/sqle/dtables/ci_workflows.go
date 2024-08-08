@@ -93,7 +93,6 @@ func (w *WorkflowsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_ignore system table.
 func (w *WorkflowsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: doltdb.WorkflowsIdPkColName, Type: types.MustCreateString(sqltypes.VarChar, 36, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowsTableName, PrimaryKey: true, Nullable: false},
 		{Name: doltdb.WorkflowsNameColName, Type: types.MustCreateString(sqltypes.VarChar, 2048, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowsTableName, PrimaryKey: false, Nullable: false},
 		{Name: doltdb.WorkflowsCreatedAtColName, Type: types.Timestamp, Source: doltdb.WorkflowsTableName, PrimaryKey: false, Nullable: false},
 		{Name: doltdb.WorkflowsUpdatedAtColName, Type: types.Timestamp, Source: doltdb.WorkflowsTableName, PrimaryKey: false, Nullable: false},
@@ -187,21 +186,10 @@ func (w *workflowsWriter) StatementBegin(ctx *sql.Context) {
 		// We should find a way to not repeat ourselves.
 		colCollection := schema.NewColCollection(
 			schema.Column{
-				Name:          doltdb.WorkflowsIdPkColName,
-				Tag:           schema.WorkflowsIdTag,
-				Kind:          stypes.StringKind,
-				IsPartOfPK:    true,
-				TypeInfo:      typeinfo.FromKind(stypes.StringKind),
-				Default:       "",
-				AutoIncrement: false,
-				Comment:       "",
-				Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
-			},
-			schema.Column{
 				Name:          doltdb.WorkflowsNameColName,
 				Tag:           schema.WorkflowsNameTag,
 				Kind:          stypes.StringKind,
-				IsPartOfPK:    false,
+				IsPartOfPK:    true,
 				TypeInfo:      typeinfo.FromKind(stypes.StringKind),
 				Default:       "",
 				AutoIncrement: false,
