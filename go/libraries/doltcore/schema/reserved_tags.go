@@ -118,11 +118,8 @@ const (
 
 // Tags for dolt_ci_workflows table
 const (
-	// WorkflowsIdTag is the tag of the id column in the workflows table
-	WorkflowsIdTag = iota + SystemTableReservedMin + uint64(9000)
-
 	// WorkflowsNameTag is the tag of the name column in the workflows table
-	WorkflowsNameTag
+	WorkflowsNameTag = iota + SystemTableReservedMin + uint64(9000)
 
 	// WorkflowsCreatedAtTag is the tag of the created_at column in the workflows table
 	WorkflowsCreatedAtTag
