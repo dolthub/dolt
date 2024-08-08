@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -148,6 +149,12 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
+		if defaultVal != "NULL" && col.Default.IsLiteral() && !gmstypes.IsTime(col.Default.Type()) && !gmstypes.IsText(col.Default.Type()) {
+			v, err := col.Default.Eval(nil, nil)
+			if err == nil {
+				defaultVal = fmt.Sprintf("'%v'", v)
+			}
+		}
 	} else {
 		generatedVal = col.Generated.String()
 	}
