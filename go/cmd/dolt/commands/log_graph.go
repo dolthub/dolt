@@ -380,8 +380,10 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 		printRefs(pager, &commits[0].Commit, decoration)
 	}
 	pager.Writer.Write([]byte(fmt.Sprintf("\033[37m %s\n", strings.Join(commits[0].formattedMessage, " "))))
+
 	previousRow := commits[0].Row
 	for i := 1; i < len(commits); i++ {
+		// print the graph lines between the previous commit and the current commit
 		for j := previousRow + 1; j < commits[i].Row; j++ {
 			pager.Writer.Write([]byte(strings.Join(graph[j], "")))
 			pager.Writer.Write([]byte("\n"))
@@ -418,8 +420,8 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 		commitInfoHeight := getHeightOfCommit(commits[i])
 
 		for j, line := range commits[i].formattedMessage {
-			y := startRow + commitInfoHeight - len(commits[i].formattedMessage) + j
-			printLine(graph, startCol, y, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
+			row := startRow + commitInfoHeight - len(commits[i].formattedMessage) + j
+			printLine(graph, startCol, row, pager, fmt.Sprintf("\t%s", line), commits[i].Commit, "\033[37m", "no")
 		}
 
 		// print the remaining lines of the graph of the current commit
@@ -441,10 +443,8 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 func expandGraphBasedOnGraphShape(commits []*commitInfoWithChildren, commitsMap map[string]*commitInfoWithChildren) {
 	posY := 0
 	for i, commit := range commits {
-		// one empty column between each branch path
 		commit.Col = commit.Col * 2
-		formattedMessage := []string{strings.Replace(commit.Commit.commitMeta.Description, "\n", " ", -1)}
-		commit.formattedMessage = formattedMessage
+		commit.formattedMessage = []string{strings.Replace(commit.Commit.commitMeta.Description, "\n", " ", -1)}
 		if i > 0 {
 			posY += 1
 			for _, childHash := range commit.Children {
@@ -464,12 +464,10 @@ func expandGraphBasedOnGraphShape(commits []*commitInfoWithChildren, commitsMap 
 // the height of the commit is determined by the length of the commit message, if the commit is a merge commit, author, and date
 func expandGraphBasedOnCommitMetaDataHeight(commits []*commitInfoWithChildren) {
 	posY := 0
-
 	for _, commit := range commits {
 		// one empty column between each branch path
 		commit.Col = commit.Col * 2
 		commit.Row = posY
-
 		formattedMessage := strings.Split(commit.Commit.commitMeta.Description, "\n")
 		commit.formattedMessage = formattedMessage
 
