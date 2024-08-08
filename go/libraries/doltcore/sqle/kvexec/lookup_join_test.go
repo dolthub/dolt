@@ -48,6 +48,51 @@ func TestLookupJoin(t *testing.T) {
 			doRowexec: true,
 		},
 		{
+			name: "accept simple lookup join with indexable filters",
+			setup: []string{
+				"create table xy (x int primary key, y int)",
+				"create table ab (a int primary key, b int)",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a where a = 1 and x = 1",
+			doRowexec: true,
+		},
+		{
+			name: "accept simple lookup join with non-indexable filters",
+			setup: []string{
+				"create table xy (x int primary key, y int)",
+				"create table ab (a int primary key, b int)",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a where b = 1 and y = 1",
+			doRowexec: true,
+		},
+		{
+			name: "accept keyless lookup join",
+			setup: []string{
+				"create table xy (x int, y int, key x_idx(x) )",
+				"create table ab (a int, b int, key a_idx(a))",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a",
+			doRowexec: true,
+		},
+		{
+			name: "accept keyless lookup join with indexable filters",
+			setup: []string{
+				"create table xy (x int, y int, key x_idx(x) )",
+				"create table ab (a int, b int, key a_idx(a))",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a where a = 1 and x = 1",
+			doRowexec: true,
+		},
+		{
+			name: "accept keyless lookup join with non-indexable filters",
+			setup: []string{
+				"create table xy (x int, y int, key x_idx(x) )",
+				"create table ab (a int, b int, key a_idx(a))",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(xy,ab) */ * from xy join ab on x = a where b = 1 and y = 1",
+			doRowexec: true,
+		},
+		{
 			name: "reject type incompatibility",
 			setup: []string{
 				"create table xy (x int primary key, y int)",

@@ -606,7 +606,7 @@ type keylessIndexImplBuilder struct {
 	s *durableIndexState
 }
 
-// IndexScanBuilder implements IndexScanBuilder
+// NewRangeMapIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
 	rows := ib.s.Primary
 	dsecondary := ib.s.Secondary
@@ -620,12 +620,8 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	indexMap := ordinalMappingFromIndex(ib.idx)
 
 	keyBld := val.NewTupleBuilder(keyDesc)
-	return &keylessMapIter{
-		indexIter:    indexIter,
-		clustered:    clustered,
-		clusteredMap: indexMap,
-		clusteredBld: keyBld,
-	}, nil
+
+	return &keylessLookupIter{pri: clustered, secIter: indexIter, pkMap: indexMap, pkBld: keyBld, prefixDesc: keyDesc}, nil
 }
 
 type keylessMapIter struct {
