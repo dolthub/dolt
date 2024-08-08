@@ -322,9 +322,6 @@ const (
 	// WorkflowsTableName is the dolt CI system table name
 	WorkflowsTableName = "dolt_ci_workflows"
 
-	// WorkflowsIdPkColName is the name of the column storing the id of the row entry.
-	WorkflowsIdPkColName = "id"
-
 	// WorkflowsNameColName is the name of the column storing the name of the workflow.
 	WorkflowsNameColName = "name"
 
