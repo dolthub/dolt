@@ -314,9 +314,7 @@ func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error)
 		return m.IterKeyRange(ctx, start, stop)
 	}
 
-	if iter == nil {
-		iter, err = treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
-	}
+	iter, err = treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
 	return filteredIter{iter: iter, rng: rng}, nil
 }
 

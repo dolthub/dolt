@@ -209,6 +209,9 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, val.Tuple, bool) {
 		if !r.Fields[i].BoundsAreEqual {
 			tb := val.NewTupleBuilder(r.Desc)
 			for i, f := range r.Fields {
+				if !f.Lo.Inclusive || !f.Lo.Binding || !f.Hi.Inclusive || !f.Hi.Binding {
+					return nil, nil, false
+				}
 				tb.PutRaw(i, f.Lo.Value)
 			}
 			start := tb.Build(pool)
