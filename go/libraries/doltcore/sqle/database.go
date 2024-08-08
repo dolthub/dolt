@@ -419,10 +419,10 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		if backingTable == nil {
-			dt, found = dtables.NewEmptyWorkflowsTable(ctx), true
+			dt, found = dtables.NewEmptyWorkflowEventsTable(ctx), true
 		} else {
 			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
+			dt, found = dtables.NewWorkflowEventsTable(ctx, db.Name(), db.ddb, versionableTable, head), true
 		}
 
 		fkt, ok := dt.(sql.ForeignKeyTable)
