@@ -424,6 +424,38 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
 		}
+	case doltdb.WorkflowEventsTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.WorkflowEventsTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyWorkflowsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
+		}
+
+		fkt, ok := dt.(sql.ForeignKeyTable)
+		if !ok {
+			return nil, false, fmt.Errorf("failed to add foreign key to %s", doltdb.WorkflowEventsTableName)
+		}
+
+		fkey := sql.ForeignKeyConstraint{
+			Database:       db.Name(),
+			Table:          doltdb.WorkflowEventsTableName,
+			Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
+			ParentDatabase: db.Name(),
+			ParentTable:    doltdb.WorkflowsTableName,
+			ParentColumns:  []string{doltdb.WorkflowsNameColName},
+			OnDelete:       "cascade",
+		}
+
+		err = fkt.AddForeignKey(ctx, fkey)
+		if err != nil {
+			return nil, false, err
+		}
+
 	case doltdb.LogTableName:
 		if head == nil {
 			var err error
