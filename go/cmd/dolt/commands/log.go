@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -307,7 +308,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 
 		// TODO: use short hash instead
 		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[33m%s \033[0m", chStr)))
+		pager.Writer.Write([]byte(color.YellowString(chStr)))
 
 		if decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto"); decoration != "no" {
 			printRefs(pager, &comm, decoration)
@@ -354,6 +355,7 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *s
 	if cli.ExecuteWithStdioRestored == nil {
 		return nil
 	}
+	color.NoColor = false
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
 		defer pager.Stop()
@@ -441,7 +443,8 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			addLen = stats.Adds
 		}
 		addStr := fillStringWithChar('+', addLen)
-		resultStr += fmt.Sprintf("\033[32;1m%s\033[0m", addStr) // bright green (32;1m)
+		resultStr += color.HiGreenString("%s", addStr)
+
 	}
 
 	if stats.Modifications > 0 {
@@ -450,7 +453,7 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			modLen = stats.Modifications
 		}
 		modStr := fillStringWithChar('*', modLen)
-		resultStr += fmt.Sprintf("\033[33;1m%s\033[0m", modStr) // bright yellow (33;1m)
+		resultStr += color.HiYellowString("%s", modStr)
 	}
 
 	if stats.Deletes > 0 {
@@ -459,7 +462,7 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			delLen = stats.Deletes
 		}
 		delStr := fillStringWithChar('-', delLen)
-		resultStr += fmt.Sprintf("\033[31;1m%s\033[0m", delStr) // bright red (31;1m)
+		resultStr += color.HiRedString("%s", delStr)
 	}
 
 	return resultStr
