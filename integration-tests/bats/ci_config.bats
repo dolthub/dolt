@@ -16,10 +16,9 @@ teardown() {
 }
 
 @test "ci: dolt_ci_workflows should allow user inserts and updates" {
-    run dolt sql -q "insert into dolt_ci_workflows (id, name, created_at, updated_at) values (uuid(), 'workflow_1', current_timestamp, current_timestamp);"
+    run dolt sql -q "insert into dolt_ci_workflows (name, created_at, updated_at) values ('workflow_1', current_timestamp, current_timestamp);"
     [ "$status" -eq 0 ]
 
-    dolt sql -q "insert into dolt_ci_workflows (id, name, created_at, updated_at) values (uuid(), 'workflow_1', current_timestamp, current_timestamp);"
     run dolt sql -q "select * from dolt_ci_workflows;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "workflow_1" ]] || false
