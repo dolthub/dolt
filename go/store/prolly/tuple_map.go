@@ -311,7 +311,7 @@ func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error)
 	// point range start->stop
 	start, stop, ok := rng.KeyRangeLookup(m.Pool())
 	if ok {
-		iter, err = m.IterKeyRange(ctx, start, stop)
+		return m.IterKeyRange(ctx, start, stop)
 	}
 
 	if iter == nil {
