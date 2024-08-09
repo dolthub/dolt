@@ -78,9 +78,16 @@ teardown() {
 @test "cherry-pick: no changes" {
     dolt commit --allow-empty -am "empty commit"
     dolt checkout main
+
+    # If an empty commit is cherry-picked, Git will stop the cherry-pick and allow you to manually commit it
+    # with the --allow-empty flag. We don't support that yet, so instead, empty commits generate an error.
     run dolt cherry-pick branch1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "The previous cherry-pick commit is empty. Use --allow-empty to cherry-pick empty commits." ]] || false
+
+    # If the --allow-empty flag is specified, then empty commits can be automatically cherry-picked.
+    run dolt cherry-pick --allow-empty branch1
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "No changes were made" ]] || false
 }
 
 @test "cherry-pick: invalid hash" {

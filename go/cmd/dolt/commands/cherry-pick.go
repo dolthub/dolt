@@ -122,11 +122,11 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
-	err = cherryPick(queryist, sqlCtx, apr)
+	err = cherryPick(queryist, sqlCtx, apr, args)
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
-func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, args []string) error {
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
 		return fmt.Errorf("error: cannot cherry-pick empty string")
@@ -154,7 +154,13 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
 	}
 
-	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick(?)", []interface{}{cherryStr}, dialect.MySQL)
+	interfaceArgs := make([]interface{}, 0)
+	for _, arg := range args {
+		interfaceArgs = append(interfaceArgs, arg)
+	}
+
+	placeholders := strings.Join(make([]string, len(args)), "?, ") + "?"
+	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick("+placeholders+")", interfaceArgs, dialect.MySQL)
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
 	}

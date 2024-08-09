@@ -29,6 +29,27 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// EmptyCommitHandling describes how a cherry-pick action should handle empty commits. This includes commits that
+// start off as empty, as well as commits whose changes are applied, but are redundant, and become empty.
+type EmptyCommitHandling int
+
+const (
+	// DropEmptyCommit instructs a cherry-pick or rebase operation to drop empty commits and to not create new
+	// commits for them.
+	DropEmptyCommit = iota
+
+	// KeepEmptyCommit instructs a cherry-pick or rebase operation to keep empty commits.
+	KeepEmptyCommit
+
+	// StopOnEmptyCommit instructs a cherry-pick or rebase operation to stop and let the user take additional action
+	// to decide how to handle an empty commit.
+	StopOnEmptyCommit
+
+	// ErrorOnEmptyCommit instructs a cherry-pick or rebase operation to fail with an error when an empty commit
+	// is encountered.
+	ErrorOnEmptyCommit
+)
+
 // RebaseState tracks the state of an in-progress rebase action. It records the name of the branch being rebased, the
 // commit onto which the new commits will be rebased, and the root value of the previous working set, which is used if
 // the rebase is aborted and the working set needs to be restored to its previous state.
@@ -36,6 +57,13 @@ type RebaseState struct {
 	preRebaseWorking RootValue
 	ontoCommit       *Commit
 	branch           string
+
+	// commitBecomesEmptyHandling specifies how to handle a commit that contains changes, but when cherry-picked,
+	// results in no changes being applied.
+	commitBecomesEmptyHandling EmptyCommitHandling
+
+	// emptyCommitHandling specifies how to handle empty commits that contain no changes.
+	emptyCommitHandling EmptyCommitHandling
 }
 
 // Branch returns the name of the branch being actively rebased. This is the branch that will be updated to point
@@ -53,6 +81,14 @@ func (rs RebaseState) OntoCommit() *Commit {
 // started. This value is used when a rebase is aborted, so that the working set can be restored to its previous state.
 func (rs RebaseState) PreRebaseWorkingRoot() RootValue {
 	return rs.preRebaseWorking
+}
+
+func (rs RebaseState) EmptyCommitHandling() EmptyCommitHandling {
+	return rs.emptyCommitHandling
+}
+
+func (rs RebaseState) CommitBecomesEmptyHandling() EmptyCommitHandling {
+	return rs.commitBecomesEmptyHandling
 }
 
 type MergeState struct {
@@ -257,11 +293,13 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 // the branch that is being rebased, and |previousRoot| is root value of the branch being rebased. The HEAD and STAGED
 // root values of the branch being rebased must match |previousRoot|; WORKING may be a different root value, but ONLY
 // if it contains only ignored tables.
-func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot RootValue) (*WorkingSet, error) {
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot RootValue, commitBecomesEmptyHandling EmptyCommitHandling, emptyCommitHandling EmptyCommitHandling) (*WorkingSet, error) {
 	ws.rebaseState = &RebaseState{
-		ontoCommit:       ontoCommit,
-		preRebaseWorking: previousRoot,
-		branch:           branch,
+		ontoCommit:                 ontoCommit,
+		preRebaseWorking:           previousRoot,
+		branch:                     branch,
+		commitBecomesEmptyHandling: commitBecomesEmptyHandling,
+		emptyCommitHandling:        emptyCommitHandling,
 	}
 
 	ontoRoot, err := ontoCommit.GetRootValue(ctx)
@@ -472,9 +510,11 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 
 		rebaseState = &RebaseState{
-			preRebaseWorking: preRebaseWorkingRoot,
-			ontoCommit:       ontoCommit,
-			branch:           dsws.RebaseState.Branch(ctx),
+			preRebaseWorking:           preRebaseWorkingRoot,
+			ontoCommit:                 ontoCommit,
+			branch:                     dsws.RebaseState.Branch(ctx),
+			commitBecomesEmptyHandling: EmptyCommitHandling(dsws.RebaseState.CommitBecomesEmptyHandling(ctx)),
+			emptyCommitHandling:        EmptyCommitHandling(dsws.RebaseState.EmptyCommitHandling(ctx)),
 		}
 	}
 
@@ -570,7 +610,8 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 			return nil, err
 		}
 
-		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch)
+		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch,
+			uint8(ws.rebaseState.commitBecomesEmptyHandling), uint8(ws.rebaseState.emptyCommitHandling))
 	}
 
 	return &datas.WorkingSetSpec{

@@ -97,10 +97,11 @@ func CreateMergeArgParser() *argparser.ArgParser {
 }
 
 func CreateRebaseArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
+	ap := argparser.NewArgParserWithMaxArgs("rebase", 1)
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return errors.New("rebase takes at most one positional argument.")
 	}
+	ap.SupportsString(EmptyParam, "", "empty", "How to handle commits that are not empty to start, but which become empty after rebasing. Valid values are: drop (default) or keep")
 	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
 	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
 	ap.SupportsFlag(InteractiveFlag, "i", "Start an interactive rebase")
@@ -172,6 +173,9 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
 	ap.SupportsFlag(AbortParam, "", "Abort the current conflict resolution process, and revert all changes from the in-process cherry-pick operation.")
+	ap.SupportsFlag(AllowEmptyFlag, "", "Allow empty commits to be cherry-picked. "+
+		"Note that use of this option only keeps commits that were initially empty. "+
+		"Commits which become empty, due to a previous commit, will cause cherry-pick to fail.")
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return errors.New("cherry-picking multiple commits is not supported yet.")
 	}

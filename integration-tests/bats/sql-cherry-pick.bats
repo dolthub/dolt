@@ -94,7 +94,13 @@ CALL DOLT_CHECKOUT('main');
 CALL DOLT_CHERRY_PICK('branch1');
 SQL
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "no changes were made, nothing to commit" ]] || false
+    [[ "$output" =~ "The previous cherry-pick commit is empty. Use --allow-empty to cherry-pick empty commits." ]] || false
+
+    # Calling dolt_cherry_pick with --allow-empty creates the empty commit
+    run dolt sql<<SQL
+CALL DOLT_CHERRY_PICK('--allow-empty', 'branch1');
+SQL
+    [ "$status" -eq "0" ]
 }
 
 @test "sql-cherry-pick: invalid hash" {
