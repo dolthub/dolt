@@ -9,6 +9,8 @@ teardown() {
     teardown_common
 }
 
+export NO_COLOR=1
+
 @test "checkout: dolt checkout takes working set changes with you" {
     dolt sql <<SQL
 create table test(a int primary key);
@@ -440,6 +442,8 @@ SQL
 
   dolt commit --amend -m "new merge"
   commitmeta=$(dolt log --oneline --parents | head -n 1)
+  echo "debug commitmeta $commitmeta"
+  echo "debug shaparent1 $shaparent1"
   [[ "$commitmeta" =~ "$shaparent1" ]] || false
   [[ "$commitmeta" =~ "$shaparent2" ]] || false
 }
