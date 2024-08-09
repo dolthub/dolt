@@ -478,17 +478,17 @@ EOF
 
   run dolt show --no-pretty
   [ $status -eq 1 ] || false
-  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+  [[ "$output" =~ '`dolt show --no-pretty` or `dolt show (BRANCHNAME)` only supported in local mode.' ]] || false
 
   run dolt show "$parentHash"
   [ $status -eq 0 ] || false
   [[ "$output" =~ "tables table1, table2" ]] || false
   run dolt show "$parentClosureHash"
   [ $status -eq 1 ] || false
-  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+  [[ "$output" =~ '`dolt show (NON_COMMIT_HASH)` only supported in local mode.' ]] || false
   run dolt show "$rootValue"
   [ $status -eq 1 ] || false
-  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+  [[ "$output" =~ '`dolt show (NON_COMMIT_HASH)` only supported in local mode.' ]] || false
 
   stop_sql_server 1
 }
@@ -795,7 +795,7 @@ SQL
     dolt reset --hard HEAD~1
 
     stop_sql_server 1
-    
+
     run dolt revert HEAD
     [ $status -eq 0 ]
     [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
@@ -1246,7 +1246,7 @@ SQL
     run dolt ls
     [ $status -eq 0 ]
     remoteOutput=$output
-    
+
     [[ "$localOutput" == "$remoteOutput" ]] || false
 }
 
