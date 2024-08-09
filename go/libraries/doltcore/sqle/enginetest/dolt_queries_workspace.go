@@ -33,7 +33,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			"update tbl set val=51 where pk=42;",
 			"call dolt_add('tbl');",
 		},
-
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
@@ -74,7 +73,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 
 			"update tbl set val=51 where pk=42;",
 		},
-
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
@@ -95,7 +93,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
 			"insert into tbl values (44,44);",
 		},
-
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
@@ -124,7 +121,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		Name: "dolt_workspace_* deleted row",
 		SetUpScript: []string{
@@ -136,7 +132,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
 			"delete from tbl where pk = 42;",
 		},
-
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
@@ -155,7 +150,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		Name: "dolt_workspace_* clean workspace",
 		SetUpScript: []string{
@@ -166,7 +160,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			"insert into tbl values (43,43);",
 			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
 		},
-
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_workspace_tbl",
@@ -175,6 +168,65 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			{
 				Query:    "select * from dolt_workspace_unknowntable",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+
+	{
+		Name: "dolt_workspace_* created table",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"insert into tbl values (42,42);",
+			"insert into tbl values (43,43);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 42, 42, nil, nil},
+					{1, false, "added", 43, 43, nil, nil},
+				},
+			},
+			{
+				Query: "call dolt_add('tbl');",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 42, 42, nil, nil},
+					{1, true, "added", 43, 43, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* dropped table",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"call dolt_commit('-Am', 'creating table t');",
+
+			"insert into tbl values (42,42);",
+			"insert into tbl values (43,43);",
+			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
+			"drop table tbl",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "removed", nil, nil, 42, 42},
+					{1, false, "removed", nil, nil, 43, 43},
+				},
+			},
+			{
+				Query: "call dolt_add('tbl');",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, nil, 42, 42},
+					{1, true, "removed", nil, nil, 43, 43},
+				},
 			},
 		},
 	},
