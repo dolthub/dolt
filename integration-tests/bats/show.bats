@@ -140,6 +140,25 @@ assert_has_key_value() {
     assert_has_key "ParentClosure" "$output"
 }
 
+@test "show: --no-pretty commit hash" {
+    dolt commit --allow-empty -m "commit: initialize table1"
+    hash=$(dolt sql -q "select dolt_hashof('head');" -r csv | tail -n 1)
+    run dolt show --no-pretty $hash
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    assert_has_key "Name" "$output"
+    assert_has_key_value "Name" "Bats Tests" "$output"
+    assert_has_key_value "Desc" "commit: initialize table1" "$output"
+    assert_has_key_value "Name" "Bats Tests" "$output"
+    assert_has_key_value "Email" "bats@email.fake" "$output"
+    assert_has_key "Timestamp" "$output"
+    assert_has_key "UserTimestamp" "$output"
+    assert_has_key_value "Height" "2" "$output"
+    assert_has_key "RootValue" "$output"
+    assert_has_key "Parents" "$output"
+    assert_has_key "ParentClosure" "$output"
+}
+
 @test "show: HEAD root" {
     dolt sql -q "create table table1 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (1), (2), (3)"
