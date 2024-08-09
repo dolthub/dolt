@@ -133,3 +133,5 @@ func TestExpandGraph(t *testing.T) {
 	require.Equal(t, 8, commits[1].Row)
 	require.Equal(t, 1, len(commits[1].formattedMessage))
 }
+
+// testing

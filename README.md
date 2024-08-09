@@ -846,6 +846,3 @@ without which we would not have been able to build Dolt so rapidly.
 Dolt is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/dolthub/dolt/blob/master/LICENSE) for
 details.
-
-
-# testing
