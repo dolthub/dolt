@@ -1271,6 +1271,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 
 		order := di.keyBld.Desc.Comparator()
+		var foundDiscontinuity bool
+		var isContiguous bool
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
@@ -1284,12 +1286,22 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// infinity bound
 				fields[i].BoundsAreEqual = false
 			}
+
+			nilBound := field.Lo.Value == nil && field.Hi.Value == nil
+			if foundDiscontinuity && !nilBound {
+				// A discontinous variable followed by any restriction
+				// can partition the key space.
+				isContiguous = false
+			}
+			foundDiscontinuity = foundDiscontinuity || !fields[i].BoundsAreEqual || nilBound
+
 		}
 		pranges[k] = prolly.Range{
 			Fields:       fields,
 			Desc:         di.keyBld.Desc,
 			Tup:          tup,
 			PreciseTypes: onlyPreciseTypes,
+			IsContiguous: isContiguous,
 		}
 	}
 	return pranges, nil

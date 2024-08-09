@@ -61,6 +61,11 @@ type Range struct {
 	// PreciseTypes is false if any type in the range
 	// expression can be serialized with a loss of precision.
 	PreciseTypes bool
+	// IsContiguous indicates whether this range expression is be a
+	// single contiguous set of keys on disk. Permit a sequence of
+	// (1) zero or more equality restrictions, (2) zero or one
+	// non-equality, and (3) no further restrictions.
+	IsContiguous bool
 }
 
 // RangeField bounds one dimension of a Range.
@@ -186,29 +191,6 @@ func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
 		if !r.Fields[i].BoundsAreEqual {
 			return false
 		}
-	}
-	return true
-}
-
-// IsContiguous returns an approximation of whether this range expression
-// will be a single contiguous set of keys on disk. Permit a sequence of
-// (1) zero or more equality restrictions, (2) zero or one non-equality,
-// and (3) no further restrictions.
-func (r Range) IsContiguous() bool {
-	var foundDiscontinuity bool
-	for _, f := range r.Fields {
-		nilBound := f.Lo.Value == nil && f.Hi.Value == nil
-		if foundDiscontinuity && !nilBound {
-			// A discontinous variable followed by any restriction
-			// can partition the key space.
-			return false
-		}
-		// Any field that isn't an equality restriction can be
-		// discontinous in the key space.
-		// ex: INDEX(x,y,z):
-		// y = 1           => scan all of x and filter for y=1
-		// 0<x<5 and y = 1 => scan x range and filter for y=1
-		foundDiscontinuity = foundDiscontinuity || !f.BoundsAreEqual || nilBound
 	}
 	return true
 }
