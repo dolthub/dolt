@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -339,10 +338,7 @@ func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error
 	// get next secondary key
 	idxKey, _, err := i.secIter.Next(ctx)
 	if err != nil {
-		if err != io.EOF {
-			return nil, nil, err
-		}
-		return nil, nil, nil
+		return nil, nil, err
 	}
 
 	if idxKey == nil {
