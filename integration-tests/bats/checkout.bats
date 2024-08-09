@@ -442,8 +442,6 @@ SQL
 
   dolt commit --amend -m "new merge"
   commitmeta=$(dolt log --oneline --parents | head -n 1)
-  echo "debug commitmeta $commitmeta"
-  echo "debug shaparent1 $shaparent1"
   [[ "$commitmeta" =~ "$shaparent1" ]] || false
   [[ "$commitmeta" =~ "$shaparent2" ]] || false
 }
