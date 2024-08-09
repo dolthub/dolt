@@ -187,6 +187,29 @@ func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
 	return true
 }
 
+// IsContiguous returns an approximation of whether this range expression
+// will be a single contiguous set of keys on disk. Permit a sequence of
+// (1) zero or more equality restrictions, (2) zero or one non-equality,
+// and (3) no further restrictions.
+func (r Range) IsContiguous() bool {
+	var foundDiscontinuity bool
+	for _, f := range r.Fields {
+		nilBound := f.Lo.Value == nil && f.Hi.Value == nil
+		if foundDiscontinuity && !nilBound {
+			// A discontinous variable followed by any restriction
+			// can partition the key space.
+			return false
+		}
+		// Any field that isn't an equality restriction can be
+		// discontinous in the key space.
+		// ex: INDEX(x,y,z):
+		// y = 1           => scan all of x and filter for y=1
+		// 0<x<5 and y = 1 => scan x range and filter for y=1
+		foundDiscontinuity = foundDiscontinuity || !f.BoundsAreEqual || nilBound
+	}
+	return true
+}
+
 // KeyRangeLookup will return a stop key and true if the range can be scanned
 // from a start to stop tuple. Otherwise, return a nil key and false. A range
 // can be key range scanned if the prefix is exact, and the final field is
