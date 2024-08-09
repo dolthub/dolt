@@ -90,6 +90,22 @@ func BenchmarkSelectRandomPoints(b *testing.B) {
 	})
 }
 
+func BenchmarkSelectRandomRanges(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		var sb strings.Builder
+		sb.Grow(120)
+		sb.WriteString("SELECT count(k) FROM sbtest1 WHERE ")
+		sep := ""
+		for i := 1; i < 10; i++ {
+			start := rand.Intn(tableSize)
+			fmt.Fprintf(&sb, "%sk between %s and %s", sep, strconv.Itoa(start), strconv.Itoa(start+5))
+			sep = " OR "
+		}
+		sb.WriteString(";")
+		return sb.String()
+	})
+}
+
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {

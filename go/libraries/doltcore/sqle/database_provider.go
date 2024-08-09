@@ -1289,12 +1289,12 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 }
 
 // Function implements the FunctionProvider interface
-func (p *DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
+func (p *DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, bool) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
-		return nil, sql.ErrFunctionNotFound.New(name)
+		return nil, false
 	}
-	return fn, nil
+	return fn, true
 }
 
 func (p *DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
