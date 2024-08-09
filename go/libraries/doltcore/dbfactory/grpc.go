@@ -73,6 +73,7 @@ func NewDoltRemoteFactory(insecure bool) DoltRemoteFactory {
 func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	var db datas.Database
 
+	panic(1)
 	dpi, ok := params[GRPCDialProviderParam]
 	if dpi == nil || !ok {
 		return nil, nil, nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
