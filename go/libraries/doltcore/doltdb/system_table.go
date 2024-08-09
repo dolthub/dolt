@@ -185,10 +185,6 @@ var generatedSystemTables = []string{
 	RemotesTableName,
 }
 
-var generatedSystemViewPrefixes = []string{
-	DoltBlameViewPrefix,
-}
-
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
