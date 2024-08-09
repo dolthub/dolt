@@ -55,9 +55,10 @@ func PrefixRange(prefix val.Tuple, desc val.TupleDesc) Range {
 // Non-matching Tuples can be filtered from physical partitions
 // by using RangeFields as logical predicates (see filteredIter).
 type Range struct {
-	Fields []RangeField
-	Desc   val.TupleDesc
-	Tup    val.Tuple
+	Fields       []RangeField
+	Desc         val.TupleDesc
+	Tup          val.Tuple
+	PreciseTypes bool
 }
 
 // RangeField bounds one dimension of a Range.

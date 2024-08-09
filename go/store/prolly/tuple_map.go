@@ -308,7 +308,6 @@ func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleD
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error) {
-	contiguousRange := rng.IsContiguous()
 	stop, ok := rng.KeyRangeLookup(m.Pool())
 	if ok {
 		iter, err = m.IterKeyRange(ctx, rng.Tup, stop)
@@ -318,7 +317,8 @@ func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error)
 	if err != nil {
 		return nil, err
 	}
-	if !contiguousRange {
+	if !rng.PreciseTypes || !rng.IsContiguous() {
+		// range.Match checks is required
 		iter = filteredIter{iter: iter, rng: rng}
 	}
 	return iter, nil

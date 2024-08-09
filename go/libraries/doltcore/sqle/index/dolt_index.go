@@ -1206,7 +1206,12 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	pranges := make([]prolly.Range, len(ranges))
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
+		onlyPreciseTypes := true
 		for j, expr := range rng {
+			if !(sqltypes.IsInteger(expr.Typ) || sqltypes.IsText(expr.Typ)) {
+				// decimal, float, datetime are imperfectly serialized
+				onlyPreciseTypes = false
+			}
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
@@ -1281,9 +1286,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 		}
 		pranges[k] = prolly.Range{
-			Fields: fields,
-			Desc:   di.keyBld.Desc,
-			Tup:    tup,
+			Fields:       fields,
+			Desc:         di.keyBld.Desc,
+			Tup:          tup,
+			PreciseTypes: onlyPreciseTypes,
 		}
 	}
 	return pranges, nil
