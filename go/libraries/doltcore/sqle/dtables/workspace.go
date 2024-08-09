@@ -306,8 +306,6 @@ type workspaceDiffIter struct {
 	tgtWorkingSch schema.Schema
 	tgtStagingSch schema.Schema
 
-	keyless bool
-
 	rows    chan sql.Row
 	errChan chan error
 	cancel  func()
@@ -330,41 +328,6 @@ func (itr workspaceDiffIter) Next(ctx *sql.Context) (sql.Row, error) {
 func (itr workspaceDiffIter) Close(c *sql.Context) error {
 	itr.cancel()
 	return nil
-}
-
-func getWorkspaceRowAndCardinality(
-	ctx context.Context,
-	idx int,
-	staging bool,
-	toSch schema.Schema,
-	fromSch schema.Schema,
-	toConverter ProllyRowConverter,
-	fromConverter ProllyRowConverter,
-	d tree.Diff,
-) (r sql.Row, n uint64, err error) {
-	switch d.Type {
-	case tree.AddedDiff:
-		n = val.ReadKeylessCardinality(val.Tuple(d.To))
-	case tree.RemovedDiff:
-		n = val.ReadKeylessCardinality(val.Tuple(d.From))
-	case tree.ModifiedDiff:
-		fN := val.ReadKeylessCardinality(val.Tuple(d.From))
-		tN := val.ReadKeylessCardinality(val.Tuple(d.To))
-		if fN < tN {
-			n = tN - fN
-			d.Type = tree.AddedDiff
-		} else {
-			n = fN - tN
-			d.Type = tree.RemovedDiff
-		}
-	}
-
-	r, err = getWorkspaceTableRow(ctx, idx, staging, toSch, fromSch, toConverter, fromConverter, d)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return r, n, nil
 }
 
 // getWorkspaceTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
@@ -416,22 +379,20 @@ func getWorkspaceTableRow(
 
 // NM4 - Virtually identical to prollyDiffIter.queueRows, but for workspaces. Dedupe this.
 func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
+	k1 := schema.EmptySchema == itr.tgtStagingSch || schema.IsKeyless(itr.tgtStagingSch)
+	k2 := schema.EmptySchema == itr.tgtBaseSch || schema.IsKeyless(itr.tgtBaseSch)
+	k3 := schema.EmptySchema == itr.tgtWorkingSch || schema.IsKeyless(itr.tgtWorkingSch)
+
+	keyless := k1 && k2 && k3
 
 	idx := 0
 
 	err := prolly.DiffMaps(ctx, itr.base, itr.staging, false, func(ctx context.Context, d tree.Diff) error {
-		dItr, err := itr.makeWorkspaceRowItr(ctx, idx, true, itr.tgtStagingSch, itr.tgtBaseSch, itr.stagingConverter, itr.baseConverter, d)
+		rows, err := itr.makeWorkspaceRows(ctx, idx, true, itr.tgtStagingSch, itr.tgtBaseSch, keyless, itr.stagingConverter, itr.baseConverter, d)
 		if err != nil {
 			return err
 		}
-		for {
-			r, err := dItr.Next(ctx)
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
+		for _, r := range rows {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -440,6 +401,7 @@ func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
 				continue
 			}
 		}
+		return nil
 	})
 
 	if err != nil && err != io.EOF {
@@ -451,18 +413,11 @@ func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
 	}
 
 	err = prolly.DiffMaps(ctx, itr.staging, itr.working, false, func(ctx context.Context, d tree.Diff) error {
-		dItr, err := itr.makeWorkspaceRowItr(ctx, idx, false, itr.tgtWorkingSch, itr.tgtStagingSch, itr.workingConverter, itr.stagingConverter, d)
+		rows, err := itr.makeWorkspaceRows(ctx, idx, false, itr.tgtWorkingSch, itr.tgtStagingSch, keyless, itr.workingConverter, itr.stagingConverter, d)
 		if err != nil {
 			return err
 		}
-		for {
-			r, err := dItr.Next(ctx)
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
+		for _, r := range rows {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -471,35 +426,54 @@ func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
 				continue
 			}
 		}
+		return nil
 	})
 
 	// we need to drain itr.rows before returning io.EOF
 	close(itr.rows)
 }
 
-func (itr *workspaceDiffIter) makeWorkspaceRowItr(
+func (itr *workspaceDiffIter) makeWorkspaceRows(
 	ctx context.Context,
 	idx int,
 	staging bool,
 	toSch schema.Schema,
 	fromSch schema.Schema,
+	keyless bool,
 	toConverter ProllyRowConverter,
 	fromConverter ProllyRowConverter,
 	d tree.Diff,
-) (*repeatingRowIter, error) {
-	if !itr.keyless {
+) ([]sql.Row, error) {
+	n := uint64(1)
+	if keyless {
+		switch d.Type {
+		case tree.AddedDiff:
+			n = val.ReadKeylessCardinality(val.Tuple(d.To))
+		case tree.RemovedDiff:
+			n = val.ReadKeylessCardinality(val.Tuple(d.From))
+		case tree.ModifiedDiff:
+			fN := val.ReadKeylessCardinality(val.Tuple(d.From))
+			tN := val.ReadKeylessCardinality(val.Tuple(d.To))
+			if fN < tN {
+				n = tN - fN
+				d.Type = tree.AddedDiff
+			} else {
+				n = fN - tN
+				d.Type = tree.RemovedDiff
+			}
+		}
+	}
+
+	ans := make([]sql.Row, n)
+	for i := uint64(0); i < n; i++ {
 		r, err := getWorkspaceTableRow(ctx, idx, staging, toSch, fromSch, toConverter, fromConverter, d)
 		if err != nil {
 			return nil, err
 		}
-		return &repeatingRowIter{row: r, n: 1}, nil
+		ans[i] = r
+		idx++
 	}
-
-	r, n, err := getWorkspaceRowAndCardinality(ctx, idx, staging, toSch, fromSch, toConverter, fromConverter, d)
-	if err != nil {
-		return nil, err
-	}
-	return &repeatingRowIter{row: r, n: n}, nil
+	return ans, nil
 }
 
 // NM4 - virtually identical to newProllyDiffIter, but for workspaces. Dedupe this.
@@ -556,7 +530,6 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		return workspaceDiffIter{}, err
 	}
 
-	keyless := schema.IsKeyless(wp.baseSch) && schema.IsKeyless(wp.stagingSch) && schema.IsKeyless(wp.workingSch)
 	child, cancel := context.WithCancel(ctx)
 	iter := workspaceDiffIter{
 		base:    base,
@@ -571,7 +544,6 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		workingConverter: workingConverter,
 		stagingConverter: stagingConverter,
 
-		keyless: keyless,
 		rows:    make(chan sql.Row, 64),
 		errChan: make(chan error),
 		cancel:  cancel,
@@ -591,7 +563,7 @@ type emptyWorkspaceTable struct {
 var _ sql.Table = (*emptyWorkspaceTable)(nil)
 
 func (e emptyWorkspaceTable) Name() string {
-	return "dolt_workspace_" + e.tableName
+	return doltdb.DoltWorkspaceTablePrefix + e.tableName
 }
 
 func (e emptyWorkspaceTable) String() string {
