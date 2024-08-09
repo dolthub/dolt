@@ -309,7 +309,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 
 		// TODO: use short hash instead
 		// Write commit hash
-		pager.Writer.Write([]byte(color.YellowString(chStr)))
+		pager.Writer.Write([]byte(color.YellowString("%s ", chStr)))
 
 		if decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto"); decoration != "no" {
 			printRefs(pager, &comm, decoration)
