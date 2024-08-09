@@ -207,6 +207,10 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, val.Tuple, bool) {
 			break
 		}
 		if !r.Fields[i].BoundsAreEqual {
+			if i < len(r.Fields)-1 {
+				// can't have a discontinuity in start/stop intervals
+				return nil, nil, false
+			}
 			tb := val.NewTupleBuilder(r.Desc)
 			for i, f := range r.Fields {
 				if !f.Lo.Inclusive || !f.Lo.Binding || !f.Hi.Inclusive || !f.Hi.Binding {
@@ -215,7 +219,12 @@ func (r Range) KeyRangeLookup(pool pool.BuffPool) (val.Tuple, val.Tuple, bool) {
 				tb.PutRaw(i, f.Lo.Value)
 			}
 			start := tb.Build(pool)
-			return start, r.Tup, true
+			_, stop, ok := IncrementTuple(r.Tup, i, r.Desc, pool)
+			if !ok {
+				return nil, nil, false
+			}
+
+			return start, stop, true
 		}
 	}
 
