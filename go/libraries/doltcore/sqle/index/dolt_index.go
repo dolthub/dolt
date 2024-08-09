@@ -1272,7 +1272,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 
 		order := di.keyBld.Desc.Comparator()
 		var foundDiscontinuity bool
-		var isContiguous bool
+		var isContiguous bool = true
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
