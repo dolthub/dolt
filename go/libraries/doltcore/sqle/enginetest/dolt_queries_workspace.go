@@ -20,6 +20,7 @@ import (
 )
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
+
 	{
 		Name: "dolt_workspace_* multiple edits of a single row",
 		SetUpScript: []string{
@@ -226,6 +227,46 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{0, true, "removed", nil, nil, 42, 42},
 					{1, true, "removed", nil, nil, 43, 43},
+				},
+			},
+		},
+	},
+
+	{
+		Name: "dolt_workspace_* keyless table",
+		SetUpScript: []string{
+			"create table tbl (x int, y int);",
+			"insert into tbl values (42,42);",
+			"insert into tbl values (42,42);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 42, 42, nil, nil},
+					{1, false, "added", 42, 42, nil, nil},
+				},
+			},
+
+			{
+				Query: "call dolt_add('tbl');",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 42, 42, nil, nil},
+					{1, true, "added", 42, 42, nil, nil},
+				},
+			},
+			{
+				Query: "insert into tbl values (42,42);",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 42, 42, nil, nil},
+					{1, true, "added", 42, 42, nil, nil},
+					{2, false, "added", 42, 42, nil, nil},
 				},
 			},
 		},
