@@ -59,7 +59,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, 
 	}
 	var stgDel *diff.TableDelta
 	for _, delta := range stageDlt {
-		if delta.ToName.Name == tblName {
+		if delta.FromName.Name == tblName || delta.ToName.Name == tblName {
 			stgDel = &delta
 			break
 		}
@@ -72,7 +72,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, 
 
 	var wkDel *diff.TableDelta
 	for _, delta := range workingDlt {
-		if delta.ToName.Name == tblName {
+		if delta.FromName.Name == tblName || delta.ToName.Name == tblName {
 			wkDel = &delta
 			break
 		}
@@ -85,22 +85,38 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, 
 
 	var toSch, fromSch schema.Schema
 	if stgDel == nil {
-		toSch, err = wkDel.ToTable.GetSchema(ctx)
-		if err != nil {
-			return nil, err
+		if wkDel.FromTable != nil {
+			fromSch, err = wkDel.FromTable.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
-		fromSch, err = wkDel.FromTable.GetSchema(ctx)
-		if err != nil {
-			return nil, err
+		toSch = fromSch
+		if wkDel.ToTable != nil {
+			toSch, err = wkDel.ToTable.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if fromSch == nil {
+			fromSch = toSch
 		}
 	} else {
-		toSch, err = stgDel.ToTable.GetSchema(ctx)
-		if err != nil {
-			return nil, err
+		if stgDel.FromTable != nil {
+			fromSch, err = stgDel.FromTable.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
-		fromSch, err = stgDel.FromTable.GetSchema(ctx)
-		if err != nil {
-			return nil, err
+		toSch = fromSch
+		if stgDel.ToTable != nil {
+			toSch, err = stgDel.ToTable.GetSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if fromSch == nil {
+			fromSch = toSch
 		}
 	}
 
@@ -149,12 +165,12 @@ func workspaceSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		toSch = fromSch
 	}
 
-	cols := make([]schema.Column, 0, 2+toSch.GetAllCols().Size()+fromSch.GetAllCols().Size())
+	cols := make([]schema.Column, 0, 3+toSch.GetAllCols().Size()+fromSch.GetAllCols().Size())
 
 	cols = append(cols,
 		schema.NewColumn("id", 0, types.UintKind, true),
-		schema.NewColumn("staged", 1, types.BoolKind, false),
-		schema.NewColumn("diff_type", 2, types.StringKind, false),
+		schema.NewColumn("staged", 0, types.BoolKind, false),
+		schema.NewColumn("diff_type", 0, types.StringKind, false),
 	)
 
 	transformer := func(sch schema.Schema, namer func(string) string) error {
@@ -227,36 +243,33 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 	if err != nil {
 		return nil, err
 	}
-	if !baseTableExists {
-		return nil, sql.ErrTableNotFound.New(wt.tableName) // NM4 - not an error. Just no changes. test/fix.
-	}
 	var baseSchema schema.Schema = schema.EmptySchema
-	if baseSchema, err = baseTable.GetSchema(ctx); err != nil {
-		return nil, err
+	if baseTableExists {
+		if baseSchema, err = baseTable.GetSchema(ctx); err != nil {
+			return nil, err
+		}
 	}
 
-	_, stagingTable, tableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.tableName)
+	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.tableName)
 	if err != nil {
 		return nil, err
-	}
-	if !tableExists {
-		return nil, sql.ErrTableNotFound.New(tableName) // NM4 - not an error. Just no changes. test/fix.
 	}
 	var stagingSchema schema.Schema = schema.EmptySchema
-	if stagingSchema, err = stagingTable.GetSchema(ctx); err != nil {
-		return nil, err
+	if stagingTableExists {
+		if stagingSchema, err = stagingTable.GetSchema(ctx); err != nil {
+			return nil, err
+		}
 	}
 
-	_, workingTable, tableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.tableName)
+	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.tableName)
 	if err != nil {
 		return nil, err
 	}
-	if !tableExists {
-		return nil, sql.ErrTableNotFound.New(tableName) // NM4 - not an error. Just no changes. test/fix.
-	}
 	var workingSchema schema.Schema = schema.EmptySchema
-	if workingSchema, err = workingTable.GetSchema(ctx); err != nil {
-		return nil, err
+	if workingTableExists {
+		if workingSchema, err = workingTable.GetSchema(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	part := WorkspacePartition{
@@ -517,7 +530,16 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		working = durable.ProllyMapFromIndex(idx)
 	}
 
-	nodeStore := wp.base.NodeStore()
+	var nodeStore tree.NodeStore
+	if wp.base != nil {
+		nodeStore = wp.base.NodeStore()
+	} else if wp.staging != nil {
+		nodeStore = wp.staging.NodeStore()
+	} else if wp.working != nil {
+		nodeStore = wp.working.NodeStore()
+	} else {
+		return workspaceDiffIter{}, errors.New("no base, staging, or working table")
+	}
 
 	baseConverter, err := NewProllyRowConverter(wp.baseSch, wp.baseSch, ctx.Warn, nodeStore)
 	if err != nil {
