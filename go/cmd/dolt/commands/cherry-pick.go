@@ -200,7 +200,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	if succeeded {
 		// on success, print the commit info
 		commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
-		if err != nil {
+		if commit == nil || err != nil {
 			return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
 		}
 
