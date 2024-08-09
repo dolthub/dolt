@@ -79,7 +79,7 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 	}
 	dp, ok := dpi.(GRPCDialProvider)
 	if !ok {
-		return nil, nil, nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
+		return nil, nil, nil, fmt.Errorf("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam: %v", dpi)
 	}
 
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params, dp)

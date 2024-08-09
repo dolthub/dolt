@@ -502,7 +502,7 @@ func runMain() int {
 		return 1
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
