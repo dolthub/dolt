@@ -402,6 +402,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	var dt sql.Table
 	found := false
 	switch lwrName {
+	case doltdb.WorkflowsTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.WorkflowsTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyWorkflowsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
+		}
 	case doltdb.LogTableName:
 		if head == nil {
 			var err error
