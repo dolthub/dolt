@@ -318,7 +318,7 @@ func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error)
 		return nil, err
 	}
 	if !rng.PreciseTypes || !rng.IsContiguous() {
-		// range.Match checks is required
+		// range.Matches checks is required
 		iter = filteredIter{iter: iter, rng: rng}
 	}
 	return iter, nil
