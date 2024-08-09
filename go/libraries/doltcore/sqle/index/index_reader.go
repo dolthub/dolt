@@ -462,6 +462,8 @@ func (i *sequenceRangeIter) Next(ctx context.Context) (val.Tuple, val.Tuple, err
 		}
 		i.remainingRanges = i.remainingRanges[1:]
 		return i.Next(ctx)
+	} else if err != nil {
+		return nil, nil, err
 	}
 	return k, v, nil
 }
