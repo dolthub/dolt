@@ -49,7 +49,7 @@ func RunTpcc(ctx context.Context, config TpccConfig) error {
 			fmt.Println("Running mysql tpcc benchmarks")
 			b = NewMysqlTpccBenchmarker(cwd, config, sc)
 		default:
-			panic(fmt.Sprintf("unexpected server type: %s", st))
+			panic(fmt.Sprintf("unexpectededed server type: %s", st))
 		}
 
 		results, err = b.Benchmark(ctx)
@@ -62,7 +62,7 @@ func RunTpcc(ctx context.Context, config TpccConfig) error {
 			return err
 		}
 
-		fmt.Printf("Successfuly wrote results for %s\n", st)
+		fmt.Printf("Successfully wrote results for %s\n", st)
 	}
 
 	return nil

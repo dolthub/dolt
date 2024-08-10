@@ -38,9 +38,9 @@ import (
 //
 // It logically stores a running histogram of uint64 values and shares some
 // important features of its inspiration:
-//   * It acccepts a correctness deficit in return for not needing to lock.
+//   * It accepts a correctness deficit in return for not needing to lock.
 //     IOW, concurrent calls to Sample may clobber each other.
-//   * It trades compactness and ease of arithmatic across histograms for
+//   * It trades compactness and ease of arithmetic across histograms for
 //     precision. Samples lose precision up to the range of the values which
 //     are stored in a bucket
 //

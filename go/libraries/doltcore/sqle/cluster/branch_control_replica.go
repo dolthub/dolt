@@ -142,7 +142,7 @@ func (r *branchControlReplica) Run() {
 		r.progressNotifier.RecordSuccess(attempt)
 		r.fastFailReplicationWait = false
 		r.backoff.Reset()
-		r.lgr.Debugf("branchControlReplica[%s]: sucessfully replicated branch control permissions.", r.client.remote)
+		r.lgr.Debugf("branchControlReplica[%s]: successfully replicated branch control permissions.", r.client.remote)
 		r.replicatedVersion = version
 	}
 }

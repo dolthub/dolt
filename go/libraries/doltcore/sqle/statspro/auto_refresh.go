@@ -196,7 +196,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 				ctx.GetLogger().Debugf("statistics updating: %s", updateMeta.qual)
 				// mark index for updating
 				idxMetas = append(idxMetas, updateMeta)
-				// update lastest hash if we haven't already
+				// update latest hash if we haven't already
 				statDb.SetLatestHash(branch, table, tableHash)
 			}
 		}

@@ -3587,7 +3587,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 
 var DoltResetTestScripts = []queries.ScriptTest{
 	{
-		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncomitted merge",
 		SetUpScript: []string{
 			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
 			"CALL DOLT_ADD('.')",
@@ -5703,7 +5703,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
-				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
+				ExpectedErrStr: "cannot cherry-pick with uncomitted changes",
 			},
 			{
 				Query:    "call dolt_add('t');",
@@ -5711,7 +5711,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
-				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
+				ExpectedErrStr: "cannot cherry-pick with uncomitted changes",
 			},
 		},
 	},
@@ -7035,7 +7035,7 @@ END`,
 		},
 	},
 	{
-		Name: "Database syntax propogates to inner calls",
+		Name: "Database syntax propagates to inner calls",
 		SetUpScript: []string{
 			"CALL DOLT_CHECKOUT('main');",
 			`CREATE PROCEDURE p4()

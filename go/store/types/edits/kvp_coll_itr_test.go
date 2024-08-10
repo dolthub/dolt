@@ -62,22 +62,22 @@ func TestKVPCollItr(t *testing.T) {
 		itr := NewItr(vrw, coll)
 
 		for i := 0; i < 2; i++ {
-			for _, expRes := range test.itrResults {
+			for _, express := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
 				kval, err := kvp.Key.Value(ctx)
 				assert.NoError(t, err)
 
-				if !kval.Equals(types.Uint(expRes.keyVal)) {
-					t.Error("unexpected result")
+				if !kval.Equals(types.Uint(express.keyVal)) {
+					t.Error("unexpectededed result")
 				}
 
-				if (buff != nil) != expRes.exhaustedBuf {
-					t.Error("unexpected buffer result")
+				if (buff != nil) != express.exhaustedBuf {
+					t.Error("unexpectededed buffer result")
 				}
 
-				if done != expRes.done {
-					t.Error("unexpected is done value.")
+				if done != express.done {
+					t.Error("unexpectededed is done value.")
 				}
 			}
 

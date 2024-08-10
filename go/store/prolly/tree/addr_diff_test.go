@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// Single layer trees are entirly root nodes - which are imbedded in the table flatbuffer, so we don't
+// Single layer trees are entirely root nodes - which are embedded in the table flatbuffer, so we don't
 // currently use them for purposes of grouping chunks.
 func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 	fromTups, desc := AscendingUintTuples(42)

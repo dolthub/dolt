@@ -111,7 +111,7 @@ Configuration:
 }
 ```
 
-`Servers`: The server defintions to run the benchmark against. Accepts Dolt and MySQL configuratiosn.
+`Servers`: The server definitions to run the benchmark against. Accepts Dolt and MySQL configuratiosn.
 
 `ScriptDir`: The directory of the TPCC testing scripts
 

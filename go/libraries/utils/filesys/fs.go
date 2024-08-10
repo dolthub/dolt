@@ -93,14 +93,14 @@ type WalkableFS interface {
 	Iter(directory string, recursive bool, cb FSIterCB) error
 }
 
-// ReadWriteFS is an interface whose implementors will provide read, and write implementations but may not allow
+// ReadWriteFS is an interface whose implementers will provide read, and write implementations but may not allow
 // for files to be listed.
 type ReadWriteFS interface {
 	ReadableFS
 	WritableFS
 }
 
-// Filesys is an interface whose implementors will provide read, write, and list mechanisms
+// Filesys is an interface whose implementers will provide read, write, and list mechanisms
 type Filesys interface {
 	ReadableFS
 	WritableFS

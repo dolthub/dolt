@@ -40,7 +40,7 @@ func (t *TestStorage) NewView() *TestStoreView {
 type TestStoreView struct {
 	ChunkStore
 	reads  int32
-	hases  int32
+	hashes  int32
 	writes int32
 }
 
@@ -61,12 +61,12 @@ func (s *TestStoreView) CacheHas(_ hash.Hash) bool {
 }
 
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
-	atomic.AddInt32(&s.hases, 1)
+	atomic.AddInt32(&s.hashes, 1)
 	return s.ChunkStore.Has(ctx, h)
 }
 
 func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
-	atomic.AddInt32(&s.hases, int32(len(hashes)))
+	atomic.AddInt32(&s.hashes, int32(len(hashes)))
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
@@ -104,9 +104,9 @@ func (s *TestStoreView) Reads() int {
 	return int(reads)
 }
 
-func (s *TestStoreView) Hases() int {
-	hases := atomic.LoadInt32(&s.hases)
-	return int(hases)
+func (s *TestStoreView) Hashes() int {
+	hashes := atomic.LoadInt32(&s.hashes)
+	return int(hashes)
 }
 
 func (s *TestStoreView) Writes() int {

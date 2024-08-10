@@ -41,7 +41,7 @@ var (
 )
 
 // Runs |sqlScript| concurrently on multiple clients.
-// Useful for repoducing concurrency bugs.
+// Useful for reproducing concurrency bugs.
 func main() {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
 		user, pass, host, port, database)

@@ -43,7 +43,7 @@ type (
 	printFunc func(ctx context.Context, w io.Writer, op prefixOp, key, val types.Value) error
 )
 
-// PrintDiff writes a textual reprensentation of the diff from |v1| to |v2|
+// PrintDiff writes a textual representation of the diff from |v1| to |v2|
 // to |w|. If |leftRight| is true then the left-right diff is used for ordered
 // sequences - see Diff vs DiffLeftRight in Set and Map.
 func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight bool) (err error) {
@@ -112,7 +112,7 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 						return err
 					}
 				} else {
-					panic("unexpected Path type")
+					panic("unexpectededed Path type")
 				}
 			case types.Set:
 				// default values are ok

@@ -252,7 +252,7 @@ func extractJsonResponse(content string) map[string]interface{} {
 }
 
 func sqlQuery(ctx context.Context, query string) (string, bool, error) {
-	cli.Println(fmt.Sprintf("Runnning query \"%s\"...", query))
+	cli.Println(fmt.Sprintf("Running query \"%s\"...", query))
 
 	output, _, err := doltExec(ctx, fmt.Sprintf("dolt sql -q \"%s\"", query), false)
 	if err != nil {

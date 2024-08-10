@@ -233,7 +233,7 @@ func TestValidation(t *testing.T) {
 	}
 
 	if apr.ContainsAny("string2", "flag2", "integer2") {
-		t.Error("Contains unexpected parameter(s)")
+		t.Error("Contains unexpectededed parameter(s)")
 	}
 
 	if val := apr.MustGetValue("string"); val != "string" {
@@ -308,7 +308,7 @@ func TestDropValue(t *testing.T) {
 	}
 
 	newApr2 := apr.DropValue("flag")
-	require.NotEqualf(t, apr, newApr2, "DropValue failes to drop flag")
+	require.NotEqualf(t, apr, newApr2, "DropValue fails to drop flag")
 
 	_, hasVal = newApr2.GetValue("string")
 	if !hasVal {

@@ -124,7 +124,7 @@ func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, 
 	return sms, nil
 }
 
-// NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
+// NewMultiEnv returns a new MultiRepoEnv instance derived from a root DoltEnv instance.
 func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
 	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env)
 }

@@ -439,7 +439,7 @@ func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence,
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
-// concatentation as one long composite sequence
+// concatenation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
 	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence", trace.WithAttributes(
 		attribute.Int64("level", int64(ms.treeLevel())),
@@ -541,10 +541,10 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	}
 
 	if len(hs) == 0 {
-		return seqs, nil // can occur with ptree that is fully uncommitted
+		return seqs, nil // can occur with ptree that is fully uncomitted
 	}
 
-	// Fetch committed child sequences in a single batch
+	// Fetch comitted child sequences in a single batch
 	readValues, err := ms.vrw.ReadManyValues(ctx, hs)
 
 	if err != nil {

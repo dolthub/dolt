@@ -96,7 +96,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		}
 		_, ok := hash.MaybeParse(path[i+1:])
 		if !ok {
-			logger.WithField("last_path_component", path[i+1:]).Warn("bad request with unparseable last path component")
+			logger.WithField("last_path_component", path[i+1:]).Warn("bad request with unparsable last path component")
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}

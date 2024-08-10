@@ -56,7 +56,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			doc:  gmstypes.MustJSON(`2.71`),
 		},
 		{
-			name: "type homogenous object",
+			name: "type homogeneous object",
 			doc:  gmstypes.MustJSON(`{"a": 2, "b": 3, "c": 4}`),
 		},
 		{
@@ -64,7 +64,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			doc:  gmstypes.MustJSON(`{"a": 2, "b": "two", "c": false}`),
 		},
 		{
-			name: "homogenous array",
+			name: "homogeneous array",
 			doc:  gmstypes.MustJSON(`[1, 2, 3]`),
 		},
 		{

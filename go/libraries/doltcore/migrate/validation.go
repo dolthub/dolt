@@ -276,7 +276,7 @@ func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 		return []types.NomsKind{types.JSONKind}
 
 	default:
-		panic(fmt.Sprintf("unexpect query.Type %s", qt.String()))
+		panic(fmt.Sprintf("unexpectededed query.Type %s", qt.String()))
 	}
 }
 

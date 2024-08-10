@@ -47,8 +47,8 @@ const (
 var (
 	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
-	ErrAlreadyCommitted     = errors.New("dataset head already pointing at given commit")
-	ErrDirtyWorkspace       = errors.New("target has uncommitted changes. --force required to overwrite")
+	ErrAlreadyComitted     = errors.New("dataset head already pointing at given commit")
+	ErrDirtyWorkspace       = errors.New("target has uncomitted changes. --force required to overwrite")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -289,7 +289,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			return err
 		}
 		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+			return fmt.Errorf("SetHead failed: referred to value is not a commit:")
 		}
 	case tagName:
 		istag, err := IsTag(ctx, newVal)
@@ -297,7 +297,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			return err
 		}
 		if !istag {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+			return fmt.Errorf("SetHead failed: referred to value is not a tag:")
 		}
 		_, commitaddr, err := newHead.HeadTag()
 		if err != nil {
@@ -487,7 +487,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			}
 			if curr != (hash.Hash{}) {
 				if curr == h {
-					return prolly.AddressMap{}, ErrAlreadyCommitted
+					return prolly.AddressMap{}, ErrAlreadyComitted
 				}
 			}
 
@@ -573,7 +573,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			return ae.Flush(ctx)
 		})
 
-	if err == ErrAlreadyCommitted {
+	if err == ErrAlreadyComitted {
 		return nil
 	}
 
@@ -655,7 +655,7 @@ func buildClassicCommitFunc(db Database, datasetID string, datasetCurrentAddr ha
 				return types.Map{}, ErrMergeNeeded
 			}
 			if currRef.TargetHash() == newCommitValueRef.TargetHash() {
-				return types.Map{}, ErrAlreadyCommitted
+				return types.Map{}, ErrAlreadyComitted
 			}
 		} else if datasetCurrentAddr != (hash.Hash{}) {
 			return types.Map{}, ErrMergeNeeded
@@ -682,7 +682,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 			}
 			if curr != (hash.Hash{}) {
 				if curr == h {
-					return prolly.AddressMap{}, ErrAlreadyCommitted
+					return prolly.AddressMap{}, ErrAlreadyComitted
 				}
 			}
 

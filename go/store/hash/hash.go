@@ -38,7 +38,7 @@
 //
 // The textual serialization of hashes uses big-endian base32 with the alphabet {0-9,a-v}. This scheme was chosen because:
 //
-// - It's easy to convert to and from base32 without bignum arithemetic.
+// - It's easy to convert to and from base32 without bignum arithmetic.
 // - No special chars: you can double-click to select in GUIs.
 // - Sorted hashes will be sorted textually, making it easy to scan for humans.
 //
@@ -125,7 +125,7 @@ func IsValid(s string) bool {
 func Parse(s string) Hash {
 	r, ok := MaybeParse(s)
 	if !ok {
-		d.PanicIfError(fmt.Errorf("cound not parse Hash: %s", s))
+		d.PanicIfError(fmt.Errorf("count not parse Hash: %s", s))
 	}
 	return r
 }

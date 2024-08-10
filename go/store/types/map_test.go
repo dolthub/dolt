@@ -497,7 +497,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 		return temp.NewStruct(vs.Format(), []Value{
 			Bool(i%2 == 0),
 			Float(i),
-			String(fmt.Sprintf("I AM A REALLY REALY REALL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
+			String(fmt.Sprintf("I AM A REALY REALY REAL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
 			String(fmt.Sprintf("I am a bit shorter and also more chill: %d", i)),
 		})
 	}
@@ -765,9 +765,9 @@ func TestMapHasRemove(t *testing.T) {
 	m, err = me.Map(context.Background())
 	require.NoError(t, err)
 	expected := []string{"a", "c", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "p", "q", "r", "s"}
-	unexpected := []string{"b", "d", "o"}
+	unexpectededed := []string{"b", "d", "o"}
 	assert.True(hasAll(m, expected...))
-	assert.True(hasNone(m, unexpected...))
+	assert.True(hasNone(m, unexpectededed...))
 
 	assert.True(m.Len() == uint64(len(expected)))
 }

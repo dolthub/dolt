@@ -105,7 +105,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		}
 
 		if fi.Size() < 0 {
-			// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+			// Size returns the number of bytes for regular files and is system dependent for others (Some of which can be negative).
 			err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
 			return
 		}
@@ -150,7 +150,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 	if chunkCount != index.chunkCount() {
 		index.Close()
 		f.Close()
-		return nil, errors.New("unexpected chunk count")
+		return nil, errors.New("unexpectededed chunk count")
 	}
 
 	tr, err := newTableReader(index, &fileReaderAt{f, path, sz}, fileBlockSize)

@@ -52,7 +52,7 @@ func None(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Pa
 	return change, merged, false
 }
 
-// Ours resolves conflicts by preferring changes from the Value currently being committed.
+// Ours resolves conflicts by preferring changes from the Value currently being comitted.
 func Ours(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
 	return aChange, a, true
 }
@@ -227,7 +227,7 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 	defer updateProgress(m.progress)
 
 	if a == nil || b == nil {
-		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
+		d.Panic("Merge candidates cannot be nil: a = %v, b = %v", a, b)
 	}
 
 	switch a.Kind() {

@@ -101,7 +101,7 @@ func RowsAndSchema() ([]row.Row, schema.Schema, error) {
 	return rows, sch, err
 }
 
-// MustTuple contructs a types.Tuple for a slice of types.Values.
+// MustTuple constructs a types.Tuple for a slice of types.Values.
 func MustTuple(vals ...types.Value) types.Tuple {
 	tup, err := types.NewTuple(types.Format_Default, vals...)
 	if err != nil {

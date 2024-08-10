@@ -77,9 +77,9 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 	},
 }
 
-// ErrRebaseUncommittedChanges is used when a rebase is started, but there are uncommitted (and not
+// ErrRebaseUncomittedChanges is used when a rebase is started, but there are uncomitted (and not
 // ignored) changes in the working set.
-var ErrRebaseUncommittedChanges = fmt.Errorf("cannot start a rebase with uncommitted changes")
+var ErrRebaseUncomittedChanges = fmt.Errorf("cannot start a rebase with uncomitted changes")
 
 // ErrRebaseConflict is used when a merge conflict is detected while rebasing a commit.
 var ErrRebaseConflict = goerrors.NewKind(
@@ -203,7 +203,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	}
 
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
-	// happens with a detatched HEAD, but Dolt doesn't support that, we use a temporary branch.
+	// happens with a detached HEAD, but Dolt doesn't support that, we use a temporary branch.
 	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
 	var rsc doltdb.ReplicationStatusController
 	err = actions.CreateBranchWithStartPt(ctx, dbData, rebaseWorkingBranch, upstreamPoint, false, &rsc)
@@ -319,7 +319,7 @@ func validateWorkingSetCanStartRebase(ctx *sql.Context) error {
 		return fmt.Errorf("unable to start rebase while another rebase is in progress – abort the current rebase before proceeding")
 	}
 
-	// Make sure the working set doesn't contain any uncommitted changes
+	// Make sure the working set doesn't contain any uncomitted changes
 	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
 	if !ok {
 		return fmt.Errorf("unable to get roots for database %s", ctx.GetCurrentDatabase())
@@ -329,7 +329,7 @@ func validateWorkingSetCanStartRebase(ctx *sql.Context) error {
 		return err
 	}
 	if !wsOnlyHasIgnoredTables {
-		return ErrRebaseUncommittedChanges
+		return ErrRebaseUncomittedChanges
 	}
 
 	return nil
@@ -473,7 +473,7 @@ func continueRebase(ctx *sql.Context) (string, error) {
 
 func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep) error {
 	// Make sure we have a transaction opened for the session
-	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
+	// NOTE: After our first call to cherry-pick, the tx is comitted, so a new tx needs to be started
 	//       as we process additional rebase actions.
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	if doltSession.GetTransaction() == nil {

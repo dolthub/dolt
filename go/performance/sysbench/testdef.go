@@ -281,8 +281,8 @@ func (r *Result) populateHistogram(buf []byte) error {
 
 	var err error
 	{
-		timeRe := regexp.MustCompile(`total time:\s+([0-9][0-9]*\.[0-9]+)s\n`)
-		res := timeRe.FindSubmatch(buf)
+		timer := regexp.MustCompile(`total time:\s+([0-9][0-9]*\.[0-9]+)s\n`)
+		res := timer.FindSubmatch(buf)
 		if len(res) == 0 {
 			return fmt.Errorf("time not found")
 		}
@@ -475,7 +475,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 	conf.Port = strconv.Itoa(s.Port)
 	conf.Password = s.Password
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
-		log.Printf("starting scipt: %s", script)
+		log.Printf("starting script: %s", script)
 
 		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port, nil)
 		if err != nil {
@@ -515,7 +515,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 // RunSqlServerTests creates a new repo and server for every import test.
 func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser, conf Config) error {
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
-		log.Printf("starting scipt: %s", script)
+		log.Printf("starting script: %s", script)
 		//make a new server for every test
 		server, err := newServer(user, repo, conf)
 		if err != nil {

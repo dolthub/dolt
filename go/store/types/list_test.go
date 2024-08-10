@@ -771,7 +771,7 @@ func TestListSet(t *testing.T) {
 	}
 	testIdx(len(testList)-1, true)
 
-	// Compare list unequality, which doesn't require building a new list every iteration, so the increment can be smaller.
+	// Compare list inequality, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList); i += incr {
 		testIdx(i, false)
 	}

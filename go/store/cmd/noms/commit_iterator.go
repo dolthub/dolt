@@ -86,7 +86,7 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 		newCols = append(newCols, col+cnt)
 	}
 
-	// Now that the branchlist has been adusted, check to see if there are branches with common
+	// Now that the branchlist has been adjusted, check to see if there are branches with common
 	// ancestors that will be folded together on this commit's graph.
 	foldedCols := iter.branches.HighestBranchIndexes()
 	node := LogNode{

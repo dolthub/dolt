@@ -176,7 +176,7 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 			return nil, err
 		}
 		if len(row) != 2 {
-			return nil, fmt.Errorf("unexpectedly received multiple columns in '%s': %s", command, row)
+			return nil, fmt.Errorf("unexpectedededly received multiple columns in '%s': %s", command, row)
 		}
 
 		rowStrings, err := sqlfmt.SqlRowAsStrings(row, schema)
@@ -479,7 +479,7 @@ func generateForceDeleteMessage(args []string) string {
 	return newArgs
 }
 
-// callStoredProcedure generates and exectures the SQL query for calling the DOLT_BRANCH stored procedure.
+// callStoredProcedure generates and executes the SQL query for calling the DOLT_BRANCH stored procedure.
 // All actions that modify branches delegate to this after they validate their arguments.
 // Actions that don't modify branches, such as `dolt branch --list` and `dolt branch --show-current`, don't call
 // this method.

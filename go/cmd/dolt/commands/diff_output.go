@@ -69,7 +69,7 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	case JsonDiffOutput:
 		return newJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut))
 	default:
-		panic(fmt.Sprintf("unexpected diff output: %v", diffOutput))
+		panic(fmt.Sprintf("unexpectededed diff output: %v", diffOutput))
 	}
 }
 
@@ -310,7 +310,7 @@ func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds
 		targetSch = fromTableInfo.Sch
 	}
 
-	// TOOD: schema names
+	// TODO: schema names
 	return sqlexport.NewSqlDiffWriter(tds.ToTableName.Name, targetSch, iohelp.NopWrCloser(cli.CliOut)), nil
 }
 

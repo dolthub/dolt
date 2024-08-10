@@ -17,7 +17,7 @@ namespace serial;
 table AddressMap {
   // sorted array of key items
   key_items:[ubyte] (required);
-  // items offets for |key_items|
+  // items offsets for |key_items|
   // first offset is 0, last offset is len(key_items)
   key_offsets:[uint16] (required);
 

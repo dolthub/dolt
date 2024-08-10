@@ -299,7 +299,7 @@ func worker(jobs <-chan string, results chan<- batsResult, ctx context.Context, 
 // in the batsee_results directory in the CWD, and the error is written to the result.err field.
 func runBats(path string, resultChan chan<- batsResult, ctx context.Context, cfg config) {
 	cmd := exec.CommandContext(ctx, "bats", path)
-	// Set the process group ID so that we can kill the entire process tree if it runs too long. We need to differenciate
+	// Set the process group ID so that we can kill the entire process tree if it runs too long. We need to differentiate
 	// process group of the sub process from this one, because kill the primary process if we don't.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Env = append(os.Environ(), fmt.Sprintf("DOLT_TEST_RETRIES=%d", cfg.retries))
