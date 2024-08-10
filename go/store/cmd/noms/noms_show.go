@@ -244,7 +244,12 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			if err != nil {
 				return err
 			}
-			return tree.OutputProllyNodeBytes(w, node)
+			fmt.Fprintf(w, "(rows %d, depth %d) #%s {",
+				node.Count(), node.Level()+1, node.HashOf().String()[:8])
+			err = tree.OutputAddressMapNode(w, node)
+			fmt.Fprintf(w, "}\n")
+			return err
+
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}
