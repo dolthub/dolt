@@ -230,7 +230,7 @@ func TestIntParseValue(t *testing.T) {
 		{
 			Int64Type,
 			"100.5",
-			100,
+			101,
 			false,
 		},
 		{
