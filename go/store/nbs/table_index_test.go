@@ -56,7 +56,7 @@ func TestParseTableIndex(t *testing.T) {
 	}
 }
 
-func TestParseLargeTableIndex(t* testing.T) {
+func TestParseLargeTableIndex(t *testing.T) {
 	// This is large enough for the NBS table index to overflow uint32s on certain index calculations.
 	numChunks := uint32(320331063)
 	idxSize := indexSize(numChunks)

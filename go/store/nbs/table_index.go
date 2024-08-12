@@ -399,7 +399,7 @@ func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
 		off := offsetSize * int64(ord)
 		b = ti.offsets1[off : off+offsetSize]
 	} else {
-		off := offsetSize * int64(ord - chunks1)
+		off := offsetSize * int64(ord-chunks1)
 		b = ti.offsets2[off : off+offsetSize]
 	}
 	return binary.BigEndian.Uint64(b)
