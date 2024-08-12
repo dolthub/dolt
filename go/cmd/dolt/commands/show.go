@@ -202,7 +202,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			continue
 		} else {
 			// Hash is a commit
-			err = printCommit(queryist, sqlCtx, opts, commitInfo)
+			err = fetchAndPrintCommit(queryist, sqlCtx, opts, commitInfo)
 			if err != nil {
 				return handleErrAndExit(err)
 			}
@@ -317,7 +317,7 @@ func getCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showO
 	return
 }
 
-func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *CommitInfo) error {
+func fetchAndPrintCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *CommitInfo) error {
 
 	cmHash := commit.commitHash
 	parents := commit.parentHashes
