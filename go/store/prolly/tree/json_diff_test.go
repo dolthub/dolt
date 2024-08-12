@@ -286,7 +286,7 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 
-	_ = func(document types.MutableJSON, path string, val interface{}) types.MutableJSON {
+	insert := func(document types.MutableJSON, path string, val interface{}) types.MutableJSON {
 		jsonVal, inRange, err := types.JSON.Convert(val)
 		require.NoError(t, err)
 		require.True(t, (bool)(inRange))
@@ -312,7 +312,7 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 		return newDoc
 	}
 
-	_ = func(document types.MutableJSON, path string) types.MutableJSON {
+	remove := func(document types.MutableJSON, path string) types.MutableJSON {
 		newDoc, changed, err := document.Remove(ctx, path)
 		require.True(t, changed)
 		require.NoError(t, err)
@@ -322,7 +322,33 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 	largeObject := createLargeArraylessDocumentForTesting(t, ctx, ns)
 	return []jsonDiffTest{
 		{
-			name: "nested insert 1",
+			name: "nested insert",
+			from: largeObject,
+			to:   insert(largeObject, "$.level7.newKey", 2),
+			expectedDiffs: []JsonDiff{
+				{
+					Key:  makeJsonPathKey(`level7`, `newKey`),
+					From: nil,
+					To:   &types.JSONDocument{Val: 2},
+					Type: AddedDiff,
+				},
+			},
+		},
+		{
+			name: "nested remove",
+			from: largeObject,
+			to:   remove(largeObject, "$.level7.level6"),
+			expectedDiffs: []JsonDiff{
+				{
+					Key:  makeJsonPathKey(`level7`, `level6`),
+					From: lookup(largeObject, "$.level7.level6"),
+					To:   nil,
+					Type: RemovedDiff,
+				},
+			},
+		},
+		{
+			name: "nested modification 1",
 			from: largeObject,
 			to:   set(largeObject, "$.level7.level5", 2),
 			expectedDiffs: []JsonDiff{
@@ -335,7 +361,7 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "nested insert 2",
+			name: "nested modification 2",
 			from: largeObject,
 			to:   set(largeObject, "$.level7.level4", 1),
 			expectedDiffs: []JsonDiff{
