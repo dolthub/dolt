@@ -41,11 +41,16 @@ type CherryPickOptions struct {
 	// CommitBecomesEmptyHandling describes how commits that do not start off as empty, but become empty after applying
 	// the changes, should be handled. For example, if cherry-picking a change from another branch, but the changes
 	// have already been applied on the target branch in another commit, the new commit will be empty. Note that this
-	// is distinct from how to handle commits that start off empty.
+	// is distinct from how to handle commits that start off empty. By default, in Git, the cherry-pick command will
+	// stop when processing a commit that becomes empty and allow the user to take additional action. Dolt doesn't
+	// support this flow, so instead, Dolt's default is to fail the cherry-pick operation. In Git rebase, and in Dolt
+	// rebase, the default for handling commits that become empty while being processed is to drop them.
 	CommitBecomesEmptyHandling doltdb.EmptyCommitHandling
 
 	// EmptyCommitHandling describes how commits that start off as empty should be handled. Note that this is distinct
-	// from how to handle commits that start off with changes, but become empty after applying the changes.
+	// from how to handle commits that start off with changes, but become empty after applying the changes. In Git
+	// and Dolt cherry-pick implementations, the default action is to fail when an empty commit is specified. In Git
+	// and Dolt rebase implementations, the default action is to keep commits that start off as empty.
 	EmptyCommitHandling doltdb.EmptyCommitHandling
 }
 
@@ -54,7 +59,7 @@ func NewCherryPickOptions() CherryPickOptions {
 	return CherryPickOptions{
 		Amend:                      false,
 		CommitMessage:              "",
-		CommitBecomesEmptyHandling: doltdb.StopOnEmptyCommit,
+		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
 		EmptyCommitHandling:        doltdb.ErrorOnEmptyCommit,
 	}
 }
@@ -117,8 +122,10 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 	if options.CommitBecomesEmptyHandling == doltdb.DropEmptyCommit {
 		commitProps.SkipEmpty = true
-	} else {
+	} else if options.CommitBecomesEmptyHandling == doltdb.KeepEmptyCommit {
 		commitProps.AllowEmpty = true
+	} else if options.CommitBecomesEmptyHandling == doltdb.StopOnEmptyCommit {
+		return "", nil, fmt.Errorf("stop on empty commit is not currently supported")
 	}
 
 	// NOTE: roots are old here (after staging the tables) and need to be refreshed

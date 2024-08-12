@@ -141,7 +141,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 			return 1, "", err
 		}
 
-		// The default for handling commits that start off empty is to keep them
+		// The default, in rebase, for handling commits that start off empty is to keep them
 		// TODO: Add support for --keep-empty and --no-keep-empty flags
 		emptyCommitHandling := doltdb.EmptyCommitHandling(doltdb.KeepEmptyCommit)
 
@@ -175,7 +175,10 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 func processCommitBecomesEmptyParams(apr *argparser.ArgParseResults) (doltdb.EmptyCommitHandling, error) {
 	commitBecomesEmptyParam, isCommitBecomesEmptySpecified := apr.GetValue(cli.EmptyParam)
 	if !isCommitBecomesEmptySpecified {
-		// If no option is specified, then by default, commits that become empty are dropped
+		// If no option is specified, then by default, commits that become empty are dropped. Git has the same
+		// default for non-interactive rebases; for interactive rebases, Git uses the default action of "stop" to
+		// let the user examine the changes and decide what to do next. We don't support the "stop" action yet, so
+		// we default to "drop" even in the interactive rebase case.
 		return doltdb.DropEmptyCommit, nil
 	}
 
@@ -522,7 +525,7 @@ func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep,
 	}
 
 	// Override the default empty commit handling options for cherry-pick, since
-	// rebase has different defaults
+	// rebase has slightly different defaults
 	options := cherry_pick.NewCherryPickOptions()
 	options.CommitBecomesEmptyHandling = commitBecomesEmptyHandling
 	options.EmptyCommitHandling = emptyCommitHandling

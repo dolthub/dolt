@@ -29,14 +29,20 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// EmptyCommitHandling describes how a cherry-pick action should handle empty commits. This includes commits that
-// start off as empty, as well as commits whose changes are applied, but are redundant, and become empty.
+// EmptyCommitHandling describes how a cherry-pick action should handle empty commits. This applies to commits that
+// start off as empty, as well as commits whose changes are applied, but are redundant, and become empty. Note that
+// cherry-pick and rebase treat these two cases separately – commits that start as empty versus commits that become
+// empty while being rebased or cherry-picked.
 type EmptyCommitHandling int
 
 const (
+	// ErrorOnEmptyCommit instructs a cherry-pick or rebase operation to fail with an error when an empty commit
+	// is encountered.
+	ErrorOnEmptyCommit = iota
+
 	// DropEmptyCommit instructs a cherry-pick or rebase operation to drop empty commits and to not create new
 	// commits for them.
-	DropEmptyCommit = iota
+	DropEmptyCommit
 
 	// KeepEmptyCommit instructs a cherry-pick or rebase operation to keep empty commits.
 	KeepEmptyCommit
@@ -44,10 +50,6 @@ const (
 	// StopOnEmptyCommit instructs a cherry-pick or rebase operation to stop and let the user take additional action
 	// to decide how to handle an empty commit.
 	StopOnEmptyCommit
-
-	// ErrorOnEmptyCommit instructs a cherry-pick or rebase operation to fail with an error when an empty commit
-	// is encountered.
-	ErrorOnEmptyCommit
 )
 
 // RebaseState tracks the state of an in-progress rebase action. It records the name of the branch being rebased, the
