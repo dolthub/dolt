@@ -333,4 +333,20 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			*/
 		},
 	},
+	{
+		Name: "dolt_workspace_* prevent illegal updates",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"insert into tbl values (42,42);",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"update tbl set val=51 where pk=42;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "update dolt_workspace_tbl set to_val = 108 where id = 0;",
+				ExpectedErrStr: "only update of column 'staged' is allowed",
+			},
+		},
+		// NM4 - new a test for deleting a row. Maybe? How about adding to the table??
+	},
 }

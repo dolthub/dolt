@@ -95,6 +95,7 @@ type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 	Deaf                     DbEaFactory
 	Tempdir                  string
+	TargetStaging            bool // NM4 - not sure.
 }
 
 // WithDeaf returns a new Options with the given  edit accumulator factory class

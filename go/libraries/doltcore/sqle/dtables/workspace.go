@@ -20,37 +20,184 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type WorkspaceTable struct {
-	roots         doltdb.Roots
+	ws   *doltdb.WorkingSet // NM4 - do we need both???
+	head doltdb.RootValue
+	//	roots         doltdb.Roots
 	tableName     string
-	nomsSchema    schema.Schema
+	nomsSchema    schema.Schema // NM4 - can we get rid of this?
 	sqlSchema     sql.Schema
 	stagedDeltas  *diff.TableDelta
 	workingDeltas *diff.TableDelta
 
 	headSchema schema.Schema
+
+	//////
+	headTable *doltdb.Table
+	stgTable  *doltdb.Table
+	wrkTable  *doltdb.Table
+}
+
+type WorkspaceTableUpdater struct {
+	ws   *doltdb.WorkingSet
+	head doltdb.RootValue
+
+	headSch schema.Schema // We probably need three. NM4.
+
+	headTable *doltdb.Table
+	stgTable  *doltdb.Table
+	wrkTable  *doltdb.Table
+}
+
+func (wtu *WorkspaceTableUpdater) StatementBegin(ctx *sql.Context) {
+	_ = ctx
+}
+
+func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	_ = ctx
+	return nil
+}
+
+func (wtu *WorkspaceTableUpdater) StatementComplete(ctx *sql.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (wtu *WorkspaceTableUpdater) getWorkspaceTableWriter(ctx *sql.Context /*, tableName, databaseName string, foreignKeyChecksDisabled bool */) (dsess.WriteSession, dsess.TableWriter, error) {
+
+	ds := dsess.DSessFromSess(ctx.Session)
+	setter := ds.SetStagingRoot
+	//	setter = ds.SetWorkingRoot
+
+	writeSession := writer.NewWriteSession(types.Format_DOLT, wtu.ws, nil, editor.Options{TargetStaging: true})
+
+	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: "tbl"}, "db8", setter, true)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return writeSession, tableWriter, nil
+}
+
+func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	if old == nil || new == nil {
+		panic("row is nil")
+	}
+	if !validateUpdate(old, new) {
+		return errors.New("only update of column 'staged' is allowed")
+	}
+
+	sessionWriter, tableWriter, err := wtu.getWorkspaceTableWriter(ctx)
+	if err != nil {
+		return err
+	}
+	_ = sessionWriter
+
+	fromRow := make(sql.Row, 0, 10)
+	fromRow = append(fromRow, old[5])
+	fromRow = append(fromRow, old[6])
+
+	toRow := make(sql.Row, 0, 10)
+	toRow = append(toRow, old[3])
+	toRow = append(toRow, old[4])
+
+	err = tableWriter.Update(ctx, fromRow, toRow)
+	if err != nil {
+		return err
+	}
+	/*
+		newWorkingSet, err := sessionWriter.Flush(ctx)
+		if err != nil {
+			return err
+		}
+
+		ds := dsess.DSessFromSess(ctx.Session)
+		err = ds.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+		if err != nil {
+			return err
+		}
+	*/
+	err = tableWriter.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateUpdate returns true IFF old and new row are identical - except the "staged" column. Updating that
+// column to TRUE or FALSE is the only update allowed, and any other update will result in returning an false.
+func validateUpdate(old, new sql.Row) bool {
+	// NM4 - I think it's impossible to have equal rows, but we should rule that out.
+	if old == nil {
+		return false
+	}
+
+	if len(old) != len(new) {
+		return false
+	}
+
+	for i := range old {
+		if i == 1 {
+			// skip the "staged" column. NM4 - is there a way to not use a constant index here?
+			continue
+		}
+
+		if old[i] != new[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
+	return nil
+}
+
+var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
+
+func (wt *WorkspaceTable) Deleter(c *sql.Context) sql.RowDeleter {
+	//TODO implement me
+	panic("I'm a deleter!!!")
+}
+
+func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return &WorkspaceTableUpdater{
+		headSch: wt.headSchema,
+		/*
+			headTable: wt.headTable,
+			stgTable:  wt.stgTable,
+			wrkTable:  wt.wrkTable,
+		*/
+		ws:   wt.ws,
+		head: wt.head,
+	}
 }
 
 var _ sql.Table = (*WorkspaceTable)(nil)
+var _ sql.UpdatableTable = (*WorkspaceTable)(nil)
+var _ sql.DeletableTable = (*WorkspaceTable)(nil)
 
-func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sql.Table, error) {
-	stageDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Staged)
+func NewWorkspaceTable(ctx *sql.Context, tblName string, head doltdb.RootValue, ws *doltdb.WorkingSet) (sql.Table, error) {
+	stageDlt, err := diff.GetTableDeltas(ctx, head, ws.StagedRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +209,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 		}
 	}
 
-	workingDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Working)
+	workingDlt, err := diff.GetTableDeltas(ctx, head, ws.WorkingRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +269,8 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 	}
 
 	return &WorkspaceTable{
-		roots:         roots,
+		ws:            ws,
+		head:          head,
 		tableName:     tblName,
 		nomsSchema:    totalSch,
 		sqlSchema:     finalSch.Schema,
@@ -229,7 +377,7 @@ func (w *WorkspacePartition) Key() []byte {
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.roots.Head, wt.tableName)
+	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.head, wt.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +388,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.roots.Staged, wt.tableName)
+	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +399,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.roots.Working, wt.tableName)
+	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.tableName)
 	if err != nil {
 		return nil, err
 	}
