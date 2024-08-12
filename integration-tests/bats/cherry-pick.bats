@@ -75,7 +75,7 @@ teardown() {
     [[ "$output" =~ "ancestor" ]] || false
 }
 
-@test "cherry-pick: no changes" {
+@test "cherry-pick: empty commit handling" {
     dolt commit --allow-empty -am "empty commit"
     dolt checkout main
 

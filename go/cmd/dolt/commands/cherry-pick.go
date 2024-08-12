@@ -154,7 +154,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
 	}
 
-	interfaceArgs := make([]interface{}, 0)
+	interfaceArgs := make([]interface{}, 0, len(args))
 	for _, arg := range args {
 		interfaceArgs = append(interfaceArgs, arg)
 	}

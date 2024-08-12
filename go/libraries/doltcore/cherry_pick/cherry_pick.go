@@ -119,6 +119,9 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	if options.Amend {
 		commitProps.Amend = true
 	}
+	if options.EmptyCommitHandling == doltdb.KeepEmptyCommit {
+		commitProps.AllowEmpty = true
+	}
 
 	if options.CommitBecomesEmptyHandling == doltdb.DropEmptyCommit {
 		commitProps.SkipEmpty = true
@@ -141,8 +144,9 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	if pendingCommit == nil {
 		if commitProps.SkipEmpty {
 			return "", nil, nil
+		} else if !commitProps.AllowEmpty {
+			return "", nil, errors.New("nothing to commit")
 		}
-		return "", nil, errors.New("nothing to commit")
 	}
 
 	newCommit, err := doltSession.DoltCommit(ctx, dbName, doltSession.GetTransaction(), pendingCommit)
@@ -277,11 +281,11 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
-	noChangesBetweenRoots, err := noChangesBetweenRoots(cherryRoot, parentRoot)
+	isEmptyCommit, err := noChangesBetweenRoots(cherryRoot, parentRoot)
 	if err != nil {
 		return nil, "", err
 	}
-	if noChangesBetweenRoots {
+	if isEmptyCommit {
 		switch emptyCommitHandling {
 		case doltdb.KeepEmptyCommit:
 			// No action; keep processing the empty commit
@@ -323,7 +327,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		}
 	}
 
-	if headRootHash.Equal(workingRootHash) {
+	if headRootHash.Equal(workingRootHash) && !isEmptyCommit {
 		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
 	}
 
