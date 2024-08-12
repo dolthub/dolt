@@ -1089,7 +1089,7 @@ SQL
   run dolt checkout br
   [ $status -eq 1 ]
 
-  [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again." ]] || false
+  [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server or connect using \`dolt sql\` instead." ]] || false
 }
 
 @test "sql-local-remote: verify unmigrated command will fail with warning" {
