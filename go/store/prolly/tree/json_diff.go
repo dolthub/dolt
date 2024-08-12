@@ -17,11 +17,12 @@ package tree
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type IJsonDiffer interface {

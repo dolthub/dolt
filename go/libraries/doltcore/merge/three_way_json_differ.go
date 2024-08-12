@@ -17,10 +17,12 @@ package merge
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"io"
+
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
 type ThreeWayJsonDiffer struct {
