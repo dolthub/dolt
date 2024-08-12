@@ -408,10 +408,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		if backingTable == nil {
-			dt, found = dtables.NewEmptyWorkflowsTable(ctx), true
+			dt, found = NewEmptyWorkflowsTable(ctx), true
 		} else {
-			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewWorkflowsTable(ctx, db.ddb, versionableTable), true
+			writeableTable, ok := backingTable.(*WritableDoltTable)
+			if !ok {
+				return nil, false, fmt.Errorf("failed to create table: %s", doltdb.WorkflowsTableName)
+			}
+			dt, found = NewWorkflowsTable(ctx, writeableTable), true
 		}
 	case doltdb.LogTableName:
 		if head == nil {

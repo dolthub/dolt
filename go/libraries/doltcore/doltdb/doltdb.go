@@ -83,6 +83,9 @@ type DoltDB struct {
 	// parent directory as the database name. For non-filesystem based databases, the database name will not
 	// currently be populated.
 	databaseName string
+
+	// ciTablesCreator is an interface used to create dolt_ci_* tables during db initialization
+	ciTablesCreator CIConfigTablesCreator
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -91,7 +94,7 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns}
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, ciTablesCreator: newDoltCIConfigTablesCreator()}
 }
 
 // HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
@@ -138,7 +141,8 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	if err != nil {
 		return nil, err
 	}
-	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
+
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name, ciTablesCreator: newDoltCIConfigTablesCreator()}, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map
@@ -205,6 +209,11 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 
 	rv, _, err = ddb.WriteRootValue(ctx, rv)
 
+	if err != nil {
+		return err
+	}
+
+	rv, err = ddb.ciTablesCreator.CreateCIConfigTables(ctx, rv)
 	if err != nil {
 		return err
 	}
