@@ -586,7 +586,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 
 	ctx := enginetest.NewContext(d)
 
-	_, iter, err := e.Query(ctx,
+	_, iter, _, err := e.Query(ctx,
 		"CALL DOLT_COMMIT('-Am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
@@ -596,7 +596,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	ctx = enginetest.NewContext(d)
 	query := "CALL dolt_branch('" + asOfString + "')"
 
-	_, iter, err = e.Query(ctx,
+	_, iter, _, err = e.Query(ctx,
 		query)
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)

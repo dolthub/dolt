@@ -98,7 +98,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	_, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 1")
+	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 1")
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -106,7 +106,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	_, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 0")
+	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 0")
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

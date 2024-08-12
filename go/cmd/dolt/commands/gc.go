@@ -96,7 +96,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	_, _, err = queryist.Query(sqlCtx, query)
+	_, _, _, err = queryist.Query(sqlCtx, query)
 	if err != nil && err != chunks.ErrNothingToCollect {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

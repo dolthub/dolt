@@ -117,7 +117,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	// Allow staging tables with merge conflicts.
-	_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit=1;")
+	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit=1;")
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
@@ -129,7 +129,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	_, rowIter, err := queryist.Query(sqlCtx, generateAddSql(apr))
+	_, rowIter, _, err := queryist.Query(sqlCtx, generateAddSql(apr))
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1

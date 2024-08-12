@@ -159,7 +159,7 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName
 
 func execQuery(sctx *sql.Context, eng *engine.SqlEngine, q string) (err error) {
 	var iter sql.RowIter
-	_, iter, err = eng.Query(sctx, q)
+	_, iter, _, err = eng.Query(sctx, q)
 	if err != nil {
 		return err
 	}

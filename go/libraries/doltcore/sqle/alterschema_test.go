@@ -449,12 +449,12 @@ func TestDropPks(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, query := range tt.setup {
-				_, _, err := engine.Query(sqlCtx, query)
+				_, _, _, err := engine.Query(sqlCtx, query)
 				require.NoError(t, err)
 			}
 
 			drop := "alter table parent drop primary key"
-			_, iter, err := engine.Query(sqlCtx, drop)
+			_, iter, _, err := engine.Query(sqlCtx, drop)
 			require.NoError(t, err)
 
 			err = drainIter(sqlCtx, iter)

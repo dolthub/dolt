@@ -648,6 +648,18 @@ func ConfigureServices(
 	}
 	controller.Register(InitSQLServer)
 
+	// Automatically restart binlog replication if replication was enabled when the server was last shut down
+	AutoStartBinlogReplica := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			// If we're unable to restart replication, log an error, but don't prevent the server from starting up
+			if err := binlogreplication.DoltBinlogReplicaController.AutoStart(ctx); err != nil {
+				logrus.Errorf("unable to restart replication: %s", err.Error())
+			}
+			return nil
+		},
+	}
+	controller.Register(AutoStartBinlogReplica)
+
 	RunClusterController := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			if clusterController == nil {

@@ -132,7 +132,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 	ctx := enginetest.NewContext(harness)
 
 	// Confirm that the system variable was correctly set.
-	_, iter, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
+	_, iter, _, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
@@ -191,7 +191,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 
 	// Verify that the inserts are seen by the engine.
 	{
-		_, iter, err := e.Query(ctx, "select count(*) from timestamps")
+		_, iter, _, err := e.Query(ctx, "select count(*) from timestamps")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 
 	// Verify that the insert operations are actually interleaved by inspecting the order that values were added to `timestamps`
 	{
-		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
+		_, iter, _, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -208,7 +208,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 	}
 
 	{
-		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
+		_, iter, _, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
@@ -506,7 +506,7 @@ func RunVersionedViewsTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, testCase := range queries.VersionedViewTests {
 		t.Run(testCase.Query, func(t *testing.T) {
 			ctx := enginetest.NewContext(h)
-			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil)
+			enginetest.TestQueryWithContext(t, ctx, e, h, testCase.Query, testCase.Expected, testCase.ExpectedColumns, nil, nil)
 		})
 	}
 }
@@ -639,21 +639,22 @@ func RunMultiDbTransactionsTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunMultiDbTransactionsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MultiDbTransactionTests {
-		func() {
-			h := h.NewHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		}()
+		//func() {
+		h := h.NewHarness(t)
+		defer h.Close()
+		enginetest.TestScriptPrepared(t, h, script)
+		//}()
 	}
 }
 
 func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltScripts {
-		go func() {
-			harness := harness.NewHarness(t)
-			defer harness.Close()
-			enginetest.TestScript(t, harness, script)
-		}()
+		//go func() {
+		harness := harness.NewHarness(t)
+
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+		//}()
 	}
 }
 
@@ -695,7 +696,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	_, err = enginetest.RunSetupScripts(ctx, h.Engine(), setupScripts, true)
 	require.NoError(t, err)
 
-	_, iter, err := h.Engine().Query(ctx, "select hashof('HEAD~2');")
+	_, iter, _, err := h.Engine().Query(ctx, "select hashof('HEAD~2');")
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
@@ -1426,7 +1427,7 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 
 					ctx = ctx.WithQuery(tt.query)
 					if tt.exp != nil {
-						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
 					}
 				})
 			}

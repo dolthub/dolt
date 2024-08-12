@@ -255,8 +255,8 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumnWDefVal(t, "iso_code_3", 8427, gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `''`),
 				schemaNewColumnWDefVal(t, "iso_country", 7151, gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
 				schemaNewColumnWDefVal(t, "country", 879, gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `''`, schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lat", 3502, gmstypes.Float32, false, "0.0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "lon", 9907, gmstypes.Float32, false, "0.0", schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "lat", 3502, gmstypes.Float32, false, "0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 9907, gmstypes.Float32, false, "0", schema.NotNullConstraint{})),
 		},
 	}
 
@@ -1081,7 +1081,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 			//eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, dEnv)
 			eng, sqlCtx := newTestEngine(ctx, dEnv)
 
-			_, iter, err := eng.Query(sqlCtx, "create database test")
+			_, iter, _, err := eng.Query(sqlCtx, "create database test")
 			if err != nil {
 				panic(err)
 			}

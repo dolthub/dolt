@@ -295,7 +295,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		}
 
 		err = func() error {
-			_, itr, err := eng.Query(sqlCtx, q)
+			_, itr, _, err := eng.Query(sqlCtx, q)
 			if err != nil {
 				return err
 			}

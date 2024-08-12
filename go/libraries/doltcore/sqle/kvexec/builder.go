@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -53,6 +54,20 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
 							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 						}
+					}
+				}
+			}
+		}
+	case *plan.GroupBy:
+		if len(n.GroupByExprs) == 0 && len(n.SelectedExprs) == 1 {
+			if cnt, ok := n.SelectedExprs[0].(*aggregation.Count); ok {
+				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
+					iter, ok, err := newCountAggregationKvIter(srcIter, srcSchema, cnt.Child)
+					if ok && err == nil {
+						// (1) no grouping expressions (returns one row)
+						// (2) only one COUNT expression with a literal or field reference
+						// (3) table or ita as child (no filters)
+						return iter, nil
 					}
 				}
 			}
@@ -364,7 +379,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		return prolly.Map{}, nil, nil, nil, nil, nil, err
 	}
 
-	if table == nil {
+	if sch == nil && table != nil {
 		sch, err = table.GetSchema(ctx)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, err

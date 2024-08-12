@@ -10,6 +10,8 @@ teardown() {
     teardown_common
 }
 
+export NO_COLOR=1
+ 
 @test "log: on initialized repo" {
     run dolt log
     [ "$status" -eq 0 ]
@@ -761,25 +763,22 @@ teardown() {
     dolt commit -Am "insert into test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ " test | 1 +" ]] || false
-    [[ "$out" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
+    [[ "$output" =~ " test | 1 +" ]] || false
+    [[ "$output" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
 
     dolt sql -q "update test set c = 2 where pk = 1"
     dolt commit -Am "update test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ " test | 1 *" ]] || false
-    [[ "$out" =~ " 1 tables changed, 0 rows added(+), 1 rows modified(*), 0 rows deleted(-)" ]] || false
+    [[ "$output" =~ " test | 1 *" ]] || false
+    [[ "$output" =~ " 1 tables changed, 0 rows added(+), 1 rows modified(*), 0 rows deleted(-)" ]] || false
 
     dolt sql -q "delete from test where pk = 1"
     dolt commit -Am "delete from test"
     run dolt log --stat head -n=1
     [ "$status" -eq 0 ]
-    out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ " test | 1 -" ]] || false
-    [[ "$out" =~ " 1 tables changed, 0 rows added(+), 0 rows modified(*), 1 rows deleted(-)" ]] || false
+    [[ "$output" =~ " test | 1 -" ]] || false
+    [[ "$output" =~ " 1 tables changed, 0 rows added(+), 0 rows modified(*), 1 rows deleted(-)" ]] || false
 
     dolt sql -q "drop table test"
     dolt commit -Am "drop table test"
@@ -797,12 +796,9 @@ teardown() {
     run dolt log --stat --oneline
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    l1=$(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$l1" =~ " test | 1 +" ]] || false
-    l2=$(echo "${lines[2]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    [[ "${lines[1]}" =~ " test | 1 +" ]] || false
     [[ "$output" =~ " 1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]] || false
-    l3=$(echo "${lines[4]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$l3" =~ " test added" ]] || false
+    [[ "${lines[4]}" =~ " test added" ]] || false
 }
 
 @test "log: --stat doesn't print diffstat for merge commits" {
@@ -825,4 +821,226 @@ teardown() {
     [[ ! "$output" =~ "test" ]] || false
     [[ "$output" =~ "merge main" ]] || false
     [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "log: --graph: basic graph log" {
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1"
+   
+    # Run the dolt log --graph command
+    run dolt log --graph
+    [ "$status" -eq 0 ]
+    
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[  "${lines[0]}" =~ "* commit " ]] || false                          # * commit xxx
+    [[  "${lines[1]}" =~ "| Author:" ]] || false                          # | Author: 
+    [[  "${lines[2]}" =~ "| Date:" ]] || false                            # | Date: 
+    [[  "${lines[3]}" =~ "|" ]] || false                                  # | 
+    [[  "${lines[4]}" =~ "commit 1" ]] || false                           # |    commit 1 
+    [[  "${lines[5]}" =~ "|" ]] || false                                  # | 
+    [[  "${lines[6]}" =~ "* commit " ]] || false                          # * commit xxx
+    [[  "${lines[7]}" =~ "Author:" ]] || false                            #   Author: 
+    [[  "${lines[8]}" =~ "Date:" ]] || false                              #   Date: 
+    [[  "${lines[9]}" =~ "Initialize data repository" ]] || false         #      Initialize data repository
+    [[ ! "${lines[9]}" =~ "%!(EXTRA string=" ]] || false
+
+    run dolt log --graph --oneline
+    [ "$status" -eq 0 ]
+    
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[ ! "$output" =~ "Author" ]] || false
+    [[ ! "$output" =~ "Date" ]] || false
+    [[  "${lines[0]}" =~ "* commit" ]] || false                      # * commit 1
+    [[  "${lines[1]}" =~ "* commit" ]] || false                      # * commit  Initialize data repository
+}
+
+@test "log: --graph: graph with merges" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt commit --allow-empty -m "commit 2 MAIN"
+    dolt merge branchA -m "Merge branchA into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[  "${lines[0]}" =~ "*   commit " ]] || false                        # *   commit xxx
+    [[  "${lines[1]}" =~ "|\  Merge:" ]] || false                         # |\  Merge:
+    [[  "${lines[2]}" =~ "| | Author:" ]] || false                        # | | Author: 
+    [[  "${lines[3]}" =~ "| | Date:" ]] || false                          # | | Date: 
+    [[  "${lines[4]}" =~ "| |" ]] || false                                # | | 
+    [[  "${lines[5]}" =~ "Merge branchA into main" ]] || false            # | |    Merge branchA into main 
+    [[  "${lines[6]}" =~ "| |" ]] || false                                # | | 
+    [[  "${lines[7]}" =~ "* | commit " ]] || false                        # * | commit xxx
+    [[  "${lines[8]}" =~ "| | Author:" ]] || false                        # | | Author: 
+    [[  "${lines[9]}" =~ "| | Date:" ]] || false                          # | | Date: 
+    [[  "${lines[10]}" =~ "| |" ]] || false                               # | | 
+    [[  "${lines[11]}" =~ "commit 2 MAIN" ]] || false                     # | |    commit 2 MAIN
+    [[  "${lines[12]}" =~ "| |" ]] || false                               # | | 
+    [[  "${lines[13]}" =~ "| * commit " ]] || false                       # | * commit xxx
+    [[  "${lines[14]}" =~ "| | Author:" ]] || false                       # | | Author: 
+    [[  "${lines[15]}" =~ "| | Date:" ]] || false                         # | | Date: 
+    [[  "${lines[16]}" =~ "| |" ]] || false                               # | |  
+    [[  "${lines[17]}" =~ "commit 1 BRANCHA" ]] || false                  # | |    commit 1 BRANCHA
+    [[  "${lines[18]}" =~ "|/" ]] || false                                # |/ 
+    [[  "${lines[19]}" =~ "* commit" ]] || false                          # *  commit xxx
+    [[  "${lines[20]}" =~ "| Author:" ]] || false                         # |  Author: 
+    [[  "${lines[21]}" =~ "| Date:" ]] || false                           # |  Date: 
+    [[  "${lines[22]}" =~ "|" ]] || false                                 # |  
+    [[  "${lines[23]}" =~ "commit 1 MAIN" ]] || false                     # |   commit 1 MAIN
+    [[  "${lines[24]}" =~ "|" ]] || false                                 # | 
+    [[  "${lines[25]}" =~ "* commit" ]] || false                          # * commit
+    [[  "${lines[26]}" =~ "Author:" ]] || false                           #   Author:
+    [[  "${lines[27]}" =~ "Date:" ]] || false                             #   Date:
+    [[  "${lines[28]}" =~ "Initialize data repository" ]] || false        #     Initialize data repository
+
+    run dolt log --graph --oneline
+    [ "$status" -eq 0 ]
+ 
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[  "${lines[0]}" =~ "* commit " ]] || false                        # * commit Merge branchA into main
+    [[  "${lines[1]}" =~ "*\ " ]] || false                              # *\
+    [[  "${lines[2]}" =~ "| * commit" ]] || false                       # | * commit 2 MAIN  
+    [[  "${lines[3]}" =~ "|/" ]] || false                               # |/  
+    [[  "${lines[4]}" =~ "* commit" ]] || false                         # * commit 1 MAIN
+    [[  "${lines[5]}" =~ "* commit" ]] || false                         # * Initialize data repository
+}
+
+@test "log: --graph: graph with multiple branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt sql -q "create table testtable (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 1 MAIN"
+    dolt checkout -b branchA
+    dolt commit --allow-empty -m "commit 1 BRANCHA"
+    dolt checkout main
+    dolt checkout -b branchB
+    dolt commit --allow-empty -m "commit 1 branchB"
+    dolt checkout main
+    dolt checkout -b branchC
+    dolt commit --allow-empty -m "commit 1 branchC"
+    dolt checkout main
+    dolt checkout -b branchD
+    dolt commit --allow-empty -m "commit 1 branchD"
+    dolt checkout main
+    dolt sql -q "insert into testtable values (1)"
+    dolt commit -Am "insert into testtable"
+    dolt merge branchA -m "Merge branchA into main"
+    dolt merge branchB -m "Merge branchB into main"
+    dolt merge branchC -m "Merge branchC into main"
+    dolt merge branchD -m "Merge branchD into main"
+
+    run dolt log --graph  
+    [ "$status" -eq 0 ]
+
+    # Check the output with patterns
+    [[  "${lines[0]}"  =~ "*   commit" ]] || false                         
+    [[  "${lines[1]}"  =~ "|\  Merge:" ]] || false                         
+    [[  "${lines[2]}"  =~ "| | Author:" ]] || false                        
+    [[  "${lines[3]}"  =~ "| | Date:" ]] || false                           
+    [[  "${lines[4]}"  =~ "| |" ]] || false                                
+    [[  "${lines[5]}"  =~ "| |" ]] || false            
+    [[  "${lines[6]}"  =~ "| |" ]] || false                                
+    [[  "${lines[7]}"  =~ "* |   commit " ]] || false                         
+    [[  "${lines[8]}"  =~ "|\|   Merge:" ]] || false                         
+    [[  "${lines[9]}"  =~ "| \   Author:" ]] || false                         
+    [[  "${lines[10]}" =~ "| |\  Date:" ]] || false                          
+    [[  "${lines[11]}" =~ "| | |" ]] || false                                
+    [[  "${lines[12]}" =~ "| | |" ]] || false             
+    [[  "${lines[13]}" =~ "| | |" ]] || false                                 
+    [[  "${lines[14]}" =~ "* | |   commit " ]] || false                        
+    [[  "${lines[15]}" =~ "|\| |   Merge:" ]] || false                         
+    [[  "${lines[16]}" =~ "| \ |   Author:" ]] || false                        
+    [[  "${lines[17]}" =~ "| |\|   Date:" ]] || false                        
+    [[  "${lines[18]}" =~ '| | \' ]] || false                               
+    [[  "${lines[19]}" =~ "| | |\ " ]] || false             
+    [[  "${lines[20]}" =~ "| | | |" ]] || false                                
+    [[  "${lines[21]}" =~ "* | | | commit " ]] || false                        
+    [[  "${lines[22]}" =~ "|\| | | Merge:" ]] || false                          
+    [[  "${lines[23]}" =~ "| \ | | Author:" ]] || false                      
+    [[  "${lines[24]}" =~ "| |\| | Date:" ]] || false                           
+    [[  "${lines[25]}" =~ "| | \ |" ]] || false                         
+    [[  "${lines[26]}" =~ "| | |\|" ]] || false           
+    [[  "${lines[27]}" =~ '| | | \' ]] || false                                 
+    [[  "${lines[28]}" =~ "* | | |\  commit " ]] || false                      
+    [[  "${lines[29]}" =~ "| | | | | Author:" ]] || false                        
+    [[  "${lines[30]}" =~ "| | | | | Date:" ]] || false                          
+    [[  "${lines[31]}" =~ "| | | | |" ]] || false                             
+    [[  "${lines[32]}" =~ "| | | | |" ]] || false             
+    [[  "${lines[33]}" =~ "| | | | |" ]] || false                                 
+    [[  "${lines[34]}" =~ "| * | | | commit " ]] || false                         
+    [[  "${lines[35]}" =~ "| | | | | Author:" ]] || false                         
+    [[  "${lines[36]}" =~ "| | | | | Date:" ]] || false                         
+    [[  "${lines[37]}" =~ "| | | | |" ]] || false                                
+    [[  "${lines[38]}" =~ "| | | | |" ]] || false            
+    [[  "${lines[39]}" =~ "| | | | |" ]] || false                                 
+    [[  "${lines[40]}" =~ "| | * | | commit" ]] || false                         
+    [[  "${lines[41]}" =~ "| | | | | Author:" ]] || false                     
+    [[  "${lines[42]}" =~ "| | | | | Date:" ]] || false                           
+    [[  "${lines[43]}" =~ "| | | | |" ]] || false                        
+    [[  "${lines[44]}" =~ "| | | | |" ]] || false          
+    [[  "${lines[45]}" =~ "| | | | |" ]] || false                                
+    [[  "${lines[46]}" =~ "| | | * | commit " ]] || false                       
+    [[  "${lines[47]}" =~ "| | | | | Author:" ]] || false                        
+    [[  "${lines[48]}" =~ "| | | | | Date:" ]] || false                           
+    [[  "${lines[49]}" =~ "| | | | |" ]] || false                                
+    [[  "${lines[50]}" =~ "| | | | |" ]] || false            
+    [[  "${lines[51]}" =~ "| | | | |" ]] || false                               
+    [[  "${lines[52]}" =~ "| | | | * commit" ]] || false                        
+    [[  "${lines[53]}" =~ "| | |/ /  Author:" ]] || false                         
+    [[  "${lines[54]}" =~ "| | / /   Date:" ]] || false                           
+    [[  "${lines[55]}" =~ "| |/ /" ]] || false                                 
+    [[  "${lines[56]}" =~ "| / /" ]] || false            
+    [[  "${lines[57]}" =~ "|/ /" ]] || false                                
+    [[  "${lines[58]}" =~ "*-- commit " ]] || false                         
+    [[  "${lines[59]}" =~ "|   Author:" ]] || false                         
+    [[  "${lines[60]}" =~ "|   Date:" ]] || false                         
+    [[  "${lines[61]}" =~ "|" ]] || false                                 
+    [[  "${lines[62]}" =~ "|" ]] || false            
+    [[  "${lines[63]}" =~ "|" ]] || false                               
+    [[  "${lines[64]}" =~ "* commit " ]] || false                        
+    [[  "${lines[65]}" =~ "Author:" ]] || false                          
+    [[  "${lines[66]}" =~ "Date:" ]] || false                              
+    [[  "${lines[67]}" =~ "Initialize data repository" ]] || false       
+
+    run dolt log --graph --oneline  
+    [ "$status" -eq 0 ]  
+
+    # Check the output with patterns
+    [[ "${lines[0]}" =~ \* ]] || false
+    [[  "${lines[0]}" =~ "* commit " ]] || false                         # * commit Merge branchD into main
+    [[  "${lines[1]}" =~ "*\ commit" ]] || false                         # *\  commit Merge branchC into main
+    [[  "${lines[2]}" =~ "*\| commit" ]] || false                        # *\|  commit Merge branchB into main
+    [[  "${lines[3]}" =~ "*\\\\ commit" ]] || false                      # *\\  commit Merge branchA into main
+    [[  "${lines[4]}" =~ "*\\\\\\ commit" ]] || false                    # *\\\  insert into testtable
+    [[  "${lines[5]}" =~ "| *\|" ]] || false                             # | *\|  commit 1 branchD
+    [[  "${lines[6]}" =~ "| |\*" ]] || false                             # | |\*  commit 1 branchC
+    [[  "${lines[7]}" =~ "| | \\\\" ]] || false                          # | | \\
+    [[  "${lines[8]}" =~ "| | |\* commit" ]] || false                    # | | |\*  commit 1 branchB
+    [[  "${lines[9]}" =~ "| | | \\" ]] || false                          # | | | \
+    [[  "${lines[10]}" =~ "| | | |\\" ]] || false                        # | | | |\
+    [[  "${lines[11]}" =~ "| | | | * commit" ]] || false                 # | | | | *  commit 1 BRANCHA
+    [[  "${lines[12]}" =~ "| | | |/" ]] || false                         # | | | |/
+    [[  "${lines[13]}" =~ "| | | /" ]] || false                          # | | | /
+    [[  "${lines[14]}" =~ "| | |/" ]] || false                           # | | |/
+    [[  "${lines[15]}" =~ "| | /" ]] || false                            # | | /
+    [[  "${lines[16]}" =~ "| |/" ]] || false                             # | |/
+    [[  "${lines[17]}" =~ "| /" ]] || false                              # | /
+    [[  "${lines[18]}" =~ "|/" ]] || false                               # |/
+    [[  "${lines[19]}" =~ "* commit" ]] || false                         # *  commit Initialize data repository
+
 }

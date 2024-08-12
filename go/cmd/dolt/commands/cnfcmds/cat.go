@@ -168,7 +168,7 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 			return fmt.Errorf("error: failed to interpolate query for table '%s': %w", tblName, err)
 		}
 
-		confSqlSch, rowItr, err := queryist.Query(sqlCtx, q)
+		confSqlSch, rowItr, _, err := queryist.Query(sqlCtx, q)
 		if err != nil {
 			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
 		}
@@ -220,7 +220,7 @@ func printSchemaConflicts(queryist cli.Queryist, sqlCtx *sql.Context, wrCloser i
 	if err != nil {
 		return err
 	}
-	sqlSch, rowItr, err := queryist.Query(sqlCtx, q)
+	sqlSch, rowItr, _, err := queryist.Query(sqlCtx, q)
 	if err != nil {
 		return err
 	}

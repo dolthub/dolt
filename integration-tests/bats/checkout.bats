@@ -9,6 +9,8 @@ teardown() {
     teardown_common
 }
 
+export NO_COLOR=1
+
 @test "checkout: dolt checkout takes working set changes with you" {
     dolt sql <<SQL
 create table test(a int primary key);

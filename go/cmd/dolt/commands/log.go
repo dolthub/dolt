@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -283,6 +284,9 @@ func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist
 	for _, hash := range commitHashes {
 		cmHash := hash[0].(string)
 		commit, err := getCommitInfo(queryist, sqlCtx, cmHash)
+		if commit == nil {
+			return fmt.Errorf("no commits found for ref %s", cmHash)
+		}
 		if err != nil {
 			return err
 		}
@@ -293,6 +297,7 @@ func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist
 }
 
 func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) error {
+	color.NoColor = false
 	for _, comm := range commits {
 		if len(comm.parentHashes) < apr.GetIntOrDefault(cli.MinParentsFlag, 0) {
 			return nil
@@ -307,7 +312,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 
 		// TODO: use short hash instead
 		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[33m%s \033[0m", chStr)))
+		pager.Writer.Write([]byte(color.YellowString("%s ", chStr)))
 
 		if decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto"); decoration != "no" {
 			printRefs(pager, &comm, decoration)
@@ -357,7 +362,9 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *s
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
 		defer pager.Stop()
-		if apr.Contains(cli.OneLineFlag) {
+		if apr.Contains(cli.GraphFlag) {
+			logGraph(pager, apr, commits)
+		} else if apr.Contains(cli.OneLineFlag) {
 			err = logCompact(pager, apr, commits, sqlCtx, queryist)
 		} else {
 			err = logDefault(pager, apr, commits, sqlCtx, queryist)
@@ -430,6 +437,7 @@ func printDiffStats(diffStats map[string]*merge.MergeStats, pager *outputpager.P
 // visualizeChangesForLog generates the string with the appropriate symbols to represent the changes in a commit with
 // the corresponding color suitable for writing to a pager
 func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
+	color.NoColor = false
 	const maxVisLen = 30 //can be a bit longer due to min len and rounding
 
 	resultStr := ""
@@ -439,7 +447,8 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			addLen = stats.Adds
 		}
 		addStr := fillStringWithChar('+', addLen)
-		resultStr += fmt.Sprintf("\033[32;1m%s\033[0m", addStr) // bright green (32;1m)
+		resultStr += color.HiGreenString("%s", addStr)
+
 	}
 
 	if stats.Modifications > 0 {
@@ -448,7 +457,7 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			modLen = stats.Modifications
 		}
 		modStr := fillStringWithChar('*', modLen)
-		resultStr += fmt.Sprintf("\033[33;1m%s\033[0m", modStr) // bright yellow (33;1m)
+		resultStr += color.HiYellowString("%s", modStr)
 	}
 
 	if stats.Deletes > 0 {
@@ -457,7 +466,7 @@ func visualizeChangesForLog(stats *merge.MergeStats, maxMods int) string {
 			delLen = stats.Deletes
 		}
 		delStr := fillStringWithChar('-', delLen)
-		resultStr += fmt.Sprintf("\033[31;1m%s\033[0m", delStr) // bright red (31;1m)
+		resultStr += color.HiRedString("%s", delStr)
 	}
 
 	return resultStr

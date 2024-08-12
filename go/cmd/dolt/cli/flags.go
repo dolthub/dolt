@@ -36,6 +36,7 @@ const (
 	DepthFlag            = "depth"
 	DryRunFlag           = "dry-run"
 	ForceFlag            = "force"
+	GraphFlag            = "graph"
 	HardResetParam       = "hard"
 	HostFlag             = "host"
 	InteractiveFlag      = "interactive"

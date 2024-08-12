@@ -102,7 +102,8 @@ func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, s
 	if !strings.HasPrefix(strings.ToLower(qStr), "select") { // TODO: allow "with?"
 		return nil, nil, fmt.Errorf("query must be a SELECT statement")
 	}
-	return tf.engine.Query(tf.ctx, qStr)
+	sch, iter, _, err := tf.engine.Query(tf.ctx, qStr)
+	return sch, iter, err
 }
 
 func (tf *QueryDiffTableFunction) evalQueries() error {

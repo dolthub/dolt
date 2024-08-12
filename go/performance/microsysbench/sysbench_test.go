@@ -93,7 +93,7 @@ func BenchmarkSelectRandomPoints(b *testing.B) {
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		_, iter, err := eng.Query(ctx, getQuery(i))
+		_, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
 		for {
 			if _, err = iter.Next(ctx); err != nil {

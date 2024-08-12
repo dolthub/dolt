@@ -306,13 +306,13 @@ func (se *SqlEngine) NewDoltSession(_ context.Context, mysqlSess *sql.BaseSessio
 }
 
 // Query execute a SQL statement and return values for printing.
-func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
+func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	return se.engine.Query(ctx, query)
 }
 
 // Analyze analyzes a node.
-func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node) (sql.Node, error) {
-	return se.engine.Analyzer.Analyze(ctx, n, nil)
+func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node, qFlags *sql.QueryFlags) (sql.Node, error) {
+	return se.engine.Analyzer.Analyze(ctx, n, nil, qFlags)
 }
 
 func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
@@ -334,6 +334,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 		return err
 	}
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
+	dblr.DoltBinlogReplicaController.SetEngine(engine)
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil

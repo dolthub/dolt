@@ -411,7 +411,7 @@ func TestDateSerializer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte{0x43, 0xb5, 0x0f}, bytes)
 	typeId, metadata := s.metadata(nil, gmstypes.Date)
-	require.EqualValues(t, mysql.TypeNewDate, typeId)
+	require.EqualValues(t, mysql.TypeDate, typeId)
 	require.EqualValues(t, 0, metadata)
 }
 

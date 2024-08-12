@@ -26,6 +26,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -308,7 +309,7 @@ func newLateBindingEngine(
 }
 
 func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
-	_, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -557,6 +558,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 
 // PrintCommitInfo prints the given commit in the format used by log and show.
 func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *CommitInfo) {
+	color.NoColor = false
 	if len(comm.parentHashes) < minParents {
 		return
 	}
@@ -567,7 +569,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 	}
 
 	// Write commit hash
-	pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
+	pager.Writer.Write([]byte(color.YellowString("commit %s ", chStr))) // Use Dim Yellow (33m)
 
 	// Show decoration
 	if decoration != "no" {
@@ -605,7 +607,7 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 			b = "refs/heads/" + b
 		}
 		// branch names are bright green (32;1m)
-		branchName := fmt.Sprintf("\033[32;1m%s\033[0m", b)
+		branchName := color.HiGreenString(b)
 		references = append(references, branchName)
 	}
 	for _, b := range comm.remoteBranchNames {
@@ -613,7 +615,7 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 			b = "refs/remotes/" + b
 		}
 		// remote names are bright red (31;1m)
-		branchName := fmt.Sprintf("\033[31;1m%s\033[0m", b)
+		branchName := color.HiRedString(b)
 		references = append(references, branchName)
 	}
 	for _, t := range comm.tagNames {
@@ -621,16 +623,22 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 			t = "refs/tags/" + t
 		}
 		// tag names are bright yellow (33;1m)
-		tagName := fmt.Sprintf("\033[33;1mtag: %s\033[0m", t)
+
+		tagName := color.HiYellowString("tag: %s", t)
 		references = append(references, tagName)
 	}
 
-	pager.Writer.Write([]byte("\033[33m(\033[0m"))
+	yellow := color.New(color.FgYellow)
+	boldCyan := color.New(color.FgCyan, color.Bold)
+
+	pager.Writer.Write([]byte(yellow.Sprintf(" (")))
+
 	if comm.isHead {
-		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
+		pager.Writer.Write([]byte(boldCyan.Sprintf("HEAD -> ")))
 	}
-	pager.Writer.Write([]byte(strings.Join(references, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
-	pager.Writer.Write([]byte("\033[33m) \033[0m"))
+
+	joinedReferences := strings.Join(references, yellow.Sprint(", "))
+	pager.Writer.Write([]byte(yellow.Sprintf("%s)", joinedReferences)))
 }
 
 // getCommitInfo returns the commit info for the given ref.
@@ -649,7 +657,8 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("no commits found for ref %s", ref)
+		// No commit with this hash exists
+		return nil, nil
 	}
 
 	row := rows[0]

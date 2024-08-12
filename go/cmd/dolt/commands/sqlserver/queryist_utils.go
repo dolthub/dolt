@@ -80,16 +80,16 @@ type ConnectionQueryist struct {
 
 var _ cli.Queryist = ConnectionQueryist{}
 
-func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
+func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	rows, err := c.connection.QueryContext(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	rowIter, err := NewMysqlRowWrapper(rows)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return rowIter.Schema(), rowIter, nil
+	return rowIter.Schema(), rowIter, nil, nil
 }
 
 type MysqlRowWrapper struct {

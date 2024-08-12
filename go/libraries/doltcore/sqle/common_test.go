@@ -50,7 +50,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root do
 		return nil, nil, err
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, query)
+	sch, iter, _, err := engine.Query(sqlCtx, query)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -82,7 +82,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root do
 		return nil, err
 	}
 
-	_, iter, err := engine.Query(sqlCtx, query)
+	_, iter, _, err := engine.Query(sqlCtx, query)
 	if err != nil {
 		return nil, err
 	}

@@ -263,7 +263,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
+	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.ProceduresTableName)
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 		return nil
 	}
 
-	sch, iter, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		return nil
 	}
 
-	sch, iter, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		sqlEngine := engine.GetUnderlyingEngine()
 		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
 		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
-		cv, _, _, err := binder.Parse(row[fragColIdx].(string), false)
+		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), false)
 		if err != nil {
 			return err
 		}

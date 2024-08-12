@@ -286,8 +286,51 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		level -= 1
 		printWithIndendationLevel(level, ret, "]\n")
 
+		clusteredIndex, _ := msg.TryClusteredIndex(nil)
+		printWithIndendationLevel(level, ret, "Primary Index: {\n")
+		level += 1
+		printIndex(level, ret, clusteredIndex)
 		level -= 1
-		printWithIndendationLevel(level, ret, "}")
+		printWithIndendationLevel(level, ret, "}\n")
+
+		printWithIndendationLevel(level, ret, "Secondary Indexes: [\n")
+		level += 1
+		numSecondaryIndexes := msg.SecondaryIndexesLength()
+		for i := 0; i < numSecondaryIndexes; i++ {
+			var index *serial.Index
+			_, _ = msg.TrySecondaryIndexes(index, i)
+			printWithIndendationLevel(level, ret, "{\n")
+			printIndex(level+1, ret, index)
+			printWithIndendationLevel(level, ret, "}\n")
+		}
+		level -= 1
+		printWithIndendationLevel(level, ret, "]\n")
+
+		printWithIndendationLevel(level, ret, "Comment: %s\n", string(msg.Comment()))
+
+		printWithIndendationLevel(level, ret, "has_features_after_try_accessors: %v\n", msg.HasFeaturesAfterTryAccessors())
+
+		printWithIndendationLevel(level, ret, "Checks: [\n")
+		level += 1
+		for i := 0; i < msg.ChecksLength(); i++ {
+			var check *serial.CheckConstraint
+			_, _ = msg.TryChecks(check, i)
+			printWithIndendationLevel(level, ret, "{\n")
+			level += 1
+			printWithIndendationLevel(level, ret, "Name: %s\n", string(check.Name()))
+			printWithIndendationLevel(level, ret, "Expression: %s\n", string(check.Expression()))
+			printWithIndendationLevel(level, ret, "Enforced: %v\n", check.Enforced())
+			level -= 1
+			printWithIndendationLevel(level, ret, "}\n")
+
+		}
+		level -= 1
+		printWithIndendationLevel(level, ret, "]\n")
+
+		printWithIndendationLevel(level, ret, "Collation: %v\n", msg.Collation().String())
+
+		level -= 1
+		printWithIndendationLevel(level, ret, "}\n")
 		return ret.String()
 	case serial.ProllyTreeNodeFileID:
 		ret := &strings.Builder{}
@@ -313,8 +356,39 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 	}
 }
 
+func printIndex(level int, ret *strings.Builder, index *serial.Index) {
+	printWithIndendationLevel(level, ret, "Name: %s\n", string(index.Name()))
+	printWithIndendationLevel(level, ret, "Comment: %s\n", string(index.Comment()))
+	printWithIndendationLevel(level, ret, "Index Columns: [")
+	for i := 0; i < index.IndexColumnsLength(); i++ {
+		fmt.Fprintf(ret, "%v, ", index.IndexColumns(i))
+	}
+	ret.WriteString("]\n")
+	printWithIndendationLevel(level, ret, "Key Columns: [")
+	for i := 0; i < index.KeyColumnsLength(); i++ {
+		fmt.Fprintf(ret, "%v, ", index.KeyColumns(i))
+	}
+	ret.WriteString("]\n")
+	printWithIndendationLevel(level, ret, "Value Columns: [")
+	for i := 0; i < index.ValueColumnsLength(); i++ {
+		fmt.Fprintf(ret, "%v, ", index.ValueColumns(i))
+	}
+	ret.WriteString("]\n")
+	printWithIndendationLevel(level, ret, "Is Primary: %v\n", index.PrimaryKey())
+	printWithIndendationLevel(level, ret, "Is Unique: %v\n", index.UniqueKey())
+	printWithIndendationLevel(level, ret, "Is System Defined: %v\n", index.SystemDefined())
+	printWithIndendationLevel(level, ret, "Is Spatial: %v\n", index.SpatialKey())
+	printWithIndendationLevel(level, ret, "Is Fulltext: %v\n", index.FulltextKey())
+
+	printWithIndendationLevel(level, ret, "Prefix Lengths: [")
+	for i := 0; i < index.PrefixLengthsLength(); i++ {
+		fmt.Fprintf(ret, "%v, ", index.PrefixLengths(i))
+	}
+	ret.WriteString("]\n")
+}
+
 func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Message) error {
-	keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	_, values, treeLevel, count, err := message.UnpackFields(msg)
 	if err != nil {
 		return err
 	}
@@ -328,21 +402,8 @@ func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Me
 	}
 
 	for i := 0; i < int(count); i++ {
-		k := keys.GetItem(i, msg)
-		kt := val.Tuple(k)
-
-		w.Write([]byte("\n    { key: "))
-		for j := 0; j < kt.Count(); j++ {
-			if j > 0 {
-				w.Write([]byte(", "))
-			}
-
-			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
-		}
-
+		w.Write([]byte("\n    { ref: #"))
 		ref := hash.New(values.GetItem(i, msg))
-
-		w.Write([]byte(" ref: #"))
 		w.Write([]byte(ref.String()))
 		w.Write([]byte(" }"))
 	}

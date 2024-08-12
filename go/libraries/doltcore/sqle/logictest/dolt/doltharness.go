@@ -75,7 +75,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 		sql.WithPid(rand.Uint64()),
 		sql.WithSession(h.sess))
 
-	_, rowIter, err := h.engine.Query(ctx, statement)
+	_, rowIter, _, err := h.engine.Query(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		}
 	}()
 
-	sch, rowIter, err = h.engine.Query(ctx, statement)
+	sch, rowIter, _, err = h.engine.Query(ctx, statement)
 	if err != nil {
 		return "", nil, err
 	}

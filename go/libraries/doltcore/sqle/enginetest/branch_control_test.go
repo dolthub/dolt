@@ -1408,7 +1408,7 @@ func TestBranchControl(t *testing.T) {
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil)
+						enginetest.TestQueryWithContext(t, ctx, engine, harness, assertion.Query, assertion.Expected, nil, nil, nil)
 					})
 				}
 			}
@@ -1450,9 +1450,9 @@ func TestBranchControlBlocks(t *testing.T) {
 
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
-			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
-			_, iter, err := engine.Query(userCtx, test.Query)
+			_, iter, _, err := engine.Query(userCtx, test.Query)
 			if err == nil {
 				_, err = sql.RowIterToRows(userCtx, iter)
 			}
@@ -1488,7 +1488,7 @@ func TestBranchControlBlocks(t *testing.T) {
 
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write');"
 			addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
-			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
 			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "testuser",
@@ -1498,9 +1498,9 @@ func TestBranchControlBlocks(t *testing.T) {
 
 			addUserQuery = "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
 			addUserQueryResults = []sql.Row{{types.NewOkResult(1)}}
-			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
+			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
-			_, iter, err := engine.Query(userCtx, test.Query)
+			_, iter, _, err := engine.Query(userCtx, test.Query)
 			if err == nil {
 				_, err = sql.RowIterToRows(userCtx, iter)
 			}

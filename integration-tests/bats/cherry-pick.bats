@@ -242,7 +242,7 @@ teardown() {
     # Assert that only 'test' is staged for commit ('other' has a constraint violation)
     run dolt sql -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| other         | false  | modified " ]] || false
+    [[ $output =~ "| other         | false  | constraint violation " ]] || false
     [[ $output =~ "| test          | true   | modified " ]] || false
     [[ $output =~ "| generated_foo | false  | new table " ]] || false
 

@@ -452,7 +452,8 @@ func (d dateSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.T
 }
 
 func (d dateSerializer) metadata(_ *sql.Context, typ sql.Type) (byte, uint16) {
-	return mysql.TypeNewDate, 0
+	// NOTE: MySQL still sends the old date type (not mysql.TypeNewDate), so for compatibility we use that here
+	return mysql.TypeDate, 0
 }
 
 // timestampSerializer loads a TIMESTAMP type value from Dolt's storage and encodes it
