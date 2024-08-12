@@ -36,8 +36,7 @@ import (
 )
 
 type WorkspaceTable struct {
-	base          doltdb.RootValue
-	ws            *doltdb.WorkingSet
+	roots         doltdb.Roots
 	tableName     string
 	nomsSchema    schema.Schema
 	sqlSchema     sql.Schema
@@ -52,8 +51,8 @@ type WorkspaceTable struct {
 var _ sql.Table = (*WorkspaceTable)(nil)
 
 // NM4 - drop ctx? error
-func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, ws *doltdb.WorkingSet) (sql.Table, error) {
-	stageDlt, err := diff.GetTableDeltas(ctx, root, ws.StagedRoot())
+func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sql.Table, error) {
+	stageDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +64,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, 
 		}
 	}
 
-	workingDlt, err := diff.GetTableDeltas(ctx, root, ws.WorkingRoot())
+	workingDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Working)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +129,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, root doltdb.RootValue, 
 	}
 
 	return &WorkspaceTable{
-		base:          root,
-		ws:            ws,
+		roots:         roots,
 		tableName:     tblName,
 		nomsSchema:    totalSch,
 		sqlSchema:     finalSch.Schema,
@@ -239,7 +237,7 @@ func (w *WorkspacePartition) Key() []byte {
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.base, wt.tableName)
+	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.roots.Head, wt.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +248,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.tableName)
+	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.roots.Staged, wt.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +259,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.tableName)
+	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.roots.Working, wt.tableName)
 	if err != nil {
 		return nil, err
 	}
