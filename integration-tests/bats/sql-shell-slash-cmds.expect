@@ -24,46 +24,81 @@ proc expect_with_defaults {pattern action} {
         }
     }
 }
+
 proc expect_with_defaults_2 {patternA patternB action} {
+    # First, match patternA
     expect {
         -re $patternA {
-#            puts "Matched pattern: $patternA"
-            exp_continue
-        }
-        -re $patternB {
-#            puts "Matched pattern: $patternB"
-            eval $action
+            puts "<<Matched expected pattern A: $patternA>>"
+            # Now match patternB
+            expect {
+                -re $patternB {
+                    puts "<<Matched expected pattern B: $patternB>>"
+                    eval $action
+                }
+                timeout {
+                    puts "<<Timeout waiting for pattern B>>"
+                    exit 1
+                }
+                eof {
+                    puts "<<End of File reached while waiting for pattern B>>"
+                    exit 1
+                }
+                failed {
+                    puts "<<Failed while waiting for pattern B>>"
+                    exit 1
+                }
+            }
         }
         timeout {
-            puts "<<Timeout>>";
+            puts "<<Timeout waiting for pattern A>>"
             exit 1
         }
         eof {
-            puts "<<End of File reached>>";
+            puts "<<End of File reached while waiting for pattern A>>"
             exit 1
         }
         failed {
-            puts "<<Failed>>";
+            puts "<<Failed while waiting for pattern A>>"
             exit 1
         }
     }
 }
 
 
-
 spawn dolt sql
 
-expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"sql-shell-slash-cmds commit\"\r"; }
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"sql-shell-slash-cmds commit\"\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "\\log -n 1;\r"; }
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "\\log -n 1;\r"; }
 
-expect_with_defaults_2 {sql-shell-slash-cmds commit} {dolt-repo-[0-9]+/main> } { send "\\status\r"; }
+expect_with_defaults_2 {sql-shell-slash-cmds commit}                    {dolt-repo-[0-9]+/main> }   { send "\\status\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main> }   { send "\\reset HEAD~1;\r"; }
+expect_with_defaults_2 {nothing to commit, working tree clean}          {dolt-repo-[0-9]+/main> }   { send "\\checkout -b br1\r"; }
 
-expect_with_defaults {dolt-repo-[0-9]+/main\*> } { send "\\diff\r"; }
+expect_with_defaults_2 {Switched to branch 'br1'}                       {dolt-repo-[0-9]+/br1> }    { send "\\commit --allow-empty -m \"empty cmt\"\r"; }
 
-expect_with_defaults_2 {diff --dolt a/tbl b/tbl} {dolt-repo-[0-9]+/main\*> } {send "quit\r";}
+expect_with_defaults_2 {empty cmt}                                      {dolt-repo-[0-9]+/br1> }    { send "\\checkout main\r"; }
+
+expect_with_defaults_2 {Switched to branch 'main'}                      {dolt-repo-[0-9]+/main> }   { send "\\commit --allow-empty -m \"main cmt\"\r"; }
+
+expect_with_defaults_2 {main cmt}                                       {dolt-repo-[0-9]+/main> }   { send "\\merge br1\r"; }
+
+expect_with_defaults_2 {Everything up-to-date}                          {dolt-repo-[0-9]+/main> }   { send "\\show\r"; }
+
+expect_with_defaults_2 {Merge branch 'br1'}                             {dolt-repo-[0-9]+/main> }   { send "\\log -n 3\r"; }
+
+expect_with_defaults_2 {empty cmt}                                      {dolt-repo-[0-9]+/main> }   { send "\\checkout br1\r"; }
+
+expect_with_defaults_2 {Switched to branch 'br1'}                       {dolt-repo-[0-9]+/br1> }    { send "\\merge main\r"; }
+
+expect_with_defaults_2 {Fast-forward}                                   {dolt-repo-[0-9]+/br1> }    { send "\\reset HEAD~3;\r"; }
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/br1\*> }  { send "\\diff\r"; }
+
+expect_with_defaults_2 {diff --dolt a/test b/test}                      {dolt-repo-[0-9]+/br1\*> }  { send "\\reset main\r"; }
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/br1> }    { send "quit\r" }
 
 expect eof
 exit

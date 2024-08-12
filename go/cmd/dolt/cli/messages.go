@@ -19,5 +19,5 @@ package cli
 const (
 	// Single variable - the name of the command. `dolt <command>` is how the commandString is formated in calls to the Exec method
 	// for dolt commands.
-	RemoteUnsupportedMsg = "%s can not currently be used when there is a local server running. Please stop your dolt sql-server and try again."
+	RemoteUnsupportedMsg = "%s can not currently be used when there is a local server running. Please stop your dolt sql-server or connect using `dolt sql` instead."
 )
