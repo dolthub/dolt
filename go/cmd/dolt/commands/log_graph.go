@@ -436,7 +436,7 @@ func printGraphAndCommitsInfo(graph [][]string, pager *outputpager.Pager, apr *a
 	last_commit_row := commits[len(commits)-1].Row
 	printCommitMetadata(graph, pager, last_commit_row, len(graph[last_commit_row]), commits[len(commits)-1], decoration)
 	for _, line := range commits[len(commits)-1].formattedMessage {
-		pager.Writer.Write([]byte(color.WhiteString("\t", line)))
+		pager.Writer.Write([]byte(color.WhiteString("\t%s", line)))
 		pager.Writer.Write([]byte("\n"))
 	}
 }
