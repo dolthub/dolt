@@ -1370,6 +1370,8 @@ var jsonMergeTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
+				// Regression test: Older versions of json documents could accidentally think that $.aa is a child
+				// of $.a and see this as a conflict, even though it isn't one.
 				name:     "false positive conflict",
 				ancestor: singleRow(1, 1, 1, `{ "a": 1, "aa":2 }`),
 				left:     singleRow(1, 2, 1, `{ "aa":2 }`),
@@ -1401,7 +1403,6 @@ func createLargeDocumentForTesting(t *testing.T, ctx *sql.Context, ns tree.NodeS
 	leafDoc["number"] = float64(1.0)
 	leafDoc["string"] = "dolt"
 	var docExpression sql.Expression = expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), sqltypes.JSON)
-	// require.NoError(t, err)
 	var err error
 
 	for level := 0; level < 8; level++ {
@@ -1500,7 +1501,6 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 					left:     singleRow(1, 2, 1, set(insert(largeObject, "$.a", 1), "$.level7", 2)),
 					right:    singleRow(1, 1, 2, set(insert(largeObject, "$.a", 1), "$.a", 3)),
 					merged:   singleRow(1, 2, 2, set(insert(largeObject, "$.a", 3), "$.level7", 2)),
-					skip:     true, //doesn't terminate?
 				},
 				{
 					name:     `parallel deletion`,
@@ -1557,7 +1557,6 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 					left:     singleRow(1, 2, 1, set(largeObject, "$.level7.level4", 1)),
 					right:    singleRow(1, 1, 2, set(largeObject, "$.level7.level5", 2)),
 					merged:   singleRow(1, 2, 2, set(set(largeObject, "$.level7.level5", 2), "$.level7.level4", 1)),
-					// skip:     true, // panics
 				},
 				{
 					name:     `nested deletion`,
@@ -1565,7 +1564,6 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 					left:     singleRow(1, 2, 1, delete(largeObject, "$.level7")),
 					right:    singleRow(1, 1, 2, delete(largeObject, "$.level6")),
 					merged:   singleRow(1, 2, 2, delete(delete(largeObject, "$.level6"), "$.level7")),
-					skip:     true, // doesn't terminate
 				},
 				{
 					name:     "complicated nested merge",

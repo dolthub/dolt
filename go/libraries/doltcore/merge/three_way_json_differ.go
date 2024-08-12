@@ -23,12 +23,8 @@ import (
 	"io"
 )
 
-type IJsonDiffer interface {
-	Next(ctx context.Context) (tree.JsonDiff, error)
-}
-
 type ThreeWayJsonDiffer struct {
-	leftDiffer, rightDiffer           IJsonDiffer
+	leftDiffer, rightDiffer           tree.IJsonDiffer
 	leftCurrentDiff, rightCurrentDiff *tree.JsonDiff
 	leftIsDone, rightIsDone           bool
 	ns                                tree.NodeStore

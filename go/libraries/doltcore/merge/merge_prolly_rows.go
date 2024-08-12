@@ -2010,22 +2010,18 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 	// First, deserialize each value into JSON.
 	// We can only merge if the value at all three commits is a JSON object.
 
-	baseTypeCategory, err := tree.GetTypeCategory(base)
+	baseIsObject, err := tree.IsJsonObject(base)
 	if err != nil {
 		return nil, true, err
 	}
-	leftTypeCategory, err := tree.GetTypeCategory(left)
+	leftIsObject, err := tree.IsJsonObject(left)
 	if err != nil {
 		return nil, true, err
 	}
-	rightTypeCategory, err := tree.GetTypeCategory(right)
+	rightIsObject, err := tree.IsJsonObject(right)
 	if err != nil {
 		return nil, true, err
 	}
-
-	baseIsObject := baseTypeCategory == tree.JsonTypeObject
-	leftIsObject := leftTypeCategory == tree.JsonTypeObject
-	rightIsObject := rightTypeCategory == tree.JsonTypeObject
 
 	if !baseIsObject || !leftIsObject || !rightIsObject {
 		// At least one of the commits does not have a JSON object.
@@ -2049,7 +2045,7 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 
 	// We only do three way merges on values read from tables right now, which are read in as tree.IndexedJsonDocument.
 
-	var leftDiffer IJsonDiffer
+	var leftDiffer tree.IJsonDiffer
 	if isBaseIndexed && isLeftIndexed {
 		leftDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedLeft)
 		if err != nil {
@@ -2064,11 +2060,10 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 		if err != nil {
 			return nil, true, err
 		}
-		leftDifferValue := tree.NewJsonDiffer(baseObject.(types.JsonObject), leftObject.(types.JsonObject))
-		leftDiffer = &leftDifferValue
+		leftDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), leftObject.(types.JsonObject))
 	}
 
-	var rightDiffer IJsonDiffer
+	var rightDiffer tree.IJsonDiffer
 	if isBaseIndexed && isRightIndexed {
 		rightDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedRight)
 		if err != nil {
@@ -2083,8 +2078,7 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 		if err != nil {
 			return nil, true, err
 		}
-		rightDifferValue := tree.NewJsonDiffer(baseObject.(types.JsonObject), rightObject.(types.JsonObject))
-		rightDiffer = &rightDifferValue
+		rightDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), rightObject.(types.JsonObject))
 	}
 
 	threeWayDiffer := ThreeWayJsonDiffer{

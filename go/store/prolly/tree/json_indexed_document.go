@@ -19,7 +19,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"io"
 	"sync"
 
@@ -258,7 +257,10 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 			}
 
 			jsonChunker.appendJsonToBuffer([]byte(fmt.Sprintf("[%s,%s]", originalValue, insertedValueBytes)))
-			jsonChunker.processBuffer(ctx)
+			err = jsonChunker.processBuffer(ctx)
+			if err != nil {
+				return IndexedJsonDocument{}, false, err
+			}
 
 			newRoot, err := jsonChunker.Done(ctx)
 			if err != nil {
@@ -314,7 +316,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 	jsonChunker.appendJsonToBuffer(insertedValueBytes)
 	err = jsonChunker.processBuffer(ctx)
 	if err != nil {
-		return nil, false, err
+		return IndexedJsonDocument{}, false, err
 	}
 
 	newRoot, err := jsonChunker.Done(ctx)
@@ -521,7 +523,10 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 	}
 
 	jsonChunker.appendJsonToBuffer(insertedValueBytes)
-	jsonChunker.processBuffer(ctx)
+	err = jsonChunker.processBuffer(ctx)
+	if err != nil {
+		return IndexedJsonDocument{}, false, err
+	}
 
 	newRoot, err := jsonChunker.Done(ctx)
 	if err != nil {
@@ -583,54 +588,6 @@ func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error
 		return 0, err
 	}
 	return firstCharacter, nil
-}
-
-type jsonTypeCategory int
-
-const (
-	jsonTypeNull jsonTypeCategory = iota
-	jsonTypeNumber
-	jsonTypeString
-	JsonTypeObject
-	jsonTypeArray
-	jsonTypeBoolean
-)
-
-func getTypeCategoryOfValue(val interface{}) (jsonTypeCategory, error) {
-	if val == nil {
-		return jsonTypeNull, nil
-	}
-	switch val.(type) {
-	case map[string]interface{}:
-		return JsonTypeObject, nil
-	case []interface{}:
-		return jsonTypeArray, nil
-	case bool:
-		return jsonTypeBoolean, nil
-	case string:
-		return jsonTypeString, nil
-	case decimal.Decimal, int8, int16, int32, int64, uint8, uint16, uint32, uint64, float32, float64:
-		return jsonTypeNumber, nil
-	}
-	return 0, fmt.Errorf("expected json value, got %v", val)
-}
-
-// getTypeCategoryFromFirstCharacter returns the type of a JSON object by inspecting its first byte.
-func getTypeCategoryFromFirstCharacter(c byte) jsonTypeCategory {
-	switch c {
-	case '{':
-		return JsonTypeObject
-	case '[':
-		return jsonTypeArray
-	case 'n':
-		return jsonTypeNull
-	case 't', 'f':
-		return jsonTypeBoolean
-	case '"':
-		return jsonTypeString
-	default:
-		return jsonTypeNumber
-	}
 }
 
 func (i IndexedJsonDocument) getTypeCategory() (jsonTypeCategory, error) {
@@ -713,7 +670,7 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 	switch thisTypeCategory {
 	case jsonTypeNull:
 		return 0, nil
-	case jsonTypeArray, JsonTypeObject:
+	case jsonTypeArray, jsonTypeObject:
 		// To compare two values that are both arrays or both objects, we must locate the first location
 		// where they differ.
 

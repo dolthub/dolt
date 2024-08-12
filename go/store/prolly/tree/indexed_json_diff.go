@@ -28,6 +28,8 @@ type IndexedJsonDiffer struct {
 	started                            bool
 }
 
+var _ IJsonDiffer = &IndexedJsonDiffer{}
+
 func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*IndexedJsonDiffer, error) {
 	differ, err := DifferFromRoots[jsonLocationKey, jsonLocationOrdering](ctx, from.m.NodeStore, to.m.NodeStore, from.m.Root, to.m.Root, jsonLocationOrdering{}, false)
 	if err != nil {
@@ -88,6 +90,38 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			}
 		}
 		return nil
+	}
+
+	newAddedDiff := func(key []byte) (JsonDiff, error) {
+		addedValue, err := jd.currentToCursor.NextValue(ctx)
+		if err != nil {
+			return JsonDiff{}, err
+		}
+		err = advanceCursor(&jd.currentToCursor)
+		if err != nil {
+			return JsonDiff{}, err
+		}
+		return JsonDiff{
+			Key:  key,
+			To:   types.NewLazyJSONDocument(addedValue),
+			Type: AddedDiff,
+		}, nil
+	}
+
+	newRemovedDiff := func(key []byte) (JsonDiff, error) {
+		removedValue, err := jd.currentFromCursor.NextValue(ctx)
+		if err != nil {
+			return JsonDiff{}, err
+		}
+		err = advanceCursor(&jd.currentFromCursor)
+		if err != nil {
+			return JsonDiff{}, err
+		}
+		return JsonDiff{
+			Key:  key,
+			From: types.NewLazyJSONDocument(removedValue),
+			Type: RemovedDiff,
+		}, nil
 	}
 
 	for {
@@ -158,7 +192,7 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 		// 5) One cursor points to the initial element of an object/array, while the other points to the end of that same path:
 		//    - A value has been changed from an object/array to a scalar, or vice-versa.
 		// 6) One cursor points to the initial element of an object, while the other points to the initial element of an array:
-		//    - The value has been change from an object to an array, or vice-versa.
+		//    - The value has been changed from an object to an array, or vice-versa.
 
 		fromScanner := &jd.currentFromCursor.jsonScanner
 		toScanner := &jd.currentToCursor.jsonScanner
@@ -227,37 +261,13 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 				continue
 
 			case -1:
-				key := fromCurrentLocation.Clone().key
 				// Case 3: A value has been removed from an object
-				removedValue, err := jd.currentFromCursor.NextValue(ctx)
-				if err != nil {
-					return JsonDiff{}, err
-				}
-				err = advanceCursor(&jd.currentFromCursor)
-				if err != nil {
-					return JsonDiff{}, err
-				}
-				return JsonDiff{
-					Key:  key,
-					From: types.NewLazyJSONDocument(removedValue),
-					Type: RemovedDiff,
-				}, nil
+				key := fromCurrentLocation.Clone().key
+				return newRemovedDiff(key)
 			case 1:
-				key := toCurrentLocation.Clone().key
 				// Case 3: A value has been added to an object
-				addedValue, err := jd.currentToCursor.NextValue(ctx)
-				if err != nil {
-					return JsonDiff{}, err
-				}
-				err = advanceCursor(&jd.currentToCursor)
-				if err != nil {
-					return JsonDiff{}, err
-				}
-				return JsonDiff{
-					Key:  key,
-					To:   types.NewLazyJSONDocument(addedValue),
-					Type: AddedDiff,
-				}, nil
+				key := toCurrentLocation.Clone().key
+				return newAddedDiff(key)
 			}
 		}
 
@@ -265,42 +275,18 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			if fromCurrentLocation.getScannerState() != endOfValue {
 				return JsonDiff{}, jsonParseError
 			}
-			key := toCurrentLocation.Clone().key
 			// Case 4: A value has been inserted at the end of an object or array.
-			addedValue, err := jd.currentToCursor.NextValue(ctx)
-			if err != nil {
-				return JsonDiff{}, err
-			}
-			err = advanceCursor(&jd.currentToCursor)
-			if err != nil {
-				return JsonDiff{}, err
-			}
-			return JsonDiff{
-				Key:  key,
-				To:   types.NewLazyJSONDocument(addedValue),
-				Type: AddedDiff,
-			}, nil
+			key := toCurrentLocation.Clone().key
+			return newAddedDiff(key)
 		}
 
 		if fromScannerAtStartOfValue && !toScannerAtStartOfValue {
 			if toCurrentLocation.getScannerState() != endOfValue {
 				return JsonDiff{}, jsonParseError
 			}
-			key := fromCurrentLocation.Clone().key
 			// Case 4: A value has been removed from the end of an object or array.
-			addedValue, err := jd.currentFromCursor.NextValue(ctx)
-			if err != nil {
-				return JsonDiff{}, err
-			}
-			err = advanceCursor(&jd.currentFromCursor)
-			if err != nil {
-				return JsonDiff{}, err
-			}
-			return JsonDiff{
-				Key:  key,
-				From: types.NewLazyJSONDocument(addedValue),
-				Type: RemovedDiff,
-			}, nil
+			key := fromCurrentLocation.Clone().key
+			return newRemovedDiff(key)
 		}
 	}
 }

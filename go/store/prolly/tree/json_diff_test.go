@@ -282,7 +282,7 @@ var simpleJsonDiffTests = []jsonDiffTest{
 	},
 }
 
-func makeLargeJsonDiffTests(t *testing.T) []jsonDiffTest {
+func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 
@@ -319,7 +319,7 @@ func makeLargeJsonDiffTests(t *testing.T) []jsonDiffTest {
 		return newDoc
 	}
 
-	largeObject := createLargeDocumentForTesting2(t, ctx, ns)
+	largeObject := createLargeArraylessDocumentForTesting(t, ctx, ns)
 	return []jsonDiffTest{
 		{
 			name: "nested insert 1",
@@ -376,19 +376,14 @@ func makeLargeJsonDiffTests(t *testing.T) []jsonDiffTest {
 	}
 }
 
-// createLargeDocumentForTesting creates a JSON document large enough to be split across multiple chunks.
-// This is useful for testing mutation operations in large documents.
-// Every different possible jsonPathType appears on a chunk boundary, for better test coverage:
-// chunk 0 key: $[6].children[2].children[0].number(endOfValue)
-// chunk 2 key: $[7].children[5].children[4].children[2].children(arrayInitialElement)
-// chunk 5 key: $[8].children[6].children[4].children[3].children[0](startOfValue)
-// chunk 8 key: $[8].children[7].children[6].children[5].children[3].children[2].children[1](objectInitialElement)
-func createLargeDocumentForTesting2(t *testing.T, ctx *sql.Context, ns NodeStore) IndexedJsonDocument {
+// createLargeArraylessDocumentForTesting creates a JSON document large enough to be split across multiple chunks that
+// does not contain arrays. This makes it easier to write tests for three-way merging, since we cant't currently merge
+// concurrent changes to arrays.
+func createLargeArraylessDocumentForTesting(t *testing.T, ctx *sql.Context, ns NodeStore) IndexedJsonDocument {
 	leafDoc := make(map[string]interface{})
 	leafDoc["number"] = float64(1.0)
 	leafDoc["string"] = "dolt"
 	var docExpression sql.Expression = expression.NewLiteral(newIndexedJsonDocumentFromValue(t, ctx, ns, leafDoc), types.JSON)
-	// require.NoError(t, err)
 	var err error
 
 	for level := 0; level < 8; level++ {
@@ -405,7 +400,7 @@ func TestJsonDiff(t *testing.T) {
 		runTestBatch(t, simpleJsonDiffTests)
 	})
 	t.Run("large document tests", func(t *testing.T) {
-		runTestBatch(t, makeLargeJsonDiffTests(t))
+		runTestBatch(t, largeJsonDiffTests(t))
 	})
 }
 

@@ -24,6 +24,10 @@ import (
 	"strings"
 )
 
+type IJsonDiffer interface {
+	Next(ctx context.Context) (JsonDiff, error)
+}
+
 type JsonDiff struct {
 	Key      []byte
 	From, To sql.JSONWrapper
@@ -43,10 +47,12 @@ type JsonDiffer struct {
 	subDiffer                      *JsonDiffer
 }
 
-func NewJsonDiffer(from, to types.JsonObject) JsonDiffer {
+var _ IJsonDiffer = &JsonDiffer{}
+
+func NewJsonDiffer(from, to types.JsonObject) *JsonDiffer {
 	fromIter := types.NewJSONIter(from)
 	toIter := types.NewJSONIter(to)
-	return JsonDiffer{
+	return &JsonDiffer{
 		root: []byte{byte(startOfValue)},
 		from: fromIter,
 		to:   toIter,

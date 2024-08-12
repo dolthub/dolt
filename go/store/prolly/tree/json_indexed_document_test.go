@@ -419,12 +419,6 @@ func TestJsonCompare(t *testing.T) {
 			Cmp:   1,
 		},
 		{
-			Name:  "large array > null",
-			Left:  largeArray,
-			Right: `null`,
-			Cmp:   1,
-		},
-		{
 			Name:  "inserting into end of array makes it greater",
 			Left:  largeArray,
 			Right: noError(largeArray.ArrayAppend("$", types.MustJSON("1"))),

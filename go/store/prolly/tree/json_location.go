@@ -439,13 +439,11 @@ var _ Ordering[[]byte] = jsonLocationOrdering{}
 
 func (jsonLocationOrdering) Compare(left, right []byte) int {
 	// A JSON document that fits entirely in a single chunk has no keys,
-	if len(left) == 0 {
-		if len(right) == 0 {
-			return 0
-		}
+	if len(left) == 0 && len(right) == 0 {
+		return 0
+	} else if len(left) == 0 {
 		return -1
-	}
-	if len(right) == 0 {
+	} else if len(right) == 0 {
 		return 1
 	}
 	leftPath := jsonPathFromKey(left)
