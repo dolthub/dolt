@@ -86,7 +86,7 @@ expect_with_defaults_2 {main cmt}                                       {dolt-re
 
 expect_with_defaults_2 {Everything up-to-date}                          {dolt-repo-[0-9]+/main> }   { send "\\show\r"; }
 
-expect_with_defaults_2 {Merge branch 'br1'}                             {dolt-repo-[0-9]+/main> }   { send "\\log\r"; }
+expect_with_defaults_2 {Merge branch 'br1'}                             {dolt-repo-[0-9]+/main> }   { send "\\log -n 3\r"; }
 
 expect_with_defaults_2 {empty cmt}                                      {dolt-repo-[0-9]+/main> }   { send "\\checkout br1\r"; }
 
