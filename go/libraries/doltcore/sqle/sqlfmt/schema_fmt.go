@@ -202,7 +202,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 	var defaultVal, genVal, onUpdateVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		// hacky way to determine if column default is an expression
-		if col.Default[0] != '(' && col.Default[len(col.Default)-1] != ')'  && col.Default[0] != '\'' && col.Default[len(col.Default)-1] != '\'' {
+		if col.Default[0] != '(' && col.Default[len(col.Default)-1] != ')' && col.Default[0] != '\'' && col.Default[len(col.Default)-1] != '\'' {
 			col.Default = fmt.Sprintf("'%s'", col.Default)
 		}
 		defaultVal = sql.NewUnresolvedColumnDefaultValue(col.Default)
