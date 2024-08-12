@@ -18,5 +18,5 @@
 package nbs
 
 func isRaceEnabled() bool {
-        return true
+	return true
 }
