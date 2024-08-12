@@ -2498,6 +2498,26 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Ensure that column defaults are normalized to the same thing, so they merge with no issue
+		Name: "merge with different types",
+		SetUpScript: []string{
+			"create table t (f float);",
+			"call dolt_commit('-Am', 'setup');",
+			"call dolt_branch('other');",
+			"alter table t modify column f float default 1.23;",
+			"call dolt_commit('-Am', 'change default on main');",
+			"call dolt_checkout('other');",
+			"alter table t modify column f float default '1.23';",
+			"call dolt_commit('-Am', 'change default on other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('main')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
