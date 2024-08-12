@@ -56,6 +56,62 @@ func TestParseTableIndex(t *testing.T) {
 	}
 }
 
+func TestParseLargeTableIndex(t* testing.T) {
+	// This is large enough for the NBS table index to overflow uint32s on certain index calculations.
+	numChunks := uint32(320331063)
+	idxSize := indexSize(numChunks)
+	sz := idxSize + footerSize
+	idxBuf := make([]byte, sz)
+	copy(idxBuf[idxSize+12:], magicNumber)
+	binary.BigEndian.PutUint32(idxBuf[idxSize:], numChunks)
+	binary.BigEndian.PutUint64(idxBuf[idxSize+4:], uint64(numChunks)*4*1024)
+
+	var prefix uint64
+
+	off := 0
+	// Write Tuples
+	for i := uint32(0); i < numChunks; i++ {
+		binary.BigEndian.PutUint64(idxBuf[off:], prefix)
+		binary.BigEndian.PutUint32(idxBuf[off+hash.PrefixLen:], i)
+		prefix += 2
+		off += prefixTupleSize
+	}
+
+	// Write Lengths
+	for i := uint32(0); i < numChunks; i++ {
+		binary.BigEndian.PutUint32(idxBuf[off:], 4*1024)
+		off += lengthSize
+	}
+
+	// Write Suffixes
+	for i := uint32(0); i < numChunks; i++ {
+		off += hash.SuffixLen
+	}
+
+	idx, err := parseTableIndex(context.Background(), idxBuf, &UnlimitedQuotaProvider{})
+	require.NoError(t, err)
+	h := &hash.Hash{}
+	h[7] = 2
+	ord, err := idx.lookupOrdinal(h)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), ord)
+	h[7] = 1
+	ord, err = idx.lookupOrdinal(h)
+	require.NoError(t, err)
+	assert.Equal(t, numChunks, ord)
+	// This is the end of the chunk, not the beginning.
+	assert.Equal(t, uint64(8*1024), idx.offsetAt(1))
+	assert.Equal(t, uint64(2), idx.prefixAt(1))
+	assert.Equal(t, uint32(1), idx.ordinalAt(1))
+	h[7] = 2
+	assert.Equal(t, *h, idx.hashAt(1))
+	entry, ok, err := idx.lookup(h)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, uint64(4*1024), entry.Offset())
+	assert.Equal(t, uint32(4*1024), entry.Length())
+}
+
 func BenchmarkFindPrefix(b *testing.B) {
 	ctx := context.Background()
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
