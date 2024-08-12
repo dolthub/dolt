@@ -657,7 +657,8 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("no commits found for ref %s", ref)
+		// No commit with this hash exists
+		return nil, nil
 	}
 
 	row := rows[0]
