@@ -44,13 +44,10 @@ type WorkspaceTable struct {
 	workingDeltas *diff.TableDelta
 
 	headSchema schema.Schema
-
-	ddb *doltdb.DoltDB
 }
 
 var _ sql.Table = (*WorkspaceTable)(nil)
 
-// NM4 - drop ctx? error
 func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sql.Table, error) {
 	stageDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Staged)
 	if err != nil {
@@ -135,8 +132,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 		sqlSchema:     finalSch.Schema,
 		stagedDeltas:  stgDel,
 		workingDeltas: wkDel,
-		headSchema:    fromSch, // NM4 - convince myself this is correct.
-		ddb:           nil,     // NM4 - not sure what this is for. Drop? I think we'll need it eventually....
+		headSchema:    fromSch,
 	}, nil
 }
 
@@ -221,6 +217,7 @@ func (w *WorkspacePartitionItr) Next(_ *sql.Context) (sql.Partition, error) {
 }
 
 type WorkspacePartition struct {
+	name       string
 	base       *doltdb.Table
 	baseSch    schema.Schema
 	working    *doltdb.Table
@@ -232,8 +229,7 @@ type WorkspacePartition struct {
 var _ sql.Partition = (*WorkspacePartition)(nil)
 
 func (w *WorkspacePartition) Key() []byte {
-	// NM4 - is there ever used? We return the table names in the DiffPartition. What is the purpose of this?
-	return []byte("hello world")
+	return []byte(w.name)
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
@@ -271,6 +267,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 	}
 
 	part := WorkspacePartition{
+		name:       wt.Name(),
 		base:       baseTable,
 		baseSch:    baseSchema,
 		staging:    stagingTable,
@@ -288,9 +285,10 @@ func (wt *WorkspaceTable) PartitionRows(ctx *sql.Context, part sql.Partition) (s
 		return nil, fmt.Errorf("Runtime Exception: expected a WorkspacePartition, got %T", part)
 	}
 
-	return newWorkspaceDiffIter(ctx, *wp) // NM4 - base schema. should we use base and staged?
+	return newWorkspaceDiffIter(ctx, *wp)
 }
 
+// workspaceDiffIter enables the iteration over the diff information between the HEAD, STAGING, and WORKING roots.
 type workspaceDiffIter struct {
 	base    prolly.Map
 	working prolly.Map
@@ -375,7 +373,9 @@ func getWorkspaceTableRow(
 	return row, nil
 }
 
-// NM4 - Virtually identical to prollyDiffIter.queueRows, but for workspaces. Dedupe this.
+// queueWorkspaceRows is similar to prollyDiffIter.queueRows, but for workspaces. It performs two seperate calls
+// to prolly.DiffMaps, one for staging and one for working. The end result is queueing the rows from both maps
+// into the "rows" channel of the workspaceDiffIter.
 func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
 	k1 := schema.EmptySchema == itr.tgtStagingSch || schema.IsKeyless(itr.tgtStagingSch)
 	k2 := schema.EmptySchema == itr.tgtBaseSch || schema.IsKeyless(itr.tgtBaseSch)
@@ -431,6 +431,10 @@ func (itr *workspaceDiffIter) queueWorkspaceRows(ctx context.Context) {
 	close(itr.rows)
 }
 
+// makeWorkspaceRows takes the diff information from the prolly.DiffMaps and converts it into a slice of rows. In the case
+// of tables with a primary key, this method will return a single row. For tables without a primary key, it will return
+// 1 or more rows. The rows returned are in the full schema that the workspace table returns, so the workspace table columns
+// (id, staged, diff_type) are included in the returned rows with the populated values.
 func (itr *workspaceDiffIter) makeWorkspaceRows(
 	ctx context.Context,
 	idx int,
@@ -474,7 +478,8 @@ func (itr *workspaceDiffIter) makeWorkspaceRows(
 	return ans, nil
 }
 
-// NM4 - virtually identical to newProllyDiffIter, but for workspaces. Dedupe this.
+// newWorkspaceDiffIter takes a WorkspacePartition and returns a workspaceDiffIter. The workspaceDiffIter is used to iterate
+// over the diff information from the prolly.DiffMaps.
 func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDiffIter, error) {
 	var base, working, staging prolly.Map
 
