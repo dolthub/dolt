@@ -91,7 +91,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 
 			"insert into tbl values (42,42);",
 			"insert into tbl values (43,43);",
-			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
+			"call dolt_commit('-am', 'inserting 2 rows at HEAD');",
 			"insert into tbl values (44,44);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
