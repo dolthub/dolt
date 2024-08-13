@@ -35,6 +35,7 @@ const (
 	DeleteForceFlag      = "D"
 	DepthFlag            = "depth"
 	DryRunFlag           = "dry-run"
+	EmptyParam           = "empty"
 	ForceFlag            = "force"
 	GraphFlag            = "graph"
 	HardResetParam       = "hard"

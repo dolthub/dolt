@@ -20,8 +20,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -122,11 +120,11 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
-	err = cherryPick(queryist, sqlCtx, apr)
+	err = cherryPick(queryist, sqlCtx, apr, args)
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
-func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, args []string) error {
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
 		return fmt.Errorf("error: cannot cherry-pick empty string")
@@ -154,7 +152,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
 	}
 
-	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick(?)", []interface{}{cherryStr}, dialect.MySQL)
+	q, err := interpolateStoredProcedureCall("DOLT_CHERRY_PICK", args)
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
 	}
