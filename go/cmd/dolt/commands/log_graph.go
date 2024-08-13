@@ -391,7 +391,7 @@ func printOneLineGraph(graph [][]string, pager *outputpager.Pager, apr *argparse
 			pager.Writer.Write([]byte("\n"))
 		}
 
-		pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[i].Row], ""), color.YellowString("commit%s ", commits[i].Commit.commitHash))))
+		pager.Writer.Write([]byte(fmt.Sprintf("%s %s ", strings.Join(graph[commits[i].Row], ""), color.YellowString("commit %s ", commits[i].Commit.commitHash))))
 		if decoration != "no" {
 			printRefs(pager, &commits[i].Commit, decoration)
 		}

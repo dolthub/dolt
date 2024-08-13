@@ -631,14 +631,14 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	yellow := color.New(color.FgYellow)
 	boldCyan := color.New(color.FgCyan, color.Bold)
 
-	pager.Writer.Write([]byte(yellow.Sprintf(" (")))
+	pager.Writer.Write([]byte(yellow.Sprintf("(")))
 
 	if comm.isHead {
 		pager.Writer.Write([]byte(boldCyan.Sprintf("HEAD -> ")))
 	}
 
 	joinedReferences := strings.Join(references, yellow.Sprint(", "))
-	pager.Writer.Write([]byte(yellow.Sprintf("%s)", joinedReferences)))
+	pager.Writer.Write([]byte(yellow.Sprintf("%s) ", joinedReferences)))
 }
 
 // getCommitInfo returns the commit info for the given ref.
