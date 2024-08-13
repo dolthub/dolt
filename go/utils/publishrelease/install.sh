@@ -58,7 +58,7 @@ assert_linux_or_macos() {
   fi
 
   if [ "$ARCH-$OS" != "x86_64-Linux" -a "$ARCH-$OS" != "x86_64-Darwin" -a "$ARCH-$OS" != "arm64-Darwin" -a "$ARCH-$OS" != "arm64-Linux" ]; then
-    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64, x86, Linux-aarch64, or Darwin-arm64."
+    fail 'E_UNSUPPOSED_ARCH' 'dolt install.sh only supports installing dolt on Linux-x86_64, Darwin-x86, Linux-aarch64, or Darwin-arm64.'
   fi
 
   if [ "$OS" == Linux ]; then
