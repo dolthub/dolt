@@ -65,8 +65,10 @@ func NewCherryPickOptions() CherryPickOptions {
 }
 
 // CherryPick replays a commit, specified by |options.Commit|, and applies it as a new commit to the current HEAD. If
-// successful, the hash of the new commit is returned. If the cherry-pick results in merge conflicts, the merge result
-// is returned. If any unexpected error occur, it is returned.
+// successful and a new commit is created, the hash of the new commit is returned. If successful, but no new commit
+// was created (for example, when dropping an empty commit), then the first return parameter will be the empty string.
+// If the cherry-pick results in merge conflicts, the merge result is returned. If the operation is not successful for
+// any reason, then the error return parameter will be populated.
 func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (string, *merge.Result, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
@@ -281,7 +283,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
-	isEmptyCommit, err := noChangesBetweenRoots(cherryRoot, parentRoot)
+	isEmptyCommit, err := rootsEqual(cherryRoot, parentRoot)
 	if err != nil {
 		return nil, "", err
 	}
@@ -357,7 +359,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	return result, cherryCommitMeta.Description, nil
 }
 
-func noChangesBetweenRoots(root1, root2 doltdb.RootValue) (bool, error) {
+func rootsEqual(root1, root2 doltdb.RootValue) (bool, error) {
 	root1Hash, err := root1.HashOf()
 	if err != nil {
 		return false, err
