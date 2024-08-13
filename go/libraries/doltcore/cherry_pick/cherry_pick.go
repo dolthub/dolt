@@ -37,11 +37,38 @@ type CherryPickOptions struct {
 
 	// CommitMessage is optional, and controls the message for the new commit.
 	CommitMessage string
+
+	// CommitBecomesEmptyHandling describes how commits that do not start off as empty, but become empty after applying
+	// the changes, should be handled. For example, if cherry-picking a change from another branch, but the changes
+	// have already been applied on the target branch in another commit, the new commit will be empty. Note that this
+	// is distinct from how to handle commits that start off empty. By default, in Git, the cherry-pick command will
+	// stop when processing a commit that becomes empty and allow the user to take additional action. Dolt doesn't
+	// support this flow, so instead, Dolt's default is to fail the cherry-pick operation. In Git rebase, and in Dolt
+	// rebase, the default for handling commits that become empty while being processed is to drop them.
+	CommitBecomesEmptyHandling doltdb.EmptyCommitHandling
+
+	// EmptyCommitHandling describes how commits that start off as empty should be handled. Note that this is distinct
+	// from how to handle commits that start off with changes, but become empty after applying the changes. In Git
+	// and Dolt cherry-pick implementations, the default action is to fail when an empty commit is specified. In Git
+	// and Dolt rebase implementations, the default action is to keep commits that start off as empty.
+	EmptyCommitHandling doltdb.EmptyCommitHandling
+}
+
+// NewCherryPickOptions creates a new CherryPickOptions instance, filled out with default values for cherry-pick.
+func NewCherryPickOptions() CherryPickOptions {
+	return CherryPickOptions{
+		Amend:                      false,
+		CommitMessage:              "",
+		CommitBecomesEmptyHandling: doltdb.ErrorOnEmptyCommit,
+		EmptyCommitHandling:        doltdb.ErrorOnEmptyCommit,
+	}
 }
 
 // CherryPick replays a commit, specified by |options.Commit|, and applies it as a new commit to the current HEAD. If
-// successful, the hash of the new commit is returned. If the cherry-pick results in merge conflicts, the merge result
-// is returned. If any unexpected error occur, it is returned.
+// successful and a new commit is created, the hash of the new commit is returned. If successful, but no new commit
+// was created (for example, when dropping an empty commit), then the first return parameter will be the empty string.
+// If the cherry-pick results in merge conflicts, the merge result is returned. If the operation is not successful for
+// any reason, then the error return parameter will be populated.
 func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (string, *merge.Result, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	dbName := ctx.GetCurrentDatabase()
@@ -51,7 +78,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
-	mergeResult, commitMsg, err := cherryPick(ctx, doltSession, roots, dbName, commit)
+	mergeResult, commitMsg, err := cherryPick(ctx, doltSession, roots, dbName, commit, options.EmptyCommitHandling)
 	if err != nil {
 		return "", mergeResult, err
 	}
@@ -94,6 +121,17 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	if options.Amend {
 		commitProps.Amend = true
 	}
+	if options.EmptyCommitHandling == doltdb.KeepEmptyCommit {
+		commitProps.AllowEmpty = true
+	}
+
+	if options.CommitBecomesEmptyHandling == doltdb.DropEmptyCommit {
+		commitProps.SkipEmpty = true
+	} else if options.CommitBecomesEmptyHandling == doltdb.KeepEmptyCommit {
+		commitProps.AllowEmpty = true
+	} else if options.CommitBecomesEmptyHandling == doltdb.StopOnEmptyCommit {
+		return "", nil, fmt.Errorf("stop on empty commit is not currently supported")
+	}
 
 	// NOTE: roots are old here (after staging the tables) and need to be refreshed
 	roots, ok = doltSession.GetRoots(ctx, dbName)
@@ -106,7 +144,11 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, err
 	}
 	if pendingCommit == nil {
-		return "", nil, errors.New("nothing to commit")
+		if commitProps.SkipEmpty {
+			return "", nil, nil
+		} else if !commitProps.AllowEmpty {
+			return "", nil, errors.New("nothing to commit")
+		}
 	}
 
 	newCommit, err := doltSession.DoltCommit(ctx, dbName, doltSession.GetTransaction(), pendingCommit)
@@ -166,7 +208,7 @@ func AbortCherryPick(ctx *sql.Context, dbName string) error {
 // cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
 // or a commit without parent commit, performs merge and returns the new working set root value and
 // the commit message of cherry-picked commit as the commit message of the new commit created during this command.
-func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string) (*merge.Result, string, error) {
+func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string, emptyCommitHandling doltdb.EmptyCommitHandling) (*merge.Result, string, error) {
 	// check for clean working set
 	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
 	if err != nil {
@@ -241,6 +283,24 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
+	isEmptyCommit, err := rootsEqual(cherryRoot, parentRoot)
+	if err != nil {
+		return nil, "", err
+	}
+	if isEmptyCommit {
+		switch emptyCommitHandling {
+		case doltdb.KeepEmptyCommit:
+			// No action; keep processing the empty commit
+		case doltdb.DropEmptyCommit:
+			return nil, "", nil
+		case doltdb.ErrorOnEmptyCommit:
+			return nil, "", fmt.Errorf("The previous cherry-pick commit is empty. " +
+				"Use --allow-empty to cherry-pick empty commits.")
+		default:
+			return nil, "", fmt.Errorf("Unsupported empty commit handling options: %v", emptyCommitHandling)
+		}
+	}
+
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, "", err
@@ -269,7 +329,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		}
 	}
 
-	if headRootHash.Equal(workingRootHash) {
+	if headRootHash.Equal(workingRootHash) && !isEmptyCommit {
 		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
 	}
 
@@ -297,6 +357,20 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 
 	return result, cherryCommitMeta.Description, nil
+}
+
+func rootsEqual(root1, root2 doltdb.RootValue) (bool, error) {
+	root1Hash, err := root1.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	root2Hash, err := root2.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return root1Hash.Equal(root2Hash), nil
 }
 
 // stageCherryPickedTables stages the tables from |mergeStats| that don't have any merge artifacts – i.e.

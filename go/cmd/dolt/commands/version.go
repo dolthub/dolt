@@ -185,6 +185,14 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		}
 	}
 
+	// If we still don't have a valid latestRelease, even after trying to query it, then skip the out of date
+	// check and print a warning message. This can happen for example, if we get a 403 from GitHub when
+	// querying for the latest release tag.
+	if latestRelease == "" {
+		cli.Printf(color.YellowString("Warning: unable to query latest released Dolt version"))
+		return nil
+	}
+
 	// if there were new releases in the last week, the latestRelease stored might be behind the current version built
 	isOutOfDate, verr := isOutOfDate(curVersion, latestRelease)
 	if verr != nil {

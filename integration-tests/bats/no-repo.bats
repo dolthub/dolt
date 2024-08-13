@@ -422,3 +422,46 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Unknown Command notarealcommand" ]] || false
 }
+
+@test "no-repo: the global dolt directory is not accessible due to permissions" {
+    noPermissionsDir=$(mktemp -d -t noPermissions-XXXX)
+    chmod 000 $noPermissionsDir
+    DOLT_ROOT_PATH=$noPermissionsDir
+
+    run dolt version
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+
+    run dolt sql
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+
+    run dolt sql-server
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+}
+
+@test "no-repo: the global dolt directory is accessible, but not writable" {
+    noPermissionsDir=$(mktemp -d -t noPermissions-XXXX)
+    chmod 000 $noPermissionsDir
+    chmod a+x $noPermissionsDir
+    DOLT_ROOT_PATH=$noPermissionsDir
+
+    run dolt version
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+
+    run dolt sql
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+
+    run dolt sql-server
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Failed to load the global config" ]] || false
+    [[ "$output" =~ "permission denied" ]] || false
+}

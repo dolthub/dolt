@@ -4,17 +4,14 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
     dolt sql -q "CREATE table t1 (pk int primary key, c int);"
-    dolt add t1
-    dolt commit -m "main commit 1"
+    dolt commit -Am "main commit 1"
     dolt branch b1
     dolt sql -q "INSERT INTO t1 VALUES (1,1);"
-    dolt add t1
-    dolt commit -m "main commit 2"
+    dolt commit -am "main commit 2"
 
     dolt checkout b1
     dolt sql -q "CREATE table t2 (pk int primary key);"
-    dolt add t2
-    dolt commit -m "b1 commit 1"
+    dolt commit -Am "b1 commit 1"
 
     dolt checkout main
 }
@@ -379,4 +376,44 @@ setupCustomEditorScript() {
     run dolt branch
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+}
+
+@test "rebase: rebase with commits that become empty" {
+    setupCustomEditorScript
+
+    # Apply the same change to b1 that was applied to main in it's most recent commit
+    # and tag the tip of b1, so we can go reset back to this commit
+    dolt checkout b1
+    dolt sql -q "INSERT INTO t1 VALUES (1,1);"
+    dolt commit -am "repeating change from main on b1"
+    dolt tag testStartPoint
+
+    # By default, dolt will drop the empty commit
+    run dolt rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Make sure the commit that became empty doesn't appear in the commit log
+    run dolt log
+    [[ ! $output =~ "repeating change from main on b1" ]] || false
+
+    # Reset back to the test start point and repeat the rebase with --empty=drop (the default)
+    dolt reset --hard testStartPoint
+    run dolt rebase -i --empty=drop main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Make sure the commit that became empty does NOT appear in the commit log
+    run dolt log
+    [[ ! $output =~ "repeating change from main on b1" ]] || false
+
+    # Reset back to the test start point and repeat the rebase with --empty=keep
+    dolt reset --hard testStartPoint
+    run dolt rebase -i --empty=keep main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Make sure the commit that became empty appears in the commit log
+    run dolt log
+    [[ $output =~ "repeating change from main on b1" ]] || false
 }
