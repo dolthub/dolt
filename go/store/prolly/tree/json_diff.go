@@ -16,17 +16,22 @@ package tree
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"io"
 	"reflect"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
+type IJsonDiffer interface {
+	Next(ctx context.Context) (JsonDiff, error)
+}
+
 type JsonDiff struct {
-	Key      string
-	From, To *types.JSONDocument
+	Key      []byte
+	From, To sql.JSONWrapper
 	Type     DiffType
 }
 
@@ -37,31 +42,44 @@ type jsonKeyPair struct {
 
 // JsonDiffer computes the diff between two JSON objects.
 type JsonDiffer struct {
-	root                           string
+	root                           []byte
 	currentFromPair, currentToPair *jsonKeyPair
 	from, to                       types.JSONIter
 	subDiffer                      *JsonDiffer
 }
 
-func NewJsonDiffer(root string, from, to types.JsonObject) JsonDiffer {
+var _ IJsonDiffer = &JsonDiffer{}
+
+func NewJsonDiffer(from, to types.JsonObject) *JsonDiffer {
 	fromIter := types.NewJSONIter(from)
 	toIter := types.NewJSONIter(to)
-	return JsonDiffer{
-		root: root,
+	return &JsonDiffer{
+		root: []byte{byte(startOfValue)},
 		from: fromIter,
 		to:   toIter,
 	}
 }
 
-func (differ *JsonDiffer) appendKey(key string) string {
-	escapedKey := strings.Replace(key, "\"", "\\\"", -1)
-	return fmt.Sprintf("%s.\"%s\"", differ.root, escapedKey)
+func (differ *JsonDiffer) newSubDiffer(key string, from, to types.JsonObject) JsonDiffer {
+	fromIter := types.NewJSONIter(from)
+	toIter := types.NewJSONIter(to)
+	newRoot := differ.appendKey(key)
+	return JsonDiffer{
+		root: newRoot,
+		from: fromIter,
+		to:   toIter,
+	}
 }
 
-func (differ *JsonDiffer) Next() (diff JsonDiff, err error) {
+func (differ *JsonDiffer) appendKey(key string) []byte {
+	escapedKey := strings.Replace(key, "\"", "\\\"", -1)
+	return append(append(differ.root, beginObjectKey), []byte(escapedKey)...)
+}
+
+func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 	for {
 		if differ.subDiffer != nil {
-			diff, err := differ.subDiffer.Next()
+			diff, err := differ.subDiffer.Next(ctx)
 			if err == io.EOF {
 				differ.subDiffer = nil
 				differ.currentFromPair = nil
@@ -116,7 +134,7 @@ func (differ *JsonDiffer) Next() (diff JsonDiff, err error) {
 					switch from := fromValue.(type) {
 					case types.JsonObject:
 						// Recursively compare the objects to generate diffs.
-						subDiffer := NewJsonDiffer(differ.appendKey(key), from, toValue.(types.JsonObject))
+						subDiffer := differ.newSubDiffer(key, from, toValue.(types.JsonObject))
 						differ.subDiffer = &subDiffer
 						continue
 					case types.JsonArray:
