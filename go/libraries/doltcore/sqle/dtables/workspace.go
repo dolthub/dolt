@@ -80,41 +80,36 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 		return &emptyTable, nil
 	}
 
-	var toSch, fromSch schema.Schema
-	if stgDel == nil {
-		if wkDel.FromTable != nil {
-			fromSch, err = wkDel.FromTable.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
+	var fromSch schema.Schema
+	if stgDel != nil && stgDel.FromTable != nil {
+		fromSch, err = stgDel.FromTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
 		}
-		toSch = fromSch
-		if wkDel.ToTable != nil {
-			toSch, err = wkDel.ToTable.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
+	} else if wkDel != nil && wkDel.FromTable != nil {
+		fromSch, err = wkDel.FromTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
 		}
-		if fromSch == nil {
-			fromSch = toSch
+	}
+
+	toSch := fromSch
+	if wkDel != nil && wkDel.ToTable != nil {
+		toSch, err = wkDel.ToTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		if stgDel.FromTable != nil {
-			fromSch, err = stgDel.FromTable.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
+	} else if stgDel != nil && stgDel.ToTable != nil {
+		toSch, err = stgDel.ToTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
 		}
-		toSch = fromSch
-		if stgDel.ToTable != nil {
-			toSch, err = stgDel.ToTable.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if fromSch == nil {
-			fromSch = toSch
-		}
+	}
+	if fromSch == nil && toSch == nil {
+		return nil, errors.New("Runtime error: from and to schemas are both nil")
+	}
+	if fromSch == nil {
+		fromSch = toSch
 	}
 
 	totalSch, err := workspaceSchema(fromSch, toSch)

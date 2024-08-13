@@ -271,4 +271,66 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_workspace_* schema change",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"call dolt_commit('-Am', 'creating table t');",
+
+			"insert into tbl values (42,42);",
+			"insert into tbl values (43,43);",
+			"call dolt_commit('-am', 'inserting rows 3 rows at HEAD');",
+
+			"update tbl set val=51 where pk=42;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 42, 51, 42, 42},
+				},
+			},
+
+			{
+				Query: "ALTER TABLE tbl ADD COLUMN newcol CHAR(36)",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 42, 51, nil, 42, 42},
+				},
+			},
+			{
+				Query: "call dolt_add('tbl')",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 42, 51, nil, 42, 42},
+				},
+			},
+			/* Three schemas are possible by having a schema change staged then altering the schema again.
+			   Currently, it's unclear if/how dolt_workspace_* can/should present this since it's all about data changes, not schema changes.
+				{
+					Query: "ALTER TABLE tbl ADD COLUMN newcol2 float",
+				},
+				{
+					Query: "select * from dolt_workspace_tbl",
+					Expected: []sql.Row{
+						{0, true, "modified", 42, 51, nil, 42, 42},
+					},
+				},
+				{
+					Query: "update tbl set val=59 where pk=42",
+				},
+				{
+					Query: "select * from dolt_workspace_tbl",
+					Expected: []sql.Row{
+						{0, true, "modified", 42, 51, nil, 42, 42},
+						{1, false, "modified", 42, 59, nil, nil, 42, 42}, //
+					},
+				},
+			*/
+		},
+	},
 }
