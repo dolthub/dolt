@@ -397,6 +397,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		return dt, true, nil
+	case strings.HasPrefix(lwrName, doltdb.DoltWorkspaceTablePrefix):
+		sess := dsess.DSessFromSess(ctx.Session)
+		roots, _ := sess.GetRoots(ctx, db.RevisionQualifiedName())
+
+		userTable := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+
+		dt, err := dtables.NewWorkspaceTable(ctx, userTable, roots)
+		if err != nil {
+			return nil, false, err
+		}
+		return dt, true, nil
 	}
 
 	var dt sql.Table

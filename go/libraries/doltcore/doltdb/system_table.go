@@ -185,16 +185,13 @@ var generatedSystemTables = []string{
 	RemotesTableName,
 }
 
-var generatedSystemViewPrefixes = []string{
-	DoltBlameViewPrefix,
-}
-
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
 	DoltHistoryTablePrefix,
 	DoltConfTablePrefix,
 	DoltConstViolTablePrefix,
+	DoltWorkspaceTablePrefix,
 }
 
 const (
@@ -264,6 +261,8 @@ const (
 	DoltConfTablePrefix = "dolt_conflicts_"
 	// DoltConstViolTablePrefix is the prefix assigned to all the generated constraint violation tables
 	DoltConstViolTablePrefix = "dolt_constraint_violations_"
+	// DoltWorkspaceTablePrefix is the prefix assigned to all the generated workspace tables
+	DoltWorkspaceTablePrefix = "dolt_workspace_"
 )
 
 const (
