@@ -556,7 +556,7 @@ func drawCommitDotsAndBranchPaths(commits []*commitInfoWithChildren, commitsMap 
 						}
 						for i := col + 1; i < parent.Col-verticalDistance+1; i++ {
 							if graph[row][i] == " " {
-								graph[row][i] = branchColor.Sprintf("s-")
+								graph[row][i] = branchColor.Sprintf("-")
 							}
 						}
 					}
