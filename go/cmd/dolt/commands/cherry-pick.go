@@ -20,8 +20,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -154,13 +152,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
 	}
 
-	interfaceArgs := make([]interface{}, 0, len(args))
-	for _, arg := range args {
-		interfaceArgs = append(interfaceArgs, arg)
-	}
-
-	placeholders := strings.Join(make([]string, len(args)), "?, ") + "?"
-	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick("+placeholders+")", interfaceArgs, dialect.MySQL)
+	q, err := interpolateStoredProcedureCall("DOLT_CHERRY_PICK", args)
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
 	}

@@ -818,3 +818,25 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 
 	return 0
 }
+
+// interpolateStoredProcedureCall returns an interpolated query to call |storedProcedureName| with the arguments
+// |args|.
+func interpolateStoredProcedureCall(storedProcedureName string, args []string) (string, error) {
+	query := fmt.Sprintf("CALL %s(%s);", storedProcedureName, buildPlaceholdersString(len(args)))
+	return dbr.InterpolateForDialect(query, stringSliceToInterfaceSlice(args), dialect.MySQL)
+}
+
+// stringSliceToInterfaceSlice converts the string slice |ss| into an interface slice with the same values.
+func stringSliceToInterfaceSlice(ss []string) []interface{} {
+	retSlice := make([]interface{}, 0, len(ss))
+	for _, s := range ss {
+		retSlice = append(retSlice, s)
+	}
+	return retSlice
+}
+
+// buildPlaceholdersString returns a placeholder string to use in an interpolated query with the specified
+// |count| of parameter placeholders.
+func buildPlaceholdersString(count int) string {
+	return strings.Join(make([]string, count), "?, ") + "?"
+}
