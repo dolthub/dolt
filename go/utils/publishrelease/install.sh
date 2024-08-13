@@ -31,7 +31,7 @@ PLATFORM_TUPLE=
 
 error() {
   if [ $# != 0 ]; then
-    echo -e "\e[0;31m""$@""\e[0m" >&2
+    printf '\e[0;31m%s\e[0m\n' "$*" >&2
   fi
 }
 
