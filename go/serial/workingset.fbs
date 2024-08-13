@@ -52,6 +52,12 @@ table RebaseState {
 
   // The commit that we are rebasing onto.
   onto_commit_addr:[ubyte] (required);
+
+  // How to handle commits that start off empty
+  empty_commit_handling:uint8;
+
+  // How to handle commits that become empty during rebasing
+  commit_becomes_empty_handling:uint8;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

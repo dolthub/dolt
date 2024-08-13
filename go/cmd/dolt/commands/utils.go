@@ -631,14 +631,14 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	yellow := color.New(color.FgYellow)
 	boldCyan := color.New(color.FgCyan, color.Bold)
 
-	pager.Writer.Write([]byte(yellow.Sprintf(" (")))
+	pager.Writer.Write([]byte(yellow.Sprintf("(")))
 
 	if comm.isHead {
 		pager.Writer.Write([]byte(boldCyan.Sprintf("HEAD -> ")))
 	}
 
 	joinedReferences := strings.Join(references, yellow.Sprint(", "))
-	pager.Writer.Write([]byte(yellow.Sprintf("%s)", joinedReferences)))
+	pager.Writer.Write([]byte(yellow.Sprintf("%s) ", joinedReferences)))
 }
 
 // getCommitInfo returns the commit info for the given ref.
@@ -657,7 +657,8 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("no commits found for ref %s", ref)
+		// No commit with this hash exists
+		return nil, nil
 	}
 
 	row := rows[0]
@@ -825,4 +826,26 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 	}
 
 	return 0
+}
+
+// interpolateStoredProcedureCall returns an interpolated query to call |storedProcedureName| with the arguments
+// |args|.
+func interpolateStoredProcedureCall(storedProcedureName string, args []string) (string, error) {
+	query := fmt.Sprintf("CALL %s(%s);", storedProcedureName, buildPlaceholdersString(len(args)))
+	return dbr.InterpolateForDialect(query, stringSliceToInterfaceSlice(args), dialect.MySQL)
+}
+
+// stringSliceToInterfaceSlice converts the string slice |ss| into an interface slice with the same values.
+func stringSliceToInterfaceSlice(ss []string) []interface{} {
+	retSlice := make([]interface{}, 0, len(ss))
+	for _, s := range ss {
+		retSlice = append(retSlice, s)
+	}
+	return retSlice
+}
+
+// buildPlaceholdersString returns a placeholder string to use in an interpolated query with the specified
+// |count| of parameter placeholders.
+func buildPlaceholdersString(count int) string {
+	return strings.Join(make([]string, count), "?, ") + "?"
 }

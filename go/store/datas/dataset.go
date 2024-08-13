@@ -162,9 +162,11 @@ type WorkingSetHead struct {
 }
 
 type RebaseState struct {
-	preRebaseWorkingAddr *hash.Hash
-	ontoCommitAddr       *hash.Hash
-	branch               string
+	preRebaseWorkingAddr       *hash.Hash
+	ontoCommitAddr             *hash.Hash
+	branch                     string
+	commitBecomesEmptyHandling uint8
+	emptyCommitHandling        uint8
 }
 
 func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
@@ -184,6 +186,14 @@ func (rs *RebaseState) OntoCommit(ctx context.Context, vr types.ValueReader) (*C
 		return LoadCommitAddr(ctx, vr, *rs.ontoCommitAddr)
 	}
 	return nil, nil
+}
+
+func (rs *RebaseState) CommitBecomesEmptyHandling(_ context.Context) uint8 {
+	return rs.commitBecomesEmptyHandling
+}
+
+func (rs *RebaseState) EmptyCommitHandling(_ context.Context) uint8 {
+	return rs.emptyCommitHandling
 }
 
 type MergeState struct {
@@ -433,7 +443,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.RebaseState = NewRebaseState(
 			hash.New(rebaseState.PreWorkingRootAddrBytes()),
 			hash.New(rebaseState.OntoCommitAddrBytes()),
-			string(rebaseState.BranchBytes()))
+			string(rebaseState.BranchBytes()),
+			rebaseState.CommitBecomesEmptyHandling(),
+			rebaseState.EmptyCommitHandling(),
+		)
 	}
 
 	return &ret, nil
