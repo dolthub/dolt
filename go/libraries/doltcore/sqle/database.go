@@ -408,7 +408,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		if backingTable == nil {
-			dt, found = NewEmptyWorkflowsTable(ctx), true
+			dt, err = NewEmptyWorkflowsTable(ctx, db, root)
+			if err != nil {
+				return nil, false, err
+			}
+			found = true
 		} else {
 			writeableTable, ok := backingTable.(*WritableDoltTable)
 			if !ok {

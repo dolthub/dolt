@@ -213,10 +213,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 		return err
 	}
 
-	rv, err = ddb.ciTablesCreator.CreateCIConfigTables(ctx, rv)
-	if err != nil {
-		return err
-	}
+	//rv, err = ddb.ciTablesCreator.CreateCIConfigTables(ctx, rv)
+	//if err != nil {
+	//	return err
+	//}
 
 	var firstCommit *datas.Commit
 	for {

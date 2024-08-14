@@ -20,7 +20,6 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -105,16 +104,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	names, err := root.GetTableNames(context.Background(), DefaultSchemaName)
 	assert.NoError(t, err)
-
-	// ignore dolt_ci_* tables
-	filtered := make([]string, 0)
-	for _, name := range names {
-		if !strings.HasPrefix(name, "dolt_ci") {
-			filtered = append(filtered, name)
-		}
-	}
-
-	if len(filtered) != 0 {
+	if len(names) != 0 {
 		t.Fatal("There should be no tables in empty db")
 	}
 
