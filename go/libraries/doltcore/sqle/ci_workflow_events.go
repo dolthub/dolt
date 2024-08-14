@@ -71,9 +71,9 @@ func (w *WorkflowEventsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_ignore system table.
 func (w *WorkflowEventsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: doltdb.WorkflowEventsIdPkColName, Type: types.MustCreateString(sqltypes.VarChar, 36, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowEventsIdPkColName, PrimaryKey: true, Nullable: false},
-		{Name: doltdb.WorkflowEventsWorkflowNameFkColName, Type: types.MustCreateString(sqltypes.VarChar, 2048, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowEventsWorkflowNameFkColName, PrimaryKey: false, Nullable: false},
-		{Name: doltdb.WorkflowEventsEventTypeColName, Type: types.Int32, Source: doltdb.WorkflowEventsEventTypeColName, PrimaryKey: false, Nullable: false},
+		{Name: doltdb.WorkflowEventsIdPkColName, Type: types.MustCreateString(sqltypes.VarChar, 36, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowEventsTableName, PrimaryKey: true, Nullable: false},
+		{Name: doltdb.WorkflowEventsWorkflowNameFkColName, Type: types.MustCreateString(sqltypes.VarChar, 2048, sql.Collation_utf8mb4_0900_ai_ci), Source: doltdb.WorkflowEventsTableName, PrimaryKey: false, Nullable: false},
+		{Name: doltdb.WorkflowEventsEventTypeColName, Type: types.Int32, Source: doltdb.WorkflowEventsTableName, PrimaryKey: false, Nullable: false},
 	}
 }
 
@@ -320,6 +320,16 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 		err = dSess.SetWorkingRoot(ctx, dbName, newRootValue)
 		if err != nil {
 			w.errDuringStatementBegin = err
+			return
+		}
+
+		dbState, ok, err = dSess.LookupDbState(ctx, dbName)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+		if !ok {
+			w.errDuringStatementBegin = fmt.Errorf("no root value found in session")
 			return
 		}
 	}
