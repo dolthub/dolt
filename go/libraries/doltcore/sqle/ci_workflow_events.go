@@ -48,84 +48,7 @@ type WorkflowEventsTable struct {
 	db           Database
 	ddb          *doltdb.DoltDB
 	backingTable dtables.VersionableTable
-	//head              *doltdb.Commit
-	//headHash          hash.Hash
-	//headCommitClosure *prolly.CommitClosure
 }
-
-//func (w *WorkflowEventsTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-//	hashStrs, ok := index.LookupToPointSelectStr(lookup)
-//	if !ok {
-//		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
-//	}
-//	hashes, commits, metas := index.HashesToCommits(ctx, w.ddb, hashStrs, nil, false)
-//	if len(hashes) == 0 {
-//		return sql.PartitionsToPartitionIter(), nil
-//	}
-//	var partitions []sql.Partition
-//	for i, h := range hashes {
-//		height, err := commits[i].Height()
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		ok, err = w.CommitIsInScope(ctx, height, h)
-//		if err != nil {
-//			return nil, err
-//		}
-//		if !ok {
-//			continue
-//		}
-//
-//		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
-//
-//	}
-//	return sql.PartitionsToPartitionIter(partitions...), nil
-//}
-
-//// CommitIsInScope returns true if a given commit hash is head or is
-//// visible from the current head's ancestry graph.
-//func (w *WorkflowEventsTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-//	headHash, err := w.HeadHash()
-//	if err != nil {
-//		return false, err
-//	}
-//	if headHash == h {
-//		return true, nil
-//	}
-//	cc, err := w.HeadCommitClosure(ctx)
-//	if err != nil {
-//		return false, err
-//	}
-//	return cc.ContainsKey(ctx, h, height)
-//}
-
-//func (w *WorkflowEventsTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-//	if w.headCommitClosure == nil {
-//		cc, err := w.head.GetCommitClosure(ctx)
-//		w.headCommitClosure = &cc
-//		if err != nil {
-//			return nil, err
-//		}
-//	}
-//	return w.headCommitClosure, nil
-//}
-
-//func (w *WorkflowEventsTable) HeadHash() (hash.Hash, error) {
-//	if w.headHash.IsEmpty() {
-//		var err error
-//		w.headHash, err = w.head.HashOf()
-//		if err != nil {
-//			return hash.Hash{}, err
-//		}
-//	}
-//	return w.headHash, nil
-//}
-
-//func (w *WorkflowEventsTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
-//	//TODO implement me
-//	panic("implement me")
-//}
 
 // NewWorkflowEventsTable creates a WorkflowEventsTable
 func NewWorkflowEventsTable(_ *sql.Context, db Database, backingTable dtables.VersionableTable) sql.Table {
@@ -230,13 +153,6 @@ func newWorkflowEventsWriter(it *WorkflowEventsTable) *workflowEventsWriter {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
-
-	//wt, ok := w.it.backingTable.(*WritableDoltTable)
-	//if !ok {
-	//	w.errDuringStatementBegin = errors.New("failed to create dolt_ci_workflow_events table. backing table is not writable")
-	//	return
-	//}
-
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -347,12 +263,6 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 			return
 		}
 
-		//tbl, err := doltdb.NewEmptyTable(ctx, newRootValue.VRW(), newRootValue.NodeStore(), newSchema)
-		//if err != nil {
-		//	w.errDuringStatementBegin = err
-		//	return
-		//}
-
 		dt, err := NewDoltTable(doltdb.WorkflowEventsTableName, newSchema, tbl, w.it.db, w.it.db.editOpts)
 		if err != nil {
 			w.errDuringStatementBegin = err
@@ -368,7 +278,8 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 			ParentDatabase: w.it.dbName,
 			ParentTable:    doltdb.WorkflowsTableName,
 			ParentColumns:  []string{doltdb.WorkflowsNameColName},
-			OnDelete:       "cascade",
+			OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
+			OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 			IsResolved:     false,
 		}, newRootValue, tbl)
 

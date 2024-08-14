@@ -2776,6 +2776,7 @@ func (t *AlterableDoltTable) AddForeignKeyToRoot(ctx *sql.Context, sqlFk sql.For
 	if err != nil {
 		return err
 	}
+
 	err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
