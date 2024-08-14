@@ -361,7 +361,7 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 
 		at := &AlterableDoltTable{WritableDoltTable{DoltTable: dt, db: w.it.db}}
 
-		err = at.AddForeignKey(ctx, sql.ForeignKeyConstraint{
+		err = at.AddForeignKeyToRoot(ctx, sql.ForeignKeyConstraint{
 			Database:       w.it.dbName,
 			Table:          doltdb.WorkflowEventsTableName,
 			Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
@@ -370,7 +370,8 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 			ParentColumns:  []string{doltdb.WorkflowsNameColName},
 			OnDelete:       "cascade",
 			IsResolved:     false,
-		})
+		}, newRootValue, tbl)
+
 		if err != nil {
 			w.errDuringStatementBegin = err
 			return

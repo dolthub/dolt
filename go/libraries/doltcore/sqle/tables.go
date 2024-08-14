@@ -2731,13 +2731,9 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
 	}
-	fmt.Println("DUSTIN: database:", sqlFk.Database)
-	fmt.Println("DUSTIN: parent database:", sqlFk.ParentDatabase)
-	fmt.Println("DUSTIN: db name:", t.db.Name())
 	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
@@ -2745,6 +2741,21 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	tbl, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
+	}
+	return t.AddForeignKeyToRoot(ctx, sqlFk, root, tbl)
+}
+
+func (t *AlterableDoltTable) AddForeignKeyToRoot(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint, root doltdb.RootValue, tbl *doltdb.Table) error {
+	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	// empty string foreign key names are replaced with a generated name elsewhere
+	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
+		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
+	}
+
+	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
+		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
 
 	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
