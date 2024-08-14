@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dtables
+package sqle
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -42,151 +42,99 @@ var _ sql.InsertableTable = (*WorkflowEventsTable)(nil)
 
 var _ sql.ReplaceableTable = (*WorkflowEventsTable)(nil)
 
-var _ sql.ForeignKeyTable = (*WorkflowEventsTable)(nil)
-
 // WorkflowEventsTable is a sql.Table implementation that implements a system table which stores dolt CI workflow events
 type WorkflowEventsTable struct {
-	dbName            string
-	ddb               *doltdb.DoltDB
-	backingTable      VersionableTable
-	head              *doltdb.Commit
-	headHash          hash.Hash
-	headCommitClosure *prolly.CommitClosure
+	dbName       string
+	db           Database
+	ddb          *doltdb.DoltDB
+	backingTable dtables.VersionableTable
+	//head              *doltdb.Commit
+	//headHash          hash.Hash
+	//headCommitClosure *prolly.CommitClosure
 }
 
-func (w *WorkflowEventsTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	hashStrs, ok := index.LookupToPointSelectStr(lookup)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
-	}
-	hashes, commits, metas := index.HashesToCommits(ctx, w.ddb, hashStrs, nil, false)
-	if len(hashes) == 0 {
-		return sql.PartitionsToPartitionIter(), nil
-	}
-	var partitions []sql.Partition
-	for i, h := range hashes {
-		height, err := commits[i].Height()
-		if err != nil {
-			return nil, err
-		}
+//func (w *WorkflowEventsTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+//	hashStrs, ok := index.LookupToPointSelectStr(lookup)
+//	if !ok {
+//		return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+//	}
+//	hashes, commits, metas := index.HashesToCommits(ctx, w.ddb, hashStrs, nil, false)
+//	if len(hashes) == 0 {
+//		return sql.PartitionsToPartitionIter(), nil
+//	}
+//	var partitions []sql.Partition
+//	for i, h := range hashes {
+//		height, err := commits[i].Height()
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		ok, err = w.CommitIsInScope(ctx, height, h)
+//		if err != nil {
+//			return nil, err
+//		}
+//		if !ok {
+//			continue
+//		}
+//
+//		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
+//
+//	}
+//	return sql.PartitionsToPartitionIter(partitions...), nil
+//}
 
-		ok, err = w.CommitIsInScope(ctx, height, h)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
+//// CommitIsInScope returns true if a given commit hash is head or is
+//// visible from the current head's ancestry graph.
+//func (w *WorkflowEventsTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
+//	headHash, err := w.HeadHash()
+//	if err != nil {
+//		return false, err
+//	}
+//	if headHash == h {
+//		return true, nil
+//	}
+//	cc, err := w.HeadCommitClosure(ctx)
+//	if err != nil {
+//		return false, err
+//	}
+//	return cc.ContainsKey(ctx, h, height)
+//}
 
-		partitions = append(partitions, doltdb.NewCommitPart(h, commits[i], metas[i]))
+//func (w *WorkflowEventsTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
+//	if w.headCommitClosure == nil {
+//		cc, err := w.head.GetCommitClosure(ctx)
+//		w.headCommitClosure = &cc
+//		if err != nil {
+//			return nil, err
+//		}
+//	}
+//	return w.headCommitClosure, nil
+//}
 
-	}
-	return sql.PartitionsToPartitionIter(partitions...), nil
-}
+//func (w *WorkflowEventsTable) HeadHash() (hash.Hash, error) {
+//	if w.headHash.IsEmpty() {
+//		var err error
+//		w.headHash, err = w.head.HashOf()
+//		if err != nil {
+//			return hash.Hash{}, err
+//		}
+//	}
+//	return w.headHash, nil
+//}
 
-// CommitIsInScope returns true if a given commit hash is head or is
-// visible from the current head's ancestry graph.
-func (w *WorkflowEventsTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	headHash, err := w.HeadHash()
-	if err != nil {
-		return false, err
-	}
-	if headHash == h {
-		return true, nil
-	}
-	cc, err := w.HeadCommitClosure(ctx)
-	if err != nil {
-		return false, err
-	}
-	return cc.ContainsKey(ctx, h, height)
-}
-
-func (w *WorkflowEventsTable) HeadCommitClosure(ctx context.Context) (*prolly.CommitClosure, error) {
-	if w.headCommitClosure == nil {
-		cc, err := w.head.GetCommitClosure(ctx)
-		w.headCommitClosure = &cc
-		if err != nil {
-			return nil, err
-		}
-	}
-	return w.headCommitClosure, nil
-}
-
-func (w *WorkflowEventsTable) HeadHash() (hash.Hash, error) {
-	if w.headHash.IsEmpty() {
-		var err error
-		w.headHash, err = w.head.HashOf()
-		if err != nil {
-			return hash.Hash{}, err
-		}
-	}
-	return w.headHash, nil
-}
-
-func (w *WorkflowEventsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	if lookup.Index.ID() == index.CommitHashIndexId {
-		return w.commitHashPartitionIter(ctx, lookup)
-	}
-
-	return w.Partitions(ctx)
-}
-
-func (w *WorkflowEventsTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
-	nw := *w
-	return &nw
-}
-
-func (w *WorkflowEventsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(w.dbName, w.Name(), w.ddb, true)
-}
-
-func (w *WorkflowEventsTable) PreciseMatch() bool {
-	return true
-}
-
-func (w *WorkflowEventsTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) DropForeignKey(ctx *sql.Context, fkName string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (w *WorkflowEventsTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
-	//TODO implement me
-	panic("implement me")
-}
+//func (w *WorkflowEventsTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+//	//TODO implement me
+//	panic("implement me")
+//}
 
 // NewWorkflowEventsTable creates a WorkflowEventsTable
-func NewWorkflowEventsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, backingTable VersionableTable, head *doltdb.Commit) sql.Table {
-	return &WorkflowEventsTable{ddb: ddb, backingTable: backingTable, head: head}
+func NewWorkflowEventsTable(_ *sql.Context, db Database, backingTable dtables.VersionableTable) sql.Table {
+	return &WorkflowEventsTable{db: db, ddb: db.GetDoltDB(), backingTable: backingTable, dbName: db.Name()}
 }
 
 // NewEmptyWorkflowEventsTable creates a WorkflowEventsTable
-func NewEmptyWorkflowEventsTable(_ *sql.Context) sql.Table {
-	return &WorkflowEventsTable{}
+func NewEmptyWorkflowEventsTable(_ *sql.Context, db Database) sql.Table {
+	return &WorkflowEventsTable{db: db, dbName: db.Name(), ddb: db.GetDoltDB(), backingTable: nil}
 }
 
 func (w *WorkflowEventsTable) Name() string {
@@ -282,6 +230,13 @@ func newWorkflowEventsWriter(it *WorkflowEventsTable) *workflowEventsWriter {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
+
+	//wt, ok := w.it.backingTable.(*WritableDoltTable)
+	//if !ok {
+	//	w.errDuringStatementBegin = errors.New("failed to create dolt_ci_workflow_events table. backing table is not writable")
+	//	return
+	//}
+
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -379,6 +334,46 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 				w.errDuringStatementBegin = err
 				return
 			}
+		}
+
+		tbl, exists, err := newRootValue.GetTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		if !exists {
+			w.errDuringStatementBegin = errors.New("failed to create dolt_ci_workflow_events table. failed to find table in root")
+			return
+		}
+
+		//tbl, err := doltdb.NewEmptyTable(ctx, newRootValue.VRW(), newRootValue.NodeStore(), newSchema)
+		//if err != nil {
+		//	w.errDuringStatementBegin = err
+		//	return
+		//}
+
+		dt, err := NewDoltTable(doltdb.WorkflowEventsTableName, newSchema, tbl, w.it.db, w.it.db.editOpts)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		at := &AlterableDoltTable{WritableDoltTable{DoltTable: dt, db: w.it.db}}
+
+		err = at.AddForeignKey(ctx, sql.ForeignKeyConstraint{
+			Database:       w.it.dbName,
+			Table:          doltdb.WorkflowEventsTableName,
+			Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
+			ParentDatabase: w.it.dbName,
+			ParentTable:    doltdb.WorkflowsTableName,
+			ParentColumns:  []string{doltdb.WorkflowsNameColName},
+			OnDelete:       "cascade",
+			IsResolved:     false,
+		})
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
 		}
 
 		err = dSess.SetWorkingRoot(ctx, dbName, newRootValue)

@@ -164,6 +164,7 @@ var writeableSystemTables = []string{
 	IgnoreTableName,
 	RebaseTableName,
 	WorkflowsTableName,
+	WorkflowEventsTableName,
 }
 
 var persistedSystemTables = []string{

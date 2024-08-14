@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dtables
+package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -45,11 +46,11 @@ var _ sql.ReplaceableTable = (*WorkflowsTable)(nil)
 // WorkflowsTable is a sql.Table implementation that implements a system table which stores dolt CI workflows
 type WorkflowsTable struct {
 	ddb          *doltdb.DoltDB
-	backingTable VersionableTable
+	backingTable dtables.VersionableTable
 }
 
 // NewWorkflowsTable creates a WorkflowsTable
-func NewWorkflowsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable VersionableTable) sql.Table {
+func NewWorkflowsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable dtables.VersionableTable) sql.Table {
 	return &WorkflowsTable{ddb: ddb, backingTable: backingTable}
 }
 
