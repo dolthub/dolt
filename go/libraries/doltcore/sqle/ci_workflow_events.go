@@ -15,8 +15,8 @@
 package sqle
 
 import (
-	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -156,6 +156,12 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
+	// check write perms
+	if err := dsess.CheckAccessForDb(ctx, w.it.db, branch_control.Permissions_Write); err != nil {
+		w.errDuringStatementBegin = err
+		return
+	}
+
 	// TODO: this needs to use a revision qualified name
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
@@ -259,19 +265,11 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 		}
 
 		if !exists {
-			w.errDuringStatementBegin = errors.New("failed to create dolt_ci_workflow_events table. failed to find table in root")
+			w.errDuringStatementBegin = fmt.Errorf("failed to create %s table", doltdb.WorkflowEventsTableName)
 			return
 		}
 
-		dt, err := NewDoltTable(doltdb.WorkflowEventsTableName, newSchema, tbl, w.it.db, w.it.db.editOpts)
-		if err != nil {
-			w.errDuringStatementBegin = err
-			return
-		}
-
-		at := &AlterableDoltTable{WritableDoltTable{DoltTable: dt, db: w.it.db}}
-
-		err = at.AddForeignKeyToRoot(ctx, sql.ForeignKeyConstraint{
+		sfkc := sql.ForeignKeyConstraint{
 			Database:       w.it.dbName,
 			Table:          doltdb.WorkflowEventsTableName,
 			Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
@@ -281,8 +279,39 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 			OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
 			OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 			IsResolved:     false,
-		}, newRootValue, tbl)
+		}
 
+		onUpdateRefAction, err := parseFkReferentialAction(sfkc.OnUpdate)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		onDeleteRefAction, err := parseFkReferentialAction(sfkc.OnDelete)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		doltFk, err := createDTableForeignKey(ctx, newRootValue, tbl, newSchema, sfkc, onUpdateRefAction, onDeleteRefAction, w.it.db.schemaName)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		fkc, err := newRootValue.GetForeignKeyCollection(ctx)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		err = fkc.AddKeys(doltFk)
+		if err != nil {
+			w.errDuringStatementBegin = err
+			return
+		}
+
+		newRootValue, err = newRootValue.PutForeignKeyCollection(ctx, fkc)
 		if err != nil {
 			w.errDuringStatementBegin = err
 			return
