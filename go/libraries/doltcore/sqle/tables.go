@@ -2742,10 +2742,6 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
-	return t.AddForeignKeyToRoot(ctx, sqlFk, root, tbl)
-}
-
-func (t *AlterableDoltTable) AddForeignKeyToRoot(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint, root doltdb.RootValue, tbl *doltdb.Table) error {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
