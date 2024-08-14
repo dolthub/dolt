@@ -270,6 +270,7 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 		}
 
 		sfkc := sql.ForeignKeyConstraint{
+			Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName),
 			Database:       w.it.dbName,
 			Table:          doltdb.WorkflowEventsTableName,
 			Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
