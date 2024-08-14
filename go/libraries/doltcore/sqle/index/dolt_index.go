@@ -1206,7 +1206,12 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 	pranges := make([]prolly.Range, len(ranges))
 	for k, rng := range ranges {
 		fields := make([]prolly.RangeField, len(rng))
+		onlyPreciseTypes := true
 		for j, expr := range rng {
+			if !(sqltypes.IsInteger(expr.Typ) || sqltypes.IsText(expr.Typ)) {
+				// decimal, float, datetime are imperfectly serialized
+				onlyPreciseTypes = false
+			}
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
 				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
@@ -1266,6 +1271,8 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		}
 
 		order := di.keyBld.Desc.Comparator()
+		var foundDiscontinuity bool
+		var isContiguous bool = true
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
@@ -1279,11 +1286,22 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				// infinity bound
 				fields[i].BoundsAreEqual = false
 			}
+
+			nilBound := field.Lo.Value == nil && field.Hi.Value == nil
+			if foundDiscontinuity || nilBound {
+				// A discontinous variable followed by any restriction
+				// can partition the key space.
+				isContiguous = false
+			}
+			foundDiscontinuity = foundDiscontinuity || !fields[i].BoundsAreEqual || nilBound
+
 		}
 		pranges[k] = prolly.Range{
-			Fields: fields,
-			Desc:   di.keyBld.Desc,
-			Tup:    tup,
+			Fields:       fields,
+			Desc:         di.keyBld.Desc,
+			Tup:          tup,
+			PreciseTypes: onlyPreciseTypes,
+			IsContiguous: isContiguous,
 		}
 	}
 	return pranges, nil
