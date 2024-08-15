@@ -41,7 +41,7 @@ type IndexCollection interface {
 	Equals(other IndexCollection) bool
 	// GetByName returns the index with the given name, or nil if it does not exist.
 	GetByName(indexName string) Index
-	// GetByName returns the index with a matching case-insensitive name, the bool return value indicates if a match was found.
+	// GetByNameCaseInsensitive returns the index with a matching case-insensitive name, the bool return value indicates if a match was found.
 	GetByNameCaseInsensitive(indexName string) (Index, bool)
 	// GetIndexByColumnNames returns whether the collection contains an index that has this exact collection and ordering of columns.
 	GetIndexByColumnNames(cols ...string) (Index, bool)
@@ -172,10 +172,6 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 		oldNamedIndex, ok := ixc.indexes[lowerName]
 		if ok {
 			ixc.removeIndex(oldNamedIndex)
-		}
-		oldTaggedIndex := ixc.containsColumnTagCollection(index.tags...)
-		if oldTaggedIndex != nil {
-			ixc.removeIndex(oldTaggedIndex)
 		}
 		ixc.indexes[lowerName] = index
 		for _, tag := range index.tags {
