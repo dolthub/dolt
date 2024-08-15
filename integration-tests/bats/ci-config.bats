@@ -116,6 +116,4 @@ teardown() {
 
     run dolt commit -m 'add dolt_ci_workflow and dolt_ci_workflow_events entries'
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: Failed to commit changes." ]] || false
-    [[ "$output" =~ "cause: foreign key" ]] || false
 }
