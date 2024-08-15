@@ -104,7 +104,7 @@ install_binary_release() {
   local URL="$RELEASES_BASE_URL/$FILE"
 
   echo "Downloading: $URL"
-  curl -a "$CURL_USER_AGENT" -fsL "$URL" > "$FILE"
+  curl -A "$CURL_USER_AGENT" -fsL "$URL" > "$FILE"
   tar zxf "$FILE"
 
   echo 'Installing dolt into /usr/local/bin.'
