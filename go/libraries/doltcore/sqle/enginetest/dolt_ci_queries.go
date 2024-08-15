@@ -31,6 +31,11 @@ var DoltCIConfigTests = []queries.ScriptTest{
 				" ('workflow_2', TIMESTAMP('2024-08-15 00:00:00'), TIMESTAMP('2024-08-15 00:00:00'))," +
 				" ('workflow_3', TIMESTAMP('2024-08-15 00:00:00'), TIMESTAMP('2024-08-15 00:00:00'))",
 			"call dolt_commit('-Am', 'create three workflows');",
+			"insert into dolt_ci_workflow_events values" +
+				"('uuid_1', 'workflow_1', 0)," +
+				" ('uuid_2', 'workflow_2', 1)," +
+				" ('uuid_3', 'workflow_3', 2)",
+			"call dolt_commit('-Am', 'create three workflow events');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -39,6 +44,14 @@ var DoltCIConfigTests = []queries.ScriptTest{
 					sql.Row{"workflow_1", time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC), time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC)},
 					sql.Row{"workflow_2", time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC), time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC)},
 					sql.Row{"workflow_3", time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC), time.Date(2024, time.August, 15, 0, 0, 0, 0, time.UTC)},
+				},
+			},
+			{
+				Query: "select * from dolt_ci_workflow_events;",
+				Expected: []sql.Row{
+					sql.Row{"uuid_1", "workflow_1", 0},
+					sql.Row{"uuid_2", "workflow_2", 1},
+					sql.Row{"uuid_3", "workflow_3", 2},
 				},
 			},
 		},
