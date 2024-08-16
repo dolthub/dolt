@@ -71,7 +71,6 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
-	//apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if !cli.CheckEnvIsValid(dEnv) {
 		return 1

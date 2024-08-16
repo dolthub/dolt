@@ -103,11 +103,10 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	if ws := dbState.WriteSession(); ws != nil {
-		err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(nrv))
-		if err != nil {
-			return err
-		}
+	newWorkingSet := dbState.WorkingSet().WithWorkingRoot(nrv)
+	err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
+	if err != nil {
+		return err
 	}
 
 	err = dSess.SetWorkingRoot(ctx, dbName, nrv)
@@ -115,16 +114,21 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	// this doesnt work
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.WorkflowsTableName}, dbName, dSess.SetWorkingRoot)
-		if err != nil {
-			return err
-		}
-		tableWriter.StatementBegin(ctx)
-		defer tableWriter.Close(ctx)
-
-		return tableWriter.StatementComplete(ctx)
+	newWorkingSetRef := newWorkingSet.Ref()
+	ddb, exists := dSess.GetDoltDB(ctx, dbName)
+	if !exists {
+		return fmt.Errorf("database not found in database %s", dbName)
 	}
-	return nil
+
+	//oldHash, err := newWorkingSet.HashOf()
+	//if err != nil {
+	//	return err
+	//}
+
+	oldHash, err := dbState.WorkingSet().HashOf()
+	if err != nil {
+		return err
+	}
+
+	return ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, oldHash, doltdb.TodoWorkingSetMeta(), nil)
 }

@@ -171,12 +171,32 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	if ws := dbState.WriteSession(); ws != nil {
-		err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(nrv))
-		if err != nil {
-			return err
-		}
+	newWorkingSet := dbState.WorkingSet().WithWorkingRoot(nrv)
+	err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
+	if err != nil {
+		return err
 	}
 
-	return dSess.SetWorkingRoot(ctx, dbName, nrv)
+	err = dSess.SetWorkingRoot(ctx, dbName, nrv)
+	if err != nil {
+		return err
+	}
+
+	newWorkingSetRef := newWorkingSet.Ref()
+	ddb, exists := dSess.GetDoltDB(ctx, dbName)
+	if !exists {
+		return fmt.Errorf("database not found in database %s", dbName)
+	}
+
+	//oldHash, err := newWorkingSet.HashOf()
+	//if err != nil {
+	//	return err
+	//}
+
+	oldHash, err := dbState.WorkingSet().HashOf()
+	if err != nil {
+		return err
+	}
+
+	return ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, oldHash, doltdb.TodoWorkingSetMeta(), nil)
 }
