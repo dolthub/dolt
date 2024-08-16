@@ -282,13 +282,13 @@ func (w *workflowEventsWriter) StatementBegin(ctx *sql.Context) {
 			IsResolved:     false,
 		}
 
-		onUpdateRefAction, err := parseFkReferentialAction(sfkc.OnUpdate)
+		onUpdateRefAction, err := doltdb.ParseFkReferentialAction(sfkc.OnUpdate)
 		if err != nil {
 			w.errDuringStatementBegin = err
 			return
 		}
 
-		onDeleteRefAction, err := parseFkReferentialAction(sfkc.OnDelete)
+		onDeleteRefAction, err := doltdb.ParseFkReferentialAction(sfkc.OnDelete)
 		if err != nil {
 			w.errDuringStatementBegin = err
 			return

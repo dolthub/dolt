@@ -25,7 +25,7 @@ type doltCIWorkflowsTableCreator struct{}
 
 var _ DoltCITableCreator = (*doltCIWorkflowsTableCreator)(nil)
 
-func NewDoltCIWorkflowTableCreator() *doltCIWorkflowsTableCreator {
+func NewDoltCIWorkflowsTableCreator() *doltCIWorkflowsTableCreator {
 	return &doltCIWorkflowsTableCreator{}
 }
 

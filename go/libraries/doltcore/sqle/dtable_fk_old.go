@@ -88,7 +88,7 @@ func createDTableForeignKey(
 	}
 
 	var tableIndexName, refTableIndexName string
-	tableIndex, ok, err := findIndexWithPrefix(sch, sqlFk.Columns)
+	tableIndex, ok, err := doltdb.FindIndexWithPrefix(sch, sqlFk.Columns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -96,7 +96,7 @@ func createDTableForeignKey(
 	if ok {
 		tableIndexName = tableIndex.Name()
 	}
-	refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
+	refTableIndex, ok, err := doltdb.FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
