@@ -12,41 +12,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
-	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type doltCIWorkflowEventsTableCreator struct {
-	dbName string
 }
 
 var _ DoltCITableCreator = (*doltCIWorkflowEventsTableCreator)(nil)
 
-func NewDoltCIWorkflowEventsTableCreator(dbName string) *doltCIWorkflowEventsTableCreator {
-	return &doltCIWorkflowEventsTableCreator{dbName: dbName}
+func NewDoltCIWorkflowEventsTableCreator() *doltCIWorkflowEventsTableCreator {
+	return &doltCIWorkflowEventsTableCreator{}
 }
 
-func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv RootValue) (RootValue, error) {
-	found, err := rv.HasTable(ctx, TableName{Name: WorkflowEventsTableName})
+func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("no root value found in session")
+	}
+
+	roots, _ := dSess.GetRoots(ctx, dbName)
+
+	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
+	if err != nil {
+		return err
 	}
 	if found {
-		return rv, nil
+		return nil
 	}
 
 	colCollection := schema.NewColCollection(
 		schema.Column{
-			Name:          WorkflowEventsIdPkColName,
+			Name:          doltdb.WorkflowEventsIdPkColName,
 			Tag:           schema.WorkflowEventsIdTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    true,
@@ -57,7 +71,7 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          WorkflowEventsWorkflowNameFkColName,
+			Name:          doltdb.WorkflowEventsWorkflowNameFkColName,
 			Tag:           schema.WorkflowEventsWorkflowNameFkTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    false,
@@ -68,7 +82,7 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          WorkflowEventsEventTypeColName,
+			Name:          doltdb.WorkflowEventsEventTypeColName,
 			Tag:           schema.WorkflowEventsEventTypeTag,
 			Kind:          stypes.IntKind,
 			IsPartOfPK:    false,
@@ -82,23 +96,23 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 
 	sch, err := schema.NewSchema(colCollection, nil, schema.Collation_Default, nil, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	newRootValue, err := CreateEmptyTable(ctx, rv, TableName{Name: WorkflowEventsTableName}, sch)
+	nrv, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, sch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	sfkc := sql.ForeignKeyConstraint{
-		Name:           fmt.Sprintf("%s_%s", WorkflowEventsTableName, WorkflowEventsWorkflowNameFkColName),
-		Database:       d.dbName,
-		Table:          WorkflowEventsTableName,
-		Columns:        []string{WorkflowEventsWorkflowNameFkColName},
-		ParentDatabase: d.dbName,
-		ParentTable:    WorkflowsTableName,
-		ParentColumns:  []string{WorkflowsNameColName},
+		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName),
+		Database:       dbName,
+		Table:          doltdb.WorkflowEventsTableName,
+		Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
+		ParentDatabase: dbName,
+		ParentTable:    doltdb.WorkflowsTableName,
+		ParentColumns:  []string{doltdb.WorkflowsNameColName},
 		OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
 		OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 		IsResolved:     false,
@@ -106,51 +120,63 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 
 	onUpdateRefAction, err := ParseFkReferentialAction(sfkc.OnUpdate)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	onDeleteRefAction, err := ParseFkReferentialAction(sfkc.OnDelete)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	vrw := newRootValue.VRW()
-	ns := newRootValue.NodeStore()
+	vrw := nrv.VRW()
+	ns := nrv.NodeStore()
 
 	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}
 
 	indexSet, err := durable.NewIndexSetWithEmptyIndexes(ctx, vrw, ns, sch)
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}
 
-	tbl, err := NewTable(ctx, vrw, ns, sch, empty, indexSet, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, empty, indexSet, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	newRootValue, err = newRootValue.PutTable(ctx, TableName{Name: WorkflowEventsTableName}, tbl)
+	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, tbl)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	doltFk, err := CreateDoltCITableForeignKey(ctx, newRootValue, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, d.dbName)
+	doltFk, err := CreateDoltCITableForeignKey(ctx, nrv, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, dbName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fkc, err := newRootValue.GetForeignKeyCollection(ctx)
+	fkc, err := nrv.GetForeignKeyCollection(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = fkc.AddKeys(doltFk)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return newRootValue.PutForeignKeyCollection(ctx, fkc)
+	nrv, err = nrv.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
+	}
+
+	if ws := dbState.WriteSession(); ws != nil {
+		err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(nrv))
+		if err != nil {
+			return err
+		}
+	}
+
+	return dSess.SetWorkingRoot(ctx, dbName, nrv)
 }

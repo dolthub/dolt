@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/ci"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -125,6 +126,7 @@ var doltSubCommands = []cli.Command{
 	commands.ReflogCmd{},
 	commands.RebaseCmd{},
 	commands.ArchiveCmd{},
+	ci.Commands,
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -164,6 +166,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.ConfigCmd{},
+	ci.Commands,
 }
 
 // commands that do not need write access for the current directory

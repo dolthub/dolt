@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package ci
 
 import (
-	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
 
-type DoltCITableCreator interface {
-	CreateTable(ctx context.Context, rv RootValue) (RootValue, error)
-}
+var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
+	InitCmd{},
+})

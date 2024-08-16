@@ -12,35 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
-	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type DoltCITablesCreator interface {
-	CreateTables(ctx context.Context, rv RootValue) (RootValue, error)
+	CreateTables(ctx *sql.Context) error
 }
 
 type doltCITablesCreator struct {
+	ctx              *sql.Context
+	db               Database
 	workflowsTC      DoltCITableCreator
 	workflowEventsTC DoltCITableCreator
 }
 
-func NewDoltCITablesCreator(dbName string) *doltCITablesCreator {
+func NewDoltCITablesCreator(ctx *sql.Context, db Database) *doltCITablesCreator {
 	return &doltCITablesCreator{
+		ctx:              ctx,
+		db:               db,
 		workflowsTC:      NewDoltCIWorkflowsTableCreator(),
-		workflowEventsTC: NewDoltCIWorkflowEventsTableCreator(dbName),
+		workflowEventsTC: NewDoltCIWorkflowEventsTableCreator(),
 	}
 }
 
-func (d doltCITablesCreator) CreateTables(ctx context.Context, rv RootValue) (RootValue, error) {
-	rv, err := d.workflowsTC.CreateTable(ctx, rv)
-	if err != nil {
-		return nil, err
+func (d doltCITablesCreator) CreateTables(ctx *sql.Context) error {
+	if err := dsess.CheckAccessForDb(d.ctx, d.db, branch_control.Permissions_Write); err != nil {
+		return err
 	}
 
-	return d.workflowEventsTC.CreateTable(ctx, rv)
+	err := d.workflowsTC.CreateTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	return d.workflowEventsTC.CreateTable(ctx)
 }
 
 var _ DoltCITablesCreator = &doltCITablesCreator{}
