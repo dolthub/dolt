@@ -144,7 +144,6 @@ func MultiEnvForDirectory(
 	var newDEnv *DoltEnv = dEnv
 
 	// InMemFS is used only for testing.
-	// All other FS Types should get a newly created Environment which will serve as the primary env in the MultiRepoEnv
 	if _, ok := dataDirFS.(*filesys.InMemFS); !ok {
 		path, err := dataDirFS.Abs("")
 		if err != nil {
@@ -152,8 +151,6 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
-
-		// newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
 	}
 
 	mrEnv := &MultiRepoEnv{
