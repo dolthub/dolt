@@ -314,15 +314,7 @@ func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error)
 	} else {
 		iter, err = treeIterFromRange(ctx, m.tuples.Root, m.tuples.NodeStore, rng)
 	}
-	if err != nil {
-		return nil, err
-	}
-	if !rng.PreciseTypes || !rng.IsContiguous {
-		// range.Matches check is required if a type is imprecise
-		// or a key range is non-contiguous on disk
-		iter = filteredIter{iter: iter, rng: rng}
-	}
-	return iter, nil
+	return filteredIter{iter: iter, rng: rng}, nil
 }
 
 // IterRangeReverse returns a mutableMapIter that iterates over a Range backwards.
