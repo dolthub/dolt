@@ -23,12 +23,14 @@ type DoltCITablesCreator interface {
 }
 
 type doltCITablesCreator struct {
-	workflowsTC DoltCITableCreator
+	workflowsTC      DoltCITableCreator
+	workflowEventsTC DoltCITableCreator
 }
 
-func NewDoltCITablesCreator() *doltCITablesCreator {
+func NewDoltCITablesCreator(dbName string) *doltCITablesCreator {
 	return &doltCITablesCreator{
-		workflowsTC: NewDoltCIWorkflowTableCreator(),
+		workflowsTC:      NewDoltCIWorkflowsTableCreator(),
+		workflowEventsTC: NewDoltCIWorkflowEventsTableCreator(dbName),
 	}
 }
 
@@ -37,10 +39,8 @@ func (d doltCITablesCreator) CreateTables(ctx context.Context, rv RootValue) (Ro
 	if err != nil {
 		return nil, err
 	}
-	// todo: set new root?
 
-	return rv, err
-	//return d.createWorkflowEventsTable(ctx, rv)
+	return d.workflowEventsTC.CreateTable(ctx, rv)
 }
 
 var _ DoltCITablesCreator = &doltCITablesCreator{}

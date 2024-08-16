@@ -14,7 +14,9 @@
 
 package doltdb
 
-import "context"
+import (
+	"context"
+)
 
 type DoltCITableCreator interface {
 	CreateTable(ctx context.Context, rv RootValue) (RootValue, error)

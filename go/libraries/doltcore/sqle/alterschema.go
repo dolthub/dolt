@@ -357,7 +357,7 @@ func backupFkcIndexesForPkDrop(ctx *sql.Context, tbl string, sch schema.Schema, 
 		}
 
 		// find suitable secondary index
-		newIdx, ok, err := findIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
+		newIdx, ok, err := doltdb.FindIndexWithPrefix(sch, sch.GetPKCols().GetColumnNames())
 		if err != nil {
 			return nil, err
 		} else if !ok {
