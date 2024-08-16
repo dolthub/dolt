@@ -421,7 +421,7 @@ type coveringIndexImplBuilder struct {
 	keyMap, valMap, ordMap val.OrdinalMapping
 }
 
-func NewSequenceRangeIter(ctx context.Context, ib IndexScanBuilder, ranges []prolly.Range, reverse bool) (prolly.MapIter, error) {
+func NewSequenceMapIter(ctx context.Context, ib IndexScanBuilder, ranges []prolly.Range, reverse bool) (prolly.MapIter, error) {
 	if len(ranges) == 0 {
 		return &strictLookupIter{}, nil
 	}

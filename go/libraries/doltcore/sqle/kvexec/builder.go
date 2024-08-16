@@ -326,7 +326,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
 
-			srcIter, err = index.NewSequenceRangeIter(ctx, lb, prollyRanges, l.IsReverse)
+			srcIter, err = index.NewSequenceMapIter(ctx, lb, prollyRanges, l.IsReverse)
 			if err != nil {
 				return prolly.Map{}, nil, nil, nil, nil, nil, err
 			}
