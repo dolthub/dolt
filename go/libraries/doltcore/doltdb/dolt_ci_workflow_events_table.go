@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 
 type doltCIWorkflowEventsTableCreator struct {
 	dbName string
-	//schemaName string
 }
 
 var _ DoltCITableCreator = (*doltCIWorkflowEventsTableCreator)(nil)
@@ -138,18 +137,7 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 		return nil, err
 	}
 
-	dbSchemas, err := rv.GetDatabaseSchemas(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// todo: wtf bro
-	schemaName := ""
-	if len(dbSchemas) > 0 {
-		schemaName = dbSchemas[0].Name
-	}
-
-	doltFk, err := CreateDoltCITableForeignKey(ctx, newRootValue, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, schemaName)
+	doltFk, err := CreateDoltCITableForeignKey(ctx, newRootValue, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, d.dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -165,23 +153,4 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx context.Context, rv R
 	}
 
 	return newRootValue.PutForeignKeyCollection(ctx, fkc)
-}
-
-func ParseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (ForeignKeyReferentialAction, error) {
-	switch refOp {
-	case sql.ForeignKeyReferentialAction_DefaultAction:
-		return ForeignKeyReferentialAction_DefaultAction, nil
-	case sql.ForeignKeyReferentialAction_Restrict:
-		return ForeignKeyReferentialAction_Restrict, nil
-	case sql.ForeignKeyReferentialAction_Cascade:
-		return ForeignKeyReferentialAction_Cascade, nil
-	case sql.ForeignKeyReferentialAction_NoAction:
-		return ForeignKeyReferentialAction_NoAction, nil
-	case sql.ForeignKeyReferentialAction_SetNull:
-		return ForeignKeyReferentialAction_SetNull, nil
-	case sql.ForeignKeyReferentialAction_SetDefault:
-		return ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
-	default:
-		return ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
-	}
 }

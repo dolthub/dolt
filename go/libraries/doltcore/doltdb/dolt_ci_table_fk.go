@@ -207,3 +207,22 @@ func lowercaseSlice(strs []string) []string {
 	}
 	return newStrs
 }
+
+func ParseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (ForeignKeyReferentialAction, error) {
+	switch refOp {
+	case sql.ForeignKeyReferentialAction_DefaultAction:
+		return ForeignKeyReferentialAction_DefaultAction, nil
+	case sql.ForeignKeyReferentialAction_Restrict:
+		return ForeignKeyReferentialAction_Restrict, nil
+	case sql.ForeignKeyReferentialAction_Cascade:
+		return ForeignKeyReferentialAction_Cascade, nil
+	case sql.ForeignKeyReferentialAction_NoAction:
+		return ForeignKeyReferentialAction_NoAction, nil
+	case sql.ForeignKeyReferentialAction_SetNull:
+		return ForeignKeyReferentialAction_SetNull, nil
+	case sql.ForeignKeyReferentialAction_SetDefault:
+		return ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
+	default:
+		return ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
+	}
+}
