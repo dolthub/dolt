@@ -84,54 +84,28 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 		indexColl.clear(t)
 	}
 
-	const prefix = "new_"
-
-	t.Run("Tag Overwrites", func(t *testing.T) {
+	t.Run("Duplicate column set", func(t *testing.T) {
 		for _, testIndex := range testIndexes {
 			indexColl.AddIndex(testIndex)
 			newIndex := testIndex.copy()
-			newIndex.name = prefix + testIndex.name
+			newIndex.name = "dupe_" + testIndex.name
 			indexColl.AddIndex(newIndex)
 			assert.Equal(t, newIndex, indexColl.GetByName(newIndex.Name()))
-			assert.Nil(t, indexColl.GetByName(testIndex.Name()))
+			assert.Equal(t, testIndex, indexColl.GetByName(testIndex.Name()))
 			assert.Contains(t, indexColl.AllIndexes(), newIndex)
-			assert.NotContains(t, indexColl.AllIndexes(), testIndex)
+			assert.Contains(t, indexColl.AllIndexes(), testIndex)
 			for _, tag := range newIndex.IndexedColumnTags() {
 				assert.Contains(t, indexColl.IndexesWithTag(tag), newIndex)
-				assert.NotContains(t, indexColl.IndexesWithTag(tag), testIndex)
+				assert.Contains(t, indexColl.IndexesWithTag(tag), testIndex)
 			}
 			for _, col := range newIndex.ColumnNames() {
 				assert.Contains(t, indexColl.IndexesWithColumn(col), newIndex)
-				assert.NotContains(t, indexColl.IndexesWithColumn(col), testIndex)
+				assert.Contains(t, indexColl.IndexesWithColumn(col), testIndex)
 			}
 			assert.True(t, indexColl.Contains(newIndex.Name()))
-			assert.False(t, indexColl.Contains(testIndex.Name()))
+			assert.True(t, indexColl.Contains(testIndex.Name()))
 			assert.True(t, indexColl.hasIndexOnColumns(newIndex.ColumnNames()...))
 			assert.True(t, indexColl.hasIndexOnTags(newIndex.IndexedColumnTags()...))
-		}
-	})
-
-	t.Run("Name Overwrites", func(t *testing.T) {
-		// should be able to reduce collection to one index
-		lastStanding := &indexImpl{
-			name:      "none",
-			tags:      []uint64{4},
-			allTags:   []uint64{4, 1, 2},
-			indexColl: indexColl,
-		}
-
-		for _, testIndex := range testIndexes {
-			lastStanding.name = prefix + testIndex.name
-			indexColl.AddIndex(lastStanding)
-		}
-
-		assert.Equal(t, map[string]*indexImpl{lastStanding.name: lastStanding}, indexColl.indexes)
-		for tag, indexes := range indexColl.colTagToIndex {
-			if tag == 4 {
-				assert.Equal(t, indexes, []*indexImpl{lastStanding})
-			} else {
-				assert.Empty(t, indexes)
-			}
 		}
 	})
 }
