@@ -128,7 +128,11 @@ func (u DoltUser) DoltDebug(debuggerPort int, args ...string) *exec.Cmd {
 
 func (u DoltUser) DoltExec(args ...string) error {
 	cmd := u.DoltCmd(args...)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error while running `dolt %v`: %w.\nOutput: %v", args, err, string(output))
+	}
+	return err
 }
 
 func (u DoltUser) MakeRepoStore() (RepoStore, error) {

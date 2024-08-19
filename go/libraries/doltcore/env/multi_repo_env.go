@@ -125,19 +125,21 @@ func GetMultiEnvStorageMetadata(dataDirFS filesys.Filesys) (StorageMetadataMap, 
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
-func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
-	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env)
+func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv, rebuildEnv bool) (*MultiRepoEnv, error) {
+	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env, rebuildEnv)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
 // invoking context is included. If it's non-nil and valid, it will be included in the returned MultiRepoEnv, and will
 // be the first database in all iterations.
+// If |rebuildEnv| is true, we recreate the DoltEnv for the main directory, otherwise we reuse it.
 func MultiEnvForDirectory(
 	ctx context.Context,
 	config config.ReadWriteConfig,
 	dataDirFS filesys.Filesys,
 	version string,
 	dEnv *DoltEnv,
+	rebuildEnv bool,
 ) (*MultiRepoEnv, error) {
 	// Load current dataDirFS and put into mr env
 	var dbName string = "dolt"
@@ -151,6 +153,10 @@ func MultiEnvForDirectory(
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
+
+		if rebuildEnv {
+			newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
+		}
 	}
 
 	mrEnv := &MultiRepoEnv{

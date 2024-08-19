@@ -813,7 +813,7 @@ func addCreateDatabaseHeader(dEnv *env.DoltEnv, fPath, dbName string) errhand.Ve
 // TODO: find a more elegant way to get database name, possibly implement a method in DoltEnv
 // getActiveDatabaseName returns the name of the current active database
 func getActiveDatabaseName(ctx context.Context, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv, false)
 	if err != nil {
 		return "", errhand.VerboseErrorFromError(err)
 	}

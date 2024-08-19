@@ -363,7 +363,7 @@ func setupConcurrencyTest(t *testing.T, ctx context.Context) (dEnv *env.DoltEnv)
 }
 
 func engineFromEnvironment(ctx context.Context, dEnv *env.DoltEnv) (dbName string, eng *engine.SqlEngine) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv, false)
 	if err != nil {
 		panic(err)
 	}

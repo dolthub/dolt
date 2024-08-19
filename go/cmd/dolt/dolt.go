@@ -592,7 +592,7 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv, false)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1

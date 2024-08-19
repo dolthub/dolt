@@ -122,7 +122,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv, false)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
 
@@ -159,7 +159,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	subEnv1 := initRepoWithRelativePath(t, filepath.Join(envPath, "abc"), hdp)
 	subEnv2 := initRepoWithRelativePath(t, filepath.Join(envPath, "def"), hdp)
 
-	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
+	mrEnv, err := MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv, false)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
 

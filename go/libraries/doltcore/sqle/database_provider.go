@@ -765,7 +765,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		}
 	}
 
-	mrEnv, err := env.MultiEnvForSingleEnv(ctx, newEnv)
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, newEnv, true)
 	if err != nil {
 		return err
 	}

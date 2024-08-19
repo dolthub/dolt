@@ -101,7 +101,7 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 
 // NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
 func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
-	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv)
+	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv, false)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
