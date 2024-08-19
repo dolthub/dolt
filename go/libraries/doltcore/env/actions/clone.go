@@ -75,10 +75,11 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 
 	dEnv := env.Load(ctx, homeProvider, newFs, doltdb.LocalDirDoltDB, version)
 	if errors.Is(dEnv.DBLoadError, doltdb.ErrMissingDoltDataDir) {
-		err = dEnv.InitRepoWithNoData(ctx, nbf)
-		if err != nil {
-			return nil, fmt.Errorf("failed to init repo: %w", err)
-		}
+		dEnv.DBLoadError = nil
+	}
+	err = dEnv.InitRepoWithNoData(ctx, nbf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init repo: %w", err)
 	}
 
 	dEnv.RSLoadErr = nil
