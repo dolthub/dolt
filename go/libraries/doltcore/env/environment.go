@@ -505,6 +505,10 @@ func (dEnv *DoltEnv) InitDBAndRepoStateWithCommitMetaGenerator(ctx context.Conte
 	err := dEnv.InitDBWithCommitMetaGenerator(ctx, nbf, branchName, commitMeta)
 	if err != nil {
 		return err
+	} else {
+		if dEnv.DBLoadError == doltdb.ErrMissingDoltDataDir {
+			dEnv.DBLoadError = nil
+		}
 	}
 
 	return dEnv.InitializeRepoState(ctx, branchName)

@@ -79,7 +79,6 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		if err != nil {
 			return nil, fmt.Errorf("failed to init repo: %w", err)
 		}
-		dEnv.DBLoadError = nil
 	}
 
 	dEnv.RSLoadErr = nil
