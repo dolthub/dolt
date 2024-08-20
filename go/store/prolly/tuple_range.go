@@ -58,9 +58,10 @@ type Range struct {
 	Fields []RangeField
 	Desc   val.TupleDesc
 	Tup    val.Tuple
-	// PreciseTypes is false if any type in the range
-	// expression can be serialized with a loss of precision.
-	PreciseTypes bool
+	// SkipRangeMatchCallback is false if any type in the index range
+	// expression can return a false positive match. Strings, datetimes,
+	// floats, and decimals ranges can prefix match invalid values.
+	SkipRangeMatchCallback bool
 	// IsContiguous indicates whether this range expression is a
 	// single contiguous set of keys on disk. Permit a sequence of
 	// (1) zero or more equality restrictions, (2) zero or one
