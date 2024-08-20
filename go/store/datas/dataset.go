@@ -167,6 +167,8 @@ type RebaseState struct {
 	branch                     string
 	commitBecomesEmptyHandling uint8
 	emptyCommitHandling        uint8
+	lastAttemptedStep          float32
+	rebasingStarted            bool
 }
 
 func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
@@ -186,6 +188,14 @@ func (rs *RebaseState) OntoCommit(ctx context.Context, vr types.ValueReader) (*C
 		return LoadCommitAddr(ctx, vr, *rs.ontoCommitAddr)
 	}
 	return nil, nil
+}
+
+func (rs *RebaseState) LastAttemptedStep(_ context.Context) float32 {
+	return rs.lastAttemptedStep
+}
+
+func (rs *RebaseState) RebasingStarted(_ context.Context) bool {
+	return rs.rebasingStarted
 }
 
 func (rs *RebaseState) CommitBecomesEmptyHandling(_ context.Context) uint8 {
@@ -446,6 +456,8 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 			string(rebaseState.BranchBytes()),
 			rebaseState.CommitBecomesEmptyHandling(),
 			rebaseState.EmptyCommitHandling(),
+			rebaseState.LastAttemptedStep(),
+			rebaseState.RebasingStarted(),
 		)
 	}
 

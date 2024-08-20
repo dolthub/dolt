@@ -81,11 +81,28 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 
 // ErrRebaseUncommittedChanges is used when a rebase is started, but there are uncommitted (and not
 // ignored) changes in the working set.
-var ErrRebaseUncommittedChanges = fmt.Errorf("cannot start a rebase with uncommitted changes")
+var ErrRebaseUncommittedChanges = goerrors.NewKind("cannot start a rebase with uncommitted changes")
 
-// ErrRebaseConflict is used when a merge conflict is detected while rebasing a commit.
-var ErrRebaseConflict = goerrors.NewKind(
-	"merge conflict detected while rebasing commit %s. " +
+// ErrRebaseUnresolvedConflicts is used when a rebase is continued, but there are
+// unresolved conflicts still present.
+var ErrRebaseUnresolvedConflicts = goerrors.NewKind(
+	"conflicts detected in tables %s; resolve conflicts before continuing the rebase")
+
+// ErrRebaseDataConflictWithAutocommit is used when data conflicts are detected in a rebase, but @@autocommit has not
+// been disabled, so it's not possible to resolve the conflicts since they would get rolled back automatically.
+var ErrRebaseDataConflictWithAutocommit = goerrors.NewKind(
+	"data conflicts from rebase, but @@autocommit has not been disabled. " +
+		"@@autocommit must be disabled to resolve conflicts. The rebase has been aborted. " +
+		"Set @@autocommit to 0 and try the rebase again to resolve the conflicts.")
+
+// ErrRebaseDataConflict is used when a data conflict is detected while rebasing a commit.
+var ErrRebaseDataConflict = goerrors.NewKind("data conflict detected while rebasing commit %s (%s). \n\n" +
+	"Resolve the conflicts and remove them from the dolt_conflicts_<table> tables, " +
+	"then continue the rebase by calling dolt_rebase('--continue')")
+
+// ErrRebaseSchemaConflict is used when a schema conflict is detected while rebasing a commit.
+var ErrRebaseSchemaConflict = goerrors.NewKind(
+	"schema conflict detected while rebasing commit %s. " +
 		"the rebase has been automatically aborted")
 
 // ErrRebaseConflictWithAbortError is used when a merge conflict is detected while rebasing a commit,
@@ -367,7 +384,7 @@ func validateWorkingSetCanStartRebase(ctx *sql.Context) error {
 		return err
 	}
 	if !wsOnlyHasIgnoredTables {
-		return ErrRebaseUncommittedChanges
+		return ErrRebaseUncommittedChanges.New()
 	}
 
 	return nil
@@ -419,45 +436,192 @@ func abortRebase(ctx *sql.Context) error {
 	return doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
 }
 
-func continueRebase(ctx *sql.Context) (string, error) {
-	// TODO: Eventually, when we allow interactive-rebases to be stopped and started (e.g. with the break action,
-	//       or for conflict resolution), we'll need to track what step we're at in the rebase plan.
-
-	// Validate that we are in an interactive rebase
+func validateActiveRebase(ctx *sql.Context) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		return "", err
+		return err
 	}
 	if !workingSet.RebaseActive() {
-		return "", fmt.Errorf("no rebase in progress")
+		return fmt.Errorf("no rebase in progress")
+	}
+	return nil
+}
+
+func validateNoConflicts(ctx *sql.Context) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
 	}
 
+	tablesWithDataConflicts, err := doltdb.TablesWithDataConflicts(ctx, workingSet.WorkingRoot())
+	if err != nil {
+		return err
+	}
+	if len(tablesWithDataConflicts) > 0 {
+		return ErrRebaseUnresolvedConflicts.New(
+			strings.Join(tablesWithDataConflicts, ", "))
+	}
+
+	return nil
+}
+
+// loadRebasePlan loads the rebase plan from the current database for the current session and validates it.
+func loadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
 	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	rdb, ok := db.(rebase.RebasePlanDatabase)
 	if !ok {
-		return "", fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
+		return nil, fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
 	rebasePlan, err := rdb.LoadRebasePlan(ctx)
 	if err != nil {
+		return nil, err
+	}
+	err = rebase.ValidateRebasePlan(ctx, rebasePlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return rebasePlan, nil
+}
+
+// isWorkingSetClean returns true if the working set for the current session doesn't contain any staged or
+// working changes, other than any changes to ignored tables.
+func isWorkingSetClean(ctx *sql.Context) (bool, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return false, fmt.Errorf("unable to get roots for current session")
+	}
+
+	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+	if !wsOnlyHasIgnoredTables {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func recordCurrentStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	if doltSession.GetTransaction() == nil {
+		_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+
+	// Update the current step in the working set, so that we can continue the merge if this hits a conflict
+	newWorkingSet := workingSet.WithRebaseState(workingSet.RebaseState().
+		WithLastAttemptedStep(step.RebaseOrderAsFloat()).
+		WithRebasingStarted(true))
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+	if err != nil {
+		return err
+	}
+
+	// Commit the SQL transaction with the LastAttemptedStep update to set that in the branch head's working set
+	if doltSession.GetTransaction() != nil {
+		err = doltSession.CommitTransaction(ctx, doltSession.GetTransaction())
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return nil
+}
+
+func continueRebase(ctx *sql.Context) (string, error) {
+	// Validate that we are in an interactive rebase
+	if err := validateActiveRebase(ctx); err != nil {
 		return "", err
 	}
 
-	err = rebase.ValidateRebasePlan(ctx, rebasePlan)
+	// If there are conflicts, stop the rebase with an error message about resolving the conflicts before continuing
+	if err := validateNoConflicts(ctx); err != nil {
+		return "", err
+	}
+
+	rebasePlan, err := loadRebasePlan(ctx)
 	if err != nil {
 		return "", err
 	}
 
+	doltSession := dsess.DSessFromSess(ctx.Session)
 	for _, step := range rebasePlan.Steps {
-		err = processRebasePlanStep(ctx, &step,
-			workingSet.RebaseState().CommitBecomesEmptyHandling(),
-			workingSet.RebaseState().EmptyCommitHandling())
+		workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
 			return "", err
+		}
+
+		rebaseStepOrder := step.RebaseOrderAsFloat()
+		lastAttemptedStep := workingSet.RebaseState().LastAttemptedStep()
+		rebasingStarted := workingSet.RebaseState().RebasingStarted()
+
+		changesCommited, err := isWorkingSetClean(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		if !rebasingStarted && !changesCommited {
+			return "", ErrRebaseUncommittedChanges.New()
+		}
+
+		// If we've already executed this step, move to the next plan step
+		if rebasingStarted && rebaseStepOrder < lastAttemptedStep {
+			continue
+		}
+
+		if rebasingStarted && rebaseStepOrder == lastAttemptedStep && !changesCommited {
+			// If we've already executed this step, but the working set has changes, then we need
+			// to make the commit for the manual changes made for this step
+			if err = commitManualChangesForStep(ctx, step); err != nil {
+				return "", err
+			}
+			continue
+		}
+
+		// If rebasing hasn't started yet or this step is greater than the last attempted step,
+		// go ahead and execute this step.
+		if !rebasingStarted || rebaseStepOrder > lastAttemptedStep {
+			if err = recordCurrentStep(ctx, step); err != nil {
+				return "", err
+			}
+
+			doltSession := dsess.DSessFromSess(ctx.Session)
+			workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+			if err != nil {
+				return "", err
+			}
+
+			err = processRebasePlanStep(ctx, &step,
+				workingSet.RebaseState().CommitBecomesEmptyHandling(),
+				workingSet.RebaseState().EmptyCommitHandling())
+			if err != nil {
+				return "", err
+			}
+		}
+
+		// Ensure a transaction has been started, so that the session is in sync with the latest changes
+		if doltSession.GetTransaction() == nil {
+			_, err = doltSession.StartTransaction(ctx, sql.ReadWrite)
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 
@@ -501,6 +665,11 @@ func continueRebase(ctx *sql.Context) (string, error) {
 		return "", err
 	}
 
+	// Start a new transaction so the session will see the changes to the branch pointer
+	if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
+		return "", err
+	}
+
 	// delete the temporary working branch
 	dbData, ok = doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
@@ -509,6 +678,48 @@ func continueRebase(ctx *sql.Context) (string, error) {
 	return rebaseBranch, actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
 	}, doltSession.Provider(), nil)
+}
+
+func commitManualChangesForStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		panic(err)
+	}
+
+	options, err := createCherryPickOptionsForRebaseStep(ctx, &step, workingSet.RebaseState().CommitBecomesEmptyHandling(),
+		workingSet.RebaseState().EmptyCommitHandling())
+
+	commitProps, err := cherry_pick.CreateCommitStagedPropsFromCherryPickOptions(ctx, *options)
+	if err != nil {
+		return err
+	}
+
+	// If the commit message wasn't set when we created the cherry-pick options, then set it to the step's commit
+	// message. For fixup commits, we don't use their commit message, so we keep it empty, and let the amend commit
+	// codepath use the previous commit's message.
+	if commitProps.Message == "" && step.Action != rebase.RebaseActionFixup {
+		commitProps.Message = step.CommitMsg
+	}
+
+	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to get roots for current session")
+	}
+	roots.Staged = roots.Working
+	pendingCommit, err := doltSession.NewPendingCommit(ctx, ctx.GetCurrentDatabase(), roots, *commitProps)
+	if err != nil {
+		return err
+	}
+
+	// Ensure a SQL transaction is set in the session
+	if doltSession.GetTransaction() == nil {
+		if _, err = doltSession.StartTransaction(ctx, sql.ReadWrite); err != nil {
+			return err
+		}
+	}
+	_, err = doltSession.DoltCommit(ctx, ctx.GetCurrentDatabase(), doltSession.GetTransaction(), pendingCommit)
+	return err
 }
 
 func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep,
@@ -524,6 +735,20 @@ func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep,
 		}
 	}
 
+	// If the action is "drop", then we don't need to do anything
+	if planStep.Action == rebase.RebaseActionDrop {
+		return nil
+	}
+
+	options, err := createCherryPickOptionsForRebaseStep(ctx, planStep, commitBecomesEmptyHandling, emptyCommitHandling)
+	if err != nil {
+		return err
+	}
+
+	return handleRebaseCherryPick(ctx, planStep, *options)
+}
+
+func createCherryPickOptionsForRebaseStep(ctx *sql.Context, planStep *rebase.RebasePlanStep, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling) (*cherry_pick.CherryPickOptions, error) {
 	// Override the default empty commit handling options for cherry-pick, since
 	// rebase has slightly different defaults
 	options := cherry_pick.NewCherryPickOptions()
@@ -531,51 +756,67 @@ func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep,
 	options.EmptyCommitHandling = emptyCommitHandling
 
 	switch planStep.Action {
-	case rebase.RebaseActionDrop:
-		return nil
+	case rebase.RebaseActionDrop, rebase.RebaseActionPick:
+		// Nothing to do
 
-	case rebase.RebaseActionPick, rebase.RebaseActionReword:
-		if planStep.Action == rebase.RebaseActionReword {
-			options.CommitMessage = planStep.CommitMsg
-		}
-		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
+	case rebase.RebaseActionReword:
+		options.CommitMessage = planStep.CommitMsg
 
-	case rebase.RebaseActionSquash, rebase.RebaseActionFixup:
+	case rebase.RebaseActionSquash:
 		options.Amend = true
-		if planStep.Action == rebase.RebaseActionSquash {
-			commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
-			if err != nil {
-				return err
-			}
-			options.CommitMessage = commitMessage
+		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
+		if err != nil {
+			return nil, err
 		}
-		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
+		options.CommitMessage = commitMessage
+
+	case rebase.RebaseActionFixup:
+		options.Amend = true
 
 	default:
-		return fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
+		return nil, fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
 	}
+
+	return &options, nil
 }
 
 // handleRebaseCherryPick runs a cherry-pick for the specified |commitHash|, using the specified
-// cherry-pick |options| and checks the results for any errors or merge conflicts. The initial
-// version of rebase doesn't support conflict resolution, so if any conflicts are detected, the
-// rebase is aborted and an error is returned.
-func handleRebaseCherryPick(ctx *sql.Context, commitHash string, options cherry_pick.CherryPickOptions) error {
-	_, mergeResult, err := cherry_pick.CherryPick(ctx, commitHash, options)
+// cherry-pick |options| and checks the results for any errors or merge conflicts. If a data conflict
+// is detected, then the ErrRebaseDataConflict error is returned. If a schema conflict is detected,
+// then the ErrRebaseSchemaConflict error is returned.
+func handleRebaseCherryPick(ctx *sql.Context, planStep *rebase.RebasePlanStep, options cherry_pick.CherryPickOptions) error {
+	_, mergeResult, err := cherry_pick.CherryPick(ctx, planStep.CommitHash, options)
 
 	var schemaConflict merge.SchemaConflict
 	isSchemaConflict := errors.As(err, &schemaConflict)
 
-	if (mergeResult != nil && mergeResult.HasMergeArtifacts()) || isSchemaConflict {
-		// TODO: rebase doesn't currently support conflict resolution, but ideally, when a conflict
-		//       is detected, the rebase would be paused and the user would resolve the conflict just
-		//       like any other conflict, and then call dolt_rebase --continue to keep going.
-		abortErr := abortRebase(ctx)
-		if abortErr != nil {
-			return ErrRebaseConflictWithAbortError.New(commitHash, abortErr)
+	if (mergeResult != nil && mergeResult.HasMergeArtifacts()) && !isSchemaConflict {
+		// Conflicts can't be resolved if @@autocommit is still enabled, so warn and abort the rebase
+		autocommitEnabled, err := isAutocommitEnabled(ctx)
+		if err != nil {
+			return err
 		}
-		return ErrRebaseConflict.New(commitHash)
+		if autocommitEnabled {
+			if abortErr := abortRebase(ctx); abortErr != nil {
+				return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
+			}
+			return ErrRebaseDataConflictWithAutocommit.New()
+		}
+
+		// Otherwise, let the caller know about the conflict and how to resolve
+		return ErrRebaseDataConflict.New(planStep.CommitHash, planStep.CommitMsg)
 	}
+
+	// TODO: rebase doesn't support schema conflict resolution yet. Ideally, when a conflict is
+	//       detected, the rebase would be paused and the user would resolve the conflict just
+	//       like any other conflict, and then call dolt_rebase --continue to keep going.
+	if isSchemaConflict {
+		if abortErr := abortRebase(ctx); abortErr != nil {
+			return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
+		}
+		return ErrRebaseSchemaConflict.New(planStep.CommitHash)
+	}
+
 	return err
 }
 
@@ -631,4 +872,18 @@ func currentBranch(ctx *sql.Context) (string, error) {
 		return "", err
 	}
 	return headRef.GetPath(), nil
+}
+
+// isAutocommitEnabled returns true if @@autocommit is enabled in the current session.
+func isAutocommitEnabled(ctx *sql.Context) (bool, error) {
+	autocommitVal, err := ctx.GetSessionVariable(ctx, "autocommit")
+	if err != nil {
+		return false, err
+	}
+	autocommitBoolVal, _, err := types.Boolean.Convert(autocommitVal)
+	if err != nil {
+		return false, err
+	}
+
+	return autocommitBoolVal == int8(1) || autocommitBoolVal == true, nil
 }
