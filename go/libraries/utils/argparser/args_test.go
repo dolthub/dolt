@@ -233,7 +233,7 @@ func TestValidation(t *testing.T) {
 	}
 
 	if apr.ContainsAny("string2", "flag2", "integer2") {
-		t.Error("Contains unexpectededed parameter(s)")
+		t.Error("Contains unexpected parameter(s)")
 	}
 
 	if val := apr.MustGetValue("string"); val != "string" {

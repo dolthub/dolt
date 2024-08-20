@@ -47,8 +47,8 @@ const (
 var (
 	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
-	ErrAlreadyComitted     = errors.New("dataset head already pointing at given commit")
-	ErrDirtyWorkspace       = errors.New("target has uncomitted changes. --force required to overwrite")
+	ErrAlreadyCommitted     = errors.New("dataset head already pointing at given commit")
+	ErrDirtyWorkspace       = errors.New("target has uncommitted changes. --force required to overwrite")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -487,7 +487,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			}
 			if curr != (hash.Hash{}) {
 				if curr == h {
-					return prolly.AddressMap{}, ErrAlreadyComitted
+					return prolly.AddressMap{}, ErrAlreadyCommitted
 				}
 			}
 
@@ -573,7 +573,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			return ae.Flush(ctx)
 		})
 
-	if err == ErrAlreadyComitted {
+	if err == ErrAlreadyCommitted {
 		return nil
 	}
 
@@ -655,7 +655,7 @@ func buildClassicCommitFunc(db Database, datasetID string, datasetCurrentAddr ha
 				return types.Map{}, ErrMergeNeeded
 			}
 			if currRef.TargetHash() == newCommitValueRef.TargetHash() {
-				return types.Map{}, ErrAlreadyComitted
+				return types.Map{}, ErrAlreadyCommitted
 			}
 		} else if datasetCurrentAddr != (hash.Hash{}) {
 			return types.Map{}, ErrMergeNeeded
@@ -682,7 +682,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 			}
 			if curr != (hash.Hash{}) {
 				if curr == h {
-					return prolly.AddressMap{}, ErrAlreadyComitted
+					return prolly.AddressMap{}, ErrAlreadyCommitted
 				}
 			}
 

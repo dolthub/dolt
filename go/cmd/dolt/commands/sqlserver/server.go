@@ -310,7 +310,7 @@ func ConfigureServices(
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {
-				return fmt.Errorf("unexpectededed type of binlog controller: %T", primaryController)
+				return fmt.Errorf("unexpected type of binlog controller: %T", primaryController)
 			}
 
 			_, logBinValue, ok := sql.SystemVariables.GetGlobal("log_bin")
@@ -319,7 +319,7 @@ func ConfigureServices(
 			}
 			logBin, ok := logBinValue.(int8)
 			if !ok {
-				return fmt.Errorf("unexpectededed type for @@log_bin system variable: %T", logBinValue)
+				return fmt.Errorf("unexpected type for @@log_bin system variable: %T", logBinValue)
 			}
 
 			_, logBinBranchValue, ok := sql.SystemVariables.GetGlobal("log_bin_branch")
@@ -328,7 +328,7 @@ func ConfigureServices(
 			}
 			logBinBranch, ok := logBinBranchValue.(string)
 			if !ok {
-				return fmt.Errorf("unexpectededed type for @@log_bin_branch system variable: %T", logBinBranchValue)
+				return fmt.Errorf("unexpected type for @@log_bin_branch system variable: %T", logBinBranchValue)
 			}
 			if logBinBranch != "" {
 				// If an invalid branch has been configured, let the server start up so that it's

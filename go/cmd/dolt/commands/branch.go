@@ -176,7 +176,7 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 			return nil, err
 		}
 		if len(row) != 2 {
-			return nil, fmt.Errorf("unexpectedededly received multiple columns in '%s': %s", command, row)
+			return nil, fmt.Errorf("unexpectedly received multiple columns in '%s': %s", command, row)
 		}
 
 		rowStrings, err := sqlfmt.SqlRowAsStrings(row, schema)

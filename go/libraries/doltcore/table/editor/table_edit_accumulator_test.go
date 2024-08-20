@@ -164,7 +164,7 @@ func TestGet(t *testing.T) {
 	key5 := newTuple(t, types.Int(5))
 	key6 := newTuple(t, types.Int(6))
 
-	// test uncomitted
+	// test uncommitted
 	requireGet(ctx, t, tea, key1, false)
 	teaInsert(t, tea, key1)
 	requireGet(ctx, t, tea, key1, true)
@@ -172,22 +172,22 @@ func TestGet(t *testing.T) {
 	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, false)
 
-	// test uncomitted flushed
+	// test uncommitted flushed
 	teaInsert(t, tea, key1)
 	requireGet(ctx, t, tea, key1, true)
-	tea.flushUncomitted()
+	tea.flushUncommitted()
 	requireGet(ctx, t, tea, key1, true)
 	err = tea.Rollback(ctx)
 	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, false)
 
-	// test comitted
+	// test commmitted
 	teaInsert(t, tea, key1)
 	err = tea.Commit(ctx, nbf)
 	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, true)
 
-	// edits in comitted and uncomitted
+	// edits in committed and uncommitted
 	requireGet(ctx, t, tea, key2, false)
 	teaInsert(t, tea, key2)
 	requireGet(ctx, t, tea, key1, true)
@@ -197,11 +197,11 @@ func TestGet(t *testing.T) {
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, false)
 
-	// edits in comitted and uncomitted flushed
+	// edits in committed and uncommitted flushed
 	teaInsert(t, tea, key2)
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, true)
-	tea.flushUncomitted()
+	tea.flushUncommitted()
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, true)
 	err = tea.Rollback(ctx)
@@ -209,10 +209,10 @@ func TestGet(t *testing.T) {
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, false)
 
-	// edits in comitted, uncomitted and uncomitted flushed
+	// edits in committed, uncommitted and uncommitted flushed
 	requireGet(ctx, t, tea, key3, false)
 	teaInsert(t, tea, key2)
-	tea.flushUncomitted()
+	tea.flushUncommitted()
 	teaInsert(t, tea, key3)
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, true)
@@ -225,7 +225,7 @@ func TestGet(t *testing.T) {
 
 	// edits everywhere materialized
 	teaInsert(t, tea, key2)
-	tea.flushUncomitted()
+	tea.flushUncommitted()
 	teaInsert(t, tea, key3)
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, true)
@@ -247,7 +247,7 @@ func TestGet(t *testing.T) {
 	requireGet(ctx, t, tea, key4, true)
 	teaDelete(t, tea, key2)
 	teaInsert(t, tea, key5)
-	tea.flushUncomitted()
+	tea.flushUncommitted()
 	requireGet(ctx, t, tea, key2, false)
 	requireGet(ctx, t, tea, key5, true)
 	teaInsert(t, tea, key6)

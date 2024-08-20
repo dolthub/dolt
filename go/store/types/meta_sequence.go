@@ -541,10 +541,10 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	}
 
 	if len(hs) == 0 {
-		return seqs, nil // can occur with ptree that is fully uncomitted
+		return seqs, nil // can occur with ptree that is fully uncommitted
 	}
 
-	// Fetch comitted child sequences in a single batch
+	// Fetch committed child sequences in a single batch
 	readValues, err := ms.vrw.ReadManyValues(ctx, hs)
 
 	if err != nil {

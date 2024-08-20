@@ -69,7 +69,7 @@ func newDiffWriter(diffOutput diffOutput) (diffWriter, error) {
 	case JsonDiffOutput:
 		return newJsonDiffWriter(iohelp.NopWrCloser(cli.CliOut))
 	default:
-		panic(fmt.Sprintf("unexpectededed diff output: %v", diffOutput))
+		panic(fmt.Sprintf("unexpected diff output: %v", diffOutput))
 	}
 }
 

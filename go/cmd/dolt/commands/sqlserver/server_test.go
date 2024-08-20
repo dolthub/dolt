@@ -140,7 +140,7 @@ func TestServerBadArgs(t *testing.T) {
 
 	tests := [][]string{
 		{"-H", "127.0.0.0.1"},
-		{"-H", "localahost"},
+		{"-H", "loclahost"},
 		{"-P", "300"},
 		{"-P", "90000"},
 		{"-l", "everything"},

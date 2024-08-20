@@ -79,7 +79,7 @@ func Run(ctx context.Context, config SysbenchConfig) error {
 			fmt.Println("Running postgres sysbench tests")
 			b = NewPostgresBenchmarker(cwd, config, sc)
 		default:
-			panic(fmt.Sprintf("unexpectededed server type: %s", st))
+			panic(fmt.Sprintf("unexpected server type: %s", st))
 		}
 
 		results, err = b.Benchmark(ctx)

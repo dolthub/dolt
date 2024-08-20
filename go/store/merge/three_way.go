@@ -52,7 +52,7 @@ func None(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Pa
 	return change, merged, false
 }
 
-// Ours resolves conflicts by preferring changes from the Value currently being comitted.
+// Ours resolves conflicts by preferring changes from the Value currently being committed.
 func Ours(aChange, bChange types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
 	return aChange, a, true
 }

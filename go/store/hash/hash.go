@@ -125,7 +125,7 @@ func IsValid(s string) bool {
 func Parse(s string) Hash {
 	r, ok := MaybeParse(s)
 	if !ok {
-		d.PanicIfError(fmt.Errorf("count not parse Hash: %s", s))
+		d.PanicIfError(fmt.Errorf("could not parse Hash: %s", s))
 	}
 	return r
 }

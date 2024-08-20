@@ -112,7 +112,7 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 						return err
 					}
 				} else {
-					panic("unexpectededed Path type")
+					panic("unexpected Path type")
 				}
 			case types.Set:
 				// default values are ok

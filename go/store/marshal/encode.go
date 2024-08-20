@@ -767,6 +767,6 @@ func shouldEncodeAsSet(t reflect.Type, tags nomsTags) bool {
 			t.Elem().Kind() == reflect.Struct &&
 			t.Elem().NumField() == 0
 	default:
-		panic(fmt.Errorf("called with unexpectededed kind %v", t.Kind()))
+		panic(fmt.Errorf("called with unexpected kind %v", t.Kind()))
 	}
 }

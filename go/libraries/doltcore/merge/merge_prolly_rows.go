@@ -635,7 +635,7 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 
 // deleteArtifact deletes the unique constraint violation artifact for the row identified by |key| and returns a
 // boolean that indicates if an artifact was deleted, as well as an error that indicates if there were any
-// unexpectededed errors encountered.
+// unexpected errors encountered.
 func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
 	artifactKey := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
 
@@ -1121,7 +1121,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// WARNING: In theory, we should only have to call MutableMap::Delete if the key is actually being deleted
 		// from the left branch. However, because of https://github.com/dolthub/dolt/issues/7192,
 		// if the left side of the merge is an empty table and we don't attempt to modify the map,
-		// the table will have an unexpectededed root hash.
+		// the table will have an unexpected root hash.
 		return m.mut.Delete(ctx, diff.Key)
 	case tree.DiffOpDivergentModifyResolved:
 		// any generated columns need to be re-resolved because their computed values may have changed as a result of
@@ -1177,7 +1177,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		}
 		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	default:
-		return fmt.Errorf("unexpectededed diffOp for editing primary index: %s", diff.Op)
+		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
 }
 
@@ -1540,7 +1540,7 @@ func writeTupleExpression(
 // instance that describes how the table is being merged, |from| is the field position in the value tuple from the
 // previous schema, and |rightSide| indicates whether the previous type info can be found on the right side of the merge
 // or the left side. If the previous type info is the same as the current type info for the merged schema, then this
-// function is a no-op and simply returns |value|. The converted value along with any unexpectededed error encountered is
+// function is a no-op and simply returns |value|. The converted value along with any unexpected error encountered is
 // returned.
 func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
 	var previousTypeInfo typeinfo.TypeInfo

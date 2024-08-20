@@ -3587,7 +3587,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 
 var DoltResetTestScripts = []queries.ScriptTest{
 	{
-		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncomitted merge",
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
 		SetUpScript: []string{
 			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
 			"CALL DOLT_ADD('.')",
@@ -5703,7 +5703,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
-				ExpectedErrStr: "cannot cherry-pick with uncomitted changes",
+				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
 			},
 			{
 				Query:    "call dolt_add('t');",
@@ -5711,7 +5711,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
-				ExpectedErrStr: "cannot cherry-pick with uncomitted changes",
+				ExpectedErrStr: "cannot cherry-pick with uncommitted changes",
 			},
 		},
 	},

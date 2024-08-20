@@ -581,7 +581,7 @@ var MergeScripts = []queries.ScriptTest{
 		// TODO: These tests are skipped, because we have temporarily disabled dolt_conflicts_resolve
 		//       when there are schema conflicts, since schema conflicts prevent table data from being
 		//       merged, and resolving the schema changes, but not completing the data merge will likely
-		//       give customers unexpectededed results.
+		//       give customers unexpected results.
 		//       https://github.com/dolthub/dolt/issues/6616
 		Name: "CALL DOLT_MERGE with schema conflicts can be correctly resolved using dolt_conflicts_resolve when autocommit is off",
 		SetUpScript: []string{

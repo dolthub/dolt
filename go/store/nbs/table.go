@@ -99,7 +99,7 @@ import (
 
 
   Looking up Chunks in an NBS Table
-  There are two phashes to loading chunk data for a given Hash from an NBS Table: Checking for the chunk's presence, and fetching the chunk's bytes. When performing a has-check, only the first phase is necessary.
+  There are two phases to loading chunk data for a given Hash from an NBS Table: Checking for the chunk's presence, and fetching the chunk's bytes. When performing a has-check, only the first phase is necessary.
 
   Phase one: Chunk presence
   - Slice off the first 8 bytes of your Hash to create a Prefix

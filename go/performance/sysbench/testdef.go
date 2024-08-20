@@ -281,8 +281,8 @@ func (r *Result) populateHistogram(buf []byte) error {
 
 	var err error
 	{
-		timer := regexp.MustCompile(`total time:\s+([0-9][0-9]*\.[0-9]+)s\n`)
-		res := timer.FindSubmatch(buf)
+		timeRe := regexp.MustCompile(`total time:\s+([0-9][0-9]*\.[0-9]+)s\n`)
+		res := timeRe.FindSubmatch(buf)
 		if len(res) == 0 {
 			return fmt.Errorf("time not found")
 		}

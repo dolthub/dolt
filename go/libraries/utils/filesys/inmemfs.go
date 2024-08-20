@@ -562,7 +562,7 @@ func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
 			delete(dir.objs, obj.absPath)
 			delete(fs.objs, obj.absPath)
 		default:
-			return fmt.Errorf("unexpectededed type of memory object: %T", v)
+			return fmt.Errorf("unexpected type of memory object: %T", v)
 		}
 	}
 
