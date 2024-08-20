@@ -1209,7 +1209,9 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		skipRangeMatchCallback := true
 		for j, expr := range rng {
 			if !sqltypes.IsInteger(expr.Typ) {
-				// decimal, float, datetime are imperfectly serialized
+				// String, decimal, float, datetime ranges can return
+				// false positive prefix matches. More precise range.Matches
+				// comparison is required.
 				skipRangeMatchCallback = false
 			}
 			if rangeCutIsBinding(expr.LowerBound) {
