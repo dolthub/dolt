@@ -40,7 +40,7 @@ func (t *TestStorage) NewView() *TestStoreView {
 type TestStoreView struct {
 	ChunkStore
 	reads  int32
-	hashes  int32
+	hashes int32
 	writes int32
 }
 

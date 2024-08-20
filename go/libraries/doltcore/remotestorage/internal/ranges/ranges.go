@@ -105,8 +105,8 @@ func (rh *RegionHeap) Pop() any {
 // A ranges.Tree is a tree data structure designed to support efficient
 // coalescing of non-overlapping ranges inserted into it.
 type Tree struct {
-	t              *btree.BTreeG[*GetRange]
-	regions        *RegionHeap
+	t             *btree.BTreeG[*GetRange]
+	regions       *RegionHeap
 	coalesceLimit int
 }
 
@@ -120,8 +120,8 @@ func GetRangeLess(a, b *GetRange) bool {
 
 func NewTree(coalesceLimit int) *Tree {
 	return &Tree{
-		t:              btree.NewG[*GetRange](64, GetRangeLess),
-		regions:        &RegionHeap{},
+		t:             btree.NewG[*GetRange](64, GetRangeLess),
+		regions:       &RegionHeap{},
 		coalesceLimit: coalesceLimit,
 	}
 }
