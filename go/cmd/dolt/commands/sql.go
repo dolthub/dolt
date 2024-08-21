@@ -612,7 +612,7 @@ func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name strin
 
 // execBatchMode runs all the queries in the input reader
 func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
-	scanner := NewSqlStatementScanner(input)
+	scanner := newStreamScanner(input)
 	var query string
 	for scanner.Scan() {
 		if fileReadProg != nil {
