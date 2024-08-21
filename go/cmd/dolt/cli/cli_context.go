@@ -27,7 +27,12 @@ import (
 
 // LateBindQueryist is a function that will be called the first time Queryist is needed for use. Input is a context which
 // is appropriate for the call to commence. Output is a Queryist, a sql.Context, a closer function, and an error.
-// The closer function is called when the Queryist is no longer needed, typically a defer right after getting it.
+//
+// The closer function is called when the Queryist is no longer needed, typically a defer right after getting it. If a nil
+// closer function is returned, then the caller knows that the queryist returned is being managed by another command. Effectively
+// this means you are running in another command's session. This is particularly interesting when running a \checkout in a
+// dolt sql session. It makes sense to do so in the context of `dolt sql`, but not in the context of `dolt checkout` when
+// connected to a remote server.
 type LateBindQueryist func(ctx context.Context) (Queryist, *sql.Context, func(), error)
 
 // CliContexct is used to pass top level command information down to subcommands.

@@ -674,7 +674,7 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 	if types.IsFormat_DOLT(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch)
 	} else {
-		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
+		return newLdDiffIter(ctx, ddb, joiner, dp, lookup)
 	}
 }
 

@@ -844,10 +844,11 @@ export NO_COLOR=1
     [[  "${lines[7]}" =~ "Author:" ]] || false                            #   Author: 
     [[  "${lines[8]}" =~ "Date:" ]] || false                              #   Date: 
     [[  "${lines[9]}" =~ "Initialize data repository" ]] || false         #      Initialize data repository
+    [[ ! "${lines[9]}" =~ "%!(EXTRA string=" ]] || false
 
     run dolt log --graph --oneline
     [ "$status" -eq 0 ]
-
+    
     [[ "${lines[0]}" =~ \* ]] || false
     [[ ! "$output" =~ "Author" ]] || false
     [[ ! "$output" =~ "Date" ]] || false

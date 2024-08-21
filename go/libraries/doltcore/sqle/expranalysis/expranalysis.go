@@ -52,7 +52,7 @@ func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Sch
 		return nil, fmt.Errorf("unable to find default or generated expression")
 	}
 
-	return expr.Expr, nil
+	return expr, nil
 }
 
 // ResolveCheckExpression returns a sql.Expression for the check provided

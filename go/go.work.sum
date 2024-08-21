@@ -318,6 +318,10 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2 h1:p1EgwI/C7NhT0JmVkwCD2ZBK8j4aeHQX2pMHH
 github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/creack/pty v1.1.9 h1:uDmaGzcdjhF4i/plgjmEsriH11Y0o7RKapEf/LDaM3w=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
+github.com/dolthub/go-mysql-server v0.18.2-0.20240812011431-f3892cc42bbf h1:F4OT8cjaQzGlLne9vp7/q0i5QFsQE2OUWIaL5thO5qA=
+github.com/dolthub/go-mysql-server v0.18.2-0.20240812011431-f3892cc42bbf/go.mod h1:PwuemL+YK+YiWcUFhknixeqNLjJNfCx7KDsHNajx9fM=
+github.com/dolthub/vitess v0.0.0-20240807181005-71d735078e24 h1:/zCd98CLZURqK85jQ+qRmEMx/dpXz85F1/Et7gqMGkk=
+github.com/dolthub/vitess v0.0.0-20240807181005-71d735078e24/go.mod h1:uBvlRluuL+SbEWTCZ68o0xvsdYZER3CEG/35INdzfJM=
 github.com/eapache/go-resiliency v1.1.0 h1:1NtRmCAqadE2FN4ZcN6g90TP3uk8cg9rn9eNK2197aU=
 github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 h1:YEetp8/yCZMuEPMUDHG0CW/brkkEp8mzqk2+ODEitlw=
 github.com/eapache/queue v1.1.0 h1:YOEu7KNc61ntiQlcEeUIoDTJ2o8mQznoNvUhiigpIqc=

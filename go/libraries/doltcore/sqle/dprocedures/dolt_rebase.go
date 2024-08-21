@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 var doltRebaseProcedureSchema = []*sql.Column{
@@ -134,6 +136,15 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		}
 
 	default:
+		commitBecomesEmptyHandling, err := processCommitBecomesEmptyParams(apr)
+		if err != nil {
+			return 1, "", err
+		}
+
+		// The default, in rebase, for handling commits that start off empty is to keep them
+		// TODO: Add support for --keep-empty and --no-keep-empty flags
+		emptyCommitHandling := doltdb.EmptyCommitHandling(doltdb.KeepEmptyCommit)
+
 		if apr.NArg() == 0 {
 			return 1, "", fmt.Errorf("not enough args")
 		} else if apr.NArg() > 1 {
@@ -142,7 +153,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		if !apr.Contains(cli.InteractiveFlag) {
 			return 1, "", fmt.Errorf("non-interactive rebases not currently supported")
 		}
-		err = startRebase(ctx, apr.Arg(0))
+		err = startRebase(ctx, apr.Arg(0), commitBecomesEmptyHandling, emptyCommitHandling)
 		if err != nil {
 			return 1, "", err
 		}
@@ -158,7 +169,33 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 	}
 }
 
-func startRebase(ctx *sql.Context, upstreamPoint string) error {
+// processCommitBecomesEmptyParams examines the parsed arguments in |apr| for the "empty" arg
+// and returns the empty commit handling strategy to use when a commit being rebased becomes
+// empty. If an invalid argument value is encountered, an error is returned.
+func processCommitBecomesEmptyParams(apr *argparser.ArgParseResults) (doltdb.EmptyCommitHandling, error) {
+	commitBecomesEmptyParam, isCommitBecomesEmptySpecified := apr.GetValue(cli.EmptyParam)
+	if !isCommitBecomesEmptySpecified {
+		// If no option is specified, then by default, commits that become empty are dropped. Git has the same
+		// default for non-interactive rebases; for interactive rebases, Git uses the default action of "stop" to
+		// let the user examine the changes and decide what to do next. We don't support the "stop" action yet, so
+		// we default to "drop" even in the interactive rebase case.
+		return doltdb.DropEmptyCommit, nil
+	}
+
+	if strings.EqualFold(commitBecomesEmptyParam, "keep") {
+		return doltdb.KeepEmptyCommit, nil
+	} else if strings.EqualFold(commitBecomesEmptyParam, "drop") {
+		return doltdb.DropEmptyCommit, nil
+	} else {
+		return -1, fmt.Errorf("unsupported option for the empty flag (%s); "+
+			"only 'keep' or 'drop' are allowed", commitBecomesEmptyParam)
+	}
+}
+
+// startRebase starts a new interactive rebase operation. |upstreamPoint| specifies the commit where the new rebased
+// commits will be based off of, |commitBecomesEmptyHandling| specifies how to  handle commits that are not empty, but
+// do not produce any changes when applied, and |emptyCommitHandling| specifies how to handle empty commits.
+func startRebase(ctx *sql.Context, upstreamPoint string, commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling) error {
 	if upstreamPoint == "" {
 		return fmt.Errorf("no upstream branch specified")
 	}
@@ -245,7 +282,8 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch, branchRoots.Working)
+	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch, branchRoots.Working,
+		commitBecomesEmptyHandling, emptyCommitHandling)
 	if err != nil {
 		return err
 	}
@@ -415,7 +453,9 @@ func continueRebase(ctx *sql.Context) (string, error) {
 	}
 
 	for _, step := range rebasePlan.Steps {
-		err = processRebasePlanStep(ctx, &step)
+		err = processRebasePlanStep(ctx, &step,
+			workingSet.RebaseState().CommitBecomesEmptyHandling(),
+			workingSet.RebaseState().EmptyCommitHandling())
 		if err != nil {
 			return "", err
 		}
@@ -471,7 +511,8 @@ func continueRebase(ctx *sql.Context) (string, error) {
 	}, doltSession.Provider(), nil)
 }
 
-func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep) error {
+func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep,
+	commitBecomesEmptyHandling doltdb.EmptyCommitHandling, emptyCommitHandling doltdb.EmptyCommitHandling) error {
 	// Make sure we have a transaction opened for the session
 	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
 	//       as we process additional rebase actions.
@@ -483,19 +524,24 @@ func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep) er
 		}
 	}
 
+	// Override the default empty commit handling options for cherry-pick, since
+	// rebase has slightly different defaults
+	options := cherry_pick.NewCherryPickOptions()
+	options.CommitBecomesEmptyHandling = commitBecomesEmptyHandling
+	options.EmptyCommitHandling = emptyCommitHandling
+
 	switch planStep.Action {
 	case rebase.RebaseActionDrop:
 		return nil
 
 	case rebase.RebaseActionPick, rebase.RebaseActionReword:
-		options := cherry_pick.CherryPickOptions{}
 		if planStep.Action == rebase.RebaseActionReword {
 			options.CommitMessage = planStep.CommitMsg
 		}
 		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
 
 	case rebase.RebaseActionSquash, rebase.RebaseActionFixup:
-		options := cherry_pick.CherryPickOptions{Amend: true}
+		options.Amend = true
 		if planStep.Action == rebase.RebaseActionSquash {
 			commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
 			if err != nil {

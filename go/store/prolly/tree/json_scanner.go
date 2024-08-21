@@ -160,7 +160,7 @@ func (s *JsonScanner) acceptValue() error {
 const endOfFile byte = 0xFF
 
 // current returns the current byte being parsed, or 0xFF if we've reached the end of the file.
-// (Since the JSON is UTF-8, the 0xFF byte cannot otherwise appear within in.)
+// (Since the JSON is UTF-8, the 0xFF byte cannot otherwise appear within it.)
 func (s JsonScanner) current() byte {
 	if s.valueOffset >= len(s.jsonBuffer) {
 		return endOfFile

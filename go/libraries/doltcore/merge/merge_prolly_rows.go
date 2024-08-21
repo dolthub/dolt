@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"golang.org/x/exp/maps"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -1978,20 +1977,20 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 }
 
 func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAddr []byte, rightAddr []byte) (resultAddr []byte, conflict bool, err error) {
-	baseDoc, err := tree.NewJSONDoc(hash.New(baseAddr), m.ns).ToJSONDocument(ctx)
+	baseDoc, err := tree.NewJSONDoc(hash.New(baseAddr), m.ns).ToIndexedJSONDocument(ctx)
 	if err != nil {
 		return nil, true, err
 	}
-	leftDoc, err := tree.NewJSONDoc(hash.New(leftAddr), m.ns).ToJSONDocument(ctx)
+	leftDoc, err := tree.NewJSONDoc(hash.New(leftAddr), m.ns).ToIndexedJSONDocument(ctx)
 	if err != nil {
 		return nil, true, err
 	}
-	rightDoc, err := tree.NewJSONDoc(hash.New(rightAddr), m.ns).ToJSONDocument(ctx)
+	rightDoc, err := tree.NewJSONDoc(hash.New(rightAddr), m.ns).ToIndexedJSONDocument(ctx)
 	if err != nil {
 		return nil, true, err
 	}
 
-	mergedDoc, conflict, err := mergeJSON(ctx, baseDoc, leftDoc, rightDoc)
+	mergedDoc, conflict, err := mergeJSON(ctx, m.ns, baseDoc, leftDoc, rightDoc)
 	if err != nil {
 		return nil, true, err
 	}
@@ -1999,35 +1998,36 @@ func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAd
 		return nil, true, nil
 	}
 
-	mergedVal, err := mergedDoc.ToInterface()
+	root, err := tree.SerializeJsonToAddr(ctx, m.ns, mergedDoc)
 	if err != nil {
 		return nil, true, err
 	}
-	mergedBytes, err := json.Marshal(mergedVal)
-	if err != nil {
-		return nil, true, err
-	}
-	mergedAddr, err := tree.SerializeBytesToAddr(ctx, m.ns, bytes.NewReader(mergedBytes), len(mergedBytes))
-	if err != nil {
-		return nil, true, err
-	}
+	mergedAddr := root.HashOf()
 	return mergedAddr[:], false, nil
-
 }
 
-func mergeJSON(ctx context.Context, base types.JSONDocument, left types.JSONDocument, right types.JSONDocument) (resultDoc types.JSONDocument, conflict bool, err error) {
+func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSONWrapper) (resultDoc sql.JSONWrapper, conflict bool, err error) {
 	// First, deserialize each value into JSON.
 	// We can only merge if the value at all three commits is a JSON object.
 
-	baseObject, baseIsObject := base.Val.(types.JsonObject)
-	leftObject, leftIsObject := left.Val.(types.JsonObject)
-	rightObject, rightIsObject := right.Val.(types.JsonObject)
+	baseIsObject, err := tree.IsJsonObject(base)
+	if err != nil {
+		return nil, true, err
+	}
+	leftIsObject, err := tree.IsJsonObject(left)
+	if err != nil {
+		return nil, true, err
+	}
+	rightIsObject, err := tree.IsJsonObject(right)
+	if err != nil {
+		return nil, true, err
+	}
 
 	if !baseIsObject || !leftIsObject || !rightIsObject {
 		// At least one of the commits does not have a JSON object.
 		// If both left and right have the same value, use that value.
 		// But if they differ, this is an unresolvable merge conflict.
-		cmp, err := left.Compare(right)
+		cmp, err := types.CompareJSON(left, right)
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
@@ -2039,26 +2039,83 @@ func mergeJSON(ctx context.Context, base types.JSONDocument, left types.JSONDocu
 		}
 	}
 
-	mergedObject := maps.Clone(leftObject)
-	merged := types.JSONDocument{Val: mergedObject}
+	indexedBase, isBaseIndexed := base.(tree.IndexedJsonDocument)
+	indexedLeft, isLeftIndexed := left.(tree.IndexedJsonDocument)
+	indexedRight, isRightIndexed := right.(tree.IndexedJsonDocument)
 
-	threeWayDiffer := NewThreeWayJsonDiffer(baseObject, leftObject, rightObject)
+	// We only do three way merges on values read from tables right now, which are read in as tree.IndexedJsonDocument.
+
+	var leftDiffer tree.IJsonDiffer
+	if isBaseIndexed && isLeftIndexed {
+		leftDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedLeft)
+		if err != nil {
+			return nil, true, err
+		}
+	} else {
+		baseObject, err := base.ToInterface()
+		if err != nil {
+			return nil, true, err
+		}
+		leftObject, err := left.ToInterface()
+		if err != nil {
+			return nil, true, err
+		}
+		leftDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), leftObject.(types.JsonObject))
+	}
+
+	var rightDiffer tree.IJsonDiffer
+	if isBaseIndexed && isRightIndexed {
+		rightDiffer, err = tree.NewIndexedJsonDiffer(ctx, indexedBase, indexedRight)
+		if err != nil {
+			return nil, true, err
+		}
+	} else {
+		baseObject, err := base.ToInterface()
+		if err != nil {
+			return nil, true, err
+		}
+		rightObject, err := right.ToInterface()
+		if err != nil {
+			return nil, true, err
+		}
+		rightDiffer = tree.NewJsonDiffer(baseObject.(types.JsonObject), rightObject.(types.JsonObject))
+	}
+
+	threeWayDiffer := ThreeWayJsonDiffer{
+		leftDiffer:  leftDiffer,
+		rightDiffer: rightDiffer,
+		ns:          ns,
+	}
 
 	// Compute the merged object by applying diffs to the left object as needed.
+	// If the left object isn't an IndexedJsonDocument, we make one.
+	var ok bool
+	var merged tree.IndexedJsonDocument
+	if merged, ok = left.(tree.IndexedJsonDocument); !ok {
+		root, err := tree.SerializeJsonToAddr(ctx, ns, left)
+		if err != nil {
+			return types.JSONDocument{}, true, err
+		}
+		merged = tree.NewIndexedJsonDocument(ctx, root, ns)
+	}
+
 	for {
 		threeWayDiff, err := threeWayDiffer.Next(ctx)
 		if err == io.EOF {
 			return merged, false, nil
 		}
+		if err != nil {
+			return types.JSONDocument{}, true, err
+		}
 
 		switch threeWayDiff.Op {
-		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify:
-			_, _, err := merged.Set(ctx, threeWayDiff.Key, threeWayDiff.Right)
+		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify, tree.DiffOpDivergentModifyResolved:
+			merged, _, err = merged.SetWithKey(ctx, threeWayDiff.Key, threeWayDiff.Right)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}
 		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
-			_, _, err := merged.Remove(ctx, threeWayDiff.Key)
+			merged, _, err = merged.RemoveWithKey(ctx, threeWayDiff.Key)
 			if err != nil {
 				return types.JSONDocument{}, true, err
 			}

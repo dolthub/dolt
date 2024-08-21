@@ -34,7 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type diffRowItr struct {
+// ldDiffRowItr is a sql.RowIter implementation which iterates over an LD formated DB in order to generate the
+// dolt_diff_{table} results. This is legacy code at this point, as the DOLT format is what we'll support going forward.
+type ldDiffRowItr struct {
 	ad             diff.RowDiffer
 	diffSrc        *diff.RowDiffSource
 	joiner         *rowconv.Joiner
@@ -43,7 +45,7 @@ type diffRowItr struct {
 	toCommitInfo   commitInfo
 }
 
-var _ sql.RowIter = &diffRowItr{}
+var _ sql.RowIter = &ldDiffRowItr{}
 
 type commitInfo struct {
 	name    types.String
@@ -52,7 +54,7 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*diffRowItr, error) {
+func newLdDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*ldDiffRowItr, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
 	if err != nil {
@@ -110,7 +112,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 	src := diff.NewRowDiffSource(rd, joiner, ctx.Warn)
 	src.AddInputRowConversion(fromConv, toConv)
 
-	return &diffRowItr{
+	return &ldDiffRowItr{
 		ad:             rd,
 		diffSrc:        src,
 		joiner:         joiner,
@@ -121,7 +123,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 }
 
 // Next returns the next row
-func (itr *diffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
+func (itr *ldDiffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	r, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
@@ -180,7 +182,7 @@ func (itr *diffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 // Close closes the iterator
-func (itr *diffRowItr) Close(*sql.Context) (err error) {
+func (itr *ldDiffRowItr) Close(*sql.Context) (err error) {
 	defer itr.ad.Close()
 	defer func() {
 		closeErr := itr.diffSrc.Close()
@@ -203,7 +205,6 @@ type prollyDiffIter struct {
 	fromSch, toSch             schema.Schema
 	targetFromSch, targetToSch schema.Schema
 	fromConverter, toConverter ProllyRowConverter
-	fromVD, toVD               val.TupleDesc
 	keyless                    bool
 
 	fromCm commitInfo2
@@ -285,8 +286,6 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		return prollyDiffIter{}, err
 	}
 
-	fromVD := fsch.GetValueDescriptor()
-	toVD := tsch.GetValueDescriptor()
 	keyless := schema.IsKeyless(targetFromSchema) && schema.IsKeyless(targetToSchema)
 	child, cancel := context.WithCancel(ctx)
 	iter := prollyDiffIter{
@@ -298,8 +297,6 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		targetToSch:   targetToSchema,
 		fromConverter: fromConverter,
 		toConverter:   toConverter,
-		fromVD:        fromVD,
-		toVD:          toVD,
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
@@ -372,7 +369,7 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 // todo(andy): copy string fields
 func (itr prollyDiffIter) makeDiffRowItr(ctx context.Context, d tree.Diff) (*repeatingRowIter, error) {
 	if !itr.keyless {
-		r, err := itr.getDiffRow(ctx, d)
+		r, err := itr.getDiffTableRow(ctx, d)
 		if err != nil {
 			return nil, err
 		}
@@ -404,7 +401,7 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 		}
 	}
 
-	r, err = itr.getDiffRow(ctx, d)
+	r, err = itr.getDiffTableRow(ctx, d)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -412,7 +409,9 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 	return r, n, nil
 }
 
-func (itr prollyDiffIter) getDiffRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
+// getDiffTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
+// output schema is intended for dolt_diff_* tables and dolt_diff function.
+func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
 	tLen := schemaSize(itr.targetToSch)
 	fLen := schemaSize(itr.targetFromSch)
 
@@ -500,16 +499,15 @@ func maybeTime(t *time.Time) interface{} {
 var _ sql.RowIter = (*diffPartitionRowIter)(nil)
 
 type diffPartitionRowIter struct {
-	diffPartitions   *DiffPartitions
 	ddb              *doltdb.DoltDB
 	joiner           *rowconv.Joiner
-	currentPartition *sql.Partition
+	currentPartition *DiffPartition
 	currentRowIter   *sql.RowIter
 }
 
-func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
+func NewDiffPartitionRowIter(partition *DiffPartition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffPartitionRowIter {
 	return &diffPartitionRowIter{
-		currentPartition: &partition,
+		currentPartition: partition,
 		ddb:              ddb,
 		joiner:           joiner,
 	}
@@ -518,16 +516,10 @@ func NewDiffPartitionRowIter(partition sql.Partition, ddb *doltdb.DoltDB, joiner
 func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
 		if itr.currentPartition == nil {
-			nextPartition, err := itr.diffPartitions.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			itr.currentPartition = &nextPartition
+			return nil, io.EOF
 		}
-
 		if itr.currentRowIter == nil {
-			dp := (*itr.currentPartition).(DiffPartition)
-			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
+			rowIter, err := itr.currentPartition.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
 			if err != nil {
 				return nil, err
 			}
@@ -538,12 +530,7 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err == io.EOF {
 			itr.currentPartition = nil
 			itr.currentRowIter = nil
-
-			if itr.diffPartitions == nil {
-				return nil, err
-			}
-
-			continue
+			return nil, err
 		} else if err != nil {
 			return nil, err
 		} else {
