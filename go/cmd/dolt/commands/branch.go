@@ -479,7 +479,7 @@ func generateForceDeleteMessage(args []string) string {
 	return newArgs
 }
 
-// callStoredProcedure generates and exectures the SQL query for calling the DOLT_BRANCH stored procedure.
+// callStoredProcedure generates and executes the SQL query for calling the DOLT_BRANCH stored procedure.
 // All actions that modify branches delegate to this after they validate their arguments.
 // Actions that don't modify branches, such as `dolt branch --list` and `dolt branch --show-current`, don't call
 // this method.

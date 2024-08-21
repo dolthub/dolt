@@ -17,7 +17,7 @@ package cli
 // This is a starting point for storing common messages. Doing this correctly would probably mean using language files
 // but that is overkill for the moment.
 const (
-	// Single variable - the name of the command. `dolt <command>` is how the commandString is formated in calls to the Exec method
+	// Single variable - the name of the command. `dolt <command>` is how the commandString is formatted in calls to the Exec method
 	// for dolt commands.
 	RemoteUnsupportedMsg = "%s can not currently be used when there is a local server running. Please stop your dolt sql-server or connect using `dolt sql` instead."
 )

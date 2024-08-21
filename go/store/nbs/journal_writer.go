@@ -444,7 +444,7 @@ func (wr *journalWriter) writeCompressedChunk(ctx context.Context, cc Compressed
 	// We go through |commitRootHash|, instead of directly |Sync()|ing the
 	// file, because we also have accumulating delayed work in the form of
 	// journal index records which may need to be serialized and flushed.
-	// Assumptions in journal bootstraping and the contents of the journal
+	// Assumptions in journal bootstrapping and the contents of the journal
 	// index require us to have a newly written root hash record anytime we
 	// write index records out. It's perfectly fine to reuse the current
 	// root hash, and this will also take care of the |Sync|.

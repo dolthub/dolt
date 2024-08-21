@@ -109,7 +109,7 @@ func (ch *ConfigHierarchy) SetStrings(updates map[string]string) error {
 		ns, paramName := splitParamName(k)
 
 		if ns == "" {
-			// panicing in cases where developers have used this function incorrectly
+			// panicking in cases where developers have used this function incorrectly
 			panic("Calls to SetStrings for a ConfigHierarchy must include the config name. " + k + " is not in the format config_name::param_name")
 		}
 
@@ -182,7 +182,7 @@ func (ch *ConfigHierarchy) Unset(params []string) error {
 		ns, paramName := splitParamName(param)
 
 		if ns == "" {
-			// panicing in cases where developers have used this function incorrectly
+			// panicking in cases where developers have used this function incorrectly
 			panic("Calls to Unset for a ConfigHierarchy must include the config name. " + param + " is not in the format config_name::param_name")
 		}
 

@@ -141,7 +141,7 @@ func addDatabaseArg(cmd *kingpin.CmdClause) (arg *string) {
 
 // addNomsDocs - adds documentation (docs only, not commands) for existing (pre-kingpin) commands.
 func addNomsDocs(noms *kingpin.Application) {
-	// commmit
+	// commit
 	commit := noms.Command("commit", `Commits a specified value as head of the dataset
 If absolute-path is not provided, then it is read from stdin. See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the dataset and absolute-path arguments.
 `)

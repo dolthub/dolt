@@ -160,7 +160,7 @@ func (r *mysqlDbReplica) Run() {
 			r.progressNotifier.RecordSuccess(attempt)
 			r.fastFailReplicationWait = false
 			r.backoff.Reset()
-			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants at version %d.", r.client.remote, version)
+			r.lgr.Debugf("mysqlDbReplica[%s]: successfully replicated users and grants at version %d.", r.client.remote, version)
 			r.replicatedVersion = version
 		} else {
 			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)

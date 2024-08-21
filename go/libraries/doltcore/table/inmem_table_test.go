@@ -50,7 +50,7 @@ func mustRow(r row.Row, err error) row.Row {
 }
 
 // These are in noms-key-sorted order, since InMemoryTable.AppendRow sorts its rows. This should probably be done
-// programatically instead of hard-coded.
+// programmatically instead of hard-coded.
 var rows = []row.Row{
 	mustRow(row.New(types.Format_Default, rowSch, row.TaggedValues{
 		nameTag:  types.String("Bill Billerson"),

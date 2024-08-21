@@ -40,7 +40,7 @@ func NewCounter(metricID eventsapi.MetricID) *Counter {
 	return &Counter{0, metricID}
 }
 
-// Inc incements a counter.  This method happens atomically.
+// Inc increments a counter.  This method happens atomically.
 func (c *Counter) Inc() {
 	c.Add(1)
 }

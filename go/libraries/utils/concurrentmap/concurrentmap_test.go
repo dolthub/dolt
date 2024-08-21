@@ -100,7 +100,7 @@ func TestConcurrentMapIter(t *testing.T) {
 		t.Errorf("Iter failed, expected to iterate 3 times, iterated %d times", counter)
 	}
 
-	// Test that iteration yeilds all elements
+	// Test that iteration yields all elements
 	if len(elements) != 3 {
 		t.Errorf("Iter failed, there should be 3 elements in the map, got %d", len(elements))
 	}

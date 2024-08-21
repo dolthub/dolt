@@ -62,7 +62,7 @@ func RunTpcc(ctx context.Context, config TpccConfig) error {
 			return err
 		}
 
-		fmt.Printf("Successfuly wrote results for %s\n", st)
+		fmt.Printf("Successfully wrote results for %s\n", st)
 	}
 
 	return nil

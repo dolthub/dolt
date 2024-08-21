@@ -80,7 +80,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 			}
 
 			if i+1 < len(se.edits.edits) && se.edits.edits[i+1].value.Equals(edit.value) {
-				continue // next edit supercedes this one
+				continue // next edit supersedes this one
 			}
 
 			edit := edit

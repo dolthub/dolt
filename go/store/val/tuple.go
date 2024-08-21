@@ -48,7 +48,7 @@ const (
 //
 // Field offsets encode the byte-offset from the front of the Tuple to the beginning
 // of the corresponding field in the Tuple. The offset for the first field is always
-// zero and is therefor omitted. Offsets and the field count are little-endian
+// zero and is therefore omitted. Offsets and the field count are little-endian
 // encoded uint16 values.
 //
 // Tuples read and write field values as byte slices. Interpreting these encoded

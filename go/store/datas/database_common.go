@@ -289,7 +289,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			return err
 		}
 		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+			return fmt.Errorf("SetHead failed: referred to value is not a commit:")
 		}
 	case tagName:
 		istag, err := IsTag(ctx, newVal)
@@ -297,7 +297,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			return err
 		}
 		if !istag {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+			return fmt.Errorf("SetHead failed: referred to value is not a tag:")
 		}
 		_, commitaddr, err := newHead.HeadTag()
 		if err != nil {

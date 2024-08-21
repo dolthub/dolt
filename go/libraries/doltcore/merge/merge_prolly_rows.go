@@ -1209,7 +1209,7 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 		return nil, err
 	}
 
-	// The default expresions always come in the order of the merged schema, but the fields we need to apply them to
+	// The default expressions always come in the order of the merged schema, but the fields we need to apply them to
 	// might have different column indexes in the case of a schema change
 	if len(exprs) > 0 {
 		for i := range exprs {

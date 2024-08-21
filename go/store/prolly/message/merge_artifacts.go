@@ -170,7 +170,7 @@ func getMergeArtifactCount(msg serial.Message) (uint16, error) {
 	if ma.KeyItemsLength() == 0 {
 		return 0, nil
 	}
-	// zeroth offset ommitted from array
+	// zeroth offset omitted from array
 	return uint16(ma.KeyOffsetsLength() + 1), nil
 }
 

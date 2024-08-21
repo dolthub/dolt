@@ -475,7 +475,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 	conf.Port = strconv.Itoa(s.Port)
 	conf.Password = s.Password
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
-		log.Printf("starting scipt: %s", script)
+		log.Printf("starting script: %s", script)
 
 		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port, nil)
 		if err != nil {
@@ -515,7 +515,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 // RunSqlServerTests creates a new repo and server for every import test.
 func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser, conf Config) error {
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
-		log.Printf("starting scipt: %s", script)
+		log.Printf("starting script: %s", script)
 		//make a new server for every test
 		server, err := newServer(user, repo, conf)
 		if err != nil {

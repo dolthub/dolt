@@ -116,7 +116,7 @@ func (ss *ServiceState) CompareAndSwap(old, new ServiceState) (swapped bool) {
 //
 // |WaitForStart| can be called at any time on a Controller. It will block
 // until |Start| is called. After |Start| is called, if all the services
-// succesfully initialize, it will return |nil|. Otherwise it will return the
+// successfully initialize, it will return |nil|. Otherwise it will return the
 // same error |Start| returned.
 //
 // |WaitForStop| can be called at any time on a Controller. It will block until

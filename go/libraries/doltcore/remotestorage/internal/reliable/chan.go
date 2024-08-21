@@ -36,7 +36,7 @@ import (
 //
 // Close should always be called on an reliable.Chan to ensure resource cleanup.
 type Chan[T any] struct {
-	// All unack'd |T|s are stored in |buff|. As they get Ackd, they get poped from here.
+	// All unack'd |T|s are stored in |buff|. As they get Ackd, they get popped from here.
 	buff *circular.Buff[T]
 
 	// We return new |T|s from here and they go into |buff| to be delivered

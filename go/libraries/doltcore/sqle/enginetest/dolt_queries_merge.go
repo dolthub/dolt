@@ -3817,7 +3817,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"set @@autocommit=1;",
 			"create table t (pk int primary key, c0 varchar(20))",
-			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_commit('-Am', 'added table t')",
 			"call dolt_checkout('-b', 'other')",
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
@@ -3845,7 +3845,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"set @@autocommit=0;",
 			"create table t (pk int primary key, c0 varchar(20))",
-			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_commit('-Am', 'added table t')",
 			"call dolt_checkout('-b', 'other')",
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
@@ -4012,7 +4012,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch3');",
-				Expected: []sql.Row{{"", 0, 1, "conficts found"}},
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",

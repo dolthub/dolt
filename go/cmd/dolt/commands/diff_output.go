@@ -310,7 +310,7 @@ func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds
 		targetSch = fromTableInfo.Sch
 	}
 
-	// TOOD: schema names
+	// TODO: schema names
 	return sqlexport.NewSqlDiffWriter(tds.ToTableName.Name, targetSch, iohelp.NopWrCloser(cli.CliOut)), nil
 }
 

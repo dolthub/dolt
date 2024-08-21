@@ -308,7 +308,7 @@ func TestDropValue(t *testing.T) {
 	}
 
 	newApr2 := apr.DropValue("flag")
-	require.NotEqualf(t, apr, newApr2, "DropValue failes to drop flag")
+	require.NotEqualf(t, apr, newApr2, "DropValue fails to drop flag")
 
 	_, hasVal = newApr2.GetValue("string")
 	if !hasVal {

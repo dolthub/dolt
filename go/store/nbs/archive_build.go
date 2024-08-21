@@ -531,7 +531,7 @@ type chunkGroup struct {
 type chunkCmpScore struct {
 	chunkId hash.Hash
 	// The compression score. Higher is better. This is the ratio of the compressed size to the raw size, using the group's
-	// dictionary. IE, this number only has meaning withing the group
+	// dictionary. IE, this number only has meaning within the group
 	score float64
 	// The size of the compressed chunk using the group's dictionary.
 	dictCmpSize int

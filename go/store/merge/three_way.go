@@ -227,7 +227,7 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 	defer updateProgress(m.progress)
 
 	if a == nil || b == nil {
-		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
+		d.Panic("Merge candidates cannot be nil: a = %v, b = %v", a, b)
 	}
 
 	switch a.Kind() {

@@ -87,14 +87,14 @@ func Run(ctx context.Context, config SysbenchConfig) error {
 			return err
 		}
 
-		fmt.Printf("Successfuly finished %s\n", st)
+		fmt.Printf("Successfully finished %s\n", st)
 
 		err = WriteResults(serverConfig, results)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Successfuly wrote results for %s\n", st)
+		fmt.Printf("Successfully wrote results for %s\n", st)
 	}
 	return nil
 }
