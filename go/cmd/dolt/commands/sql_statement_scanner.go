@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 	"unicode"
 )
@@ -404,7 +403,6 @@ func (s *streamScanner) seekDelimiter() (error, bool) {
 
 					if i+1 >= s.fill {
 						// require lookahead or EOF
-						log.Printf("boundary quote: %d\n", i)
 						if err := s.read(); err != nil {
 							return err, false
 						}
