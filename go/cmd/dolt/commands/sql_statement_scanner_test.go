@@ -178,6 +178,14 @@ primary key (a))`,
 				1, 2, 6,
 			},
 		},
+		{
+			input: `DELIMITER |
+insert into foo values (1,2,3)|`,
+			statements: []string{
+				"",
+				"insert into foo values (1,2,3)",
+			},
+		},
 	}
 
 	for _, tt := range testcases {

@@ -323,7 +323,7 @@ func (s *streamScanner) isDelimiterExpr() (error, bool) {
 	//  "DELIMITER " -> 0+ spaces -> <delimiter string> -> 1 space
 	s.state.checkedDelim = true
 
-	if s.fill-s.i < delimPrefixLen && bytes.EqualFold(s.buf[s.i:s.i+delimPrefixLen], delimPrefix) {
+	if s.fill-s.i >= delimPrefixLen && bytes.EqualFold(s.buf[s.i:s.i+delimPrefixLen], delimPrefix) {
 		delimTokenIdx := s.i
 		s.i += delimPrefixLen
 		for ; !s.isEOF && unicode.IsSpace(rune(s.buf[s.i])); s.i++ {
@@ -349,7 +349,8 @@ func (s *streamScanner) isDelimiterExpr() (error, bool) {
 			}
 		}
 		delimEnd := s.i
-		s.delimiter = s.buf[delimStart:delimEnd]
+		s.delimiter = make([]byte, delimEnd-delimStart)
+		copy(s.delimiter, s.buf[delimStart:delimEnd])
 
 		// discard delimiter token, return empty token
 		s.truncate()
