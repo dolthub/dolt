@@ -17,14 +17,14 @@ package cli
 import (
 	"context"
 	"fmt"
-	querypb "github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/fatih/color"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
