@@ -106,7 +106,7 @@ func (s *streamScanner) Scan() bool {
 		s.err = err
 		return false
 	} else if ok {
-		// empty token is required to ack DELIMITER
+		// empty token acks DELIMITER
 		return true
 	}
 
@@ -115,12 +115,15 @@ func (s *streamScanner) Scan() bool {
 			s.err = err
 			return false
 		} else if ok {
+			// delimiter found, scanner holds valid token state
 			return true
 		} else if s.isEOF && s.i == s.fill {
+			// token terminates with file
 			s.state.end = s.fill
 			return true
 		}
 		if err := s.read(); err != nil {
+			// haven't found delimiter yet, keep reading
 			s.err = err
 			return false
 		}
