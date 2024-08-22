@@ -196,11 +196,11 @@ insert into foo values (1,2,3)|`,
 			for scanner.Scan() {
 				require.True(t, i < len(tt.statements))
 				assert.Equal(t, tt.statements[i], strings.TrimSpace(scanner.Text()))
-				//if tt.lineNums != nil {
-				//	assert.Equal(t, tt.lineNums[i], scanner.statementStartLine)
-				//} else {
-				//	assert.Equal(t, 1, scanner.statementStartLine)
-				//}
+				if tt.lineNums != nil {
+					assert.Equal(t, tt.lineNums[i], scanner.state.statementStartLine)
+				} else {
+					assert.Equal(t, 1, scanner.state.statementStartLine)
+				}
 				i++
 			}
 

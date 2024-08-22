@@ -45,16 +45,16 @@ const delimPrefixLen = 10
 var delimPrefix = []byte("delimiter ")
 
 type streamScanner struct {
-	inp                io.Reader
-	buf                []byte
-	maxSize            int
-	i                  int // leading byte
-	fill               int
-	err                error
-	isEOF              bool
-	delimiter          []byte
-	statementStartLine int
-	state              *qState
+	inp       io.Reader
+	buf       []byte
+	maxSize   int
+	i         int // leading byte
+	fill      int
+	err       error
+	isEOF     bool
+	delimiter []byte
+	lineNum   int
+	state     *qState
 }
 
 func newStreamScanner(r io.Reader) *streamScanner {
@@ -70,7 +70,7 @@ type qState struct {
 	numConsecutiveBackslashes      int  // the number of consecutive backslashes encountered
 	seenNonWhitespaceChar          bool // whether we have encountered a non-whitespace character since we returned the last token
 	numConsecutiveDelimiterMatches int  // the consecutive number of characters that have been matched to the delimiter
-	lastQuoteIdx                   int
+	statementStartLine             int
 }
 
 func (s *streamScanner) Scan() bool {
@@ -93,6 +93,9 @@ func (s *streamScanner) Scan() bool {
 
 	// discard leading whitespace
 	for ; unicode.IsSpace(rune(s.buf[s.i])); s.i++ {
+		if s.buf[s.i] == '\n' {
+			s.lineNum++
+		}
 		if s.i >= s.fill {
 			if err := s.read(); err != nil {
 				s.err = err
@@ -110,6 +113,7 @@ func (s *streamScanner) Scan() bool {
 		return true
 	}
 
+	s.state.statementStartLine = s.lineNum + 1
 	for {
 		if err, ok := s.seekDelimiter(); err != nil {
 			s.err = err
@@ -256,6 +260,8 @@ func (s *streamScanner) seekDelimiter() (error, bool) {
 			}
 
 			switch s.buf[i] {
+			case '\n':
+				s.lineNum++
 			case backslash:
 				s.state.numConsecutiveBackslashes++
 			case sQuote, dQuote, backtick:
@@ -297,7 +303,6 @@ func (s *streamScanner) seekDelimiter() (error, bool) {
 				}
 
 				// open quote
-				s.state.lastQuoteIdx = i
 				s.state.quoteChar = s.buf[i]
 			default:
 				s.state.numConsecutiveBackslashes = 0

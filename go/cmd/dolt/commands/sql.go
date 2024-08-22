@@ -630,7 +630,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
-			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
+			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
 			} else {
@@ -642,7 +642,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, _, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
-			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
+			err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
 			} else {
@@ -661,7 +661,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 			}
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
 			if err != nil {
-				err = buildBatchSqlErr(scanner.statementStartLine, query, err)
+				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
 					return err
 				} else {
@@ -673,7 +673,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	}
 
 	if err := scanner.Err(); err != nil {
-		return buildBatchSqlErr(scanner.statementStartLine, query, err)
+		return buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 	}
 
 	return nil
