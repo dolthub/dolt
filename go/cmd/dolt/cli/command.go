@@ -17,6 +17,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"os"
 	"os/signal"
 	"strings"
@@ -86,6 +88,7 @@ type SignalCommand interface {
 // SQL. The Queryist can be obtained from the CliContext passed into the Exec method by calling the QueryEngine method.
 type Queryist interface {
 	Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
+	QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]*querypb.BindVariable, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into

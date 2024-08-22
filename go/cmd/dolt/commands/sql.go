@@ -1122,7 +1122,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return qryist.Query(ctx, query)
 	default:
-		return qryist.Query(ctx, query)
+		return qryist.QueryWithBindings(ctx, query, sqlStatement, nil, nil)
 	}
 }
 

@@ -18,6 +18,8 @@ import (
 	"context"
 	sql2 "database/sql"
 	"fmt"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -90,6 +92,10 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		return nil, nil, nil, err
 	}
 	return rowIter.Schema(), rowIter, nil, nil
+}
+
+func (c ConnectionQueryist) QueryWithBindings(ctx *sql.Context, query string, _ sqlparser.Statement, _ map[string]*querypb.BindVariable, _ *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
+	return c.Query(ctx, query)
 }
 
 type MysqlRowWrapper struct {
