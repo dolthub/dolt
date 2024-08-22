@@ -269,7 +269,6 @@ func (s *streamScanner) seekDelimiter() (error, bool) {
 
 				// currently in a quoted string
 				if s.state.quoteChar != 0 {
-
 					if i+1 >= s.fill {
 						// require lookahead or EOF
 						if err := s.read(); err != nil {
@@ -287,13 +286,9 @@ func (s *streamScanner) seekDelimiter() (error, bool) {
 						if nextChar == s.state.quoteChar {
 							// escaped quote. skip the next character
 							s.state.ignoreNextChar = true
-						} else if s.isEOF || i+1 < s.fill {
+						} else {
 							// end quote
 							s.state.quoteChar = 0
-						} else {
-							// need more data to make a decision
-							// this shouldn't be possible
-							panic("")
 						}
 					}
 
