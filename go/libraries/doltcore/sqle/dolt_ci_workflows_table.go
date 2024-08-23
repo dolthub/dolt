@@ -15,14 +15,12 @@
 package sqle
 
 import (
-	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
 )
 
 type doltCIWorkflowsTableCreator struct{}
@@ -42,11 +40,6 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
 	}
 
 	root := ws.WorkingRoot()
-	startHash, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(color.Output, "workflow WorkingSet.WorkingRoot.HashOf() start: %s\n", startHash)
 
 	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowsTableName})
 	if err != nil {
@@ -104,22 +97,5 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	err = dSess.SetWorkingRoot(ctx, dbName, nrv)
-	if err != nil {
-		return err
-	}
-
-	nws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	newRoot := nws.WorkingRoot()
-	endHash, err := newRoot.HashOf()
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(color.Output, "workflow WorkingSet.WorkingRoot.HashOf() end: %s\n", endHash)
-	return nil
+	return dSess.SetWorkingRoot(ctx, dbName, nrv)
 }

@@ -16,9 +16,9 @@ package sqle
 
 import (
 	"fmt"
-"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -42,18 +42,21 @@ func NewDoltCITablesCreator(ctx *sql.Context, db Database) *doltCITablesCreator 
 	}
 }
 
-func (d doltCITablesCreator) CreateTables(ctx *sql.Context) error {
-	if err := dsess.CheckAccessForDb(d.ctx, d.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-
+func (d *doltCITablesCreator) createTables(ctx *sql.Context) error {
 	// TOD0: maybe CreateTable(...) should take in old RootVal and return new RootVal?
 	err := d.workflowsTC.CreateTable(ctx)
 	if err != nil {
 		return err
 	}
+	return d.workflowEventsTC.CreateTable(ctx)
+}
 
-	err = d.workflowEventsTC.CreateTable(ctx)
+func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
+	if err := dsess.CheckAccessForDb(d.ctx, d.db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+
+	err := d.createTables(ctx)
 	if err != nil {
 		return err
 	}
