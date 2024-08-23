@@ -187,11 +187,11 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	newWorkingSetRef := newWorkingSet.Ref()
-	ddb, exists := dSess.GetDoltDB(ctx, dbName)
-	if !exists {
-		return fmt.Errorf("database not found in database %s", dbName)
-	}
+	//newWorkingSetRef := newWorkingSet.Ref()
+	//ddb, exists := dSess.GetDoltDB(ctx, dbName)
+	//if !exists {
+	//	return fmt.Errorf("database not found in database %s", dbName)
+	//}
 
 	////oldHash, err := newWorkingSet.HashOf()
 	////if err != nil {
@@ -203,10 +203,10 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 	//	return err
 	//}
 
-	err = ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, startHash, doltdb.TodoWorkingSetMeta(), nil)
-	if err != nil {
-		return err
-	}
+	//err = ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, startHash, doltdb.TodoWorkingSetMeta(), nil)
+	//if err != nil {
+	//	return err
+	//}
 
 	nws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
