@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/sql"
 	"sort"
@@ -25,14 +26,14 @@ import (
 
 func CreateDoltCITableForeignKey(
 	ctx context.Context,
-	root RootValue,
-	tbl *Table,
+	root doltdb.RootValue,
+	tbl *doltdb.Table,
 	sch schema.Schema,
 	sqlFk sql.ForeignKeyConstraint,
-	onUpdateRefAction, onDeleteRefAction ForeignKeyReferentialAction,
-	schemaName string) (ForeignKey, error) {
+	onUpdateRefAction, onDeleteRefAction doltdb.ForeignKeyReferentialAction,
+	schemaName string) (doltdb.ForeignKey, error) {
 	if !sqlFk.IsResolved {
-		return ForeignKey{
+		return doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
 			TableName:              sqlFk.Table,
 			TableIndex:             "",
@@ -42,7 +43,7 @@ func CreateDoltCITableForeignKey(
 			ReferencedTableColumns: nil,
 			OnUpdate:               onUpdateRefAction,
 			OnDelete:               onDeleteRefAction,
-			UnresolvedFKDetails: UnresolvedFKDetails{
+			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
 				TableColumns:           sqlFk.Columns,
 				ReferencedTableColumns: sqlFk.ParentColumns,
 			},
@@ -52,12 +53,12 @@ func CreateDoltCITableForeignKey(
 	for i, col := range sqlFk.Columns {
 		tableCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(col)
 		if !ok {
-			return ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", sqlFk.Table, col)
+			return doltdb.ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", sqlFk.Table, col)
 		}
 		colTags[i] = tableCol.Tag
 	}
 
-	var refTbl *Table
+	var refTbl *doltdb.Table
 	var refSch schema.Schema
 	if sqlFk.IsSelfReferential() {
 		refTbl = tbl
@@ -67,16 +68,16 @@ func CreateDoltCITableForeignKey(
 		var err error
 		// TODO: the parent table can be in another schema
 
-		refTbl, _, ok, err = GetTableInsensitive(ctx, root, TableName{Name: sqlFk.ParentTable, Schema: schemaName})
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: schemaName})
 		if err != nil {
-			return ForeignKey{}, err
+			return doltdb.ForeignKey{}, err
 		}
 		if !ok {
-			return ForeignKey{}, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+			return doltdb.ForeignKey{}, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
 		}
 		refSch, err = refTbl.GetSchema(ctx)
 		if err != nil {
-			return ForeignKey{}, err
+			return doltdb.ForeignKey{}, err
 		}
 	}
 
@@ -84,7 +85,7 @@ func CreateDoltCITableForeignKey(
 	for i, name := range sqlFk.ParentColumns {
 		refCol, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
 		if !ok {
-			return ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", sqlFk.ParentTable, name)
+			return doltdb.ForeignKey{}, fmt.Errorf("table `%s` does not have column `%s`", sqlFk.ParentTable, name)
 		}
 		refColTags[i] = refCol.Tag
 	}
@@ -92,7 +93,7 @@ func CreateDoltCITableForeignKey(
 	var tableIndexName, refTableIndexName string
 	tableIndex, ok, err := FindIndexWithPrefix(sch, sqlFk.Columns)
 	if err != nil {
-		return ForeignKey{}, err
+		return doltdb.ForeignKey{}, err
 	}
 	// Use secondary index if found; otherwise it will use empty string, indicating primary key
 	if ok {
@@ -100,13 +101,13 @@ func CreateDoltCITableForeignKey(
 	}
 	refTableIndex, ok, err := FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
 	if err != nil {
-		return ForeignKey{}, err
+		return doltdb.ForeignKey{}, err
 	}
 	// Use secondary index if found; otherwise it will use  empty string, indicating primary key
 	if ok {
 		refTableIndexName = refTableIndex.Name()
 	}
-	return ForeignKey{
+	return doltdb.ForeignKey{
 		Name:                   sqlFk.Name,
 		TableName:              sqlFk.Table,
 		TableIndex:             tableIndexName,
@@ -116,7 +117,7 @@ func CreateDoltCITableForeignKey(
 		ReferencedTableColumns: refColTags,
 		OnUpdate:               onUpdateRefAction,
 		OnDelete:               onDeleteRefAction,
-		UnresolvedFKDetails: UnresolvedFKDetails{
+		UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
 			TableColumns:           sqlFk.Columns,
 			ReferencedTableColumns: sqlFk.ParentColumns,
 		},
@@ -206,23 +207,4 @@ func lowercaseSlice(strs []string) []string {
 		newStrs[i] = strings.ToLower(str)
 	}
 	return newStrs
-}
-
-func ParseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (ForeignKeyReferentialAction, error) {
-	switch refOp {
-	case sql.ForeignKeyReferentialAction_DefaultAction:
-		return ForeignKeyReferentialAction_DefaultAction, nil
-	case sql.ForeignKeyReferentialAction_Restrict:
-		return ForeignKeyReferentialAction_Restrict, nil
-	case sql.ForeignKeyReferentialAction_Cascade:
-		return ForeignKeyReferentialAction_Cascade, nil
-	case sql.ForeignKeyReferentialAction_NoAction:
-		return ForeignKeyReferentialAction_NoAction, nil
-	case sql.ForeignKeyReferentialAction_SetNull:
-		return ForeignKeyReferentialAction_SetNull, nil
-	case sql.ForeignKeyReferentialAction_SetDefault:
-		return ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
-	default:
-		return ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
-	}
 }

@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
-	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	stypes "github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type doltCIWorkflowsTableCreator struct{}
@@ -29,18 +31,28 @@ func NewDoltCIWorkflowsTableCreator() *doltCIWorkflowsTableCreator {
 	return &doltCIWorkflowsTableCreator{}
 }
 
-func (d *doltCIWorkflowsTableCreator) CreateTable(ctx context.Context, rv RootValue) (RootValue, error) {
-	found, err := rv.HasTable(ctx, TableName{Name: WorkflowsTableName})
+func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+	ws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	root := ws.WorkingRoot()
+
+	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowsTableName})
+	if err != nil {
+		return err
+	}
+
 	if found {
-		return rv, nil
+		return nil
 	}
 
 	colCollection := schema.NewColCollection(
 		schema.Column{
-			Name:          WorkflowsNameColName,
+			Name:          doltdb.WorkflowsNameColName,
 			Tag:           schema.WorkflowsNameTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    true,
@@ -51,7 +63,7 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx context.Context, rv RootVa
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          WorkflowsCreatedAtColName,
+			Name:          doltdb.WorkflowsCreatedAtColName,
 			Tag:           schema.WorkflowsCreatedAtTag,
 			Kind:          stypes.TimestampKind,
 			IsPartOfPK:    false,
@@ -62,7 +74,7 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx context.Context, rv RootVa
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          WorkflowsUpdatedAtColName,
+			Name:          doltdb.WorkflowsUpdatedAtColName,
 			Tag:           schema.WorkflowsUpdatedAtTag,
 			Kind:          stypes.TimestampKind,
 			IsPartOfPK:    false,
@@ -76,9 +88,14 @@ func (d *doltCIWorkflowsTableCreator) CreateTable(ctx context.Context, rv RootVa
 
 	newSchema, err := schema.NewSchema(colCollection, nil, schema.Collation_Default, nil, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	return CreateEmptyTable(ctx, rv, TableName{Name: WorkflowsTableName}, newSchema)
+	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowsTableName}, newSchema)
+	if err != nil {
+		return err
+	}
+
+	return dSess.SetWorkingRoot(ctx, dbName, nrv)
 }

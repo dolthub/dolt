@@ -2688,7 +2688,7 @@ func (t *WritableDoltTable) createForeignKey(
 	}
 
 	var tableIndexName, refTableIndexName string
-	tableIndex, ok, err := doltdb.FindIndexWithPrefix(t.sch, sqlFk.Columns)
+	tableIndex, ok, err := FindIndexWithPrefix(t.sch, sqlFk.Columns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -2696,7 +2696,7 @@ func (t *WritableDoltTable) createForeignKey(
 	if ok {
 		tableIndexName = tableIndex.Name()
 	}
-	refTableIndex, ok, err := doltdb.FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
+	refTableIndex, ok, err := FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -2753,11 +2753,11 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
 
-	onUpdateRefAction, err := doltdb.ParseFkReferentialAction(sqlFk.OnUpdate)
+	onUpdateRefAction, err := ParseFkReferentialAction(sqlFk.OnUpdate)
 	if err != nil {
 		return err
 	}
-	onDeleteRefAction, err := doltdb.ParseFkReferentialAction(sqlFk.OnDelete)
+	onDeleteRefAction, err := ParseFkReferentialAction(sqlFk.OnDelete)
 	if err != nil {
 		return err
 	}
@@ -3019,7 +3019,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 			col, _ := oldIdx.GetColumn(colTag)
 			fkParentCols[i] = col.Name
 		}
-		newIdx, ok, err := doltdb.FindIndexWithPrefix(t.sch, fkParentCols)
+		newIdx, ok, err := FindIndexWithPrefix(t.sch, fkParentCols)
 		if err != nil {
 			return nil, nil, err
 		}
