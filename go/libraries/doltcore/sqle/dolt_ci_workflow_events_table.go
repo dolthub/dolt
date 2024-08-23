@@ -39,22 +39,19 @@ func NewDoltCIWorkflowEventsTableCreator() *doltCIWorkflowEventsTableCreator {
 func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
-
 	ws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	startHash, err := ws.HashOf()
+	root := ws.WorkingRoot()
+	startHash, err := root.HashOf()
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(color.Output, "workflow events WorkingSet.WorkingRoot.HashOf() start: %s\n", startHash)
 
-	fmt.Fprintf(color.Output, "workflow events working set hash at start: %s\n", startHash)
-
-	roots, _ := dSess.GetRoots(ctx, dbName)
-
-	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
+	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
 	if err != nil {
 		return err
 	}
@@ -104,7 +101,7 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	nrv, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, sch)
+	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, sch)
 	if err != nil {
 		return err
 	}
@@ -187,38 +184,17 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 		return err
 	}
 
-	//newWorkingSetRef := newWorkingSet.Ref()
-	//ddb, exists := dSess.GetDoltDB(ctx, dbName)
-	//if !exists {
-	//	return fmt.Errorf("database not found in database %s", dbName)
-	//}
-
-	////oldHash, err := newWorkingSet.HashOf()
-	////if err != nil {
-	////	return err
-	////}
-	//
-	//oldHash, err := dbState.WorkingSet().HashOf()
-	//if err != nil {
-	//	return err
-	//}
-
-	//err = ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, startHash, doltdb.TodoWorkingSetMeta(), nil)
-	//if err != nil {
-	//	return err
-	//}
-
 	nws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	endHash, err := nws.HashOf()
+	newRoot := nws.WorkingRoot()
+	endHash, err := newRoot.HashOf()
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(color.Output, "workflow events working set hash at end: %s\n", endHash)
+	fmt.Fprintf(color.Output, "workflow events WorkingSet.WorkingRoot.HashOf() end: %s\n", endHash)
 	return nil
-
 }

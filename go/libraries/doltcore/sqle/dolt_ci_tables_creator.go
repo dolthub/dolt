@@ -15,8 +15,10 @@
 package sqle
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"fmt"
+"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -45,31 +47,38 @@ func (d doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		return err
 	}
 
-	//dbName := ctx.GetCurrentDatabase()
-	//dSess := dsess.DSessFromSess(ctx.Session)
-
-	//dbState, ok, err := dSess.LookupDbState(ctx, dbName)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//if !ok {
-	//	return fmt.Errorf("database %s not found in database state", dbName)
-	//}
-
-	//originalWorkingSetHash, err := dbState.WorkingSet().HashOf()
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//fmt.Fprintf(color.Output, "original working set hash: %s\n", originalWorkingSetHash)
-
+	// TOD0: maybe CreateTable(...) should take in old RootVal and return new RootVal?
 	err := d.workflowsTC.CreateTable(ctx)
 	if err != nil {
 		return err
 	}
 
-	return d.workflowEventsTC.CreateTable(ctx)
+	err = d.workflowEventsTC.CreateTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	// update doltdb workingset exactly once
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
+	if err != nil {
+		return err
+	}
+	ddb, exists := dSess.GetDoltDB(ctx, dbName)
+	if !exists {
+		return fmt.Errorf("database not found in database %s", dbName)
+	}
+	err = ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, wsHash, doltdb.TodoWorkingSetMeta(), nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var _ DoltCITablesCreator = &doltCITablesCreator{}
