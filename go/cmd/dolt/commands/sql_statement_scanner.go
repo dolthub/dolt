@@ -77,7 +77,6 @@ func (s *streamScanner) Scan() bool {
 	// truncate last query
 	s.truncate()
 	s.resetState()
-	s.state.statementStartLine = s.lineNum + 1
 
 	if s.i >= s.fill {
 		// initialize buffer
@@ -105,6 +104,8 @@ func (s *streamScanner) Scan() bool {
 		}
 	}
 	s.truncate()
+
+	s.state.statementStartLine = s.lineNum + 1
 
 	if err, ok := s.isDelimiterExpr(); err != nil {
 		s.err = err

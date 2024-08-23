@@ -185,6 +185,7 @@ insert into foo values (1,2,3)|`,
 				"",
 				"insert into foo values (1,2,3)",
 			},
+			lineNums: []int{1, 2},
 		},
 	}
 
