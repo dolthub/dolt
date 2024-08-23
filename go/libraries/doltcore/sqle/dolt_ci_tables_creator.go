@@ -15,9 +15,11 @@
 package sqle
 
 import (
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 )
 
 type DoltCITablesCreator interface {
@@ -45,12 +47,31 @@ func (d doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		return err
 	}
 
-	err := d.workflowsTC.CreateTable(ctx)
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	return d.workflowEventsTC.CreateTable(ctx)
+	if !ok {
+		return fmt.Errorf("database %s not found in database state", dbName)
+	}
+
+	originalWorkingSetHash, err := dbState.WorkingSet().HashOf()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(color.Output, "original working set hash: %s\n", originalWorkingSetHash)
+
+	err = d.workflowsTC.CreateTable(ctx, originalWorkingSetHash)
+	if err != nil {
+		return err
+	}
+
+	return d.workflowEventsTC.CreateTable(ctx, originalWorkingSetHash)
 }
 
 var _ DoltCITablesCreator = &doltCITablesCreator{}

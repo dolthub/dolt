@@ -15,9 +15,10 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type DoltCITableCreator interface {
-	CreateTable(ctx *sql.Context) error
+	CreateTable(ctx *sql.Context, originalHash hash.Hash) error
 }

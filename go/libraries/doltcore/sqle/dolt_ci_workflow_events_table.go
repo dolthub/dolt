@@ -22,8 +22,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 )
 
 type doltCIWorkflowEventsTableCreator struct {
@@ -35,7 +37,7 @@ func NewDoltCIWorkflowEventsTableCreator() *doltCIWorkflowEventsTableCreator {
 	return &doltCIWorkflowEventsTableCreator{}
 }
 
-func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
+func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context, originalHash hash.Hash) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -188,15 +190,17 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 		return fmt.Errorf("database not found in database %s", dbName)
 	}
 
-	//oldHash, err := newWorkingSet.HashOf()
+	////oldHash, err := newWorkingSet.HashOf()
+	////if err != nil {
+	////	return err
+	////}
+	//
+	//oldHash, err := dbState.WorkingSet().HashOf()
 	//if err != nil {
 	//	return err
 	//}
 
-	oldHash, err := dbState.WorkingSet().HashOf()
-	if err != nil {
-		return err
-	}
+	fmt.Fprintf(color.Output, "original hash create events: %s\n", originalHash)
 
-	return ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, oldHash, doltdb.TodoWorkingSetMeta(), nil)
+	return ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, originalHash, doltdb.TodoWorkingSetMeta(), nil)
 }
