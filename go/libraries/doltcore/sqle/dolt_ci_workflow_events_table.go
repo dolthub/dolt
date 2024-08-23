@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
@@ -37,18 +36,21 @@ func NewDoltCIWorkflowEventsTableCreator() *doltCIWorkflowEventsTableCreator {
 	return &doltCIWorkflowEventsTableCreator{}
 }
 
-func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context, originalHash hash.Hash) error {
+func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	ws, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	if !ok {
-		return fmt.Errorf("no root value found in session")
+	startHash, err := ws.HashOf()
+	if err != nil {
+		return err
 	}
+
+	fmt.Fprintf(color.Output, "workflow events working set hash at start: %s\n", startHash)
 
 	roots, _ := dSess.GetRoots(ctx, dbName)
 
@@ -173,7 +175,8 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context, origina
 		return err
 	}
 
-	newWorkingSet := dbState.WorkingSet().WithWorkingRoot(nrv)
+	//newWorkingSet := dbState.WorkingSet().WithWorkingRoot(nrv)
+	newWorkingSet := ws.WithWorkingRoot(nrv)
 	err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
 	if err != nil {
 		return err
@@ -200,7 +203,22 @@ func (d *doltCIWorkflowEventsTableCreator) CreateTable(ctx *sql.Context, origina
 	//	return err
 	//}
 
-	fmt.Fprintf(color.Output, "original hash create events: %s\n", originalHash)
+	err = ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, startHash, doltdb.TodoWorkingSetMeta(), nil)
+	if err != nil {
+		return err
+	}
 
-	return ddb.UpdateWorkingSet(ctx, newWorkingSetRef, newWorkingSet, originalHash, doltdb.TodoWorkingSetMeta(), nil)
+	nws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	endHash, err := nws.HashOf()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(color.Output, "workflow events working set hash at end: %s\n", endHash)
+	return nil
+
 }
