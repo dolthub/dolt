@@ -44,6 +44,10 @@ const delimPrefixLen = 10
 
 var delimPrefix = []byte("delimiter ")
 
+// streamScanner is an iterator that reads bytes from |inp| until either
+// (1) we match a DELIMITER statement, (2) we match the |delimiter| token,
+// or (3) we EOF the file. After each Scan() call, the valid token will
+// span from the buffer beginning to |state.end|.
 type streamScanner struct {
 	inp       io.Reader
 	buf       []byte
@@ -62,8 +66,7 @@ func newStreamScanner(r io.Reader) *streamScanner {
 }
 
 type qState struct {
-	end                            int // token end, usually i - len(delimiter)
-	checkedDelim                   bool
+	end                            int  // token end, usually i - len(delimiter)
 	quoteChar                      byte // the opening quote character of the current quote being parsed, or 0 if the current parse location isn't inside a quoted string
 	lastChar                       byte // the last character parsed
 	ignoreNextChar                 bool // whether to ignore the next character
@@ -127,8 +130,8 @@ func (s *streamScanner) Scan() bool {
 			s.state.end = s.fill
 			return true
 		}
+		// haven't found delimiter yet, keep reading
 		if err := s.read(); err != nil {
-			// haven't found delimiter yet, keep reading
 			s.err = err
 			return false
 		}
@@ -194,8 +197,6 @@ func (s *streamScanner) isDelimiterExpr() (error, bool) {
 
 	// valid delimiter state machine check
 	//  "DELIMITER " -> 0+ spaces -> <delimiter string> -> 1 space
-	s.state.checkedDelim = true
-
 	if s.fill-s.i >= delimPrefixLen && bytes.EqualFold(s.buf[s.i:s.i+delimPrefixLen], delimPrefix) {
 		delimTokenIdx := s.i
 		s.i += delimPrefixLen
