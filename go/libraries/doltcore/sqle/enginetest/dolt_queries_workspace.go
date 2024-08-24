@@ -733,4 +733,107 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_workspace_* keyless tables",
+		SetUpScript: []string{
+			"create table tbl (val int);",
+			"insert into tbl values (42);",
+			"insert into tbl values (42);",
+			"insert into tbl values (42);",
+			"insert into tbl values (51);",
+			"insert into tbl values (51);",
+			"call dolt_commit('-Am', 'creating table tbl')",
+			"update tbl set val=51 where val=42 limit 1",
+			"call dolt_add('tbl')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 51, nil},
+					{1, true, "removed", nil, 42},
+				},
+			},
+			{
+				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
+				Expected: []sql.Row{
+					{42, 2},
+					{51, 3},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where id = 0",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 42},
+					{1, false, "added", 51, nil},
+				},
+			},
+			{
+				Query: "update tbl set val=23",
+			},
+			{
+				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
+				Expected: []sql.Row{
+					{42, 2},
+					{51, 2},
+				},
+			},
+			{
+				Query: "select val, count(*) as num from tbl AS OF WORKING group by val order by val",
+				Expected: []sql.Row{
+					{23, 5},
+				},
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 42},
+					{1, false, "added", 23, nil},
+					{2, false, "added", 23, nil},
+					{3, false, "added", 23, nil},
+					{4, false, "added", 23, nil},
+					{5, false, "added", 23, nil},
+					{6, false, "removed", nil, 51},
+					{7, false, "removed", nil, 51},
+					{8, false, "removed", nil, 42},
+					{9, false, "removed", nil, 42},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = true where id % 2 = 0",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 23, nil},
+					{1, true, "added", 23, nil},
+					{2, true, "removed", nil, 51},
+					{3, true, "removed", nil, 42},
+					{4, true, "removed", nil, 42},
+					{5, false, "added", 23, nil},
+					{6, false, "added", 23, nil},
+					{7, false, "added", 23, nil},
+					{8, false, "removed", nil, 51},
+					{9, false, "removed", nil, 42},
+				},
+			},
+			{
+				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
+				Expected: []sql.Row{
+					{23, 2},
+					{42, 1},
+					{51, 1},
+				},
+			},
+			{
+				Query: "select val, count(*) as num from tbl AS OF WORKING group by val order by val",
+				Expected: []sql.Row{
+					{23, 5},
+				},
+			},
+		},
+	},
 }
