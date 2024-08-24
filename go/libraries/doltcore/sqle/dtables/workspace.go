@@ -130,18 +130,24 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		panic("row is nil")
 	}
 
-	if !validateUpdate(old, new) {
+	valid, isStaged := validateWorkspaceUpdate(old, new)
+	if !valid {
 		return errors.New("only update of column 'staged' is allowed")
 	}
-	// old and new are the same. Just use one.
-	new = nil
 
 	// We could do this up front once. NM4. Also - not always the same schema??
 	schemaLen := wtu.headSch.GetAllCols().Size()
 
-	// loop over toRow, and if it's all nil, it's a delete. NM4 - is there a better way to pass through the diff type?
+	// old and new are the same. Just use one.
+	new = nil
+
 	toRow := old[3 : 3+schemaLen]
 	fromRow := old[3+schemaLen : len(old)]
+	if !isStaged {
+		toRow, fromRow = fromRow, toRow
+	}
+
+	// loop over toRow, and if it's all nil, it's a delete. NM4 - is there a better way to pass through the diff type?
 	isDelete := true
 	for _, val := range toRow {
 		if val != nil {
@@ -159,29 +165,46 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 	}
 }
 
-// validateUpdate returns true IFF old and new row are identical - except the "staged" column. Updating that
-// column to TRUE or FALSE is the only update allowed, and any other update will result in returning an false.
-func validateUpdate(old, new sql.Row) bool {
+// NM4 - is there a better way?
+func isTrue(value interface{}) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case int8:
+		return v != 0
+	default:
+		return false
+	}
+}
+
+// validateWorkspaceUpdate returns true IFF old and new row are identical - except the "staged" column. Updating that
+// column to TRUE or FALSE is the only update allowed, and any other update will result in 'valid' being false. If
+// valid is true, then 'staged' will be the value in the "staged" column of the new row.
+func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
 	// NM4 - I think it's impossible to have equal rows, but we should rule that out.
 	if old == nil {
-		return false
+		return false, false
 	}
 
 	if len(old) != len(new) {
-		return false
+		return false, false
 	}
 
-	for i := range old {
+	isStaged := false
+
+	for i := range new {
 		if i == 1 {
+			// NM4 - not required in the iterator, right?
+			isStaged = isTrue(new[i])
 			// skip the "staged" column. NM4 - is there a way to not use a constant index here?
 			continue
 		}
 
 		if old[i] != new[i] {
-			return false
+			return false, false
 		}
 	}
-	return true
+	return true, isStaged
 }
 
 func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {

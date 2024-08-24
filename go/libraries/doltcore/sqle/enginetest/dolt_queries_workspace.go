@@ -530,4 +530,207 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_workspace_* modifies downgrade from staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, v char(36));",
+			"insert into tbl values (42, UUID());",
+			"insert into tbl values (23, UUID());",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"update tbl set v = UUID();",
+			"call dolt_add('tbl')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 23},
+					{1, true, "modified", 42},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where id = 0",
+			},
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 42},
+					{1, false, "modified", 23},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 0 where staged = TRUE",
+			},
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 23},
+					{1, false, "modified", 42},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* inserts downgrade from staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, v char(36));",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"insert into tbl values (42, UUID());",
+			"insert into tbl values (23, UUID());",
+			"call dolt_add('tbl')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 23},
+					{1, true, "added", 42},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where id = 0",
+			},
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 42},
+					{1, false, "added", 23},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 0 where staged = TRUE",
+			},
+			{
+				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 23},
+					{1, false, "added", 42},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* deletes downgrade from staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, v char(36));",
+			"insert into tbl values (42, UUID());",
+			"insert into tbl values (23, UUID());",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"delete from tbl",
+			"call dolt_add('tbl')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", 23, nil},
+					{1, true, "removed", 42, nil},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where from_pk = 23",
+			},
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", 42, nil},
+					{1, false, "removed", 23, nil},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = FALSE", // Unstage everything.
+			},
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "removed", 23, nil},
+					{1, false, "removed", 42, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* complicated mixed updates",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, v char(36));",
+			"insert into tbl values (42, UUID());",
+			"insert into tbl values (23, UUID());",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"update tbl set v = UUID() where pk = 42;",
+			"delete from tbl where pk = 23;",
+			"call dolt_add('tbl')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", 23, nil},
+					{1, true, "modified", 42, 42},
+				},
+			},
+			{
+				Query: "update tbl set v = UUID() where pk = 42",
+			},
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", 23, nil},
+					{1, true, "modified", 42, 42},
+					{2, false, "modified", 42, 42},
+				},
+			},
+			{
+				Query: "insert into tbl values (23, UUID())",
+			},
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", 23, nil},
+					{1, true, "modified", 42, 42},
+					{2, false, "added", nil, 23},
+					{3, false, "modified", 42, 42},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 1 where id = 2",
+			},
+			{
+				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 23, 23},
+					{1, true, "modified", 42, 42},
+					{2, false, "modified", 42, 42},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* downgrades keep working changes",
+		SetUpScript: []string{
+			`create table tbl (pk int primary key, v varchar(20))`,
+			`insert into tbl values (42, "inserted")`,
+			`call dolt_commit('-Am', 'creating table tbl')`,
+			`update tbl set v = "staged"`,
+			`call dolt_add('tbl')`,
+			`update tbl set v = "working"`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 42, "staged", 42, "inserted"},
+					{1, false, "modified", 42, "working", 42, "staged"},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where id = 0",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 42, "working", 42, "inserted"},
+				},
+			},
+		},
+	},
 }
