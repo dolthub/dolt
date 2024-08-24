@@ -20,7 +20,6 @@ import (
 )
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
-
 	{
 		Name: "dolt_workspace_* multiple edits of a single row",
 		SetUpScript: []string{
@@ -330,7 +329,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 						{1, false, "modified", 42, 59, nil, nil, 42, 42}, //
 					},
 				},
-			*/
+			*/ // NM4 reinstate: * /
 		},
 	},
 	{
@@ -347,6 +346,188 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "only update of column 'staged' is allowed",
 			},
 		},
-		// NM4 - new a test for deleting a row. Maybe? How about adding to the table??
+	},
+	{
+		Name: "dolt_workspace_* modifies promote to staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, x int, y int);",
+			"insert into tbl values (41,42,43);",
+			"insert into tbl values (50,51,52);",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"update tbl set x=23",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 41, 23, 43, 41, 42, 43},
+					{1, false, "modified", 50, 23, 52, 50, 51, 52},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = true where to_pk = 41;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 41, 23, 43, 41, 42, 43},
+					{1, false, "modified", 50, 23, 52, 50, 51, 52},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 1 where staged = 0;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 41, 23, 43, 41, 42, 43},
+					{1, true, "modified", 50, 23, 52, 50, 51, 52},
+				},
+			},
+			{
+				Query: "update tbl set y=81",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 41, 23, 43, 41, 42, 43},
+					{1, true, "modified", 50, 23, 52, 50, 51, 52},
+					{2, false, "modified", 41, 23, 81, 41, 23, 43},
+					{3, false, "modified", 50, 23, 81, 50, 23, 52},
+				},
+			},
+			{
+				// add everything.
+				Query: "update dolt_workspace_tbl set staged = 1",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "modified", 41, 23, 81, 41, 42, 43},
+					{1, true, "modified", 50, 23, 81, 50, 51, 52},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* inserts promote to staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, x int, y int);",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"insert into tbl values (41,42,43);",
+			"insert into tbl values (50,51,52);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 41, 42, 43, nil, nil, nil},
+					{1, false, "added", 50, 51, 52, nil, nil, nil},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = true where to_pk = 41;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 41, 42, 43, nil, nil, nil},
+					{1, false, "added", 50, 51, 52, nil, nil, nil},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 1 where staged = 0;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 41, 42, 43, nil, nil, nil},
+					{1, true, "added", 50, 51, 52, nil, nil, nil},
+				},
+			},
+			{
+				Query: "update tbl set x=81",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 41, 42, 43, nil, nil, nil},
+					{1, true, "added", 50, 51, 52, nil, nil, nil},
+					{2, false, "modified", 41, 81, 43, 41, 42, 43},
+					{3, false, "modified", 50, 81, 52, 50, 51, 52},
+				},
+			},
+			{
+				// add everything.
+				Query: "update dolt_workspace_tbl set staged = 1",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 41, 81, 43, nil, nil, nil},
+					{1, true, "added", 50, 81, 52, nil, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* deletes promote to staging",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key);",
+			"insert into tbl values (41);",
+			"insert into tbl values (50);",
+			"call dolt_commit('-Am', 'creating table tbl');",
+			"delete from tbl",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "removed", nil, 41},
+					{1, false, "removed", nil, 50},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = true where id = 0;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 41},
+					{1, false, "removed", nil, 50},
+				},
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = 1 where staged = 0;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 41},
+					{1, true, "removed", nil, 50},
+				},
+			},
+			{
+				Query: "insert into tbl values (41);",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 41},
+					{1, true, "removed", nil, 50},
+					{2, false, "added", 41, nil},
+				},
+			},
+			{
+				// add everything. Insert of 41 should negate the staged remove.
+				Query: "update dolt_workspace_tbl set staged = 1",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "removed", nil, 50},
+				},
+			},
+		},
 	},
 }

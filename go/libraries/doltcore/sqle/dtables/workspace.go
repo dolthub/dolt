@@ -57,39 +57,67 @@ type WorkspaceTable struct {
 }
 
 type WorkspaceTableUpdater struct {
-	ws   *doltdb.WorkingSet
-	head doltdb.RootValue
+	tableName string
+	ws        *doltdb.WorkingSet
+	head      doltdb.RootValue
 
 	headSch schema.Schema // We probably need three. NM4.
 
 	headTable *doltdb.Table
 	stgTable  *doltdb.Table
 	wrkTable  *doltdb.Table
+
+	tableWriter   *dsess.TableWriter
+	sessionWriter *dsess.WriteSession
 }
 
 func (wtu *WorkspaceTableUpdater) StatementBegin(ctx *sql.Context) {
-	_ = ctx
+	sessionWriter, tableWriter, err := wtu.getWorkspaceTableWriter(ctx)
+	if err != nil {
+		panic(err) // NM4.
+	}
+	wtu.tableWriter = &tableWriter
+	wtu.sessionWriter = &sessionWriter
+
 }
 
 func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	_ = ctx
-	return nil
+	return errorEncountered
 }
 
 func (wtu *WorkspaceTableUpdater) StatementComplete(ctx *sql.Context) error {
-	_ = ctx
+	if wtu.tableWriter != nil {
+		err := (*wtu.tableWriter).Close(ctx)
+		if err != nil {
+			return err
+		}
+		wtu.tableWriter = nil
+	}
+
+	if wtu.sessionWriter != nil {
+		newWorkingSet, err := (*wtu.sessionWriter).Flush(ctx)
+		if err != nil {
+			return err
+		}
+		wtu.sessionWriter = nil
+
+		ds := dsess.DSessFromSess(ctx.Session)
+		err = ds.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-func (wtu *WorkspaceTableUpdater) getWorkspaceTableWriter(ctx *sql.Context /*, tableName, databaseName string, foreignKeyChecksDisabled bool */) (dsess.WriteSession, dsess.TableWriter, error) {
-
+func (wtu *WorkspaceTableUpdater) getWorkspaceTableWriter(ctx *sql.Context) (dsess.WriteSession, dsess.TableWriter, error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetStagingRoot
-	//	setter = ds.SetWorkingRoot
 
 	writeSession := writer.NewWriteSession(types.Format_DOLT, wtu.ws, nil, editor.Options{TargetStaging: true})
 
-	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: "tbl"}, "db8", setter, true)
+	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: wtu.tableName}, ctx.GetCurrentDatabase(), setter, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,46 +129,34 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 	if old == nil || new == nil {
 		panic("row is nil")
 	}
+
 	if !validateUpdate(old, new) {
 		return errors.New("only update of column 'staged' is allowed")
 	}
+	// old and new are the same. Just use one.
+	new = nil
 
-	sessionWriter, tableWriter, err := wtu.getWorkspaceTableWriter(ctx)
-	if err != nil {
-		return err
-	}
-	_ = sessionWriter
+	// We could do this up front once. NM4. Also - not always the same schema??
+	schemaLen := wtu.headSch.GetAllCols().Size()
 
-	fromRow := make(sql.Row, 0, 10)
-	fromRow = append(fromRow, old[5])
-	fromRow = append(fromRow, old[6])
-
-	toRow := make(sql.Row, 0, 10)
-	toRow = append(toRow, old[3])
-	toRow = append(toRow, old[4])
-
-	err = tableWriter.Update(ctx, fromRow, toRow)
-	if err != nil {
-		return err
-	}
-	/*
-		newWorkingSet, err := sessionWriter.Flush(ctx)
-		if err != nil {
-			return err
+	// loop over toRow, and if it's all nil, it's a delete. NM4 - is there a better way to pass through the diff type?
+	toRow := old[3 : 3+schemaLen]
+	fromRow := old[3+schemaLen : len(old)]
+	isDelete := true
+	for _, val := range toRow {
+		if val != nil {
+			isDelete = false
+			break
 		}
-
-		ds := dsess.DSessFromSess(ctx.Session)
-		err = ds.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
-		if err != nil {
-			return err
-		}
-	*/
-	err = tableWriter.Close(ctx)
-	if err != nil {
-		return err
 	}
 
-	return nil
+	// NM4 - check nil???
+	tableWriter := (*wtu.tableWriter)
+	if isDelete {
+		return tableWriter.Delete(ctx, fromRow)
+	} else {
+		return tableWriter.Update(ctx, fromRow, toRow)
+	}
 }
 
 // validateUpdate returns true IFF old and new row are identical - except the "staged" column. Updating that
@@ -181,7 +197,8 @@ func (wt *WorkspaceTable) Deleter(c *sql.Context) sql.RowDeleter {
 
 func (wt *WorkspaceTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	return &WorkspaceTableUpdater{
-		headSch: wt.headSchema,
+		tableName: wt.tableName,
+		headSch:   wt.headSchema,
 		/*
 			headTable: wt.headTable,
 			stgTable:  wt.stgTable,
