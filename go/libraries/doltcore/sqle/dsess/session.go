@@ -952,6 +952,8 @@ func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot do
 	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithWorkingRoot(newRoot))
 }
 
+// SetStagingRoot sets the staging root for the session's current database. This is useful when editing the staged
+// table without messing with the HEAD or working trees.
 func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
 	branchState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
