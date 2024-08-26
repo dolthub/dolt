@@ -278,6 +278,9 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 // valid returns whether the source and destination key types
 // are type compatible
 func (m *lookupMapping) valid() bool {
+	if m == nil {
+		return false
+	}
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
