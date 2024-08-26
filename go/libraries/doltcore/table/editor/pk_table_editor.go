@@ -95,7 +95,7 @@ type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 	Deaf                     DbEaFactory
 	Tempdir                  string
-	
+
 	// TargetStaging is true if the table is being edited in the staging root, as opposed to the working root (rare).
 	TargetStaging bool
 }
