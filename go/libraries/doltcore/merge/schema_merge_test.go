@@ -1882,7 +1882,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
-	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), doltdb.TableName{Name: tbl.ns.name}, "test", noop, false)
 	require.NoError(t, err)
 
 	sctx := sql.NewEmptyContext()
