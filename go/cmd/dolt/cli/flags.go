@@ -65,6 +65,7 @@ const (
 	SetUpstreamFlag      = "set-upstream"
 	ShallowFlag          = "shallow"
 	ShowIgnoredFlag      = "ignored"
+	SignFlag             = "gpg-sign"
 	SilentFlag           = "silent"
 	SingleBranchFlag     = "single-branch"
 	SkipEmptyFlag        = "skip-empty"

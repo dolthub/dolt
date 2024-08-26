@@ -17,6 +17,9 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -152,7 +155,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
+	csp := actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -161,7 +164,22 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
-	})
+	}
+
+	signature := ""
+	if apr.Contains(cli.SignFlag) || strings.ToUpper(cliCtx.Config().GetStringOrDefault(config.SignCommitsKey, "FALSE")) == "TRUE" {
+		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
+		if err != nil {
+			return "", false, err
+		}
+
+		signature, err = gpgSign([]byte(strToSign))
+		if err != nil {
+			return "", false, err
+		}
+	}
+
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp, signature)
 	if err != nil {
 		return "", false, err
 	}
@@ -205,4 +223,32 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
+}
+
+func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp actions.CommitStagedProps) (string, error) {
+	var lines []string
+	lines = append(lines, fmt.Sprint("db: ", dbName))
+	lines = append(lines, fmt.Sprint("Message: ", csp.Message))
+	lines = append(lines, fmt.Sprint("Name: ", csp.Name))
+	lines = append(lines, fmt.Sprint("Email: ", csp.Email))
+	lines = append(lines, fmt.Sprint("Date: ", csp.Date.String()))
+
+	head, err := roots.Head.HashOf()
+	if err != nil {
+		return "", err
+	}
+
+	staged, err := roots.Staged.HashOf()
+	if err != nil {
+		return "", err
+	}
+
+	lines = append(lines, fmt.Sprint("Head: ", head.String()))
+	lines = append(lines, fmt.Sprint("Staged: ", staged.String()))
+
+	return strings.Join(lines, "\n"), nil
+}
+
+func gpgSign(toSign []byte) (string, error) {
+	return "", nil
 }

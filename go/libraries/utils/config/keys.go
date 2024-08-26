@@ -64,3 +64,7 @@ const PushAutoSetupRemote = "push.autosetupremote"
 const ProfileKey = "profile"
 
 const VersionCheckDisabled = "versioncheck.disabled"
+
+const SignCommitsKey = "commit.gpgsign"
+
+const GPGSigningKeyKey = "user.signingkey"

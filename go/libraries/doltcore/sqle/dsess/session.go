@@ -661,13 +661,13 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, branchState *bran
 		return nil, err
 	}
 
-	return d.newPendingCommit(ctx, branchState, roots, props)
+	return d.newPendingCommit(ctx, branchState, roots, props, "")
 }
 
 // NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
 // merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
 // but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
-func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps, signature string) (*doltdb.PendingCommit, error) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
@@ -676,12 +676,12 @@ func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots do
 		return nil, fmt.Errorf("session state for database %s not found", dbName)
 	}
 
-	return d.newPendingCommit(ctx, branchState, roots, props)
+	return d.newPendingCommit(ctx, branchState, roots, props, signature)
 }
 
 // newPendingCommit returns a new |doltdb.PendingCommit| for the database and head named by |branchState|
 // See NewPendingCommit
-func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps, signature string) (*doltdb.PendingCommit, error) {
 	headCommit := branchState.headCommit
 	headHash, _ := headCommit.HashOf()
 

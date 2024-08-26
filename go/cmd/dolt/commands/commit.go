@@ -268,6 +268,17 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("--skip-empty")
 	}
 
+	if apr.Contains(cli.SignFlag) {
+		writeToBuffer("--gpg-sign")
+
+		gpgKey := apr.GetValueOrDefault(cli.SignFlag, "")
+		if gpgKey != "" {
+			param = true
+			writeToBuffer("?")
+			params = append(params, gpgKey)
+		}
+	}
+
 	buffer.WriteString(")")
 	return buffer.String(), params, nil
 }

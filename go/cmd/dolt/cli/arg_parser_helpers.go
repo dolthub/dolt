@@ -68,7 +68,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
-	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
+	ap.SupportsOptionalString(SignFlag, "S", "key-id", "Sign the commit using GPG. If no key-id is provided the key-id is taken from 'user.signingkey' the in the configuration")
 	return ap
 }
 
