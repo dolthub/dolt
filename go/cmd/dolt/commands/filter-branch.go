@@ -282,7 +282,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		return nil, err
 	}
 
-	scanner := NewSqlStatementScanner(strings.NewReader(query))
+	scanner := newStreamScanner(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}

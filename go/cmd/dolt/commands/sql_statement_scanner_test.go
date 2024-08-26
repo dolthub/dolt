@@ -178,20 +178,29 @@ primary key (a))`,
 				1, 2, 6,
 			},
 		},
+		{
+			input: `DELIMITER |
+insert into foo values (1,2,3)|`,
+			statements: []string{
+				"",
+				"insert into foo values (1,2,3)",
+			},
+			lineNums: []int{1, 2},
+		},
 	}
 
 	for _, tt := range testcases {
 		t.Run(tt.input, func(t *testing.T) {
 			reader := strings.NewReader(tt.input)
-			scanner := NewSqlStatementScanner(reader)
+			scanner := newStreamScanner(reader)
 			var i int
 			for scanner.Scan() {
 				require.True(t, i < len(tt.statements))
 				assert.Equal(t, tt.statements[i], strings.TrimSpace(scanner.Text()))
 				if tt.lineNums != nil {
-					assert.Equal(t, tt.lineNums[i], scanner.statementStartLine)
+					assert.Equal(t, tt.lineNums[i], scanner.state.statementStartLine)
 				} else {
-					assert.Equal(t, 1, scanner.statementStartLine)
+					assert.Equal(t, 1, scanner.state.statementStartLine)
 				}
 				i++
 			}
