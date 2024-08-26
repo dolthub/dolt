@@ -69,7 +69,7 @@ type WorkspaceTableModifier struct {
 	ws        *doltdb.WorkingSet
 	head      doltdb.RootValue
 
-	headSch   schema.Schema // We probably need three. NM4.
+	headSch   schema.Schema
 	schemaLen int
 
 	// tableWriter and sessionWriter are only set during StatementBegin
@@ -166,7 +166,7 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		toRow, fromRow = fromRow, toRow
 	}
 
-	// loop over toRow, and if it's all nil, it's a delete. NM4 - is there a better way to pass through the diff type?
+	// It's a delete if all the values in toRow are nil.
 	isDelete := true
 	for _, val := range toRow {
 		if val != nil {
@@ -188,7 +188,8 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 }
 
 func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
-	return nil // NM4 - not sure. Should return error? Look for examples.
+	// Resources released in StatementComplete
+	return nil
 }
 
 func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
@@ -262,7 +263,8 @@ func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
 }
 
 func (wtd *WorkspaceTableDeleter) Close(c *sql.Context) error {
-	return nil // NM4 - not sure.
+	// Resources released in StatementComplete
+	return nil
 }
 
 func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
@@ -288,7 +290,7 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 	return writeSession, tableWriter, nil
 }
 
-// NM4 - is there a better way?
+// isTrue returns true if the value is a boolean true, or an int8 value of != 0. Otherwise, it returns false.
 func isTrue(value interface{}) bool {
 	switch v := value.(type) {
 	case bool:
@@ -304,22 +306,17 @@ func isTrue(value interface{}) bool {
 // column to TRUE or FALSE is the only update allowed, and any other update will result in 'valid' being false. If
 // valid is true, then 'staged' will be the value in the "staged" column of the new row.
 func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
-	// NM4 - I think it's impossible to have equal rows, but we should rule that out.
-	if old == nil {
-		return false, false
-	}
-
 	if len(old) != len(new) {
 		return false, false
 	}
 
 	isStaged := false
 
+	// Verify there are no changes in the columns other than the "staged" column.
 	for i := range new {
-		if i == 1 {
-			// NM4 - not required in the iterator, right?
-			isStaged = isTrue(new[i])
-			// skip the "staged" column. NM4 - is there a way to not use a constant index here?
+		if i == stagedColumnIdx {
+			isStaged = isTrue(new[stagedColumnIdx])
+			// skip the "staged" column.
 			continue
 		}
 
