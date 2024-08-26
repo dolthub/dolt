@@ -410,7 +410,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 		userTable := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
 
-		dt, err := dtables.NewWorkspaceTable(ctx, userTable, head, ws)
+		dt, err := dtables.NewWorkspaceTable(ctx, tblName, userTable, head, ws)
 		if err != nil {
 			return nil, false, err
 		}

@@ -329,7 +329,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 						{1, false, "modified", 42, 59, nil, nil, 42, 42}, //
 					},
 				},
-			*/ // NM4 reinstate: * /
+			*/
 		},
 	},
 	{
@@ -832,6 +832,131 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				Query: "select val, count(*) as num from tbl AS OF WORKING group by val order by val",
 				Expected: []sql.Row{
 					{23, 5},
+				},
+			},
+		},
+	},
+
+	{
+		Name: "dolt_workspace_* delete forbidden on staged rows",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into tbl values (42,42);",
+			"insert into tbl values (43,43);",
+			"call dolt_add('tbl');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 42, 42, nil, nil},
+					{1, true, "added", 43, 43, nil, nil},
+				},
+			},
+			{
+				Query:          "delete from dolt_workspace_tbl where id = 0;",
+				ExpectedErrStr: "cannot delete staged rows from workspace",
+			},
+			{
+				Query: "update dolt_workspace_tbl set staged = false where to_pk = 42;",
+			},
+			{
+				Query: "delete from dolt_workspace_tbl where to_pk = 42;",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, true, "added", 43, 43, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* delete from workspace to restore deleted row",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"insert into tbl values (42,42)",
+			"insert into tbl values (43,43)",
+			"call dolt_add('tbl');",
+			"call dolt_commit('-Am', 'creating table tbl')",
+			"delete from tbl",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "delete from dolt_workspace_tbl where id = 0",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "removed", nil, nil, 43, 43},
+				},
+			},
+			{
+				Query: "select * from tbl",
+				Expected: []sql.Row{
+					{42, 42},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* delete from workspace to remove new row",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"call dolt_commit('-Am', 'creating table tbl')",
+			"insert into tbl values (42,42)",
+			"insert into tbl values (43,43)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "delete from dolt_workspace_tbl where to_pk = 42",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "added", 43, 43, nil, nil},
+				},
+			},
+			{
+				Query: "select * from tbl",
+				Expected: []sql.Row{
+					{43, 43},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* delete from workspace to revert and update",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"insert into tbl values (42,42)",
+			"insert into tbl values (43,43)",
+			"call dolt_commit('-Am', 'creating table tbl')",
+			"update tbl set val=val*2",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 42, 84, 42, 42},
+					{1, false, "modified", 43, 86, 43, 43},
+				},
+			},
+			{
+				Query: "delete from dolt_workspace_tbl where to_pk = 42",
+			},
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 43, 86, 43, 43},
+				},
+			},
+			{
+				Query: "select * from tbl",
+				Expected: []sql.Row{
+					{42, 42}, // 42 is unchanged.
+					{43, 86},
 				},
 			},
 		},
