@@ -30,7 +30,7 @@ func doltTag(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(res), nil
+	return rowToIter(int64(res)), nil
 }
 
 // doDoltTag is used as sql dolt_tag command for only creating or deleting tags, not listing.
