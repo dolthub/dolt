@@ -151,9 +151,13 @@ func (s *streamScanner) resetState() {
 
 func (s *streamScanner) read() error {
 	if s.fill >= s.maxSize {
+		// if script exceeds buffer that's OK, if
+		// a single query exceeds buffer that's not OK
 		if s.state.start == 0 {
 			return fmt.Errorf("exceeded max query size")
 		}
+		// discard previous queries, resulting buffer will start
+		// at the current |start|
 		s.fill -= s.state.start
 		s.i -= s.state.start
 		s.state.end = s.state.start
@@ -161,21 +165,18 @@ func (s *streamScanner) read() error {
 		s.state.start = 0
 		return s.read()
 	}
-	//newFillSize := s.fill + pageSize
 	if s.fill == len(s.buf) {
 		newBufSize := min(len(s.buf)*2, s.maxSize)
 		newBuf := make([]byte, newBufSize)
 		copy(newBuf, s.buf)
 		s.buf = newBuf
 	}
-	// read at most |pageSize| into |s.buf| at index |s.fill|
 	n, err := s.inp.Read(s.buf[s.fill:])
 	if err == io.EOF {
 		s.isEOF = true
 	} else if err != nil {
 		return err
 	}
-	// update fill, to |newFill| in the optimistic case
 	s.fill += n
 	return nil
 }
