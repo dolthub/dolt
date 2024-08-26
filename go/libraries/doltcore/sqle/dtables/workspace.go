@@ -39,6 +39,18 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// The Schema for the dolt_workspace_* table is as follows:
+// id (int primary key)
+// staged (bool)        - Index 1, or 'stagedColumnIdx'
+// diff_type (string)
+// from_value_A (any)
+// from_value_B (any)
+// ....
+// to_value_A (any)
+// to_value_B (any)
+// ....
+const stagedColumnIdx = 1
+
 type WorkspaceTable struct {
 	userTblName string
 	ws          *doltdb.WorkingSet
@@ -57,7 +69,8 @@ type WorkspaceTableModifier struct {
 	ws        *doltdb.WorkingSet
 	head      doltdb.RootValue
 
-	headSch schema.Schema // We probably need three. NM4.
+	headSch   schema.Schema // We probably need three. NM4.
+	schemaLen int
 
 	// tableWriter and sessionWriter are only set during StatementBegin
 	tableWriter   *dsess.TableWriter
@@ -134,7 +147,7 @@ func (wtm *WorkspaceTableModifier) statementComplete(ctx *sql.Context) error {
 
 func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
 	if old == nil || new == nil {
-		panic("row is nil")
+		return fmt.Errorf("Runtime error: expected non-nil inputs to WorkspaceTableUpdater.Update")
 	}
 
 	valid, isStaged := validateWorkspaceUpdate(old, new)
@@ -142,8 +155,7 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		return errors.New("only update of column 'staged' is allowed")
 	}
 
-	// We could do this up front once. NM4. Also - not always the same schema??
-	schemaLen := wtu.headSch.GetAllCols().Size()
+	schemaLen := wtu.schemaLen
 
 	// old and new are the same. Just use one.
 	new = nil
@@ -209,13 +221,12 @@ func (wtd *WorkspaceTableDeleter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
-	isStaged := isTrue(row[1]) // NM4 - better index?
+	isStaged := isTrue(row[stagedColumnIdx])
 	if isStaged {
 		return fmt.Errorf("cannot delete staged rows from workspace")
 	}
 
-	// We could do this up front once. NM4. Also - not always the same schema??
-	schemaLen := wtd.headSch.GetAllCols().Size()
+	schemaLen := wtd.schemaLen
 
 	toRow := row[3 : 3+schemaLen]
 	fromRow := row[3+schemaLen:]
@@ -320,9 +331,11 @@ func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
 }
 
 func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
+	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName: wt.userTblName,
 		headSch:   wt.headSchema,
+		schemaLen: cols,
 		ws:        wt.ws,
 		head:      wt.head,
 	}
@@ -333,9 +346,11 @@ func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
 }
 
 func (wt *WorkspaceTable) Updater(_ *sql.Context) sql.RowUpdater {
+	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
 		tableName: wt.userTblName,
 		headSch:   wt.headSchema,
+		schemaLen: cols,
 		ws:        wt.ws,
 		head:      wt.head,
 	}
