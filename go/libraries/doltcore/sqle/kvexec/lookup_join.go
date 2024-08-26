@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -232,7 +233,10 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 		switch e := e.(type) {
 		case *expression.GetField:
 			// map the schema order index to the physical storage index
-			col := sourceSch.GetAllCols().NameToCol[e.Name()]
+			col, ok := sourceSch.GetAllCols().LowerNameToCol[strings.ToLower(e.Name())]
+			if !ok {
+				return nil
+			}
 			if col.IsPartOfPK {
 				srcMapping[i] = sourceSch.GetPKCols().TagToIdx[col.Tag]
 			} else if keyless {
@@ -274,6 +278,9 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 // valid returns whether the source and destination key types
 // are type compatible
 func (m *lookupMapping) valid() bool {
+	if m == nil {
+		return false
+	}
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
