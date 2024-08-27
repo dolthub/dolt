@@ -88,12 +88,13 @@ var ErrRebaseUncommittedChanges = goerrors.NewKind("cannot start a rebase with u
 var ErrRebaseUnresolvedConflicts = goerrors.NewKind(
 	"conflicts detected in tables %s; resolve conflicts before continuing the rebase")
 
-// ErrRebaseDataConflictWithAutocommit is used when data conflicts are detected in a rebase, but @@autocommit has not
-// been disabled, so it's not possible to resolve the conflicts since they would get rolled back automatically.
-var ErrRebaseDataConflictWithAutocommit = goerrors.NewKind(
-	"data conflicts from rebase, but @@autocommit has not been disabled. " +
-		"@@autocommit must be disabled to resolve conflicts. The rebase has been aborted. " +
-		"Set @@autocommit to 0 and try the rebase again to resolve the conflicts.")
+// ErrRebaseDataConflictsCantBeResolved is used when data conflicts are detected in a rebase, but @@autocommit has not
+// been disabled or @@dolt_allow_commit_conflicts has not been enabled, so it's not possible to resolve the conflicts
+// since they would get rolled back automatically.
+var ErrRebaseDataConflictsCantBeResolved = goerrors.NewKind(
+	"data conflicts from rebase, but session settings do not allow preserving conflicts, so they cannot be resolved. " +
+		"The rebase has been aborted. Set @@autocommit to 0 or set @@dolt_allow_commit_conflicts to 1 and " +
+		"try the rebase again to resolve the conflicts.")
 
 // ErrRebaseDataConflict is used when a data conflict is detected while rebasing a commit.
 var ErrRebaseDataConflict = goerrors.NewKind("data conflict detected while rebasing commit %s (%s). \n\n" +
@@ -790,17 +791,32 @@ func handleRebaseCherryPick(ctx *sql.Context, planStep *rebase.RebasePlanStep, o
 	var schemaConflict merge.SchemaConflict
 	isSchemaConflict := errors.As(err, &schemaConflict)
 
+	doltSession := dsess.DSessFromSess(ctx.Session)
 	if (mergeResult != nil && mergeResult.HasMergeArtifacts()) && !isSchemaConflict {
-		// Conflicts can't be resolved if @@autocommit is still enabled, so warn and abort the rebase
-		autocommitEnabled, err := isAutocommitEnabled(ctx)
+		if err := validateConflictsCanBeResolved(ctx, planStep); err != nil {
+			return err
+		}
+
+		// If @@dolt_allow_commit_conflicts is enabled, then we need to make a SQL commit here, which
+		// will save the conflicts and make them visible to other sessions. This is necessary for the CLI's
+		// rebase command support. However, it's also valid to use @@autocommit and resolve the data
+		// conflicts within the same session, so in that case, we do NOT make a SQL commit.
+		allowCommitConflictsEnabled, err := isAllowCommitConflictsEnabled(ctx)
 		if err != nil {
 			return err
 		}
-		if autocommitEnabled {
-			if abortErr := abortRebase(ctx); abortErr != nil {
-				return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
+		if allowCommitConflictsEnabled {
+			if doltSession.GetTransaction() == nil {
+				_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+				if err != nil {
+					return err
+				}
 			}
-			return ErrRebaseDataConflictWithAutocommit.New()
+
+			err = doltSession.CommitTransaction(ctx, doltSession.GetTransaction())
+			if err != nil {
+				return err
+			}
 		}
 
 		// Otherwise, let the caller know about the conflict and how to resolve
@@ -874,16 +890,54 @@ func currentBranch(ctx *sql.Context) (string, error) {
 	return headRef.GetPath(), nil
 }
 
+// validateConflictsCanBeResolved checks to see if conflicts can be recorded in the current session, by looking to see
+// if @@autocommit is disabled, or if @@dolt_allow_commit_conflicts has been enabled. If conflicts cannot be recorded
+// then the current rebase is aborted, and an error is returned describing how to change the session settings and
+// restart the rebase.
+func validateConflictsCanBeResolved(ctx *sql.Context, planStep *rebase.RebasePlanStep) error {
+	autocommitEnabled, err := isAutocommitEnabled(ctx)
+	if err != nil {
+		return err
+	}
+
+	allowCommitConflictsEnabled, err := isAllowCommitConflictsEnabled(ctx)
+	if err != nil {
+		return err
+	}
+
+	// If @@autocommit is turned off, or if @@dolt_allow_commit_conflicts is enabled, then the user will
+	// be able to resolve conflicts in the session.
+	if !autocommitEnabled || allowCommitConflictsEnabled {
+		return nil
+	}
+
+	// Otherwise, abort the rebase and return an error message, since conflicts can't be worked with.
+	if abortErr := abortRebase(ctx); abortErr != nil {
+		return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
+	}
+	return ErrRebaseDataConflictsCantBeResolved.New()
+}
+
 // isAutocommitEnabled returns true if @@autocommit is enabled in the current session.
 func isAutocommitEnabled(ctx *sql.Context) (bool, error) {
-	autocommitVal, err := ctx.GetSessionVariable(ctx, "autocommit")
+	return lookupBoolSysVar(ctx, "autocommit")
+}
+
+// isAllowCommitConflictsEnabled returns true if @@dolt_allow_commit_conflicts is enabled in the current session.
+func isAllowCommitConflictsEnabled(ctx *sql.Context) (bool, error) {
+	return lookupBoolSysVar(ctx, "dolt_allow_commit_conflicts")
+}
+
+// lookupBoolSysVar returns the value of the boolean system variable named |systemVarName| for the current session.
+func lookupBoolSysVar(ctx *sql.Context, systemVarName string) (bool, error) {
+	value, err := ctx.GetSessionVariable(ctx, systemVarName)
 	if err != nil {
 		return false, err
 	}
-	autocommitBoolVal, _, err := types.Boolean.Convert(autocommitVal)
+	boolValue, _, err := types.Boolean.Convert(value)
 	if err != nil {
 		return false, err
 	}
 
-	return autocommitBoolVal == int8(1) || autocommitBoolVal == true, nil
+	return boolValue == int8(1) || boolValue == true, nil
 }

@@ -362,7 +362,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:       "call dolt_rebase('--continue');",
-				ExpectedErr: dprocedures.ErrRebaseDataConflictWithAutocommit,
+				ExpectedErr: dprocedures.ErrRebaseDataConflictsCantBeResolved,
 			},
 		},
 	},
