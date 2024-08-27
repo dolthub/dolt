@@ -297,10 +297,10 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		level += 1
 		numSecondaryIndexes := msg.SecondaryIndexesLength()
 		for i := 0; i < numSecondaryIndexes; i++ {
-			var index *serial.Index
-			_, _ = msg.TrySecondaryIndexes(index, i)
+			var index serial.Index
+			_, _ = msg.TrySecondaryIndexes(&index, i)
 			printWithIndendationLevel(level, ret, "{\n")
-			printIndex(level+1, ret, index)
+			printIndex(level+1, ret, &index)
 			printWithIndendationLevel(level, ret, "}\n")
 		}
 		level -= 1

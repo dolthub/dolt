@@ -317,3 +317,29 @@ EOF
     [[ "$output" =~ "Checks: [" ]] || false
     [[ "$output" =~ "Collation: utf8mb4_0900_bin" ]] || false
 }
+
+@test "show: secondary index leaf" {
+    dolt sql <<EOF
+create table test(pk int primary key, v2 int unique);
+insert into test values (0, 35), (1, 19), (2, 3);
+EOF
+    run dolt show "#9afhmiubuqjviu4qocn15tqlgigea26l"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "{ key: 03000000, 02000000 value:  }" ]] || false
+    [[ "$output" =~ "{ key: 13000000, 01000000 value:  }" ]] || false
+    [[ "$output" =~ "{ key: 23000000, 00000000 value:  }" ]] || false
+}
+
+@test "show: secondary index non-leaf" {
+    dolt sql <<EOF
+create table test(pk int primary key, v1 int, index(v1));
+insert into test values (1, 0);
+EOF
+    for i in {1..10}; do dolt sql -q "insert ignore into test select 2*(pk+$i), (pk+$i) from test;"; done
+    run dolt show "#3ir2otqqb8pnu28um6jc1ipv05iamdlk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SerialMessage" ]] || false
+    [[ "$output" =~ "{ key: 73000000, e6000000 ref: #pdcuscnfqsusgil1642k5hup1cp5co6t }" ]] || false
+    [[ "$output" =~ "{ key: f4090000, e8130000 ref: #hddhk8djkj275q1so9fs3ag48v7qsfsi }" ]] || false
+}
