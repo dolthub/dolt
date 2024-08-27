@@ -101,9 +101,9 @@ func (wtu *WorkspaceTableUpdater) StatementBegin(ctx *sql.Context) {
 	wtu.sessionWriter = &sessionWriter
 }
 
-func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	if wtu.tableWriter != nil {
-		err := (*wtu.tableWriter).DiscardChanges(ctx, errorEncountered)
+func (wtm *WorkspaceTableModifier) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	if wtm.tableWriter != nil {
+		err := (*wtm.tableWriter).DiscardChanges(ctx, errorEncountered)
 		if err != nil {
 			return err
 		}
@@ -111,12 +111,13 @@ func (wtu *WorkspaceTableUpdater) DiscardChanges(ctx *sql.Context, errorEncounte
 	return nil
 }
 
-func (wtu *WorkspaceTableUpdater) StatementComplete(ctx *sql.Context) error {
-	if wtu.err != nil {
-		return *wtu.err
+// StatementComplete is common between WorkspaceTableModifier and WorkspaceTableUpdater
+func (wtm *WorkspaceTableModifier) StatementComplete(ctx *sql.Context) error {
+	if wtm.err != nil {
+		return *wtm.err
 	}
 
-	return wtu.statementComplete(ctx)
+	return wtm.statementComplete(ctx)
 }
 
 func (wtm *WorkspaceTableModifier) statementComplete(ctx *sql.Context) error {
@@ -201,24 +202,6 @@ func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
 	}
 	wtd.tableWriter = &tableWriter
 	wtd.sessionWriter = &sessionWriter
-}
-
-func (wtd *WorkspaceTableDeleter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	if wtd.tableWriter != nil {
-		err := (*wtd.tableWriter).DiscardChanges(ctx, errorEncountered)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (wtd *WorkspaceTableDeleter) StatementComplete(ctx *sql.Context) error {
-	if wtd.err != nil {
-		return *wtd.err
-	}
-
-	return wtd.statementComplete(ctx)
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
