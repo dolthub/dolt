@@ -27,56 +27,351 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// The Schema for the dolt_workspace_* table is as follows:
+// id (int primary key)
+// staged (bool)        - Index 1, or 'stagedColumnIdx'
+// diff_type (string)
+// from_value_A (any)
+// from_value_B (any)
+// ....
+// to_value_A (any)
+// to_value_B (any)
+// ....
+const stagedColumnIdx = 1
+
 type WorkspaceTable struct {
-	roots         doltdb.Roots
-	tableName     string
-	nomsSchema    schema.Schema
-	sqlSchema     sql.Schema
+	userTblName string
+	ws          *doltdb.WorkingSet
+	head        doltdb.RootValue
+
+	sqlSchema     sql.Schema // This is the full schema for the dolt_workspace_* table
 	stagedDeltas  *diff.TableDelta
 	workingDeltas *diff.TableDelta
 
+	// headSchema is the schema of the table that is being modified.
 	headSchema schema.Schema
 }
 
-var _ sql.Table = (*WorkspaceTable)(nil)
+type WorkspaceTableModifier struct {
+	tableName string
+	ws        *doltdb.WorkingSet
+	head      doltdb.RootValue
 
-func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sql.Table, error) {
-	stageDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Staged)
+	headSch   schema.Schema
+	schemaLen int
+
+	// tableWriter and sessionWriter are only set during StatementBegin
+	tableWriter   *dsess.TableWriter
+	sessionWriter *dsess.WriteSession
+
+	err *error
+}
+
+type WorkspaceTableUpdater struct {
+	WorkspaceTableModifier
+}
+
+var _ sql.RowUpdater = (*WorkspaceTableUpdater)(nil)
+
+type WorkspaceTableDeleter struct {
+	WorkspaceTableModifier
+}
+
+var _ sql.RowDeleter = (*WorkspaceTableDeleter)(nil)
+
+func (wtu *WorkspaceTableUpdater) StatementBegin(ctx *sql.Context) {
+	sessionWriter, tableWriter, err := wtu.getWorkspaceTableWriter(ctx, true)
+	if err != nil {
+		wtu.err = &err
+		return
+	}
+	wtu.tableWriter = &tableWriter
+	wtu.sessionWriter = &sessionWriter
+}
+
+func (wtm *WorkspaceTableModifier) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	if wtm.tableWriter != nil {
+		err := (*wtm.tableWriter).DiscardChanges(ctx, errorEncountered)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// StatementComplete is common between WorkspaceTableModifier and WorkspaceTableUpdater
+func (wtm *WorkspaceTableModifier) StatementComplete(ctx *sql.Context) error {
+	if wtm.err != nil {
+		return *wtm.err
+	}
+
+	return wtm.statementComplete(ctx)
+}
+
+func (wtm *WorkspaceTableModifier) statementComplete(ctx *sql.Context) error {
+	if wtm.tableWriter != nil {
+		err := (*wtm.tableWriter).Close(ctx)
+		if err != nil {
+			return err
+		}
+		wtm.tableWriter = nil
+	}
+
+	if wtm.sessionWriter != nil {
+		newWorkingSet, err := (*wtm.sessionWriter).Flush(ctx)
+		if err != nil {
+			return err
+		}
+		wtm.sessionWriter = nil
+
+		ds := dsess.DSessFromSess(ctx.Session)
+		err = ds.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	if old == nil || new == nil {
+		return fmt.Errorf("Runtime error: expected non-nil inputs to WorkspaceTableUpdater.Update")
+	}
+
+	valid, isStaged := validateWorkspaceUpdate(old, new)
+	if !valid {
+		return errors.New("only update of column 'staged' is allowed")
+	}
+
+	schemaLen := wtu.schemaLen
+
+	// old and new are the same. Just use one.
+	new = nil
+
+	toRow := old[3 : 3+schemaLen]
+	fromRow := old[3+schemaLen:]
+	if !isStaged {
+		toRow, fromRow = fromRow, toRow
+	}
+
+	// It's a delete if all the values in toRow are nil.
+	isDelete := true
+	for _, val := range toRow {
+		if val != nil {
+			isDelete = false
+			break
+		}
+	}
+
+	tableWriter := (*wtu.tableWriter)
+	if tableWriter == nil {
+		return fmt.Errorf("Runtime error: table writer is nil")
+	}
+
+	if isDelete {
+		return tableWriter.Delete(ctx, fromRow)
+	} else {
+		return tableWriter.Update(ctx, fromRow, toRow)
+	}
+}
+
+func (wtu *WorkspaceTableUpdater) Close(c *sql.Context) error {
+	// Resources released in StatementComplete
+	return nil
+}
+
+func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
+	// Deletes are only allowed on WORKING, do not target staging.
+	sessionWriter, tableWriter, err := wtd.getWorkspaceTableWriter(ctx, false)
+	if err != nil {
+		wtd.err = &err
+		return
+	}
+	wtd.tableWriter = &tableWriter
+	wtd.sessionWriter = &sessionWriter
+}
+
+func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
+	isStaged := isTrue(row[stagedColumnIdx])
+	if isStaged {
+		return fmt.Errorf("cannot delete staged rows from workspace")
+	}
+
+	schemaLen := wtd.schemaLen
+
+	toRow := row[3 : 3+schemaLen]
+	fromRow := row[3+schemaLen:]
+
+	// If to Row has any non-nil values, then we need to do an update. Otherwise, insert.
+	wasDelete := true
+	for _, val := range toRow {
+		if val != nil {
+			wasDelete = false
+			break
+		}
+	}
+	wasInsert := true
+	for _, val := range fromRow {
+		if val != nil {
+			wasInsert = false
+			break
+		}
+	}
+
+	tableWriter := (*wtd.tableWriter)
+	if tableWriter == nil {
+		return fmt.Errorf("Runtime error: table writer is nil")
+	}
+
+	if wasInsert {
+		return tableWriter.Delete(c, toRow) // delete newly added row.
+	} else if wasDelete {
+		return tableWriter.Insert(c, fromRow) // restore deleted row.
+	} else {
+		return tableWriter.Update(c, toRow, fromRow) // restore updated row.
+	}
+}
+
+func (wtd *WorkspaceTableDeleter) Close(c *sql.Context) error {
+	// Resources released in StatementComplete
+	return nil
+}
+
+func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, targetStaging bool) (dsess.WriteSession, dsess.TableWriter, error) {
+	ds := dsess.DSessFromSess(ctx.Session)
+
+	setter := ds.SetWorkingRoot
+	if targetStaging {
+		setter = ds.SetStagingRoot
+	}
+
+	gst, err := dsess.NewAutoIncrementTracker(ctx, "dolt", wtm.ws)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	writeSession := writer.NewWriteSession(types.Format_DOLT, wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
+
+	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: wtm.tableName}, ctx.GetCurrentDatabase(), setter, targetStaging)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return writeSession, tableWriter, nil
+}
+
+// isTrue returns true if the value is a boolean true, or an int8 value of != 0. Otherwise, it returns false.
+func isTrue(value interface{}) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case int8:
+		return v != 0
+	default:
+		return false
+	}
+}
+
+// validateWorkspaceUpdate returns true IFF old and new row are identical - except the "staged" column. Updating that
+// column to TRUE or FALSE is the only update allowed, and any other update will result in 'valid' being false. If
+// valid is true, then 'staged' will be the value in the "staged" column of the new row.
+func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
+	if len(old) != len(new) {
+		return false, false
+	}
+
+	isStaged := false
+
+	// Verify there are no changes in the columns other than the "staged" column.
+	for i := range new {
+		if i == stagedColumnIdx {
+			isStaged = isTrue(new[stagedColumnIdx])
+			// skip the "staged" column.
+			continue
+		}
+
+		if old[i] != new[i] {
+			return false, false
+		}
+	}
+	return true, isStaged
+}
+
+func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
+	cols := wt.headSchema.GetAllCols().Size()
+	modifier := WorkspaceTableModifier{
+		tableName: wt.userTblName,
+		headSch:   wt.headSchema,
+		schemaLen: cols,
+		ws:        wt.ws,
+		head:      wt.head,
+	}
+
+	return &WorkspaceTableDeleter{
+		modifier,
+	}
+}
+
+func (wt *WorkspaceTable) Updater(_ *sql.Context) sql.RowUpdater {
+	cols := wt.headSchema.GetAllCols().Size()
+	modifier := WorkspaceTableModifier{
+		tableName: wt.userTblName,
+		headSch:   wt.headSchema,
+		schemaLen: cols,
+		ws:        wt.ws,
+		head:      wt.head,
+	}
+
+	return &WorkspaceTableUpdater{
+		modifier,
+	}
+}
+
+var _ sql.Table = (*WorkspaceTable)(nil)
+var _ sql.UpdatableTable = (*WorkspaceTable)(nil)
+var _ sql.DeletableTable = (*WorkspaceTable)(nil)
+
+func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head doltdb.RootValue, ws *doltdb.WorkingSet) (sql.Table, error) {
+	stageDlt, err := diff.GetTableDeltas(ctx, head, ws.StagedRoot())
 	if err != nil {
 		return nil, err
 	}
 	var stgDel *diff.TableDelta
 	for _, delta := range stageDlt {
-		if delta.FromName.Name == tblName || delta.ToName.Name == tblName {
+		if delta.FromName.Name == userName || delta.ToName.Name == userName {
 			stgDel = &delta
 			break
 		}
 	}
 
-	workingDlt, err := diff.GetTableDeltas(ctx, roots.Head, roots.Working)
+	workingDlt, err := diff.GetTableDeltas(ctx, head, ws.WorkingRoot())
 	if err != nil {
 		return nil, err
 	}
 
 	var wkDel *diff.TableDelta
 	for _, delta := range workingDlt {
-		if delta.FromName.Name == tblName || delta.ToName.Name == tblName {
+		if delta.FromName.Name == userName || delta.ToName.Name == userName {
 			wkDel = &delta
 			break
 		}
 	}
 
 	if wkDel == nil && stgDel == nil {
-		emptyTable := emptyWorkspaceTable{tableName: tblName}
+		emptyTable := emptyWorkspaceTable{tableName: userName}
 		return &emptyTable, nil
 	}
 
@@ -116,15 +411,15 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 	if err != nil {
 		return nil, err
 	}
-	finalSch, err := sqlutil.FromDoltSchema("", "", totalSch)
+	finalSch, err := sqlutil.FromDoltSchema("", workspaceName, totalSch)
 	if err != nil {
 		return nil, err
 	}
 
 	return &WorkspaceTable{
-		roots:         roots,
-		tableName:     tblName,
-		nomsSchema:    totalSch,
+		ws:            ws,
+		head:          head,
+		userTblName:   userName,
 		sqlSchema:     finalSch.Schema,
 		stagedDeltas:  stgDel,
 		workingDeltas: wkDel,
@@ -133,7 +428,7 @@ func NewWorkspaceTable(ctx *sql.Context, tblName string, roots doltdb.Roots) (sq
 }
 
 func (wt *WorkspaceTable) Name() string {
-	return doltdb.DoltWorkspaceTablePrefix + wt.tableName
+	return doltdb.DoltWorkspaceTablePrefix + wt.userTblName
 }
 
 func (wt *WorkspaceTable) String() string {
@@ -229,7 +524,7 @@ func (w *WorkspacePartition) Key() []byte {
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.roots.Head, wt.tableName)
+	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.head, wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +535,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.roots.Staged, wt.tableName)
+	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +546,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.roots.Working, wt.tableName)
+	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
