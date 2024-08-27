@@ -397,6 +397,18 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "select sum(y) from tbl AS OF STAGED",
+				Expected: []sql.Row{
+					{float64(95)},
+				},
+			},
+			{
+				Query: "select sum(y) from tbl AS OF WORKING",
+				Expected: []sql.Row{
+					{float64(162)},
+				},
+			},
+			{
 				// add everything.
 				Query: "update dolt_workspace_tbl set staged = 1",
 			},
@@ -726,6 +738,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				Query: "update dolt_workspace_tbl set staged = false where id = 0",
 			},
 			{
+				// Removing the staged row should not affect the working row's final value, but it will change the from_ value.
 				Query: "select * from dolt_workspace_tbl",
 				Expected: []sql.Row{
 					{0, false, "modified", 42, "working", 42, "inserted"},
