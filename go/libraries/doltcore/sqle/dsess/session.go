@@ -563,6 +563,21 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	return dirtyStates
 }
 
+// DirtyDatabases returns the names of databases who have outstanding changes in this session and need to be committed
+// in a SQL transaction before they are visible to other sessions.
+func (d *DoltSession) DirtyDatabases() []string {
+	var dbNames []string
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				dbNames = append(dbNames, dbState.dbName)
+				break
+			}
+		}
+	}
+	return dbNames
+}
+
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
