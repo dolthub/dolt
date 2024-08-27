@@ -296,14 +296,24 @@ func newProllyKeylessIndexIter(
 	ctx *sql.Context,
 	idx DoltIndex,
 	rng prolly.Range,
+	doltgresRange *DoltgresRange,
 	pkSch sql.PrimaryKeySchema,
 	projections []uint64,
 	rows, dsecondary durable.Index,
 ) (prollyKeylessIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)
-	indexIter, err := secondary.IterRange(ctx, rng)
-	if err != nil {
-		return prollyKeylessIndexIter{}, err
+	var indexIter prolly.MapIter
+	var err error
+	if doltgresRange == nil {
+		indexIter, err = secondary.IterRange(ctx, rng)
+		if err != nil {
+			return prollyKeylessIndexIter{}, err
+		}
+	} else {
+		indexIter, err = doltgresProllyMapIterator(ctx, secondary.KeyDesc(), secondary.NodeStore(), secondary.Tuples().Root, *doltgresRange)
+		if err != nil {
+			return prollyKeylessIndexIter{}, err
+		}
 	}
 
 	clustered := durable.ProllyMapFromIndex(rows)

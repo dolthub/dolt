@@ -34,10 +34,14 @@ import (
 
 func ProllyRangesForIndex(ctx *sql.Context, index sql.Index, ranges sql.RangeCollection) ([]prolly.Range, error) {
 	idx := index.(*doltIndex)
-	return idx.prollyRanges(ctx, idx.ns, ranges...)
+	return idx.prollyRanges(ctx, idx.ns, ranges.(sql.MySQLRangeCollection)...)
 }
 
 func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []uint64) (sql.RowIter, error) {
+	mysqlRanges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
+	if !ok {
+		return nil, fmt.Errorf("expected MySQL ranges while creating row iter")
+	}
 	idx := lookup.Index.(*doltIndex)
 	durableState, err := idx.getDurableState(ctx, t)
 	if err != nil {
@@ -45,7 +49,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	}
 
 	if types.IsFormat_DOLT(idx.Format()) {
-		prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+		prollyRanges, err := idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
 		if len(prollyRanges) > 1 {
 			return nil, fmt.Errorf("expected a single index range")
 		}
@@ -54,7 +58,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		}
 		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState)
 	} else {
-		nomsRanges, err := idx.nomsRanges(ctx, lookup.Ranges...)
+		nomsRanges, err := idx.nomsRanges(ctx, mysqlRanges...)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +74,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, projections, durableState.Primary, durableState.Secondary)
+		return newProllyKeylessIndexIter(ctx, idx, r, nil, pkSch, projections, durableState.Primary, durableState.Secondary)
 	}
 
 	covers := idx.coversColumns(durableState, projections)
@@ -101,6 +105,10 @@ type IndexLookupKeyIterator interface {
 }
 
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup, isDoltFmt bool) (sql.PartitionIter, error) {
+	if _, ok := lookup.Ranges.(DoltgresRangeCollection); ok {
+		return NewDoltgresPartitionIter(ctx, lookup)
+	}
+	mysqlRanges := lookup.Ranges.(sql.MySQLRangeCollection)
 	idx := lookup.Index.(*doltIndex)
 	if lookup.IsPointLookup && isDoltFmt {
 		return newPointPartitionIter(ctx, lookup, idx)
@@ -110,9 +118,9 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	var nomsRanges []*noms.ReadRange
 	var err error
 	if isDoltFmt {
-		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+		prollyRanges, err = idx.prollyRanges(ctx, idx.ns, mysqlRanges...)
 	} else {
-		nomsRanges, err = idx.nomsRanges(ctx, lookup.Ranges...)
+		nomsRanges, err = idx.nomsRanges(ctx, mysqlRanges...)
 	}
 	if err != nil {
 		return nil, err
@@ -127,7 +135,7 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 }
 
 func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
-	prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges[0])
+	prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges.(sql.MySQLRangeCollection)[0])
 	if err != nil {
 		return nil, err
 	}
@@ -405,6 +413,8 @@ func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) 
 		} else {
 			return ib.sec.IterRange(ctx, p.prollyRange)
 		}
+	case DoltgresPartition:
+		return doltgresProllyMapIterator(ctx, ib.secKd, ib.ns, ib.sec.Node(), p.rang)
 	default:
 		panic(fmt.Sprintf("unexpected prolly partition type: %T", part))
 	}
@@ -425,6 +435,7 @@ func NewSequenceRangeIter(ctx context.Context, ib IndexScanBuilder, ranges []pro
 	if len(ranges) == 0 {
 		return &strictLookupIter{}, nil
 	}
+	// TODO: probably need to do something with Doltgres ranges here?
 	cur, err := ib.NewRangeMapIter(ctx, ranges[0], reverse)
 	if err != nil || len(ranges) < 2 {
 		return cur, err
@@ -664,13 +675,16 @@ func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	var prollyRange prolly.Range
+	var doltgresRange *DoltgresRange
 	switch p := part.(type) {
 	case rangePartition:
 		prollyRange = p.prollyRange
 	case pointPartition:
 		prollyRange = p.r
+	case DoltgresPartition:
+		doltgresRange = &p.rang
 	}
-	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
+	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, doltgresRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
 }
 
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
