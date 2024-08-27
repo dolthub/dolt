@@ -30,7 +30,7 @@ func OpenRange(tpl1, tpl2 types.Tuple) *noms.ReadRange {
 	return CustomRange(tpl1, tpl2, sql.Open, sql.Open)
 }
 
-func CustomRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.RangeBoundType) *noms.ReadRange {
+func CustomRange(tpl1, tpl2 types.Tuple, bt1, bt2 sql.MySQLRangeBoundType) *noms.ReadRange {
 	var nrc nomsRangeCheck
 	_ = tpl1.IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
 		if tupleIndex%2 == 0 {
@@ -203,12 +203,12 @@ func ReadRangesEqual(nr1, nr2 *noms.ReadRange) bool {
 }
 
 func NomsRangesFromIndexLookup(ctx *sql.Context, lookup sql.IndexLookup) ([]*noms.ReadRange, error) {
-	return lookup.Index.(*doltIndex).nomsRanges(ctx, lookup.Ranges...)
+	return lookup.Index.(*doltIndex).nomsRanges(ctx, lookup.Ranges.(sql.MySQLRangeCollection)...)
 }
 
 func ProllyRangesFromIndexLookup(ctx *sql.Context, lookup sql.IndexLookup) ([]prolly.Range, error) {
 	idx := lookup.Index.(*doltIndex)
-	return idx.prollyRanges(ctx, idx.ns, lookup.Ranges...)
+	return idx.prollyRanges(ctx, idx.ns, lookup.Ranges.(sql.MySQLRangeCollection)...)
 }
 
 func DoltIndexFromSqlIndex(idx sql.Index) DoltIndex {

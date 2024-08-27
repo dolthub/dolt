@@ -1058,7 +1058,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			expectedRows := convertSqlRowToInt64(test.expectedRows)
 
 			exprs := idx.Expressions()
-			sqlIndex := sql.NewIndexBuilder(idx)
+			sqlIndex := sql.NewMySQLIndexBuilder(idx)
 			for i := range test.greaterThanOrEqual {
 				sqlIndex = sqlIndex.GreaterOrEqual(ctx, exprs[i], test.greaterThanOrEqual[i]).LessOrEqual(ctx, exprs[i], test.lessThanOrEqual[i])
 			}
@@ -1294,7 +1294,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
-	builder := sql.NewIndexBuilder(idx)
+	builder := sql.NewMySQLIndexBuilder(idx)
 	for i, key := range keys {
 		switch cmp {
 		case indexComp_Eq:
@@ -1460,7 +1460,7 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 
 func TestSplitNullsFromRange(t *testing.T) {
 	t.Run("EmptyRange", func(t *testing.T) {
-		r, err := index.SplitNullsFromRange(sql.Range{})
+		r, err := index.SplitNullsFromRange(sql.MySQLRange{})
 		assert.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Len(t, r, 1)
@@ -1468,7 +1468,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("ThreeColumnNoNullsRange", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NotNullRangeColumnExpr(types.Int8)}
+		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NotNullRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1478,7 +1478,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("LastColumnOnlyNull", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NullRangeColumnExpr(types.Int8)}
+		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.NullRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1488,7 +1488,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("LastColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.AllRangeColumnExpr(types.Int8)}
+		r := sql.MySQLRange{sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8), sql.AllRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1502,7 +1502,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("FirstColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.AllRangeColumnExpr(types.Int8), sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8)}
+		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.LessThanRangeColumnExpr(10, types.Int8), sql.GreaterThanRangeColumnExpr(16, types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
@@ -1516,7 +1516,7 @@ func TestSplitNullsFromRange(t *testing.T) {
 	})
 
 	t.Run("AllColumnAll", func(t *testing.T) {
-		r := sql.Range{sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8)}
+		r := sql.MySQLRange{sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8), sql.AllRangeColumnExpr(types.Int8)}
 		rs, err := index.SplitNullsFromRange(r)
 		assert.NoError(t, err)
 		assert.NotNil(t, rs)
