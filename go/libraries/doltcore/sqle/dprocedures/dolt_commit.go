@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -201,13 +200,12 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 			return "", false, err
 		}
 
-		signed, signature, err := gpgSign(ctx, keyId, []byte(strToSign))
+		signature, err := gpg.Sign(ctx, keyId, []byte(strToSign))
 		if err != nil {
 			return "", false, err
 		}
 
-		fmt.Println(signed, signature)
-		pendingCommit.CommitOptions.Meta.Signature = signature
+		pendingCommit.CommitOptions.Meta.Signature = string(signature)
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -266,25 +264,4 @@ func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp
 	lines = append(lines, fmt.Sprint("Staged: ", staged.String()))
 
 	return strings.Join(lines, "\n"), nil
-}
-
-func gpgSign(ctx context.Context, keyId string, toSign []byte) (string, string, error) {
-	blocks, err := gpg.Sign(ctx, keyId, toSign)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to sign: %w", err)
-	}
-
-	signedDataBlocks := gpg.GetBlocksOfType(blocks, "PGP SIGNED MESSAGE")
-
-	if len(signedDataBlocks) != 1 {
-		return "", "", fmt.Errorf("expected 1 'PGP SIGNED MESSAGE' block, got %d", len(signedDataBlocks))
-	}
-
-	signatureBlocks := gpg.GetBlocksOfType(blocks, "PGP SIGNATURE")
-
-	if len(signatureBlocks) != 1 {
-		return "", "", fmt.Errorf("expected 1 PGP SIGNATURE block, got %d", len(signatureBlocks))
-	}
-
-	return string(signedDataBlocks[0].Bytes), string(signatureBlocks[0].Bytes), nil
 }

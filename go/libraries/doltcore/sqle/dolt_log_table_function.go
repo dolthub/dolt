@@ -749,7 +749,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, meta.Signature)
+	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
@@ -764,6 +764,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		isHead := itr.headHash == commitHash
 		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
 	}
+
+	row = row.Append(sql.NewRow(meta.Signature))
 
 	return row, nil
 }

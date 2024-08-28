@@ -676,8 +676,8 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	isHead := commitHash == hashOfHead
 
 	var signature string
-	if len(row) > 6 {
-		signature = row[6].(string)
+	if len(row) > 7 {
+		signature = row[7].(string)
 	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)

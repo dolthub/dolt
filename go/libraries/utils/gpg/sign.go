@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func Sign(ctx context.Context, keyId string, message []byte) ([]*pem.Block, error) {
+func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 	args := []string{"--clear-sign", "-u", keyId}
 	cmdStr := fmt.Sprintf("gpg %s", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, "gpg", args...)
@@ -72,12 +72,7 @@ func Sign(ctx context.Context, keyId string, message []byte) ([]*pem.Block, erro
 		return nil, fmt.Errorf("failed to read output for command '%s': %w", cmdStr, err)
 	}
 
-	pemBlocks, err := decodeAllPEMBlocks(outBuf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode PEM blocks: %w", err)
-	}
-
-	return pemBlocks, nil
+	return outBuf.Bytes(), nil
 }
 
 func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Buffer {
@@ -90,7 +85,7 @@ func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Bu
 }
 
 // Throws away all intersperesed text and returns all decoded PEM blocks, in the order they are read.
-func decodeAllPEMBlocks(bs []byte) ([]*pem.Block, error) {
+func DecodeAllPEMBlocks(bs []byte) ([]*pem.Block, error) {
 	const beginHeaderPrefix = "BEGIN "
 	const pemSeperator = "-----"
 
