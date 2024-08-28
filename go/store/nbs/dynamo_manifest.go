@@ -97,7 +97,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 		return false, manifestContents{}, fmt.Errorf("failed to get dynamo table: '%s' - %w", dm.table, err)
 	}
 
-	// !exists(dbAttr) => unitialized store
+	// !exists(dbAttr) => uninitialized store
 	if len(result.Item) > 0 {
 		valid, hasSpecs, hasAppendix := validateManifest(result.Item)
 		if !valid {

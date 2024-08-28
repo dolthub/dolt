@@ -52,6 +52,8 @@ type prollyTableWriter struct {
 	flusher dsess.WriteSessionFlusher
 	setter  dsess.SessionRootSetter
 
+	targetStaging bool
+
 	errEncountered error
 }
 
@@ -374,5 +376,10 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	return w.setter(ctx, w.dbName, ws.WorkingRoot())
+
+	if w.targetStaging {
+		return w.setter(ctx, w.dbName, ws.StagedRoot())
+	} else {
+		return w.setter(ctx, w.dbName, ws.WorkingRoot())
+	}
 }

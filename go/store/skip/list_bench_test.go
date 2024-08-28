@@ -68,7 +68,7 @@ func BenchmarkPut(b *testing.B) {
 			benchmarkPut(b, randomInts(65536))
 		})
 	})
-	b.Run("asending keys", func(b *testing.B) {
+	b.Run("ascending keys", func(b *testing.B) {
 		b.Run("n=64", func(b *testing.B) {
 			benchmarkPut(b, ascendingInts(64))
 		})
@@ -104,7 +104,7 @@ func BenchmarkIterAll(b *testing.B) {
 			benchmarkIterAll(b, randomInts(65536))
 		})
 	})
-	b.Run("asending keys", func(b *testing.B) {
+	b.Run("ascending keys", func(b *testing.B) {
 		b.Run("n=64", func(b *testing.B) {
 			benchmarkIterAll(b, ascendingInts(64))
 		})

@@ -800,7 +800,7 @@ func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
 
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
-	// ctxFactory is a function that returns a new sql.Context. This will create a new conext every time it is called,
+	// ctxFactory is a function that returns a new sql.Context. This will create a new context every time it is called,
 	// so it should be called once per API request.
 	ctxFactory func(context.Context) (*sql.Context, error)
 	rawDb      *mysql_db.MySQLDb
@@ -827,7 +827,7 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 	if strings.Index(address, ":") > 0 {
 		address, _, err = net.SplitHostPort(creds.Address)
 		if err != nil {
-			return nil, fmt.Errorf("Invlaid Host string for authentication: %s", creds.Address)
+			return nil, fmt.Errorf("Invalid Host string for authentication: %s", creds.Address)
 		}
 	}
 

@@ -439,7 +439,7 @@ func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence,
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
-// concatentation as one long composite sequence
+// concatenation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
 	ctx, span := tracer.Start(ctx, "metaSequence.getChildSequence", trace.WithAttributes(
 		attribute.Int64("level", int64(ms.treeLevel())),

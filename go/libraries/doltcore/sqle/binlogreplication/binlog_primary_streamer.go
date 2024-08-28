@@ -47,7 +47,7 @@ func newBinlogStreamer() *binlogStreamer {
 }
 
 // startStream listens for new binlog events sent to this streamer over its binlog event
-// channel and sends them over |conn|. It also listens for ticker ticks to send hearbeats
+// channel and sends them over |conn|. It also listens for ticker ticks to send heartbeats
 // over |conn|. The specified |binlogFormat| is used to define the format of binlog events
 // and |binlogEventMeta| records the position of the stream. This method blocks until an error
 // is received over the stream (e.g. the connection closing) or the streamer is closed,

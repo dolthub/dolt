@@ -34,7 +34,7 @@ import (
 
 // A remotestorage.ChunkFetcher is a pipelined chunk fetcher for fetching a
 // large number of chunks where the downloads may benefit from range
-// coallescing, hedging, automatic retries, pipelining of download location
+// coalescing, hedging, automatic retries, pipelining of download location
 // retrieval with the fetching of the actual chunk bytes, etc.
 //
 // It is expected that one goroutine will be calling `Get()` with batches of
@@ -392,7 +392,7 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			// |toSend| could have come from a previous iteration
 			// of this loop or the outer loop. If it's |nil|, we
 			// can get the next range to download from
-			// |downlaods.ranges|.
+			// |downloads.ranges|.
 			if toSend == nil {
 				max := downloads.ranges.DeleteMaxRegion()
 				if len(max) == 0 {
@@ -486,9 +486,9 @@ type SizeSetter interface {
 
 // This does additive increase, multiplicative decrease on calls to |SetSize|,
 // reading successes and failures from calls to |RecordSuccess| and
-// |RecordFailure|. If there have been any faliures in the last update window,
+// |RecordFailure|. If there have been any failures in the last update window,
 // it will call |SetSize| with a new size that's 1/2 the current size. If there
-// have been no faliures in the last update window, but there has been at least
+// have been no failures in the last update window, but there has been at least
 // one success, it will call |SetSize| with a size 1 greater than the current
 // size. Will not scale size greater than |MaxConcurrency|.
 func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss SizeSetter, sz int) error {

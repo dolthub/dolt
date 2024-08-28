@@ -48,7 +48,7 @@ func doltConflictsResolve(ctx *sql.Context, args ...string) (sql.RowIter, error)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(res), nil
+	return rowToIter(int64(res)), nil
 }
 
 // DoltConflictsCatFunc runs a `dolt commit` in the SQL context, committing staged changes to head.

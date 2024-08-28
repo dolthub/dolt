@@ -151,11 +151,15 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 }
 
 func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup) (sql.PartitionIter, error) {
-	if len(i.Ranges) != 1 || len(i.Ranges[0]) != 2 {
+	ranges, ok := i.Ranges.(sql.MySQLRangeCollection)
+	if !ok {
+		return nil, fmt.Errorf("commit diff table requires MySQL ranges")
+	}
+	if len(ranges) != 1 || len(ranges[0]) != 2 {
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	to := i.Ranges[0][0]
-	from := i.Ranges[0][1]
+	to := ranges[0][0]
+	from := ranges[0][1]
 	switch to.UpperBound.(type) {
 	case sql.Above, sql.Below:
 	default:
@@ -166,16 +170,15 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	default:
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	toCommit, _, err := to.Typ.Convert(sql.GetRangeCutKey(to.UpperBound))
+	toCommit, _, err := to.Typ.Convert(sql.GetMySQLRangeCutKey(to.UpperBound))
 	if err != nil {
 		return nil, err
 	}
-	var ok bool
 	dt.toCommit, ok = toCommit.(string)
 	if !ok {
 		return nil, fmt.Errorf("to_commit must be string, found %T", toCommit)
 	}
-	fromCommit, _, err := from.Typ.Convert(sql.GetRangeCutKey(from.UpperBound))
+	fromCommit, _, err := from.Typ.Convert(sql.GetMySQLRangeCutKey(from.UpperBound))
 	if err != nil {
 		return nil, err
 	}

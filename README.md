@@ -59,7 +59,6 @@ Valid commands for dolt are
               commit - Record changes to the repository.
                  sql - Run a SQL query against tables in repository.
           sql-server - Start a MySQL-compatible server.
-          sql-client - Starts a built-in MySQL client.
                  log - Show commit logs.
               branch - Create, list, edit, delete branches.
             checkout - Checkout a branch or overwrite a table from HEAD.

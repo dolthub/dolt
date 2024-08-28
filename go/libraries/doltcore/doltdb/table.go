@@ -37,7 +37,7 @@ var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 
 const dolt_row_hash_tag = 0
 
-// IsValidTableName checks if name is a valid identifer, and doesn't end with space characters
+// IsValidTableName checks if name is a valid identifier, and doesn't end with space characters
 func IsValidTableName(name string) bool {
 	if len(name) == 0 || unicode.IsSpace(rune(name[len(name)-1])) {
 		return false

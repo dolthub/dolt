@@ -7035,7 +7035,7 @@ END`,
 		},
 	},
 	{
-		Name: "Database syntax propogates to inner calls",
+		Name: "Database syntax propagates to inner calls",
 		SetUpScript: []string{
 			"CALL DOLT_CHECKOUT('main');",
 			`CREATE PROCEDURE p4()

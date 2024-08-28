@@ -952,6 +952,28 @@ func (d *DoltSession) SetWorkingRoot(ctx *sql.Context, dbName string, newRoot do
 	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithWorkingRoot(newRoot))
 }
 
+// SetStagingRoot sets the staging root for the session's current database. This is useful when editing the staged
+// table without messing with the HEAD or working trees.
+func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot doltdb.RootValue) error {
+	branchState, _, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	existingWorkingSet := branchState.WorkingSet()
+	if existingWorkingSet == nil {
+		return doltdb.ErrOperationNotSupportedInDetachedHead
+	}
+	if rootsEqual(branchState.roots().Staged, newRoot) {
+		return nil
+	}
+
+	if branchState.readOnly {
+		return fmt.Errorf("cannot set root on read-only session")
+	}
+	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithStagedRoot(newRoot))
+}
+
 // SetRoots sets new roots for the session for the database named. Typically, clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.

@@ -57,14 +57,14 @@ var maxOffset = int(1<<maxOffsetPOT - 1)
 //
 // When in the "matched state" (attempting to extend the current match), Snappy
 // does not re-index new 4-byte sequences, but Sloppy does. The reason for this
-// is that Sloppy would like match the most recent occurence as it moves
+// is that Sloppy would like match the most recent occurrence as it moves
 // forward.
 //
 // Lastly, Sloppy adds two novel heuritics, both aimed at further mitigating
 // the chance of chunk boundaries being redrawn because of byte value changes:
 //
 // 1) During the first 2 bytes of match, it *continues* to look for closer
-// matches (effectively prefering a closer but shorter copy to a further but
+// matches (effectively preferring a closer but shorter copy to a further but
 // longer one). The reason for this is that when sequences repeat frequently in
 // a byte stream, randomness provides for a good chance that a one or two byte
 // prefix on a repeated sequence will match "far away". E.g.

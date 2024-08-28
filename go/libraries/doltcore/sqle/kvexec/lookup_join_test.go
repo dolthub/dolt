@@ -93,6 +93,15 @@ func TestLookupJoin(t *testing.T) {
 			doRowexec: true,
 		},
 		{
+			name: "accept keys of different casing",
+			setup: []string{
+				"create table t1 (abc int primary key, def int)",
+				"create table t2 (GHI int primary key, JKL int)",
+			},
+			join:      "select  /*+ LOOKUP_JOIN(t1,t2) */ * from t1 join t2 on ABC = ghi",
+			doRowexec: true,
+		},
+		{
 			name: "reject type incompatibility",
 			setup: []string{
 				"create table xy (x int primary key, y int)",

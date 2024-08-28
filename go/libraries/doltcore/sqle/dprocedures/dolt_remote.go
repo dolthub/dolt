@@ -36,7 +36,7 @@ func doltRemote(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(res), nil
+	return rowToIter(int64(res)), nil
 }
 
 // doDoltRemote is used as sql dolt_remote command for only creating or deleting remotes, not listing.

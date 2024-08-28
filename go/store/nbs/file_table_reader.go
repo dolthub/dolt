@@ -105,7 +105,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		}
 
 		if fi.Size() < 0 {
-			// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+			// Size returns the number of bytes for regular files and is system dependent for others (Some of which can be negative).
 			err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
 			return
 		}

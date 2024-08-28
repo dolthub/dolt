@@ -38,8 +38,8 @@ type GetRange struct {
 // A |Region| represents a continuous range of bytes within in a Url.
 // |ranges.Tree| maintains |Region| instances that cover every |GetRange|
 // within the tree. As entries are inserted into the Tree, their Regions can
-// coallesce with Regions which come before or after them in the same Url,
-// based on the |coallesceLimit|.
+// coalesce with Regions which come before or after them in the same Url,
+// based on the |coalesceLimit|.
 //
 // |Region|s are maintained in a |RegionHeap| so that the |Tree| can quickly
 // return a large download to get started on when a download worker is
@@ -103,11 +103,11 @@ func (rh *RegionHeap) Pop() any {
 }
 
 // A ranges.Tree is a tree data structure designed to support efficient
-// coallescing of non-overlapping ranges inserted into it.
+// coalescing of non-overlapping ranges inserted into it.
 type Tree struct {
-	t              *btree.BTreeG[*GetRange]
-	regions        *RegionHeap
-	coallesceLimit int
+	t             *btree.BTreeG[*GetRange]
+	regions       *RegionHeap
+	coalesceLimit int
 }
 
 func GetRangeLess(a, b *GetRange) bool {
@@ -118,11 +118,11 @@ func GetRangeLess(a, b *GetRange) bool {
 	}
 }
 
-func NewTree(coallesceLimit int) *Tree {
+func NewTree(coalesceLimit int) *Tree {
 	return &Tree{
-		t:              btree.NewG[*GetRange](64, GetRangeLess),
-		regions:        &RegionHeap{},
-		coallesceLimit: coallesceLimit,
+		t:             btree.NewG[*GetRange](64, GetRangeLess),
+		regions:       &RegionHeap{},
+		coalesceLimit: coalesceLimit,
 	}
 }
 
@@ -154,12 +154,12 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 	}
 	t.t.ReplaceOrInsert(ins)
 
-	// Check for coallesce with the range of the entry before the new one...
+	// Check for coalesce with the range of the entry before the new one...
 	t.t.DescendLessOrEqual(ins, func(gr *GetRange) bool {
 		if gr == ins {
 			return true
 		}
-		// If we coallesce...
+		// If we coalesce...
 		if ins.Url == gr.Url {
 			regionEnd := gr.Region.EndOffset
 			if regionEnd > ins.Offset {
@@ -167,8 +167,8 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 				ins.Region = gr.Region
 				ins.Region.MatchedBytes += uint64(ins.Length)
 				heap.Fix(t.regions, ins.Region.HeapIndex)
-			} else if (ins.Offset - regionEnd) < uint64(t.coallesceLimit) {
-				// Inserted entry is within the limit to coallesce with the prior one.
+			} else if (ins.Offset - regionEnd) < uint64(t.coalesceLimit) {
+				// Inserted entry is within the limit to coalesce with the prior one.
 				ins.Region = gr.Region
 				ins.Region.MatchedBytes += uint64(ins.Length)
 				ins.Region.EndOffset = ins.Offset + uint64(ins.Length)
@@ -183,10 +183,10 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 		if gr == ins {
 			return true
 		}
-		// If we coallesce...
+		// If we coalesce...
 		if ins.Url == gr.Url && gr.Region != ins.Region {
 			regionStart := gr.Region.StartOffset
-			if regionStart < (ins.Offset + uint64(ins.Length) + uint64(t.coallesceLimit)) {
+			if regionStart < (ins.Offset + uint64(ins.Length) + uint64(t.coalesceLimit)) {
 				if ins.Region == nil {
 					ins.Region = gr.Region
 					ins.Region.MatchedBytes += uint64(ins.Length)
@@ -216,7 +216,7 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 		return false
 	})
 
-	// We didn't coallesce with any existing Regions. Insert a new Region
+	// We didn't coalesce with any existing Regions. Insert a new Region
 	// covering just this GetRange.
 	if ins.Region == nil {
 		ins.Region = &Region{
@@ -233,7 +233,7 @@ func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
 // Returns all the |*GetRange| entries in the tree that are encompassed by the
 // current top entry in our |RegionHeap|. For |HeapStrategy_largest|, this will
 // be the largest possible download we can currently start, given our
-// |coallesceLimit|.
+// |coalesceLimit|.
 func (t *Tree) DeleteMaxRegion() []*GetRange {
 	if t.regions.Len() == 0 {
 		return nil

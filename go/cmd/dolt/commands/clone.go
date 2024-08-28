@@ -231,7 +231,7 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 	}
 
 	if u.Scheme == dbfactory.HTTPSScheme && u.Host == "www.dolthub.com" {
-		// Get the actual repo name and covert the remote
+		// Get the actual repo name and convert the remote
 		split := strings.Split(u.Path, "/")
 
 		if len(split) > 2 {

@@ -95,7 +95,7 @@ import (
      -Total Uncompressed Chunk Data is the sum of the uncompressed byte lengths of all contained chunk byte slices.
      -Magic Number is the first 8 bytes of the SHA256 hash of "https://github.com/attic-labs/nbs".
 
-    NOTE: Unsigned integer quanities, hashes and hash suffix are all encoded big-endian
+    NOTE: Unsigned integer quantities, hashes and hash suffix are all encoded big-endian
 
 
   Looking up Chunks in an NBS Table

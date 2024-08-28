@@ -30,10 +30,11 @@ import (
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
-	workingSet *doltdb.WorkingSet
-	tables     map[doltdb.TableName]*prollyTableWriter
-	aiTracker  globalstate.AutoIncrementTracker
-	mut        *sync.RWMutex
+	workingSet    *doltdb.WorkingSet
+	tables        map[doltdb.TableName]*prollyTableWriter
+	aiTracker     globalstate.AutoIncrementTracker
+	mut           *sync.RWMutex
+	targetStaging bool
 }
 
 var _ dsess.WriteSession = &prollyWriteSession{}
@@ -43,7 +44,7 @@ func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 }
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter) (dsess.TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -51,11 +52,15 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 		return tw, nil
 	}
 
-	// XXX: certain table editors rely on this embedded working set. See
+	// Certain table editors rely on this embedded working set. See
 	// fullTextRewriteEditor for one example, where the |ctx| maintains
 	// the old version of the data while fulltext indexes are rebuilt
 	// using this hidden empty workingSet.
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, tableName)
+	root := s.workingSet.WorkingRoot()
+	if targetStaging {
+		root = s.workingSet.StagedRoot()
+	}
+	t, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -91,17 +96,18 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, tableName doltdb.T
 	}
 
 	twr := &prollyTableWriter{
-		tableName: tableName,
-		dbName:    db,
-		primary:   pw,
-		secondary: sws,
-		tbl:       t,
-		sch:       schState.DoltSchema,
-		sqlSch:    schState.PkSchema.Schema,
-		aiCol:     schState.AutoIncCol,
-		aiTracker: s.aiTracker,
-		flusher:   s,
-		setter:    setter,
+		tableName:     tableName,
+		dbName:        db,
+		primary:       pw,
+		secondary:     sws,
+		tbl:           t,
+		sch:           schState.DoltSchema,
+		sqlSch:        schState.PkSchema.Schema,
+		aiCol:         schState.AutoIncCol,
+		aiTracker:     s.aiTracker,
+		flusher:       s,
+		setter:        setter,
+		targetStaging: targetStaging,
 	}
 	s.tables[tableName] = twr
 
@@ -192,6 +198,9 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 
 	var err error
 	flushed := s.workingSet.WorkingRoot()
+	if s.targetStaging {
+		flushed = s.workingSet.StagedRoot()
+	}
 	for name, tbl := range tables {
 		flushed, err = flushed.PutTable(ctx, name, tbl)
 		if err != nil {
@@ -199,7 +208,11 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 		}
 	}
 
-	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
+	if s.targetStaging {
+		s.workingSet = s.workingSet.WithStagedRoot(flushed)
+	} else {
+		s.workingSet = s.workingSet.WithWorkingRoot(flushed)
+	}
 
 	return s.workingSet, nil
 }

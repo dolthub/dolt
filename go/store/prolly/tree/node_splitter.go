@@ -236,7 +236,7 @@ const (
 // split on any of the records up to |size - thisSize|,
 // the probability that we should split on this record
 // is (CDF(end) - CDF(start)) / (1 - CDF(start)), or,
-// the precentage of the remaining portion of the CDF
+// the percentage of the remaining portion of the CDF
 // that this record actually covers. We split is |hash|,
 // treated as a uniform random number between [0,1),
 // is less than this percentage.

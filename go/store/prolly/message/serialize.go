@@ -66,7 +66,7 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 	for i := len(items) - 1; i >= 0; i-- {
 		val.IterAddressFields(td, func(j int, t val.Type) {
-			// get offset of address withing |tup|
+			// get offset of address within |tup|
 			addr := val.Tuple(items[i]).GetField(j)
 			if len(addr) > 0 && !hash.New(addr).IsEmpty() {
 				cnt++
@@ -89,7 +89,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 			if len(addr) == 0 || hash.New(addr).IsEmpty() {
 				return
 			}
-			// get offset of address withing |tup|
+			// get offset of address within |tup|
 			o, _ := tup.GetOffset(j)
 			o += off // offset is tuple start plus field start
 			b.PrependUint16(uint16(o))

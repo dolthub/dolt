@@ -213,12 +213,12 @@ func float64Encoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWri
 }
 
 func intEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
-	// TODO: encoding types.Int as types.Float is lossy, but will recquire a migration to change
+	// TODO: encoding types.Int as types.Float is lossy, but will require a migration to change
 	return types.Float(float64(v.Int())), nil
 }
 
 func uintEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
-	// TODO: encoding types.Int as types.Uint is lossy, but will recquire a migration to change
+	// TODO: encoding types.Int as types.Uint is lossy, but will require a migration to change
 	return types.Float(float64(v.Uint())), nil
 }
 

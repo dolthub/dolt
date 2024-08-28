@@ -58,7 +58,7 @@ func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(newCommitHash, dataConflicts, schemaConflicts, constraintViolations), nil
+	return rowToIter(newCommitHash, int64(dataConflicts), int64(schemaConflicts), int64(constraintViolations)), nil
 }
 
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns

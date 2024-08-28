@@ -184,7 +184,7 @@ func filterBranchTests() []filterBranchTest {
 			asserts: []testAssertion{
 				{
 					setup: []testCommand{
-						// expeced error: "table not found: test"
+						// expected error: "table not found: test"
 						{cmd.FilterBranchCmd{}, args{"--continue", "-q", "DELETE FROM test WHERE pk > 1;"}},
 					},
 				},

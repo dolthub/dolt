@@ -27,7 +27,7 @@ import (
 func YamlForVersion(st any, versionNum uint32) ([]byte, error) {
 	err := NullUnsupported(versionNum, st)
 	if err != nil {
-		return nil, fmt.Errorf("error nulling unspported fields for version %d: %w", versionNum, err)
+		return nil, fmt.Errorf("error nulling unsupported fields for version %d: %w", versionNum, err)
 	}
 
 	return yaml.Marshal(st)
