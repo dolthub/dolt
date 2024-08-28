@@ -359,6 +359,7 @@ setupCustomEditorScript() {
     [[ "$output" =~ "+  | ours   | 1  | 1 | NULL | NULL | NULL | NULL |" ]] || false
     [[ "$output" =~ "+  | theirs | 1  | 2 | NULL | NULL | NULL | NULL |" ]] || false
     dolt conflicts resolve --theirs t1
+    dolt add t1
 
     run dolt rebase --continue
     [ "$status" -eq 0 ]
@@ -400,7 +401,13 @@ setupCustomEditorScript() {
     [[ "$output" =~ "+  | theirs | 1  | 2 | NULL | NULL | NULL | NULL |" ]] || false
     dolt conflicts resolve --theirs t1
 
-    # Continue the rebase and hit the second data conflict
+    # Without staging the changed tables, trying to continue the rebase results in an error
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot continue a rebase with unstaged changes" ]] || false
+
+    # Stage the tables and then continue the rebase and hit the second data conflict
+    dolt add t1
     run dolt rebase --continue
     [ "$status" -eq 1 ]
     [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
@@ -419,6 +426,7 @@ setupCustomEditorScript() {
     dolt conflicts resolve --ours t1
 
     # Finish the rebase
+    dolt add t1
     run dolt rebase --continue
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false

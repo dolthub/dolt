@@ -869,6 +869,15 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "zero"}, {1, "uno"}},
 			},
 			{
+				// If we don't stage the table, then rebase will give us an error about having unstaged changes
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseUnstagedChanges,
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 			},
@@ -1000,10 +1009,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "uno", 1, "one", "modified", 1, "ein", "modified"}},
 			},
 			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"dolt_rebase_branch1"}},
-			},
-			{
 				Query: "select message from dolt_log;",
 				Expected: []sql.Row{
 					{"inserting row 1 on branch1"},
@@ -1022,6 +1027,15 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// Table t includes the change from the tip of main (0, "zero"), as well as the conflict we just resolved
 				Query:    "SELECT * FROM t;",
 				Expected: []sql.Row{{0, "zero"}, {1, "ein"}},
+			},
+			{
+				// If we don't stage the table, then rebase will give us an error about having unstaged changes
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseUnstagedChanges,
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:       "call dolt_rebase('--continue');",
@@ -1172,6 +1186,15 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "zero"}},
 			},
 			{
+				// If we don't stage the table, then rebase will give us an error about having unstaged changes
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseUnstagedChanges,
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 			},
@@ -1201,6 +1224,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				// Accept the new values from the cherry-picked commit (1, "uno").
 				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_add('t');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -1315,6 +1342,15 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "zero"}},
 			},
 			{
+				// If we don't stage the table, then rebase will give us an error about having unstaged changes
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseUnstagedChanges,
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
 				Query:       "call dolt_rebase('--continue');",
 				ExpectedErr: dprocedures.ErrRebaseDataConflict,
 			},
@@ -1340,6 +1376,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				// Accept the new values from the cherry-picked commit (-1, "-1")
 				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--theirs', 't');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_add('t');",
 				Expected: []sql.Row{{0}},
 			},
 			{

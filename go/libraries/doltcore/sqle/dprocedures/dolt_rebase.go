@@ -83,6 +83,11 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 // ignored) changes in the working set.
 var ErrRebaseUncommittedChanges = goerrors.NewKind("cannot start a rebase with uncommitted changes")
 
+// ErrRebaseUnstagedChanges is used when a rebase is continued, but there are unstaged changes
+// in the working set.
+var ErrRebaseUnstagedChanges = goerrors.NewKind("cannot continue a rebase with unstaged changes. " +
+	"Use dolt_add() to stage tables and then continue the rebase")
+
 // ErrRebaseUnresolvedConflicts is used when a rebase is continued, but there are
 // unresolved conflicts still present.
 var ErrRebaseUnresolvedConflicts = goerrors.NewKind(
@@ -492,24 +497,53 @@ func loadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
 	return rebasePlan, nil
 }
 
-// isWorkingSetClean returns true if the working set for the current session doesn't contain any staged or
-// working changes, other than any changes to ignored tables.
-func isWorkingSetClean(ctx *sql.Context) (bool, error) {
+// filterIgnoredTables iterates over the specified |unstagedTableDeltas|, filters out any TableDeltas for
+// ignored tables, and returns the filtered list.
+func filterIgnoredTables(ctx *sql.Context, unstagedTableDeltas []diff.TableDelta) ([]diff.TableDelta, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		return false, fmt.Errorf("unable to get roots for current session")
+		return nil, fmt.Errorf("unable to get roots for current session")
 	}
 
-	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	filteredTableDeltas := make([]diff.TableDelta, 0, len(unstagedTableDeltas))
+	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
-		return false, err
-	}
-	if !wsOnlyHasIgnoredTables {
-		return false, nil
+		return nil, err
 	}
 
-	return true, nil
+	for _, tableDelta := range unstagedTableDeltas {
+		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
+		if err != nil {
+			return nil, err
+		}
+		if isIgnored != doltdb.Ignore {
+			filteredTableDeltas = append(filteredTableDeltas, tableDelta)
+		}
+	}
+
+	return filteredTableDeltas, nil
+}
+
+// workingSetStatus checks the workspace status and returns whether there are any staged changes and unstaged changes.
+func workingSetStatus(ctx *sql.Context) (stagedChanges, unstagedChanges bool, err error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return false, false, fmt.Errorf("unable to get roots for current session")
+	}
+
+	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return false, false, err
+	}
+
+	unstagedTables, err = filterIgnoredTables(ctx, unstagedTables)
+	if err != nil {
+		return false, false, err
+	}
+
+	return len(stagedTables) > 0, len(unstagedTables) > 0, nil
 }
 
 // recordCurrentStep updates working set metadata to record the current rebase plan step number as well
@@ -560,12 +594,24 @@ func continueRebase(ctx *sql.Context) (string, error) {
 		return "", err
 	}
 
+	// After we've checked for conflicts in the working set, commit the SQL transaction to ensure
+	// our session is in sync with the latest changes on the branch
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	if doltSession.GetTransaction() == nil {
+		_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); err != nil {
+		return "", err
+	}
+
 	rebasePlan, err := loadRebasePlan(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	doltSession := dsess.DSessFromSess(ctx.Session)
 	for _, step := range rebasePlan.Steps {
 		workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
@@ -576,12 +622,14 @@ func continueRebase(ctx *sql.Context) (string, error) {
 		lastAttemptedStep := workingSet.RebaseState().LastAttemptedStep()
 		rebasingStarted := workingSet.RebaseState().RebasingStarted()
 
-		changesCommited, err := isWorkingSetClean(ctx)
+		hasStagedChanges, hasUnstagedChanges, err := workingSetStatus(ctx)
 		if err != nil {
 			return "", err
 		}
 
-		if !rebasingStarted && !changesCommited {
+		// If the rebase is just starting but there are any uncommitted changes in the working set,
+		// tell the user they need to commit them before we can start executing the rebase plan.
+		if !rebasingStarted && (hasStagedChanges || hasUnstagedChanges) {
 			return "", ErrRebaseUncommittedChanges.New()
 		}
 
@@ -590,10 +638,16 @@ func continueRebase(ctx *sql.Context) (string, error) {
 			continue
 		}
 
-		if rebasingStarted && rebaseStepOrder == lastAttemptedStep && !changesCommited {
-			// If we've already executed this step, but the working set has changes, then we need
-			// to make the commit for the manual changes made for this step
-			if err = commitManualChangesForStep(ctx, step); err != nil {
+		// If the rebase is continued, but not all working set changes are staged, then tell the user
+		// they need to explicitly stage the tables before the rebase can be continued.
+		if hasUnstagedChanges {
+			return "", ErrRebaseUnstagedChanges.New()
+		}
+
+		// If we've already executed this step, but the working set has staged changes,
+		// then we need to make the commit for the manual changes made for this step.
+		if rebasingStarted && rebaseStepOrder == lastAttemptedStep && hasStagedChanges {
+			if err = commitManuallyStagedChangesForStep(ctx, step); err != nil {
 				return "", err
 			}
 			continue
@@ -684,7 +738,10 @@ func continueRebase(ctx *sql.Context) (string, error) {
 	}, doltSession.Provider(), nil)
 }
 
-func commitManualChangesForStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
+// commitManuallyStagedChangesForStep handles committing staged changes after a conflict has been manually
+// resolved by the caller before rebasing has been continued. This involves building the correct commit
+// message based on the details of the rebase plan |step| and then creating the commit.
+func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
@@ -710,7 +767,6 @@ func commitManualChangesForStep(ctx *sql.Context, step rebase.RebasePlanStep) er
 	if !ok {
 		return fmt.Errorf("unable to get roots for current session")
 	}
-	roots.Staged = roots.Working
 	pendingCommit, err := doltSession.NewPendingCommit(ctx, ctx.GetCurrentDatabase(), roots, *commitProps)
 	if err != nil {
 		return err
