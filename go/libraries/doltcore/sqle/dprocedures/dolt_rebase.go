@@ -792,11 +792,19 @@ func createCherryPickOptionsForRebaseStep(ctx *sql.Context, planStep *rebase.Reb
 func handleRebaseCherryPick(ctx *sql.Context, planStep *rebase.RebasePlanStep, options cherry_pick.CherryPickOptions) error {
 	_, mergeResult, err := cherry_pick.CherryPick(ctx, planStep.CommitHash, options)
 
+	// TODO: rebase doesn't support schema conflict resolution yet. Ideally, when a schema conflict
+	//       is detected, the rebase would be paused and the user would resolve the conflict just
+	//       like any other conflict, and then call dolt_rebase --continue to keep going.
 	var schemaConflict merge.SchemaConflict
-	isSchemaConflict := errors.As(err, &schemaConflict)
+	if errors.As(err, &schemaConflict) {
+		if abortErr := abortRebase(ctx); abortErr != nil {
+			return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
+		}
+		return ErrRebaseSchemaConflict.New(planStep.CommitHash)
+	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	if (mergeResult != nil && mergeResult.HasMergeArtifacts()) && !isSchemaConflict {
+	if mergeResult != nil && mergeResult.HasMergeArtifacts() {
 		if err := validateConflictsCanBeResolved(ctx, planStep); err != nil {
 			return err
 		}
@@ -825,16 +833,6 @@ func handleRebaseCherryPick(ctx *sql.Context, planStep *rebase.RebasePlanStep, o
 
 		// Otherwise, let the caller know about the conflict and how to resolve
 		return ErrRebaseDataConflict.New(planStep.CommitHash, planStep.CommitMsg)
-	}
-
-	// TODO: rebase doesn't support schema conflict resolution yet. Ideally, when a conflict is
-	//       detected, the rebase would be paused and the user would resolve the conflict just
-	//       like any other conflict, and then call dolt_rebase --continue to keep going.
-	if isSchemaConflict {
-		if abortErr := abortRebase(ctx); abortErr != nil {
-			return ErrRebaseConflictWithAbortError.New(planStep.CommitHash, abortErr)
-		}
-		return ErrRebaseSchemaConflict.New(planStep.CommitHash)
 	}
 
 	return err
