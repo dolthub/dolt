@@ -254,6 +254,20 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
 			Default: "",
 		},
+		&sql.MysqlSystemVariable{
+			Name:    "signingkey",
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_PersistOnly),
+			Type:    types.NewSystemStringType("signingkey"),
+			Default: "",
+		},
+		&sql.MysqlSystemVariable{
+			Name:    "gpgsign",
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_PersistOnly),
+			Type:    types.NewSystemBoolType("gpgsign"),
+			Default: int8(0),
+		},
 	})
 }
 

@@ -672,7 +672,13 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	message := row[4].(string)
 	parent := row[5].(string)
 	height := uint64(len(rows))
+
 	isHead := commitHash == hashOfHead
+
+	var signature string
+	if len(row) > 6 {
+		signature = row[6].(string)
+	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
 	if err != nil {
@@ -694,6 +700,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 			Timestamp:     timestamp,
 			Description:   message,
 			UserTimestamp: int64(timestamp),
+			Signature:     signature,
 		},
 		commitHash:        commitHash,
 		height:            height,

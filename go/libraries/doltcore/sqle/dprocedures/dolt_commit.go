@@ -15,10 +15,11 @@
 package dprocedures
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -166,20 +167,12 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Email:      email,
 	}
 
-	signature := ""
-	if apr.Contains(cli.SignFlag) || strings.ToUpper(cliCtx.Config().GetStringOrDefault(config.SignCommitsKey, "FALSE")) == "TRUE" {
-		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
-		if err != nil {
-			return "", false, err
-		}
-
-		signature, err = gpgSign([]byte(strToSign))
-		if err != nil {
-			return "", false, err
-		}
+	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get gpgsign: %w", err)
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp, signature)
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
 	if err != nil {
 		return "", false, err
 	}
@@ -189,6 +182,32 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", true, nil
 	} else if pendingCommit == nil {
 		return "", false, errors.New("nothing to commit")
+	}
+
+	if apr.Contains(cli.SignFlag) || shouldSign {
+		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
+
+		if keyId == "" {
+			v, err := ctx.GetSessionVariable(ctx, "signingkey")
+			if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+				return "", false, fmt.Errorf("failed to get signingkey: %w", err)
+			} else if err == nil {
+				keyId = v.(string)
+			}
+		}
+
+		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
+		if err != nil {
+			return "", false, err
+		}
+
+		signed, signature, err := gpgSign(ctx, keyId, []byte(strToSign))
+		if err != nil {
+			return "", false, err
+		}
+
+		fmt.Println(signed, signature)
+		pendingCommit.CommitOptions.Meta.Signature = signature
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -249,6 +268,23 @@ func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp
 	return strings.Join(lines, "\n"), nil
 }
 
-func gpgSign(toSign []byte) (string, error) {
-	return "", nil
+func gpgSign(ctx context.Context, keyId string, toSign []byte) (string, string, error) {
+	blocks, err := gpg.Sign(ctx, keyId, toSign)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign: %w", err)
+	}
+
+	signedDataBlocks := gpg.GetBlocksOfType(blocks, "PGP SIGNED MESSAGE")
+
+	if len(signedDataBlocks) != 1 {
+		return "", "", fmt.Errorf("expected 1 'PGP SIGNED MESSAGE' block, got %d", len(signedDataBlocks))
+	}
+
+	signatureBlocks := gpg.GetBlocksOfType(blocks, "PGP SIGNATURE")
+
+	if len(signatureBlocks) != 1 {
+		return "", "", fmt.Errorf("expected 1 PGP SIGNATURE block, got %d", len(signatureBlocks))
+	}
+
+	return string(signedDataBlocks[0].Bytes), string(signatureBlocks[0].Bytes), nil
 }

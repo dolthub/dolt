@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
+func Sign(ctx context.Context, keyId string, message []byte) ([]*pem.Block, error) {
 	args := []string{"--clear-sign", "-u", keyId}
 	cmdStr := fmt.Sprintf("gpg %s", strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, "gpg", args...)
@@ -72,19 +72,12 @@ func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read output for command '%s': %w", cmdStr, err)
 	}
 
-	var signature []byte
-	pemBlocks := decodeAllPEMBlocks(outBuf.Bytes())
-	for _, block := range pemBlocks {
-		fmt.Println("type:", block.Type)
-		fmt.Println("headers:", block.Headers)
-		fmt.Println("bytes:", block.Bytes)
-
-		if block.Type == "SIGNATURE" {
-			signature = block.Bytes
-		}
+	pemBlocks, err := decodeAllPEMBlocks(outBuf.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode PEM blocks: %w", err)
 	}
 
-	return signature, nil
+	return pemBlocks, nil
 }
 
 func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Buffer {
@@ -97,20 +90,74 @@ func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Bu
 }
 
 // Throws away all intersperesed text and returns all decoded PEM blocks, in the order they are read.
-func decodeAllPEMBlocks(bs []byte) []*pem.Block {
-	fmt.Println("decoding PEM blocks in:")
-	fmt.Println(string(bs))
+func decodeAllPEMBlocks(bs []byte) ([]*pem.Block, error) {
+	const beginHeaderPrefix = "BEGIN "
+	const pemSeperator = "-----"
 
-	var b *pem.Block
-	var ret []*pem.Block
-	for {
-		b, bs = pem.Decode(bs)
-		if b != nil {
-			fmt.Println("decoded block")
-			ret = append(ret, b)
-		} else {
-			fmt.Printf("decoded '%d' blocks\n", len(ret))
-			return ret
+	sections := strings.Split(string(bs), pemSeperator)
+	filtered := make([]string, 0, len(sections))
+
+	for i, section := range sections {
+		section := strings.TrimSpace(section)
+
+		if i == 0 || i == len(sections)-1 {
+			if section == "" {
+				continue
+			}
+		}
+
+		filtered = append(filtered, section)
+	}
+
+	pemBlocks := make([]*pem.Block, 0, len(filtered))
+	for i := 0; i < len(filtered); {
+		headerName := filtered[i]
+		i++
+
+		if strings.HasPrefix(headerName, beginHeaderPrefix) {
+			headerName = headerName[len(beginHeaderPrefix):]
+
+			body := filtered[i]
+			i++
+
+			headers := make(map[string]string)
+			lines := strings.Split(body, "\n")
+			for j, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				tokens := strings.Split(trimmed, ":")
+				if len(tokens) == 2 {
+					headers[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
+				} else {
+					if j > 0 {
+						if lines[j] == "" {
+							j++
+						}
+
+						lines = lines[j:]
+					}
+
+					break
+				}
+			}
+
+			body = strings.Join(lines, "\n")
+			pemBlocks = append(pemBlocks, &pem.Block{
+				Type:    headerName,
+				Headers: headers,
+				Bytes:   []byte(body),
+			})
 		}
 	}
+
+	return pemBlocks, nil
+}
+
+func GetBlocksOfType(blocks []*pem.Block, blTypeStr string) []*pem.Block {
+	var ret []*pem.Block
+	for _, block := range blocks {
+		if block.Type == blTypeStr {
+			ret = append(ret, block)
+		}
+	}
+	return ret
 }

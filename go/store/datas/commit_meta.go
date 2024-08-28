@@ -34,6 +34,7 @@ const (
 	commitMetaTimestampKey = "timestamp"
 	commitMetaUserTSKey    = "user_timestamp"
 	commitMetaVersionKey   = "metaversion"
+	commitMetaSignature    = "signature"
 
 	commitMetaStName  = "metadata"
 	commitMetaVersion = "1.0"
@@ -60,6 +61,7 @@ type CommitMeta struct {
 	Timestamp     uint64
 	Description   string
 	UserTimestamp int64
+	Signature     string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -118,7 +120,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	committerDateMillis := uint64(CommitterDate().UnixMilli())
 	authorDateMillis := userTS.UnixMilli()
 
-	return &CommitMeta{n, e, committerDateMillis, d, authorDateMillis}, nil
+	return &CommitMeta{n, e, committerDateMillis, d, authorDateMillis, ""}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -164,12 +166,21 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		userTS = types.Int(int64(uint64(ts.(types.Uint))))
 	}
 
+	signature, ok, err := st.MaybeGet(commitMetaSignature)
+
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		signature = types.String("")
+	}
+
 	return &CommitMeta{
 		string(n.(types.String)),
 		string(e.(types.String)),
 		uint64(ts.(types.Uint)),
 		string(d.(types.String)),
 		int64(userTS.(types.Int)),
+		string(signature.(types.String)),
 	}, nil
 }
 
@@ -181,6 +192,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaTimestampKey: types.Uint(cm.Timestamp),
 		commitMetaVersionKey:   types.String(commitMetaVersion),
 		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
+		commitMetaSignature:    types.String(cm.Signature),
 	}
 
 	return types.NewStruct(nbf, commitMetaStName, metadata)

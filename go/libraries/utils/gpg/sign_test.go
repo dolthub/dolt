@@ -2,6 +2,7 @@ package gpg
 
 import (
 	"context"
+	"encoding/pem"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -41,7 +42,19 @@ YN6Sszg+o8Aw0AT4M6nrLTe3YaIE6sR4YMxOCSOPAT9oSDg1t5s=
 =fklH
 -----END PGP SIGNATURE-----`
 
-	pemBlocks := decodeAllPEMBlocks([]byte(pemBlock))
+	pemBlocks, err := decodeAllPEMBlocks([]byte(pemBlock))
+	require.NoError(t, err)
 	fmt.Println(len(pemBlocks))
 	require.Len(t, pemBlocks, 2)
+	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNED MESSAGE"))
+	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNATURE"))
+}
+
+func containsBlockOfType(blocks []*pem.Block, blockType string) bool {
+	for _, block := range blocks {
+		if block.Type == blockType {
+			return true
+		}
+	}
+	return false
 }

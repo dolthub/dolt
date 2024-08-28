@@ -435,7 +435,7 @@ func executeNoFFMerge(
 		Force:   spec.Force,
 		Name:    spec.Name,
 		Email:   spec.Email,
-	}, "")
+	})
 	if err != nil {
 		return nil, nil, err
 	}
