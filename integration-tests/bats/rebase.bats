@@ -367,7 +367,7 @@ setupCustomEditorScript() {
     # Assert that we are back on the branch being rebased
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "b1" ]] || false
+    [[ "$output" =~ "* b1" ]] || false
     ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
 }
 

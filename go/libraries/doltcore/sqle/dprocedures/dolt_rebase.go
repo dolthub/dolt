@@ -512,12 +512,15 @@ func isWorkingSetClean(ctx *sql.Context) (bool, error) {
 	return true, nil
 }
 
+// recordCurrentStep updates working set metadata to record the current rebase plan step number as well
+// as the rebase started flag indicating that execution of the rebase plan has been started. This
+// information is all stored in the RebaseState of the WorkingSet.
 func recordCurrentStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	if doltSession.GetTransaction() == nil {
 		_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
@@ -539,7 +542,7 @@ func recordCurrentStep(ctx *sql.Context, step rebase.RebasePlanStep) error {
 	if doltSession.GetTransaction() != nil {
 		err = doltSession.CommitTransaction(ctx, doltSession.GetTransaction())
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
@@ -685,7 +688,7 @@ func commitManualChangesForStep(ctx *sql.Context, step rebase.RebasePlanStep) er
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	options, err := createCherryPickOptionsForRebaseStep(ctx, &step, workingSet.RebaseState().CommitBecomesEmptyHandling(),
@@ -758,7 +761,8 @@ func createCherryPickOptionsForRebaseStep(ctx *sql.Context, planStep *rebase.Reb
 
 	switch planStep.Action {
 	case rebase.RebaseActionDrop, rebase.RebaseActionPick:
-		// Nothing to do
+		// Nothing to do – the drop action doesn't result in a cherry pick and the pick action
+		// doesn't require any special options (i.e. no amend, no custom commit message).
 
 	case rebase.RebaseActionReword:
 		options.CommitMessage = planStep.CommitMsg
