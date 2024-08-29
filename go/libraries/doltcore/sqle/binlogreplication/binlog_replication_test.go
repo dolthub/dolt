@@ -35,6 +35,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
@@ -121,6 +122,47 @@ func TestBinlogReplicationSanityCheck(t *testing.T) {
 	primaryDatabase.MustExec("update tableT set pk = 300")
 	waitForReplicaToCatchUp(t)
 	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"300"}})
+}
+
+// TestBinlogReplicationWithHundredsOfDatabases asserts that we can efficiently replicate the creation of hundreds of databases.
+func TestBinlogReplicationWithHundredsOfDatabases(t *testing.T) {
+	defer teardown(t)
+	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	startReplicationAndCreateTestDb(t, mySqlPort)
+
+	// Create a table on the primary and verify on the replica
+	primaryDatabase.MustExec("create table tableT (pk int primary key)")
+	waitForReplicaToCatchUp(t)
+	assertCreateTableStatement(t, replicaDatabase, "tableT",
+		"CREATE TABLE tableT ( pk int NOT NULL, PRIMARY KEY (pk)) "+
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin")
+	assertRepoStateFileExists(t, "db01")
+
+	// Create a few hundred databases on the primary and let them replicate to the replica
+	dbCount := 300
+	startTime := time.Now()
+	for i := range dbCount {
+		dbName := fmt.Sprintf("db%03d", i)
+		primaryDatabase.MustExec(fmt.Sprintf("create database %s", dbName))
+	}
+	waitForReplicaToCatchUp(t)
+	endTime := time.Now()
+	logrus.Infof("Time to replicate %d databases: %v", dbCount, endTime.Sub(startTime))
+
+	// Spot check the presence of a database on the replica
+	assertRepoStateFileExists(t, "db042")
+
+	// Insert some data in one database
+	startTime = time.Now()
+	primaryDatabase.MustExec("use db042;")
+	primaryDatabase.MustExec("create table t (pk int primary key);")
+	primaryDatabase.MustExec("insert into t values (100), (101), (102);")
+
+	// Verify the results on the replica
+	waitForReplicaToCatchUp(t)
+	requireReplicaResults(t, "select * from db042.t;", [][]any{{"100"}, {"101"}, {"102"}})
+	endTime = time.Now()
+	logrus.Infof("Time to replicate inserts to 1 database (out of %d): %v", endTime.Sub(startTime), dbCount)
 }
 
 // TestAutoRestartReplica tests that a Dolt replica automatically starts up replication if
