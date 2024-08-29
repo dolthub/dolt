@@ -66,6 +66,15 @@ type RebaseState struct {
 
 	// emptyCommitHandling specifies how to handle empty commits that contain no changes.
 	emptyCommitHandling EmptyCommitHandling
+
+	// lastAttemptedStep records the last rebase plan step that was attempted, whether it completed successfully, or
+	// resulted in conflicts for the user to manually resolve. This field is not valid unless rebasingStarted is set
+	// to true.
+	lastAttemptedStep float32
+
+	// rebasingStarted is true once the rebase plan has been started to execute. Once rebasingStarted is true, the
+	// value in lastAttemptedStep has been initialized and is valid to read.
+	rebasingStarted bool
 }
 
 // Branch returns the name of the branch being actively rebased. This is the branch that will be updated to point
@@ -91,6 +100,24 @@ func (rs RebaseState) EmptyCommitHandling() EmptyCommitHandling {
 
 func (rs RebaseState) CommitBecomesEmptyHandling() EmptyCommitHandling {
 	return rs.commitBecomesEmptyHandling
+}
+
+func (rs RebaseState) LastAttemptedStep() float32 {
+	return rs.lastAttemptedStep
+}
+
+func (rs RebaseState) WithLastAttemptedStep(step float32) *RebaseState {
+	rs.lastAttemptedStep = step
+	return &rs
+}
+
+func (rs RebaseState) RebasingStarted() bool {
+	return rs.rebasingStarted
+}
+
+func (rs RebaseState) WithRebasingStarted(rebasingStarted bool) *RebaseState {
+	rs.rebasingStarted = rebasingStarted
+	return &rs
 }
 
 type MergeState struct {
@@ -517,6 +544,8 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			branch:                     dsws.RebaseState.Branch(ctx),
 			commitBecomesEmptyHandling: EmptyCommitHandling(dsws.RebaseState.CommitBecomesEmptyHandling(ctx)),
 			emptyCommitHandling:        EmptyCommitHandling(dsws.RebaseState.EmptyCommitHandling(ctx)),
+			lastAttemptedStep:          dsws.RebaseState.LastAttemptedStep(ctx),
+			rebasingStarted:            dsws.RebaseState.RebasingStarted(ctx),
 		}
 	}
 
@@ -613,7 +642,8 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		}
 
 		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch,
-			uint8(ws.rebaseState.commitBecomesEmptyHandling), uint8(ws.rebaseState.emptyCommitHandling))
+			uint8(ws.rebaseState.commitBecomesEmptyHandling), uint8(ws.rebaseState.emptyCommitHandling),
+			ws.rebaseState.lastAttemptedStep, ws.rebaseState.rebasingStarted)
 	}
 
 	return &datas.WorkingSetSpec{
