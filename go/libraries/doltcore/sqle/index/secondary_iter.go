@@ -250,7 +250,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 			if err != nil {
 				return nil, err
 			}
-			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
+			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld, sch: c.sch}, nil
 		}
 	}
 	rng := prolly.PrefixRange(k, c.prefixDesc)
@@ -259,7 +259,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 		return nil, err
 	}
 
-	return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
+	return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld, sch: c.sch}, nil
 }
 
 type keylessSecondaryLookupGen struct {
