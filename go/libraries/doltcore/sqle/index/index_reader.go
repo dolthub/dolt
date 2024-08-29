@@ -547,7 +547,6 @@ type nonCoveringMapIter struct {
 	primary   prolly.Map
 	pkMap     val.OrdinalMapping
 	pkBld     *val.TupleBuilder
-	sch       schema.Schema
 }
 
 var _ prolly.MapIter = (*nonCoveringMapIter)(nil)
@@ -576,6 +575,7 @@ func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, er
 }
 
 func (ib *nonCoveringIndexImplBuilder) OutputSchema() schema.Schema {
+	// this refs the table schema
 	return ib.baseIndexImplBuilder.idx.Schema()
 }
 
@@ -731,7 +731,7 @@ type nomsIndexImplBuilder struct {
 }
 
 func (ib *nomsIndexImplBuilder) OutputSchema() schema.Schema {
-	return ib.baseIndexImplBuilder.OutputSchema()
+	return ib.baseIndexImplBuilder.idx.Schema()
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
