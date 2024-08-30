@@ -16,16 +16,14 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/dolthub/vitess/go/vt/proto/query"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -1226,29 +1224,29 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from test as of 'HEAD~' where pk=?;",
 				Expected: []sql.Row{{0, 0}},
-				Bindings: map[string]*query.BindVariable{
-					"v1": sqltypes.Int8BindVariable(int8(0)),
+				Bindings: map[string]sqlparser.Expr{
+					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
 			},
 			{
 				Query:    "select * from test as of hashof('HEAD') where pk=?;",
 				Expected: []sql.Row{{1, 1, nil}},
-				Bindings: map[string]*query.BindVariable{
-					"v1": sqltypes.Int8BindVariable(int8(1)),
+				Bindings: map[string]sqlparser.Expr{
+					"v1": sqlparser.NewIntVal([]byte("1")),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit1 where pk=?;",
 				Expected: []sql.Row{{0, 0}},
-				Bindings: map[string]*query.BindVariable{
-					"v1": sqltypes.Int8BindVariable(int8(0)),
+				Bindings: map[string]sqlparser.Expr{
+					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit2 where pk=?;",
 				Expected: []sql.Row{{0, 0, nil}},
-				Bindings: map[string]*query.BindVariable{
-					"v1": sqltypes.Int8BindVariable(int8(0)),
+				Bindings: map[string]sqlparser.Expr{
+					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
 			},
 		},

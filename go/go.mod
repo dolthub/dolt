@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240829233246-ed8de8d3a4e6
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240830164359-91e75818cc5a
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
@@ -166,6 +166,8 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
+
+replace github.com/dolthub/go-mysql-server => /Users/jenniferpurevsuren/dolt_workspace/repos/go-mysql-server
 
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 

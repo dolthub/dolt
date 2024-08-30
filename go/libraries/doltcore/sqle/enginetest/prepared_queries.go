@@ -16,14 +16,13 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,8 +35,8 @@ func DoltPreparedScripts(t *testing.T, harness enginetest.Harness) {
 		},
 		{
 			Query: "SELECT table_name FROM information_schema.columns WHERE table_name = ? group by table_name ORDER BY ORDINAL_POSITION",
-			Bindings: map[string]*query.BindVariable{
-				"v1": sqltypes.StringBindVariable("dolt_history_mytable"),
+			Bindings: map[string]sqlparser.Expr{
+				"v1": sqlparser.NewStrVal([]byte("dolt_history_mytable")),
 			},
 			Expected: []sql.Row{{"dolt_history_mytable"}},
 		},
