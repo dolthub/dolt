@@ -19,15 +19,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
