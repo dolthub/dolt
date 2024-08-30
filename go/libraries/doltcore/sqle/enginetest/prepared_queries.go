@@ -16,8 +16,9 @@ package enginetest
 
 import (
 	"fmt"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"testing"
+
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"

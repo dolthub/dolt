@@ -322,6 +322,8 @@ github.com/dolthub/go-mysql-server v0.18.2-0.20240812011431-f3892cc42bbf h1:F4OT
 github.com/dolthub/go-mysql-server v0.18.2-0.20240812011431-f3892cc42bbf/go.mod h1:PwuemL+YK+YiWcUFhknixeqNLjJNfCx7KDsHNajx9fM=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240827100900-3bf086dd5c18 h1:1lgwZvnecrjoc9v0iqxjdKBvaasAPiQzty40uTKOHsE=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240827100900-3bf086dd5c18/go.mod h1:nbdOzd0ceWONE80vbfwoRBjut7z3CIj69ZgDF/cKuaA=
+github.com/dolthub/go-mysql-server v0.18.2-0.20240830164359-91e75818cc5a h1:ob1NcRvW8+jw+Y8zq1cCacEvSZi3RI3qE/35cGZoaIc=
+github.com/dolthub/go-mysql-server v0.18.2-0.20240830164359-91e75818cc5a/go.mod h1:nbdOzd0ceWONE80vbfwoRBjut7z3CIj69ZgDF/cKuaA=
 github.com/eapache/go-resiliency v1.1.0 h1:1NtRmCAqadE2FN4ZcN6g90TP3uk8cg9rn9eNK2197aU=
 github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 h1:YEetp8/yCZMuEPMUDHG0CW/brkkEp8mzqk2+ODEitlw=
 github.com/eapache/queue v1.1.0 h1:YOEu7KNc61ntiQlcEeUIoDTJ2o8mQznoNvUhiigpIqc=
