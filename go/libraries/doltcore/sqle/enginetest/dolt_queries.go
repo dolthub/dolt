@@ -5663,7 +5663,63 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
-
+	{
+		// this behavior aligns with how we treat branches
+		Name: "hard reset inserted rows continues auto increment",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-Am', 'initialize table')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_reset('--hard')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t(b) values (5)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1, InsertID: 5}},
+				},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{5, 5},
+				},
+			},
+		},
+	},
+	{
+		Name: "hard reset dropped table with branch restores auto increment",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-Am', 'initialize table')",
+			"call dolt_checkout('-b', 'branch1')",
+			"insert into t values (100, 100)",
+			"call dolt_commit('-Am', 'other')",
+			"call dolt_checkout('main')",
+			"drop table t",
+			"call dolt_reset('--hard')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t(b) values (101)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1, InsertID: 101}},
+				},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{101, 101},
+				},
+			},
+		},
+	},
 }
 
 var DoltCherryPickTests = []queries.ScriptTest{
