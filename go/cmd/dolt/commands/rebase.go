@@ -49,7 +49,7 @@ branch. For example, you can drop commits that contain debugging or test changes
 single commit, or reorder commits so that related changes are adjacent in the new commit history.
 `,
 	Synopsis: []string{
-		`(-i | --interactive) {{.LessThan}}upstream{{.GreaterThan}}`,
+		`(-i | --interactive) [--empty=drop|keep] {{.LessThan}}upstream{{.GreaterThan}}`,
 		`(--continue | --abort)`,
 	},
 }
