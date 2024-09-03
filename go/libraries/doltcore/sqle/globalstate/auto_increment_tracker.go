@@ -38,9 +38,10 @@ type AutoIncrementTracker interface {
 	// below the current value for this table. The table in the provided working set is assumed to already have the value
 	// given, so the new global maximum is computed without regard for its value in that working set.
 	Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error)
-
 	// AcquireTableLock acquires the auto increment lock on a table, and returns a callback function to release the lock.
 	// Depending on the value of the `innodb_autoinc_lock_mode` system variable, the engine may need to acquire and hold
 	// the lock for the duration of an insert statement.
 	AcquireTableLock(ctx *sql.Context, tableName string) (func(), error)
+	// Reset resets the auto increment tracker to the value at the provided root.
+	Reset(ctx *sql.Context, roots ...doltdb.Rootish) error
 }

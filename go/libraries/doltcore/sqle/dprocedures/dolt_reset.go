@@ -106,14 +106,15 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		}
 
 		// TODO - refactor and make transactional with the head update above.
-		ws, err := dSess.WorkingSet(ctx, dbName)
+		err = dSess.SetRoots(ctx, dbName, roots)
 		if err != nil {
 			return 1, err
 		}
-		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
+		err = dSess.ResetGlobals(ctx, dbName, roots.Working)
 		if err != nil {
 			return 1, err
 		}
+
 	} else if apr.Contains(cli.SoftResetParam) {
 		arg := ""
 		if apr.NArg() > 1 {

@@ -5637,6 +5637,33 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "hard reset dropped table restores auto increment",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-Am', 'initialize table')",
+			"drop table t",
+			"call dolt_reset('--hard')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "insert into t(b) values (3)",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 1, InsertID: 3}},
+				},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+				},
+			},
+		},
+	},
+
 }
 
 var DoltCherryPickTests = []queries.ScriptTest{
