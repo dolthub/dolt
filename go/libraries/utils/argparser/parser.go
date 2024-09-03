@@ -413,7 +413,7 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 			if opt.AllowMultipleOptions {
 				list := getListValues(args[next:])
 				valueStr = strings.Join(list, ",")
-				index += len(list) - 1
+				index += len(list)
 			} else {
 				nextArg := args[next]
 				if opt.OptType == OptionalEmptyValue {
@@ -426,8 +426,8 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 					index = next
 				}
 			}
+			value = &valueStr
 		}
-		value = &valueStr
 	}
 
 	if opt.Validator != nil {
