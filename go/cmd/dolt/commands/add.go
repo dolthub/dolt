@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -123,59 +122,29 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	for _, tableName := range apr.Args {
-		if tableName != "." && !doltdb.IsValidTableName(tableName) {
-			return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", tableName).Build(), nil)
+	if apr.Contains("patch") {
+		return patchWorkflow(sqlCtx, queryist, args, cliCtx)
+	} else {
+		for _, tableName := range apr.Args {
+			if tableName != "." && !doltdb.IsValidTableName(tableName) {
+				return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", tableName).Build(), nil)
+			}
 		}
-	}
 
-	_, rowIter, _, err := queryist.Query(sqlCtx, generateAddSql(apr))
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
+		_, rowIter, _, err := queryist.Query(sqlCtx, generateAddSql(apr))
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
 
-	_, err = sql.RowIterToRows(sqlCtx, rowIter)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
+		_, err = sql.RowIterToRows(sqlCtx, rowIter)
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
 	}
 
 	return 0
 }
 
-func HandleStageError(err error) int {
-	cli.PrintErrln(toStageVErr(err).Verbose())
-	return 1
-}
-
-func toStageVErr(err error) errhand.VerboseError {
-	switch {
-	case doltdb.IsRootValUnreachable(err):
-		rt := doltdb.GetUnreachableRootType(err)
-		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
-		bdr.AddCause(doltdb.GetUnreachableRootCause(err))
-		return bdr.Build()
-
-	case actions.IsTblNotExist(err):
-		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("Some of the specified tables or docs were not found")
-		bdr.AddDetails("Unknown tables or docs: %v", tbls)
-
-		return bdr.Build()
-
-	case actions.IsTblInConflict(err) || actions.IsTblViolatesConstraints(err):
-		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("error: not all tables merged")
-
-		for _, tbl := range tbls {
-			bdr.AddDetails("  %s", tbl)
-		}
-
-		return bdr.Build()
-	case doltdb.AsDoltIgnoreInConflict(err) != nil:
-		return errhand.VerboseErrorFromError(err)
-	default:
-		return errhand.BuildDError("Unknown error").AddCause(err).Build()
-	}
 }
