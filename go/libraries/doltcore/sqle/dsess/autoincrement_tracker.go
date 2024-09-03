@@ -431,8 +431,7 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 	return a.mm.Lock(tableName), nil
 }
 
-
-func (a *AutoIncrementTracker) Reset(ctx *sql.Context, roots... doltdb.Rootish) error {
+func (a *AutoIncrementTracker) Reset(ctx *sql.Context, roots ...doltdb.Rootish) error {
 	for _, root := range roots {
 		r, err := root.ResolveRootValue(ctx)
 		if err != nil {

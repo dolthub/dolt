@@ -5648,7 +5648,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "insert into t(b) values (3)",
+				Query: "insert into t(b) values (3)",
 				Expected: []sql.Row{
 					{types.OkResult{RowsAffected: 1, InsertID: 3}},
 				},
@@ -5663,7 +5663,6 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 }
 
 var DoltCherryPickTests = []queries.ScriptTest{
