@@ -86,12 +86,12 @@ func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 
 func Verify(ctx context.Context, signature []byte) ([]byte, error) {
 	args := []string{"--verify"}
-	outBuf, _, err := execGpgAndReadOutput(ctx, signature, args)
+	_, errBuf, err := execGpgAndReadOutput(ctx, signature, args)
 	if err != nil {
 		return nil, err
 	}
 
-	return outBuf.Bytes(), nil
+	return errBuf.Bytes(), nil
 }
 
 func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Buffer {
@@ -103,7 +103,7 @@ func listenToOut(ctx context.Context, eg *errgroup.Group, r io.Reader) *bytes.Bu
 	return buf
 }
 
-// Throws away all intersperesed text and returns all decoded PEM blocks, in the order they are read.
+// DecodeAllPEMBlocks decodes all PEM blocks from a byte slice.
 func DecodeAllPEMBlocks(bs []byte) ([]*pem.Block, error) {
 	const beginHeaderPrefix = "BEGIN "
 	const pemSeperator = "-----"

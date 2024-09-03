@@ -42,12 +42,16 @@ YN6Sszg+o8Aw0AT4M6nrLTe3YaIE6sR4YMxOCSOPAT9oSDg1t5s=
 =fklH
 -----END PGP SIGNATURE-----`
 
-	pemBlocks, err := decodeAllPEMBlocks([]byte(pemBlock))
+	pemBlocks, err := DecodeAllPEMBlocks([]byte(pemBlock))
 	require.NoError(t, err)
 	fmt.Println(len(pemBlocks))
 	require.Len(t, pemBlocks, 2)
 	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNED MESSAGE"))
 	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNATURE"))
+
+	output, err := Verify(context.Background(), []byte(pemBlock))
+	require.NoError(t, err)
+	require.NotNil(t, output)
 }
 
 func containsBlockOfType(blocks []*pem.Block, blockType string) bool {

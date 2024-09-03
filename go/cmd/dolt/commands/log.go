@@ -280,10 +280,14 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 
 // logCommits takes a list of sql rows that have only 1 column, commit hash, and retrieves the commit info for each hash to be printed to std out
 func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) error {
+	opts := commitInfoOptions{
+		showSignature: apr.Contains(cli.ShowSignatureFlag),
+	}
+
 	var commitsInfo []CommitInfo
 	for _, hash := range commitHashes {
 		cmHash := hash[0].(string)
-		commit, err := getCommitInfo(queryist, sqlCtx, cmHash)
+		commit, err := getCommitInfoWithOptions(queryist, sqlCtx, cmHash, opts)
 		if commit == nil {
 			return fmt.Errorf("no commits found for ref %s", cmHash)
 		}
@@ -338,7 +342,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 
 func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commits []CommitInfo, sqlCtx *sql.Context, queryist cli.Queryist) error {
 	for _, comm := range commits {
-		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.GetValueOrDefault(cli.DecorateFlag, "auto"), &comm)
+		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.Contains(cli.ShowSignatureFlag), apr.GetValueOrDefault(cli.DecorateFlag, "auto"), &comm)
 		if apr.Contains(cli.StatFlag) {
 			if comm.parentHashes != nil && len(comm.parentHashes) == 1 { // don't print stats for merge commits
 				diffStats := make(map[string]*merge.MergeStats)
