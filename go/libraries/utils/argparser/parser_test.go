@@ -15,12 +15,20 @@
 package argparser
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func createParserWithOptionalArgs() *ArgParser {
+	ap := NewArgParserWithMaxArgs("test", 16)
+	ap.SupportsFlag("flag", "f", "flag")
+	ap.SupportsString("param", "p", "param", "")
+	ap.SupportsOptionalString("optional", "o", "optional", "")
+
+	return ap
+}
 
 func TestArgParser(t *testing.T) {
 	tests := []struct {
@@ -94,10 +102,52 @@ func TestArgParser(t *testing.T) {
 			[]string{},
 		},
 		{
-			NewArgParserWithMaxArgs("test", 1),
+			createParserWithOptionalArgs(),
 			[]string{"foo", "bar"},
-			errors.New("error: test has too many positional arguments. Expected at most 1, found 2: foo, bar"),
+			nil,
 			map[string]string{},
+			[]string{"foo", "bar"},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-o", "-f", "foo", "bar"},
+			nil,
+			map[string]string{"flag": "", "optional": ""},
+			[]string{"foo", "bar"},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-o", "optional value", "-f", "foo", "bar"},
+			nil,
+			map[string]string{"flag": "", "optional": "optional value"},
+			[]string{"foo", "bar"},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-o", "--", "foo", "bar"},
+			nil,
+			map[string]string{"optional": ""},
+			[]string{"foo", "bar"},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-p", "value", "-o"},
+			nil,
+			map[string]string{"param": "value", "optional": ""},
+			[]string{},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-p", "value", "-o", "--"},
+			nil,
+			map[string]string{"param": "value", "optional": ""},
+			[]string{},
+		},
+		{
+			createParserWithOptionalArgs(),
+			[]string{"-o", "-p", "value"},
+			nil,
+			map[string]string{"param": "value", "optional": ""},
 			[]string{},
 		},
 	}

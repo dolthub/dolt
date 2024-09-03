@@ -343,6 +343,22 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	return &ArgParseResults{namedArgs, positionalArgs, ap, positionalArgsSeparatorIndex}, nil
 }
 
+func (ap *ArgParser) isOptionOrFlag(s string) bool {
+	if len(s) == 0 {
+		return false
+	} else if s[0] != '-' {
+		return false
+	}
+	s = s[1:]
+
+	if len(s) >= 1 && s[0] == '-' {
+		s = s[1:]
+	}
+
+	_, ok := ap.nameOrAbbrevToOpt[s]
+	return ok
+}
+
 func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, err error) {
 	arg := args[index]
 
@@ -387,19 +403,28 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 	}
 
 	if value == nil {
-		index++
+		next := index + 1
 		valueStr := ""
-		if index >= len(args) {
+		if next >= len(args) {
 			if opt.OptType != OptionalEmptyValue {
 				return 0, nil, nil, errors.New("error: no value for option `" + opt.Name + "'")
 			}
 		} else {
 			if opt.AllowMultipleOptions {
-				list := getListValues(args[index:])
+				list := getListValues(args[next:])
 				valueStr = strings.Join(list, ",")
 				index += len(list) - 1
 			} else {
-				valueStr = args[index]
+				nextArg := args[next]
+				if opt.OptType == OptionalEmptyValue {
+					if !(nextArg == "--" || ap.isOptionOrFlag(nextArg)) {
+						valueStr = args[next]
+						index = next
+					}
+				} else {
+					valueStr = args[next]
+					index = next
+				}
 			}
 		}
 		value = &valueStr
