@@ -41,7 +41,7 @@ Cherry-picking merge commits or commits with table drops/renames is not currentl
 If any data conflicts, schema conflicts, or constraint violations are detected during cherry-picking, you can use Dolt's conflict resolution features to resolve them. For more information on resolving conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts.
 `,
 	Synopsis: []string{
-		`{{.LessThan}}commit{{.GreaterThan}}`,
+		`[--allow-empty] {{.LessThan}}commit{{.GreaterThan}}`,
 	},
 }
 

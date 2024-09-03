@@ -212,7 +212,7 @@ type lookupMapping struct {
 	pool pool.BuffPool
 }
 
-func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src prolly.Map, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression) *lookupMapping {
+func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, ns tree.NodeStore) *lookupMapping {
 	keyless := schema.IsKeyless(sourceSch)
 	// |split| is an index into the schema separating the key and value fields
 	var split int
@@ -254,12 +254,12 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 	litDesc := val.NewTupleDescriptor(litTypes...)
 	litTb := val.NewTupleBuilder(litDesc)
 	for i, j := range litMappings {
-		tree.PutField(ctx, src.NodeStore(), litTb, i, keyExprs[j].(*expression.Literal).Value())
+		tree.PutField(ctx, ns, litTb, i, keyExprs[j].(*expression.Literal).Value())
 	}
 
 	var litTuple val.Tuple
 	if litDesc.Count() > 0 {
-		litTuple = litTb.Build(src.Pool())
+		litTuple = litTb.Build(ns.Pool())
 	}
 
 	return &lookupMapping{
@@ -267,11 +267,11 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, src proll
 		srcMapping: srcMapping,
 		litTuple:   litTuple,
 		litKd:      litDesc,
-		srcKd:      src.KeyDesc(),
-		srcVd:      src.ValDesc(),
+		srcKd:      sourceSch.GetKeyDescriptor(),
+		srcVd:      sourceSch.GetValueDescriptor(),
 		targetKb:   val.NewTupleBuilder(tgtKeyDesc),
-		ns:         src.NodeStore(),
-		pool:       src.Pool(),
+		ns:         ns,
+		pool:       ns.Pool(),
 	}
 }
 

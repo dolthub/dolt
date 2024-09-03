@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -249,6 +250,9 @@ type IndexScanBuilder interface {
 
 	// Key returns the table root for caching purposes
 	Key() doltdb.DataCacheKey
+
+	// OutputSchema returns the output KV tuple schema
+	OutputSchema() schema.Schema
 }
 
 func NewIndexReaderBuilder(
@@ -374,6 +378,10 @@ func (ib *baseIndexImplBuilder) Key() doltdb.DataCacheKey {
 	return ib.key
 }
 
+func (ib *baseIndexImplBuilder) OutputSchema() schema.Schema {
+	return ib.idx.IndexSchema()
+}
+
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *baseIndexImplBuilder) NewPartitionRowIter(_ *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	panic("cannot call NewRowIter on baseIndexImplBuilder")
@@ -479,6 +487,10 @@ func (i *sequenceRangeIter) Next(ctx context.Context) (val.Tuple, val.Tuple, err
 	return k, v, nil
 }
 
+func (ib *coveringIndexImplBuilder) OutputSchema() schema.Schema {
+	return ib.idx.IndexSchema()
+}
+
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
 	if reverse {
@@ -562,6 +574,11 @@ func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, er
 	return pk, value, nil
 }
 
+func (ib *nonCoveringIndexImplBuilder) OutputSchema() schema.Schema {
+	// this refs the table schema
+	return ib.baseIndexImplBuilder.idx.Schema()
+}
+
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
 	var secIter prolly.MapIter
@@ -617,6 +634,10 @@ func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nu
 type keylessIndexImplBuilder struct {
 	*baseIndexImplBuilder
 	s *durableIndexState
+}
+
+func (ib *keylessIndexImplBuilder) OutputSchema() schema.Schema {
+	return ib.idx.Schema()
 }
 
 // NewRangeMapIter implements IndexScanBuilder
@@ -707,6 +728,10 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 type nomsIndexImplBuilder struct {
 	*baseIndexImplBuilder
 	s *durableIndexState
+}
+
+func (ib *nomsIndexImplBuilder) OutputSchema() schema.Schema {
+	return ib.baseIndexImplBuilder.idx.Schema()
 }
 
 // NewPartitionRowIter implements IndexScanBuilder
