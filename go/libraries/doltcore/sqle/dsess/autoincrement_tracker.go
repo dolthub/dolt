@@ -61,41 +61,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		sequences: &sync.Map{},
 		mm:        mutexmap.NewMutexMap(),
 	}
-
-	for _, root := range roots {
-		root, err := root.ResolveRootValue(ctx)
-		if err != nil {
-			return &AutoIncrementTracker{}, err
-		}
-
-		err = root.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
-			ok := schema.HasAutoIncrement(sch)
-			if !ok {
-				return false, nil
-			}
-
-			tableName = tableName.ToLower()
-
-			seq, err := table.GetAutoIncrementValue(ctx)
-			if err != nil {
-				return true, err
-			}
-
-			// TODO: support schema name as part of the key
-			tableNameStr := tableName.Name
-			oldValue, loaded := ait.sequences.LoadOrStore(tableNameStr, seq)
-			if loaded && seq > oldValue.(uint64) {
-				ait.sequences.Store(tableNameStr, seq)
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return &AutoIncrementTracker{}, err
-		}
-	}
-
+	ait.InitWithRoots(ctx, roots...)
 	return &ait, nil
 }
 
@@ -431,7 +397,7 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 	return a.mm.Lock(tableName), nil
 }
 
-func (a *AutoIncrementTracker) Reset(ctx *sql.Context, roots ...doltdb.Rootish) error {
+func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
 	for _, root := range roots {
 		r, err := root.ResolveRootValue(ctx)
 		if err != nil {
@@ -449,8 +415,7 @@ func (a *AutoIncrementTracker) Reset(ctx *sql.Context, roots ...doltdb.Rootish) 
 			}
 
 			tableNameStr := tableName.ToLower().Name
-			oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq)
-			if loaded && seq > oldValue.(uint64) {
+			if oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq); loaded && seq > oldValue.(uint64) {
 				a.sequences.Store(tableNameStr, seq)
 			}
 

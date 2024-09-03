@@ -1017,7 +1017,7 @@ func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.
 		return err
 	}
 
-	err = tracker.Reset(ctx, root)
+	err = tracker.InitWithRoots(ctx, root)
 	if err != nil {
 		return err
 	}

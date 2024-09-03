@@ -15,6 +15,8 @@
 package globalstate
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -42,6 +44,6 @@ type AutoIncrementTracker interface {
 	// Depending on the value of the `innodb_autoinc_lock_mode` system variable, the engine may need to acquire and hold
 	// the lock for the duration of an insert statement.
 	AcquireTableLock(ctx *sql.Context, tableName string) (func(), error)
-	// Reset resets the auto increment tracker to the value at the provided root.
-	Reset(ctx *sql.Context, roots ...doltdb.Rootish) error
+	// InitWithRoots fills the AutoIncrementTracker with values at the specified root.
+	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
 }
