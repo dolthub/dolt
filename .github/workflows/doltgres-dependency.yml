@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
 
 jobs:
   test-integration:
@@ -12,35 +12,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check for a DoltgreSQL PR link
-        run: |
-          COMMENTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments)
-          COMMENT_EXISTS=$(echo "$COMMENTS" | jq -r '.[] | select(.body | contains("github.com/dolthub/doltgresql/pull/"))')
-          if [ -n "$COMMENT_EXISTS" ]; then
-            exit 0
-          fi
-
       - name: Checkout Dolt
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Setup Git User
+        uses: fregante/setup-git-user@v2
+
+      - name: Merge main into PR
+        id: merge_main
+        run: |
+          git fetch --all --unshallow
+          git merge origin/main --no-commit --no-ff
+          if [ $? -ne 0 ]; then
+            echo "Skipping the remainder of the workflow due to a merge conflict."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Merge performed successfully, continuing workflow."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for a DoltgreSQL PR link
+        if: steps.merge_main.outputs.skip == 'false'
+        run: |
+          PR_DESCRIPTION=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number != '' && github.event.pull_request.number || github.event.issue.number }})
+          COMMENTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number != '' && github.event.pull_request.number || github.event.issue.number }}/comments)
+          echo "$PR_DESCRIPTION$COMMENTS"
+          if echo "$PR_DESCRIPTION$COMMENTS" | grep -q "github.com/dolthub/doltgresql/pull/"; then
+            echo "comment_exists=true" >> $GITHUB_OUTPUT
+            echo "DoltgreSQL PR link exists"
+          else
+            echo "comment_exists=false" >> $GITHUB_OUTPUT
+            echo "DoltgreSQL PR link does not exist"
+          fi
+
       - name: Install Go
         uses: actions/setup-go@v5
+        if: steps.merge_main.outputs.skip == 'false'
         with:
           go-version-file: go/go.mod
 
       - name: Clone DoltgreSQL repository
+        if: steps.merge_main.outputs.skip == 'false'
         run: git clone https://github.com/dolthub/doltgresql.git
 
       - name: Build DoltgreSQL's parser
+        if: steps.merge_main.outputs.skip == 'false'
         run: |
           cd doltgresql
           ./postgres/parser/build.sh
 
       - name: Test DoltgreSQL against main
         id: test_doltgresql_main
+        if: steps.merge_main.outputs.skip == 'false'
         continue-on-error: true
         run: |
           cd doltgresql
@@ -50,11 +77,11 @@ jobs:
           go test ./... --count=1 -skip Replication
 
       - name: Test DoltgreSQL against PR
-        if: steps.test_doltgresql_main.outcome == 'success'
+        if: steps.merge_main.outputs.skip == 'false' && steps.test_doltgresql_main.outcome == 'success'
         run: |
           cd doltgresql
           git reset --hard
-          go get github.com/${{ github.event.pull_request.head.repo.full_name }}/go@${{ github.event.pull_request.head.sha }}
+          go mod edit -replace github.com/dolthub/dolt/go=../go
           go mod tidy
           cd testing/go
           go test ./... --count=1 -skip Replication

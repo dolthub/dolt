@@ -563,6 +563,21 @@ func (d *DoltSession) dirtyWorkingSets() []*branchState {
 	return dirtyStates
 }
 
+// DirtyDatabases returns the names of databases who have outstanding changes in this session and need to be committed
+// in a SQL transaction before they are visible to other sessions.
+func (d *DoltSession) DirtyDatabases() []string {
+	var dbNames []string
+	for _, dbState := range d.dbStates {
+		for _, branchState := range dbState.heads {
+			if branchState.dirty {
+				dbNames = append(dbNames, dbState.dbName)
+				break
+			}
+		}
+	}
+	return dbNames
+}
+
 // CommitWorkingSet commits the working set for the transaction given, without creating a new dolt commit.
 // Clients should typically use CommitTransaction, which performs additional checks, instead of this method.
 func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.Transaction) error {
@@ -705,6 +720,31 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 			}
 
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
+		}
+
+		// If the commit message isn't set and we're amending the previous commit,
+		// go ahead and set the commit message from the current HEAD
+		if props.Message == "" && props.Amend {
+			cs, err := doltdb.NewCommitSpec("HEAD")
+			if err != nil {
+				return nil, err
+			}
+
+			headRef, err := branchState.dbData.Rsr.CWBHeadRef()
+			if err != nil {
+				return nil, err
+			}
+			optCmt, err := branchState.dbData.Ddb.Resolve(ctx, cs, headRef)
+			commit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
+			meta, err := commit.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, err
+			}
+			props.Message = meta.Description
 		}
 
 		// TODO: This is not the correct way to write this commit as an amend. While this commit is running
@@ -978,7 +1018,7 @@ func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot do
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -989,6 +1029,25 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 	workingSet := sessionState.WorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
+}
+
+func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	tracker, err := sessionState.dbState.globalState.AutoIncrementTracker(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = tracker.InitWithRoots(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *DoltSession) SetFileSystem(fs filesys.Filesys) {
@@ -1019,8 +1078,8 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	if writeSess := branchState.WriteSession(); writeSess != nil {
-		err = writeSess.SetWorkingSet(ctx, ws)
+	if branchState.writeSession != nil {
+		err = branchState.writeSession.SetWorkingSet(ctx, ws)
 		if err != nil {
 			return err
 		}
@@ -1444,9 +1503,10 @@ func (d *DoltSession) dbSessionVarsStale(ctx *sql.Context, state *branchState) b
 	return d.dbCache.CacheSessionVars(state, dtx)
 }
 
-func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
-	d.globalsConf = conf
-	return &d
+func (d *DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
+	nd := *d
+	nd.globalsConf = conf
+	return &nd
 }
 
 // PersistGlobal implements sql.PersistableSession

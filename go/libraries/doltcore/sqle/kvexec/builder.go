@@ -43,7 +43,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
 				if _, _, dstIter, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
-						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, srcMap, dstIter.InputKeyDesc(), ita.Expressions()); keyLookupMapper.valid() {
+						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), srcMap.NodeStore()); keyLookupMapper.valid() {
 							// conditions:
 							// (1) lookup or left lookup join
 							// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
@@ -314,6 +314,8 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			return prolly.Map{}, nil, nil, nil, nil, nil, err
 		}
 		indexMap = durable.ProllyMapFromIndex(rowData)
+
+		sch = lb.OutputSchema()
 
 		if isSrc {
 			l, err := n.GetLookup(ctx, nil)

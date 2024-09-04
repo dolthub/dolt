@@ -336,7 +336,7 @@ setupCustomEditorScript() {
     ! [[ "$output" =~ "b1 merge commit" ]] || false
 }
 
-@test "rebase: rebase with data conflicts aborts" {
+@test "rebase: rebase with data conflict" {
     setupCustomEditorScript
 
     dolt checkout b1
@@ -345,15 +345,96 @@ setupCustomEditorScript() {
 
     run dolt rebase -i main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "merge conflict detected while rebasing commit" ]] || false
-    [[ "$output" =~ "the rebase has been automatically aborted" ]] || false
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "b1 commit 2" ]] || false
+
+    # Assert that we are on the rebase working branch (not the branch being rebased)
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Review and resolve the data conflict
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | ours   | 1  | 1 | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "+  | theirs | 1  | 2 | NULL | NULL | NULL | NULL |" ]] || false
+    dolt conflicts resolve --theirs t1
+    dolt add t1
 
     run dolt rebase --continue
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no rebase in progress" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
 
+    # Assert that we are back on the branch being rebased
     run dolt branch
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "* b1" ]] || false
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+}
+
+@test "rebase: rebase with multiple data conflicts" {
+    setupCustomEditorScript
+    dolt sql -q "INSERT INTO t1 VALUES (2,200);"
+    dolt commit -am "main commit 3"
+
+    dolt checkout b1
+    dolt sql -q "INSERT INTO t1 VALUES (1,2);"
+    dolt commit -am "b1 commit 2"
+    dolt sql -q "INSERT INTO t1 VALUES (2,3);"
+    dolt commit -am "b1 commit 3"
+
+    # Start the rebase
+    run dolt rebase -i main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "b1 commit 2" ]] || false
+
+    # Assert that we are on the rebase working branch now (not the branch being rebased)
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Review and resolve the first data conflict
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | ours   | 1  | 1 | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "+  | theirs | 1  | 2 | NULL | NULL | NULL | NULL |" ]] || false
+    dolt conflicts resolve --theirs t1
+
+    # Without staging the changed tables, trying to continue the rebase results in an error
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot continue a rebase with unstaged changes" ]] || false
+
+    # Stage the tables and then continue the rebase and hit the second data conflict
+    dolt add t1
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "data conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "b1 commit 3" ]] || false
+
+    # Assert that we are still on the rebase working branch
+    run dolt sql -q "select active_branch();"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " dolt_rebase_b1 " ]] || false
+
+    # Review and resolve the second data conflict
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | ours   | 2  | 200 | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "+  | theirs | 2  | 3   | NULL | NULL | NULL | NULL |" ]] || false
+    dolt conflicts resolve --ours t1
+
+    # Finish the rebase
+    dolt add t1
+    run dolt rebase --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Assert that we are back on the branch that was rebased, and that the rebase working branch is gone
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "b1" ]] || false
     ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
 }
 
@@ -366,7 +447,7 @@ setupCustomEditorScript() {
 
     run dolt rebase -i main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "merge conflict detected while rebasing commit" ]] || false
+    [[ "$output" =~ "schema conflict detected while rebasing commit" ]] || false
     [[ "$output" =~ "the rebase has been automatically aborted" ]] || false
 
     run dolt rebase --continue
