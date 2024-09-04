@@ -62,6 +62,13 @@ type RebasePlanStep struct {
 	CommitMsg   string
 }
 
+// RebaseOrderAsFloat returns the RebaseOrder as a float32. Float32 provides enough scale and precision to hold
+// rebase order values, since they are limited to two decimal points of precision and six total digits.
+func (rps *RebasePlanStep) RebaseOrderAsFloat() float32 {
+	f64, _ := rps.RebaseOrder.Float64()
+	return float32(f64)
+}
+
 // CreateDefaultRebasePlan creates and returns the default rebase plan for the commits between
 // |startCommit| and |upstreamCommit|, equivalent to the log of startCommit..upstreamCommit. The
 // default plan includes each of those commits, in the same order they were originally applied, and

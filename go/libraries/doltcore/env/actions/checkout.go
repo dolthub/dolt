@@ -18,13 +18,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -148,7 +149,7 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 
 // CleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
 func CleanOldWorkingSet(
-	ctx context.Context,
+	ctx *sql.Context,
 	dbData env.DbData,
 	doltDb *doltdb.DoltDB,
 	username, email string,

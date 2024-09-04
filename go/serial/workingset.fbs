@@ -58,6 +58,15 @@ table RebaseState {
 
   // How to handle commits that become empty during rebasing
   commit_becomes_empty_handling:uint8;
+
+  // The last_attempted_step field indicates which step in the rebase plan was last executed. The step may have ended
+  // with a data conflict that the user has to manually resolve, or it may have been cherry-picked cleanly. This field
+  // is not valid unless the rebasing_started field is set to true.
+  last_attempted_step:float;
+
+  // The rebasing_started field indicates if execution of the rebase plan has been started or not. Once execution of the
+  // plan has been started, the last_attempted_step field holds a reference to the most recent plan step attempted.
+  rebasing_started:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

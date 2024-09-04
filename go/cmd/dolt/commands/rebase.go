@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
@@ -48,7 +49,7 @@ branch. For example, you can drop commits that contain debugging or test changes
 single commit, or reorder commits so that related changes are adjacent in the new commit history.
 `,
 	Synopsis: []string{
-		`(-i | --interactive) {{.LessThan}}upstream{{.GreaterThan}}`,
+		`(-i | --interactive) [--empty=drop|keep] {{.LessThan}}upstream{{.GreaterThan}}`,
 		`(--continue | --abort)`,
 	},
 }
@@ -95,6 +96,12 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		defer closeFunc()
 	}
 
+	// Set @@dolt_allow_commit_conflicts in case there are data conflicts that need to be resolved by the caller.
+	// Without this, the conflicts can't be committed to the branch working set, and the caller can't access them.
+	if _, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	branchName, err := getActiveBranchName(sqlCtx, queryist)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -118,65 +125,84 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 	}
 
+	// If the rebase was successful, or if it was aborted, print out the message and
+	// ensure the branch being rebased is checked out in the CLI
 	message := rows[0][1].(string)
-	if strings.Contains(message, dprocedures.SuccessfulRebaseMessage) {
-		cli.Println(dprocedures.SuccessfulRebaseMessage + branchName)
-	} else if strings.Contains(message, dprocedures.RebaseAbortedMessage) {
-		cli.Println(dprocedures.RebaseAbortedMessage)
-	} else {
-		rebasePlan, err := getRebasePlan(cliCtx, sqlCtx, queryist, apr.Arg(0), branchName)
-		if err != nil {
-			// attempt to abort the rebase
-			_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+	if strings.Contains(message, dprocedures.SuccessfulRebaseMessage) ||
+		strings.Contains(message, dprocedures.RebaseAbortedMessage) {
+		cli.Println(message)
+		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-
-		// if all uncommented lines are deleted in the editor, abort the rebase
-		if rebasePlan == nil || rebasePlan.Steps == nil || len(rebasePlan.Steps) == 0 {
-			rows, err := GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-			status, err := getInt64ColAsInt64(rows[0][0])
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-			if status == 1 {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
-			}
-
-			cli.Println(dprocedures.RebaseAbortedMessage)
-		} else {
-			err = insertRebasePlanIntoDoltRebaseTable(rebasePlan, sqlCtx, queryist)
-			if err != nil {
-				// attempt to abort the rebase
-				_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-
-			rows, err := GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--continue');")
-			if err != nil {
-				// attempt to abort the rebase
-				_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-			status, err := getInt64ColAsInt64(rows[0][0])
-			if err != nil {
-				// attempt to abort the rebase
-				_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-			if status == 1 {
-				// attempt to abort the rebase
-				_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
-			}
-
-			cli.Println(dprocedures.SuccessfulRebaseMessage + branchName)
-		}
+		return 0
 	}
 
-	return HandleVErrAndExitCode(nil, usage)
+	rebasePlan, err := getRebasePlan(cliCtx, sqlCtx, queryist, apr.Arg(0), branchName)
+	if err != nil {
+		// attempt to abort the rebase
+		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	// if all uncommented lines are deleted in the editor, abort the rebase
+	if rebasePlan == nil || rebasePlan.Steps == nil || len(rebasePlan.Steps) == 0 {
+		rows, err := GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		status, err := getInt64ColAsInt64(rows[0][0])
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		if status == 1 {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
+		}
+
+		cli.Println(dprocedures.RebaseAbortedMessage)
+		return 0
+	}
+
+	err = insertRebasePlanIntoDoltRebaseTable(rebasePlan, sqlCtx, queryist)
+	if err != nil {
+		// attempt to abort the rebase
+		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	rows, err = GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--continue');")
+	if err != nil {
+		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
+		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
+			if checkoutErr := syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); checkoutErr != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+			}
+		} else {
+			_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+			if checkoutErr := syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); checkoutErr != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
+			}
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	status, err = getInt64ColAsInt64(rows[0][0])
+	if err != nil {
+		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if status == 1 {
+		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
+	}
+
+	cli.Println(rows[0][1].(string))
+	return 0
 }
 
 // getRebasePlan opens an editor for users to edit the rebase plan and returns the parsed rebase plan from the editor.
@@ -312,4 +338,18 @@ func insertRebasePlanIntoDoltRebaseTable(plan *rebase.RebasePlan, sqlCtx *sql.Co
 	}
 
 	return nil
+}
+
+// syncCliBranchToSqlSessionBranch sets the current branch for the CLI (in repo_state.json) to the active branch
+// for the current session. This is needed during rebasing, since any conflicts need to be resolved while the
+// session is on the rebase working branch (e.g. dolt_rebase_t1) and after the rebase finishes, the session needs
+// to be back on the branch being rebased (e.g. t1).
+func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	currentBranch, err := doltSession.GetBranch()
+	if err != nil {
+		return err
+	}
+
+	return saveHeadBranch(dEnv.FS, currentBranch)
 }
