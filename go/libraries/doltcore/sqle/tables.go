@@ -172,7 +172,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 			for lookupIdx, ord := range lookup.Ordinals {
 				// the ordinals redirection accounts for index
 				// columns not in schema order
-				
+
 				var matched bool
 				var matchIdx int
 				for i, c2 := range lookupCols {
