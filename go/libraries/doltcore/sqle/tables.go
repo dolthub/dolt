@@ -169,28 +169,22 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 			// order for the given lookup.
 			// (2) aggregate the unused expressions into the return filter.
 			rb := sql.NewEqualityIndexBuilder(lookup.Idx)
-			for lookupIdx, ord := range lookup.Ordinals {
-				// the ordinals redirection accounts for index
-				// columns not in schema order
-				
+			for _, c2 := range lookupCols {
 				var matched bool
 				var matchIdx int
-				for i, c2 := range lookupCols {
+				for i, ord := range lookup.Ordinals {
+					// the ordinals redirection accounts for index
+					// columns not in schema order
 					idx := ord - 1
 					c := schCols.GetColumns()[idx]
 					if strings.EqualFold(c2.Col, c.Name) {
-						if matched {
-							if lookupCols[matchIdx].Lit.Value() != c2.Lit.Value() {
-								return sql.IndexLookup{}, nil, nil, false, nil
-							}
-						}
 						matched = true
 						matchIdx = i
+						break
 					}
 				}
-				c2 := lookupCols[matchIdx]
 				if matched {
-					if err := rb.AddEquality(ctx, lookupIdx, c2.Lit.Value()); err != nil {
+					if err := rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
 						return sql.IndexLookup{}, nil, nil, false, nil
 					}
 				}
