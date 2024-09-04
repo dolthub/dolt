@@ -19,19 +19,21 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
 // resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
 // Commit and Roots.
-func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
+func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 
@@ -100,11 +102,15 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	}
 
 	for name := range untracked {
-		tbl, _, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
+		tname, tbl, exists, err := resolve.Table(ctx, roots.Working, name)
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
-		newWkRoot, err = newWkRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
+		if !exists {
+			return nil, doltdb.Roots{}, fmt.Errorf("untracked table %s does not exist in working set", name)
+		}
+
+		newWkRoot, err = newWkRoot.PutTable(ctx, tname, tbl)
 		if err != nil {
 			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
 		}
@@ -144,7 +150,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 
 // ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the new
 // head commit and resulting roots
-func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
+func ResetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
@@ -152,7 +158,7 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 // The reset can be performed on a non-current branch and working set.
 // Returns an error if the reset fails.
 func ResetHard(
-	ctx context.Context,
+	ctx *sql.Context,
 	dbData env.DbData,
 	doltDb *doltdb.DoltDB,
 	username, email string,

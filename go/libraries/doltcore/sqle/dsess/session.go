@@ -1018,7 +1018,7 @@ func (d *DoltSession) SetStagingRoot(ctx *sql.Context, dbName string, newRoot do
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the working root, this method always marks the database state dirty.
 func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
-	sessionState, _, err := d.LookupDbState(ctx, dbName)
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return err
 	}
@@ -1029,6 +1029,25 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 	workingSet := sessionState.WorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
+}
+
+func (d *DoltSession) ResetGlobals(ctx *sql.Context, dbName string, root doltdb.RootValue) error {
+	sessionState, _, err := d.lookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	tracker, err := sessionState.dbState.globalState.AutoIncrementTracker(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = tracker.InitWithRoots(ctx, root)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *DoltSession) SetFileSystem(fs filesys.Filesys) {
@@ -1059,8 +1078,8 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 		return err
 	}
 
-	if writeSess := branchState.WriteSession(); writeSess != nil {
-		err = writeSess.SetWorkingSet(ctx, ws)
+	if branchState.writeSession != nil {
+		err = branchState.writeSession.SetWorkingSet(ctx, ws)
 		if err != nil {
 			return err
 		}
@@ -1484,9 +1503,10 @@ func (d *DoltSession) dbSessionVarsStale(ctx *sql.Context, state *branchState) b
 	return d.dbCache.CacheSessionVars(state, dtx)
 }
 
-func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
-	d.globalsConf = conf
-	return &d
+func (d *DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
+	nd := *d
+	nd.globalsConf = conf
+	return &nd
 }
 
 // PersistGlobal implements sql.PersistableSession

@@ -114,6 +114,11 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
+		err = dSess.ResetGlobals(ctx, dbName, roots.Working)
+		if err != nil {
+			return 1, err
+		}
+
 	} else if apr.Contains(cli.SoftResetParam) {
 		arg := ""
 		if apr.NArg() > 1 {
