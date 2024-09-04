@@ -44,6 +44,6 @@ type AutoIncrementTracker interface {
 	// Depending on the value of the `innodb_autoinc_lock_mode` system variable, the engine may need to acquire and hold
 	// the lock for the duration of an insert statement.
 	AcquireTableLock(ctx *sql.Context, tableName string) (func(), error)
-	// InitWithRoots fills the AutoIncrementTracker with values at the specified root.
+	// InitWithRoots fills the AutoIncrementTracker with values pulled from each root in order.
 	InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error
 }
