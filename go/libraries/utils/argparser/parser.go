@@ -438,6 +438,10 @@ func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []strin
 		}
 	}
 
+	if value == nil {
+		value = new(string)
+	}
+
 	namedArgs[opt.Name] = *value
 	return index, positionalArgs, namedArgs, nil
 }
