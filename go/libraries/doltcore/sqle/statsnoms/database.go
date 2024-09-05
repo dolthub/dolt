@@ -286,7 +286,9 @@ func (n *NomsStatsDatabase) Flush(ctx context.Context, branch string) error {
 					return err
 				}
 				n.dirty[i] = nil
-				n.destDb.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf())
+				if err := n.destDb.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf()); err != nil {
+					return err
+				}
 				return nil
 			}
 		}
