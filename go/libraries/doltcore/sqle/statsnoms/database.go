@@ -180,7 +180,9 @@ func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql
 		if strings.EqualFold(branch, b) {
 			n.stats[i][qual] = stats
 			if n.dirty[i] == nil {
-				n.initMutable(ctx, i)
+				if err := n.initMutable(ctx, i); err != nil {
+					return err
+				}
 			}
 			statsMap = n.dirty[i]
 		}
