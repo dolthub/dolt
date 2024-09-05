@@ -1650,12 +1650,15 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	var res interface{}
 	switch value.(type) {
 	case int8:
+		v = asIntIfBoolValue(v)
 		var tmp int64
 		tmp, err = strconv.ParseInt(v, 10, 8)
 		res = int8(tmp)
 	case int, int16, int32, int64:
+		v = asIntIfBoolValue(v)
 		res, err = strconv.ParseInt(v, 10, 64)
 	case uint, uint8, uint16, uint32, uint64:
+		v = asIntIfBoolValue(v)
 		res, err = strconv.ParseUint(v, 10, 64)
 	case float32, float64:
 		res, err = strconv.ParseFloat(v, 64)
@@ -1672,6 +1675,17 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	}
 
 	return res, nil
+}
+
+func asIntIfBoolValue(v string) string {
+	lower := strings.ToLower(v)
+	if lower == "true" {
+		return "1"
+	} else if lower == "false" {
+		return "0"
+	}
+
+	return v
 }
 
 // setPersistedValue casts and persists a key value pair assuming thread safety
