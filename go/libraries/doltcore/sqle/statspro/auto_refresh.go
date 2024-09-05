@@ -107,8 +107,6 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 }
 
 func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
-	//p.mu.Lock()
-	//defer p.mu.Unlock()
 	if !p.TryLockForUpdate("", dbName, branch) {
 		return nil
 	}

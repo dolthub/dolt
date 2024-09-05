@@ -97,8 +97,6 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 	}
 
 	// lock only after accessing DatabaseProvider
-	//p.mu.Lock()
-	//defer p.mu.Unlock()
 
 	tableName := strings.ToLower(table.Name())
 	dbName := strings.ToLower(db)
