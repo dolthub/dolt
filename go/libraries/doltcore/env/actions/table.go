@@ -18,6 +18,8 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -26,7 +28,7 @@ import (
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
 func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
-	tblSet := doltdb.NewTableNameSet(tbls)
+	tablesToMove := doltdb.NewTableNameSet(tbls)
 
 	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -38,7 +40,94 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 		return nil, err
 	}
 
-	// We want to include all Full-Text tables for every move
+	addFullTextTablesToDelta(tblDeltas, tablesToMove)
+
+	destSchemaNames, err := getDatabaseSchemaNames(ctx, dest)
+	if err != nil {
+		return nil, err
+	}
+
+	tblsToDrop := doltdb.NewTableNameSet(nil)
+	for _, td := range tblDeltas {
+		if td.IsDrop() {
+			if !tablesToMove.Contains(td.FromName) {
+				continue
+			}
+
+			stagedFKs.RemoveKeys(td.FromFks...)
+			tblsToDrop.Add(td.FromName)
+		}
+	}
+
+	for _, td := range tblDeltas {
+		if !td.IsDrop() {
+			if !tablesToMove.Contains(td.ToName) {
+				continue
+			}
+
+			if td.IsRename() {
+				// rename table before adding the new version so we don't have
+				// two copies of the same table
+				dest, err = dest.RenameTable(ctx, td.FromName, td.ToName)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// edge case: if we're moving a table with a schema name to a root that doesn't have that schema,
+			// we implicitly create that schema on the destination root in addition to updating the list of schemas
+			if td.ToName.Schema != "" && !destSchemaNames.Contains(td.ToName.Schema) {
+				dest, err = dest.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+					Name: td.ToName.Schema,
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
+			if err != nil {
+				return nil, err
+			}
+
+			stagedFKs.RemoveKeys(td.FromFks...)
+			err = stagedFKs.AddKeys(td.ToFks...)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	logrus.Warnf("root value is %s", dest.DebugString(ctx, true))
+
+	dest, err = dest.PutForeignKeyCollection(ctx, stagedFKs)
+	if err != nil {
+		return nil, err
+	}
+
+	// RemoveTables also removes that table's ForeignKeys
+	dest, err = dest.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
+	if err != nil {
+		return nil, err
+	}
+
+	return dest, nil
+}
+
+func getDatabaseSchemaNames(ctx context.Context, dest doltdb.RootValue) (*set.StrSet, error) {
+	dbSchemaNames := set.NewEmptyStrSet()
+	dbSchemas, err := dest.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, dbSchema := range dbSchemas {
+		dbSchemaNames.Add(dbSchema.Name)
+	}
+	return dbSchemaNames, nil
+}
+
+// addFullTextTablesToDelta adds the full text tables associated any full text indexes in the table deltas to the tableset provided
+func addFullTextTablesToDelta(tblDeltas []diff.TableDelta, tblSet *doltdb.TableNameSet) {
 	for _, td := range tblDeltas {
 		var ftIndexes []schema.Index
 		if tblSet.Contains(td.ToName) && td.ToSch.Indexes().ContainsFullTextIndex() {
@@ -58,6 +147,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 		}
 		for _, ftIndex := range ftIndexes {
 			props := ftIndex.FullTextProperties()
+			// TODO: schema names
 			tblSet.Add(
 				doltdb.TableName{Name: props.ConfigTable},
 				doltdb.TableName{Name: props.PositionTable},
@@ -67,59 +157,6 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 			)
 		}
 	}
-
-	tblsToDrop := doltdb.NewTableNameSet(nil)
-
-	for _, td := range tblDeltas {
-		if td.IsDrop() {
-			if !tblSet.Contains(td.FromName) {
-				continue
-			}
-
-			tblsToDrop.Add(td.FromName)
-			stagedFKs.RemoveKeys(td.FromFks...)
-		}
-	}
-	for _, td := range tblDeltas {
-		if !td.IsDrop() {
-			if !tblSet.Contains(td.ToName) {
-				continue
-			}
-
-			if td.IsRename() {
-				// rename table before adding the new version so we don't have
-				// two copies of the same table
-				dest, err = dest.RenameTable(ctx, td.FromName, td.ToName)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
-			if err != nil {
-				return nil, err
-			}
-
-			stagedFKs.RemoveKeys(td.FromFks...)
-			err = stagedFKs.AddKeys(td.ToFks...)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	dest, err = dest.PutForeignKeyCollection(ctx, stagedFKs)
-	if err != nil {
-		return nil, err
-	}
-
-	// RemoveTables also removes that table's ForeignKeys
-	dest, err = dest.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
-	if err != nil {
-		return nil, err
-	}
-
-	return dest, nil
 }
 
 func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown []doltdb.TableName) error {
