@@ -116,6 +116,20 @@ teardown() {
     [ "${lines[1]}" = "0" ]
 }
 
+@test "stats: correct stats directory location, issue#8324" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    dolt sql -q "call dolt_stats_restart()"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+
+    run stat .dolt/repo2
+    [ "$status" -eq 1 ]
+}
+
 @test "stats: deletes refresh" {
     cd repo2
 
