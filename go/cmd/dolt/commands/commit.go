@@ -268,7 +268,8 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("--skip-empty")
 	}
 
-	if apr.Contains(cli.SignFlag) {
+	cfgSign := cliCtx.Config().GetStringOrDefault("sqlserver.global.gpgsign", "")
+	if apr.Contains(cli.SignFlag) || strings.ToLower(cfgSign) == "true" {
 		writeToBuffer("--gpg-sign")
 
 		gpgKey := apr.GetValueOrDefault(cli.SignFlag, "")
