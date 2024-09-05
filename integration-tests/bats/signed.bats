@@ -112,3 +112,35 @@ init_gpg() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ 'gpg: Good signature from "Test User <test@dolthub.com>"' ]] || false
 }
+
+@test "commit using stored procedure with signed commits configured" {
+  init_gpg
+  run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
+  [ "$status" -eq 0 ]
+
+  run dolt config --global --add sqlserver.global.gpgsign true
+  [ "$status" -eq 0 ]
+
+  run dolt sql -q "CREATE TABLE t (pk INT primary key);"
+  [ "$status" -eq 0 ]
+
+  run dolt add .
+  [ "$status" -eq 0 ]
+
+  run dolt commit -m "initial commit"
+  echo $output
+  [ "$status" -eq 0 ]
+
+  run dolt sql -q "INSERT INTO t VALUES (1);"
+  [ "$status" -eq 0 ]
+
+  run dolt add .
+  [ "$status" -eq 0 ]
+
+  run dolt sql -q "CALL dolt_commit('-m', 'signed commit');"
+  [ "$status" -eq 0 ]
+
+  run dolt log --show-signature
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'gpg: Good signature from "Test User <test@dolthub.com>"' ]] || false
+}
