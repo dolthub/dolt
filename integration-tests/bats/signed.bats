@@ -26,7 +26,7 @@ init_gpg() {
   fi
 }
 
-@test "signing a dolt commit with key specified on command line" {
+@test "signed a dolt commit with key specified on command line" {
   init_gpg
   run dolt sql -q "CREATE TABLE t (pk INT primary key);"
   [ "$status" -eq 0 ]
@@ -53,7 +53,7 @@ init_gpg() {
   [[ "$output" =~ 'gpg: Good signature from "Test User <test@dolthub.com>"' ]] || false
 }
 
-@test "signing a dolt commit with key specified in config" {
+@test "signed a dolt commit with key specified in config" {
   init_gpg
   run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
   [ "$status" -eq 0 ]
@@ -81,7 +81,7 @@ init_gpg() {
   [[ "$output" =~ 'gpg: Good signature from "Test User <test@dolthub.com>"' ]] || false
 }
 
-@test "default to signed commits using the config" {
+@test "signed by default using the config" {
   init_gpg
   run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
   [ "$status" -eq 0 ]
@@ -113,7 +113,7 @@ init_gpg() {
   [[ "$output" =~ 'gpg: Good signature from "Test User <test@dolthub.com>"' ]] || false
 }
 
-@test "commit using stored procedure with signed commits configured" {
+@test "signed using stored procedure" {
   init_gpg
   run dolt config --global --add sqlserver.global.signingkey "573DA8C6366D04E35CDB1A44E09A0B208F666373"
   [ "$status" -eq 0 ]
