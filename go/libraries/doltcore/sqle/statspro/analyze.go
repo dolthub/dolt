@@ -85,7 +85,7 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 
 func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {
 	if !p.TryLockForUpdate(table.Name(), db, branch) {
-		return nil
+		return fmt.Errorf("already updating statistics")
 	}
 	defer p.UnlockTable(table.Name(), db, branch)
 
