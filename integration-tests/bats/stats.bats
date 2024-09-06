@@ -130,6 +130,38 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "stats: stats roundtrip restart" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    # make sure no stats
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    # add stats while server is running
+    start_sql_server
+    dolt sql -q "call dolt_stats_restart()"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+    stop_sql_server
+
+    # make sure restarted server sees same stats
+    start_sql_server
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+    stop_sql_server
+}
+
 @test "stats: deletes refresh" {
     cd repo2
 
