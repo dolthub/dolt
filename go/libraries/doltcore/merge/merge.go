@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -245,8 +244,9 @@ func MergeRoots(
 	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
+
 		// TODO: schema name
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName.Name, opts, mergeOpts)
 		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
@@ -296,12 +296,12 @@ func MergeRoots(
 			continue
 		}
 
-		newRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
+		mergedRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
 
-		if newRootHasTable {
+		if mergedRootHasTable {
 			// Merge root deleted this table
 			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
 
@@ -346,9 +346,9 @@ func MergeRoots(
 		return nil, err
 	}
 
-	var tableSet *set.StrSet = nil
+	var tableSet *doltdb.TableNameSet = nil
 	if mergeOpts.RecordViolationsForTables != nil {
-		tableSet = set.NewCaseInsensitiveStrSet(nil)
+		tableSet = doltdb.NewCaseInsensitiveTableNameSet(nil)
 		for tableName, _ := range mergeOpts.RecordViolationsForTables {
 			tableSet.Add(tableName)
 		}

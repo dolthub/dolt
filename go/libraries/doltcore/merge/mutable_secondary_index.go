@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -49,7 +50,7 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 // GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
 // is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
 // merging a schema that has a new index, but the index does not exist on the index set being modified.
-func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ourSch, sch schema.Schema, tableName doltdb.TableName, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
 

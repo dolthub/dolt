@@ -45,7 +45,22 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables
 		return doltdb.Roots{}, err
 	}
 
-	return StageTables(ctx, roots, tbls, filterIgnoredTables)
+	roots, err = StageTables(ctx, roots, tbls, filterIgnoredTables)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	// TODO: next
+	roots, err = StageAllSchemas(ctx, roots)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return roots, nil
+}
+
+func StageAllSchemas(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	return roots, nil
 }
 
 func StageDatabase(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {

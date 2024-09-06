@@ -45,7 +45,8 @@ type CreateIndexReturn struct {
 func CreateIndex(
 	ctx *sql.Context,
 	table *doltdb.Table,
-	tableName, indexName string,
+	tableName doltdb.TableName,
+	indexName string,
 	columns []string,
 	prefixLengths []uint16,
 	props schema.IndexProperties,
@@ -131,7 +132,7 @@ func CreateIndex(
 	}, nil
 }
 
-func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
+func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName doltdb.TableName, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
 	case types.Format_LD_1:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
@@ -164,7 +165,7 @@ func BuildSecondaryProllyIndex(
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,
-	tableName string,
+	tableName doltdb.TableName,
 	idx schema.Index,
 	primary prolly.Map,
 ) (durable.Index, error) {
@@ -208,7 +209,7 @@ func BuildUniqueProllyIndex(
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,
-	tableName string,
+	tableName doltdb.TableName,
 	idx schema.Index,
 	primary prolly.Map,
 	cb DupEntryCb,

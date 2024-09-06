@@ -132,7 +132,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	defaults, err := resolveDefaults(ctx, tm.name, finalSch, tm.leftSch)
+	defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.leftSch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -374,7 +374,7 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 			continue
 		}
 
-		expr, err := expranalysis.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
+		expr, err := expranalysis.ResolveCheckExpression(ctx, tm.name.Name, sch, check.Expression())
 		if err != nil {
 			return checkValidator{}, err
 		}
@@ -703,7 +703,7 @@ type uniqIndex struct {
 	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName doltdb.TableName, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -853,7 +853,7 @@ func newNullValidator(
 		return nullValidator{}, err
 	}
 	return nullValidator{
-		table:        tm.name,
+		table:        tm.name.Name,
 		final:        final,
 		leftMap:      vm.leftMapping,
 		rightMap:     vm.rightMapping,
@@ -1089,7 +1089,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		} else {
 			// Remapping when there's no schema change is harmless, but slow.
 			if m.mergeInfo.RightNeedsRewrite {
-				defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch, m.tableMerger.rightSch)
+				defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
 				if err != nil {
 					return err
 				}
@@ -1127,7 +1127,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// the merge
 		merged := diff.Merged
 		if hasStoredGeneratedColumns(m.finalSch) {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch, m.tableMerger.rightSch)
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.finalSch, m.tableMerger.rightSch)
 			if err != nil {
 				return err
 			}
@@ -1326,7 +1326,7 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 						return fmt.Errorf("cannot merge keyless tables with reordered columns")
 					}
 				} else {
-					defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.mergedSchema, m.tableMerger.rightSch)
+					defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.mergedSchema, m.tableMerger.rightSch)
 					if err != nil {
 						return err
 					}
@@ -1350,7 +1350,7 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 					}
 					newTupleValue = tempTupleValue
 					if diff.Base != nil {
-						defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.mergedSchema, m.tableMerger.ancSch)
+						defaults, err := resolveDefaults(ctx, m.tableMerger.name.Name, m.mergedSchema, m.tableMerger.ancSch)
 						if err != nil {
 							return err
 						}
@@ -2032,7 +2032,7 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 			return types.JSONDocument{}, true, err
 		}
 		if cmp == 0 {
-			//convergent operation.
+			// convergent operation.
 			return left, false, nil
 		} else {
 			return types.JSONDocument{}, true, nil

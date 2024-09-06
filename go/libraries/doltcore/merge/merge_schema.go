@@ -164,7 +164,7 @@ var ErrMergeWithDifferentPksFromAncestor = errorkinds.NewKind("error: cannot mer
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
 // unexpected error encountered while merging the schemas.
-func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
+func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName doltdb.TableName) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -285,7 +285,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	}
 
 	// check for conflicts between foreign keys added on each branch since the ancestor
-	//TODO: figure out the best way to handle unresolved foreign keys here if one branch added an unresolved one and
+	// TODO: figure out the best way to handle unresolved foreign keys here if one branch added an unresolved one and
 	// another branch added the same one but resolved
 	_ = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		theirFK, ok := theirNewFKs.GetByTags(ourFK.TableColumns, ourFK.ReferencedTableColumns)

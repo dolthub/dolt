@@ -105,17 +105,7 @@ func mergeProllySecondaryIndexes(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(
-	ctx *sql.Context,
-	vrw types.ValueReadWriter,
-	ns tree.NodeStore,
-	postMergeSchema schema.Schema,
-	index schema.Index,
-	m prolly.Map,
-	artEditor *prolly.ArtifactsEditor,
-	theirRootIsh doltdb.Rootish,
-	tblName string,
-) (durable.Index, error) {
+func buildIndex(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor *prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName doltdb.TableName) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {

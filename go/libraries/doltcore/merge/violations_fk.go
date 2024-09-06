@@ -69,13 +69,14 @@ type FKViolationReceiver interface {
 
 // GetForeignKeyViolations returns the violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends the violations to |receiver|.
-func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *set.StrSet, receiver FKViolationReceiver) error {
+func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, receiver FKViolationReceiver) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
 	}
 	for _, foreignKey := range fkColl.AllKeys() {
-		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
+		// TODO: schema names
+		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(doltdb.TableName{Name: foreignKey.TableName})) {
 			continue
 		}
 
@@ -156,7 +157,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
 // todo(andy): pass doltdb.Rootish
-func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (doltdb.RootValue, *set.StrSet, error) {
+func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, theirRootIsh hash.Hash) (doltdb.RootValue, *set.StrSet, error) {
 	violationWriter := &foreignKeyViolationWriter{rootValue: newRoot, theirRootIsh: theirRootIsh, violatedTables: set.NewStrSet(nil)}
 	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, violationWriter)
 	if err != nil {
