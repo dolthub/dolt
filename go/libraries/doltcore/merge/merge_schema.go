@@ -48,7 +48,7 @@ var ErrUnmergeableNewColumn = errorkinds.NewKind("Unable to merge new column `%s
 var ErrDefaultCollationConflict = errorkinds.NewKind("Unable to merge table '%s', because its default collation setting has changed on both sides of the merge. Manually change the table's default collation setting on one of the sides of the merge and retry this merge.")
 
 type SchemaConflict struct {
-	TableName            string
+	TableName            doltdb.TableName
 	ColConflicts         []ColConflict
 	IdxConflicts         []IdxConflict
 	ChkConflicts         []ChkConflict
@@ -180,7 +180,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, mergeInfo, diffInfo, err = mergeColumns(tblName.Name, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, mergeInfo, diffInfo, err
 	}
@@ -199,7 +199,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 		return nil, sc, mergeInfo, diffInfo, err
 	}
 
-	sch, err = mergeTableCollation(ctx, tblName, ancSch, ourSch, theirSch, sch)
+	sch, err = mergeTableCollation(ctx, tblName.Name, ancSch, ourSch, theirSch, sch)
 	if err != nil {
 		return nil, sc, mergeInfo, diffInfo, err
 	}

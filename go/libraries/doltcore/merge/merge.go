@@ -138,8 +138,8 @@ func (r Result) CountOfTablesWithConstraintViolations() int {
 	return count
 }
 
-func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
-	tables = make([]string, len(sc))
+func SchemaConflictTableNames(sc []SchemaConflict) (tables []doltdb.TableName) {
+	tables = make([]doltdb.TableName, len(sc))
 	for i := range sc {
 		tables[i] = sc[i].TableName
 	}
@@ -257,7 +257,7 @@ func MergeRoots(
 				SchemaConflicts: 1,
 			}
 			conflict := SchemaConflict{
-				TableName:            tblName.Name,
+				TableName:            tblName,
 				ModifyDeleteConflict: true,
 			}
 			if !mergeOpts.KeepSchemaConflicts {

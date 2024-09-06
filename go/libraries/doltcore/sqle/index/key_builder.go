@@ -17,7 +17,6 @@ package index
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,7 +30,7 @@ import (
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
 // The schema of the source table is defined in |sch|, and |idxDesc| describes the tuple layout for the index's keys
 // (index value tuples are not used).
-func NewSecondaryKeyBuilder(ctx *sql.Context, tableName doltdb.TableName, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
+func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
 		builder:   val.NewTupleBuilder(idxDesc),
 		pool:      p,
@@ -59,7 +58,7 @@ func NewSecondaryKeyBuilder(ctx *sql.Context, tableName doltdb.TableName, sch sc
 					virtualExpressions = make([]sql.Expression, len(def.AllTags()))
 				}
 
-				expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName.Name, sch, col)
+				expr, err := expranalysis.ResolveDefaultExpression(ctx, tableName, sch, col)
 				if err != nil {
 					return SecondaryKeyBuilder{}, err
 				}

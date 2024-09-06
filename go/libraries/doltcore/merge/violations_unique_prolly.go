@@ -80,7 +80,7 @@ func (m UniqCVMeta) PrettyPrint() string {
 	return jsonStr
 }
 
-func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh doltdb.Rootish, vInfo []byte, tblName doltdb.TableName) error {
+func replaceUniqueKeyViolation(ctx context.Context, edt *prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, theirRootIsh doltdb.Rootish, vInfo []byte) error {
 	var value val.Tuple
 	err := m.Get(ctx, k, func(_, v val.Tuple) error {
 		value = v

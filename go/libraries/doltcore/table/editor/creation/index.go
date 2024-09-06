@@ -151,7 +151,7 @@ func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, 
 			return nil, err
 		}
 		primary := durable.ProllyMapFromIndex(m)
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName.Name, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
@@ -165,7 +165,7 @@ func BuildSecondaryProllyIndex(
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,
-	tableName doltdb.TableName,
+	tableName string,
 	idx schema.Index,
 	primary prolly.Map,
 ) (durable.Index, error) {
@@ -209,7 +209,7 @@ func BuildUniqueProllyIndex(
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,
-	tableName doltdb.TableName,
+	tableName string,
 	idx schema.Index,
 	primary prolly.Map,
 	cb DupEntryCb,
