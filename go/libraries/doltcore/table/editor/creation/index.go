@@ -45,7 +45,7 @@ type CreateIndexReturn struct {
 func CreateIndex(
 	ctx *sql.Context,
 	table *doltdb.Table,
-	tableName doltdb.TableName,
+	tableName string,
 	indexName string,
 	columns []string,
 	prefixLengths []uint16,
@@ -132,7 +132,7 @@ func CreateIndex(
 	}, nil
 }
 
-func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName doltdb.TableName, opts editor.Options) (durable.Index, error) {
+func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
 	case types.Format_LD_1:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
@@ -151,7 +151,7 @@ func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, 
 			return nil, err
 		}
 		primary := durable.ProllyMapFromIndex(m)
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName.Name, idx, primary)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
