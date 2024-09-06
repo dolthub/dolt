@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,7 +30,7 @@ import (
 
 // NewConflictsTable returns a new ConflictsTable instance
 func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, tblName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tblName})
+	resolvedTableName, tbl, ok, err := resolve.Table(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -41,14 +42,14 @@ func NewConflictsTable(ctx *sql.Context, tblName string, srcTbl sql.Table, root 
 		if !ok {
 			return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
 		}
-		return newProllyConflictsTable(ctx, tbl, upd, tblName, root, rs)
+		return newProllyConflictsTable(ctx, tbl, upd, resolvedTableName, root, rs)
 	}
 
-	return newNomsConflictsTable(ctx, tbl, tblName, root, rs)
+	return newNomsConflictsTable(ctx, tbl, resolvedTableName.Name, root, rs)
 }
 
 func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	rd, err := merge.NewConflictReader(ctx, tbl, tblName)
+	rd, err := merge.NewConflictReader(ctx, tbl, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +115,8 @@ func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	// conflict reader must be reset each time partitionRows is called.
-	rd, err := merge.NewConflictReader(ctx, ct.tbl, ct.tblName)
+	// TODO: schema name
+	rd, err := merge.NewConflictReader(ctx, ct.tbl, doltdb.TableName{Name: ct.tblName})
 	if err != nil {
 		return nil, err
 	}

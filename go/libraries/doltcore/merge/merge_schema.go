@@ -164,7 +164,12 @@ var ErrMergeWithDifferentPksFromAncestor = errorkinds.NewKind("error: cannot mer
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
 // unexpected error encountered while merging the schemas.
-func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName doltdb.TableName) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
+func SchemaMerge(
+	ctx context.Context,
+	format *storetypes.NomsBinFormat,
+	ourSch, theirSch, ancSch schema.Schema,
+	tblName doltdb.TableName,
+) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -905,7 +910,10 @@ func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCo
 	return d
 }
 
-func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, ancSchs map[string]schema.Schema) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
+func foreignKeysInCommon(
+	ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection,
+	ancSchs map[doltdb.TableName]schema.Schema,
+) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
 	common, _ = doltdb.NewForeignKeyCollection()
 	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
 
@@ -982,7 +990,10 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection, 
 // fkCollSetDifference returns a collection of all foreign keys that are in the given collection but not the ancestor
 // collection. This is specifically for finding differences between a descendant and an ancestor, and therefore should
 // not be used in the general case.
-func fkCollSetDifference(fkColl, ancestorFkColl *doltdb.ForeignKeyCollection, ancSchs map[string]schema.Schema) (d *doltdb.ForeignKeyCollection, err error) {
+func fkCollSetDifference(
+	fkColl, ancestorFkColl *doltdb.ForeignKeyCollection,
+	ancSchs map[doltdb.TableName]schema.Schema,
+) (d *doltdb.ForeignKeyCollection, err error) {
 	d, _ = doltdb.NewForeignKeyCollection()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		_, ok := ancestorFkColl.GetMatchingKey(fk, ancSchs, false)

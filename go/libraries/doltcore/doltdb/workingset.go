@@ -137,8 +137,8 @@ type MergeState struct {
 type SchemaConflict struct {
 	ToSch, FromSch    schema.Schema
 	ToFks, FromFks    []ForeignKey
-	ToParentSchemas   map[string]schema.Schema
-	FromParentSchemas map[string]schema.Schema
+	ToParentSchemas   map[TableName]schema.Schema
+	FromParentSchemas map[TableName]schema.Schema
 	toTbl, fromTbl    *Table
 }
 
