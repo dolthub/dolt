@@ -546,7 +546,7 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 		}
 		secondary := durable.ProllyMapFromIndex(idx)
 
-		u, err := newUniqIndex(ctx, sch, tm.name, def, clustered, secondary)
+		u, err := newUniqIndex(ctx, sch, tm.name.Name, def, clustered, secondary)
 		if err != nil {
 			return uniqValidator{}, err
 		}
@@ -703,7 +703,7 @@ type uniqIndex struct {
 	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName doltdb.TableName, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -1281,7 +1281,7 @@ func newSecondaryMerger(ctx *sql.Context, tm *TableMerger, valueMerger *valueMer
 	}
 	// Use the mergedSchema to work with the secondary indexes, to pull out row data using the right
 	// pri_index -> sec_index mapping.
-	lm, err := GetMutableSecondaryIdxsWithPending(ctx, leftSchema, mergedSchema, tm.name, ls, secondaryMergerPendingSize)
+	lm, err := GetMutableSecondaryIdxsWithPending(ctx, leftSchema, mergedSchema, tm.name.Name, ls, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}

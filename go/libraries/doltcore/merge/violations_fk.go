@@ -168,7 +168,7 @@ func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // GetForeignKeyViolatedTables returns a list of tables that have foreign key
 // violations based on the diff between |newRoot| and |baseRoot|.
-func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *set.StrSet) (*set.StrSet, error) {
+func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet) (*set.StrSet, error) {
 	handler := &foreignKeyViolationTracker{tableSet: set.NewStrSet(nil)}
 	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, handler)
 	if err != nil {
