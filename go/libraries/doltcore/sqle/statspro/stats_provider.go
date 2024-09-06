@@ -115,8 +115,6 @@ func (p *Provider) UnlockTable(table string, db string, branch string) {
 
 func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error {
 	err := p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env, db)
-	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	if err != nil {
 		p.UpdateStatus(name, fmt.Sprintf("error restarting thread %s: %s", name, err.Error()))
