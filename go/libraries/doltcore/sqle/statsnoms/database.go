@@ -151,6 +151,9 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 }
 
 func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			return n.stats[i]
@@ -174,7 +177,7 @@ func (n *NomsStatsDatabase) ListStatQuals(branch string) []sql.StatQualifier {
 	return ret
 }
 
-func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql.StatQualifier, stats *statspro.DoltStats) error {
+func (n *NomsStatsDatabase) setStat(ctx context.Context, branch string, qual sql.StatQualifier, stats *statspro.DoltStats) error {
 	var statsMap *prolly.MutableMap
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
@@ -196,6 +199,12 @@ func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql
 	}
 
 	return n.replaceStats(ctx, statsMap, stats)
+}
+func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql.StatQualifier, stats *statspro.DoltStats) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	return n.setStat(ctx, branch, qual, stats)
 }
 
 func (n *NomsStatsDatabase) trackBranch(ctx context.Context, branch string) error {
@@ -222,6 +231,9 @@ func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {
 }
 
 func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifier) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			for _, qual := range quals {
@@ -232,6 +244,9 @@ func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifie
 }
 
 func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string, flush bool) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			n.branches = append(n.branches[:i], n.branches[i+1:]...)
@@ -247,6 +262,9 @@ func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string
 }
 
 func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []sql.HistogramBucket) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	var dbStat dbStats
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
@@ -276,10 +294,13 @@ func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qu
 	dbStat[qual].UpdateActive()
 
 	// let |n.SetStats| update memory and disk
-	return n.SetStat(ctx, branch, qual, dbStat[qual])
+	return n.setStat(ctx, branch, qual, dbStat[qual])
 }
 
 func (n *NomsStatsDatabase) Flush(ctx context.Context, branch string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			if n.dirty[i] != nil {
