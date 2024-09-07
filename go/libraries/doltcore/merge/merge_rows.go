@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
@@ -131,9 +132,26 @@ type MergedTable struct {
 	conflict SchemaConflict
 }
 
+func getDatabaseSchemaNames(ctx context.Context, dest doltdb.RootValue) (*set.StrSet, error) {
+	dbSchemaNames := set.NewEmptyStrSet()
+	dbSchemas, err := dest.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, dbSchema := range dbSchemas {
+		dbSchemaNames.Add(dbSchema.Name)
+	}
+	return dbSchemaNames, nil
+}
+
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
-func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName doltdb.TableName, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
+func (rm *RootMerger) MergeTable(
+	ctx *sql.Context,
+	tblName doltdb.TableName,
+	opts editor.Options,
+	mergeOpts MergeOpts,
+) (*MergedTable, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err

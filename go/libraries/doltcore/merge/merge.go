@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
@@ -240,6 +241,11 @@ func MergeRoots(
 		return nil, err
 	}
 
+	destSchemaNames, err := getDatabaseSchemaNames(ctx, ourRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	// visitedTables holds all tables that were added, removed, or modified (basically not "unmodified")
 	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
@@ -289,6 +295,18 @@ func MergeRoots(
 		if mergedTable.table != nil {
 			tblToStats[tblName.Name] = stats
 
+			// edge case: if we're merging a table with a schema name to a root that doesn't have that schema,
+			// we implicitly create that schema on the destination root in addition to updating the list of schemas
+			if tblName.Schema != "" && !destSchemaNames.Contains(tblName.Schema) {
+				mergedRoot, err = mergedRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+					Name: tblName.Schema,
+				})
+				if err != nil {
+					return nil, err
+				}
+				destSchemaNames.Add(tblName.Schema)
+			}
+
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
 			if err != nil {
 				return nil, err
@@ -305,6 +323,7 @@ func MergeRoots(
 			// Merge root deleted this table
 			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
 
+			// TODO: drop schemas as necessary
 			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
 				return nil, err

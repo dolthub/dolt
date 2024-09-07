@@ -52,7 +52,13 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // table's primary index will also be rewritten. This function merges the table's artifacts (e.g. recorded
 // conflicts), migrates any existing table data to the specified |mergedSch|, and merges table data from both
 // sides of the merge together.
-func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTable(
+	ctx context.Context,
+	tm *TableMerger,
+	mergedSch schema.Schema,
+	mergeInfo MergeInfo,
+	diffInfo tree.ThreeWayDiffInfo,
+) (*doltdb.Table, *MergeStats, error) {
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
