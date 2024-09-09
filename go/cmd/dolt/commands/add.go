@@ -24,6 +24,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/ishell"
+	"github.com/fatih/color"
+	"golang.org/x/exp/slices"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -32,10 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/ishell"
-	"github.com/fatih/color"
-	"golang.org/x/exp/slices"
 )
 
 var addDocs = cli.CommandDocumentationContent{
