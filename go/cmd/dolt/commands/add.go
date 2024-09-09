@@ -212,7 +212,8 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 	}
 
 	shell := ishell.New()
-	shell.AutoHelp(false)
+	shell.AutoHelp(false) // This doesn't seem to actually disable the "help" command.
+	shell.NotFound(opHelp)
 
 	shell.AddCmd(&ishell.Cmd{
 		Name: "?",
@@ -270,15 +271,9 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (map[string]*tablePatchInfo, error) {
 	changeCounts := make(map[string]*tablePatchInfo)
 	for _, tableName := range tables {
-		qry := fmt.Sprintf("SELECT * FROM dolt_workspace_%s LIMIT 1", tableName)
-		tableSchema, _, _, err := queryist.Query(sqlCtx, qry)
-		if err != nil {
-			return nil, err
-		}
-
-		// Now get the add/drop/modify counts. This query is hand crafted which seems like a bad idea, but it's only the
+		// Get the add/drop/modify counts. This query is hand crafted which seems like a bad idea, but it's only the
 		// table name that is inserted, and that comes from our data, not user input.
-		qry = fmt.Sprintf("SELECT diff_type,count(*) AS count FROM dolt_workspace_%s WHERE NOT staged GROUP BY diff_type", tableName)
+		qry := fmt.Sprintf("SELECT diff_type,count(*) AS count FROM dolt_workspace_%s WHERE NOT staged GROUP BY diff_type", tableName)
 		_, rowIter, _, err := queryist.Query(sqlCtx, qry)
 		if err != nil {
 			return nil, err
@@ -286,6 +281,11 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 		rows, err := sql.RowIterToRows(sqlCtx, rowIter)
 		if err != nil {
 			return nil, err
+		}
+
+		if len(rows) == 0 {
+			// This can happen if the user has added all changes in a table, thn restarted the workflow.
+			continue
 		}
 
 		changeCounts[tableName] = &tablePatchInfo{}
@@ -305,6 +305,12 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 			default:
 				return nil, errors.New("Unexpected diff type: " + diffType)
 			}
+		}
+
+		qry = fmt.Sprintf("SELECT * FROM dolt_workspace_%s LIMIT 1", tableName)
+		tableSchema, _, _, err := queryist.Query(sqlCtx, qry)
+		if err != nil {
+			return nil, err
 		}
 
 		// Kind of lame to do another query, but so be it.
@@ -533,13 +539,13 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 	tblIdx++
 
 	if tblIdx < len(ps.tables) {
-		nextTbl := ps.tables[tblIdx]
-		if _, ok := ps.changeCounts[nextTbl]; !ok {
+		ps.currentTable = ps.tables[tblIdx]
+		if _, ok := ps.changeCounts[ps.currentTable]; !ok {
 			// It's possible that a table has no more change if the user restarted the workflow.
 			ps.nextTable(c)
 			return
 		}
-		ps.currentTable = nextTbl
+
 		changes := ps.changeCounts[ps.currentTable]
 		ps.currentRowId = changes.firstId
 		ps.currentTableLastRowId = changes.lastId
@@ -623,6 +629,11 @@ func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 	// Print each entry with aligned columns
 	for _, tbl := range tables {
 		c := counts[tbl]
+		if c == nil {
+			// This can happen if the user has added all changes in a table, thn restarted the workflow.
+			continue
+		}
+
 		addStr := color.GreenString("%-7d", c.add)
 		modifiesStr := color.YellowString("%-10d", c.modifies)
 		removesStr := color.RedString("%d", c.removes)
