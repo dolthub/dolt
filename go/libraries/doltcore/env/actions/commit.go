@@ -47,13 +47,13 @@ func GetCommitStaged(
 		return nil, datas.ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
+	stagedTables, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
 
 	var stagedTblNames []doltdb.TableName
-	for _, td := range staged {
+	for _, td := range stagedTables {
 		n := td.ToName
 		if td.IsDrop() {
 			n = td.FromName
@@ -61,7 +61,12 @@ func GetCommitStaged(
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	isEmpty := len(staged) == 0
+	stagedSchemas, _, err := diff.GetStagedUnstagedDatabaseSchemaDeltas(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	isEmpty := len(stagedTables) == 0 && len(stagedSchemas) == 0
 	allowEmpty := ws.MergeActive() || props.AllowEmpty || props.Amend
 
 	if isEmpty && props.SkipEmpty {
