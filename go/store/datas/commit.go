@@ -174,7 +174,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
 	descoff := builder.CreateString(opts.Meta.Description)
-	sigoff := builder.CreateString(opts.Meta.Signature)
+
+	var sigoff flatbuffers.UOffsetT
+	if len(opts.Meta.Signature) != 0 {
+		sigoff = builder.CreateString(opts.Meta.Signature)
+	}
+
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
