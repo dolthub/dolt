@@ -114,7 +114,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	ap := cli.CreateAddArgParser()
 
 	// This flag is only supported in a CLI context, not the in the dolt procedure.
-	ap.SupportsFlag("patch", "p", "Interactively select changes to add to the staged set.")
+	ap.SupportsFlag(cli.PatchFlag, "p", "Interactively select changes to add to the staged set.")
 
 	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, addDocs)
 	if terminate {
@@ -137,7 +137,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return 1
 	}
 
-	if apr.Contains("patch") {
+	if apr.Contains(cli.PatchFlag) {
 		return patchWorkflow(sqlCtx, queryist, apr.Args)
 	} else {
 		for _, tableName := range apr.Args {
@@ -267,7 +267,9 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 	return 0
 }
 
-// queryForUnstagedChanges queries the dolt_workspace_* tables for the add/modify/remove counts for each table.
+// queryForUnstagedChanges queries the dolt_workspace_* tables for details required for the patch workflow. This
+// includes the add/modify/remove counts for each table, the schema for each table, and the first and last row IDs.
+// We do this with three separate queries, which isn't ideal, but this is not a performance critical path.
 func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (map[string]*tablePatchInfo, error) {
 	changeCounts := make(map[string]*tablePatchInfo)
 	for _, tableName := range tables {
@@ -307,13 +309,20 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 			}
 		}
 
+		// Get the schema for the table. Note this is the dolt_workspace_* table schema, not the schema of the user table.
+		// We need to munge this a bit to get what we want.
 		qry = fmt.Sprintf("SELECT * FROM dolt_workspace_%s LIMIT 1", tableName)
 		tableSchema, _, _, err := queryist.Query(sqlCtx, qry)
 		if err != nil {
 			return nil, err
 		}
+		reconstructedSchema, err := reconstructSchema(tableSchema)
+		if err != nil {
+			return nil, err
+		}
+		changeCounts[tableName].schema = reconstructedSchema
 
-		// Kind of lame to do another query, but so be it.
+		// Finally, get the first and last row IDs for the table.
 		qry = fmt.Sprintf("SELECT min(id) as first_id, max(id) as last_id FROM dolt_workspace_%s WHERE NOT staged", tableName)
 		_, rowIter, _, err = queryist.Query(sqlCtx, qry)
 		if err != nil {
@@ -337,11 +346,6 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 		}
 		changeCounts[tableName].lastId = lastId
 
-		reconstructedSchema, err := reconstructSchema(tableSchema)
-		if err != nil {
-			return nil, err
-		}
-		changeCounts[tableName].schema = reconstructedSchema
 	}
 
 	return changeCounts, nil
@@ -364,6 +368,7 @@ func coerceToInt(val interface{}) (int, error) {
 	}
 }
 
+// queryForSingleChange queries the dolt_workspace_* table for the row with the given ID.
 func queryForSingleChange(sqlCtx *sql.Context, queryist cli.Queryist, tableName string, rowId int) (sql.Row, error) {
 	qry := fmt.Sprintf("SELECT * FROM dolt_workspace_%s WHERE ID = %d LIMIT 1", tableName, rowId)
 	_, rowIter, _, err := queryist.Query(sqlCtx, qry)
@@ -392,6 +397,7 @@ s - show summary of unstaged changes and start over
 	cli.Println(help)
 }
 
+// patchState is the state for the patch workflow.
 type patchState struct {
 	sqlCtx                *sql.Context
 	queryist              cli.Queryist
@@ -405,6 +411,7 @@ type patchState struct {
 	err                   error
 }
 
+// opYes stages the current change. "a" command.
 func (ps *patchState) opYes(c *ishell.Context) {
 	qry := fmt.Sprintf("UPDATE dolt_workspace_%s SET staged = TRUE WHERE id = %d", ps.currentTable, ps.currentRowId)
 	_, iter, _, err := ps.queryist.Query(ps.sqlCtx, qry)
@@ -414,6 +421,8 @@ func (ps *patchState) opYes(c *ishell.Context) {
 		return
 	}
 
+	// The Update operation doesn't return any rows, but we need to itterate over it to ensure that the update
+	// is made when the queryist we are using for a local query engine.
 	for {
 		_, err = iter.Next(ps.sqlCtx)
 		if err == io.EOF {
@@ -431,6 +440,8 @@ func (ps *patchState) opYes(c *ishell.Context) {
 		return
 	}
 
+	// Move to the next row. Note that when we stage the current row, the sequence ID of the row will change. This is OK
+	// since staged rows are always earlier in the sequence than unstaged rows.
 	ps.currentRowId++
 	if ps.currentRowId <= ps.currentTableLastRowId {
 		ps.setCurrentRowState(c)
@@ -439,6 +450,7 @@ func (ps *patchState) opYes(c *ishell.Context) {
 	}
 }
 
+// opNo does not stage the current change. "n" command.
 func (ps *patchState) opNo(c *ishell.Context) {
 	ps.currentRowId++
 	if ps.currentRowId <= ps.currentTableLastRowId {
@@ -448,10 +460,12 @@ func (ps *patchState) opNo(c *ishell.Context) {
 	}
 }
 
+// opSkipTable skips the current table. "d" command.
 func (ps *patchState) opSkipTable(c *ishell.Context) {
 	ps.nextTable(c)
 }
 
+// opAddAllOfTable adds all changes in the current table. "a" command.
 func (ps *patchState) opAddAllOfTable(c *ishell.Context) {
 	// grab the row id.
 	id, err := coerceToInt(ps.currentRow[0])
@@ -488,6 +502,8 @@ func (ps *patchState) opAddAllOfTable(c *ishell.Context) {
 	ps.nextTable(c)
 }
 
+// reset resets the state to the beginning of the workflow. This is done by querying the dolt_workspace_* tables for
+// the details required for the patch workflow, then reseting the appropriate state variables.
 func (ps *patchState) reset(c *ishell.Context) {
 	changeCounts, err := queryForUnstagedChanges(ps.sqlCtx, ps.queryist, ps.tables)
 	if err != nil {
@@ -503,6 +519,7 @@ func (ps *patchState) reset(c *ishell.Context) {
 	ps.nextTable(c)
 }
 
+// setCurrentRowState sets the current row state. This has the side effect of printing the current row.
 func (ps *patchState) setCurrentRowState(c *ishell.Context) {
 	if ps.currentRowId > ps.currentTableLastRowId {
 		ps.nextTable(c)
@@ -529,7 +546,9 @@ func (ps *patchState) setCurrentRowState(c *ishell.Context) {
 	}
 }
 
-// Move the state to work on the next table. Print the header for the table. If there are no more tables false is returned.
+// nextTable moves the state to work on the next table. Also prints the header for the table, and as a result
+// of calling ps.setCurrentRowState, the first row will be printed.
+// If there are no more tables waiting to be processed, the shell will be stopped (no error).
 func (ps *patchState) nextTable(c *ishell.Context) {
 	tblIdx := -1
 	if ps.currentTable != "" {
@@ -559,6 +578,10 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 	}
 }
 
+// tableHeader returns a colored header for the given table name. Looks like:
+// =============
+// Table: tblfoo
+// =============
 func tableHeader(tableName string) string {
 	width := 7 + len(tableName)
 	eqs := strings.Repeat("=", width)
@@ -571,6 +594,8 @@ func tableHeader(tableName string) string {
 	return eqs + "\n" + textLine + "\n" + eqs + "\n"
 }
 
+// newState returns a new patchState for the given tables. This is the starting point for the patch workflow,
+// and is reset with a nil ishell.Context. The nil context is allowed because the shell has not been started yet.
 func newState(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (*patchState, error) {
 	ans := &patchState{sqlCtx: sqlCtx, queryist: queryist, tables: tables}
 	ans.reset(nil)
@@ -603,6 +628,8 @@ func printSingleChange(sqlCtx *sql.Context, workspaceRow sql.Row, schema sql.Sch
 	return err
 }
 
+// reconstructSchema takes the workspace schema and returns the schema of the user table. There is probably
+// a cleaner way to do this, but I think this is the only place we need to do this.
 func reconstructSchema(workspaceSchema sql.Schema) (sql.Schema, error) {
 	toSchema := workspaceSchema[3:(3 + ((len(workspaceSchema) - 3) / 2))]
 
@@ -618,6 +645,8 @@ func reconstructSchema(workspaceSchema sql.Schema) (sql.Schema, error) {
 	return toSchema, nil
 }
 
+// colDiffType returns a slice of diff.ChangeType of the given length, all set to the same value. The underlying
+// diff printing code required this.
 func colDiffType(t diff.ChangeType, n int) []diff.ChangeType {
 	ans := make([]diff.ChangeType, n)
 	for i := range ans {
@@ -654,6 +683,7 @@ func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 		totalChgCount += c.total()
 	}
 
+	// If the user has a lot of changes, we want to inform the user them may have better options.
 	if totalChgCount > 25 {
 		warning := `You have %d changes in total. Consider updating dolt_workspace_* tables directly as
 'add --patch' requires you to individually evaluate each changed row.
