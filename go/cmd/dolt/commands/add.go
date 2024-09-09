@@ -22,12 +22,16 @@ import (
 	"io"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
@@ -106,7 +110,7 @@ func generateAddSql(apr *argparser.ArgParseResults) string {
 }
 
 // Exec executes the command
-func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateAddArgParser()
 
 	// This flag is only supported in a CLI context, not the in the dolt procedure.
@@ -184,19 +188,20 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 	return 0
 }
 
-// changeCount is a struct that holds the summary of details for a single table's unstaged changes.
+// tablePatchInfo is a struct that holds the summary of details for a single table's unstaged changes.
 // This includes the number of added, modified, and removed rows, and the ID of the first and last rows where
 // staged == false.
-type changeCount struct {
+type tablePatchInfo struct {
 	add      int
 	modifies int
 	removes  int
 	firstId  int
 	lastId   int
+	schema   sql.Schema
 }
 
-func (c *changeCount) total() int {
-	return c.add + c.modifies + c.removes
+func (tpi *tablePatchInfo) total() int {
+	return tpi.add + tpi.modifies + tpi.removes
 }
 
 func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) int {
@@ -251,7 +256,7 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 	prompt = color.HiGreenString(prompt)
 	shell.SetPrompt(prompt)
 
-	// run shell. This blocks until the user exits.
+	// run shell. This blocks until The stop() function is called on the ishell context.
 	shell.Run()
 
 	if state.err != nil {
@@ -262,12 +267,18 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 }
 
 // queryForUnstagedChanges queries the dolt_workspace_* tables for the add/modify/remove counts for each table.
-func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (map[string]*changeCount, error) {
-	changeCounts := make(map[string]*changeCount)
+func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (map[string]*tablePatchInfo, error) {
+	changeCounts := make(map[string]*tablePatchInfo)
 	for _, tableName := range tables {
+		qry := fmt.Sprintf("SELECT * FROM dolt_workspace_%s LIMIT 1", tableName)
+		tableSchema, _, _, err := queryist.Query(sqlCtx, qry)
+		if err != nil {
+			return nil, err
+		}
+
 		// Now get the add/drop/modify counts. This query is hand crafted which seems like a bad idea, but it's only the
 		// table name that is inserted, and that comes from our data, not user input.
-		qry := fmt.Sprintf("SELECT diff_type,count(*) AS count FROM dolt_workspace_%s WHERE NOT staged GROUP BY diff_type", tableName)
+		qry = fmt.Sprintf("SELECT diff_type,count(*) AS count FROM dolt_workspace_%s WHERE NOT staged GROUP BY diff_type", tableName)
 		_, rowIter, _, err := queryist.Query(sqlCtx, qry)
 		if err != nil {
 			return nil, err
@@ -277,7 +288,7 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 			return nil, err
 		}
 
-		changeCounts[tableName] = &changeCount{}
+		changeCounts[tableName] = &tablePatchInfo{}
 		for _, row := range rows {
 			diffType := row[0].(string)
 			count, err := coerceToInt(row[1])
@@ -307,7 +318,7 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 			return nil, err
 		}
 		if len(rows) != 1 {
-			return nil, errors.New("Expectedlyone row")
+			return nil, errors.New("Expected one row")
 		}
 		firstId, err := coerceToInt(rows[0][0])
 		if err != nil {
@@ -319,6 +330,12 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 			return nil, err
 		}
 		changeCounts[tableName].lastId = lastId
+
+		reconstructedSchema, err := reconstructSchema(tableSchema)
+		if err != nil {
+			return nil, err
+		}
+		changeCounts[tableName].schema = reconstructedSchema
 	}
 
 	return changeCounts, nil
@@ -357,15 +374,6 @@ func queryForSingleChange(sqlCtx *sql.Context, queryist cli.Queryist, tableName 
 	return rows[0], nil
 }
 
-func firstFoundTable(tables []string, changeCounts map[string]*changeCount) string {
-	for _, tableName := range tables {
-		if _, ok := changeCounts[tableName]; ok {
-			return tableName
-		}
-	}
-	return ""
-}
-
 func opHelp(_ *ishell.Context) {
 	help := `y - stage the current change
 n - do not stage the current change
@@ -382,8 +390,9 @@ type patchState struct {
 	sqlCtx                *sql.Context
 	queryist              cli.Queryist
 	tables                []string
-	changeCounts          map[string]*changeCount
+	changeCounts          map[string]*tablePatchInfo
 	currentTable          string
+	currentTableSchema    sql.Schema
 	currentTableLastRowId int
 	currentRowId          int
 	currentRow            sql.Row
@@ -484,15 +493,8 @@ func (ps *patchState) reset(c *ishell.Context) {
 	ps.changeCounts = changeCounts
 
 	printTableSummary(ps.tables, changeCounts)
+	ps.currentTable = ""
 	ps.nextTable(c)
-
-	ps.currentRow, err = queryForSingleChange(ps.sqlCtx, ps.queryist, ps.currentTable, ps.currentRowId)
-	if err != nil {
-		ps.err = err
-		if c != nil {
-			c.Stop()
-		}
-	}
 }
 
 func (ps *patchState) setCurrentRowState(c *ishell.Context) {
@@ -512,7 +514,13 @@ func (ps *patchState) setCurrentRowState(c *ishell.Context) {
 
 	ps.currentRow = newRow
 
-	printSingleChange(ps.sqlCtx, ps.queryist, ps.currentTable, ps.currentRow)
+	err = printSingleChange(ps.sqlCtx, ps.currentRow, ps.currentTableSchema)
+	if err != nil {
+		ps.err = err
+		if c != nil {
+			c.Stop()
+		}
+	}
 }
 
 // Move the state to work on the next table. Print the header for the table. If there are no more tables false is returned.
@@ -535,6 +543,7 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 		changes := ps.changeCounts[ps.currentTable]
 		ps.currentRowId = changes.firstId
 		ps.currentTableLastRowId = changes.lastId
+		ps.currentTableSchema = changes.schema
 
 		cli.Printf("=============\n")
 		cli.Printf("Table: %s\n", ps.currentTable)
@@ -555,13 +564,54 @@ func newState(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (*pat
 	return ans, nil
 }
 
-func printSingleChange(sqlCtx *sql.Context, queryist cli.Queryist, tableName string, row sql.Row) {
-	cli.Printf("I'm a change: %v\n", row)
+func printSingleChange(sqlCtx *sql.Context, workspaceRow sql.Row, schema sql.Schema) (err error) {
+	writer := tabular.NewFixedWidthDiffTableWriter(schema, iohelp.NopWrCloser(cli.CliOut), len(workspaceRow)/2)
+	defer writer.Close(sqlCtx.Context)
+
+	toRow := workspaceRow[3:5]
+	fromRow := workspaceRow[5:7]
+
+	diffType := workspaceRow[2].(string)
+	switch diffType {
+	case "added":
+		err = writer.WriteRow(sqlCtx.Context, toRow, diff.Added, colDiffType(diff.Added, len(toRow)))
+	case "modified":
+		err = writer.WriteCombinedRow(sqlCtx.Context, fromRow, toRow, diff.ModeContext)
+	case "removed":
+		err = writer.WriteRow(sqlCtx.Context, fromRow, diff.Removed, colDiffType(diff.Removed, len(fromRow)))
+	default:
+		err = errors.New(fmt.Sprintf("Unexpected diff type: %s", diffType))
+	}
+
+	return err
+}
+
+func reconstructSchema(workspaceSchema sql.Schema) (sql.Schema, error) {
+	toSchema := workspaceSchema[3:(3 + ((len(workspaceSchema) - 3) / 2))]
+
+	// This column names _should_ all be prefixed with "to_". A bug if not.
+	for _, col := range toSchema {
+		if strings.HasPrefix(col.Name, "to_") {
+			col.Name = strings.TrimPrefix(col.Name, "to_")
+		} else {
+			return nil, errors.New("Unexpected column name: " + col.Name)
+		}
+	}
+
+	return toSchema, nil
+}
+
+func colDiffType(t diff.ChangeType, n int) []diff.ChangeType {
+	ans := make([]diff.ChangeType, n)
+	for i := range ans {
+		ans[i] = t
+	}
+	return ans
 }
 
 // printTableSummary prints a summary of the changes in the tables. tables slice should be the table names in alphabetical order.
 // counts map should be the change counts for each table.
-func printTableSummary(tables []string, counts map[string]*changeCount) {
+func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 	header := "Table                              Added / Modified / Removed\n"
 	header += "=====                              =====   ========   =======\n"
 	header = color.YellowString(header)
