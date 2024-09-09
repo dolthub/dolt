@@ -611,8 +611,8 @@ func printSingleChange(sqlCtx *sql.Context, workspaceRow sql.Row, schema sql.Sch
 	writer := tabular.NewFixedWidthDiffTableWriter(schema, iohelp.NopWrCloser(cli.CliOut), len(workspaceRow)/2)
 	defer writer.Close(sqlCtx.Context)
 
-	toRow := workspaceRow[3:5]
-	fromRow := workspaceRow[5:7]
+	toRow := workspaceRow[3 : 3+len(schema)]
+	fromRow := workspaceRow[3+len(schema):]
 
 	diffType := workspaceRow[2].(string)
 	switch diffType {
