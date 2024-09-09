@@ -551,13 +551,24 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 		ps.currentTableLastRowId = changes.lastId
 		ps.currentTableSchema = changes.schema
 
-		cli.Printf("=============\n")
-		cli.Printf("Table: %s\n", ps.currentTable)
+		cli.Printf("%s", tableHeader(ps.currentTable))
 
 		ps.setCurrentRowState(c)
 	} else {
 		c.Stop()
 	}
+}
+
+func tableHeader(tableName string) string {
+	width := 7 + len(tableName)
+	eqs := strings.Repeat("=", width)
+	eqs = color.YellowString(eqs)
+
+	label := color.YellowString("Table:")
+	textLine := fmt.Sprintf("%s %s", label, tableName)
+	textLine = color.YellowString(textLine)
+
+	return eqs + "\n" + textLine + "\n" + eqs + "\n"
 }
 
 func newState(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (*patchState, error) {
