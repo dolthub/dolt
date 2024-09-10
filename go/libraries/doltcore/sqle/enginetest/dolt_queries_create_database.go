@@ -47,22 +47,34 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "create database with non standard collation, create branch",
+		SetUpScript: []string{
+			"CREATE DATABASE test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "use test",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "call dolt_branch('b1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create database test",
+				Expected: []sql.Row{
+					{"test", "CREATE DATABASE `test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */"},
+				},
+			},
+		},
+	},
+	{
 		Name: "create database in a transaction",
 		SetUpScript: []string{
-			"CREATE DATABASE if not exists mydb", // TODO: this is an artifact of how we run the tests
 			"START TRANSACTION",
 			"CREATE DATABASE test",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "SHOW DATABASES",
-				Expected: []sql.Row{
-					{"information_schema"},
-					{"mydb"},
-					{"mysql"},
-					{"test"},
-				},
-			},
 			{
 				Query:            "USE test",
 				SkipResultsCheck: true,

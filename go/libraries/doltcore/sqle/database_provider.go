@@ -542,18 +542,20 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		return err
 	}
 
+	// Since we just created this database, we need to commit the current transaction so that the new database is
+	// usable in this session.
+
+	// We need to unlock the provider early to avoid a deadlock with the commit
+	needUnlock = false
+	p.mu.Unlock()
+
+	err = commitTransaction(ctx, sess, &rsc)
+	if err != nil {
+		return err
+	}
+
 	needsDoltCommit := updatedSchemas || updatedCollation
 	if needsDoltCommit {
-		// Need to unlock the provider early to avoid a deadlock with the commit
-		needUnlock = false
-		p.mu.Unlock()
-
-		// Since we just created this database, we need a new transaction to inspect its roots
-		err = commitTransaction(ctx, sess, &rsc)
-		if err != nil {
-			return err
-		}
-
 		// After making changes to the working set for the DB, create a new dolt commit so that any newly created
 		// branches have those changes
 		// TODO: it would be better if there weren't a commit for this database where these changes didn't exist, but

@@ -104,52 +104,41 @@ func TestSchemaOverrides(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "CREATE DATABASE error handling",
+			Name: "create database in a transaction",
+			SetUpScript: []string{
+				"START TRANSACTION",
+				"CREATE DATABASE test",
+			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "create database `abc/def`",
-					ExpectedErr: sql.ErrInvalidDatabaseName,
+					Query:            "USE test",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "CREATE DATABASE newtestdb CHARACTER SET utf8mb4 ENCRYPTION='N'",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:            "CREATE TABLE foo (bar INT)",
+					SkipResultsCheck: true,
 				},
 				{
-					SkipResultCheckOnServerEngine: true, // tracking issue here, https://github.com/dolthub/dolt/issues/6921. Also for when run with prepares, the warning is added twice
-					Query:                         "SHOW WARNINGS /* 1 */",
-					Expected:                      []sql.Row{{"Warning", 1235, "Setting CHARACTER SET, COLLATION and ENCRYPTION are not supported yet"}},
+					Query:            "USE mydb",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "CREATE DATABASE newtest1db DEFAULT COLLATE binary ENCRYPTION='Y'",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:            "INSERT INTO test.foo VALUES (1)",
+					SkipResultsCheck: true,
 				},
 				{
-					SkipResultCheckOnServerEngine: true, // tracking issue here, https://github.com/dolthub/dolt/issues/6921.
-					// TODO: There should only be one warning (the warnings are not clearing for create database query) AND 'PREPARE' statements should not create warning from its query
-					Query: "SHOW WARNINGS /* 2 */",
+					Query: "SELECT * FROM test.foo",
 					Expected: []sql.Row{
-						{"Warning", 1235, "Setting CHARACTER SET, COLLATION and ENCRYPTION are not supported yet"},
-						{"Warning", 1235, "Setting CHARACTER SET, COLLATION and ENCRYPTION are not supported yet"},
+						{1},
 					},
 				},
-				{
-					Query:       "CREATE DATABASE mydb",
-					ExpectedErr: sql.ErrDatabaseExists,
-				},
-				{
-					Query:    "CREATE DATABASE IF NOT EXISTS mydb",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
-				},
-				{
-					Query:    "SHOW WARNINGS /* 3 */",
-					Expected: []sql.Row{{"Note", 1007, "Can't create database mydb; database exists "}},
-				},
 			},
-		}}
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
