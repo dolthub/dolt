@@ -78,6 +78,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 				dest, err = dest.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 					Name: td.ToName.Schema,
 				})
+				destSchemaNames.Add(td.ToName.Schema)
 				if err != nil {
 					return nil, err
 				}

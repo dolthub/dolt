@@ -413,7 +413,12 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	needUnlock := true
+	defer func() {
+		if needUnlock {
+			p.mu.Unlock()
+		}
+	}()
 
 	exists, isDir := p.fs.Exists(name)
 	if exists && isDir {
@@ -497,7 +502,38 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
-	return p.registerNewDatabase(ctx, name, newEnv)
+	err = p.registerNewDatabase(ctx, name, newEnv)
+	if err != nil {
+		return err
+	}
+
+	if resolve.UseSearchPath {
+		// Need to unlock the provider early to avoid a deadlock with the commit
+		needUnlock = false
+		p.mu.Unlock()
+
+		// After creating these schemas, commit them as well so that any newly created branches have them
+		// TODO: it would be better if there weren't a commit for this database where these schemas didn't exist, but
+		//  we always create an empty commit as part of initializing a repo right now.
+		roots, ok := sess.GetRoots(ctx, name)
+		if !ok {
+			return fmt.Errorf("unable to get roots for database %s", name)
+		}
+
+		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, actions.CommitStagedProps{
+			Message: "CREATE DATABASE",
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = sess.DoltCommit(ctx, name, sess.GetTransaction(), pendingCommit)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
