@@ -66,18 +66,6 @@ jobs:
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install GPG
         run: sudo apt install -y gnupg2
-      - name: Import GPG keys
-        working-directory: ./integration-tests/bats
-        run: |
-          output=$(gpg --list-keys)
-
-          if [[ $output == *"573DA8C6366D04E35CDB1A44E09A0B208F666373"* ]]; then
-            echo "It's there! key exists"
-          else
-            echo "It's not there"
-            echo "importing ./private.pgp"
-            gpg --import ./private.pgp
-          fi
       - name: Install Bats
         run: |
           npm i bats
@@ -142,5 +130,6 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
+          gpg-agent --daemon --enable-ssh-support
           bats --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
