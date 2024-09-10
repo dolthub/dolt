@@ -65,9 +65,8 @@ jobs:
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install GPG
-        run: sudo apt-get install -y gnupg
-      - name: Install GPG Agent
-        run: sudo apt-get install -y gpg-agent
+        run: sudo apt update \
+             sudo apt install gnupg2
       - name: Install Bats
         run: |
           npm i bats
