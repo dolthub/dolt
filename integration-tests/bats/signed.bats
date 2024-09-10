@@ -22,6 +22,7 @@ init_gpg() {
   else
     echo "importing $BATS_TEST_DIRNAME/private.pgp"
     run gpg --import "$BATS_TEST_DIRNAME/private.pgp"
+    echo gpg --import $BATS_TEST_DIRNAME/private.pgp: \"$output\"
     [ "$status" -eq 0 ]
   fi
 }
