@@ -64,6 +64,10 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
+      - name: Install GPG
+        run: sudo apt-get install -y gnupg
+      - name: Install GPG Agent
+        run: sudo apt-get install -y gpg-agent
       - name: Install Bats
         run: |
           npm i bats
@@ -112,8 +116,6 @@ jobs:
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
-      - name: Install GPG
-        run: sudo apt-get install -y gnupg gpg-agent
       - name: Test all Unix
         env:
           SQL_ENGINE: "local-engine"
