@@ -411,7 +411,44 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 	return p.CreateCollatedDatabase(ctx, name, sql.Collation_Default)
 }
 
+func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
+	currentTx := ctx.GetTransaction()
+
+	err := dSess.CommitTransaction(ctx, currentTx)
+	if err != nil {
+		return err
+	}
+	newTx, err := dSess.StartTransaction(ctx, sql.ReadWrite)
+	if err != nil {
+		return err
+	}
+	ctx.SetTransaction(newTx)
+
+	if rsc != nil {
+		dsess.WaitForReplicationController(ctx, *rsc)
+	}
+
+	return nil
+}
+
 func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
+	exists, isDir := p.fs.Exists(name)
+	if exists && isDir {
+		return sql.ErrDatabaseExists.New(name)
+	} else if exists {
+		return fmt.Errorf("Cannot create DB, file exists at %s", name)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	var rsc doltdb.ReplicationStatusController
+
+	// before we create a new database, we need to implicitly commit any current transaction, because we'll begin a new
+	// one after we create the new DB
+	err = commitTransaction(ctx, sess, &rsc)
+	if err != nil {
+		return err
+	}
+
 	p.mu.Lock()
 	needUnlock := true
 	defer func() {
@@ -419,13 +456,6 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 			p.mu.Unlock()
 		}
 	}()
-
-	exists, isDir := p.fs.Exists(name)
-	if exists && isDir {
-		return sql.ErrDatabaseExists.New(name)
-	} else if exists {
-		return fmt.Errorf("Cannot create DB, file exists at %s", name)
-	}
 
 	err = p.fs.MkDirs(name)
 	if err != nil {
@@ -445,7 +475,6 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	}
 
 	// TODO: fill in version appropriately
-	sess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
 
 	newDbStorageFormat := types.Format_Default
@@ -453,6 +482,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	if err != nil {
 		return err
 	}
+
+	updatedCollation, updatedSchemas := false, false
 
 	// Set the collation
 	if collation != sql.Collation_Default {
@@ -471,6 +502,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		if err = newEnv.UpdateStagedRoot(ctx, newRoot); err != nil {
 			return err
 		}
+
+		updatedCollation = true
 	}
 
 	// If the search path is enabled, we need to create our initial schema object (public and pg_catalog are available
@@ -500,6 +533,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		if err = newEnv.UpdateStagedRoot(ctx, workingRoot); err != nil {
 			return err
 		}
+
+		updatedSchemas = true
 	}
 
 	err = p.registerNewDatabase(ctx, name, newEnv)
@@ -507,21 +542,36 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		return err
 	}
 
-	if resolve.UseSearchPath {
+	needsDoltCommit := updatedSchemas || updatedCollation
+	if needsDoltCommit {
 		// Need to unlock the provider early to avoid a deadlock with the commit
 		needUnlock = false
 		p.mu.Unlock()
 
-		// After creating these schemas, commit them as well so that any newly created branches have them
-		// TODO: it would be better if there weren't a commit for this database where these schemas didn't exist, but
+		// Since we just created this database, we need a new transaction to inspect its roots
+		err = commitTransaction(ctx, sess, &rsc)
+		if err != nil {
+			return err
+		}
+
+		// After making changes to the working set for the DB, create a new dolt commit so that any newly created
+		// branches have those changes
+		// TODO: it would be better if there weren't a commit for this database where these changes didn't exist, but
 		//  we always create an empty commit as part of initializing a repo right now.
 		roots, ok := sess.GetRoots(ctx, name)
 		if !ok {
 			return fmt.Errorf("unable to get roots for database %s", name)
 		}
 
+		t := ctx.QueryTime()
+		userName := ctx.Client().User
+		userEmail := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+
 		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, actions.CommitStagedProps{
 			Message: "CREATE DATABASE",
+			Date:    t,
+			Name:    userName,
+			Email:   userEmail,
 		})
 		if err != nil {
 			return err
