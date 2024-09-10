@@ -11,6 +11,7 @@ teardown() {
 }
 
 init_gpg() {
+  echo skip gpg init
 }
 
 @test "signed: dolt commit with key specified on command line" {
