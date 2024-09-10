@@ -10,10 +10,8 @@ teardown() {
 }
 
 init_gpg() {
-  run gpg-agent --daemon
-  echo gpg-agent --daemon: \"$output\"
-  run gpg-connect-agent updatestartuptty /bye
-  echo gpg-connect-agent updatestartuptty /bye: \"$output\"
+  run /usr/bin/gpg-agent --daemon
+  echo /usr/bin/gpg-agent --daemon: \"$output\"
   run gpg --list-keys
   echo gpg --list-keys: \"$output\"
   if [[ "$output" =~ "573DA8C6366D04E35CDB1A44E09A0B208F666373" ]]; then

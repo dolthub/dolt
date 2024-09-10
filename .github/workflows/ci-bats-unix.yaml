@@ -131,6 +131,5 @@ jobs:
           BATS_TEST_RETRIES: "3"
         run: |
           gpg-agent --daemon --enable-ssh-support
-          gpg-connect-agent updatestartuptty /bye
           bats --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
