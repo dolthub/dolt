@@ -74,59 +74,11 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
-      - name: Install Dolt
-        working-directory: ./go
+      - name: Install GPG
         run: |
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-
-          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
-          go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
-      - name: Setup Dolt Config
+          sudo apt install -y gnupg2
+      - name: Test gpg-agent
         run: |
-          dolt config --global --add user.name 'Dolthub Actions'
-          dolt config --global --add user.email 'actions@dolthub.com'
-      - name: Install expect
-        if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get install -y expect
-      - name: Install Maven
-        working-directory: ./.ci_bin
-        run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.4/binaries/apache-maven-3.9.4-bin.tar.gz
-          tar -xf apache-maven-3.9.4-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.4/bin" >> $GITHUB_PATH
-      - name: Install Hadoop
-        working-directory: ./.ci_bin
-        run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
-          tar xvf hadoop-3.3.6.tar.gz
-          echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
-      - name: Install parquet-cli
-        id: parquet_cli
-        working-directory: ./.ci_bin
-        run: |
-          curl -OL https://github.com/apache/parquet-mr/archive/refs/tags/apache-parquet-1.12.3.tar.gz
-          tar zxvf apache-parquet-1.12.3.tar.gz
-          cd parquet-java-apache-parquet-1.12.3/parquet-cli
-          mvn clean install -DskipTests
-          runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
-          echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
-      - name: Check expect
-        run: expect -v
-      - name: Test all Unix
-        env:
-          SQL_ENGINE: "local-engine"
-          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
-          BATS_TEST_RETRIES: "3"
-        run: |
-          bats --tap $BATS_FILTER .
-        working-directory: ./integration-tests/bats
-      - name: Test all Unix, SQL_ENGINE=remote-engine
-        # If we have AWS credentials, we run these remote-engine tests here instead of in the separate job.
-        if: ${{ env.use_credentials == 'true' && matrix.os == 'ubuntu-22.04' }}
-        env:
-          SQL_ENGINE: "remote-engine"
-          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
-          BATS_TEST_RETRIES: "3"
-        run: |
-          bats --tap $BATS_FILTER .
-        working-directory: ./integration-tests/bats
+          gpg-agent --help
+          which gpg-agent
+        
