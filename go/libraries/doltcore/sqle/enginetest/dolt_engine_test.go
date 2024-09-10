@@ -842,7 +842,6 @@ func TestDropColumn(t *testing.T) {
 
 func TestCreateDatabase(t *testing.T) {
 	h := newDoltHarness(t)
-	defer h.Close()
 	RunCreateDatabaseTest(t, h)
 }
 
