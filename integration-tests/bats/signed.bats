@@ -11,7 +11,16 @@ teardown() {
 }
 
 init_gpg() {
-  echo skip gpg init
+  run gpg --list-keys
+  echo gpg --list-keys: \"$output\"
+  if [[ "$output" =~ "573DA8C6366D04E35CDB1A44E09A0B208F666373" ]]; then
+    echo "key exists"
+  else
+    echo "importing $BATS_TEST_DIRNAME/private.pgp"
+    run gpg --import "$BATS_TEST_DIRNAME/private.pgp"
+    echo gpg --import $BATS_TEST_DIRNAME/private.pgp: \"$output\"
+    [ "$status" -eq 0 ]
+  fi
 }
 
 @test "signed: dolt commit with key specified on command line" {
