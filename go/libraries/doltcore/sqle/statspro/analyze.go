@@ -172,7 +172,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 			// empty table
 			continue
 		}
-		stat.Chunks = idxMeta.allAddrs
+		stat.SetChunks(idxMeta.allAddrs)
 		stat.Hist = targetChunks
 		stat.UpdateActive()
 		if err := statDb.SetStat(ctx, branch, idxMeta.qual, stat); err != nil {

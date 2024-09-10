@@ -44,6 +44,12 @@ func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {
 
 var _ sql.Statistic = (*DoltStats)(nil)
 
+func (s *DoltStats) SetChunks(h []hash.Hash) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Chunks = h
+}
+
 func (s *DoltStats) WithColSet(set sql.ColSet) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithColSet(set).(*stats.Statistic)
