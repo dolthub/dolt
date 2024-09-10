@@ -284,9 +284,9 @@ func TestSingleQueryPrepared(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//engine := enginetest.NewEngine(t, harness)
-	//enginetest.CreateIndexes(t, harness, engine)
-	//engine := enginetest.NewSpatialEngine(t, harness)
+	// engine := enginetest.NewEngine(t, harness)
+	// enginetest.CreateIndexes(t, harness, engine)
+	// engine := enginetest.NewSpatialEngine(t, harness)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
@@ -305,8 +305,8 @@ func TestSingleQueryPrepared(t *testing.T) {
 		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	// engine.Analyzer.Debug = true
+	// engine.Analyzer.Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -843,7 +843,7 @@ func TestDropColumn(t *testing.T) {
 func TestCreateDatabase(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestCreateDatabase(t, h)
+	RunCreateDatabaseTest(t, h)
 }
 
 func TestBlobs(t *testing.T) {
@@ -1984,7 +1984,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		_, iter, _, err := engine.Query(ctx, q)
 		require.NoError(t, err)
 		_, err = sql.RowIterToRows(ctx, iter)
-		//fmt.Printf("%s %d\n", tag, id)
+		// fmt.Printf("%s %d\n", tag, id)
 		require.NoError(t, err)
 	}
 

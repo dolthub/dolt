@@ -639,22 +639,22 @@ func RunMultiDbTransactionsTest(t *testing.T, h DoltEnginetestHarness) {
 
 func RunMultiDbTransactionsPreparedTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range MultiDbTransactionTests {
-		//func() {
+		// func() {
 		h := h.NewHarness(t)
 		defer h.Close()
 		enginetest.TestScriptPrepared(t, h, script)
-		//}()
+		// }()
 	}
 }
 
 func RunDoltScriptsTest(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range DoltScripts {
-		//go func() {
+		// go func() {
 		harness := harness.NewHarness(t)
 
 		enginetest.TestScript(t, harness, script)
 		harness.Close()
-		//}()
+		// }()
 	}
 }
 
@@ -821,6 +821,17 @@ func RunShowCreateTableTests(t *testing.T, h DoltEnginetestHarness) {
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
+	}
+}
+
+func RunCreateDatabaseTest(t *testing.T, h *DoltHarness) {
+	enginetest.TestCreateDatabase(t, h)
+	h.Close()
+
+	for _, script := range DoltCreateDatabaseScripts {
+		h := h.NewHarness(t)
+		enginetest.TestScript(t, h, script)
+		h.Close()
 	}
 }
 
