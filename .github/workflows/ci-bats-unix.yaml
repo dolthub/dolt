@@ -112,6 +112,8 @@ jobs:
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
+      - name: Install GPG
+        run: sudo apt-get install -y gnupg
       - name: Test all Unix
         env:
           SQL_ENGINE: "local-engine"
