@@ -101,7 +101,8 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	err := stashChanges(ctx, dEnv, apr)
 	if err != nil {
-		return commands.HandleStageError(err)
+		commands.PrintStagingError(err)
+		return 1
 	}
 	return 0
 }

@@ -58,6 +58,7 @@ const (
 	OursFlag             = "ours"
 	OutputOnlyFlag       = "output-only"
 	ParentsFlag          = "parents"
+	PatchFlag            = "patch"
 	PasswordFlag         = "password"
 	PortFlag             = "port"
 	PruneFlag            = "prune"

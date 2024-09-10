@@ -107,8 +107,10 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 }
 
 func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	if !p.TryLockForUpdate("", dbName, branch) {
+		return nil
+	}
+	defer p.UnlockTable("", dbName, branch)
 
 	// Iterate all dbs, tables, indexes. Each db will collect
 	// []indexMeta above refresh threshold. We read and process those
@@ -131,6 +133,10 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 	}
 
 	for _, table := range tables {
+		if !p.TryLockForUpdate(table, dbName, branch) {
+			continue
+		}
+		defer p.UnlockTable(table, dbName, branch)
 		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return err

@@ -84,6 +84,11 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 }
 
 func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {
+	if !p.TryLockForUpdate(table.Name(), db, branch) {
+		return fmt.Errorf("already updating statistics")
+	}
+	defer p.UnlockTable(table.Name(), db, branch)
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
@@ -92,8 +97,6 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 	}
 
 	// lock only after accessing DatabaseProvider
-	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	tableName := strings.ToLower(table.Name())
 	dbName := strings.ToLower(db)

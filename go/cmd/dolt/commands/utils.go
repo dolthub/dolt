@@ -881,3 +881,38 @@ func stringSliceToInterfaceSlice(ss []string) []interface{} {
 func buildPlaceholdersString(count int) string {
 	return strings.Join(make([]string, count), "?, ") + "?"
 }
+
+func PrintStagingError(err error) {
+	vErr := func() errhand.VerboseError {
+		switch {
+		case doltdb.IsRootValUnreachable(err):
+			rt := doltdb.GetUnreachableRootType(err)
+			bdr := errhand.BuildDError("Unable to read %s.", rt.String())
+			bdr.AddCause(doltdb.GetUnreachableRootCause(err))
+			return bdr.Build()
+
+		case actions.IsTblNotExist(err):
+			tbls := actions.GetTablesForError(err)
+			bdr := errhand.BuildDError("Some of the specified tables or docs were not found")
+			bdr.AddDetails("Unknown tables or docs: %v", tbls)
+
+			return bdr.Build()
+
+		case actions.IsTblInConflict(err) || actions.IsTblViolatesConstraints(err):
+			tbls := actions.GetTablesForError(err)
+			bdr := errhand.BuildDError("error: not all tables merged")
+
+			for _, tbl := range tbls {
+				bdr.AddDetails("  %s", tbl)
+			}
+
+			return bdr.Build()
+		case doltdb.AsDoltIgnoreInConflict(err) != nil:
+			return errhand.VerboseErrorFromError(err)
+		default:
+			return errhand.BuildDError("Unknown error").AddCause(err).Build()
+		}
+	}()
+
+	cli.PrintErrln(vErr.Verbose())
+}
