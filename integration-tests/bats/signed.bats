@@ -11,6 +11,9 @@ teardown() {
 }
 
 init_gpg() {
+  # run it once to create the directory
+  gpg --list-keys
+
   # check for existence of public.gpg and private.gpg
   run gpg --list-keys
   echo gpg --list-keys: \"$output\"
