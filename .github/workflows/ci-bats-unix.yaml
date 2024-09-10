@@ -113,7 +113,7 @@ jobs:
       - name: Check expect
         run: expect -v
       - name: Install GPG
-        run: sudo apt-get install -y gnupg
+        run: sudo apt-get install -y gnupg gpg-agent
       - name: Test all Unix
         env:
           SQL_ENGINE: "local-engine"
