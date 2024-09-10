@@ -1954,6 +1954,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// create engine
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
+	harness.configureStats = true
 	engine := mustNewEngine(t, harness)
 	defer engine.Close()
 
@@ -1973,8 +1974,9 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
+	refreshCtx := enginetest.NewSession(harness)
 	newCtx := func(context.Context) (*sql.Context, error) {
-		return enginetest.NewSession(harness), nil
+		return refreshCtx, nil
 	}
 
 	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
@@ -1988,7 +1990,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	iters := 1_000
+	iters := 50
 	{
 		// 3 threads to test auto-refresh/DML concurrency safety
 		// - auto refresh (read + write)

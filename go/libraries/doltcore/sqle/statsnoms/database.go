@@ -151,9 +151,6 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 }
 
 func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			return n.stats[i]
@@ -163,12 +160,16 @@ func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
 }
 
 func (n *NomsStatsDatabase) GetStat(branch string, qual sql.StatQualifier) (*statspro.DoltStats, bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	stats := n.getBranchStats(branch)
 	ret, ok := stats[qual]
 	return ret, ok
 }
 
 func (n *NomsStatsDatabase) ListStatQuals(branch string) []sql.StatQualifier {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	stats := n.getBranchStats(branch)
 	var ret []sql.StatQualifier
 	for qual, _ := range stats {
@@ -286,7 +287,11 @@ func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qu
 		if err != nil {
 			return err
 		}
-		dbStat[qual].Hist = targetBuckets
+		newStat, err := dbStat[qual].WithHistogram(targetBuckets)
+		if err != nil {
+			return err
+		}
+		dbStat[qual] = newStat.(*statspro.DoltStats)
 	} else {
 		dbStat[qual] = statspro.NewDoltStats()
 	}
