@@ -61,7 +61,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 
 	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
 		pro := dSess.Provider()
-		newFs, err := pro.FileSystem().WithWorkingDir(dbName)
+		newFs, err := pro.FileSystemForDatabase(dbName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restart stats collection: %w", err)
 		}

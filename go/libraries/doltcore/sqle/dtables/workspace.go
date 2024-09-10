@@ -453,9 +453,9 @@ func workspaceSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 	cols := make([]schema.Column, 0, 3+toSch.GetAllCols().Size()+fromSch.GetAllCols().Size())
 
 	cols = append(cols,
-		schema.NewColumn("id", 0, types.UintKind, true),
-		schema.NewColumn("staged", 0, types.BoolKind, false),
-		schema.NewColumn("diff_type", 0, types.StringKind, false),
+		schema.NewColumn("id", 0, types.UintKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("staged", 0, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("diff_type", 0, types.StringKind, false, schema.NotNullConstraint{}),
 	)
 
 	transformer := func(sch schema.Schema, namer func(string) string) error {
@@ -485,7 +485,11 @@ func workspaceSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
+	newSchema, err := schema.NewSchema(schema.NewColCollection(cols...), nil, schema.Collation_Default, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return newSchema, nil
 }
 
 func (wt *WorkspaceTable) Collation() sql.CollationID { return sql.Collation_Default }
