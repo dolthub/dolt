@@ -11,11 +11,6 @@ teardown() {
 }
 
 init_gpg() {
-  # check if gpg is installed properly
-  run which gpg
-  echo which gpg: \"$output\"
-  [ "$status" -eq 0 ]
-
   # check for existence of public.gpg and private.gpg
   run gpg --list-keys
   echo gpg --list-keys: \"$output\"
