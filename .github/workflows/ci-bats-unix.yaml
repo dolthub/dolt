@@ -65,8 +65,7 @@ jobs:
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install GPG
-        run: sudo apt update \
-             sudo apt install gnupg2
+        run: sudo apt install -y gnupg2
       - name: Install Bats
         run: |
           npm i bats
