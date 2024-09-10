@@ -13,6 +13,8 @@ teardown() {
 init_gpg() {
   # run it once to create the directory
   gpg --list-keys
+  run gpg-agent --daemon
+  echo gpg-agent --daemon: \"$output\"
 
   # check for existence of public.gpg and private.gpg
   run gpg --list-keys
