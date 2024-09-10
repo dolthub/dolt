@@ -2,9 +2,11 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
+  echo setup
 }
 
 teardown() {
+  echo teardown
 }
 
 init_gpg() {
