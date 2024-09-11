@@ -64,8 +64,6 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
-      - name: Install GPG
-        run: sudo apt install -y gnupg2
       - name: Install Bats
         run: |
           npm i bats
@@ -130,6 +128,5 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          gpg-agent --daemon --enable-ssh-support
           bats --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
