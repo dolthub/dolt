@@ -94,7 +94,7 @@ func TestRenameTable(t *testing.T) {
 
 			schemas, err := doltdb.GetAllSchemas(ctx, root)
 			require.NoError(t, err)
-			beforeSch := schemas[tt.oldName]
+			beforeSch := schemas[doltdb.TableName{Name: tt.oldName}]
 
 			updatedRoot, err := renameTable(ctx, root, tt.oldName, tt.newName)
 			if len(tt.expectedErr) > 0 {
@@ -115,7 +115,7 @@ func TestRenameTable(t *testing.T) {
 
 			schemas, err = doltdb.GetAllSchemas(ctx, updatedRoot)
 			require.NoError(t, err)
-			require.Equal(t, beforeSch, schemas[tt.newName])
+			require.Equal(t, beforeSch, schemas[doltdb.TableName{Name: tt.newName}])
 		})
 	}
 }

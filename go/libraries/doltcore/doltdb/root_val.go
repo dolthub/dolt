@@ -455,11 +455,10 @@ func GetExistingColumns(
 	return existingCols, nil
 }
 
-func GetAllSchemas(ctx context.Context, root RootValue) (map[string]schema.Schema, error) {
-	m := make(map[string]schema.Schema)
+func GetAllSchemas(ctx context.Context, root RootValue) (map[TableName]schema.Schema, error) {
+	m := make(map[TableName]schema.Schema)
 	err := root.IterTables(ctx, func(name TableName, table *Table, sch schema.Schema) (stop bool, err error) {
-		// TODO: schema name
-		m[name.Name] = sch
+		m[name] = sch
 		return false, nil
 	})
 

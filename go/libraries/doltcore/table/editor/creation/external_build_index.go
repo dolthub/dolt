@@ -40,16 +40,7 @@ const (
 // BuildProllyIndexExternal builds unique and non-unique indexes with a
 // single prolly tree materialization by presorting the index keys in an
 // intermediate file format.
-func BuildProllyIndexExternal(
-	ctx *sql.Context,
-	vrw types.ValueReadWriter,
-	ns tree.NodeStore,
-	sch schema.Schema,
-	tableName string,
-	idx schema.Index,
-	primary prolly.Map,
-	uniqCb DupEntryCb,
-) (durable.Index, error) {
+func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err

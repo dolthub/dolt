@@ -122,7 +122,12 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
-	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables))
+	stagedSchemas, unstagedSchemas, err := diff.GetStagedUnstagedDatabaseSchemaDeltas(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables)+len(stagedSchemas)+len(unstagedSchemas))
 
 	cvTables, err := doltdb.TablesWithConstraintViolations(ctx, roots.Working)
 	if err != nil {
@@ -195,7 +200,33 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		})
 	}
 
+	for _, sd := range stagedSchemas {
+		rows = append(rows, statusTableRow{
+			tableName: sd.CurName(),
+			isStaged:  true,
+			status:    schemaStatusString(sd),
+		})
+	}
+
+	for _, sd := range unstagedSchemas {
+		rows = append(rows, statusTableRow{
+			tableName: sd.CurName(),
+			isStaged:  false,
+			status:    schemaStatusString(sd),
+		})
+	}
+
 	return &StatusItr{rows: rows}, nil
+}
+
+func schemaStatusString(sd diff.DatabaseSchemaDelta) string {
+	if sd.IsAdd() {
+		return "new schema"
+	} else if sd.IsDrop() {
+		return "deleted schema"
+	} else {
+		panic("unexpected schema delta")
+	}
 }
 
 func tableName(td diff.TableDelta) string {

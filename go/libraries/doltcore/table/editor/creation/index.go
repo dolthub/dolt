@@ -45,7 +45,8 @@ type CreateIndexReturn struct {
 func CreateIndex(
 	ctx *sql.Context,
 	table *doltdb.Table,
-	tableName, indexName string,
+	tableName string,
+	indexName string,
 	columns []string,
 	prefixLengths []uint16,
 	props schema.IndexProperties,
