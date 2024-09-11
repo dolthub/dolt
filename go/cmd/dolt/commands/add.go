@@ -183,6 +183,12 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 			tables = append(tables, tbl)
 		}
 	}
+
+	if len(tables) == 0 {
+		cli.Println("No changes.")
+		return 0
+	}
+
 	sort.Strings(tables)
 	runAddPatchShell(sqlCtx, queryist, tables)
 
@@ -575,7 +581,9 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 
 		ps.setCurrentRowState(c)
 	} else {
-		c.Stop()
+		if c != nil {
+			c.Stop()
+		}
 	}
 }
 
