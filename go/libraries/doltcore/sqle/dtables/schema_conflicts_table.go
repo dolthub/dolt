@@ -249,7 +249,7 @@ func (it *schemaConflictsIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	c := it.conflicts[0] // pop next conflict
 	it.conflicts = it.conflicts[1:]
-	return sql.NewRow(c.table, c.baseSch, c.ourSch, c.theirSch, c.description), nil
+	return sql.NewRow(c.table.Name, c.baseSch, c.ourSch, c.theirSch, c.description), nil
 }
 
 func (it *schemaConflictsIter) Close(ctx *sql.Context) error {
