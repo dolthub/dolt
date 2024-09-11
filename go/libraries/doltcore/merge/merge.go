@@ -252,7 +252,6 @@ func MergeRoots(
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
 
-		// TODO: schema name
 		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
