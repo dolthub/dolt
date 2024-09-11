@@ -47,18 +47,18 @@ func GetDatabaseSchemaDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootVa
 
 	// generate a diff for each schema name that's present in one root but not the other
 	var deltas []DatabaseSchemaDelta
-	fromNames.Iterate(func(name string) (stop bool) {
+	fromNames.Iterate(func(name string) (cont bool) {
 		if !toNames.Contains(name) {
 			deltas = append(deltas, DatabaseSchemaDelta{FromName: name})
 		}
-		return false
+		return true
 	})
 
-	toNames.Iterate(func(name string) (stop bool) {
+	toNames.Iterate(func(name string) (cont bool) {
 		if !fromNames.Contains(name) {
 			deltas = append(deltas, DatabaseSchemaDelta{ToName: name})
 		}
-		return false
+		return true
 	})
 
 	return deltas, nil
@@ -79,9 +79,9 @@ func GetStagedUnstagedDatabaseSchemaDeltas(ctx context.Context, roots doltdb.Roo
 	return staged, unstaged, nil
 }
 
-func getDatabaseSchemaNames(ctx context.Context, dest doltdb.RootValue) (*set.StrSet, error) {
+func getDatabaseSchemaNames(ctx context.Context, root doltdb.RootValue) (*set.StrSet, error) {
 	dbSchemaNames := set.NewEmptyStrSet()
-	dbSchemas, err := dest.GetDatabaseSchemas(ctx)
+	dbSchemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
 		return nil, err
 	}
