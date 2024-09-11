@@ -559,7 +559,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		// After making changes to the working set for the DB, create a new dolt commit so that any newly created
 		// branches have those changes
 		// TODO: it would be better if there weren't a commit for this database where these changes didn't exist, but
-		//  we always create an empty commit as part of initializing a repo right now.
+		//  we always create an empty commit as part of initializing a repo right now, and you cannot amend the initial
+		//  commit
 		roots, ok := sess.GetRoots(ctx, name)
 		if !ok {
 			return fmt.Errorf("unable to get roots for database %s", name)
