@@ -266,7 +266,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 	{
 		name: "no conflicts",
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 		},
 	},
 	{
@@ -284,7 +284,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
@@ -312,7 +312,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.NameCollision,
@@ -338,7 +338,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.TagCollision,
@@ -366,7 +366,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.TagCollision,
@@ -389,7 +389,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			ChkConflicts: []merge.ChkConflict{
 				{
 					Kind:   merge.TagCollision,
@@ -432,7 +432,7 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 		},
 		expConflict: merge.SchemaConflict{
-			TableName: "test",
+			TableName: doltdb.TableName{Name: "test"},
 			ChkConflicts: []merge.ChkConflict{
 				{
 					Kind:   merge.TagCollision,
@@ -497,7 +497,7 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 		}),
 		expFKConflict: []merge.FKConflict{},
 	},
-	//{
+	// {
 	//	name: "add foreign key, drop foreign key, merge",
 	//	setup: []testCommand{
 	//		{commands.SqlCmd{}, []string{"-q", "alter table quiz add constraint q2_fk foreign key (q2) references test(t2);"}},
@@ -519,7 +519,7 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 	//			ReferencedTableIndex:   "dolt_fk_2",
 	//			ReferencedTableColumns: []uint64{2}}),
 	//	expFKConflict: []merge.FKConflict{},
-	//},
+	// },
 }
 
 func colCollection(cols ...schema.Column) *schema.ColCollection {
