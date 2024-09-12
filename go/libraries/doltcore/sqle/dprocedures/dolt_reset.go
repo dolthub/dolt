@@ -17,6 +17,8 @@ package dprocedures
 import (
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -24,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // doltReset is the stored procedure version for the CLI command `dolt reset`.
