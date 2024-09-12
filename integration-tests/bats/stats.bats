@@ -130,6 +130,25 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "stats: restart in shell doesn't drop db, issue#8345" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,1), (2,2), (3,3), (4,4)"
+    dolt sql -q "insert into ab values (0,0), (1,1), (2,2), (3,3), (4,4)"
+    dolt sql -q "ANALYZE table xy, ab"
+    dolt sql <<EOF
+select count(*) from dolt_statistics;
+set @@GLOBAL.dolt_stats_auto_refresh_interval = 2;
+call dolt_stats_restart();
+select count(*) from dolt_statistics;
+select sleep(3);
+select count(*) from dolt_statistics;
+EOF
+
+    run stat .dolt/repo2
+    [ "$status" -eq 1 ]
+}
+
 @test "stats: stats roundtrip restart" {
     cd repo2
 

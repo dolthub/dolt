@@ -37,15 +37,15 @@ func NewStatsInitDatabaseHook(
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
-		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
-		if err != nil {
-			ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
-			return nil
+		dbName := strings.ToLower(db.Name())
+		if _, ok := statsProv.getStatDb(dbName); !ok {
+			statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
+			if err != nil {
+				ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
+				return nil
+			}
+			statsProv.setStatDb(dbName, statsDb)
 		}
-		statsProv.mu.Lock()
-		statsProv.setStatDb(strings.ToLower(db.Name()), statsDb)
-		statsProv.mu.Unlock()
-
 		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
 		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
 	}

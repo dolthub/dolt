@@ -147,8 +147,6 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 		}
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.setStatDb(strings.ToLower(db.Name()), statsDb)
 	return
 }
