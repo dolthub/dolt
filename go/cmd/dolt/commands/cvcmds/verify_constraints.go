@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -85,7 +84,12 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to read table names.").AddCause(err).Build(), nil)
 		}
 	}
-	tableSet := set.NewStrSet(tableNames)
+	tableSet := doltdb.NewTableNameSet(nil)
+
+	// TODO: schema names
+	for _, tableName := range tableNames {
+		tableSet.Add(doltdb.TableName{Name: tableName})
+	}
 
 	comparingRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {

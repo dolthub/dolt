@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -51,11 +51,11 @@ type MergeOpts struct {
 	// will have constraint violations recorded. This functionality is primarily used by the
 	// dolt_verify_constraints() stored procedure to allow callers to verify constraints for a
 	// subset of tables.
-	RecordViolationsForTables map[string]struct{}
+	RecordViolationsForTables map[doltdb.TableName]struct{}
 }
 
 type TableMerger struct {
-	name string
+	name doltdb.TableName
 
 	leftTbl  *doltdb.Table
 	rightTbl *doltdb.Table
@@ -132,9 +132,26 @@ type MergedTable struct {
 	conflict SchemaConflict
 }
 
+func getDatabaseSchemaNames(ctx context.Context, dest doltdb.RootValue) (*set.StrSet, error) {
+	dbSchemaNames := set.NewEmptyStrSet()
+	dbSchemas, err := dest.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, dbSchema := range dbSchemas {
+		dbSchemaNames.Add(dbSchema.Name)
+	}
+	return dbSchemaNames, nil
+}
+
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
-func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
+func (rm *RootMerger) MergeTable(
+	ctx *sql.Context,
+	tblName doltdb.TableName,
+	opts editor.Options,
+	mergeOpts MergeOpts,
+) (*MergedTable, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err
@@ -179,10 +196,10 @@ func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.O
 	return &MergedTable{table: tbl}, stats, nil
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, mergeOpts MergeOpts) (*TableMerger, error) {
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableName, mergeOpts MergeOpts) (*TableMerger, error) {
 	recordViolations := true
 	if mergeOpts.RecordViolationsForTables != nil {
-		if _, ok := mergeOpts.RecordViolationsForTables[strings.ToLower(tblName)]; !ok {
+		if _, ok := mergeOpts.RecordViolationsForTables[tblName.ToLower()]; !ok {
 			recordViolations = false
 		}
 	}
@@ -199,7 +216,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 	var err error
 	var leftSideTableExists, rightSideTableExists, ancTableExists bool
 
-	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, doltdb.TableName{Name: tblName})
+	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +226,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, doltdb.TableName{Name: tblName})
+	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +258,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, doltdb.TableName{Name: tblName})
+	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,7 @@ import (
 type SqlExportWriter struct {
 	tableName            string
 	sch                  schema.Schema
-	parentSchs           map[string]schema.Schema
+	parentSchs           map[doltdb.TableName]schema.Schema
 	foreignKeys          []doltdb.ForeignKey
 	wr                   io.WriteCloser
 	root                 doltdb.RootValue

@@ -256,7 +256,7 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 }
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
-func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) GetConflictSchemas(ctx context.Context, tblName TableName) (base, sch, mergeSch schema.Schema, err error) {
 	if t.Format() == types.Format_DOLT {
 		return t.getProllyConflictSchemas(ctx, tblName)
 	}
@@ -267,7 +267,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, s
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.
 // For now, we will enforce that all conflicts in the artifacts table must have the same schema set (base, ours, theirs).
 // In the future, we may be able to display conflicts in a way that allows different conflict schemas to coexist.
-func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName TableName) (base, sch, mergeSch schema.Schema, err error) {
 	arts, err := t.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -331,12 +331,12 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (b
 	return baseSch, ourSch, theirSch, nil
 }
 
-func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash, tblName string) (*Table, bool, error) {
+func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash, tblName TableName) (*Table, bool, error) {
 	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, ns, h)
 	if err != nil {
 		return nil, false, err
 	}
-	tbl, ok, err := rv.GetTable(ctx, TableName{Name: tblName})
+	tbl, ok, err := rv.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, false, err
 	}

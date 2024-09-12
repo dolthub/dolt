@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -81,7 +80,7 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 		return nil, doltdb.Roots{}, err
 	}
 	for _, name := range staged {
-		delete(untracked, name)
+		delete(untracked, doltdb.TableName{Name: name})
 	}
 
 	newWkRoot := roots.Head
@@ -102,7 +101,7 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 	}
 
 	for name := range untracked {
-		tname, tbl, exists, err := resolve.Table(ctx, roots.Working, name)
+		tbl, exists, err := roots.Working.GetTable(ctx, name)
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
@@ -110,7 +109,7 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 			return nil, doltdb.Roots{}, fmt.Errorf("untracked table %s does not exist in working set", name)
 		}
 
-		newWkRoot, err = newWkRoot.PutTable(ctx, tname, tbl)
+		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
 		if err != nil {
 			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
 		}
@@ -334,11 +333,11 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 
 // mapColumnTags takes a map from table name to schema.Schema and generates
 // a map from column tags to table names (see RootValue.GetAllSchemas).
-func mapColumnTags(tables map[string]schema.Schema) (m map[uint64]string) {
+func mapColumnTags(tables map[doltdb.TableName]schema.Schema) (m map[uint64]string) {
 	m = make(map[uint64]string, len(tables))
 	for tbl, sch := range tables {
 		for _, tag := range sch.GetAllCols().Tags {
-			m[tag] = tbl
+			m[tag] = tbl.Name
 		}
 	}
 	return

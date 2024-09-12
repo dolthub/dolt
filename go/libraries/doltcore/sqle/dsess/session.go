@@ -682,7 +682,12 @@ func (d *DoltSession) PendingCommitAllStaged(ctx *sql.Context, branchState *bran
 // NewPendingCommit returns a new |doltdb.PendingCommit| for the database named, using the roots given, adding any
 // merge parent from an in progress merge as appropriate. The session working set is not updated with these new roots,
 // but they are set in the returned |doltdb.PendingCommit|. If there are no changes staged, this method returns nil.
-func (d *DoltSession) NewPendingCommit(ctx *sql.Context, dbName string, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
+func (d *DoltSession) NewPendingCommit(
+	ctx *sql.Context,
+	dbName string,
+	roots doltdb.Roots,
+	props actions.CommitStagedProps,
+) (*doltdb.PendingCommit, error) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err

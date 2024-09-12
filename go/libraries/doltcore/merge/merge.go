@@ -23,8 +23,8 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -139,8 +139,8 @@ func (r Result) CountOfTablesWithConstraintViolations() int {
 	return count
 }
 
-func SchemaConflictTableNames(sc []SchemaConflict) (tables []string) {
-	tables = make([]string, len(sc))
+func SchemaConflictTableNames(sc []SchemaConflict) (tables []doltdb.TableName) {
+	tables = make([]doltdb.TableName, len(sc))
 	for i := range sc {
 		tables[i] = sc[i].TableName
 	}
@@ -241,12 +241,17 @@ func MergeRoots(
 		return nil, err
 	}
 
+	destSchemaNames, err := getDatabaseSchemaNames(ctx, ourRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	// visitedTables holds all tables that were added, removed, or modified (basically not "unmodified")
 	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
-		// TODO: schema name
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName.Name, opts, mergeOpts)
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
+
 		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
@@ -257,7 +262,7 @@ func MergeRoots(
 				SchemaConflicts: 1,
 			}
 			conflict := SchemaConflict{
-				TableName:            tblName.Name,
+				TableName:            tblName,
 				ModifyDeleteConflict: true,
 			}
 			if !mergeOpts.KeepSchemaConflicts {
@@ -289,6 +294,18 @@ func MergeRoots(
 		if mergedTable.table != nil {
 			tblToStats[tblName.Name] = stats
 
+			// edge case: if we're merging a table with a schema name to a root that doesn't have that schema,
+			// we implicitly create that schema on the destination root in addition to updating the list of schemas
+			if tblName.Schema != "" && !destSchemaNames.Contains(tblName.Schema) {
+				mergedRoot, err = mergedRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+					Name: tblName.Schema,
+				})
+				if err != nil {
+					return nil, err
+				}
+				destSchemaNames.Add(tblName.Schema)
+			}
+
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
 			if err != nil {
 				return nil, err
@@ -296,15 +313,16 @@ func MergeRoots(
 			continue
 		}
 
-		newRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
+		mergedRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
 
-		if newRootHasTable {
+		if mergedRootHasTable {
 			// Merge root deleted this table
 			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
 
+			// TODO: drop schemas as necessary
 			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
 				return nil, err
@@ -346,9 +364,9 @@ func MergeRoots(
 		return nil, err
 	}
 
-	var tableSet *set.StrSet = nil
+	var tableSet *doltdb.TableNameSet = nil
 	if mergeOpts.RecordViolationsForTables != nil {
-		tableSet = set.NewCaseInsensitiveStrSet(nil)
+		tableSet = doltdb.NewCaseInsensitiveTableNameSet(nil)
 		for tableName, _ := range mergeOpts.RecordViolationsForTables {
 			tableSet.Add(tableName)
 		}

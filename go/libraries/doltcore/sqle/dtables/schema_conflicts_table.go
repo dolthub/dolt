@@ -119,8 +119,8 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 
 	var conflicts []schemaConflict
 	err = p.state.IterSchemaConflicts(ctx, p.ddb, func(table string, cnf doltdb.SchemaConflict) error {
-
-		c, err := newSchemaConflict(ctx, table, baseRoot, cnf)
+		// TODO: schema name
+		c, err := newSchemaConflict(ctx, doltdb.TableName{Name: table}, baseRoot, cnf)
 		if err != nil {
 			return err
 		}
@@ -147,14 +147,14 @@ func (p schemaConflictsPartition) Key() []byte {
 }
 
 type schemaConflict struct {
-	table       string
+	table       doltdb.TableName
 	baseSch     string
 	ourSch      string
 	theirSch    string
 	description string
 }
 
-func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
+func newSchemaConflict(ctx context.Context, table doltdb.TableName, baseRoot doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
 	bs, err := doltdb.GetAllSchemas(ctx, baseRoot)
 	if err != nil {
 		return schemaConflict{}, err
@@ -166,13 +166,12 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootVa
 		return schemaConflict{}, err
 	}
 
-	// TODO: schema name
-	baseFKs, _ := fkc.KeysForTable(doltdb.TableName{Name: table})
+	baseFKs, _ := fkc.KeysForTable(table)
 
 	var base string
 	if baseSch != nil {
 		var err error
-		base, err = getCreateTableStatement(table, baseSch, baseFKs, bs)
+		base, err = getCreateTableStatement(table.Name, baseSch, baseFKs, bs)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -183,7 +182,7 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootVa
 	var ours string
 	if c.ToSch != nil {
 		var err error
-		ours, err = getCreateTableStatement(table, c.ToSch, c.ToFks, c.ToParentSchemas)
+		ours, err = getCreateTableStatement(table.Name, c.ToSch, c.ToFks, c.ToParentSchemas)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -194,7 +193,7 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootVa
 	var theirs string
 	if c.FromSch != nil {
 		var err error
-		theirs, err = getCreateTableStatement(table, c.FromSch, c.FromFks, c.FromParentSchemas)
+		theirs, err = getCreateTableStatement(table.Name, c.FromSch, c.FromFks, c.FromParentSchemas)
 		if err != nil {
 			return schemaConflict{}, err
 		}
@@ -226,13 +225,12 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot doltdb.RootVa
 	}, nil
 }
 
-func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
+func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[doltdb.TableName]schema.Schema) (string, error) {
 	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
 }
 
-func getSchemaConflictDescription(ctx context.Context, table string, base, ours, theirs schema.Schema) (string, error) {
-	nbf := noms.Format_Default
-	_, conflict, _, _, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
+func getSchemaConflictDescription(ctx context.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {
+	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_Default, ours, theirs, base, table)
 	if err != nil {
 		return "", err
 	}
@@ -251,7 +249,7 @@ func (it *schemaConflictsIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	c := it.conflicts[0] // pop next conflict
 	it.conflicts = it.conflicts[1:]
-	return sql.NewRow(c.table, c.baseSch, c.ourSch, c.theirSch, c.description), nil
+	return sql.NewRow(c.table.Name, c.baseSch, c.ourSch, c.theirSch, c.description), nil
 }
 
 func (it *schemaConflictsIter) Close(ctx *sql.Context) error {
