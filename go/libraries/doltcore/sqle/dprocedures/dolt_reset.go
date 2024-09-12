@@ -91,21 +91,20 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		firstArg := apr.Arg(0)
-		if apr.NArg() != 1 || (apr.NArg() == 1 && firstArg == ".") {
+		if apr.NArg() != 1 || (apr.NArg() == 1 && apr.Arg(0) == ".") {
 			err := resetSoftTables(ctx, apr, roots, dSess, dbName)
 			if err != nil {
 				return 1, err
 			}
 		} else {
 			// check if the input is a table name or commit ref
-			if isTableInRoots(ctx, roots, firstArg) {
+			if isTableInRoots(ctx, roots, apr.Arg(0)) {
 				err := resetSoftTables(ctx, apr, roots, dSess, dbName)
 				if err != nil {
 					return 1, err
 				}
 			} else {
-				err := resetSoftToRef(ctx, dbData, firstArg, dSess, dbName)
+				err := resetSoftToRef(ctx, dbData, apr.Arg(0), dSess, dbName)
 				if err != nil {
 					return 1, err
 				}
