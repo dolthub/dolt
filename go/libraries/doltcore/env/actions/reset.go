@@ -74,13 +74,11 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 	if err != nil {
 		return nil, doltdb.Roots{}, err
 	}
+
 	// untracked tables exist in |working| but not in |staged|
-	staged, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
-	if err != nil {
-		return nil, doltdb.Roots{}, err
-	}
+	staged := GetAllTableNames(ctx, roots.Staged)
 	for _, name := range staged {
-		delete(untracked, doltdb.TableName{Name: name})
+		delete(untracked, name)
 	}
 
 	newWkRoot := roots.Head
@@ -116,27 +114,18 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 	}
 
 	// need to save the state of files that aren't tracked
-	untrackedTables := make(map[string]*doltdb.Table)
-	wTblNames, err := roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName)
-
-	if err != nil {
-		return nil, doltdb.Roots{}, err
-	}
+	untrackedTables := make(map[doltdb.TableName]*doltdb.Table)
+	wTblNames := GetAllTableNames(ctx, roots.Working)
 
 	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: tblName})
+		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
 
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
 	}
 
-	headTblNames, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
-
-	if err != nil {
-		return nil, doltdb.Roots{}, err
-	}
-
+	headTblNames := GetAllTableNames(ctx, roots.Staged)
 	for _, tblName := range headTblNames {
 		delete(untrackedTables, tblName)
 	}
@@ -145,6 +134,15 @@ func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots
 	roots.Staged = roots.Head
 
 	return newHead, roots, nil
+}
+
+func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.TableName {
+	tableNames := make([]doltdb.TableName, 0)
+	_ = root.IterTables(ctx, func(name doltdb.TableName, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		tableNames = append(tableNames, name)
+		return false, nil
+	})
+	return tableNames
 }
 
 // ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the new
