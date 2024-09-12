@@ -37,10 +37,12 @@ func TestSignAndVerifyCommit(t *testing.T) {
 		"user.email": "test@dolthub.com",
 	}
 
-	execCommand(t, ctx, "testdata/signed_commits/db", CommitCmd{}, args, apr, map[string]string{}, global)
+	commitOutput := execCommand(t, ctx, "testdata/signed_commits/db", CommitCmd{}, args, apr, map[string]string{}, global)
+	require.NoError(t, err)
+
 }
 
-func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) {
+func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string) {
 	err := os.Chdir(wd)
 	require.NoError(t, err)
 
