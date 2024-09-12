@@ -53,9 +53,13 @@ func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 }
 
 func InitIO() (restoreIO func()) {
+	outFile := filepath.Join(os.TempDir(), uuid.New().String())
+	return InitIOWithFile(outFile)
+}
+
+func InitIOWithFile(outFile string) (restoreIO func()) {
 	stdOut, stdErr := os.Stdout, os.Stderr
 
-	outFile := filepath.Join(os.TempDir(), uuid.New().String())
 	f, err := os.Create(outFile)
 
 	if err == nil {

@@ -8,8 +8,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -65,6 +67,17 @@ func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, 
 	require.NoError(t, verr)
 	cliCtx, err := cli.NewCliContext(apr, cfg, latebind)
 	require.NoError(t, err)
+
+	outFile := filepath.Join(os.TempDir(), uuid.New().String())
+	revertIO := cli.InitIOWithFile(outFile)
+	defer func() {
+		revertIO()
+
+		outAndErr, err := os.ReadFile(outFile)
+		require.NoError(t, err)
+
+		t.Logf("Output:\n%s", string(outAndErr))
+	}()
 
 	n := cmd.Exec(ctx, "commit", args, dEnv, cliCtx)
 	require.Equal(t, 0, n)
