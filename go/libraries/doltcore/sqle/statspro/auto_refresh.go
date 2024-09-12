@@ -108,7 +108,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 
 func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
 	if !p.TryLockForUpdate("", dbName, branch) {
-		return nil
+		return fmt.Errorf("database already being updated: %s/%s", branch, dbName)
 	}
 	defer p.UnlockTable("", dbName, branch)
 
@@ -133,6 +133,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 	}
 
 	for _, table := range tables {
+		if !p.TryLockForUpdate(table, dbName, branch) {
+			ctx.GetLogger().Debugf("statistics refresh: table is already being updated: %s/%s.%s", branch, dbName, table)
+			return fmt.Errorf("table already being updated: %s", table)
+		}
+		defer p.UnlockTable(table, dbName, branch)
+
 		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return err
@@ -151,12 +157,6 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		} else {
 			ctx.GetLogger().Debugf("statistics refresh: new table hash: %s", tableHash)
 		}
-
-		if !p.TryLockForUpdate(table, dbName, branch) {
-			ctx.GetLogger().Debugf("statistics refresh: table is already being updated: %s/%s.%s", branch, dbName, table)
-			continue
-		}
-		defer p.UnlockTable(table, dbName, branch)
 
 		iat, ok := sqlTable.(sql.IndexAddressableTable)
 		if !ok {

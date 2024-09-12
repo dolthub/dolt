@@ -94,10 +94,10 @@ func newDbStats(dbName string) *dbToStats {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
-func (p *Provider) TryLockForUpdate(table string, db string, branch string) bool {
+func (p *Provider) TryLockForUpdate(branch, db, table string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	lockId := fmt.Sprintf("%s.%s.%s", db, branch, table)
+	lockId := fmt.Sprintf("%s.%s.%s", branch, db, table)
 	if ok := p.lockedTables[lockId]; ok {
 		return false
 	}
@@ -105,10 +105,10 @@ func (p *Provider) TryLockForUpdate(table string, db string, branch string) bool
 	return true
 }
 
-func (p *Provider) UnlockTable(table string, db string, branch string) {
+func (p *Provider) UnlockTable(branch, db, table string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	lockId := fmt.Sprintf("%s.%s.%s", db, branch, table)
+	lockId := fmt.Sprintf("%s.%s.%s", branch, db, table)
 	p.lockedTables[lockId] = false
 	return
 }
