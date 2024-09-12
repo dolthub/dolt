@@ -169,9 +169,38 @@ teardown() {
 
   run dolt sql -q "select pk, name from names AS OF STAGED"
   [ $status -eq 0 ]
-  [[ "$output" =~ "| 1  | neil |" ]] || false
+  [[ "$output" =~ "| 1  | joey |" ]] || false
+  [[ "$output" =~ "| 2  | sami |" ]] || false
   [[ "$output" =~ "| 3  | jane |" ]] || false
-  [[ ! "$output" =~ "john" ]] || false # last promoted row - should not be staged.
+  [[ "$output" =~ "| 4  | john |" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "add-patch: summary updates are correct" {
+  # Similar to the previous test, but this time we're ensuring that the summary updates are correct.
+  run $BATS_TEST_DIRNAME/add-patch-expect/summary_updates.expect
+  [ $status -eq 0 ]
+
+  # Status should be identical to the previous test.
+  run dolt sql -q "select name from colors AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Red"     ]] || false
+  [[ "$output" =~ "SkyBlue" ]] || false
+  [[ "$output" =~ "Yellow"  ]] || false
+  [[ ! "$output" =~ "Green" ]] || false
+
+  run dolt sql -q "select pk, y from coordinates AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | 2.2     |"   ]] || false
+  [[ "$output" =~ "| 3  | 100.001 |"   ]] || false
+  [[ "$output" =~ "| 4  | 23.32   |"   ]] || false
+
+  run dolt sql -q "select pk, name from names AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | joey |" ]] || false
+  [[ "$output" =~ "| 2  | sami |" ]] || false
+  [[ "$output" =~ "| 3  | jane |" ]] || false
+  [[ "$output" =~ "| 4  | john |" ]] || false
 }
 
 # bats test_tags=no_lambda
@@ -180,12 +209,12 @@ teardown() {
   run $BATS_TEST_DIRNAME/add-patch-expect/yes_then_d.expect
   [ $status -eq 0 ]
 
-  run dolt sql -q "select name from colors AS OF STAGED"
+  run dolt sql -q "select pk,name from colors AS OF STAGED"
   [ $status -eq 0 ]
-  [[ "$output" =~ "Yellow"  ]] || false
-  [[ "$output" =~ "Red"     ]] || false
-  [[ "$output" =~ "Green"   ]] || false
-  [[ "$output" =~ "Blue"    ]] || false
+  [[ "$output" =~ "0  | Yellow"  ]] || false
+  [[ "$output" =~ "1  | Red"     ]] || false
+  [[ "$output" =~ "2  | Green"   ]] || false
+  [[ "$output" =~ "3  | Blue"    ]] || false
   # verify no extra rows in table we didn't look for.
   run dolt sql -q "select sum(pk) as s from colors AS OF STAGED"
   [ $status -eq 0 ]
@@ -245,6 +274,10 @@ teardown() {
   [ $status -eq 0 ]
   [[ "$output" =~ "| 6 |" ]] || false
 }
+
+
+
+
 
 # Test needed:
 # add keyless table tests.
