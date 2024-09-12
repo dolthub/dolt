@@ -9,6 +9,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/stretchr/testify/require"
+	"log"
 	"os"
 	"testing"
 )
@@ -40,6 +41,7 @@ func TestSignAndVerifyCommit(t *testing.T) {
 	commitOutput := execCommand(t, ctx, "testdata/signed_commits/db", CommitCmd{}, args, apr, map[string]string{}, global)
 	require.NoError(t, err)
 
+	log.Println("commit output", commitOutput)
 }
 
 func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string) {
@@ -84,12 +86,13 @@ func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, 
 		os.Stdout = initialOut
 		os.Stderr = initialErr
 
-		outAndErr, err := os.ReadFile(f.Name())
+		outputBytes, err := os.ReadFile(f.Name())
 		require.NoError(t, err)
 
-		t.Logf("Output:\n%s", string(outAndErr))
+		output = string(outputBytes)
 	}()
 
 	n := cmd.Exec(ctx, "commit", args, dEnv, cliCtx)
 	require.Equal(t, 0, n)
+	return
 }
