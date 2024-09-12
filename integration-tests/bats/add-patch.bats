@@ -107,7 +107,6 @@ teardown() {
   ORIG_DB_HASH=$(echo "$output" | awk 'NR==2')
 
   run $BATS_TEST_DIRNAME/add-patch-expect/help_quit.expect
-
   [ $status -eq 0 ]
 
   run dolt sql -r csv -q "select dolt_hashof_db()"
@@ -275,6 +274,7 @@ teardown() {
   [[ "$output" =~ "| 6 |" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "add-patch: keyless table" {
   dolt add .
   dolt commit -m "make clean workspace"
