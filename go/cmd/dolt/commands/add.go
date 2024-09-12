@@ -164,7 +164,9 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 }
 
 func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) int {
-	if len(tables) == 0 {
+	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
+		tables = tables[:0] // in the event that the user specified '.' as the only argument, we want to clear the list of tables
+
 		// Get the list of tables to patch
 		_, rowIter, _, err := queryist.Query(sqlCtx, "select table_name from dolt_status where not staged")
 		if err != nil {
