@@ -201,7 +201,7 @@ func ResetHard(
 	return nil
 }
 
-func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
+func ResetSoftTables(ctx context.Context, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
 	tables, err := getUnionedTables(ctx, tableNamesFromArgs(apr.Args), roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
