@@ -27,7 +27,7 @@ UPDATE colors SET name = 'SkyBlue', red = 0, green = 128, blue = 255 WHERE pk = 
 UPDATE coordinates SET y = 100.001 WHERE pk = 3;
 
 INSERT INTO names VALUES (4,'john');
-INSERT INTO colors VALUES (0, 'Yellow', 255, 255, 0);
+INSERT INTO colors VALUES (0, 'Yellow', 255, 255, 0); // use 0 pk to ensure ordering is different from other tables.
 INSERT INTO coordinates VALUES (4, 42.24, 23.32);
 
 DELETE FROM names WHERE pk = 2;
@@ -148,6 +148,7 @@ teardown() {
   [[ ! "$output" =~ "john" ]] || false # Value for inserted row - should not be there.
 }
 
+# bats test_tags=no_lambda
 @test "add-patch: y/n repeatedly with restarts" {
   # This test repeatedly does 'y/n/y/s' until the program exits.
   run $BATS_TEST_DIRNAME/add-patch-expect/restart_multiple_times.expect
@@ -173,7 +174,77 @@ teardown() {
   [[ ! "$output" =~ "john" ]] || false # last promoted row - should not be staged.
 }
 
+# bats test_tags=no_lambda
+@test "add-patch: y then d" {
+  # Accept the first change for each table, then skip the rest.
+  run $BATS_TEST_DIRNAME/add-patch-expect/yes_then_d.expect
+  [ $status -eq 0 ]
+
+  run dolt sql -q "select name from colors AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Yellow"  ]] || false
+  [[ "$output" =~ "Red"     ]] || false
+  [[ "$output" =~ "Green"   ]] || false
+  [[ "$output" =~ "Blue"    ]] || false
+  # verify no extra rows in table we didn't look for.
+  run dolt sql -q "select sum(pk) as s from colors AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 6 |" ]] || false # Yellow added as pk=0, so 0+1+2+3
+
+  run dolt sql -q "select pk, y from coordinates AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | 2.2 |"   ]] || false
+  [[ "$output" =~ "| 3  | 6.6 |"   ]] || false
+  # verify no extra rows in table we didn't look for.
+  run dolt sql -q "select sum(pk) as s from coordinates AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 4 |" ]] || false
+
+  run dolt sql -q "select pk, name from names AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | joey |" ]] || false
+  [[ "$output" =~ "| 2  | sami |" ]] || false
+  [[ "$output" =~ "| 3  | jane |" ]] || false
+  run dolt sql -q "select sum(pk) as s from names AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 6 |" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "add-patch: n then a" {
+  # Accept the reject fir change, then accept the rest.
+  run $BATS_TEST_DIRNAME/add-patch-expect/no_then_a.expect
+  [ $status -eq 0 ]
+
+  run dolt sql -q "select pk,name from colors AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | Red     |" ]] || false
+  [[ "$output" =~ "| 3  | SkyBlue |" ]] || false
+  # verify no extra rows in table we didn't look for.
+  run dolt sql -q "select sum(pk) as s from colors AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 4 |" ]] || false
+
+  run dolt sql -q "select pk, y from coordinates AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | 2.2     |"   ]] || false
+  [[ "$output" =~ "| 2  | 4.4     |"   ]] || false
+  [[ "$output" =~ "| 3  | 100.001 |"   ]] || false
+  [[ "$output" =~ "| 4  | 23.32   |"   ]] || false
+  # verify no extra rows in table we didn't look for.
+  run dolt sql -q "select sum(pk) as s from coordinates AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 10 |" ]] || false
+
+  run dolt sql -q "select pk, name from names AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 1  | neil |" ]] || false
+  [[ "$output" =~ "| 2  | sami |" ]] || false
+  [[ "$output" =~ "| 3  | jane |" ]] || false
+  run dolt sql -q "select sum(pk) as s from names AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "| 6 |" ]] || false
+}
 
 # Test needed:
-# restart workflow.
 # add keyless table tests.
