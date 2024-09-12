@@ -275,9 +275,52 @@ teardown() {
   [[ "$output" =~ "| 6 |" ]] || false
 }
 
+@test "add-patch: keyless table" {
+  dolt add .
+  dolt commit -m "make clean workspace"
 
+  dolt sql -q "create table keyless (x int, y int)"
+  dolt sql -q "insert into keyless values (1,1), (2,2), (3,3), (1,1), (2,2), (3,3)"
+  dolt commit -A -m "add keyless table with data."
 
+  # This update, while it updates "all rows", the diff will be:
+  # diff --dolt a/keyless b/keyless
+  # --- a/keyless
+  # +++ b/keyless
+  # +---+---+---+
+  # |   | x | y |
+  # +---+---+---+
+  # | - | 1 | 1 |
+  # | - | 1 | 1 |
+  # | + | 4 | 4 |
+  # | + | 4 | 4 |
+  # +---+---+---+
+  dolt sql -q "update keyless set x = x + 1, y = y + 1"
 
+  run $BATS_TEST_DIRNAME/add-patch-expect/keyless.expect
+  [ $status -eq 0 ]
 
-# Test needed:
-# add keyless table tests.
+  run dolt sql -q "select * from keyless AS OF STAGED"
+  # Output should be:
+  # +---+---+
+  # | x | y |
+  # +---+---+
+  # | 3 | 3 |
+  # | 3 | 3 |
+  # | 2 | 2 |
+  # | 2 | 2 |
+  # | 1 | 1 |
+  # | 4 | 4 |
+  # +---+---+
+  [ $status -eq 0 ]
+  [[ "$output" =~ "3 | 3" ]] || false
+  [[ "$output" =~ "2 | 2" ]] || false
+  [[ "$output" =~ "1 | 1" ]] || false
+  [[ "$output" =~ "4 | 4" ]] || false
+
+  # verify no extra rows in table we didn't look for. 3 + 3 + 2 + 2 + 1 + 4 = 15
+  run dolt sql -q "select sum(x) as s from keyless AS OF STAGED"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "15" ]] || false
+}
+
