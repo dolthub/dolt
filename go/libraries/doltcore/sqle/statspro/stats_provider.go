@@ -279,7 +279,7 @@ func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, _ []strin
 	}
 
 	if _, ok := statDb.GetStat(branch, qual); ok {
-		statDb.DeleteStats(branch, qual)
+		statDb.DeleteStats(ctx, branch, qual)
 		p.UpdateStatus(qual.Db(), fmt.Sprintf("dropped statisic: %s", qual.String()))
 	}
 

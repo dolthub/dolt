@@ -133,10 +133,6 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 	}
 
 	for _, table := range tables {
-		if !p.TryLockForUpdate(table, dbName, branch) {
-			continue
-		}
-		defer p.UnlockTable(table, dbName, branch)
 		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return err
@@ -155,6 +151,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		} else {
 			ctx.GetLogger().Debugf("statistics refresh: new table hash: %s", tableHash)
 		}
+
+		if !p.TryLockForUpdate(table, dbName, branch) {
+			ctx.GetLogger().Debugf("statistics refresh: table is already being updated: %s/%s.%s", branch, dbName, table)
+			continue
+		}
+		defer p.UnlockTable(table, dbName, branch)
 
 		iat, ok := sqlTable.(sql.IndexAddressableTable)
 		if !ok {
@@ -240,7 +242,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		}
 	}
 
-	statDb.DeleteStats(branch, deletedStats...)
+	statDb.DeleteStats(ctx, branch, deletedStats...)
 
 	if err := statDb.Flush(ctx, branch); err != nil {
 		return err
