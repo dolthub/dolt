@@ -89,6 +89,32 @@ func execGpgAndReadOutput(ctx context.Context, in []byte, args []string) (*bytes
 	return outBuf, errBuf, nil
 }
 
+func ImportKey(ctx context.Context, keyFile string) error {
+	args := []string{"--import", keyFile}
+	_, _, err := execGpgAndReadOutput(ctx, nil, args)
+	return err
+}
+
+func ListKeys(ctx context.Context) ([]byte, error) {
+	args := []string{"--list-keys"}
+	outBuf, _, err := execGpgAndReadOutput(ctx, nil, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return outBuf.Bytes(), nil
+}
+
+func HasKey(ctx context.Context, keyId string) (bool, error) {
+	args := []string{"--list-keys", keyId}
+	outBuf, _, err := execGpgAndReadOutput(ctx, nil, args)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.Contains(outBuf.String(), keyId), nil
+}
+
 func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 	args := []string{"--clear-sign", "-u", keyId}
 	outBuf, _, err := execGpgAndReadOutput(ctx, message, args)

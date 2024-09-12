@@ -23,6 +23,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func signTestSetup(t *testing.T, ctx context.Context) {
+	err := ImportKey(ctx, "testdata/private.pgp")
+	require.NoError(t, err)
+
+	ok, err := HasKey(ctx, "4798B29CA9029452D103B1E388F64CE29826DA4A")
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
 func TestSign(t *testing.T) {
 	ctx := context.Background()
 	keyId := "4798B29CA9029452D103B1E388F64CE29826DA4A"
