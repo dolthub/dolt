@@ -71,11 +71,16 @@ func execCommand(t *testing.T, ctx context.Context, wd string, cmd cli.Command, 
 	f, err := os.CreateTemp(os.TempDir(), "signed-commit-test-*")
 	os.Stdout = f
 	os.Stderr = f
+	restoreIO := cli.InitIO()
+
 	defer func() {
 		err := f.Close()
+		require.NoError(t, err)
+
+		restoreIO()
+
 		os.Stdout = initialOut
 		os.Stderr = initialErr
-		require.NoError(t, err)
 
 		outAndErr, err := os.ReadFile(f.Name())
 		require.NoError(t, err)
