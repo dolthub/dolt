@@ -365,7 +365,7 @@ func coerceToInt(val interface{}) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return val.(int), nil
+	return int(val.(int32)), nil
 }
 
 // queryForSingleChange queries the dolt_workspace_* table for the row with the given ID.
