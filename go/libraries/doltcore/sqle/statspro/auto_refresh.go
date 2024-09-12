@@ -107,10 +107,10 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 }
 
 func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
-	if !p.TryLockForUpdate("", dbName, branch) {
-		return nil
+	if !p.TryLockForUpdate(branch, dbName, "") {
+		return fmt.Errorf("database already being updated: %s/%s", branch, dbName)
 	}
-	defer p.UnlockTable("", dbName, branch)
+	defer p.UnlockTable(branch, dbName, "")
 
 	// Iterate all dbs, tables, indexes. Each db will collect
 	// []indexMeta above refresh threshold. We read and process those
@@ -133,10 +133,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 	}
 
 	for _, table := range tables {
-		if !p.TryLockForUpdate(table, dbName, branch) {
-			continue
+		if !p.TryLockForUpdate(branch, dbName, table) {
+			ctx.GetLogger().Debugf("statistics refresh: table is already being updated: %s/%s.%s", branch, dbName, table)
+			return fmt.Errorf("table already being updated: %s", table)
 		}
-		defer p.UnlockTable(table, dbName, branch)
+		defer p.UnlockTable(branch, dbName, table)
+
 		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return err
@@ -240,7 +242,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		}
 	}
 
-	statDb.DeleteStats(branch, deletedStats...)
+	statDb.DeleteStats(ctx, branch, deletedStats...)
 
 	if err := statDb.Flush(ctx, branch); err != nil {
 		return err

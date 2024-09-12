@@ -231,22 +231,25 @@ func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {
 	return nil
 }
 
-func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifier) {
+func (n *NomsStatsDatabase) DeleteStats(ctx *sql.Context, branch string, quals ...sql.StatQualifier) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			for _, qual := range quals {
+				ctx.GetLogger().Debugf("statistics refresh: deleting index statistics: %s/%s", branch, qual)
 				delete(n.stats[i], qual)
 			}
 		}
 	}
 }
 
-func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string, flush bool) error {
+func (n *NomsStatsDatabase) DeleteBranchStats(ctx *sql.Context, branch string, flush bool) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	ctx.GetLogger().Debugf("statistics refresh: deleting branch statistics: %s", branch)
 
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
