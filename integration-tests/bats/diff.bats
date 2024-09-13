@@ -1021,8 +1021,8 @@ SQL
     [[ "$output" =~ "where poop = 0" ]] || false
 }
 
-@test "diff: --cached" {
-    run dolt diff --cached
+@test "diff: --cached/--staged" {
+    run dolt diff --staged
     [ $status -eq 0 ]
     [ "$output" = "" ]
 
@@ -1038,7 +1038,7 @@ SQL
 
     CORRECT_DIFF=$output
     dolt add test
-    run dolt diff --cached
+    run dolt diff --staged
     [ $status -eq 0 ]
     [ "$output" = "$CORRECT_DIFF" ]
 
