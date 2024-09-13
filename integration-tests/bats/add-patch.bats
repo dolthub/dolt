@@ -267,11 +267,11 @@ teardown() {
   run dolt sql -q "select pk, name from names AS OF STAGED"
   [ $status -eq 0 ]
   [[ "$output" =~ "| 1  | neil |" ]] || false
-  [[ "$output" =~ "| 2  | sami |" ]] || false
   [[ "$output" =~ "| 3  | jane |" ]] || false
+  [[ "$output" =~ "| 4  | john |" ]] || false
   run dolt sql -q "select sum(pk) as s from names AS OF STAGED"
   [ $status -eq 0 ]
-  [[ "$output" =~ "| 6 |" ]] || false
+  [[ "$output" =~ "| 8 |" ]] || false
 }
 
 # bats test_tags=no_lambda
