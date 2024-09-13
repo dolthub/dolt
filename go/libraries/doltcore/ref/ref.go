@@ -122,7 +122,7 @@ func EqualsCaseInsensitive(dr, other DoltRef) bool {
 		return false
 	}
 
-	return dr.GetType() == other.GetType() && strings.ToLower(dr.GetPath()) == strings.ToLower(other.GetPath())
+	return dr.GetType() == other.GetType() && strings.EqualFold(dr.GetPath(), other.GetPath())
 }
 
 // EqualsStr compares a DoltRef to a reference string to see if they are referring to the same thing

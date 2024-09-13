@@ -2042,7 +2042,7 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 		var colNames []string
 		prefixLengths := index.PrefixLengths()
 		for i, colName := range index.ColumnNames() {
-			if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
+			if strings.EqualFold(oldColumn.Name, colName) {
 				colNames = append(colNames, newColumn.Name)
 				if len(prefixLengths) > 0 {
 					if !sqltypes.IsText(newColumn.Type) {
@@ -2731,7 +2731,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
 	}
-	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
+	if !strings.EqualFold(sqlFk.Database, sqlFk.ParentDatabase) || !strings.EqualFold(sqlFk.Database, t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
 
@@ -3265,7 +3265,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	for _, key := range keys {
-		if strings.ToLower(key.Name) == strings.ToLower(name) {
+		if strings.EqualFold(key.Name, name) {
 			return true, nil
 		}
 	}
@@ -3276,7 +3276,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	for _, check := range checks {
-		if strings.ToLower(check.Name) == strings.ToLower(name) {
+		if strings.EqualFold(check.Name, name) {
 			return true, nil
 		}
 	}

@@ -398,7 +398,7 @@ func getStrBoolColAsBool(col interface{}) (bool, error) {
 	case bool:
 		return col.(bool), nil
 	case string:
-		return strings.ToLower(col.(string)) == "true" || strings.ToLower(col.(string)) == "1", nil
+		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
 	}

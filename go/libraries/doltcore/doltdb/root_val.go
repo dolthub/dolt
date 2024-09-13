@@ -380,7 +380,7 @@ func GenerateTagsForNewColumns(
 		for i := range newColNames {
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
-			if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+			if strings.EqualFold(newColNames[i], col.Name) &&
 				newColKinds[i] == col.TypeInfo.NomsKind() {
 				newTags[i] = &col.Tag
 				break
@@ -520,10 +520,9 @@ func (root *rootValue) ResolveTableName(ctx context.Context, tName TableName) (s
 	}
 
 	found := false
-	lwrName := strings.ToLower(tName.Name)
 	resolvedName := tName.Name
 	err = tmIterAll(ctx, tableMap, func(name string, addr hash.Hash) {
-		if found == false && lwrName == strings.ToLower(name) {
+		if found == false && strings.EqualFold(tName.Name, name) {
 			resolvedName = name
 			found = true
 		}

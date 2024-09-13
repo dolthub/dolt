@@ -391,7 +391,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 
 		// These columns are case insensitive, make sure to do a case-insensitive comparison
-		if strings.ToLower(sqlRow[typeIdx].(string)) == fragType && strings.ToLower(sqlRow[nameIdx].(string)) == name {
+		if strings.EqualFold(sqlRow[typeIdx].(string), fragType) && strings.EqualFold(sqlRow[nameIdx].(string), name) {
 			return sqlRow, true, nil
 		}
 	}

@@ -524,7 +524,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	currDbBaseName, rev := SplitRevisionDbName(currDb)
 	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
-	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
+	if !strings.EqualFold(currDbBaseName, dirtyDbBaseName) {
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
 	}
 
@@ -540,7 +540,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		rev = dbState.checkedOutRevSpec
 	}
 
-	if strings.ToLower(rev) != strings.ToLower(dirtyBranchState.head) {
+	if !strings.EqualFold(rev, dirtyBranchState.head) {
 		return fmt.Errorf("no changes to dolt_commit on branch %s", rev)
 	}
 
@@ -1175,7 +1175,7 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 		return sql.ErrSystemVariableReadOnly.New(key)
 	}
 
-	if strings.ToLower(key) == "foreign_key_checks" {
+	if strings.EqualFold(key, "foreign_key_checks") {
 		return d.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
@@ -1372,7 +1372,7 @@ func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Tab
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
 	tables := d.tempTables[strings.ToLower(db)]
 	for i, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+		if strings.EqualFold(tbl.Name(), name) {
 			tables = append(tables[:i], tables[i+1:]...)
 			break
 		}
@@ -1382,7 +1382,7 @@ func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
 
 func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
 	for _, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+		if strings.EqualFold(tbl.Name(), name) {
 			return tbl, true
 		}
 	}

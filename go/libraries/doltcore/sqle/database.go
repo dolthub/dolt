@@ -1579,7 +1579,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 			}
 		}
 
-		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+		if strings.EqualFold(fragment.name, viewName) {
 			found = true
 			viewDef = views[i]
 		}
@@ -1727,7 +1727,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 	}
 
 	for _, frag := range frags {
-		if strings.ToLower(frag.name) == strings.ToLower(name) {
+		if strings.EqualFold(frag.name, name) {
 			event, err := db.createEventDefinitionFromFragment(ctx, frag)
 			if err != nil {
 				return sql.EventDefinition{}, false, err
