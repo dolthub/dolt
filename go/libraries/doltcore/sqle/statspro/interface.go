@@ -36,13 +36,13 @@ type Database interface {
 	LoadBranchStats(ctx *sql.Context, branch string) error
 	// DeleteBranchStats removes references to in memory index statistics.
 	// If |flush| is true delete the data from storage.
-	DeleteBranchStats(ctx context.Context, branch string, flush bool) error
+	DeleteBranchStats(ctx *sql.Context, branch string, flush bool) error
 	// GetStat returns a branch's index statistics.
 	GetStat(branch string, qual sql.StatQualifier) (*DoltStats, bool)
 	//SetStat bulk replaces the statistic, deleting any previous version
 	SetStat(ctx context.Context, branch string, qual sql.StatQualifier, stats *DoltStats) error
 	//DeleteStats deletes a list of index statistics.
-	DeleteStats(branch string, quals ...sql.StatQualifier)
+	DeleteStats(ctx *sql.Context, branch string, quals ...sql.StatQualifier)
 	// ReplaceChunks is an update interface that lets a stats implementation
 	// decide how to edit stats for a stats refresh.
 	ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []sql.HistogramBucket) error

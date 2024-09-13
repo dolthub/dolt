@@ -37,7 +37,7 @@ const batchSize = 10000
 type BatchSqlExportWriter struct {
 	tableName            string
 	sch                  schema.Schema
-	parentSchs           map[string]schema.Schema
+	parentSchs           map[doltdb.TableName]schema.Schema
 	foreignKeys          []doltdb.ForeignKey
 	wr                   io.WriteCloser
 	root                 doltdb.RootValue
@@ -49,7 +49,15 @@ type BatchSqlExportWriter struct {
 }
 
 // OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*BatchSqlExportWriter, error) {
+func OpenBatchedSQLExportWriter(
+	ctx context.Context,
+	wr io.WriteCloser,
+	root doltdb.RootValue,
+	tableName string,
+	autocommitOff bool,
+	sch schema.Schema,
+	editOpts editor.Options,
+) (*BatchSqlExportWriter, error) {
 
 	allSchemas, err := doltdb.GetAllSchemas(ctx, root)
 	if err != nil {

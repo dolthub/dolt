@@ -72,7 +72,7 @@ func mergeNomsTable(ctx *sql.Context, tm *TableMerger, mergedSch schema.Schema, 
 		}
 	}
 
-	updatedTblEditor, err := editor.NewTableEditor(ctx, mergeTbl, mergedSch, tm.name, opts)
+	updatedTblEditor, err := editor.NewTableEditor(ctx, mergeTbl, mergedSch, tm.name.Name, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +92,7 @@ func mergeNomsTable(ctx *sql.Context, tm *TableMerger, mergedSch schema.Schema, 
 		return nil, nil, err
 	}
 
-	resultTbl, cons, stats, err := mergeNomsTableData(ctx, vrw, tm.name, mergedSch, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
+	resultTbl, cons, stats, err := mergeNomsTableData(ctx, vrw, tm.name.Name, mergedSch, rows, mergeRows, durable.NomsMapFromIndex(ancRows), updatedTblEditor)
 	if err != nil {
 		return nil, nil, err
 	}

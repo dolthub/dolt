@@ -76,7 +76,7 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 	if td.IsDrop() {
 		ddlStatements = append(ddlStatements, DropTableStmt(td.FromName.Name))
 	} else if td.IsAdd() {
-		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, nameMapFromTableNameMap(td.ToFksParentSch))
+		stmt, err := GenerateCreateTableStatement(td.ToName.Name, td.ToSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -92,17 +92,9 @@ func GenerateSqlPatchSchemaStatements(ctx *sql.Context, toRoot doltdb.RootValue,
 	return ddlStatements, nil
 }
 
-func nameMapFromTableNameMap(tableNameMap map[doltdb.TableName]schema.Schema) map[string]schema.Schema {
-	nameMap := make(map[string]schema.Schema)
-	for name := range tableNameMap {
-		nameMap[name.Name] = tableNameMap[name]
-	}
-	return nameMap
-}
-
 // generateNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
 // TODO: schema names
-func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
+func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[doltdb.TableName]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
 	if td.IsAdd() || td.IsDrop() {
 		// use add and drop specific methods
 		return nil, nil
@@ -167,7 +159,8 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		switch fkDiff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			// TODO: schema name
+			parentSch := toSchemas[doltdb.TableName{Name: fkDiff.To.ReferencedTableName}]
 			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 		case diff.SchDiffRemoved:
 			from := fkDiff.From
@@ -175,8 +168,8 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		case diff.SchDiffModified:
 			from := fkDiff.From
 			ddlStatements = append(ddlStatements, AlterTableDropForeignKeyStmt(from.TableName, from.Name))
-
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			// TODO: schema name
+			parentSch := toSchemas[doltdb.TableName{Name: fkDiff.To.ReferencedTableName}]
 			ddlStatements = append(ddlStatements, AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 		}
 	}
@@ -449,12 +442,7 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 // `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
 // TODO: schema names
-func GenerateCreateTableStatement(
-	tblName string,
-	sch schema.Schema,
-	fks []doltdb.ForeignKey,
-	fksParentSch map[string]schema.Schema,
-) (string, error) {
+func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 
 	// Statement creation parts for each column
@@ -478,7 +466,8 @@ func GenerateCreateTableStatement(
 	}
 
 	for _, fk := range fks {
-		colStmts = append(colStmts, GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+		// TODO: schema name
+		colStmts = append(colStmts, GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[doltdb.TableName{Name: fk.ReferencedTableName}]))
 	}
 
 	for _, check := range sch.Checks().AllChecks() {

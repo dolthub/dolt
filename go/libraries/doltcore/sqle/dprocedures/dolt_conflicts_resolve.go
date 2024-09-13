@@ -310,13 +310,13 @@ func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Tab
 	return resolvePkConflicts(ctx, opts, tbl, tblName, sch, conflicts)
 }
 
-func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table string) error {
-	tables, err := after.GetTableNames(ctx, doltdb.DefaultSchemaName)
+func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table doltdb.TableName) error {
+	tables, err := after.GetTableNames(ctx, table.Schema)
 	if err != nil {
 		return err
 	}
 
-	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, set.NewStrSet(tables))
+	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, doltdb.NewTableNameSet(doltdb.ToTableNames(tables, table.Schema)))
 	if err != nil {
 		return err
 	}
@@ -327,12 +327,12 @@ func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootVal
 	return nil
 }
 
-func clearTableAndUpdateRoot(ctx *sql.Context, root doltdb.RootValue, tbl *doltdb.Table, tblName string) (doltdb.RootValue, error) {
+func clearTableAndUpdateRoot(ctx *sql.Context, root doltdb.RootValue, tbl *doltdb.Table, tblName doltdb.TableName) (doltdb.RootValue, error) {
 	newTbl, err := tbl.ClearConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tblName}, newTbl)
+	newRoot, err := root.PutTable(ctx, tblName, newTbl)
 	if err != nil {
 		return nil, err
 	}
@@ -360,6 +360,7 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 			"To track resolution of this limitation, follow https://github.com/dolthub/dolt/issues/6616")
 	}
 
+	// TODO: schema names
 	tblSet := set.NewStrSet(tables)
 	updates := make(map[string]*doltdb.Table)
 	err := ws.MergeState().IterSchemaConflicts(ctx, ddb, func(table string, conflict doltdb.SchemaConflict) error {
@@ -399,9 +400,9 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
-func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
+func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []doltdb.TableName) error {
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
+		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
@@ -432,7 +433,7 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltd
 
 		if !ours {
 			if tbl.Format() == types.Format_DOLT {
-				tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
+				tbl, err = resolveProllyConflicts(ctx, tbl, tblName.Name, ourSch, sch)
 			} else {
 				state, _, err := dSess.LookupDbState(ctx, dbName)
 				if err != nil {
@@ -442,7 +443,7 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltd
 				if ws := state.WriteSession(); ws != nil {
 					opts = ws.GetOptions()
 				}
-				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName, sch)
+				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
 			}
 			if err != nil {
 				return err
@@ -499,21 +500,22 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	// get all tables in conflict
-	tbls := apr.Args
-	if len(tbls) == 1 && tbls[0] == "." {
+	strTableNames := apr.Args
+	if len(strTableNames) == 1 && strTableNames[0] == "." {
+		// TODO: schema names
 		all, err := ws.WorkingRoot().GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return 1, nil
 		}
-		tbls = all
+		strTableNames = all
 	}
 
-	ws, err = ResolveSchemaConflicts(ctx, ddb, ws, ours, tbls)
+	ws, err = ResolveSchemaConflicts(ctx, ddb, ws, ours, strTableNames)
 	if err != nil {
 		return 1, err
 	}
 
-	err = ResolveDataConflicts(ctx, dSess, ws.WorkingRoot(), dbName, ours, tbls)
+	err = ResolveDataConflicts(ctx, dSess, ws.WorkingRoot(), dbName, ours, doltdb.ToTableNames(strTableNames, doltdb.DefaultSchemaName))
 	if err != nil {
 		return 1, err
 	}

@@ -84,10 +84,10 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 }
 
 func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table, db string, branch string) error {
-	if !p.TryLockForUpdate(table.Name(), db, branch) {
+	if !p.TryLockForUpdate(branch, db, table.Name()) {
 		return fmt.Errorf("already updating statistics")
 	}
-	defer p.UnlockTable(table.Name(), db, branch)
+	defer p.UnlockTable(branch, db, table.Name())
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
@@ -172,7 +172,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 			// empty table
 			continue
 		}
-		stat.Chunks = idxMeta.allAddrs
+		stat.SetChunks(idxMeta.allAddrs)
 		stat.Hist = targetChunks
 		stat.UpdateActive()
 		if err := statDb.SetStat(ctx, branch, idxMeta.qual, stat); err != nil {

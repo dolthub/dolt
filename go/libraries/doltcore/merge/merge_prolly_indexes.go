@@ -88,7 +88,7 @@ func mergeProllySecondaryIndexes(
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if forceIndexRebuild || rebuildRequired {
-				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
+				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name.Name)
 			}
 			return durable.IndexFromProllyMap(left), nil
 		}()
@@ -134,11 +134,11 @@ func buildIndex(
 		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
 			eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
 			nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
-			err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, kd, theirRootIsh, vInfo, tblName)
+			err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, theirRootIsh, vInfo)
 			if err != nil {
 				return err
 			}
-			err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, kd, theirRootIsh, vInfo, tblName)
+			err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, theirRootIsh, vInfo)
 			if err != nil {
 				return err
 			}

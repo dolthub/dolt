@@ -151,9 +151,6 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 }
 
 func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			return n.stats[i]
@@ -163,12 +160,16 @@ func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
 }
 
 func (n *NomsStatsDatabase) GetStat(branch string, qual sql.StatQualifier) (*statspro.DoltStats, bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	stats := n.getBranchStats(branch)
 	ret, ok := stats[qual]
 	return ret, ok
 }
 
 func (n *NomsStatsDatabase) ListStatQuals(branch string) []sql.StatQualifier {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	stats := n.getBranchStats(branch)
 	var ret []sql.StatQualifier
 	for qual, _ := range stats {
@@ -230,22 +231,25 @@ func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {
 	return nil
 }
 
-func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifier) {
+func (n *NomsStatsDatabase) DeleteStats(ctx *sql.Context, branch string, quals ...sql.StatQualifier) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			for _, qual := range quals {
+				ctx.GetLogger().Debugf("statistics refresh: deleting index statistics: %s/%s", branch, qual)
 				delete(n.stats[i], qual)
 			}
 		}
 	}
 }
 
-func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string, flush bool) error {
+func (n *NomsStatsDatabase) DeleteBranchStats(ctx *sql.Context, branch string, flush bool) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
+	ctx.GetLogger().Debugf("statistics refresh: deleting branch statistics: %s", branch)
 
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
@@ -286,7 +290,11 @@ func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qu
 		if err != nil {
 			return err
 		}
-		dbStat[qual].Hist = targetBuckets
+		newStat, err := dbStat[qual].WithHistogram(targetBuckets)
+		if err != nil {
+			return err
+		}
+		dbStat[qual] = newStat.(*statspro.DoltStats)
 	} else {
 		dbStat[qual] = statspro.NewDoltStats()
 	}

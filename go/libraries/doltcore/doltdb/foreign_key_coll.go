@@ -490,7 +490,7 @@ OuterLoop:
 // and any keys in the collection are unresolved. A "dirty resolution" is performed, which matches the column names to
 // tags, and then a standard tag comparison is performed. If a table or column is not in the map, then the foreign key
 // is ignored.
-func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema, matchUnresolvedKeyToResolvedKey bool) (ForeignKey, bool) {
+func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[TableName]schema.Schema, matchUnresolvedKeyToResolvedKey bool) (ForeignKey, bool) {
 	if !fk.IsResolved() {
 		// The given foreign key is unresolved, so we only look for matches on unresolved keys
 	OuterLoopUnresolved:
@@ -543,11 +543,13 @@ OuterLoopResolved:
 				len(fk.ReferencedTableColumns) != len(existingFk.UnresolvedFKDetails.ReferencedTableColumns) {
 				continue
 			}
-			tblSch, ok := allSchemas[existingFk.TableName]
+			// TODO: schema name
+			tblSch, ok := allSchemas[TableName{Name: existingFk.TableName}]
 			if !ok {
 				continue
 			}
-			refTblSch, ok := allSchemas[existingFk.ReferencedTableName]
+			// TODO: schema name
+			refTblSch, ok := allSchemas[TableName{Name: existingFk.ReferencedTableName}]
 			if !ok {
 				continue
 			}

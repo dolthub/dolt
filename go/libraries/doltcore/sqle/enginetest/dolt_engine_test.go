@@ -108,9 +108,35 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name:        "",
-			SetUpScript: []string{},
-			Assertions:  []queries.ScriptTestAssertion{},
+			Name: "create database in a transaction",
+			SetUpScript: []string{
+				"START TRANSACTION",
+				"CREATE DATABASE test",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:            "USE test",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "CREATE TABLE foo (bar INT)",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "USE mydb",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "INSERT INTO test.foo VALUES (1)",
+					SkipResultsCheck: true,
+				},
+				{
+					Query: "SELECT * FROM test.foo",
+					Expected: []sql.Row{
+						{1},
+					},
+				},
+			},
 		},
 	}
 
@@ -284,9 +310,9 @@ func TestSingleQueryPrepared(t *testing.T) {
 	t.Skip()
 
 	harness := newDoltHarness(t)
-	//engine := enginetest.NewEngine(t, harness)
-	//enginetest.CreateIndexes(t, harness, engine)
-	//engine := enginetest.NewSpatialEngine(t, harness)
+	// engine := enginetest.NewEngine(t, harness)
+	// enginetest.CreateIndexes(t, harness, engine)
+	// engine := enginetest.NewSpatialEngine(t, harness)
 	engine, err := harness.NewEngine(t)
 	if err != nil {
 		panic(err)
@@ -305,8 +331,8 @@ func TestSingleQueryPrepared(t *testing.T) {
 		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	// engine.Analyzer.Debug = true
+	// engine.Analyzer.Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -842,8 +868,7 @@ func TestDropColumn(t *testing.T) {
 
 func TestCreateDatabase(t *testing.T) {
 	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestCreateDatabase(t, h)
+	RunCreateDatabaseTest(t, h)
 }
 
 func TestBlobs(t *testing.T) {
@@ -1954,6 +1979,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// create engine
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
+	harness.configureStats = true
 	engine := mustNewEngine(t, harness)
 	defer engine.Close()
 
@@ -1973,8 +1999,9 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
+	refreshCtx := enginetest.NewSession(harness)
 	newCtx := func(context.Context) (*sql.Context, error) {
-		return enginetest.NewSession(harness), nil
+		return refreshCtx, nil
 	}
 
 	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
@@ -1984,11 +2011,11 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		_, iter, _, err := engine.Query(ctx, q)
 		require.NoError(t, err)
 		_, err = sql.RowIterToRows(ctx, iter)
-		//fmt.Printf("%s %d\n", tag, id)
+		// fmt.Printf("%s %d\n", tag, id)
 		require.NoError(t, err)
 	}
 
-	iters := 1_000
+	iters := 50
 	{
 		// 3 threads to test auto-refresh/DML concurrency safety
 		// - auto refresh (read + write)

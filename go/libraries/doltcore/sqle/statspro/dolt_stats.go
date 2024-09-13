@@ -44,6 +44,12 @@ func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {
 
 var _ sql.Statistic = (*DoltStats)(nil)
 
+func (s *DoltStats) SetChunks(h []hash.Hash) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Chunks = h
+}
+
 func (s *DoltStats) WithColSet(set sql.ColSet) sql.Statistic {
 	ret := *s
 	ret.Statistic = ret.Statistic.WithColSet(set).(*stats.Statistic)
@@ -161,6 +167,8 @@ func (s *DoltStats) ToInterface() (interface{}, error) {
 }
 
 func (s *DoltStats) WithHistogram(h sql.Histogram) (sql.Statistic, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ret := *s
 	ret.Hist = nil
 	for _, b := range h {
@@ -174,6 +182,8 @@ func (s *DoltStats) WithHistogram(h sql.Histogram) (sql.Statistic, error) {
 }
 
 func (s *DoltStats) Histogram() sql.Histogram {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.Hist
 }
 

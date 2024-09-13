@@ -36,7 +36,14 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatableTbl sql.UpdatableTable, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func newProllyConflictsTable(
+	ctx *sql.Context,
+	tbl *doltdb.Table,
+	sourceUpdatableTbl sql.UpdatableTable,
+	tblName doltdb.TableName,
+	root doltdb.RootValue,
+	rs RootSetter,
+) (sql.Table, error) {
 	arts, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
@@ -51,13 +58,13 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatabl
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName, confSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName.Name, confSch)
 	if err != nil {
 		return nil, err
 	}
 
 	return ProllyConflictsTable{
-		tblName:         tblName,
+		tblName:         tblName.Name,
 		sqlSch:          sqlSch,
 		baseSch:         baseSch,
 		ourSch:          ourSch,

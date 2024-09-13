@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 func StageTables(ctx context.Context, roots doltdb.Roots, tbls []doltdb.TableName, filterIgnoredTables bool) (doltdb.Roots, error) {
@@ -45,7 +46,58 @@ func StageAllTables(ctx context.Context, roots doltdb.Roots, filterIgnoredTables
 		return doltdb.Roots{}, err
 	}
 
-	return StageTables(ctx, roots, tbls, filterIgnoredTables)
+	roots, err = StageTables(ctx, roots, tbls, filterIgnoredTables)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots, err = StageAllSchemas(ctx, roots)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return roots, nil
+}
+
+func StageAllSchemas(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	newStaged, err := MoveAllSchemasBetweenRoots(ctx, roots.Working, roots.Staged)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	roots.Staged = newStaged
+	return roots, nil
+}
+
+// MoveAllSchemasBetweenRoots copies all schemas from the src RootValue to the dest RootValue.
+func MoveAllSchemasBetweenRoots(ctx context.Context, src, dest doltdb.RootValue) (doltdb.RootValue, error) {
+	srcSchemaNames, err := getDatabaseSchemaNames(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+
+	if srcSchemaNames.Size() == 0 {
+		return dest, nil
+	}
+
+	destSchemaNames, err := getDatabaseSchemaNames(ctx, dest)
+	if err != nil {
+		return nil, err
+	}
+
+	srcSchemaNames.Iterate(func(schemaName string) (cont bool) {
+		if !destSchemaNames.Contains(schemaName) {
+			dest, err = dest.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+				Name: schemaName,
+			})
+			if err != nil {
+				return false
+			}
+		}
+		return true
+	})
+
+	return dest, nil
 }
 
 func StageDatabase(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {

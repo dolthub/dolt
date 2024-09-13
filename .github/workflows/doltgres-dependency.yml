@@ -34,6 +34,7 @@ jobs:
           fi
 
       - name: Check for a DoltgreSQL PR link
+        id: check_doltgresql_pr
         if: steps.merge_main.outputs.skip == 'false'
         run: |
           PR_DESCRIPTION=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -56,18 +57,18 @@ jobs:
           go-version-file: go/go.mod
 
       - name: Clone DoltgreSQL repository
-        if: steps.merge_main.outputs.skip == 'false'
+        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
         run: git clone https://github.com/dolthub/doltgresql.git
 
       - name: Build DoltgreSQL's parser
-        if: steps.merge_main.outputs.skip == 'false'
+        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
         run: |
           cd doltgresql
           ./postgres/parser/build.sh
 
       - name: Test DoltgreSQL against main
         id: test_doltgresql_main
-        if: steps.merge_main.outputs.skip == 'false'
+        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false'
         continue-on-error: true
         run: |
           cd doltgresql
@@ -77,7 +78,7 @@ jobs:
           go test ./... --count=1 -skip Replication
 
       - name: Test DoltgreSQL against PR
-        if: steps.merge_main.outputs.skip == 'false' && steps.test_doltgresql_main.outcome == 'success'
+        if: steps.merge_main.outputs.skip == 'false' && steps.check_doltgresql_pr.outputs.comment_exists == 'false' && steps.test_doltgresql_main.outcome == 'success'
         run: |
           cd doltgresql
           git reset --hard
