@@ -7,7 +7,7 @@ source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 spawn dolt add --patch
 
-# This is a long script, but the idea is simple. Input y,n,y,s repeatedly and insure that the right prompts are seen
+# This is a long script, but the idea is simple. Input y,n,y,s repeatedly and ensure that the right prompts are seen
 
 expect_with_defaults_2 {| \+ | 0  | Yellow | 255 | 255   | 0    |}  {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "y\r"; }
 
