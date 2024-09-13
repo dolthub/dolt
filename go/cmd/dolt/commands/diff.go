@@ -171,7 +171,8 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the staged data changes.")
+	ap.SupportsFlag(cli.StagedFlag, "", "Show only the staged data changes.")
+	ap.SupportsFlag(cli.CachedFlag, "c", "Synonym for --staged")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
 	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
@@ -286,7 +287,9 @@ func parseDiffArgs(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.Ar
 		diffDisplaySettings: parseDiffDisplaySettings(apr),
 	}
 
-	tableNames, err := dArgs.applyDiffRoots(queryist, sqlCtx, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
+	staged := apr.Contains(cli.StagedFlag) || apr.Contains(cli.CachedFlag)
+
+	tableNames, err := dArgs.applyDiffRoots(queryist, sqlCtx, apr.Args, staged, apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
