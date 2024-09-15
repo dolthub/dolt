@@ -1811,3 +1811,15 @@ SQL
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 }
+
+@test "diff: diff --reverse" {
+  run dolt diff -R
+  [ $status -eq 0 ]
+  [[ $output =~ "diff --dolt a/test b/test" ]] || false
+  [[ $output =~ "deleted table" ]] || false
+
+  run dolt diff --reverse
+  [ $status -eq 0 ]
+  [[ $output =~ "diff --dolt a/test b/test" ]] || false
+  [[ $output =~ "deleted table" ]] || false
+}
