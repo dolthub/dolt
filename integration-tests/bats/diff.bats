@@ -1811,3 +1811,146 @@ SQL
     [ $status -eq 1 ]
     [[ $output =~ "invalid Arguments" ]] || false
 }
+
+# https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change int to float" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (pk int primary key, val int);
+
+insert into t1 values (1, 1);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val float;
+update t1 set val = val + 0.234;
+
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1     |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.234 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.234 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1     |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change int to decimal" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (pk int primary key, val int);
+
+insert into t1 values (1, 1);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val decimal(20,4);
+update t1 set val = val + 0.234;
+
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.0000 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.2340 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.2340 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.0000 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change float to double" {
+    dolt reset --hard
+
+    # The int 16777217 can be represented perfectly as a double, but not as a float.
+    # When the type is changes, we need to set the value again to make sure the double value is correct.
+    dolt sql <<SQL
+create table t1 (pk int primary key, val float);
+
+insert into t1 values (1,16777217 );
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val double;
+update t1 set val = 16777217;
+
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.6777216e+07 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.6777217e+07 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.6777217e+07 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.6777216e+07 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change int to bigint" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (pk int primary key, val smallint);
+
+insert into t1 values (1, 32760);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val bigint;
+update t1 set val = val + 10000;
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 32760 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 42760 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 42760 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 32760 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change DATE to TIMESTAMP" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (pk int primary key, val date);
+
+insert into t1 values (1, '2023-01-01');
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val timestamp;
+update t1 set val = '2023-01-01 12:21:42';
+
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 2023-01-01 00:00:00 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 2023-01-01 12:21:42 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 2023-01-01 12:21:42 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 2023-01-01 00:00:00 |" ]] || false
+}
+
+@test "diff: diff --reverse" {
+  run dolt diff -R
+  [ $status -eq 0 ]
+  [[ $output =~ "diff --dolt a/test b/test" ]] || false
+  [[ $output =~ "deleted table" ]] || false
+
+  run dolt diff --reverse
+  [ $status -eq 0 ]
+  [[ $output =~ "diff --dolt a/test b/test" ]] || false
+  [[ $output =~ "deleted table" ]] || false
+}

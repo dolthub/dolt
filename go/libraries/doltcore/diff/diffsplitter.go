@@ -49,7 +49,7 @@ type RowDiff struct {
 }
 
 // NewDiffSplitter returns a splitter that knows how to split unified diff query rows.
-// |querySch| is the result schema from the dolt_dif(...) table function
+// |querySch| is the result schema from the dolt_diff(...) table function
 // it contains "from_..." and "to..." columns corresponding to the "from"
 // and "to" schemas used to generate the diff.
 // |targetSch| is the output schema used to print the diff and is computed
