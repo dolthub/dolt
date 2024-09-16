@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -1534,11 +1535,71 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 	var union sql.Schema
 	union = append(union, s1...)
 	for i := range s2 {
-		if union.IndexOfColName(s2[i].Name) < 0 {
+		idx := union.IndexOfColName(s2[i].Name)
+		if idx < 0 {
 			union = append(union, s2[i])
+		} else {
+			// have same name. choose the one with the most 'flexible' type
+			orig := union[idx]
+			orig.Type = chooseMostFlexibleType(orig.Type, s2[i].Type)
 		}
 	}
 	return union
+}
+
+// chooseMostFlexibleType returns the type that is more 'flexible' than the other type, for the purposes of printing
+// a diff when the type of the column has changed. There are a ton of different ways we could slice this. We'll stick to
+// the following rules for the time being:
+//   - Going from any integer to a float, always take the float.
+//   - Going from a low precision float to a high precision float, we'll always take the high precision float.
+//   - Going from a low precision integer to a high precision integer, we'll always take the high precision integer.
+//     Currently, we only support this if the signage is the same.
+//   - Going from a DATE, TIME, or DATETIME to a TIMESTAMP, we'll always take the TIMESTAMP.
+//
+// If none of these rules apply, we'll just take the `a` type.
+//
+// Note this is only for printing the diff. This is not robust for other purposes.
+func chooseMostFlexibleType(a, b sql.Type) sql.Type {
+	at := a.Type()
+	bt := b.Type()
+
+	if bt == at {
+		return a
+	}
+
+	// If both are numbers, we'll take the float.
+	if sqltypes.IsIntegral(at) && sqltypes.IsFloat(bt) {
+		return b
+	}
+	if sqltypes.IsIntegral(bt) && sqltypes.IsFloat(at) {
+		return a
+	}
+
+	if sqltypes.IsFloat(at) && sqltypes.IsFloat(bt) {
+		// If both are floats, we'll take the float64.
+		if at == sqltypes.Float64 {
+			return a
+		}
+		return b
+	}
+
+	if sqltypes.IsIntegral(at) && sqltypes.IsIntegral(bt) {
+		if (sqltypes.IsUnsigned(at) && sqltypes.IsUnsigned(bt)) || (!sqltypes.IsUnsigned(at) && !sqltypes.IsUnsigned(bt)) {
+			// Vitess definitions are ordered in the even that both are signed or unsigned, so take the higher one.
+			if bt > at {
+				return b
+			}
+			return a
+		}
+
+		// TODO: moving from unsigned to signed or vice versa.
+	}
+
+	if bt == sqltypes.Timestamp && (at == sqltypes.Date || at == sqltypes.Time || at == sqltypes.Datetime) {
+		return b
+	}
+
+	return a
 }
 
 func getColumnNames(fromTableInfo, toTableInfo *diff.TableInfo) (colNames []string, formatText string) {
