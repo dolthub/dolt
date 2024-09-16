@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
 	"golang.org/x/exp/slices"
@@ -164,7 +164,9 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 }
 
 func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) int {
-	if len(tables) == 0 {
+	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
+		tables = tables[:0] // in the event that the user specified '.' as the only argument, we want to clear the list of tables
+
 		// Get the list of tables to patch
 		_, rowIter, _, err := queryist.Query(sqlCtx, "select table_name from dolt_status where not staged")
 		if err != nil {
@@ -183,6 +185,12 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 			tables = append(tables, tbl)
 		}
 	}
+
+	if len(tables) == 0 {
+		cli.Println("No changes.")
+		return 0
+	}
+
 	sort.Strings(tables)
 	runAddPatchShell(sqlCtx, queryist, tables)
 
@@ -224,12 +232,12 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 	shell.AddCmd(&ishell.Cmd{
 		Name: "y",
 		Help: "stage the current change",
-		Func: state.opYes,
+		Func: state.stageCurrentChange,
 	})
 	shell.AddCmd(&ishell.Cmd{
 		Name: "n",
 		Help: "do not stage the current change",
-		Func: state.opNo,
+		Func: state.skipCurrentChange,
 	})
 	shell.AddCmd(&ishell.Cmd{
 		Name: "q",
@@ -241,12 +249,12 @@ func runAddPatchShell(sqlCtx *sql.Context, queryist cli.Queryist, tables []strin
 	shell.AddCmd(&ishell.Cmd{
 		Name: "a",
 		Help: "add all changes in this table",
-		Func: state.opAddAllOfTable,
+		Func: state.addRemainingInTable,
 	})
 	shell.AddCmd(&ishell.Cmd{
 		Name: "d",
 		Help: "do not stage any further changes in this table",
-		Func: state.opSkipTable,
+		Func: state.skipRemainingInTable,
 	})
 	shell.AddCmd(&ishell.Cmd{
 		Name: "s",
@@ -287,7 +295,7 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 		}
 
 		if len(rows) == 0 {
-			// This can happen if the user has added all changes in a table, thn restarted the workflow.
+			// This can happen if the user has added all changes in a table, then restarted the workflow.
 			continue
 		}
 
@@ -353,20 +361,11 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 }
 
 func coerceToInt(val interface{}) (int, error) {
-	switch v := val.(type) {
-	case int:
-		return v, nil
-	case int64:
-		return int(v), nil
-	case string:
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			return 0, err
-		}
-		return i, nil
-	default:
-		return 0, errors.New("Expected int, int64 or string")
+	val, _, err := gmstypes.Int32.Convert(val)
+	if err != nil {
+		return 0, err
 	}
+	return int(val.(int32)), nil
 }
 
 // queryForSingleChange queries the dolt_workspace_* table for the row with the given ID.
@@ -412,8 +411,8 @@ type patchState struct {
 	err                   error
 }
 
-// opYes stages the current change. "a" command.
-func (ps *patchState) opYes(c *ishell.Context) {
+// stageCurrentChange stages the current change. "a" command.
+func (ps *patchState) stageCurrentChange(c *ishell.Context) {
 	qry := fmt.Sprintf("UPDATE dolt_workspace_%s SET staged = TRUE WHERE id = %d", ps.currentTable, ps.currentRowId)
 	_, iter, _, err := ps.queryist.Query(ps.sqlCtx, qry)
 	if err != nil {
@@ -422,7 +421,7 @@ func (ps *patchState) opYes(c *ishell.Context) {
 		return
 	}
 
-	// The Update operation doesn't return any rows, but we need to itterate over it to ensure that the update
+	// The Update operation doesn't return any rows, but we need to iterate over it to ensure that the update
 	// is made when the queryist we are using for a local query engine.
 	for {
 		_, err = iter.Next(ps.sqlCtx)
@@ -451,8 +450,8 @@ func (ps *patchState) opYes(c *ishell.Context) {
 	}
 }
 
-// opNo does not stage the current change. "n" command.
-func (ps *patchState) opNo(c *ishell.Context) {
+// skipCurrentChange does not stage the current change. "n" command.
+func (ps *patchState) skipCurrentChange(c *ishell.Context) {
 	ps.currentRowId++
 	if ps.currentRowId <= ps.currentTableLastRowId {
 		ps.setCurrentRowState(c)
@@ -461,13 +460,13 @@ func (ps *patchState) opNo(c *ishell.Context) {
 	}
 }
 
-// opSkipTable skips the current table. "d" command.
-func (ps *patchState) opSkipTable(c *ishell.Context) {
+// skipRemainingInTable skips the current table. "d" command.
+func (ps *patchState) skipRemainingInTable(c *ishell.Context) {
 	ps.nextTable(c)
 }
 
-// opAddAllOfTable adds all changes in the current table. "a" command.
-func (ps *patchState) opAddAllOfTable(c *ishell.Context) {
+// addRemainingInTable adds all changes in the current table. "a" command.
+func (ps *patchState) addRemainingInTable(c *ishell.Context) {
 	// grab the row id.
 	id, err := coerceToInt(ps.currentRow[0])
 	if err != nil {
@@ -575,7 +574,9 @@ func (ps *patchState) nextTable(c *ishell.Context) {
 
 		ps.setCurrentRowState(c)
 	} else {
-		c.Stop()
+		if c != nil {
+			c.Stop()
+		}
 	}
 }
 
@@ -671,7 +672,7 @@ func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 	for _, tbl := range tables {
 		c := counts[tbl]
 		if c == nil {
-			// This can happen if the user has added all changes in a table, thn restarted the workflow.
+			// This can happen if the user has added all changes in a table, then restarted the workflow.
 			continue
 		}
 
@@ -684,7 +685,7 @@ func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 		totalChgCount += c.total()
 	}
 
-	// If the user has a lot of changes, we want to inform the user them may have better options.
+	// If the user has a lot of changes, we want to inform the user they may have better options.
 	if totalChgCount > 25 {
 		warning := `You have %d changes in total. Consider updating dolt_workspace_* tables directly as
 'add --patch' requires you to individually evaluate each changed row.

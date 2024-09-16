@@ -1,0 +1,18 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+# Specify tables
+spawn dolt add -p coordinates colors
+
+# colors table will be first (alpha order). Add everything.
+expect_with_defaults_2 { Yellow | 255 | 255 }    {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "a\r"; }
+
+# coordinates table is next.
+expect_with_defaults_2 {| - | 2  | 3.3 | 4.4 |}  {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "d\r"; }
+
+expect eof
+exit

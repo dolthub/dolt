@@ -1,0 +1,15 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt add -p
+
+expect_with_defaults                          {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "?\r"; }
+
+expect_with_defaults_2 {\? - show this help}  {Stage this row \[y,n,q,a,d,s,\?\]\? } { send "q\r"; }
+
+expect eof
+exit
