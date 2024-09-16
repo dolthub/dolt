@@ -39,6 +39,7 @@ var slashCmds = []cli.Command{
 	BranchCmd{},
 	MergeCmd{},
 	SlashHelp{},
+	SlashEdit{},
 }
 
 // parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
@@ -68,6 +69,7 @@ func parseSlashCmd(cmd string) []string {
 	return cmdWords
 }
 
+// handleSlashCommand executes the command given by the fullCmd string. These are commands are direct calls to CLI commands.
 func handleSlashCommand(sqlCtx *sql.Context, subCmd cli.Command, fullCmd string, cliCtx cli.CliContext) error {
 	cliCmd := parseSlashCmd(fullCmd)
 	if len(cliCmd) == 0 {
@@ -109,7 +111,6 @@ func (s SlashHelp) Exec(ctx context.Context, _ string, args []string, _ *env.Dol
 		if ok {
 			foo, _ := cli.HelpAndUsagePrinters(subCmdInst.Docs())
 			foo()
-
 		} else {
 			cli.Println(fmt.Sprintf("Unknown command: %s", subCmd))
 		}
@@ -177,4 +178,40 @@ func findSlashCmd(cmd string) (cli.Command, bool) {
 		}
 	}
 	return nil, false
+}
+
+type SlashEdit struct{}
+
+var _ cli.Command = SlashEdit{}
+
+func (s SlashEdit) Name() string {
+	return "edit"
+}
+
+func (s SlashEdit) Description() string {
+	return "Use $EDITOR to edit the last command."
+}
+func (s SlashEdit) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+
+	initialCmd := "select * from my_table;"
+
+	contents, err := execEditor(initialCmd, ".sql", cliCtx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
+	cli.Printf("Edited command: %s", contents)
+
+	return 0
+}
+
+func (s SlashEdit) Docs() *cli.CommandDocumentation {
+	//TODO implement me
+	return &cli.CommandDocumentation{}
+}
+
+func (s SlashEdit) ArgParser() *argparser.ArgParser {
+	// No arguments.
+	return &argparser.ArgParser{}
 }

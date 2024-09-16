@@ -19,11 +19,15 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/fatih/color"
@@ -915,4 +919,36 @@ func PrintStagingError(err error) {
 	}()
 
 	cli.PrintErrln(vErr.Verbose())
+}
+
+// execEditor opens editor to ask user for input.
+func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (editedMsg string, err error) {
+	if cli.ExecuteWithStdioRestored == nil {
+		return initialMsg, nil
+	}
+
+	if !checkIsTerminal() {
+		return initialMsg, nil
+	}
+
+	backupEd := "vim"
+	// try getting default editor on the user system
+	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
+		backupEd = ed
+	}
+	// try getting Dolt config core.editor
+	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
+
+	cli.ExecuteWithStdioRestored(func() {
+		editedMsg, err = editor.OpenTempEditor(editorStr, initialMsg, suffix)
+		if err != nil {
+			return
+		}
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
+	}
+
+	return editedMsg, nil
 }
