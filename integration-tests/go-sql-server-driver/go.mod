@@ -6,7 +6,7 @@ toolchain go1.22.7
 
 require (
 	github.com/dolthub/dolt/go v0.40.4
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.7.0
 	gopkg.in/square/go-jose.v2 v2.5.1
