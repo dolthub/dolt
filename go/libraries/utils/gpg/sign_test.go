@@ -23,24 +23,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var keyId = "573DA8C6366D04E35CDB1A44E09A0B208F666373"
+
 func signTestSetup(t *testing.T, ctx context.Context) {
 	err := ImportKey(ctx, "testdata/private.pgp")
 	require.NoError(t, err)
 
-	ok, err := HasKey(ctx, "4798B29CA9029452D103B1E388F64CE29826DA4A")
+	ok, err := HasKey(ctx, keyId)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
 
 func TestSign(t *testing.T) {
 	ctx := context.Background()
-	keyId := "4798B29CA9029452D103B1E388F64CE29826DA4A"
+	signTestSetup(t, ctx)
 
 	message := []byte("I did a thing")
 	signature, err := Sign(ctx, keyId, message)
 	require.NoError(t, err)
 	require.NotNil(t, signature)
 	require.NotEmpty(t, signature)
+
+	output, err := Verify(context.Background(), signature)
+	require.NoError(t, err)
+	require.NotNil(t, output)
 }
 
 func TestDecodeAllPemBlocks(t *testing.T) {
@@ -73,9 +79,6 @@ YN6Sszg+o8Aw0AT4M6nrLTe3YaIE6sR4YMxOCSOPAT9oSDg1t5s=
 	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNED MESSAGE"))
 	require.True(t, containsBlockOfType(pemBlocks, "PGP SIGNATURE"))
 
-	output, err := Verify(context.Background(), []byte(pemBlock))
-	require.NoError(t, err)
-	require.NotNil(t, output)
 }
 
 func containsBlockOfType(blocks []*pem.Block, blockType string) bool {
