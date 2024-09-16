@@ -205,9 +205,10 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 
 		// stop if we see a value option
 		for _, vo := range ap.sortedValueOptions() {
-			lv := len(vo)
-			isValOpt := len(rest) >= lv && rest[:lv] == vo
-			if isValOpt {
+			if rest == vo {
+				return matches, rest
+			}
+			if strings.HasPrefix(rest, vo+"=") {
 				return matches, rest
 			}
 		}

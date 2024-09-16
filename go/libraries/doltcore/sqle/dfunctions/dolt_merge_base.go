@@ -15,6 +15,7 @@
 package dfunctions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -39,13 +40,6 @@ func NewMergeBase(left, right sql.Expression) sql.Expression {
 
 // Eval implements the sql.Expression interface.
 func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	if _, ok := d.Left().Type().(sql.StringType); !ok {
-		return nil, sql.ErrInvalidType.New(d.Left().Type())
-	}
-	if _, ok := d.Right().Type().(sql.StringType); !ok {
-		return nil, sql.ErrInvalidType.New(d.Right().Type())
-	}
-
 	leftSpec, err := d.Left().Eval(ctx, row)
 	if err != nil {
 		return nil, err
@@ -59,7 +53,17 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, nil
 	}
 
-	left, right, err := resolveRefSpecs(ctx, leftSpec.(string), rightSpec.(string))
+	leftStr, ok := leftSpec.(string)
+	if !ok {
+		return nil, errors.New("left value is not a string")
+	}
+
+	rightStr, ok := rightSpec.(string)
+	if !ok {
+		return nil, errors.New("right value is not a string")
+	}
+
+	left, right, err := resolveRefSpecs(ctx, leftStr, rightStr)
 	if err != nil {
 		return nil, err
 	}

@@ -186,6 +186,8 @@ func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string)
 }
 
 func (p *Provider) setStatDb(name string, db Database) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.statDbs[name] = db
 }
 
