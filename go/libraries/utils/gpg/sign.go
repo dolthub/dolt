@@ -75,6 +75,11 @@ func execGpgAndReadOutput(ctx context.Context, in []byte, args []string) (*bytes
 
 		if state.Exited() {
 			if state.ExitCode() != 0 {
+				waitErr := eg.Wait()
+				if waitErr != nil {
+					return nil, nil, fmt.Errorf("failed to read output for command '%s': %w", cmdStr, waitErr)
+				}
+
 				return nil, nil, fmt.Errorf("command '%s' exited with code %d. stdout: '%s', stderr: '%s'", cmdStr, state.ExitCode(), outBuf.String(), errBuf.String())
 			}
 
