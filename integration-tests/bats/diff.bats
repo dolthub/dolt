@@ -1839,6 +1839,32 @@ SQL
 }
 
 # https://github.com/dolthub/dolt/issues/8133
+@test "diff: schema change int to decimal" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (pk int primary key, val int);
+
+insert into t1 values (1, 1);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column val decimal(20,4);
+update t1 set val = val + 0.234;
+
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.0000 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.2340 |" ]] || false
+
+    run dolt diff --reverse
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| < | 1  | 1.2340 |" ]] || false
+    [[ "$output" =~ "| > | 1  | 1.0000 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8133
 @test "diff: schema change float to double" {
     dolt reset --hard
 
