@@ -133,7 +133,7 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 	// |statPath| is either file://./stat or mem://stat
 	statsDb, err := p.sf.Init(ctx, db, p.pro, fs, env.GetCurrentUserHomeDir)
 	if err != nil {
-		ctx.Warn(0, err.Error())
+		ctx.GetLogger().Errorf("initialize stats failure: %s\n", err.Error())
 		return
 	}
 
@@ -141,8 +141,8 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 		err = statsDb.LoadBranchStats(ctx, branch)
 		if err != nil {
 			// if branch name is invalid, continue loading rest
-			// TODO: differentiate bad branch name from other errors
-			ctx.Warn(0, err.Error())
+			// TODO: d	ifferentiate bad branch name from other errors
+			ctx.GetLogger().Errorf("load stats failure: %s\n", err.Error())
 			continue
 		}
 	}
