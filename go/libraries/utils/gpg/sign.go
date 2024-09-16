@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"strings"
 
@@ -91,7 +92,18 @@ func execGpgAndReadOutput(ctx context.Context, in []byte, args []string) (*bytes
 
 func ImportKey(ctx context.Context, keyFile string) error {
 	args := []string{"--import", keyFile}
-	_, _, err := execGpgAndReadOutput(ctx, nil, args)
+	ioOut, ioErr, err := execGpgAndReadOutput(ctx, nil, args)
+
+	if ioOut != nil && len(ioOut.String()) > 0 {
+		log.Println("import output:", ioOut.String())
+	}
+
+	if ioErr != nil && len(ioErr.String()) > 0 {
+		log.Println("import ioErr:", ioErr.String())
+	}
+
+	log.Println("import err:", err)
+
 	return err
 }
 
