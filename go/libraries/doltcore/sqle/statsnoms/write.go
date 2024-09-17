@@ -17,12 +17,12 @@ package statsnoms
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
