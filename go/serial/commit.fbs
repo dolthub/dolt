@@ -28,6 +28,7 @@ table Commit {
   description:string (required);
   timestamp_millis:uint64;
   user_timestamp_millis:int64;
+  signature:string;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

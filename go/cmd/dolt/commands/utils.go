@@ -557,7 +557,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 }
 
 // PrintCommitInfo prints the given commit in the format used by log and show.
-func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *CommitInfo) {
+func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, showSignatures bool, decoration string, comm *CommitInfo) {
 	color.NoColor = false
 	if len(comm.parentHashes) < minParents {
 		return
@@ -580,6 +580,14 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
 		for _, h := range comm.parentHashes {
 			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
+		}
+	}
+
+	if showSignatures && len(comm.commitMeta.Signature) > 0 {
+		signatureLines := strings.Split(comm.commitMeta.Signature, "\n")
+		for _, line := range signatureLines {
+			pager.Writer.Write([]byte("\n"))
+			pager.Writer.Write([]byte(color.CyanString(line)))
 		}
 	}
 
@@ -641,17 +649,34 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	pager.Writer.Write([]byte(yellow.Sprintf("%s) ", joinedReferences)))
 }
 
+type commitInfoOptions struct {
+	showSignature bool
+}
+
 // getCommitInfo returns the commit info for the given ref.
 func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*CommitInfo, error) {
+	return getCommitInfoWithOptions(queryist, sqlCtx, ref, commitInfoOptions{})
+}
+
+func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
+	var q string
+	if opts.showSignature {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
+	} else {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
 	}
+
 	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
@@ -672,7 +697,13 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	message := row[4].(string)
 	parent := row[5].(string)
 	height := uint64(len(rows))
+
 	isHead := commitHash == hashOfHead
+
+	var signature string
+	if len(row) > 7 {
+		signature = row[7].(string)
+	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
 	if err != nil {
@@ -694,6 +725,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 			Timestamp:     timestamp,
 			Description:   message,
 			UserTimestamp: int64(timestamp),
+			Signature:     signature,
 		},
 		commitHash:        commitHash,
 		height:            height,

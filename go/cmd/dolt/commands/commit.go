@@ -181,7 +181,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 			pager := outputpager.Start()
 			defer pager.Stop()
 
-			PrintCommitInfo(pager, 0, false, "auto", commit)
+			PrintCommitInfo(pager, 0, false, false, "auto", commit)
 		})
 	}
 
@@ -266,6 +266,18 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 
 	if apr.Contains(cli.SkipEmptyFlag) {
 		writeToBuffer("--skip-empty")
+	}
+
+	cfgSign := cliCtx.Config().GetStringOrDefault("sqlserver.global.gpgsign", "")
+	if apr.Contains(cli.SignFlag) || strings.ToLower(cfgSign) == "true" {
+		writeToBuffer("--gpg-sign")
+
+		gpgKey := apr.GetValueOrDefault(cli.SignFlag, "")
+		if gpgKey != "" {
+			param = true
+			writeToBuffer("?")
+			params = append(params, gpgKey)
+		}
 	}
 
 	buffer.WriteString(")")

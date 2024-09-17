@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -24,8 +25,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -152,7 +155,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
+	csp := actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
 		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
@@ -161,7 +164,14 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
-	})
+	}
+
+	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get gpgsign: %w", err)
+	}
+
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
 	if err != nil {
 		return "", false, err
 	}
@@ -171,6 +181,31 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		return "", true, nil
 	} else if pendingCommit == nil {
 		return "", false, errors.New("nothing to commit")
+	}
+
+	if apr.Contains(cli.SignFlag) || shouldSign {
+		keyId := apr.GetValueOrDefault(cli.SignFlag, "")
+
+		if keyId == "" {
+			v, err := ctx.GetSessionVariable(ctx, "signingkey")
+			if err != nil && !sql.ErrUnknownSystemVariable.Is(err) {
+				return "", false, fmt.Errorf("failed to get signingkey: %w", err)
+			} else if err == nil {
+				keyId = v.(string)
+			}
+		}
+
+		strToSign, err := commitSignatureStr(ctx, dbName, roots, csp)
+		if err != nil {
+			return "", false, err
+		}
+
+		signature, err := gpg.Sign(ctx, keyId, []byte(strToSign))
+		if err != nil {
+			return "", false, err
+		}
+
+		pendingCommit.CommitOptions.Meta.Signature = string(signature)
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
@@ -205,4 +240,28 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 	}
 
 	return args, nil
+}
+
+func commitSignatureStr(ctx *sql.Context, dbName string, roots doltdb.Roots, csp actions.CommitStagedProps) (string, error) {
+	var lines []string
+	lines = append(lines, fmt.Sprint("db: ", dbName))
+	lines = append(lines, fmt.Sprint("Message: ", csp.Message))
+	lines = append(lines, fmt.Sprint("Name: ", csp.Name))
+	lines = append(lines, fmt.Sprint("Email: ", csp.Email))
+	lines = append(lines, fmt.Sprint("Date: ", csp.Date.String()))
+
+	head, err := roots.Head.HashOf()
+	if err != nil {
+		return "", err
+	}
+
+	staged, err := roots.Staged.HashOf()
+	if err != nil {
+		return "", err
+	}
+
+	lines = append(lines, fmt.Sprint("Head: ", head.String()))
+	lines = append(lines, fmt.Sprint("Staged: ", staged.String()))
+
+	return strings.Join(lines, "\n"), nil
 }

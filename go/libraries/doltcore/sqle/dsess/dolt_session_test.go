@@ -200,9 +200,9 @@ func TestGetPersistedValue(t *testing.T) {
 			ExpectedRes: uint64(7),
 		},
 		{
-			Name:  "activate_all_roles_on_login",
-			Value: "true",
-			Err:   true,
+			Name:        "activate_all_roles_on_login",
+			Value:       "true",
+			ExpectedRes: int8(1),
 		},
 		{
 			Name:  "activate_all_roles_on_login",
@@ -215,9 +215,9 @@ func TestGetPersistedValue(t *testing.T) {
 			ExpectedRes: int8(1),
 		},
 		{
-			Name:  "activate_all_roles_on_login",
-			Value: "false",
-			Err:   true,
+			Name:        "activate_all_roles_on_login",
+			Value:       "false",
+			ExpectedRes: int8(0),
 		},
 		{
 			Name:  "activate_all_roles_on_login",
