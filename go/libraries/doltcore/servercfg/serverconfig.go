@@ -34,6 +34,7 @@ const (
 	LogLevel_Warning LogLevel = "warning"
 	LogLevel_Error   LogLevel = "error"
 	LogLevel_Fatal   LogLevel = "fatal"
+	LogLevel_Panic   LogLevel = "panic"
 )
 
 const (
@@ -84,6 +85,8 @@ func (level LogLevel) String() string {
 	case LogLevel_Error:
 		fallthrough
 	case LogLevel_Fatal:
+		fallthrough
+	case LogLevel_Panic:
 		return string(level)
 	default:
 		return "unknown"
