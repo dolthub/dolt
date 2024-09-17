@@ -349,6 +349,49 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "binary types round-trip",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y varbinary(10), z binary(14), key(y(9)), key(z));",
+			"insert into xy values (0,'row 1', 'row 1'),(1,'row 2', 'row 1')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
+				Expected: []sql.Row{
+					{"mydb", "xy", "y", "y", "varbinary(10)"},
+					{"mydb", "xy", "primary", "x", "bigint"},
+					{"mydb", "xy", "z", "z", "binary(14)"},
+				},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
+	{
+		Name: "timestamp types round-trip",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y timestamp, key(y));",
+			"insert into xy values (0,'2024-03-11 18:52:44'),(1,'2024-03-11 19:22:12')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
+				Expected: []sql.Row{
+					{"mydb", "xy", "primary", "x", "bigint"},
+					{"mydb", "xy", "y", "y", "timestamp"},
+				},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		Name: "multi-table",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",

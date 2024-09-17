@@ -22,7 +22,7 @@ require (
 	github.com/go-sql-driver/mysql v1.7.2-0.20231213112541-0004702b931d
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/snappy v0.0.4
-	github.com/google/uuid v1.6.0
+	github.com/google/uuid v1.3.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/mattn/go-isatty v0.0.17
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20240917100606-3acd341e555c
+	github.com/dolthub/go-mysql-server v0.18.2-0.20240917161933-32eff493e467
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
