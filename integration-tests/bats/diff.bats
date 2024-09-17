@@ -1957,7 +1957,7 @@ SQL
 
 @test "diff: duplicate commit_hash in diff" {
   dolt reset --hard
-  dolt sql -q "create table t1 (i int primray key);"
+  dolt sql -q "create table t1 (i int primary key);"
   dolt sql -q "create table t2 (j int primary key);"
   dolt add .
   dolt commit -m "commit 1"
