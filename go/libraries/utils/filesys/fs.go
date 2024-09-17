@@ -17,8 +17,10 @@ package filesys
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -145,4 +147,49 @@ func CopyFile(srcPath, destPath string, srcFS, destFS Filesys) (err error) {
 
 	_, err = io.Copy(wr, rd)
 	return
+}
+
+// CopyDir does a recursive copy of the src directory into the dest directory.
+func CopyDir(src, dest string, fs Filesys) error {
+	absSrc, err := fs.Abs(src)
+	if err != nil {
+		return fmt.Errorf("error getting absolute path for %s: %w", src, err)
+	}
+
+	err = fs.MkDirs(dest)
+	if err != nil {
+		return fmt.Errorf("error creating directory %s: %w", dest, err)
+	}
+
+	itrErr := fs.Iter(absSrc, true, func(path string, size int64, isDir bool) (stop bool) {
+		relPath := path[len(absSrc):]
+		destPath := filepath.Join(dest, relPath)
+		if isDir {
+			err = fs.MkDirs(destPath)
+			if err != nil {
+				err = fmt.Errorf("error creating directory %s: %w", destPath, err)
+				return true
+			}
+		} else {
+			var data []byte
+			data, err = fs.ReadFile(path)
+			if err != nil {
+				err = fmt.Errorf("error reading file %s: %w", path, err)
+				return true
+			}
+
+			err = fs.WriteFile(destPath, data, os.ModePerm)
+			if err != nil {
+				err = fmt.Errorf("error writing file %s: %w", destPath, err)
+				return true
+			}
+		}
+		return false
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return itrErr
 }

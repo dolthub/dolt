@@ -144,7 +144,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		pager := outputpager.Start()
 		defer pager.Stop()
 
-		PrintCommitInfo(pager, 0, false, "auto", commit)
+		PrintCommitInfo(pager, 0, false, false, "auto", commit)
 	})
 
 	return 0

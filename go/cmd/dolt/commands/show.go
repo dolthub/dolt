@@ -326,7 +326,7 @@ func fetchAndPrintCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showO
 		pager := outputpager.Start()
 		defer pager.Stop()
 
-		PrintCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
+		PrintCommitInfo(pager, 0, opts.showParents, false, opts.decoration, commit)
 	})
 
 	if len(parents) == 0 {
