@@ -671,6 +671,24 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "duplicate commit_hash",
+		SetUpScript: []string{
+			"create table t1 (x int primary key)",
+			"create table t2 (x int primary key)",
+			"call dolt_add('.');",
+			"call dolt_commit_hash_out(@commit1, '-Am', 'commit1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select table_name from dolt_diff where commit_hash = @commit1",
+				Expected: []sql.Row{
+					{"t1"},
+					{"t2"},
+				},
+			},
+		},
+	},
 }
 
 var Dolt1DiffSystemTableScripts = []queries.ScriptTest{

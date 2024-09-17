@@ -1954,3 +1954,15 @@ SQL
   [[ $output =~ "diff --dolt a/test b/test" ]] || false
   [[ $output =~ "deleted table" ]] || false
 }
+
+@test "diff: duplicate commit_hash in diff" {
+  dolt reset --hard
+  dolt sql -q "create table t1 (i int primray key);"
+  dolt sql -q "create table t2 (j int primary key);"
+  dolt add .
+  dolt commit -m "commit 1"
+  run dolt sql -q "select table_name from dolt_diff where commit_hash = hashof('HEAD')"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "t1" ]] || false
+  [[ "$output" =~ "t2" ]] || false
+}
