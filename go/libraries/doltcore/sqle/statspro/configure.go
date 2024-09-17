@@ -141,7 +141,7 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 		err = statsDb.LoadBranchStats(ctx, branch)
 		if err != nil {
 			// if branch name is invalid, continue loading rest
-			// TODO: d	ifferentiate bad branch name from other errors
+			// TODO: differentiate bad branch name from other errors
 			ctx.GetLogger().Errorf("load stats failure: %s\n", err.Error())
 			continue
 		}
