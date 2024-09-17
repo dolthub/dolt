@@ -98,7 +98,7 @@ func ImportKey(ctx context.Context, keyFile string) error {
 	args := []string{"--import", keyFile}
 	_, ioErr, err := execGpgAndReadOutput(ctx, nil, args)
 
-	if ioErr != nil && len(ioErr.String()) > 0 {
+	if err != nil && ioErr != nil && len(ioErr.String()) > 0 {
 		err = fmt.Errorf("`gpg --import %s` error gpg_output: %s - %w", keyFile, ioErr.String(), err)
 	}
 
