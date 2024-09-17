@@ -59,7 +59,7 @@ func TestOpenCommitEditor(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		val, err := OpenTempEditor(test.editorStr, test.initialContents)
+		val, err := OpenTempEditor(test.editorStr, test.initialContents, "")
 
 		if err != nil {
 			t.Error(err)

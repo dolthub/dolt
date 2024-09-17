@@ -25,8 +25,9 @@ import (
 )
 
 // OpenTempEditor allows user to write/edit message in temporary file
-func OpenTempEditor(ed string, initialContents string) (string, error) {
-	filename := filepath.Join(os.TempDir(), uuid.New().String())
+func OpenTempEditor(ed string, initialContents string, fileSuffix string) (string, error) {
+	fileName := uuid.New().String() + fileSuffix
+	filename := filepath.Join(os.TempDir(), fileName)
 	err := os.WriteFile(filename, []byte(initialContents), os.ModePerm)
 
 	if err != nil {

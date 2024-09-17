@@ -230,7 +230,7 @@ func getRebasePlan(cliCtx cli.CliContext, sqlCtx *sql.Context, queryist cli.Quer
 
 	var rebaseMsg string
 	cli.ExecuteWithStdioRestored(func() {
-		rebaseMsg, err = editor.OpenTempEditor(editorStr, initialRebaseMsg)
+		rebaseMsg, err = editor.OpenTempEditor(editorStr, initialRebaseMsg, "")
 	})
 	if err != nil {
 		return nil, err

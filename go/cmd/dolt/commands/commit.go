@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -347,14 +346,6 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 // getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
 // suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
 func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
-	if cli.ExecuteWithStdioRestored == nil || noEdit {
-		return suggestedMsg, nil
-	}
-
-	if !checkIsTerminal() {
-		return suggestedMsg, nil
-	}
-
 	var finalMsg string
 	initialMsg, err := buildInitalCommitMsg(sqlCtx, queryist, suggestedMsg)
 	if err != nil {
@@ -364,26 +355,20 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 		initialMsg = fmt.Sprintf("%s\n%s", amendString, initialMsg)
 	}
 
-	backupEd := "vim"
-	// try getting default editor on the user system
-	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
-		backupEd = ed
+	if cli.ExecuteWithStdioRestored == nil || noEdit {
+		return suggestedMsg, nil
 	}
-	// try getting Dolt config core.editor
-	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
 
-	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, cErr := editor.OpenTempEditor(editorStr, initialMsg)
-		if cErr != nil {
-			err = cErr
-		}
-		finalMsg = parseCommitMessage(commitMsg)
-	})
+	if !checkIsTerminal() {
+		return suggestedMsg, nil
+	}
 
+	commitMsg, err := execEditor(initialMsg, "", cliCtx)
 	if err != nil {
 		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
 	}
 
+	finalMsg = parseCommitMessage(commitMsg)
 	return finalMsg, nil
 }
 
