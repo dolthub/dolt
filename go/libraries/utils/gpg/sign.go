@@ -20,7 +20,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"strings"
 
@@ -67,24 +66,19 @@ func execGpgAndReadOutput(ctx context.Context, in []byte, args []string) (*bytes
 		return nil, nil, fmt.Errorf("failed to close stdin for command '%s': %w", cmdStr, err)
 	}
 
+	var exitCode int
 	for {
 		state, err := cmd.Process.Wait()
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to wait for command '%s': %w", cmdStr, err)
 		}
 
-		if state.Exited() {
-			if state.ExitCode() != 0 {
-				waitErr := eg.Wait()
-				if waitErr != nil {
-					return nil, nil, fmt.Errorf("failed to read output for command '%s': %w", cmdStr, waitErr)
-				}
-
-				return nil, nil, fmt.Errorf("command '%s' exited with code %d. stdout: '%s', stderr: '%s'", cmdStr, state.ExitCode(), outBuf.String(), errBuf.String())
-			}
-
-			break
+		if !state.Exited() {
+			continue
 		}
+
+		exitCode = state.ExitCode()
+		break
 	}
 
 	err = eg.Wait()
@@ -92,26 +86,26 @@ func execGpgAndReadOutput(ctx context.Context, in []byte, args []string) (*bytes
 		return nil, nil, fmt.Errorf("failed to read output for command '%s': %w", cmdStr, err)
 	}
 
+	if exitCode != 0 {
+		return nil, nil, fmt.Errorf("command '%s' exited with code %d. stdout: '%s', stderr: '%s'", cmdStr, exitCode, outBuf.String(), errBuf.String())
+	}
+
 	return outBuf, errBuf, nil
 }
 
+// ImportKey imports a key from a file using gpg
 func ImportKey(ctx context.Context, keyFile string) error {
 	args := []string{"--import", keyFile}
-	ioOut, ioErr, err := execGpgAndReadOutput(ctx, nil, args)
-
-	if ioOut != nil && len(ioOut.String()) > 0 {
-		log.Println("import output:", ioOut.String())
-	}
+	_, ioErr, err := execGpgAndReadOutput(ctx, nil, args)
 
 	if ioErr != nil && len(ioErr.String()) > 0 {
-		log.Println("import ioErr:", ioErr.String())
+		err = fmt.Errorf("`gpg --import %s` error gpg_output: %s - %w", keyFile, ioErr.String(), err)
 	}
-
-	log.Println("import err:", err)
 
 	return err
 }
 
+// ListKey returns the output of `gpg --list-keys`
 func ListKeys(ctx context.Context) ([]byte, error) {
 	args := []string{"--list-keys"}
 	outBuf, _, err := execGpgAndReadOutput(ctx, nil, args)
@@ -122,6 +116,7 @@ func ListKeys(ctx context.Context) ([]byte, error) {
 	return outBuf.Bytes(), nil
 }
 
+// HasKey returns true if the key with the given keyId is present when `gpg --list-keys` is run
 func HasKey(ctx context.Context, keyId string) (bool, error) {
 	args := []string{"--list-keys", keyId}
 	outBuf, _, err := execGpgAndReadOutput(ctx, nil, args)
@@ -132,6 +127,7 @@ func HasKey(ctx context.Context, keyId string) (bool, error) {
 	return strings.Contains(outBuf.String(), keyId), nil
 }
 
+// Sign signs a message using the key with the given keyId
 func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 	args := []string{"--clear-sign", "-u", keyId}
 	outBuf, _, err := execGpgAndReadOutput(ctx, message, args)
@@ -142,6 +138,7 @@ func Sign(ctx context.Context, keyId string, message []byte) ([]byte, error) {
 	return outBuf.Bytes(), nil
 }
 
+// Verify verifies a signature
 func Verify(ctx context.Context, signature []byte) ([]byte, error) {
 	args := []string{"--verify"}
 	_, errBuf, err := execGpgAndReadOutput(ctx, signature, args)
@@ -224,6 +221,7 @@ func DecodeAllPEMBlocks(bs []byte) ([]*pem.Block, error) {
 	return pemBlocks, nil
 }
 
+// GetBlocksOfType returns all PEM blocks of a given type.
 func GetBlocksOfType(blocks []*pem.Block, blTypeStr string) []*pem.Block {
 	var ret []*pem.Block
 	for _, block := range blocks {

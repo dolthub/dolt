@@ -149,6 +149,7 @@ func CopyFile(srcPath, destPath string, srcFS, destFS Filesys) (err error) {
 	return
 }
 
+// CopyDir does a recursive copy of the src directory into the dest directory.
 func CopyDir(src, dest string, fs Filesys) error {
 	absSrc, err := fs.Abs(src)
 	if err != nil {
