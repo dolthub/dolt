@@ -681,7 +681,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select table_name from dolt_diff where commit_hash = @commit1",
+				Query: "select table_name from dolt_diff where commit_hash = @commit1",
 				Expected: []sql.Row{
 					{"t1"},
 					{"t2"},
