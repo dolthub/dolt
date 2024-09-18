@@ -302,7 +302,7 @@ func (ixc *indexCollectionImpl) GetByName(indexName string) Index {
 
 func (ixc *indexCollectionImpl) GetByNameCaseInsensitive(indexName string) (Index, bool) {
 	for name, ix := range ixc.indexes {
-		if strings.ToLower(name) == strings.ToLower(indexName) {
+		if strings.EqualFold(name, indexName) {
 			return ix, true
 		}
 	}

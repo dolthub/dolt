@@ -278,7 +278,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 	colIdx, iCol := 0, 0
 	newSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		last = false
-		if strings.ToLower(col.Name) == strings.ToLower(newCol) {
+		if strings.EqualFold(col.Name, newCol) {
 			last = true
 			colIdx = iCol
 		}

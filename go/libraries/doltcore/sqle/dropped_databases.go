@@ -224,7 +224,7 @@ func (dd *droppedDatabaseManager) validateUndropDatabase(ctx *sql.Context, name 
 func hasCaseInsensitivePath(fs filesys.Filesys, target string) bool {
 	found := false
 	fs.Iter(filepath.Dir(target), false, func(path string, size int64, isDir bool) (stop bool) {
-		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(target)) {
+		if strings.EqualFold(filepath.Base(path), filepath.Base(target)) {
 			found = true
 		}
 		return found
@@ -238,9 +238,8 @@ func hasCaseInsensitivePath(fs filesys.Filesys, target string) bool {
 func hasCaseInsensitiveMatch(candidates []string, target string) (bool, string) {
 	found := false
 	exactCaseName := ""
-	lowercaseName := strings.ToLower(target)
 	for _, s := range candidates {
-		if lowercaseName == strings.ToLower(s) {
+		if strings.EqualFold(target, s) {
 			exactCaseName = s
 			found = true
 			break

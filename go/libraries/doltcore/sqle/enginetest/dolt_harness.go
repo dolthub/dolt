@@ -191,7 +191,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			tableName := tableNameRow[0].(string)
 
 			// special handling for auto_increment_tbl, which is expected to start with particular values
-			if strings.ToLower(tableName) == "auto_increment_tbl" {
+			if strings.EqualFold(tableName, "auto_increment_tbl") {
 				resetCmds = append(resetCmds, setup.AutoincrementData...)
 				continue
 			}

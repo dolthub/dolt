@@ -195,13 +195,13 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
 	tableName = strings.ToLower(tableName)
 	for _, d := range deltas {
-		if strings.ToLower(d.ToName.Name) == tableName {
+		if strings.EqualFold(d.ToName.Name, tableName) {
 			return d
 		}
 	}
 
 	for _, d := range deltas {
-		if strings.ToLower(d.FromName.Name) == tableName {
+		if strings.EqualFold(d.FromName.Name, tableName) {
 			return d
 		}
 	}

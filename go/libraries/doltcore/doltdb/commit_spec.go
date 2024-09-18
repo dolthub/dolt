@@ -102,7 +102,7 @@ func NewCommitSpec(cSpecStr string) (*CommitSpec, error) {
 		return nil, err
 	}
 
-	if strings.ToLower(name) == head {
+	if strings.EqualFold(name, head) {
 		return &CommitSpec{head, headCommitSpec, as}, nil
 	}
 	if hashRegex.MatchString(name) {

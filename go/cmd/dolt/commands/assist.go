@@ -159,7 +159,7 @@ func agreeToTerms(scanner *bufio.Scanner) bool {
 
 	scanner.Scan()
 	input := strings.TrimSpace(scanner.Text())
-	if strings.ToLower(input) == "y" {
+	if strings.EqualFold(input, "y") {
 		cli.Println(wordWrap("# ", "You can disable this check in the future by setting the DOLT_ASSIST_AGREE "+
 			"environment variable."))
 		return true

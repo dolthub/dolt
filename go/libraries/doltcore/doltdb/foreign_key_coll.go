@@ -278,7 +278,7 @@ func CombinedHash(fks []ForeignKey) (hash.Hash, error) {
 
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
 func (fk ForeignKey) IsSelfReferential() bool {
-	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)
+	return strings.EqualFold(fk.TableName, fk.ReferencedTableName)
 }
 
 // IsResolved returns whether the foreign key has been resolved.
@@ -402,7 +402,7 @@ func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string)
 		return ForeignKey{}, false
 	}
 	for _, fk := range fkc.foreignKeys {
-		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
+		if strings.EqualFold(fk.Name, foreignKeyName) {
 			return fk, true
 		}
 	}
@@ -589,12 +589,11 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
-	lowercaseTblName := tableName.ToLower()
 	for _, foreignKey := range fkc.foreignKeys {
-		if strings.ToLower(foreignKey.TableName) == lowercaseTblName.Name {
+		if strings.EqualFold(foreignKey.TableName, tableName.Name) {
 			declaredFk = append(declaredFk, foreignKey)
 		}
-		if strings.ToLower(foreignKey.ReferencedTableName) == lowercaseTblName.Name {
+		if strings.EqualFold(foreignKey.ReferencedTableName, tableName.Name) {
 			referencedByFk = append(referencedByFk, foreignKey)
 		}
 	}
@@ -627,7 +626,7 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 	var key string
 	for k, fk := range fkc.foreignKeys {
-		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
+		if strings.EqualFold(fk.Name, foreignKeyName) {
 			key = k
 			break
 		}

@@ -65,7 +65,7 @@ type checkCollection struct {
 
 func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check, error) {
 	for _, chk := range c.checks {
-		if strings.ToLower(name) == strings.ToLower(chk.name) {
+		if strings.EqualFold(name, chk.name) {
 			// Engine is supposed to enforce this for us, but just in case
 			return nil, fmt.Errorf("name %s in use", name)
 		}
@@ -83,7 +83,7 @@ func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check
 
 func (c *checkCollection) DropCheck(name string) error {
 	for i, chk := range c.checks {
-		if strings.ToLower(name) == strings.ToLower(chk.name) {
+		if strings.EqualFold(name, chk.name) {
 			c.checks = append(c.checks[:i], c.checks[i+1:]...)
 			return nil
 		}
