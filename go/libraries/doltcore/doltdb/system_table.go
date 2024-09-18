@@ -80,7 +80,7 @@ func IsReadOnlySystemTable(name string) bool {
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
 // by the user.
 func IsNonAlterableSystemTable(name string) bool {
-	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name)) || strings.ToLower(name) == SchemasTableName
+	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name)) || strings.EqualFold(name, SchemasTableName)
 }
 
 // GetNonSystemTableNames gets non-system table names

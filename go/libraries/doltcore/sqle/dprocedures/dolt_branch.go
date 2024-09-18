@@ -241,7 +241,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 
 		// If we deleted the branch this client is connected to, change the current branch to the default
 		// TODO: this would be nice to do for every other session (or maybe invalidate sessions on this branch)
-		if strings.ToLower(currBranch) == strings.ToLower(branchName) {
+		if strings.EqualFold(currBranch, branchName) {
 			ctx.SetCurrentDatabase(currBase)
 		}
 

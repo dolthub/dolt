@@ -222,6 +222,11 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 	buffPool := prollyMap.NodeStore().Pool()
 
+	if cnt, err := prollyMap.Count(); err != nil {
+		return nil, err
+	} else if cnt == 0 {
+		return nil, nil
+	}
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
 	if err != nil {
 		return nil, err

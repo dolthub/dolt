@@ -623,7 +623,7 @@ func (si *schemaImpl) SetCollation(collation Collation) {
 func (si *schemaImpl) indexOf(colName string) int {
 	i, idx := 0, -1
 	si.allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		if strings.ToLower(col.Name) == strings.ToLower(colName) {
+		if strings.EqualFold(col.Name, colName) {
 			idx = i
 			return true, nil
 		}

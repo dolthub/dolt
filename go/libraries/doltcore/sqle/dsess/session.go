@@ -524,7 +524,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	currDbBaseName, rev := SplitRevisionDbName(currDb)
 	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
-	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
+	if !strings.EqualFold(currDbBaseName, dirtyDbBaseName) {
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
 	}
 
@@ -540,7 +540,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		rev = dbState.checkedOutRevSpec
 	}
 
-	if strings.ToLower(rev) != strings.ToLower(dirtyBranchState.head) {
+	if !strings.EqualFold(rev, dirtyBranchState.head) {
 		return fmt.Errorf("no changes to dolt_commit on branch %s", rev)
 	}
 
@@ -1175,7 +1175,7 @@ func (d *DoltSession) SetSessionVariable(ctx *sql.Context, key string, value int
 		return sql.ErrSystemVariableReadOnly.New(key)
 	}
 
-	if strings.ToLower(key) == "foreign_key_checks" {
+	if strings.EqualFold(key, "foreign_key_checks") {
 		return d.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
@@ -1372,7 +1372,7 @@ func (d *DoltSession) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Tab
 func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
 	tables := d.tempTables[strings.ToLower(db)]
 	for i, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+		if strings.EqualFold(tbl.Name(), name) {
 			tables = append(tables[:i], tables[i+1:]...)
 			break
 		}
@@ -1382,7 +1382,7 @@ func (d *DoltSession) DropTemporaryTable(ctx *sql.Context, db, name string) {
 
 func (d *DoltSession) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
 	for _, tbl := range d.tempTables[strings.ToLower(db)] {
-		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+		if strings.EqualFold(tbl.Name(), name) {
 			return tbl, true
 		}
 	}
@@ -1655,12 +1655,15 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	var res interface{}
 	switch value.(type) {
 	case int8:
+		v = asIntIfBoolValue(v)
 		var tmp int64
 		tmp, err = strconv.ParseInt(v, 10, 8)
 		res = int8(tmp)
 	case int, int16, int32, int64:
+		v = asIntIfBoolValue(v)
 		res, err = strconv.ParseInt(v, 10, 64)
 	case uint, uint8, uint16, uint32, uint64:
+		v = asIntIfBoolValue(v)
 		res, err = strconv.ParseUint(v, 10, 64)
 	case float32, float64:
 		res, err = strconv.ParseFloat(v, 64)
@@ -1677,6 +1680,17 @@ func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error
 	}
 
 	return res, nil
+}
+
+func asIntIfBoolValue(v string) string {
+	lower := strings.ToLower(v)
+	if lower == "true" {
+		return "1"
+	} else if lower == "false" {
+		return "0"
+	}
+
+	return v
 }
 
 // setPersistedValue casts and persists a key value pair assuming thread safety

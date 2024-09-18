@@ -191,8 +191,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	}
 
 	for _, cmd := range hc.Subcommands {
-		lwrName := strings.ToLower(cmd.Name())
-		if lwrName == subCommandStr {
+		if strings.EqualFold(cmd.Name(), subCommandStr) {
 			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv, cliCtx)
 		}
 	}

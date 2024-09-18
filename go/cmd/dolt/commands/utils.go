@@ -19,6 +19,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,11 +34,14 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -398,7 +402,7 @@ func getStrBoolColAsBool(col interface{}) (bool, error) {
 	case bool:
 		return col.(bool), nil
 	case string:
-		return strings.ToLower(col.(string)) == "true" || strings.ToLower(col.(string)) == "1", nil
+		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
 	}
@@ -557,7 +561,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 }
 
 // PrintCommitInfo prints the given commit in the format used by log and show.
-func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *CommitInfo) {
+func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, showSignatures bool, decoration string, comm *CommitInfo) {
 	color.NoColor = false
 	if len(comm.parentHashes) < minParents {
 		return
@@ -580,6 +584,14 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
 		for _, h := range comm.parentHashes {
 			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
+		}
+	}
+
+	if showSignatures && len(comm.commitMeta.Signature) > 0 {
+		signatureLines := strings.Split(comm.commitMeta.Signature, "\n")
+		for _, line := range signatureLines {
+			pager.Writer.Write([]byte("\n"))
+			pager.Writer.Write([]byte(color.CyanString(line)))
 		}
 	}
 
@@ -641,17 +653,34 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	pager.Writer.Write([]byte(yellow.Sprintf("%s) ", joinedReferences)))
 }
 
+type commitInfoOptions struct {
+	showSignature bool
+}
+
 // getCommitInfo returns the commit info for the given ref.
 func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*CommitInfo, error) {
+	return getCommitInfoWithOptions(queryist, sqlCtx, ref, commitInfoOptions{})
+}
+
+func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
+	var q string
+	if opts.showSignature {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
+	} else {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
 	}
+
 	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
@@ -672,7 +701,13 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	message := row[4].(string)
 	parent := row[5].(string)
 	height := uint64(len(rows))
+
 	isHead := commitHash == hashOfHead
+
+	var signature string
+	if len(row) > 7 {
+		signature = row[7].(string)
+	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
 	if err != nil {
@@ -694,6 +729,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 			Timestamp:     timestamp,
 			Description:   message,
 			UserTimestamp: int64(timestamp),
+			Signature:     signature,
 		},
 		commitHash:        commitHash,
 		height:            height,
@@ -883,4 +919,36 @@ func PrintStagingError(err error) {
 	}()
 
 	cli.PrintErrln(vErr.Verbose())
+}
+
+// execEditor opens editor to ask user for input.
+func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (editedMsg string, err error) {
+	if cli.ExecuteWithStdioRestored == nil {
+		return initialMsg, nil
+	}
+
+	if !checkIsTerminal() {
+		return initialMsg, nil
+	}
+
+	backupEd := "vim"
+	// try getting default editor on the user system
+	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
+		backupEd = ed
+	}
+	// try getting Dolt config core.editor
+	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
+
+	cli.ExecuteWithStdioRestored(func() {
+		editedMsg, err = editor.OpenTempEditor(editorStr, initialMsg, suffix)
+		if err != nil {
+			return
+		}
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
+	}
+
+	return editedMsg, nil
 }

@@ -214,7 +214,15 @@ func (rcv *Commit) MutateUserTimestampMillis(n int64) bool {
 	return rcv._tab.MutateInt64Slot(20, n)
 }
 
-const CommitNumFields = 9
+func (rcv *Commit) Signature() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const CommitNumFields = 10
 
 func CommitStart(builder *flatbuffers.Builder) {
 	builder.StartObject(CommitNumFields)
@@ -254,6 +262,9 @@ func CommitAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis uint
 }
 func CommitAddUserTimestampMillis(builder *flatbuffers.Builder, userTimestampMillis int64) {
 	builder.PrependInt64Slot(8, userTimestampMillis, 0)
+}
+func CommitAddSignature(builder *flatbuffers.Builder, signature flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(9, flatbuffers.UOffsetT(signature), 0)
 }
 func CommitEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

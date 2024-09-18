@@ -171,7 +171,7 @@ func (cc *ColCollection) IndexOf(colName string) int {
 		defer func() {
 			i++
 		}()
-		if strings.ToLower(col.Name) == strings.ToLower(colName) {
+		if strings.EqualFold(col.Name, colName) {
 			idx = i
 			stop = true
 		}

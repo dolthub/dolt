@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -33,6 +34,8 @@ import (
 // are approximate, but certainly shouldn't reach the square
 // of the expected size.
 const maxBucketFanout = 200 * 200
+
+var mcvsTypes = []sql.Type{types.Int64, types.Int64, types.Int64}
 
 func (n *NomsStatsDatabase) replaceStats(ctx context.Context, statsMap *prolly.MutableMap, dStats *statspro.DoltStats) error {
 	if err := deleteIndexRows(ctx, statsMap, dStats); err != nil {
@@ -127,7 +130,7 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		for _, v := range h.McvCounts() {
 			mcvCntsRow = append(mcvCntsRow, int(v))
 		}
-		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, dStats.Statistic.Typs))
+		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, mcvsTypes))
 
 		key := keyBuilder.Build(pool)
 		value := valueBuilder.Build(pool)

@@ -398,7 +398,7 @@ func printMergeStats(fastForward bool,
 				pager := outputpager.Start()
 				defer pager.Stop()
 
-				PrintCommitInfo(pager, 0, false, "auto", commit)
+				PrintCommitInfo(pager, 0, false, false, "auto", commit)
 			})
 		}
 	}
