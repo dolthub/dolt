@@ -141,7 +141,7 @@ func (dt *UnscopedDiffTable) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *UnscopedDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, true)
+	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, false)
 }
 
 // IndexedAccess implements sql.IndexAddressable
