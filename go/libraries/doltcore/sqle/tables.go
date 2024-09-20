@@ -922,7 +922,7 @@ func emptyFulltextTable(
 	}
 
 	// TODO: this should be the head root, not working root
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, doltTable.tableName, sql.NewPrimaryKeySchema(fulltextSch), workingRoot, parentTable.Collation())
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, doltTable.TableName(), sql.NewPrimaryKeySchema(fulltextSch), workingRoot, parentTable.Collation())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1594,7 +1594,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	if err != nil {
 		return err
 	}
-	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.TableName(), []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
 	if err != nil {
 		return err
 	}
@@ -2108,7 +2108,7 @@ func validateFullTextColumnChange(ctx *sql.Context, idx schema.Index, oldColumn 
 func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot doltdb.RootValue) (schema.Schema, error) {
 	// Adding or dropping a column
 	if oldColumn == nil || newColumn == nil {
-		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
 		}
@@ -2116,7 +2116,7 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 	}
 
 	// Modifying a column
-	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}

@@ -88,7 +88,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, tableName, create.PrimaryKeySchema, nil, sql.Collation_Default)
+	// NOTE: We don't support setting a schema name to qualify the table name here, so this code will not work
+	//       correctly with Doltgres yet.
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, doltdb.TableName{Name: tableName}, create.PrimaryKeySchema, nil, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +111,9 @@ func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db 
 		return nil, err
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(sqlCtx, root, tableName, sql.NewPrimaryKeySchema(sch), nil, sql.Collation_Default)
+	// NOTE: We don't support setting a schema name to qualify the table name here, so this code will not work
+	//       correctly with Doltgres yet.
+	doltSchema, err := sqlutil.ToDoltSchema(sqlCtx, root, doltdb.TableName{Name: tableName}, sql.NewPrimaryKeySchema(sch), nil, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}

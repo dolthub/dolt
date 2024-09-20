@@ -158,6 +158,7 @@ func InferSchema(ctx context.Context, root doltdb.RootValue, rd table.ReadCloser
 		}
 	}
 
+	// NOTE: This code is only used in the import codepath for Dolt, so we don't use a schema to qualify the table name
 	newCols, err = doltdb.GenerateTagsForNewColColl(ctx, root, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
