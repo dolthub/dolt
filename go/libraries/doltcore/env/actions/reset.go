@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -201,13 +200,13 @@ func ResetHard(
 	return nil
 }
 
-func ResetSoftTables(ctx context.Context, apr *argparser.ArgParseResults, roots doltdb.Roots) (doltdb.Roots, error) {
-	tables, err := getUnionedTables(ctx, tableNamesFromArgs(apr.Args), roots.Staged, roots.Head)
+func ResetSoftTables(ctx context.Context, tableNames []doltdb.TableName, roots doltdb.Roots) (doltdb.Roots, error) {
+	tables, err := getUnionedTables(ctx, tableNames, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	err = ValidateTables(context.TODO(), tables, roots.Staged, roots.Head)
+	err = ValidateTables(ctx, tables, roots.Staged, roots.Head)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -218,14 +217,6 @@ func ResetSoftTables(ctx context.Context, apr *argparser.ArgParseResults, roots 
 	}
 
 	return roots, nil
-}
-
-func tableNamesFromArgs(args []string) []doltdb.TableName {
-	tbls := make([]doltdb.TableName, len(args))
-	for i, arg := range args {
-		tbls[i] = doltdb.TableName{Name: arg}
-	}
-	return tbls
 }
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
@@ -266,7 +257,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 }
 
 func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot, headRoot doltdb.RootValue) ([]doltdb.TableName, error) {
-	if len(tables) == 0 || (len(tables) == 1 && tables[0].Name == ".") {
+	if len(tables) == 0 {
 		var err error
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
 
