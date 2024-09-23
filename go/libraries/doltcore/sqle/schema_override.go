@@ -266,7 +266,7 @@ func newRowConverterForDoltTable(ctx *sql.Context, t *DoltTable) (func(ctx *sql.
 		return nil, fmt.Errorf("unable to get roots for database '%s'", t.db.Name())
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, roots.Working, t.Name(), t.sqlSch, roots.Head, t.Collation())
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, roots.Working, t.TableName(), t.sqlSch, roots.Head, t.Collation())
 	if err != nil {
 		return nil, err
 	}

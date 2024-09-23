@@ -328,6 +328,9 @@ func (root *rootValue) HasTable(ctx context.Context, tName TableName) (bool, err
 	return !a.IsEmpty(), nil
 }
 
+// GenerateTagsForNewColColl creates a new ColCollection for the specified |tableName|. Note that this function is only
+// intended to be used from Dolt code, and does not support qualifying a table with a schema name, so it will not work
+// correctly for Doltgres.
 func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
 	newColNames := make([]string, 0, cc.Size())
 	newColKinds := make([]types.NomsKind, 0, cc.Size())
@@ -337,7 +340,7 @@ func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName st
 		return false, nil
 	})
 
-	newTags, err := GenerateTagsForNewColumns(ctx, root, tableName, newColNames, newColKinds, nil)
+	newTags, err := GenerateTagsForNewColumns(ctx, root, TableName{Name: tableName}, newColNames, newColKinds, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +358,7 @@ func GenerateTagsForNewColColl(ctx context.Context, root RootValue, tableName st
 func GenerateTagsForNewColumns(
 	ctx context.Context,
 	root RootValue,
-	tableName string,
+	tableName TableName,
 	newColNames []string,
 	newColKinds []types.NomsKind,
 	headRoot RootValue,
@@ -405,9 +408,9 @@ func GenerateTagsForNewColumns(
 			continue
 		}
 
-		outputTags[i] = schema.AutoGenerateTag(existingTags, tableName, existingColKinds, newColNames[i], newColKinds[i])
+		outputTags[i] = schema.AutoGenerateTag(existingTags, tableName.Name, existingColKinds, newColNames[i], newColKinds[i])
 		existingColKinds = append(existingColKinds, newColKinds[i])
-		existingTags.Add(outputTags[i], tableName)
+		existingTags.Add(outputTags[i], tableName.Name)
 	}
 
 	return outputTags, nil
@@ -416,13 +419,13 @@ func GenerateTagsForNewColumns(
 func GetExistingColumns(
 	ctx context.Context,
 	root, headRoot RootValue,
-	tableName string,
+	tableName TableName,
 	newColNames []string,
 	newColKinds []types.NomsKind,
 ) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
-	tbl, found, err := root.GetTable(ctx, TableName{Name: tableName})
+	tbl, found, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +440,7 @@ func GetExistingColumns(
 			return false, nil
 		})
 	} else if headRoot != nil {
-		tbl, found, err := headRoot.GetTable(ctx, TableName{Name: tableName})
+		tbl, found, err := headRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
