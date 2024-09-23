@@ -17,6 +17,7 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ type DoltStats struct {
 	// field on disk
 	Active map[hash.Hash]int
 	Hist   sql.Histogram
+	Tb     *val.TupleBuilder
 }
 
 func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {

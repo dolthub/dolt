@@ -332,6 +332,22 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "varbinary encoding bug",
+		SetUpScript: []string{
+			`create table a (a varbinary (32) primary key)`,
+			"insert into a values ('hello, world')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `analyze table a`,
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "boundary nils don't panic when trying to convert to the zero type",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y varchar(10), key(y,x));",
@@ -826,6 +842,7 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 			err := eng.Analyzer.Catalog.StatsProvider.DropDbStats(ctx, "mydb", false)
 			require.NoError(t, err)
 
+			ctx := enginetest.NewContext(harness)
 			err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", "main")
 			require.NoError(t, err)
 		}

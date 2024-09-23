@@ -16,7 +16,6 @@ package statspro
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -65,16 +64,16 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		// copy closure variables
 		db := db
 		eg.Go(func() (err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					if str, ok := r.(fmt.Stringer); ok {
-						err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
-					} else {
-						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
-					}
-					return
-				}
-			}()
+			//defer func() {
+			//	if r := recover(); r != nil {
+			//		if str, ok := r.(fmt.Stringer); ok {
+			//			err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
+			//		} else {
+			//			err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
+			//		}
+			//		return
+			//	}
+			//}()
 
 			fs, err := p.pro.FileSystemForDatabase(db.Name())
 			if err != nil {
