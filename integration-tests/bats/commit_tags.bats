@@ -75,8 +75,8 @@ teardown() {
 }
 
 @test "commit_tags: commit onto checked out tag" {
-    dolt tag v1 HEAD^
     skip "need to implement detached head first"
+    dolt tag v1 HEAD^
     dolt checkout v1
     run dolt sql -q "insert into test values (8),(9)"
     [ $status -eq 0 ]
@@ -95,7 +95,8 @@ teardown() {
 
 @test "commit_tags: use a tag as a ref for merge" {
     dolt tag v1 HEAD
-    dolt checkout -b other HEAD~
+    dolt branch other HEAD~
+    dolt checkout other
     dolt sql -q "insert into test values (8),(9)"
     dolt add -A && dolt commit -m 'made changes'
     run dolt merge v1 -m "merge v1"
