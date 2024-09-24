@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -60,12 +61,11 @@ var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
-	// TODO: schema
-	table, _, ok, err := doltdb.GetTableInsensitive(ctx, wRoot, doltdb.TableName{Name: tblName})
+	_, table, tableExists, err := resolve.Table(ctx, wRoot, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if !tableExists {
 		return nil, sql.ErrTableNotFound.New(diffTblName)
 	}
 
