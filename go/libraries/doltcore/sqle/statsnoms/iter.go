@@ -159,11 +159,7 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 func (s *statsIter) ParseRow(rowStr string) (sql.Row, error) {
 	var row sql.Row
-	parts := strings.Split(rowStr, ",")
-	if len(parts) > len(s.currentTypes) {
-		return nil, nil
-	}
-	for i, v := range parts {
+	for i, v := range strings.Split(rowStr, ",") {
 		val, _, err := s.currentTypes[i].Convert(v)
 		if err != nil {
 			return nil, err
