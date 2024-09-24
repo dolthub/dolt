@@ -55,7 +55,7 @@ func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, r
 	}
 	m := durable.ProllyMapFromArtifactIndex(arts)
 	return &prollyConstraintViolationsTable{
-		tblName: resolvedName.Name,
+		tblName: resolvedName,
 		root:    root,
 		sqlSch:  sqlSch,
 		tbl:     tbl,
@@ -67,7 +67,7 @@ func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, r
 // prollyConstraintViolationsTable is a sql.Table implementation that provides access to the constraint violations that exist
 // for a user table for the v1 format.
 type prollyConstraintViolationsTable struct {
-	tblName string
+	tblName doltdb.TableName
 	root    doltdb.RootValue
 	sqlSch  sql.PrimaryKeySchema
 	tbl     *doltdb.Table
@@ -80,12 +80,12 @@ var _ sql.DeletableTable = (*prollyConstraintViolationsTable)(nil)
 
 // Name implements the interface sql.Table.
 func (cvt *prollyConstraintViolationsTable) Name() string {
-	return doltdb.DoltConstViolTablePrefix + cvt.tblName
+	return doltdb.DoltConstViolTablePrefix + cvt.tblName.Name
 }
 
 // String implements the interface sql.Table.
 func (cvt *prollyConstraintViolationsTable) String() string {
-	return doltdb.DoltConstViolTablePrefix + cvt.tblName
+	return doltdb.DoltConstViolTablePrefix + cvt.tblName.Name
 }
 
 // Schema implements the interface sql.Table.
@@ -320,7 +320,7 @@ func (d *prollyCVDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	updatedRoot, err := d.cvt.root.PutTable(ctx, doltdb.TableName{Name: d.cvt.tblName}, updatedTbl)
+	updatedRoot, err := d.cvt.root.PutTable(ctx, d.cvt.tblName, updatedTbl)
 	if err != nil {
 		return err
 	}
