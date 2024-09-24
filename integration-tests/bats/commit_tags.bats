@@ -94,11 +94,8 @@ teardown() {
 }
 
 @test "commit_tags: use a tag as a ref for merge" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "This test relies on dolt checkout, which has not been migrated yet."
-    fi
     dolt tag v1 HEAD
-    dolt checkout -b other HEAD^
+    dolt checkout -b other HEAD~
     dolt sql -q "insert into test values (8),(9)"
     dolt add -A && dolt commit -m 'made changes'
     run dolt merge v1 -m "merge v1"
