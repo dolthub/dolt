@@ -172,7 +172,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 	// prevent cloning tags (branches in detached head state)
 	for _, srcRef := range srcRefHashes {
-		if strings.EqualFold(srcRef.Ref.GetPath(), branch) {
+		if srcRef.Ref.GetType() == ref.TagRefType && strings.EqualFold(srcRef.Ref.GetPath(), branch) {
 			return doltdb.ErrOperationNotSupportedInDetachedHead
 		}
 	}

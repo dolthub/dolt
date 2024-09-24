@@ -163,12 +163,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(branchName, ""), nil
 	}
 
-	if isTag, err := actions.IsTag(ctx, dbData.Ddb, branchName); err != nil {
-		return 1, "", err
-	} else if isTag {
-		return 1, "", fmt.Errorf("error: tag '%s' is not a branch", branchName)
-	}
-
 	roots, ok := dSess.GetRoots(ctx, currentDbName)
 	if !ok {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)

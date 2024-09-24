@@ -66,7 +66,7 @@ teardown() {
 @test "commit_tags: checkout a tag" {
     dolt branch comp HEAD^
     dolt tag v1 HEAD^
-    skip "need to implelement detached head first"
+    skip "need to implement detached head first"
     run dolt checkout v1
     [ $status -eq 0 ]
     run dolt diff comp
@@ -95,10 +95,6 @@ teardown() {
 
 @test "commit_tags: use a tag as a ref for merge" {
     dolt tag v1 HEAD
-    # TODO: remove this once dolt checkout is migrated
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "This test relies on dolt checkout, which has not been migrated yet."
-    fi
     dolt checkout -b other HEAD^
     dolt sql -q "insert into test values (8),(9)"
     dolt add -A && dolt commit -m 'made changes'
@@ -126,18 +122,35 @@ teardown() {
     dolt sql -q "insert into test values (7),(8),(9);"
     dolt add -A && dolt commit -m "more rows"
 
-    dolt remote add origin file://../remote
+    dolt remote add origin file://./../remote
     dolt push origin main
-    cd .. && dolt clone file://remote repo_clone && cd repo
 
     run dolt tag v1 HEAD^
     [ $status -eq 0 ]
     run dolt tag v2 HEAD -m "SAMO"
     [ $status -eq 0 ]
 
-    skip "todo"
-    run dolt push origin master
+    # tags are not pushed by default
+    run dolt push origin main
     [ $status -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+
+    cd .. && dolt clone file://./remote repo_clone && cd repo
+
+    cd ../repo_clone
+    run dolt pull --no-edit
+    [ $status -eq 0 ]
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "v1" ]] || false
+    [[ ! "$output" =~ "v2" ]] || false
+
+    cd ../repo
+    run dolt push origin v1
+    [ $status -eq 0 ]
+    run dolt push origin v2
+    [ $status -eq 0 ]
+
     cd ../repo_clone
     run dolt pull --no-edit
     [ $status -eq 0 ]
