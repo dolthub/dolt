@@ -842,7 +842,6 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 			err := eng.Analyzer.Catalog.StatsProvider.DropDbStats(ctx, "mydb", false)
 			require.NoError(t, err)
 
-			ctx := enginetest.NewContext(harness)
 			err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", "main")
 			require.NoError(t, err)
 		}
