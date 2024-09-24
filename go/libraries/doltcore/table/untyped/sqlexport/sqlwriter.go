@@ -129,7 +129,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 	b.WriteRune('\n')
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
-	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
+	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, doltdb.TableName{Name: w.tableName})
 	if err != nil {
 		return err
 	}

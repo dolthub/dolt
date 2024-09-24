@@ -306,7 +306,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	sqlDb := sqle.NewUserSpaceDatabase(root, editor.Options{})
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 
-	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
+	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

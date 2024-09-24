@@ -151,7 +151,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root dol
 func exportTblSchema(ctx context.Context, tblName string, root doltdb.RootValue, wr io.Writer, opts editor.Options) errhand.VerboseError {
 	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
-	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
+	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
