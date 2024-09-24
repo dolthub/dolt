@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -93,14 +94,19 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		}
 	} else {
 		if apr.NArg() != 1 || (apr.NArg() == 1 && apr.Arg(0) == ".") {
-			err := resetSoftTables(ctx, apr, roots, dSess, dbName)
+			err := resetSoftTables(ctx, nil, roots, dSess, dbName)
 			if err != nil {
 				return 1, err
 			}
 		} else {
 			// check if the input is a table name or commit ref
-			if isTableInRoots(ctx, roots, apr.Arg(0)) {
-				err := resetSoftTables(ctx, apr, roots, dSess, dbName)
+			tblName, inRoots, err := isTableInRoots(ctx, roots, apr.Arg(0))
+			if err != nil {
+				return 0, err
+			}
+
+			if inRoots {
+				err := resetSoftTables(ctx, []doltdb.TableName{tblName}, roots, dSess, dbName)
 				if err != nil {
 					return 1, err
 				}
@@ -144,23 +150,44 @@ func resetSoftToRef(
 }
 
 // isTableInRoots returns true if the table given exists in any of the roots given
-func isTableInRoots(ctx *sql.Context, roots doltdb.Roots, tableName string) bool {
-	_, tableNameInHead, _ := roots.Head.ResolveTableName(ctx, doltdb.TableName{Name: tableName})
-	_, tableNameInStaged, _ := roots.Staged.ResolveTableName(ctx, doltdb.TableName{Name: tableName})
-	_, tableNameInWorking, _ := roots.Working.ResolveTableName(ctx, doltdb.TableName{Name: tableName})
-	isTableName := tableNameInHead || tableNameInStaged || tableNameInWorking
-	return isTableName
+func isTableInRoots(ctx *sql.Context, roots doltdb.Roots, tableName string) (doltdb.TableName, bool, error) {
+	resolvedName, _, tableNameInHead, err := resolve.Table(ctx, roots.Head, tableName)
+	if err != nil {
+		return resolvedName, false, err
+	}
+	if tableNameInHead {
+		return resolvedName, true, nil
+	}
+
+	resolvedName, _, tableNameInStaged, err := resolve.Table(ctx, roots.Staged, tableName)
+	if err != nil {
+		return resolvedName, false, err
+	}
+	if tableNameInStaged {
+		return resolvedName, true, nil
+	}
+
+	resolvedName, _, tableNameInWorking, err := resolve.Table(ctx, roots.Working, tableName)
+	if err != nil {
+		return resolvedName, false, err
+	}
+	if tableNameInWorking {
+		return resolvedName, true, nil
+	}
+
+	return doltdb.TableName{}, false, nil
 }
 
-// resetSoftTables replaces staged tables named from HEAD
+// resetSoftTables replaces staged tables named from HEAD. A nil table name slice resets all table names from
+// HEAD and STAGED
 func resetSoftTables(
 	ctx *sql.Context,
-	apr *argparser.ArgParseResults,
+	tableNames []doltdb.TableName,
 	roots doltdb.Roots,
 	dSess *dsess.DoltSession,
 	dbName string,
 ) error {
-	roots, err := actions.ResetSoftTables(ctx, apr, roots)
+	roots, err := actions.ResetSoftTables(ctx, tableNames, roots)
 	if err != nil {
 		return err
 	}
