@@ -40,7 +40,9 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 		return "", nil, fmt.Errorf("expected create table, found %T", create)
 	}
 
-	sch, err := ToDoltSchema(ctx, root, create.Name(), create.PkSchema(), nil, create.Collation)
+	// NOTE: We don't support setting a schema name here since this code is only intended to be used from the Dolt
+	//       codebase, and will not work correctly from Doltgres.
+	sch, err := ToDoltSchema(ctx, root, doltdb.TableName{Name: create.Name()}, create.PkSchema(), nil, create.Collation)
 	if err != nil {
 		return "", nil, err
 	}

@@ -80,7 +80,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	var cm *doltdb.Commit
-	if strings.ToUpper(name) == "HEAD" {
+	if strings.EqualFold(name, "HEAD") {
 		sess := dsess.DSessFromSess(ctx.Session)
 
 		// TODO: this should resolve the current DB through the analyzer so it can use the revision qualified name here

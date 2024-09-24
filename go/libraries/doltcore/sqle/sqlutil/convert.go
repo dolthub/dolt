@@ -77,7 +77,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 func ToDoltSchema(
 	ctx context.Context,
 	root doltdb.RootValue,
-	tableName string,
+	tableName doltdb.TableName,
 	sqlSchema sql.PrimaryKeySchema,
 	headRoot doltdb.RootValue,
 	collation sql.CollationID,

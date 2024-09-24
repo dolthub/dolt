@@ -922,7 +922,7 @@ func emptyFulltextTable(
 	}
 
 	// TODO: this should be the head root, not working root
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, doltTable.tableName, sql.NewPrimaryKeySchema(fulltextSch), workingRoot, parentTable.Collation())
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, doltTable.TableName(), sql.NewPrimaryKeySchema(fulltextSch), workingRoot, parentTable.Collation())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1594,7 +1594,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	if err != nil {
 		return err
 	}
-	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.tableName, []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
+	tags, err := doltdb.GenerateTagsForNewColumns(ctx, root, t.TableName(), []string{column.Name}, []types.NomsKind{ti.NomsKind()}, nil)
 	if err != nil {
 		return err
 	}
@@ -2042,7 +2042,7 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 		var colNames []string
 		prefixLengths := index.PrefixLengths()
 		for i, colName := range index.ColumnNames() {
-			if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
+			if strings.EqualFold(oldColumn.Name, colName) {
 				colNames = append(colNames, newColumn.Name)
 				if len(prefixLengths) > 0 {
 					if !sqltypes.IsText(newColumn.Type) {
@@ -2108,7 +2108,7 @@ func validateFullTextColumnChange(ctx *sql.Context, idx schema.Index, oldColumn 
 func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot doltdb.RootValue) (schema.Schema, error) {
 	// Adding or dropping a column
 	if oldColumn == nil || newColumn == nil {
-		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
+		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
 		}
@@ -2116,7 +2116,7 @@ func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, ol
 	}
 
 	// Modifying a column
-	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
+	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.TableName(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}
@@ -2731,7 +2731,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
 	}
-	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
+	if !strings.EqualFold(sqlFk.Database, sqlFk.ParentDatabase) || !strings.EqualFold(sqlFk.Database, t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
 
@@ -3265,7 +3265,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	for _, key := range keys {
-		if strings.ToLower(key.Name) == strings.ToLower(name) {
+		if strings.EqualFold(key.Name, name) {
 			return true, nil
 		}
 	}
@@ -3276,7 +3276,7 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 	}
 
 	for _, check := range checks {
-		if strings.ToLower(check.Name) == strings.ToLower(name) {
+		if strings.EqualFold(check.Name, name) {
 			return true, nil
 		}
 	}

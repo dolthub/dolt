@@ -253,7 +253,7 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 
 	for i, colName := range cmpNames {
 		if col, ok := existingCols[colName]; ok {
-			if col.Kind == cmpKinds[i] && strings.ToLower(col.Name) == strings.ToLower(cmpNames[i]) {
+			if col.Kind == cmpKinds[i] && strings.EqualFold(col.Name, cmpNames[i]) {
 				shared = append(shared, col)
 			}
 		}

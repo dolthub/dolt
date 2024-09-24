@@ -19,6 +19,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,11 +34,14 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -398,7 +402,7 @@ func getStrBoolColAsBool(col interface{}) (bool, error) {
 	case bool:
 		return col.(bool), nil
 	case string:
-		return strings.ToLower(col.(string)) == "true" || strings.ToLower(col.(string)) == "1", nil
+		return strings.EqualFold(col.(string), "true") || strings.EqualFold(col.(string), "1"), nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool or string", v)
 	}
@@ -915,4 +919,36 @@ func PrintStagingError(err error) {
 	}()
 
 	cli.PrintErrln(vErr.Verbose())
+}
+
+// execEditor opens editor to ask user for input.
+func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (editedMsg string, err error) {
+	if cli.ExecuteWithStdioRestored == nil {
+		return initialMsg, nil
+	}
+
+	if !checkIsTerminal() {
+		return initialMsg, nil
+	}
+
+	backupEd := "vim"
+	// try getting default editor on the user system
+	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
+		backupEd = ed
+	}
+	// try getting Dolt config core.editor
+	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
+
+	cli.ExecuteWithStdioRestored(func() {
+		editedMsg, err = editor.OpenTempEditor(editorStr, initialMsg, suffix)
+		if err != nil {
+			return
+		}
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("Failed to open commit editor: %v \n Check your `EDITOR` environment variable with `echo $EDITOR` or your dolt config with `dolt config --list` to ensure that your editor is valid", err)
+	}
+
+	return editedMsg, nil
 }

@@ -23,7 +23,6 @@ import (
 	"syscall"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/fatih/color"
 
@@ -88,7 +87,7 @@ type SignalCommand interface {
 // SQL. The Queryist can be obtained from the CliContext passed into the Exec method by calling the QueryEngine method.
 type Queryist interface {
 	Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
-	QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]*querypb.BindVariable, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
+	QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
@@ -192,8 +191,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	}
 
 	for _, cmd := range hc.Subcommands {
-		lwrName := strings.ToLower(cmd.Name())
-		if lwrName == subCommandStr {
+		if strings.EqualFold(cmd.Name(), subCommandStr) {
 			return hc.handleCommand(ctx, commandStr+" "+subCommandStr, cmd, args[1:], dEnv, cliCtx)
 		}
 	}

@@ -112,7 +112,7 @@ func NewPuller(
 	rd := GetChunkFetcher(ctx, srcChunkStore)
 
 	var pushLogger *log.Logger
-	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.ToLower(dbg) == "true" {
+	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
 		logFilePath := filepath.Join(tempDir, "push.log")
 		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 

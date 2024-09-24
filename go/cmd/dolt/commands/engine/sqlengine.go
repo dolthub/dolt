@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
-	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
 
@@ -212,9 +211,9 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	if dbg, ok := os.LookupEnv(dconfig.EnvSqlDebugLog); ok && strings.ToLower(dbg) == "true" {
+	if dbg, ok := os.LookupEnv(dconfig.EnvSqlDebugLog); ok && strings.EqualFold(dbg, "true") {
 		engine.Analyzer.Debug = true
-		if verbose, ok := os.LookupEnv(dconfig.EnvSqlDebugLogVerbose); ok && strings.ToLower(verbose) == "true" {
+		if verbose, ok := os.LookupEnv(dconfig.EnvSqlDebugLogVerbose); ok && strings.EqualFold(verbose, "true") {
 			engine.Analyzer.Verbose = true
 		}
 	}
@@ -312,7 +311,7 @@ func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
-func (se *SqlEngine) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]*querypb.BindVariable, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
+func (se *SqlEngine) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	return se.engine.QueryWithBindings(ctx, query, parsed, bindings, qFlags)
 }
 

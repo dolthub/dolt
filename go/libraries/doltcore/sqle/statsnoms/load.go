@@ -198,7 +198,7 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 	root, err := db.GetRoot(ctx)
 	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
 	if !ok {
-		return nil, nil, nil
+		return nil, nil, sql.ErrTableNotFound.New(qual.Table())
 	}
 	if err != nil {
 		return nil, nil, err
@@ -221,7 +221,7 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, nil, err
 	} else if cnt == 0 {
-		return nil, nil, nil
+		return nil, keyBuilder, nil
 	}
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
 	if err != nil {

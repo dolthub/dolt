@@ -1184,7 +1184,7 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 		return nil, err
 	}
 	for _, branchRef := range branchRefs {
-		if strings.ToLower(branchRef.GetPath()) == strings.ToLower(refName) {
+		if strings.EqualFold(branchRef.GetPath(), refName) {
 			return branchRef, nil
 		}
 	}
@@ -1194,7 +1194,7 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 		return nil, err
 	}
 	for _, headRef := range headRefs {
-		if strings.ToLower(headRef.GetPath()) == strings.ToLower(refName) {
+		if strings.EqualFold(headRef.GetPath(), refName) {
 			return headRef, nil
 		}
 	}
@@ -1204,7 +1204,7 @@ func (ddb *DoltDB) GetRefByNameInsensitive(ctx context.Context, refName string) 
 		return nil, err
 	}
 	for _, tagRef := range tagRefs {
-		if strings.ToLower(tagRef.GetPath()) == strings.ToLower(refName) {
+		if strings.EqualFold(tagRef.GetPath(), refName) {
 			return tagRef, nil
 		}
 	}

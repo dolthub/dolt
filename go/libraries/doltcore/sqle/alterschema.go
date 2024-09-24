@@ -135,7 +135,7 @@ func validateNewColumn(
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
 		if currColTag == tag {
 			return false, schema.ErrTagPrevUsed(tag, newColName, tblName, tblName)
-		} else if strings.ToLower(currCol.Name) == strings.ToLower(newColName) {
+		} else if strings.EqualFold(currCol.Name, newColName) {
 			return true, fmt.Errorf("A column with the name %s already exists in table %s.", newColName, tblName)
 		}
 

@@ -141,8 +141,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		isDEnvRequired = true
 	}
 	for _, specRef := range opts.specRefs {
-		upperCaseSpecRef := strings.ToUpper(specRef)
-		if !hashRegex.MatchString(specRef) && upperCaseSpecRef != "HEAD" {
+		if !hashRegex.MatchString(specRef) && !strings.EqualFold(specRef, "HEAD") {
 			isDEnvRequired = true
 		}
 	}
@@ -225,10 +224,9 @@ func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string)
 	var refHash hash.Hash
 	var err error
 	roots, err := dEnv.Roots(ctx)
-	upperCaseSpecRef := strings.ToUpper(specRef)
-	if upperCaseSpecRef == doltdb.Working {
+	if strings.EqualFold(specRef, doltdb.Working) {
 		refHash, err = roots.Working.HashOf()
-	} else if upperCaseSpecRef == doltdb.Staged {
+	} else if strings.EqualFold(specRef, doltdb.Staged) {
 		refHash, err = roots.Staged.HashOf()
 	} else if hashRegex.MatchString(specRef) {
 		refHash, err = parseHashString(specRef)

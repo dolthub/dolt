@@ -1181,7 +1181,7 @@ OuterLoop:
 }
 
 // createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
-func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
+func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -1196,10 +1196,11 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		db.schemaName = schemaName
 	}
 
-	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
+	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
-		return sql.ErrTableAlreadyExists.New(tableName)
+		return sql.ErrTableAlreadyExists.New(table)
 	}
 
 	headRoot, err := db.GetHeadRoot(ctx)
@@ -1215,7 +1216,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
-		return schema.ErrUsingSpatialKey.New(tableName)
+		return schema.ErrUsingSpatialKey.New(tableName.Name)
 	}
 
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
@@ -1225,14 +1226,14 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName)
+		ait.AddNewTable(tableName.Name)
 	}
 
-	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
+	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
 }
 
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
-func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
+func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaName string, sch sql.PrimaryKeySchema, idxDef sql.IndexDef, collation sql.CollationID) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -1247,10 +1248,11 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 		db.schemaName = schemaName
 	}
 
-	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
+	tableName := doltdb.TableName{Name: table, Schema: schemaName}
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
-		return sql.ErrTableAlreadyExists.New(tableName)
+		return sql.ErrTableAlreadyExists.New(tableName.Name)
 	}
 
 	headRoot, err := db.GetHeadRoot(ctx)
@@ -1265,7 +1267,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
-		return schema.ErrUsingSpatialKey.New(tableName)
+		return schema.ErrUsingSpatialKey.New(tableName.Name)
 	}
 
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes in Primary Key
@@ -1281,10 +1283,10 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 		if err != nil {
 			return err
 		}
-		ait.AddNewTable(tableName)
+		ait.AddNewTable(tableName.Name)
 	}
 
-	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
+	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
 }
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
@@ -1579,7 +1581,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 			}
 		}
 
-		if strings.ToLower(fragment.name) == strings.ToLower(viewName) {
+		if strings.EqualFold(fragment.name, viewName) {
 			found = true
 			viewDef = views[i]
 		}
@@ -1727,7 +1729,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 	}
 
 	for _, frag := range frags {
-		if strings.ToLower(frag.name) == strings.ToLower(name) {
+		if strings.EqualFold(frag.name, name) {
 			event, err := db.createEventDefinitionFromFragment(ctx, frag)
 			if err != nil {
 				return sql.EventDefinition{}, false, err

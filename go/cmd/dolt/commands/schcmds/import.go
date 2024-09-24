@@ -428,6 +428,7 @@ func CombineColCollections(ctx context.Context, root doltdb.RootValue, inferredC
 		return nil, verr
 	}
 
+	// NOTE: This code is only used in the import codepath for Dolt, so we don't use a schema to qualify the table name
 	newCols, err := doltdb.GenerateTagsForNewColColl(ctx, root, impOpts.tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()

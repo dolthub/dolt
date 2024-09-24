@@ -755,7 +755,7 @@ func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
 func (tx *DoltTransaction) findSavepoint(name string) int {
 	for i, s := range tx.savepoints {
-		if strings.ToLower(s.name) == strings.ToLower(name) {
+		if strings.EqualFold(s.name, name) {
 			return i
 		}
 	}
