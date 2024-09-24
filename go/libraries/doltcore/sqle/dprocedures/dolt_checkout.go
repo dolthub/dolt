@@ -484,7 +484,7 @@ func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, table)
+			return fmt.Errorf("error: given tables do not exist")
 		}
 		tableNames[i] = tbl
 	}
