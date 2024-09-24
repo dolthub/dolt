@@ -89,7 +89,7 @@ func GetCommitStaged(
 			return nil, err
 		}
 		if len(violatesConstraints) > 0 {
-			return nil, NewTblHasConstraintViolations(violatesConstraints)
+			return nil, NewTblHasConstraintViolations(doltdb.FlattenTableNames(violatesConstraints))
 		}
 
 		if ws.MergeActive() {

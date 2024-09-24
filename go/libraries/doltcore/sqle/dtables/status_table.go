@@ -100,9 +100,9 @@ type statusTableRow struct {
 	status    string
 }
 
-func contains(str string, strs []string) bool {
-	for _, s := range strs {
-		if s == str {
+func containsTableName(name string, names []doltdb.TableName) bool {
+	for _, s := range names {
+		if s.Name == name {
 			return true
 		}
 	}
@@ -136,7 +136,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	for _, tbl := range cvTables {
 		rows = append(rows, statusTableRow{
-			tableName: tbl,
+			tableName: tbl.Name,
 			status:    "constraint violation",
 		})
 	}
@@ -176,7 +176,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		if doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		if contains(tblName, cvTables) {
+		if containsTableName(tblName, cvTables) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
@@ -190,7 +190,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		if doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		if contains(tblName, cvTables) {
+		if containsTableName(tblName, cvTables) {
 			continue
 		}
 		rows = append(rows, statusTableRow{

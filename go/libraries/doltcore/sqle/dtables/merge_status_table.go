@@ -104,7 +104,7 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 	}
 
 	unmergedTblNames := set.NewStrSet(inConflict)
-	unmergedTblNames.Add(tblsWithViolations...)
+	unmergedTblNames.Add(doltdb.FlattenTableNames(tblsWithViolations)...)
 	unmergedTblNames.Add(schConflicts...)
 
 	var sourceCommitSpecStr *string

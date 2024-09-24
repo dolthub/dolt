@@ -538,10 +538,12 @@ func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as
 		return as, err
 	}
 
-	as.ConstraintViolationsTables, err = doltdb.TablesWithConstraintViolations(ctx, working.WorkingRoot())
+	violations, err := doltdb.TablesWithConstraintViolations(ctx, working.WorkingRoot())
 	if err != nil {
-		return as, err
+		return ArtifactStatus{}, err
 	}
+
+	as.ConstraintViolationsTables = doltdb.FlattenTableNames(violations)
 	return
 }
 
