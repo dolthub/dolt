@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -86,6 +87,36 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 	}
 
 	return roots, nil
+}
+
+// FindTableInRoots resolves a table by looking in all three roots (working,
+// staged, head) in that order.
+func FindTableInRoots(ctx *sql.Context, roots doltdb.Roots, name string) (doltdb.TableName, *doltdb.Table, bool, error) {
+	tbl, root, tblExists, err := resolve.Table(ctx, roots.Working, name)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+	if tblExists {
+		return tbl, root, true, nil
+	}
+
+	tbl, root, tblExists, err = resolve.Table(ctx, roots.Staged, name)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+	if tblExists {
+		return tbl, root, true, nil
+	}
+
+	tbl, root, tblExists, err = resolve.Table(ctx, roots.Head, name)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+	if tblExists {
+		return tbl, root, true, nil
+	}
+
+	return doltdb.TableName{}, nil, false, nil
 }
 
 // RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The

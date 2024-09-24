@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -271,7 +272,7 @@ func getUnionedTables(ctx context.Context, tables []doltdb.TableName, stagedRoot
 
 // CleanUntracked deletes untracked tables from the working root.
 // Evaluates untracked tables as: all working tables - all staged tables.
-func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
+func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryrun bool, force bool) (doltdb.Roots, error) {
 	untrackedTables := make(map[doltdb.TableName]struct{})
 
 	var err error
@@ -284,21 +285,24 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 
 	for i := range tables {
 		name := tables[i]
-		_, _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
+		resolvedName, _, tblExists, err := resolve.Table(ctx, roots.Working, name)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
-		untrackedTables[doltdb.TableName{Name: name}] = struct{}{}
+		if !tblExists {
+			return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
+		}
+		untrackedTables[resolvedName] = struct{}{}
 	}
 
 	// untracked tables = working tables - staged tables
-	headTblNames, err := roots.Staged.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	headTblNames := GetAllTableNames(ctx, roots.Staged)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
 	for _, name := range headTblNames {
-		delete(untrackedTables, doltdb.TableName{Name: name})
+		delete(untrackedTables, name)
 	}
 
 	newRoot := roots.Working

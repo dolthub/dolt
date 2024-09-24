@@ -476,9 +476,20 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 }
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
-	// TODO: schema name
-	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, doltdb.ToTableNames(tables, doltdb.DefaultSchemaName))
+	tableNames := make([]doltdb.TableName, len(tables))
 
+	for i, table := range tables {
+		tbl, _, exists, err := actions.FindTableInRoots(ctx, roots, table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("error: given tables do not exist")
+		}
+		tableNames[i] = tbl
+	}
+
+	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {
 			rt := doltdb.GetUnreachableRootType(err)
