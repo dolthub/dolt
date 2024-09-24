@@ -29,12 +29,12 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -145,11 +145,11 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
+		_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
 		if err != nil {
 			return nil, err
 		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, doltdb.TableName{Name: tableName})
+		_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
 		if err != nil {
 			return nil, err
 		}
