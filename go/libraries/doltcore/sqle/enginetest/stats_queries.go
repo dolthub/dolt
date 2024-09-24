@@ -607,6 +607,9 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "call dolt_stats_stop()",
 			},
 			{
+				Query: "select sleep(.1)",
+			},
+			{
 				Query: "call dolt_stats_drop()",
 			},
 			{
