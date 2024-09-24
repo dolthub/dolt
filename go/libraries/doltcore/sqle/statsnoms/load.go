@@ -39,13 +39,11 @@ import (
 
 func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
-
 	iter, err := NewStatsIter(ctx, m)
 	if err != nil {
 		return nil, err
 	}
 	currentStat := statspro.NewDoltStats()
-	var lowerBound sql.Row
 	for {
 		row, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -108,15 +106,10 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			}
 		}
 
-		boundRow, err := iter.ParseRow(boundRowStr)
-		if err != nil {
-			return nil, err
-		}
-
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Statistic.Qual.String() != qual.String() {
 			if !currentStat.Statistic.Qual.Empty() {
-				currentStat.Statistic.LowerBnd, err = loadLowerBound(ctx, currentStat.Statistic.Qual)
+				currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 				if err != nil {
 					return nil, err
 				}
@@ -133,7 +126,10 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat = statspro.NewDoltStats()
 			currentStat.Statistic.Qual = qual
 			currentStat.Statistic.Cols = columns
-			currentStat.Statistic.LowerBnd = lowerBound
+			currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if currentStat.Statistic.Hist == nil {
@@ -142,6 +138,11 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 				return nil, err
 			}
 			currentStat.Statistic.Qual = qual
+		}
+
+		boundRow, err := DecodeRow(ctx, m.NodeStore(), boundRowStr, currentStat.Tb)
+		if err != nil {
+			return nil, err
 		}
 
 		bucket := statspro.DoltBucket{
@@ -166,7 +167,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat.Statistic.Created = createdAt
 		}
 	}
-	currentStat.Statistic.LowerBnd, err = loadLowerBound(ctx, currentStat.Statistic.Qual)
+	currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 	if err != nil {
 		return nil, err
 	}
@@ -193,19 +194,14 @@ func parseTypeStrings(typs []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, qual.Db())
+func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, error) {
+	root, err := db.GetRoot(ctx)
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
 	if !ok {
-		return nil, nil
-	}
-
-	table, ok, err := roots.Head.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
-	if !ok {
-		return nil, nil
+		return nil, nil, sql.ErrTableNotFound.New(qual.Table())
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var idx durable.Index
@@ -215,25 +211,25 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 		idx, err = table.GetIndexRowData(ctx, qual.Index())
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	prollyMap := durable.ProllyMapFromIndex(idx)
-	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
+	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(cols))
 	buffPool := prollyMap.NodeStore().Pool()
 
 	if cnt, err := prollyMap.Count(); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if cnt == 0 {
-		return nil, nil
+		return nil, keyBuilder, nil
 	}
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	keyBytes, _, err := firstIter.Next(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for i := range keyBuilder.Desc.Types {
 		keyBuilder.PutRaw(i, keyBytes.GetField(i))
@@ -244,10 +240,10 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	for i := 0; i < keyBuilder.Desc.Count(); i++ {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return firstRow, nil
+	return firstRow, keyBuilder, nil
 }
 
 func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier) (*sql.FuncDepSet, sql.ColSet, error) {
