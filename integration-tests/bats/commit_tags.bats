@@ -94,6 +94,9 @@ teardown() {
 }
 
 @test "commit_tags: use a tag as a ref for merge" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt tag v1 HEAD
     dolt branch other HEAD~
     dolt checkout other
