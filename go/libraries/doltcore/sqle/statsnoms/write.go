@@ -17,7 +17,6 @@ package statsnoms
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
