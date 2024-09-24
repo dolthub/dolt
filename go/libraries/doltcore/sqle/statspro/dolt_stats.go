@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 	"sync"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type DoltStats struct {
