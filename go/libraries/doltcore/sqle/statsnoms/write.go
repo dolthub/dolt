@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"strings"
 
