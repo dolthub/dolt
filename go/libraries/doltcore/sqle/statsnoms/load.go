@@ -17,6 +17,7 @@ package statsnoms
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"io"
 	"strconv"
 	"strings"
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -39,7 +39,6 @@ import (
 
 func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
-
 	iter, err := NewStatsIter(ctx, m)
 	if err != nil {
 		return nil, err
@@ -110,7 +109,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Statistic.Qual.String() != qual.String() {
 			if !currentStat.Statistic.Qual.Empty() {
-				currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, currentStat.Statistic.Qual, len(currentStat.Columns()))
+				currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 				if err != nil {
 					return nil, err
 				}
@@ -127,7 +126,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat = statspro.NewDoltStats()
 			currentStat.Statistic.Qual = qual
 			currentStat.Statistic.Cols = columns
-			currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, currentStat.Statistic.Qual, len(currentStat.Columns()))
+			currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 			if err != nil {
 				return nil, err
 			}
@@ -168,7 +167,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat.Statistic.Created = createdAt
 		}
 	}
-	currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, currentStat.Statistic.Qual, len(currentStat.Columns()))
+	currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 	if err != nil {
 		return nil, err
 	}
@@ -195,14 +194,9 @@ func parseTypeStrings(typs []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, qual.Db())
-	if !ok {
-		return nil, nil, nil
-	}
-
-	table, ok, err := roots.Head.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
+func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, error) {
+	root, err := db.GetRoot(ctx)
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
 	if !ok {
 		return nil, nil, nil
 	}
@@ -253,7 +247,6 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier, cols int) (sql.Row
 }
 
 func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier) (*sql.FuncDepSet, sql.ColSet, error) {
-	return &sql.FuncDepSet{}, sql.ColSet{}, nil
 	tab, ok, err := db.GetTableInsensitive(ctx, qual.Table())
 	if err != nil {
 		return nil, sql.ColSet{}, err

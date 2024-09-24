@@ -16,7 +16,6 @@ package statsnoms
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"time"
 
@@ -161,8 +160,6 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 func (s *statsIter) ParseRow(rowStr string) (sql.Row, error) {
 	var row sql.Row
 	parts := strings.Split(rowStr, ",")
-	res, _ := types.ConvertToString("[129,119,235,21]", s.currentTypes[0].(sql.StringType))
-	print(res)
 	if len(parts) > len(s.currentTypes) {
 		return nil, nil
 	}

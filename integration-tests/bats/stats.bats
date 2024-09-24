@@ -116,6 +116,20 @@ teardown() {
     [ "${lines[1]}" = "0" ]
 }
 
+@test "stats: encode/decode loop is delimiter safe" {
+    cd repo2
+
+dolt sql <<EOF
+create table uv (u varbinary(255) primary key);
+insert into uv values ('hello, world');
+analyze table uv;
+EOF
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+}
+
 @test "stats: correct stats directory location, issue#8324" {
     cd repo2
 
