@@ -285,9 +285,12 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 
 	for i := range tables {
 		name := tables[i]
-		resolvedName, _, _, err := resolve.Table(ctx, roots.Working, name)
+		resolvedName, _, tblExists, err := resolve.Table(ctx, roots.Working, name)
 		if err != nil {
 			return doltdb.Roots{}, err
+		}
+		if !tblExists {
+			return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
 		}
 		untrackedTables[resolvedName] = struct{}{}
 	}
