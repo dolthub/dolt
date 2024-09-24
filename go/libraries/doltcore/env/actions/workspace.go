@@ -36,7 +36,7 @@ func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint st
 }
 
 func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoint string, headRef ref.DoltRef) error {
-	isBranch, err := IsBranchOnDB(ctx, ddb, name)
+	isBranch, err := IsBranch(ctx, ddb, name)
 	if err != nil {
 		return err
 	}

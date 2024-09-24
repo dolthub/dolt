@@ -365,12 +365,13 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 var emptyHash = hash.Hash{}
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
-	return IsBranchOnDB(ctx, ddb, str)
-}
-
-func IsBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
 	return ddb.HasRef(ctx, dref)
+}
+
+func IsTag(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
+	tRef := ref.NewTagRef(str)
+	return ddb.HasRef(ctx, tRef)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {

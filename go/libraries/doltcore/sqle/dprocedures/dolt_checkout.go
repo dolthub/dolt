@@ -163,6 +163,12 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(branchName, ""), nil
 	}
 
+	if isTag, err := actions.IsTag(ctx, dbData.Ddb, branchName); err != nil {
+		return 1, "", err
+	} else if isTag {
+		return 1, "", fmt.Errorf("error: tag '%s' is not a branch", branchName)
+	}
+
 	roots, ok := dSess.GetRoots(ctx, currentDbName)
 	if !ok {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
@@ -290,11 +296,15 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 
 	if len(remoteRefs) == 0 {
+		if isTag, err := actions.IsTag(ctx, dbData.Ddb, branchName); err != nil {
+			return "", err
+		} else if isTag && apr.Contains(cli.MoveFlag) {
+			return "", fmt.Errorf(`dolt does not support a detached head state. To checkout a tag, run: 
+	dolt checkout %s -b {new_branch_namee}`, branchName)
+		}
 		if doltdb.IsValidCommitHash(branchName) && apr.Contains(cli.MoveFlag) {
-
 			// User tried to enter a detached head state, which we don't support.
 			// Inform and suggest that they check-out a new branch at this commit instead.
-
 			return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
 
 	dolt checkout %s -b {new_branch_name}
