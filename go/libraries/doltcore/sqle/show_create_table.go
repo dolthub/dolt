@@ -21,7 +21,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -42,8 +41,8 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb dsess.SqlDatabase) (*sql.
 	return sqlCtx, engine, sess
 }
 
-func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName doltdb.TableName) (string, error) {
-	_, rowIter, _, err := engine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE `%s`;", tableName.String()))
+func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string) (string, error) {
+	_, rowIter, _, err := engine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE `%s`;", tableName))
 	if err != nil {
 		return "", err
 	}

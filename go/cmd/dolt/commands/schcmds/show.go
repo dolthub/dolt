@@ -154,7 +154,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 				notFound = append(notFound, tblName)
 			} else {
 				cli.Println(bold.Sprint(tblName), "@", cmStr)
-				stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, doltdb.TableName{Name: tblName})
+				stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}
