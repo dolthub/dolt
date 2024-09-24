@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -476,9 +477,17 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 }
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
-	// TODO: schema name
-	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, doltdb.ToTableNames(tables, doltdb.DefaultSchemaName))
+	var err error
+	tableNames := make([]doltdb.TableName, len(tables))
 
+	for i, table := range tables {
+		tableNames[i], _, _, err = resolve.Table(ctx, roots.Working, table)
+		if err != nil {
+			return err
+		}
+	}
+
+	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
 	if err != nil {
 		if doltdb.IsRootValUnreachable(err) {
 			rt := doltdb.GetUnreachableRootType(err)
