@@ -4704,7 +4704,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_checkout('v1');",
-				ExpectedErrStr: "error: could not find v1",
+				ExpectedErrStr: "dolt does not support a detached head state. To create a branch at this tag, run: \n\tCALL DOLT_CHECKOUT('v1', '-b', <new_branch_name>)",
 			},
 		},
 	},
