@@ -304,7 +304,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 			}
 		}
 
-		if doltdb.IsValidCommitHash(branchName)  {
+		if doltdb.IsValidCommitHash(branchName) {
 			// User tried to enter a detached head state, which we don't support.
 			// Inform and suggest that they check-out a new branch at this commit instead.
 			if apr.Contains(cli.MoveFlag) {
