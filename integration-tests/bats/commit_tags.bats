@@ -66,7 +66,7 @@ teardown() {
 @test "commit_tags: checkout a tag" {
     dolt branch comp HEAD^
     dolt tag v1 HEAD^
-    skip "need to implelement detached head first"
+    skip "need to implement detached head first"
     run dolt checkout v1
     [ $status -eq 0 ]
     run dolt diff comp
@@ -75,8 +75,8 @@ teardown() {
 }
 
 @test "commit_tags: commit onto checked out tag" {
-    dolt tag v1 HEAD^
     skip "need to implement detached head first"
+    dolt tag v1 HEAD^
     dolt checkout v1
     run dolt sql -q "insert into test values (8),(9)"
     [ $status -eq 0 ]
@@ -94,12 +94,12 @@ teardown() {
 }
 
 @test "commit_tags: use a tag as a ref for merge" {
-    dolt tag v1 HEAD
-    # TODO: remove this once dolt checkout is migrated
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "This test relies on dolt checkout, which has not been migrated yet."
+      skip "needs checkout which is unsupported for remote-engine"
     fi
-    dolt checkout -b other HEAD^
+    dolt tag v1 HEAD
+    dolt branch other HEAD~
+    dolt checkout other
     dolt sql -q "insert into test values (8),(9)"
     dolt add -A && dolt commit -m 'made changes'
     run dolt merge v1 -m "merge v1"
@@ -126,18 +126,35 @@ teardown() {
     dolt sql -q "insert into test values (7),(8),(9);"
     dolt add -A && dolt commit -m "more rows"
 
-    dolt remote add origin file://../remote
+    dolt remote add origin file://./../remote
     dolt push origin main
-    cd .. && dolt clone file://remote repo_clone && cd repo
 
     run dolt tag v1 HEAD^
     [ $status -eq 0 ]
     run dolt tag v2 HEAD -m "SAMO"
     [ $status -eq 0 ]
 
-    skip "todo"
-    run dolt push origin master
+    # tags are not pushed by default
+    run dolt push origin main
     [ $status -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+
+    cd .. && dolt clone file://./remote repo_clone && cd repo
+
+    cd ../repo_clone
+    run dolt pull --no-edit
+    [ $status -eq 0 ]
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "v1" ]] || false
+    [[ ! "$output" =~ "v2" ]] || false
+
+    cd ../repo
+    run dolt push origin v1
+    [ $status -eq 0 ]
+    run dolt push origin v2
+    [ $status -eq 0 ]
+
     cd ../repo_clone
     run dolt pull --no-edit
     [ $status -eq 0 ]
@@ -148,6 +165,28 @@ teardown() {
     run dolt tag -v
     [ $status -eq 0 ]
     [[ "$output" =~ "SAMO" ]] || false
+}
+
+@test "commit_tags: prevent cloning tags" {
+    # reset env
+    rm -rf .dolt
+    mkdir repo remote
+    cd repo
+
+    dolt init
+    dolt sql -q "create table test (pk int primary key);"
+    dolt sql -q "insert into test values (0),(1),(2);"
+    dolt add -A && dolt commit -m "table test"
+    dolt tag v1 HEAD
+
+    dolt remote add origin file://./../remote
+    dolt push origin main
+    dolt push origin v1
+
+    cd ..
+    run dolt clone --branch v1 file://./remote repo_clone
+    [ $status -eq 1 ]
+    [[ "$output" =~ "this operation is not supported while in a detached head state" ]] || false
 }
 
 @test "commit_tags: create a tag with semver string" {

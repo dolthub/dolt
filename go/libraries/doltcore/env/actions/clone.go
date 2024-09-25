@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/dustin/go-humanize"
@@ -168,6 +169,12 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	srcRefHashes, branch, err := getSrcRefs(ctx, branch, srcDB, dEnv)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
+	}
+	// prevent cloning tags (branches in detached head state)
+	for _, srcRef := range srcRefHashes {
+		if srcRef.Ref.GetType() == ref.TagRefType && strings.EqualFold(srcRef.Ref.GetPath(), branch) {
+			return doltdb.ErrOperationNotSupportedInDetachedHead
+		}
 	}
 	if remoteName == "" {
 		remoteName = "origin"

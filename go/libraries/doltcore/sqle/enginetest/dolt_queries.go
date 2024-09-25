@@ -4678,6 +4678,36 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt-tag: checkout errors",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk int primary key);",
+			"CALL DOLT_COMMIT('-Am','created table test');",
+			"CALL DOLT_TAG('v1');",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"CALL DOLT_COMMIT('-am','inserted rows into test');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT tag_name FROM dolt_tags",
+				Expected: []sql.Row{
+					{"v1"},
+				},
+			},
+			{
+				Query: "select * from test;",
+				Expected: []sql.Row{
+					{0},
+					{1},
+					{2},
+				},
+			},
+			{
+				Query:          "call dolt_checkout('v1');",
+				ExpectedErrStr: "dolt does not support a detached head state. To create a branch at this tag, run: \n\tCALL DOLT_CHECKOUT('v1', '-b', <new_branch_name>)",
+			},
+		},
+	},
 }
 
 var DoltRemoteTestScripts = []queries.ScriptTest{
