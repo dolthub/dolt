@@ -1379,7 +1379,7 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 // GetSchema implements sql.SchemaDatabase
 func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
 	if schemaName == sql.InformationSchemaDatabaseName {
-		return newInformationSchemaDatabase(ctx), true, nil
+		return newInformationSchemaDatabase(db.Name()), true, nil
 	}
 
 	ws, err := db.GetWorkingSet(ctx)
@@ -1448,7 +1448,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 		dbSchemas[i] = handledDb
 	}
 
-	dbSchemas[len(schemas)] = newInformationSchemaDatabase(ctx)
+	dbSchemas[len(schemas)] = newInformationSchemaDatabase(db.Name())
 
 	return dbSchemas, nil
 }
@@ -1462,9 +1462,9 @@ type informationSchemaDatabaseSchema struct {
 var _ sql.DatabaseSchema = (*informationSchemaDatabaseSchema)(nil)
 
 // newInformationSchemaDatabase creates a new INFORMATION_SCHEMA DatabaseSchema.
-func newInformationSchemaDatabase(ctx *sql.Context) sql.DatabaseSchema {
+func newInformationSchemaDatabase(dbName string) sql.DatabaseSchema {
 	isDb := &informationSchemaDatabaseSchema{
-		name:       ctx.GetCurrentDatabase(),
+		name:       dbName,
 		schemaName: sql.InformationSchemaDatabaseName,
 		tables:     information_schema.GetInformationSchemaTables(),
 	}
