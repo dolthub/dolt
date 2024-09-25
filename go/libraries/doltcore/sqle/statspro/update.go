@@ -90,6 +90,8 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 
 			ret[meta.qual].Statistic.Fds = fds
 			ret[meta.qual].Statistic.Colset = colSet
+			ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
+
 			continue
 		}
 
@@ -105,6 +107,7 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 		ret[meta.qual].Statistic.Cols = meta.cols
 		ret[meta.qual].Statistic.Typs = types
 		ret[meta.qual].Statistic.Qual = meta.qual
+		ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
 
 		var start, stop uint64
 		// read leaf rows for each bucket

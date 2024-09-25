@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type DoltStats struct {
@@ -36,6 +37,7 @@ type DoltStats struct {
 	// field on disk
 	Active map[hash.Hash]int
 	Hist   sql.Histogram
+	Tb     *val.TupleBuilder
 }
 
 func (s *DoltStats) Clone(_ context.Context) sql.JSONWrapper {

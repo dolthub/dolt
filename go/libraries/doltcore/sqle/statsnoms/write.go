@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -120,7 +121,11 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		valueBuilder.PutInt64(4, int64(h.NullCount()))
 		valueBuilder.PutString(5, strings.Join(dStats.Columns(), ","))
 		valueBuilder.PutString(6, typesStr)
-		valueBuilder.PutString(7, stats.StringifyKey(h.UpperBound(), dStats.Statistic.Typs))
+		boundRow, err := EncodeRow(ctx, statsMap.NodeStore(), h.UpperBound(), dStats.Tb)
+		if err != nil {
+			return err
+		}
+		valueBuilder.PutString(7, string(boundRow))
 		valueBuilder.PutInt64(8, int64(h.BoundCount()))
 		valueBuilder.PutDatetime(9, statspro.DoltBucketCreated(h))
 		for i, r := range h.Mcvs() {
@@ -138,4 +143,29 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		pos++
 	}
 	return nil
+}
+
+func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleBuilder) ([]byte, error) {
+	for i, v := range r {
+		if v == nil {
+			continue
+		}
+		if err := tree.PutField(ctx, ns, tb, i, v); err != nil {
+			return nil, err
+		}
+	}
+	return tb.Build(ns.Pool()), nil
+}
+
+func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBuilder) (sql.Row, error) {
+	tup := []byte(s)
+	r := make(sql.Row, tb.Desc.Count())
+	var err error
+	for i, _ := range r {
+		r[i], err = tree.GetField(ctx, tb.Desc, i, tup, ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
 }

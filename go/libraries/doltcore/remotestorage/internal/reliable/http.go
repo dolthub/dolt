@@ -221,8 +221,11 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 	}()
 
 	return StreamingResponse{
-		Body:   r,
-		cancel: cancel,
+		Body: r,
+		cancel: func() {
+			r.Close()
+			cancel()
+		},
 	}
 }
 
