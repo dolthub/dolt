@@ -75,6 +75,11 @@ type CommitIndex struct {
 	*doltIndex
 }
 
+// CanSupportOrderBy implements the interface sql.Index.
+func (p *CommitIndex) CanSupportOrderBy(_ sql.Expression) bool {
+	return false
+}
+
 func (p *CommitIndex) CanSupport(ranges ...sql.Range) bool {
 	var selects []string
 	for _, r := range ranges {
@@ -610,6 +615,11 @@ var _ sql.ExtendedIndex = (*doltIndex)(nil)
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(...sql.Range) bool {
 	return true
+}
+
+// CanSupportOrderBy implements the interface sql.Index.
+func (di *doltIndex) CanSupportOrderBy(_ sql.Expression) bool {
+	return false
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
