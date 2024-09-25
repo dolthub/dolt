@@ -167,6 +167,28 @@ teardown() {
     [[ "$output" =~ "SAMO" ]] || false
 }
 
+@test "commit_tags: prevent cloning tags" {
+    # reset env
+    rm -rf .dolt
+    mkdir repo remote
+    cd repo
+
+    dolt init
+    dolt sql -q "create table test (pk int primary key);"
+    dolt sql -q "insert into test values (0),(1),(2);"
+    dolt add -A && dolt commit -m "table test"
+    dolt tag v1 HEAD
+
+    dolt remote add origin file://./../remote
+    dolt push origin main
+    dolt push origin v1
+
+    cd ..
+    run dolt clone --branch v1 file://./remote repo_clone
+    [ $status -eq 1 ]
+    [[ "$output" =~ "this operation is not supported while in a detached head state" ]] || false
+}
+
 @test "commit_tags: create a tag with semver string" {
     dolt tag v1.0.0 HEAD^
 
