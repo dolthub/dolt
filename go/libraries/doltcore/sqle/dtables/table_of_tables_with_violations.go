@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
@@ -78,9 +79,9 @@ func (totwv *TableOfTablesWithViolations) Partitions(ctx *sql.Context) (sql.Part
 
 // PartitionRows implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	tblName := string(part.Key())
+	tblName := decodeTableName(part.Key())
 	var rows []sql.Row
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, totwv.root, doltdb.TableName{Name: tblName})
+	tbl, ok, err := totwv.root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part s
 	if err != nil {
 		return nil, err
 	}
-	rows = append(rows, sql.Row{tblName, n})
+	rows = append(rows, sql.Row{tblName.Name, n})
 	return sql.RowsToRowIter(rows...), nil
 }
 
@@ -119,11 +120,24 @@ func (t *tableOfTablesPartitionIter) Close(context *sql.Context) error {
 }
 
 // tableOfTablesPartition is a partition returned from tableOfTablesPartitionIter, which is just a table name.
-type tableOfTablesPartition string
+type tableOfTablesPartition doltdb.TableName
 
-var _ sql.Partition = tableOfTablesPartition("")
+var _ sql.Partition = tableOfTablesPartition(doltdb.TableName{})
 
 // Key implements the interface sql.Partition.
 func (t tableOfTablesPartition) Key() []byte {
-	return []byte(t)
+	return encodeTableName(doltdb.TableName(t))
+}
+
+func encodeTableName(name doltdb.TableName) []byte {
+	b := bytes.Buffer{}
+	b.WriteString(name.Schema)
+	b.WriteByte(0)
+	b.WriteString(name.Name)
+	return b.Bytes()
+}
+
+func decodeTableName(b []byte) doltdb.TableName {
+	parts := bytes.SplitN(b, []byte{0}, 2)
+	return doltdb.TableName{Schema: string(parts[0]), Name: string(parts[1])}
 }

@@ -654,16 +654,15 @@ func TablesWithDataConflicts(ctx context.Context, root RootValue) ([]string, err
 }
 
 // TablesWithConstraintViolations returns all tables that have constraint violations.
-func TablesWithConstraintViolations(ctx context.Context, root RootValue) ([]string, error) {
-	// TODO: schema name
-	names, err := root.GetTableNames(ctx, DefaultSchemaName)
+func TablesWithConstraintViolations(ctx context.Context, root RootValue) ([]TableName, error) {
+	names, err := UnionTableNames(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	violating := make([]string, 0, len(names))
+	violating := make([]TableName, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, TableName{Name: name})
+		tbl, _, err := root.GetTable(ctx, name)
 		if err != nil {
 			return nil, err
 		}
