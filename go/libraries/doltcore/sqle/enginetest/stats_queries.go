@@ -332,18 +332,30 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "varbinary encoding bug",
+		Name: "comma encoding bug",
 		SetUpScript: []string{
 			`create table a (a varbinary (32) primary key)`,
 			"insert into a values ('hello, world')",
+			"analyze table a",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: `analyze table a`,
-			},
-			{
 				Query:    "select count(*) from dolt_statistics",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "comma encoding mcv bug",
+		SetUpScript: []string{
+			`create table ab (a int primary key, b varbinary (32), t timestamp, index (b,t))`,
+			"insert into ab values (1, 'no thank you, world', '2024-03-12 01:18:53'), (2, 'hi, world', '2024-03-12 01:18:53'), (3, 'hello, world', '2024-03-12 01:18:53'), (4, 'hello, world', '2024-03-12 01:18:53'),(5, 'hello, world', '2024-03-12 01:18:53'), (6, 'hello, world', '2024-03-12 01:18:53')",
+			"analyze table ab",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
