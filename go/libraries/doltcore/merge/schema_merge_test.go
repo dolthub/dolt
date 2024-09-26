@@ -656,7 +656,7 @@ var collationTests = []schemaMergeTest{
 				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
 				left:     singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
 				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
-				merged:   singleRow(1, 2, 2, "FOO", decimal.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", decimal.New(100, 0)),
 			},
 			{
 				name:         "conflict removal and replace varchar with equal replacement",
