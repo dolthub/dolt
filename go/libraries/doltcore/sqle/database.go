@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
@@ -1451,54 +1450,6 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 	dbSchemas[len(schemas)] = newInformationSchemaDatabase(db.Name())
 
 	return dbSchemas, nil
-}
-
-type informationSchemaDatabaseSchema struct {
-	name       string
-	schemaName string
-	tables     map[string]sql.Table
-}
-
-var _ sql.DatabaseSchema = (*informationSchemaDatabaseSchema)(nil)
-
-// newInformationSchemaDatabase creates a new INFORMATION_SCHEMA DatabaseSchema.
-func newInformationSchemaDatabase(dbName string) sql.DatabaseSchema {
-	isDb := &informationSchemaDatabaseSchema{
-		name:       dbName,
-		schemaName: sql.InformationSchemaDatabaseName,
-		tables:     information_schema.GetInformationSchemaTables(),
-	}
-
-	isDb.tables[information_schema.StatisticsTableName] = information_schema.NewDefaultStats()
-
-	return isDb
-}
-
-// Name implements the sql.DatabaseSchema interface.
-func (db *informationSchemaDatabaseSchema) Name() string { return db.name }
-
-// SchemaName implements the sql.DatabaseSchema interface.
-func (db *informationSchemaDatabaseSchema) SchemaName() string { return db.schemaName }
-
-// GetTableInsensitive implements the sql.DatabaseSchema interface.
-func (db *informationSchemaDatabaseSchema) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
-	// The columns table has dynamic information that can't be cached across queries
-	if strings.ToLower(tblName) == information_schema.ColumnsTableName {
-		return information_schema.NewColumnsTable(), true, nil
-	}
-
-	tbl, ok := sql.GetTableInsensitive(tblName, db.tables)
-	return tbl, ok, nil
-}
-
-// GetTableNames implements the sql.DatabaseSchema interface.
-func (db *informationSchemaDatabaseSchema) GetTableNames(ctx *sql.Context) ([]string, error) {
-	tblNames := make([]string, 0, len(db.tables))
-	for k := range db.tables {
-		tblNames = append(tblNames, k)
-	}
-
-	return tblNames, nil
 }
 
 // RenameTable implements sql.TableRenamer
