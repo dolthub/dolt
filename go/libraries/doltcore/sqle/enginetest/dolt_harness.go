@@ -170,6 +170,12 @@ func (d *DoltHarness) SkipSetupCommit() {
 // included.
 func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	ctx := enginetest.NewContext(d)
+	// Turn off server mode for resetScripts
+	oldServerMode := d.engine.Analyzer.ServerMode
+	d.engine.Analyzer.ServerMode = false
+	defer func() {
+		d.engine.Analyzer.ServerMode = oldServerMode
+	}()
 	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 	var dbs []string
 	for i := range res {
