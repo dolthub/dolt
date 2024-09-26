@@ -11,7 +11,7 @@ export const docsTests = [
     res: [],
   },
   {
-    q: "INSERT INTO dolt_docs VALUES (:docName, :docText) ON DUPLICATE KEY UPDATE doc_text=:docText",
+    q: "REPLACE INTO dolt_docs VALUES (:docName, :docText);",
     p: {
       docName: "README.md",
       docText: readmeText,
