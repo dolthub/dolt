@@ -1377,6 +1377,11 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 
 // GetSchema implements sql.SchemaDatabase
 func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
+	// For doltgres, the information_schema database should be a schema.
+	if schemaName == sql.InformationSchemaDatabaseName {
+		return newInformationSchemaDatabase(db.Name()), true, nil
+	}
+
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return nil, false, err
@@ -1432,7 +1437,7 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 		return nil, err
 	}
 
-	dbSchemas := make([]sql.DatabaseSchema, len(schemas))
+	dbSchemas := make([]sql.DatabaseSchema, len(schemas)+1)
 	for i, schema := range schemas {
 		sdb := db
 		sdb.schemaName = schema.Name
@@ -1442,6 +1447,9 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 		}
 		dbSchemas[i] = handledDb
 	}
+
+	// For doltgres, the information_schema database should be a schema.
+	dbSchemas[len(schemas)] = newInformationSchemaDatabase(db.Name())
 
 	return dbSchemas, nil
 }
