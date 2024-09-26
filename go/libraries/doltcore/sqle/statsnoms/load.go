@@ -72,40 +72,6 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			typs[i] = strings.TrimSpace(t)
 		}
 
-		numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
-
-		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
-		mcvCnts := make([]uint64, numMcvs)
-		for i, v := range mcvCountsStr {
-			if v == "" {
-				continue
-			}
-			val, err := strconv.Atoi(v)
-			if err != nil {
-				return nil, err
-			}
-			mcvCnts[i] = uint64(val)
-		}
-
-		mcvs := make([]sql.Row, numMcvs)
-		for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
-			if v != nil && v != "" {
-				row, err := iter.ParseRow(v.(string))
-				if err != nil {
-					return nil, err
-				}
-				mcvs[i] = row
-			}
-		}
-
-		for i, v := range mcvCnts {
-			if v == 0 {
-				mcvs = mcvs[:i]
-				mcvCnts = mcvCnts[:i]
-				break
-			}
-		}
-
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Statistic.Qual.String() != qual.String() {
 			if !currentStat.Statistic.Qual.Empty() {
@@ -129,6 +95,40 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
 			if err != nil {
 				return nil, err
+			}
+		}
+
+		numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
+
+		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
+		mcvCnts := make([]uint64, numMcvs)
+		for i, v := range mcvCountsStr {
+			if v == "" {
+				continue
+			}
+			val, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, err
+			}
+			mcvCnts[i] = uint64(val)
+		}
+
+		mcvs := make([]sql.Row, numMcvs)
+		for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
+			if v != nil && v != "" {
+				row, err := DecodeRow(ctx, m.NodeStore(), v.(string), currentStat.Tb)
+				if err != nil {
+					return nil, err
+				}
+				mcvs[i] = row
+			}
+		}
+
+		for i, v := range mcvCnts {
+			if v == 0 {
+				mcvs = mcvs[:i]
+				mcvCnts = mcvCnts[:i]
+				break
 			}
 		}
 
