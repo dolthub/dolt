@@ -805,7 +805,7 @@ func getFastforward(row sql.Row, index int) bool {
 }
 
 func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
-	q, err := dbr.InterpolateForDialect("select hashof(?)", []interface{}{ref}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select dolt_hashof(?)", []interface{}{ref}, dialect.MySQL)
 	if err != nil {
 		return "", fmt.Errorf("error interpolating hashof query: %v", err)
 	}
