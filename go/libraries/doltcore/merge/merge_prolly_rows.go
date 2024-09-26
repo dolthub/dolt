@@ -1766,7 +1766,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		if err != nil {
 			return false, err
 		}
-		if isEqual(i, baseCol, rightCol, m.rightVD.Types[rightColIdx]) {
+		if isEqualComparator(m.baseVD.Comparator(), i, baseCol, rightCol, m.rightVD.Types[rightColIdx]) {
 			// right column did not change, so there is no conflict.
 			return false, nil
 		}
@@ -1789,7 +1789,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		if err != nil {
 			return false, err
 		}
-		if isEqual(i, baseCol, leftCol, m.leftVD.Types[leftColIdx]) {
+		if isEqualComparator(m.leftVD.Comparator(), i, baseCol, leftCol, m.leftVD.Types[leftColIdx]) {
 			// left column did not change, so there is no conflict.
 			return false, nil
 		}
@@ -1880,7 +1880,7 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 			return nil, false, err
 		}
 
-		if isEqual(i, leftCol, rightCol, resultType) {
+		if isEqualComparator(m.leftVD.Comparator(), i, leftCol, rightCol, resultType) {
 			// Columns are equal, returning either would be correct.
 			// However, for certain types the two columns may have different bytes.
 			// We need to ensure that merges are deterministic regardless of the merge direction.
@@ -1934,14 +1934,14 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		if err != nil {
 			return nil, true, nil
 		}
-		rightModified = !isEqual(i, rightCol, baseCol, resultType)
+		rightModified = !isEqualComparator(m.rightVD.Comparator(), i, rightCol, baseCol, resultType)
 	}
 
 	leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
 	if err != nil {
 		return nil, true, nil
 	}
-	if isEqual(i, leftCol, rightCol, resultType) {
+	if isEqualComparator(m.leftVD.Comparator(), i, leftCol, rightCol, resultType) {
 		// Columns are equal, returning either would be correct.
 		// However, for certain types the two columns may have different bytes.
 		// We need to ensure that merges are deterministic regardless of the merge direction.
@@ -1952,7 +1952,7 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		return rightCol, false, nil
 	}
 
-	leftModified = !isEqual(i, leftCol, baseCol, resultType)
+	leftModified = !isEqualComparator(m.baseVD.Comparator(), i, leftCol, baseCol, resultType)
 
 	switch {
 	case leftModified && rightModified:
@@ -2139,6 +2139,12 @@ func isEqual(i int, left []byte, right []byte, resultType val.Type) bool {
 	// We use a default comparator instead of the comparator in the schema.
 	// This is necessary to force a binary collation for string comparisons.
 	return val.DefaultTupleComparator{}.CompareValues(i, left, right, resultType) == 0
+}
+
+func isEqualComparator(cmp val.TupleComparator, i int, left []byte, right []byte, resultType val.Type) bool {
+	// We use a default comparator instead of the comparator in the schema.
+	// This is necessary to force a binary collation for string comparisons.
+	return cmp.CompareValues(i, left, right, resultType) == 0
 }
 
 func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
