@@ -802,6 +802,18 @@ func TableNamesAsString(names []TableName) string {
 	return sb.String()
 }
 
+// UnqualifiedTableNamesAsString returns a comma-separated string of the table names given
+func UnqualifiedTableNamesAsString(names []TableName) string {
+	sb := strings.Builder{}
+	for i, name := range names {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(name.Name)
+	}
+	return sb.String()
+}
+
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
 // primary (unnamed) table store in a root.
 var DefaultSchemaName = ""

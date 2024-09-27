@@ -130,7 +130,9 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 		s3 := curr.String()
 		target = &s3
 
-		tableNamesAsString := doltdb.TableNamesAsString(unmergedTblNames.AsSlice())
+		// TODO: it might be nice to include schema name in this output, not sure yet
+		//  It makes testing more challenging to have the behavior diverge between Dolt and Doltgres though
+		tableNamesAsString := doltdb.UnqualifiedTableNamesAsString(unmergedTblNames.AsSlice())
 		unmergedTables = &tableNamesAsString
 	}
 
