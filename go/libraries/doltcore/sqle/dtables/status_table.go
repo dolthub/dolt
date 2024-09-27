@@ -166,7 +166,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 	for _, tbl := range cnfTables {
 		rows = append(rows, statusTableRow{
-			tableName: tbl,
+			tableName: tbl.Name,
 			status:    mergeConflictStatus,
 		})
 	}

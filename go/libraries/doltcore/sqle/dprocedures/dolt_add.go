@@ -115,7 +115,8 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 
 			// This mirrors the logic in actions.StageTables
 			if len(missingTables) > 0 {
-				return 1, actions.NewTblNotExistError(missingTables)
+				// TODO: schema names
+				return 1, actions.NewTblNotExistError(doltdb.ToTableNames(missingTables, doltdb.DefaultSchemaName))
 			}
 		} else {
 			tableNames = doltdb.ToTableNames(unqualifiedTableNames, doltdb.DefaultSchemaName)

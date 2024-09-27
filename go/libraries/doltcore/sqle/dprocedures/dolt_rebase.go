@@ -467,7 +467,7 @@ func validateNoConflicts(ctx *sql.Context) error {
 	}
 	if len(tablesWithDataConflicts) > 0 {
 		return ErrRebaseUnresolvedConflicts.New(
-			strings.Join(tablesWithDataConflicts, ", "))
+			doltdb.TableNamesAsString(tablesWithDataConflicts))
 	}
 
 	return nil

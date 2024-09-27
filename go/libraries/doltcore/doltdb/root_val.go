@@ -628,15 +628,15 @@ func (root *rootValue) getTableMap(ctx context.Context, schemaName string) (tabl
 	return root.st.GetTablesMap(ctx, root.vrw, root.ns, schemaName)
 }
 
-func TablesWithDataConflicts(ctx context.Context, root RootValue) ([]string, error) {
-	names, err := root.GetTableNames(ctx, DefaultSchemaName)
+func TablesWithDataConflicts(ctx context.Context, root RootValue) ([]TableName, error) {
+	names, err := UnionTableNames(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 
-	conflicted := make([]string, 0, len(names))
+	conflicted := make([]TableName, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, TableName{Name: name})
+		tbl, _, err := root.GetTable(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -788,6 +788,18 @@ func FlattenTableNames(names []TableName) []string {
 		tbls[i] = name.Name
 	}
 	return tbls
+}
+
+// TableNamesAsString returns a comma-separated string of the table names given
+func TableNamesAsString(names []TableName) string {
+	sb := strings.Builder{}
+	for i, name := range names {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(name.String())
+	}
+	return sb.String()
 }
 
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the

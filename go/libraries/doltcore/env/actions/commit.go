@@ -89,13 +89,13 @@ func GetCommitStaged(
 			return nil, err
 		}
 		if len(violatesConstraints) > 0 {
-			return nil, NewTblHasConstraintViolations(doltdb.FlattenTableNames(violatesConstraints))
+			return nil, NewTblHasConstraintViolations(violatesConstraints)
 		}
 
 		if ws.MergeActive() {
 			schConflicts := ws.MergeState().TablesWithSchemaConflicts()
 			if len(schConflicts) > 0 {
-				return nil, NewTblSchemaConflictError(schConflicts)
+				return nil, NewTblSchemaConflictError(doltdb.ToTableNames(schConflicts, doltdb.DefaultSchemaName))
 			}
 		}
 	}
