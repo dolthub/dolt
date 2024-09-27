@@ -958,7 +958,7 @@ func RunDoltConflictsTableNameTableTests(t *testing.T, h DoltEnginetestHarness) 
 	}
 }
 
-func RunKelyessDoltMergeCVsAndConflictsTests(t *testing.T, h DoltEnginetestHarness) {
+func RunKeylessDoltMergeCVsAndConflictsTests(t *testing.T, h DoltEnginetestHarness) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip()
 	}

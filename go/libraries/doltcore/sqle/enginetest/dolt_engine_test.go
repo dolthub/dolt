@@ -1292,7 +1292,7 @@ func TestDoltConflictsTableNameTable(t *testing.T) {
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
-	RunKelyessDoltMergeCVsAndConflictsTests(t, h)
+	RunKeylessDoltMergeCVsAndConflictsTests(t, h)
 }
 
 // eventually this will be part of TestDoltMerge
