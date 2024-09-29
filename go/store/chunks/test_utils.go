@@ -99,6 +99,11 @@ func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []
 	return collector.MarkAndSweepChunks(ctx, hashes, collector)
 }
 
+func (s *TestStoreView) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
+	//NM4 implement me
+	panic("implement me")
+}
+
 func (s *TestStoreView) Reads() int {
 	reads := atomic.LoadInt32(&s.reads)
 	return int(reads)

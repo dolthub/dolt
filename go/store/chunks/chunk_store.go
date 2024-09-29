@@ -186,6 +186,9 @@ type ChunkStoreGarbageCollector interface {
 	// interactions with generational stores. See ValueStore and
 	// NomsBlockStore/GenerationalNBS for details.
 	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error
+
+	// GetChunkAddresses NM4.
+	GetChunkHashes(context.Context, chan hash.Hash)
 }
 
 type PrefixChunkStore interface {

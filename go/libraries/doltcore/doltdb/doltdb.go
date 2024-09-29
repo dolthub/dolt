@@ -2045,3 +2045,39 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }
+
+func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	hashChan := make(chan hash.Hash)
+
+	if gs, ok := cs.(*nbs.GenerationalNBS); ok {
+		go func() {
+			defer close(hashChan)
+			gs.OldGen().GetChunkHashes(ctx, hashChan)
+			gs.NewGen().GetChunkHashes(ctx, hashChan)
+		}()
+	} else {
+		return errors.New("fsck command requires a local database")
+	}
+
+	for h := range hashChan {
+		chk, err := cs.Get(ctx, h)
+		if err != nil {
+			return err
+		}
+
+		if chk.Hash() != h {
+			return errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
+		}
+		raw := chk.Data()
+		calcChkSum := hash.Of(raw)
+		if chk.Hash() != calcChkSum {
+			return errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+		}
+
+		progress <- "OK: " + h.String()
+	}
+
+	return nil
+}

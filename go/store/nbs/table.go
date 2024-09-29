@@ -240,6 +240,9 @@ type chunkSource interface {
 
 	// currentSize returns the current total physical size of the chunkSource.
 	currentSize() uint64
+
+	// NM4 - I dunno. Maybe?
+	getAllChunkHashes(context.Context, chan hash.Hash)
 }
 
 type chunkSources []chunkSource

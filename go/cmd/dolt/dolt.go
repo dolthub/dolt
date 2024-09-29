@@ -109,6 +109,7 @@ var doltSubCommands = []cli.Command{
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
+	commands.FsckCmd{},
 	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
@@ -151,6 +152,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.ArchiveCmd{},
+	commands.FsckCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{

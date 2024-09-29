@@ -209,6 +209,11 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
+func (s journalChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
+	// NM4 - figure out journals!
+	return
+}
+
 func equalSpecs(left, right []tableSpec) bool {
 	if len(left) != len(right) {
 		return false

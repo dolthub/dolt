@@ -169,6 +169,17 @@ func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
 }
 
+func (ftr *fileTableReader) getAllChunkHashes(_ context.Context, out chan hash.Hash) {
+	for i := uint32(0); i < ftr.idx.chunkCount(); i++ {
+		var h hash.Hash
+		_, err := ftr.idx.indexEntry(i, &h)
+		if err != nil {
+			panic(err) // NM4
+		}
+		out <- h
+	}
+}
+
 func (ftr *fileTableReader) Close() error {
 	return ftr.tableReader.close()
 }

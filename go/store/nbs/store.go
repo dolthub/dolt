@@ -1667,6 +1667,16 @@ LOOP:
 	return gcc.copyTablesToDir(ctx, tfp)
 }
 
+func (nbs *NomsBlockStore) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
+	for _, v := range nbs.tables.novel {
+		v.getAllChunkHashes(ctx, hashes)
+
+	}
+	for _, v := range nbs.tables.upstream {
+		v.getAllChunkHashes(ctx, hashes)
+	}
+}
+
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()

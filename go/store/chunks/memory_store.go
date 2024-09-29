@@ -382,6 +382,11 @@ LOOP:
 	return nil
 }
 
+func (ms *MemoryStoreView) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (ms *MemoryStoreView) Stats() interface{} {
 	return nil
 }

@@ -83,6 +83,11 @@ func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest)
 }
 
+func (nbsMW *NBSMetricWrapper) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 	return nbsMW.nbs.PruneTableFiles(ctx)

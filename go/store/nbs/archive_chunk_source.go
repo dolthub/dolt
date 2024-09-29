@@ -152,3 +152,8 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord) 
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	return false, errors.New("Archive chunk source does not support getManyCompressed")
 }
+
+func (acs archiveChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
+	//TODO implement me
+	panic("implement me")
+}

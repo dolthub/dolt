@@ -93,3 +93,8 @@ func (ecs emptyChunkSource) close() error {
 func (ecs emptyChunkSource) clone() (chunkSource, error) {
 	return ecs, nil
 }
+
+func (ecs emptyChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
+	//TODO implement me
+	panic("implement me")
+}
