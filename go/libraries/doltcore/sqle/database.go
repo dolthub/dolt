@@ -799,7 +799,9 @@ func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (s
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
-	if resolve.UseSearchPath && db.schemaName == "" {
+	// dolt_docs table is branch-specific, not schema-specific for doltgres
+	isDoltDocs := tableName == doltdb.DocTableName
+	if resolve.UseSearchPath && db.schemaName == "" && !isDoltDocs {
 		return resolve.TableWithSearchPath(ctx, root, tableName)
 	} else {
 		return db.tableInsensitive(ctx, root, tableName)
