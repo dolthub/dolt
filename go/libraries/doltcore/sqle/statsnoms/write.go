@@ -129,7 +129,11 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		valueBuilder.PutInt64(8, int64(h.BoundCount()))
 		valueBuilder.PutDatetime(9, statspro.DoltBucketCreated(h))
 		for i, r := range h.Mcvs() {
-			valueBuilder.PutString(10+i, stats.StringifyKey(r, dStats.Statistic.Typs))
+			mcvRow, err := EncodeRow(ctx, statsMap.NodeStore(), r, dStats.Tb)
+			if err != nil {
+				return err
+			}
+			valueBuilder.PutString(10+i, string(mcvRow))
 		}
 		var mcvCntsRow sql.Row
 		for _, v := range h.McvCounts() {
