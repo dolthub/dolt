@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
 	"os"
 	"path/filepath"
@@ -153,7 +154,16 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	return false, errors.New("Archive chunk source does not support getManyCompressed")
 }
 
-func (acs archiveChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
-	//TODO implement me
-	panic("implement me")
+func (acs archiveChunkSource) getAllChunkHashes(_ context.Context, out chan hash.Hash) {
+	addrCount := uint32(len(acs.aRdr.prefixes))
+	for i := uint32(0); i < addrCount; i++ {
+		var h hash.Hash
+		suffix := acs.aRdr.getSuffixByID(i)
+
+		// Reconstruct the hash from the prefix and suffix.
+		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
+		copy(h[hash.ByteLen-hash.SuffixLen:], suffix[:])
+
+		out <- h
+	}
 }
