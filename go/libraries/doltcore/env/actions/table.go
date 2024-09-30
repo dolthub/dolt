@@ -167,7 +167,7 @@ func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown
 	}
 
 	if len(notExist) > 0 {
-		return NewTblNotExistError(summarizeTableNames(notExist))
+		return NewTblNotExistError(notExist)
 	}
 
 	return nil

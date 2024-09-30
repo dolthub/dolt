@@ -17,7 +17,6 @@ package dtables
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // MergeStatusTable is a sql.Table implementation that implements a system table
@@ -103,9 +101,10 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 		schConflicts = ws.MergeState().TablesWithSchemaConflicts()
 	}
 
-	unmergedTblNames := set.NewStrSet(inConflict)
-	unmergedTblNames.Add(doltdb.FlattenTableNames(tblsWithViolations)...)
-	unmergedTblNames.Add(schConflicts...)
+	unmergedTblNames := doltdb.NewTableNameSet(inConflict)
+	unmergedTblNames.Add(tblsWithViolations...)
+	// TODO: schema name
+	unmergedTblNames.Add(doltdb.ToTableNames(schConflicts, doltdb.DefaultSchemaName)...)
 
 	var sourceCommitSpecStr *string
 	var sourceCommitHash *string
@@ -131,8 +130,10 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 		s3 := curr.String()
 		target = &s3
 
-		s4 := strings.Join(unmergedTblNames.AsSlice(), ", ")
-		unmergedTables = &s4
+		// TODO: it might be nice to include schema name in this output, not sure yet
+		//  It makes testing more challenging to have the behavior diverge between Dolt and Doltgres though
+		tableNamesAsString := doltdb.UnqualifiedTableNamesAsString(unmergedTblNames.AsSlice())
+		unmergedTables = &tableNamesAsString
 	}
 
 	return &MergeStatusIter{

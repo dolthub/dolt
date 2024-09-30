@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -219,17 +218,5 @@ func ValidateTables(ctx context.Context, tbls []doltdb.TableName, roots ...doltd
 		return nil
 	}
 
-	return NewTblNotExistError(summarizeTableNames(missing))
-}
-
-func summarizeTableNames(names []doltdb.TableName) []string {
-	namesStrs := make([]string, len(names))
-	for i, name := range names {
-		if name.Schema != "" {
-			namesStrs[i] = fmt.Sprintf("%s.%s", name.Schema, name.Name)
-		} else {
-			namesStrs[i] = fmt.Sprintf("%s", name.Name)
-		}
-	}
-	return namesStrs
+	return NewTblNotExistError(missing)
 }

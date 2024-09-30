@@ -134,19 +134,6 @@ func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, er
 	return s.AsSlice(), nil
 }
 
-// GetAllTableNames returns table names for all persisted and generated tables.
-func GetAllTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	n, err := GetNonSystemTableNames(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	s, err := GetSystemTableNames(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-	return append(n, s...), nil
-}
-
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
@@ -200,7 +187,7 @@ const (
 	DocTableName = "dolt_docs"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
-	//DocTextColumnName is the name of the column containing the document contents in the docs table
+	// DocTextColumnName is the name of the column containing the document contents in the docs table
 	DocTextColumnName = "doc_text"
 )
 
