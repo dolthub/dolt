@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -2046,6 +2047,7 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }
 
+// FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
@@ -2073,7 +2075,16 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 		raw := chk.Data()
 		calcChkSum := hash.Of(raw)
 		if chk.Hash() != calcChkSum {
-			return errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+			fuzzyMatch := false
+			// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+			if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+				// Now we'll just verify that the first 16 bytes match.
+				ln := hash.ByteLen - 4
+				fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+			}
+			if !fuzzyMatch {
+				return errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+			}
 		}
 
 		progress <- "OK: " + h.String()

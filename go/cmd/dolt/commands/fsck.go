@@ -27,8 +27,20 @@ type FsckCmd struct{}
 var _ cli.Command = FsckCmd{}
 
 func (cmd FsckCmd) Description() string {
+	return "Verifies the contents of the database are not corrupted."
+}
+
+func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 	//TODO implement me
-	panic("implement me")
+	panic("implement Docs")
+}
+
+func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
+	return &argparser.ArgParser{}
+}
+
+func (cmd FsckCmd) Name() string {
+	return "fsck"
 }
 
 func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
@@ -51,17 +63,4 @@ func fsckHandleProgress(progress chan interface{}) {
 			cli.Println(item)
 		}
 	}()
-}
-
-func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
-	//TODO implement me
-	panic("implement Docs")
-}
-
-func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
-	return &argparser.ArgParser{}
-}
-
-func (cmd FsckCmd) Name() string {
-	return "fsck"
 }

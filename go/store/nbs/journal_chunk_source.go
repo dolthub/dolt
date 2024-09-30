@@ -209,9 +209,20 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
-func (s journalChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
-	// NM4 - figure out journals!
-	return
+func (s journalChunkSource) getAllChunkHashes(ctx context.Context, out chan hash.Hash) {
+	s.journal.ranges.novel.Iter(func(k hash.Hash, v Range) (stop bool) {
+		out <- k
+		return false
+	})
+
+	s.journal.ranges.cached.Iter(func(k addr16, v Range) (stop bool) {
+		// Currently we only have 16bytes of the hash. The value returned here will have 4 0xFF bytes at the end.
+		var h hash.Hash
+		copy(h[:], k[:])
+		out <- h
+
+		return false
+	})
 }
 
 func equalSpecs(left, right []tableSpec) bool {

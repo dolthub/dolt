@@ -241,7 +241,8 @@ type chunkSource interface {
 	// currentSize returns the current total physical size of the chunkSource.
 	currentSize() uint64
 
-	// NM4 - I dunno. Maybe?
+	// getAllChunkHashes returns all the chunk hashes in the chunkSource. This is currently used to perform integrity checks,
+	// and should be used with caution as the journal chunk source may return hashes which end in 4 null bytes.
 	getAllChunkHashes(context.Context, chan hash.Hash)
 }
 
