@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -2051,44 +2052,68 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
-	hashChan := make(chan hash.Hash)
-
-	if gs, ok := cs.(*nbs.GenerationalNBS); ok {
-		go func() {
-			defer close(hashChan)
-			gs.OldGen().GetChunkHashes(ctx, hashChan)
-			gs.NewGen().GetChunkHashes(ctx, hashChan)
-		}()
-	} else {
-		return errors.New("fsck command requires a local database")
+	gs, ok := cs.(*nbs.GenerationalNBS)
+	if !ok {
+		return errors.New("FSCK requires a local database")
 	}
 
-	for h := range hashChan {
-		chk, err := cs.Get(ctx, h)
-		if err != nil {
-			return err
-		}
+	hashChan := make(chan hash.Hash, 128)
+	hashChanWg := &sync.WaitGroup{}
 
-		if chk.Hash() != h {
-			return errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
-		}
-		raw := chk.Data()
-		calcChkSum := hash.Of(raw)
-		if chk.Hash() != calcChkSum {
-			fuzzyMatch := false
-			// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
-			if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
-				// Now we'll just verify that the first 16 bytes match.
-				ln := hash.ByteLen - 4
-				fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+	chkCount := 0
+	chkCount += gs.OldGen().GetChunkHashes(ctx, hashChan, hashChanWg)
+	chkCount += gs.NewGen().GetChunkHashes(ctx, hashChan, hashChanWg)
+
+	verifyWg := &sync.WaitGroup{}
+	verifyWg.Add(1)
+
+	var finalErr error
+	go func() {
+		defer verifyWg.Done()
+
+		for h := range hashChan {
+			chk, err := cs.Get(ctx, h)
+			if err != nil {
+				finalErr = err
+				return
 			}
-			if !fuzzyMatch {
-				return errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+
+			if chk.Hash() != h {
+				finalErr = errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
+				return
+			}
+			raw := chk.Data()
+			calcChkSum := hash.Of(raw)
+			if chk.Hash() != calcChkSum {
+				fuzzyMatch := false
+				// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+				if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+					// Now we'll just verify that the first 16 bytes match.
+					ln := hash.ByteLen - 4
+					fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+				}
+				if !fuzzyMatch {
+					finalErr = errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+					return
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				finalErr = ctx.Err()
+				return
+			default:
+				progress <- "OK: " + h.String()
 			}
 		}
+	}()
 
-		progress <- "OK: " + h.String()
-	}
+	// When all stores are done putting hashes in the channel, close it.
+	hashChanWg.Wait()
+	close(hashChan)
 
-	return nil
+	// Wait for all the verification goroutines to finish.
+	verifyWg.Wait()
+
+	return finalErr
 }

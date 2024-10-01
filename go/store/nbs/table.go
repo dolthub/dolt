@@ -26,6 +26,7 @@ import (
 	"crypto/sha512"
 	"hash/crc32"
 	"io"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -243,7 +244,7 @@ type chunkSource interface {
 
 	// getAllChunkHashes returns all the chunk hashes in the chunkSource. This is currently used to perform integrity checks,
 	// and should be used with caution as the journal chunk source may return hashes which end in 4 null bytes.
-	getAllChunkHashes(context.Context, chan hash.Hash)
+	getAllChunkHashes(context.Context, chan<- hash.Hash, *sync.WaitGroup) int
 }
 
 type chunkSources []chunkSource

@@ -382,9 +382,8 @@ LOOP:
 	return nil
 }
 
-func (ms *MemoryStoreView) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
-	//TODO implement me
-	panic("implement me")
+func (ms *MemoryStoreView) GetChunkHashes(_ context.Context, _ chan<- hash.Hash, _ *sync.WaitGroup) int {
+	panic("runtime error: GetChunkHashes should never be called on the MemoryStoreView")
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {

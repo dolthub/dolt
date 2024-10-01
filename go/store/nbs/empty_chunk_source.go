@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -94,7 +95,6 @@ func (ecs emptyChunkSource) clone() (chunkSource, error) {
 	return ecs, nil
 }
 
-func (ecs emptyChunkSource) getAllChunkHashes(_ context.Context, _ chan hash.Hash) {
-	//TODO implement me
-	panic("implement me")
+func (ecs emptyChunkSource) getAllChunkHashes(_ context.Context, _ chan<- hash.Hash, _ *sync.WaitGroup) int {
+	return 0
 }

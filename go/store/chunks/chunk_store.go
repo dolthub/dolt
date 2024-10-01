@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -187,8 +188,10 @@ type ChunkStoreGarbageCollector interface {
 	// NomsBlockStore/GenerationalNBS for details.
 	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error
 
-	// GetChunkAddresses NM4.
-	GetChunkHashes(context.Context, chan hash.Hash)
+	// GetChunkAddresses immediately returns the number of hashes in the store, and writes them to the channel provided.
+	// Writing the the channel should be performed asynchronously. Implementations should bump the wait group and decrement
+	// the wait group when all hashes have been written to the channel. Canceling the context will halt the operation.
+	GetChunkHashes(context.Context, chan<- hash.Hash, *sync.WaitGroup) int
 }
 
 type PrefixChunkStore interface {

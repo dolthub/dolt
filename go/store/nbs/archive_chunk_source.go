@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -154,16 +155,26 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	return false, errors.New("Archive chunk source does not support getManyCompressed")
 }
 
-func (acs archiveChunkSource) getAllChunkHashes(_ context.Context, out chan hash.Hash) {
+func (acs archiveChunkSource) getAllChunkHashes(ctx context.Context, out chan<- hash.Hash, wg *sync.WaitGroup) int {
 	addrCount := uint32(len(acs.aRdr.prefixes))
-	for i := uint32(0); i < addrCount; i++ {
-		var h hash.Hash
-		suffix := acs.aRdr.getSuffixByID(i)
 
-		// Reconstruct the hash from the prefix and suffix.
-		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
-		copy(h[hash.ByteLen-hash.SuffixLen:], suffix[:])
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := uint32(0); i < addrCount; i++ {
+			var h hash.Hash
+			suffix := acs.aRdr.getSuffixByID(i)
 
-		out <- h
-	}
+			// Reconstruct the hash from the prefix and suffix.
+			binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
+			copy(h[hash.ByteLen-hash.SuffixLen:], suffix[:])
+
+			select {
+			case out <- h: // Send hash
+			case <-ctx.Done(): // Stop if context is cancelled
+				return
+			}
+		}
+	}()
+	return int(addrCount)
 }

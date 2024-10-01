@@ -62,3 +62,20 @@ make_updates() {
     # NM4 - some more validation of the output would be nice.
 }
 
+@test "fsck: good journal" {
+    dolt init
+    dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
+    dolt commit -Am "Create table tbl"
+
+    make_inserts
+
+    # Objects are in the journal. Don't gc.
+    dolt fsck
+}
+
+@test "fsck: bad journal" {
+    mkdir ".dolt"
+    cp -R "$BATS_TEST_DIRNAME/corrupt_dbs/bad_journal/" .dolt/
+
+    run dolt fsck
+}

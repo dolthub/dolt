@@ -28,6 +28,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -169,15 +170,29 @@ func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
 }
 
-func (ftr *fileTableReader) getAllChunkHashes(_ context.Context, out chan hash.Hash) {
-	for i := uint32(0); i < ftr.idx.chunkCount(); i++ {
-		var h hash.Hash
-		_, err := ftr.idx.indexEntry(i, &h)
-		if err != nil {
-			panic(err) // NM4
+func (ftr *fileTableReader) getAllChunkHashes(ctx context.Context, out chan<- hash.Hash, wg *sync.WaitGroup) int {
+	count := ftr.idx.chunkCount()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := uint32(0); i < count; i++ {
+			var h hash.Hash
+			_, err := ftr.idx.indexEntry(i, &h)
+			if err != nil {
+				panic(err) // NM4 - Need an error channel??
+			}
+
+			select {
+			case out <- h: // Send hash
+			case <-ctx.Done(): // Stop if context is cancelled
+				return
+			}
 		}
-		out <- h
-	}
+	}()
+
+	return int(count)
+
 }
 
 func (ftr *fileTableReader) Close() error {

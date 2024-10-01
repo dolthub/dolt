@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -83,9 +84,8 @@ func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest)
 }
 
-func (nbsMW *NBSMetricWrapper) GetChunkHashes(ctx context.Context, hashes chan hash.Hash) {
-	//TODO implement me
-	panic("implement me")
+func (nbsMW *NBSMetricWrapper) GetChunkHashes(ctx context.Context, hashes chan<- hash.Hash, wg *sync.WaitGroup) int {
+	return nbsMW.nbs.GetChunkHashes(ctx, hashes, wg)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

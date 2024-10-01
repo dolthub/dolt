@@ -209,20 +209,28 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
-func (s journalChunkSource) getAllChunkHashes(ctx context.Context, out chan hash.Hash) {
-	s.journal.ranges.novel.Iter(func(k hash.Hash, v Range) (stop bool) {
-		out <- k
-		return false
-	})
+func (s journalChunkSource) getAllChunkHashes(_ context.Context, out chan<- hash.Hash, wg *sync.WaitGroup) int {
+	chunkCount := s.journal.recordCount()
 
-	s.journal.ranges.cached.Iter(func(k addr16, v Range) (stop bool) {
-		// Currently we only have 16bytes of the hash. The value returned here will have 4 0xFF bytes at the end.
-		var h hash.Hash
-		copy(h[:], k[:])
-		out <- h
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.journal.ranges.novel.Iter(func(k hash.Hash, v Range) (stop bool) {
+			out <- k
+			return false
+		})
 
-		return false
-	})
+		s.journal.ranges.cached.Iter(func(k addr16, v Range) (stop bool) {
+			// Currently we only have 16bytes of the hash. The value returned here will have 4 0xFF bytes at the end.
+			var h hash.Hash
+			copy(h[:], k[:])
+			out <- h
+
+			return false
+		})
+	}()
+
+	return int(chunkCount)
 }
 
 func equalSpecs(left, right []tableSpec) bool {
