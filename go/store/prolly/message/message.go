@@ -41,6 +41,9 @@ func UnpackFields(msg serial.Message) (fileId string, keys, values ItemAccess, l
 	case serial.ProllyTreeNodeFileID:
 		keys, values, level, count, err = getProllyMapKeysAndValues(msg)
 		return
+	case serial.VectorIndexNodeFileID:
+		keys, values, level, count, err = getVectorIndexKeysAndValues(msg)
+		return
 	case serial.AddressMapFileID:
 		keys, values, level, count, err = getAddressMapKeysAndValues(msg)
 		return
@@ -75,6 +78,8 @@ func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return walkProllyMapAddresses(ctx, msg, cb)
+	case serial.VectorIndexNodeFileID:
+		return walkVectorIndexAddresses(ctx, msg, cb)
 	case serial.AddressMapFileID:
 		return walkAddressMapAddresses(ctx, msg, cb)
 	case serial.MergeArtifactsFileID:
@@ -93,6 +98,8 @@ func GetTreeCount(msg serial.Message) (int, error) {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeCount(msg)
+	case serial.VectorIndexNodeFileID:
+		return getVectorIndexTreeCount(msg)
 	case serial.AddressMapFileID:
 		return getAddressMapTreeCount(msg)
 	case serial.MergeArtifactsFileID:

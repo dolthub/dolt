@@ -1,0 +1,57 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+namespace serial;
+
+// VectorIndexNode is a node that makes up a vector index. Every key contains a vector value,
+// and keys are organized according to their proximity to their parent node.
+// Currently, this is a subset of the fields used in ProllyMap. However, it uses its own message type
+// to limit the risk that lookup/mutation algorithms written for ProllyMap nodes accidentally run on VectorIndex nodes.
+table VectorIndexNode {
+  // sorted array of key items
+  key_items:[ubyte] (required);
+  // items offets for |key_items|
+  // first offset is 0, last offset is len(key_items)
+  key_offsets:[uint16] (required);
+  // item type for |key_items|
+  // key_type:ItemType;
+
+  // array of values items, ordered by paired key
+  value_items:[ubyte];
+  // item offsets for |value_items|
+  // first offset is 0, last offset is len(value_items)
+  value_offsets:[uint16];
+  // item type for |value_items|
+  // value_type:ItemType;
+
+  // array of chunk addresses
+  //  - subtree addresses for internal prolly tree nodes
+  //  - value addresses for AddressMap leaf nodes
+  address_array:[ubyte] (required);
+
+  // array of varint encoded subtree counts
+  // see: go/store/prolly/message/varint.go
+  subtree_counts:[ubyte];
+  // total count of prolly tree
+  tree_count:uint64;
+  // prolly tree level, 0 for leaf nodes
+  tree_level:uint8;
+}
+
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "IVFF";
+
+root_type VectorIndexNode;
+
