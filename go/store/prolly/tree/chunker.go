@@ -40,9 +40,10 @@ type chunker[S message.Serializer] struct {
 	level  int
 	done   bool
 
-	splitter   nodeSplitter
-	builder    *nodeBuilder[S]
-	serializer S
+	splitterFactory splitterFactory
+	splitter        nodeSplitter
+	builder         *nodeBuilder[S]
+	serializer      S
 
 	ns NodeStore
 }
@@ -58,20 +59,25 @@ func newEmptyChunker[S message.Serializer](ctx context.Context, ns NodeStore, se
 }
 
 func newChunker[S message.Serializer](ctx context.Context, cur *cursor, level int, ns NodeStore, serializer S) (*chunker[S], error) {
+	return newChunkerWithSplitterFactory(ctx, cur, level, ns, serializer, defaultSplitterFactory)
+}
+
+func newChunkerWithSplitterFactory[S message.Serializer](ctx context.Context, cur *cursor, level int, ns NodeStore, serializer S, splitterFactory splitterFactory) (*chunker[S], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
-	splitter := defaultSplitterFactory(uint8(level % 256))
+	splitter := splitterFactory(uint8(level % 256))
 	builder := newNodeBuilder(serializer, level)
 
 	sc := &chunker[S]{
-		cur:        cur,
-		parent:     nil,
-		level:      level,
-		splitter:   splitter,
-		builder:    builder,
-		serializer: serializer,
-		ns:         ns,
+		cur:             cur,
+		parent:          nil,
+		level:           level,
+		splitter:        splitter,
+		splitterFactory: splitterFactory,
+		builder:         builder,
+		serializer:      serializer,
+		ns:              ns,
 	}
 
 	if cur != nil {
@@ -355,7 +361,7 @@ func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = newChunker(ctx, parent, tc.level+1, tc.ns, tc.serializer)
+	tc.parent, err = newChunkerWithSplitterFactory(ctx, parent, tc.level+1, tc.ns, tc.serializer, tc.splitterFactory)
 	if err != nil {
 		return err
 	}
