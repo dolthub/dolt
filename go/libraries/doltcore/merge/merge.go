@@ -528,25 +528,6 @@ func (as ArtifactStatus) HasConstraintViolations() bool {
 	return len(as.ConstraintViolationsTables) > 0
 }
 
-func GetMergeArtifactStatus(ctx context.Context, working *doltdb.WorkingSet) (as ArtifactStatus, err error) {
-	if working.MergeActive() {
-		as.SchemaConflictsTables = working.MergeState().TablesWithSchemaConflicts()
-	}
-
-	as.DataConflictTables, err = doltdb.TablesWithDataConflicts(ctx, working.WorkingRoot())
-	if err != nil {
-		return as, err
-	}
-
-	violations, err := doltdb.TablesWithConstraintViolations(ctx, working.WorkingRoot())
-	if err != nil {
-		return ArtifactStatus{}, err
-	}
-
-	as.ConstraintViolationsTables = doltdb.FlattenTableNames(violations)
-	return
-}
-
 // MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.
 func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
 	mergeRoot, err := mergeCommit.GetRootValue(ctx)

@@ -24,6 +24,8 @@ import (
 	"strings"
 )
 
+var DefaultUnixSocketFilePath = DefaultMySQLUnixSocketFilePath
+
 // LogLevel defines the available levels of logging for the server.
 type LogLevel string
 
@@ -57,7 +59,7 @@ const (
 	DefaultMetricsHost             = ""
 	DefaultMetricsPort             = -1
 	DefaultAllowCleartextPasswords = false
-	DefaultUnixSocketFilePath      = "/tmp/mysql.sock"
+	DefaultMySQLUnixSocketFilePath = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen       = 0
 	DefaultEncodeLoggedQuery       = false
 )

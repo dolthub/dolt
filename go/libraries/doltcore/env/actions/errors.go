@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 type tblErrorType string
@@ -32,28 +33,38 @@ const (
 )
 
 type TblError struct {
-	tables     []string
+	tables     []doltdb.TableName
 	tblErrType tblErrorType
 }
 
-func NewTblNotExistError(tbls []string) TblError {
+func NewTblNotExistError(tbls []doltdb.TableName) TblError {
 	return TblError{tbls, tblErrTypeNotExist}
 }
 
-func NewTblInConflictError(tbls []string) TblError {
-	return TblError{tbls, tblErrTypeInConflict}
+func NewTblInConflictError(tbls []doltdb.TableName) TblError {
+	return TblError{tables: tbls, tblErrType: tblErrTypeInConflict}
 }
 
-func NewTblSchemaConflictError(tbls []string) TblError {
-	return TblError{tbls, tblErrTypeSchConflict}
+func NewTblSchemaConflictError(tbls []doltdb.TableName) TblError {
+	return TblError{tables: tbls, tblErrType: tblErrTypeSchConflict}
 }
 
-func NewTblHasConstraintViolations(tbls []string) TblError {
+func NewTblHasConstraintViolations(tbls []doltdb.TableName) TblError {
 	return TblError{tbls, tblErrTypeConstViols}
 }
 
 func (te TblError) Error() string {
-	return "error: the table(s) " + strings.Join(te.tables, ", ") + " " + string(te.tblErrType)
+	sb := strings.Builder{}
+	sb.WriteString("error: the table(s) ")
+	for i, tbl := range te.tables {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(tbl.String())
+	}
+	sb.WriteString(" ")
+	sb.WriteString(string(te.tblErrType))
+	return sb.String()
 }
 
 func getTblErrType(err error) tblErrorType {
@@ -82,7 +93,7 @@ func IsTblViolatesConstraints(err error) bool {
 	return getTblErrType(err) == tblErrTypeConstViols
 }
 
-func GetTablesForError(err error) []string {
+func GetTablesForError(err error) []doltdb.TableName {
 	te, ok := err.(TblError)
 
 	if !ok {
