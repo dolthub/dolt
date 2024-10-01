@@ -38,7 +38,8 @@ fi
   table.fbs \
   tag.fbs \
   tuple.fbs \
-  workingset.fbs
+  workingset.fbs \
+  vectorindexnode.fbs
 
 # prefix files with copyright header
 for FILE in $GEN_DIR/*.go;
