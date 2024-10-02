@@ -38,7 +38,8 @@ make_updates() {
     run dolt fsck
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]]
+    [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]] || false
+    [[ "$output" =~ "hacky@hackypants.com" ]] || false
 }
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
@@ -79,5 +80,5 @@ make_updates() {
 
     run dolt fsck
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 load failed with error: checksum error" ]]
+    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 load failed with error: checksum error" ]] || false
 }

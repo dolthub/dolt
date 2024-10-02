@@ -86,6 +86,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	case <-ctx.Done():
 		cli.PrintErrln(ctx.Err().Error())
 		return 1
+	default:
 	}
 
 	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)

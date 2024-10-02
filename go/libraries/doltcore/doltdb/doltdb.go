@@ -2057,6 +2057,9 @@ type FSCKReport struct {
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interface{}) (*FSCKReport, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	vs := types.NewValueStore(cs)
+
 	gs, ok := cs.(*nbs.GenerationalNBS)
 	if !ok {
 		return nil, errors.New("FSCK requires a local database")
@@ -2073,6 +2076,17 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interfac
 
 	chksProcessed := int64(0)
 
+	decodeMsg := func(chk chunks.Chunk) string {
+		hrs := ""
+		val, err := types.DecodeValue(chk, vs)
+		if err == nil {
+			hrs = val.HumanReadableString()
+		} else {
+			hrs = fmt.Sprintf("Unable to decode value: %s", err.Error())
+		}
+		return hrs
+	}
+
 	verifyWg := &sync.WaitGroup{}
 	for i := 0; i < threads; i++ {
 		verifyWg.Add(1)
@@ -2087,7 +2101,8 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interfac
 					errChan <- errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
 					chunkOk = false
 				} else if chk.Hash() != h {
-					errChan <- errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
+					hrs := decodeMsg(chk)
+					errChan <- errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), chk.Hash().String(), hrs))
 					chunkOk = false
 				} else {
 					raw := chk.Data()
@@ -2101,7 +2116,8 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interfac
 							fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
 						}
 						if !fuzzyMatch {
-							errChan <- errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s", h.String(), calcChkSum.String()))
+							hrs := decodeMsg(chk)
+							errChan <- errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs))
 							chunkOk = false
 						}
 					}
