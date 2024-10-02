@@ -2060,8 +2060,7 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 	hashChan := make(chan hash.Hash, 128)
 	hashChanWg := &sync.WaitGroup{}
 
-	chkCount := 0
-	chkCount += gs.OldGen().GetChunkHashes(ctx, hashChan, hashChanWg)
+	chkCount := gs.OldGen().GetChunkHashes(ctx, hashChan, hashChanWg)
 	chkCount += gs.NewGen().GetChunkHashes(ctx, hashChan, hashChanWg)
 
 	verifyWg := &sync.WaitGroup{}

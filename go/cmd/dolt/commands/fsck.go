@@ -30,13 +30,24 @@ func (cmd FsckCmd) Description() string {
 	return "Verifies the contents of the database are not corrupted."
 }
 
+var fsckDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Verifies the contents of the database are not corrupted.",
+	LongDesc:  "Verifies the contents of the database are not corrupted.",
+	Synopsis: []string{
+		"",
+		"[--quiet]",
+	},
+}
+
 func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
-	//TODO implement me
-	panic("implement Docs")
+	return cli.NewCommandDocumentation(fsckDocs, cmd.ArgParser())
 }
 
 func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
-	return &argparser.ArgParser{}
+	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+	ap.SupportsFlag(cli.QuietFlag, "", "Don't show progress. Just print final report.")
+
+	return ap
 }
 
 func (cmd FsckCmd) Name() string {
@@ -44,9 +55,17 @@ func (cmd FsckCmd) Name() string {
 }
 
 func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
+	ap := cmd.ArgParser()
+	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, fsckDocs)
+	if terminate {
+		return status
+	}
+
+	quiet := apr.Contains(cli.QuietFlag)
+
 	progress := make(chan interface{}, 32)
 	defer close(progress)
-	fsckHandleProgress(progress)
+	fsckHandleProgress(progress, quiet)
 
 	err := dEnv.DoltDB.FSCK(ctx, progress)
 	if err != nil {
@@ -57,10 +76,12 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return 0
 }
 
-func fsckHandleProgress(progress chan interface{}) {
+func fsckHandleProgress(progress chan interface{}, quiet bool) {
 	go func() {
 		for item := range progress {
-			cli.Println(item)
+			if !quiet {
+				cli.Println(item)
+			}
 		}
 	}()
 }
