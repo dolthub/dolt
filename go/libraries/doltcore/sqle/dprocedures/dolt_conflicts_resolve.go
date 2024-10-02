@@ -362,9 +362,9 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 
 	// TODO: schema names
 	tblSet := set.NewStrSet(tables)
-	updates := make(map[string]*doltdb.Table)
-	err := ws.MergeState().IterSchemaConflicts(ctx, ddb, func(table string, conflict doltdb.SchemaConflict) error {
-		if !tblSet.Contains(table) {
+	updates := make(map[doltdb.TableName]*doltdb.Table)
+	err := ws.MergeState().IterSchemaConflicts(ctx, ddb, func(table doltdb.TableName, conflict doltdb.SchemaConflict) error {
+		if !tblSet.Contains(table.Name) {
 			return nil
 		}
 		ours, theirs := conflict.GetConflictingTables()
@@ -379,19 +379,19 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 		return nil, err
 	}
 
-	var merged []string
+	var merged []doltdb.TableName
 	root := ws.WorkingRoot()
 	for name, tbl := range updates {
-		if root, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl); err != nil {
+		if root, err = root.PutTable(ctx, name, tbl); err != nil {
 			return nil, err
 		}
 		merged = append(merged, name)
 	}
 
 	// clear resolved schema conflicts
-	var unmerged []string
+	var unmerged []doltdb.TableName
 	for _, tbl := range ws.MergeState().TablesWithSchemaConflicts() {
-		if tblSet.Contains(tbl) {
+		if tblSet.Contains(tbl.Name) {
 			continue
 		}
 		unmerged = append(unmerged, tbl)

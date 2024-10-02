@@ -118,9 +118,8 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 	}
 
 	var conflicts []schemaConflict
-	err = p.state.IterSchemaConflicts(ctx, p.ddb, func(table string, cnf doltdb.SchemaConflict) error {
-		// TODO: schema name
-		c, err := newSchemaConflict(ctx, doltdb.TableName{Name: table}, baseRoot, cnf)
+	err = p.state.IterSchemaConflicts(ctx, p.ddb, func(table doltdb.TableName, cnf doltdb.SchemaConflict) error {
+		c, err := newSchemaConflict(ctx, table, baseRoot, cnf)
 		if err != nil {
 			return err
 		}
