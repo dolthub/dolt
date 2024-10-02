@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -2070,14 +2071,16 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interfac
 
 	errChan := make(chan error, 128)
 
+	chksProcessed := int64(0)
+
 	verifyWg := &sync.WaitGroup{}
 	for i := 0; i < threads; i++ {
 		verifyWg.Add(1)
 		go func() {
 			defer verifyWg.Done()
-
 			for h := range hashChan {
 				chunkOk := true
+				pCnt := atomic.AddInt64(&chksProcessed, 1)
 
 				chk, err := cs.Get(ctx, h)
 				if err != nil {
@@ -2104,10 +2107,14 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interfac
 					}
 				}
 
+				percentage := (float64(pCnt) * 100) / float64(chkCount)
+				result := fmt.Sprintf("(%4.1f%% done)", percentage)
+
 				progStr := "OK: " + h.String()
 				if !chunkOk {
 					progStr = "FAIL: " + h.String()
 				}
+				progStr = result + " " + progStr
 
 				select {
 				case <-ctx.Done():

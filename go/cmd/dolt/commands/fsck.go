@@ -81,6 +81,13 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
+	// The ctx will only be done if it was cancelled.
+	select {
+	case <-ctx.Done():
+		cli.PrintErrln(ctx.Err().Error())
+		return 1
+	}
+
 	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
 	if len(report.Problems) == 0 {
 		cli.Println("No problems found.")
