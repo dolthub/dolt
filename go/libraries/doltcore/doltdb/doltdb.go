@@ -2055,7 +2055,7 @@ type FSCKReport struct {
 }
 
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
-func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interface{}) (*FSCKReport, error) {
+func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan string) (*FSCKReport, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	vs := types.NewValueStore(cs)

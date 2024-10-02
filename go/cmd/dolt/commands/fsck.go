@@ -63,7 +63,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
-	progress := make(chan interface{}, 32)
+	progress := make(chan string, 32)
 	defer close(progress)
 	fsckHandleProgress(progress, quiet)
 
@@ -102,7 +102,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 }
 
-func fsckHandleProgress(progress chan interface{}, quiet bool) {
+func fsckHandleProgress(progress chan string, quiet bool) {
 	go func() {
 		for item := range progress {
 			if !quiet {
