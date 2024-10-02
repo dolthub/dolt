@@ -1877,14 +1877,16 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 }
 
 // HistorySystemTableScriptTests contains working tests for both prepared and non-prepared
+// These tests find the commit hash via looking at the second-to-last commit in the dolt_log table. This quirk is due
+// to the fact that the first commit comes chonologically after successive commits due to our specifying --date in the
+// past.
 var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "empty table",
 		SetUpScript: []string{
 			"create table t (n int, c varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+			"call dolt_commit('-am', 'creating table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1899,16 +1901,16 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table foo1 (n int, de varchar(20));",
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
 			"call dolt_add('.')",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
+			"call dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
+			"set @Commit1 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
 
 			"update foo1 set de='Eins' where n=1;",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
+			"call dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
+			"set @Commit2 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
 
 			"insert into foo1 values (4, 'Vier');",
-			"set @Commit3 = '';",
-			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
+			"call dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
+			"set @Commit3 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
