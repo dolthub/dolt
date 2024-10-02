@@ -38,7 +38,7 @@ make_updates() {
     run dolt fsck
 
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "rlmgv0komq0oj7qu4osdo759vs4c5pvg read with incorrect checksum: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]]
+    [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]]
 }
 
 # This test runs over 45 seconds, resulting in a timeout in lambdabats
@@ -73,9 +73,11 @@ make_updates() {
     dolt fsck
 }
 
-@test "fsck: bad journal" {
+@test "fsck: bad journal crc" {
     mkdir ".dolt"
-    cp -R "$BATS_TEST_DIRNAME/corrupt_dbs/bad_journal/" .dolt/
+    cp -R "$BATS_TEST_DIRNAME/corrupt_dbs/bad_journal_crc/" .dolt/
 
     run dolt fsck
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 load failed with error: checksum error" ]]
 }

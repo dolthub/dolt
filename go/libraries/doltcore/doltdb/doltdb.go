@@ -2051,12 +2051,12 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
-
 	gs, ok := cs.(*nbs.GenerationalNBS)
 	if !ok {
 		return errors.New("FSCK requires a local database")
 	}
 
+	// Channel receives hashes of chunks to check.
 	hashChan := make(chan hash.Hash, 128)
 	hashChanWg := &sync.WaitGroup{}
 
@@ -2074,7 +2074,7 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 		for h := range hashChan {
 			chk, err := cs.Get(ctx, h)
 			if err != nil {
-				finalErr = err
+				finalErr = errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
 				return
 			}
 
@@ -2082,6 +2082,7 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 				finalErr = errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
 				return
 			}
+
 			raw := chk.Data()
 			calcChkSum := hash.Of(raw)
 			if chk.Hash() != calcChkSum {
@@ -2093,7 +2094,7 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 					fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
 				}
 				if !fuzzyMatch {
-					finalErr = errors.New(fmt.Sprintf("Chunk: %s read with incorrect checksum: %s", h.String(), calcChkSum.String()))
+					finalErr = errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s", h.String(), calcChkSum.String()))
 					return
 				}
 			}
