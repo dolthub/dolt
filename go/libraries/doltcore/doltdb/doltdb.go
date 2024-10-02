@@ -2048,12 +2048,17 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }
 
+type FSCKReport struct {
+	ChunkCount int
+	Problems   []error
+}
+
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
-func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
+func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan interface{}) (*FSCKReport, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 	gs, ok := cs.(*nbs.GenerationalNBS)
 	if !ok {
-		return errors.New("FSCK requires a local database")
+		return nil, errors.New("FSCK requires a local database")
 	}
 
 	// Channel receives hashes of chunks to check.
@@ -2063,50 +2068,57 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 	chkCount := gs.OldGen().GetChunkHashes(ctx, hashChan, hashChanWg)
 	chkCount += gs.NewGen().GetChunkHashes(ctx, hashChan, hashChanWg)
 
+	errChan := make(chan error, 128)
+
 	verifyWg := &sync.WaitGroup{}
-	verifyWg.Add(1)
+	for i := 0; i < threads; i++ {
+		verifyWg.Add(1)
+		go func() {
+			defer verifyWg.Done()
 
-	var finalErr error
-	go func() {
-		defer verifyWg.Done()
+			for h := range hashChan {
+				chunkOk := true
 
-		for h := range hashChan {
-			chk, err := cs.Get(ctx, h)
-			if err != nil {
-				finalErr = errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
-				return
-			}
-
-			if chk.Hash() != h {
-				finalErr = errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
-				return
-			}
-
-			raw := chk.Data()
-			calcChkSum := hash.Of(raw)
-			if chk.Hash() != calcChkSum {
-				fuzzyMatch := false
-				// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
-				if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
-					// Now we'll just verify that the first 16 bytes match.
-					ln := hash.ByteLen - 4
-					fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+				chk, err := cs.Get(ctx, h)
+				if err != nil {
+					errChan <- errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
+					chunkOk = false
+				} else if chk.Hash() != h {
+					errChan <- errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s", h.String(), chk.Hash().String()))
+					chunkOk = false
+				} else {
+					raw := chk.Data()
+					calcChkSum := hash.Of(raw)
+					if chk.Hash() != calcChkSum {
+						fuzzyMatch := false
+						// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+						if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+							// Now we'll just verify that the first 16 bytes match.
+							ln := hash.ByteLen - 4
+							fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+						}
+						if !fuzzyMatch {
+							errChan <- errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s", h.String(), calcChkSum.String()))
+							chunkOk = false
+						}
+					}
 				}
-				if !fuzzyMatch {
-					finalErr = errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s", h.String(), calcChkSum.String()))
+
+				progStr := "OK: " + h.String()
+				if !chunkOk {
+					progStr = "FAIL: " + h.String()
+				}
+
+				select {
+				case <-ctx.Done():
+					errChan <- ctx.Err()
 					return
+				default:
+					progress <- progStr
 				}
 			}
-
-			select {
-			case <-ctx.Done():
-				finalErr = ctx.Err()
-				return
-			default:
-				progress <- "OK: " + h.String()
-			}
-		}
-	}()
+		}()
+	}
 
 	// When all stores are done putting hashes in the channel, close it.
 	hashChanWg.Wait()
@@ -2114,6 +2126,12 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan interface{}) error {
 
 	// Wait for all the verification goroutines to finish.
 	verifyWg.Wait()
+	close(errChan)
 
-	return finalErr
+	FSCKReport := FSCKReport{ChunkCount: chkCount}
+	for err := range errChan {
+		FSCKReport.Problems = append(FSCKReport.Problems, err)
+	}
+
+	return &FSCKReport, nil
 }

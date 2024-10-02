@@ -34,8 +34,8 @@ var fsckDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Verifies the contents of the database are not corrupted.",
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
-		"",
 		"[--quiet]",
+		"--threads 16",
 	},
 }
 
@@ -45,6 +45,7 @@ func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+	ap.SupportsInt(cli.ThreadsFlag, "", "thread_count", "Number of threads to use for fsck. Defaults to 8.")
 	ap.SupportsFlag(cli.QuietFlag, "", "Don't show progress. Just print final report.")
 
 	return ap
@@ -62,18 +63,35 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
-
 	progress := make(chan interface{}, 32)
 	defer close(progress)
 	fsckHandleProgress(progress, quiet)
 
-	err := dEnv.DoltDB.FSCK(ctx, progress)
+	threads, haveThreads := apr.GetInt(cli.ThreadsFlag)
+	if !haveThreads {
+		threads = 8
+	}
+	if threads <= 0 {
+		threads = 1
+	}
+
+	report, err := dEnv.DoltDB.FSCK(ctx, threads, progress)
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
 	}
 
-	return 0
+	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
+	if len(report.Problems) == 0 {
+		cli.Println("No problems found.")
+		return 0
+	} else {
+		for _, e := range report.Problems {
+			cli.PrintErrln(e.Error())
+		}
+
+		return 1
+	}
 }
 
 func fsckHandleProgress(progress chan interface{}, quiet bool) {
