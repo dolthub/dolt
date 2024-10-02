@@ -29,6 +29,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -475,7 +476,7 @@ func (p *PatchTableFunction) evaluateArguments() (interface{}, interface{}, inte
 }
 
 type patchNode struct {
-	tblName          string
+	tblName          doltdb.TableName
 	schemaPatchStmts []string
 	dataPatchStmts   []string
 }
@@ -500,7 +501,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 			alterDBCollStmt := sqlfmt.AlterDatabaseCollateStmt(dbName, fromColl, toColl)
 			patches = append(patches, &patchNode{
-				tblName:          td.FromName.Name,
+				tblName:          td.FromName,
 				schemaPatchStmts: []string{alterDBCollStmt},
 				dataPatchStmts:   []string{},
 			})
@@ -529,7 +530,7 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 			}
 		}
 
-		patches = append(patches, &patchNode{tblName: tblName.Name, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
+		patches = append(patches, &patchNode{tblName: tblName, schemaPatchStmts: schemaStmts, dataPatchStmts: dataStmts})
 	}
 
 	return patches, nil
@@ -739,7 +740,12 @@ func (itr *patchTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		} else {
 			itr.statementIdx++
-			r := sql.Row{itr.statementIdx, itr.fromRef, itr.toRef, itr.currentPatch.tblName}
+			r := sql.Row{
+				itr.statementIdx,                  // statement_order
+				itr.fromRef,                       // from_commit_hash
+				itr.toRef,                         // to_commit_hash
+				itr.currentPatch.tblName.String(), // table_name
+			}
 			return r.Append(row), nil
 		}
 	}
@@ -789,7 +795,10 @@ func (p *patchStatementsRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		diffType = diffTypeData
 	}
 
-	return sql.Row{diffType, stmt}, nil
+	return sql.Row{
+		diffType, // diff_type
+		stmt,     // statement
+	}, nil
 }
 
 func (p *patchStatementsRowIter) Close(_ *sql.Context) error {
