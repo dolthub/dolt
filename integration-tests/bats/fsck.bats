@@ -30,13 +30,13 @@ make_updates() {
 }
 
 @test "fsck: bad commit" {
-    mkdir ".dolt"
-    cp -R "$BATS_TEST_DIRNAME/corrupt_dbs/bad_commit/" .dolt/
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/bad_commit/* .dolt/
 
+    # validate that cp worked.
     dolt status
 
     run dolt fsck
-
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Chunk: rlmgv0komq0oj7qu4osdo759vs4c5pvg content hash mismatch: gpphmuvegiedtjtbfku4ru8jalfdk21u" ]] || false
     [[ "$output" =~ "hacky@hackypants.com" ]] || false
@@ -59,8 +59,6 @@ make_updates() {
     dolt archive
 
     dolt fsck
-
-    # NM4 - some more validation of the output would be nice.
 }
 
 @test "fsck: good journal" {
@@ -75,8 +73,8 @@ make_updates() {
 }
 
 @test "fsck: bad journal crc" {
-    mkdir ".dolt"
-    cp -R "$BATS_TEST_DIRNAME/corrupt_dbs/bad_journal_crc/" .dolt/
+    mkdir .dolt
+    cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc/* .dolt/
 
     run dolt fsck
     [ "$status" -eq 1 ]
