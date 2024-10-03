@@ -502,7 +502,6 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		// TODO: Schema name
 		unmergableTableNames := ToTableNames(unmergableTables, DefaultSchemaName)
 
 		mergeState = &MergeState{
@@ -621,6 +620,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 			return nil, err
 		}
 
+		// TODO: Serialize the full TableName
 		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, FlattenTableNames(ws.mergeState.unmergableTables), ws.mergeState.isCherryPick)
 		if err != nil {
 			return nil, err
