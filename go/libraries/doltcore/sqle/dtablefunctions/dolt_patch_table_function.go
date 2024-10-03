@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -146,19 +145,11 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
-		if err != nil {
-			return nil, err
-		}
-		_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !fromTblExists && !toTblExists {
+		delta := findMatchingDelta(tableDeltas, tableName)
+		if delta.FromTable == nil && delta.ToTable == nil {
 			return nil, sql.ErrTableNotFound.New(tableName)
 		}
 
-		delta := findMatchingDelta(tableDeltas, tableName)
 		tableDeltas = []diff.TableDelta{delta}
 	}
 
