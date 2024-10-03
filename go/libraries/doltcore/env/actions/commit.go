@@ -95,7 +95,7 @@ func GetCommitStaged(
 		if ws.MergeActive() {
 			schConflicts := ws.MergeState().TablesWithSchemaConflicts()
 			if len(schConflicts) > 0 {
-				return nil, NewTblSchemaConflictError(doltdb.ToTableNames(schConflicts, doltdb.DefaultSchemaName))
+				return nil, NewTblSchemaConflictError(schConflicts)
 			}
 		}
 	}

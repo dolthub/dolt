@@ -129,8 +129,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 
 	if ws.MergeActive() {
 		schConflicts := ws.MergeState().TablesWithSchemaConflicts()
-		// TODO: schema name
-		tblNames = append(tblNames, doltdb.ToTableNames(schConflicts, doltdb.DefaultSchemaName)...)
+		tblNames = append(tblNames, schConflicts...)
 	}
 
 	var partitions []*tableInConflict

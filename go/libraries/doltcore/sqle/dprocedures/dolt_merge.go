@@ -533,8 +533,7 @@ func mergeRootToWorking(
 	if !squash || merged.HasSchemaConflicts() {
 		ws = ws.StartMerge(cm2, cm2Spec)
 		tt := merge.SchemaConflictTableNames(merged.SchemaConflicts)
-		// TODO: schema names
-		ws = ws.WithUnmergableTables(doltdb.FlattenTableNames(tt))
+		ws = ws.WithUnmergableTables(tt)
 	}
 
 	ws = ws.WithWorkingRoot(working)

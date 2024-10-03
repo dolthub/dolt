@@ -257,7 +257,7 @@ func (d *doltColDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 	sqlRow := sql.NewRow(
 		d.changeSet,
-		d.tableName.Name,
+		d.tableName.String(),
 		d.colNames[d.colIndex],
 		nil, // committer
 		nil, // email
@@ -364,7 +364,7 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 
 	return sql.NewRow(
 		h.String(),
-		tableChange.tableName.Name,
+		tableChange.tableName.String(),
 		col,
 		meta.Name,
 		meta.Email,

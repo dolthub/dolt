@@ -486,20 +486,6 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 		return diff.TableDelta{}, err
 	}
 
-	fromTableName, fromTable, fromTableExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-
-	toTableName, toTable, toTableExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
-	if err != nil {
-		return diff.TableDelta{}, err
-	}
-
-	if !fromTableExists && !toTableExists {
-		return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
-	}
-
 	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
 	deltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
 	if err != nil {
@@ -514,6 +500,20 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, fromCommitVal, t
 	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
 	// TODO: schema name
 	if delta.FromTable == nil && delta.ToTable == nil {
+		fromTableName, fromTable, fromTableExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
+		if err != nil {
+			return diff.TableDelta{}, err
+		}
+
+		toTableName, toTable, toTableExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
+		if err != nil {
+			return diff.TableDelta{}, err
+		}
+
+		if !fromTableExists && !toTableExists {
+			return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
+		}
+
 		delta.FromName = fromTableName
 		delta.ToName = toTableName
 		delta.FromTable = fromTable
