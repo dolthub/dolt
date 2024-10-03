@@ -17,7 +17,8 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"io"
+	"github.com/shopspring/decimal"
+"io"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -51,7 +52,7 @@ func NewParquetRowWriter(outSch sql.Schema, w io.WriteCloser) (*ParquetRowWriter
 		if col.Nullable {
 			repetitionType = ", repetitiontype=OPTIONAL"
 		}
-		mappedType, err := mapTypeToParquetTypeDescription(colType.Type())
+		mappedType, err := mapTypeToParquetTypeDescription(colType, colType.Type())
 		if err != nil {
 			return nil, err
 		}
@@ -103,6 +104,9 @@ func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 				sqlType = types.Int64
 			case query.Type_BIT:
 				sqlType = types.Uint64
+			case query.Type_DECIMAL:
+				decVal := val.(decimal.Decimal)
+				val = decVal.Shift(-decVal.Exponent())
 			}
 			v, err := sqlutil.SqlColToStr(sqlType, val)
 			if err != nil {
@@ -135,7 +139,7 @@ func (pwr *ParquetRowWriter) Close(_ context.Context) error {
 }
 
 // mapTypeToParquetTypeDescription maps |qt| from a query.Type to a text description of the type for Parquet.
-func mapTypeToParquetTypeDescription(qt query.Type) (string, error) {
+func mapTypeToParquetTypeDescription(t sql.Type, qt query.Type) (string, error) {
 	switch qt {
 	case query.Type_DATETIME, query.Type_DATE, query.Type_TIMESTAMP:
 		return "type=INT64, convertedtype=TIMESTAMP_MICROS", nil
@@ -143,7 +147,10 @@ func mapTypeToParquetTypeDescription(qt query.Type) (string, error) {
 		return "type=INT32, convertedtype=INT_32", nil
 	case query.Type_TIME:
 		return "type=INT64, convertedtype=TIMESPAN", nil
-	case query.Type_DECIMAL, query.Type_ENUM, query.Type_SET, query.Type_BLOB, query.Type_TUPLE, query.Type_VARBINARY,
+	case query.Type_DECIMAL:
+		dt := t.(types.DecimalType_)
+		return fmt.Sprintf("type=BYTE_ARRAY, convertedtype=DECIMAL, precision=%d, scale=%d", dt.Precision(), dt.Scale()), nil
+	case query.Type_ENUM, query.Type_SET, query.Type_BLOB, query.Type_TUPLE, query.Type_VARBINARY,
 		query.Type_JSON, query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT, query.Type_BINARY, query.Type_GEOMETRY:
 		return "type=BYTE_ARRAY, convertedtype=UTF8", nil
 	case query.Type_FLOAT32, query.Type_FLOAT64:

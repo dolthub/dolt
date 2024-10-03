@@ -115,6 +115,11 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			}
 		}
 
+		if col.Kind == types.DecimalKind {
+			valBytes := []byte(val.(string))
+			print(valBytes)
+		}
+
 		row[allCols.TagToIdx[tag]] = val
 
 		return false, nil
@@ -134,32 +139,4 @@ func (pr *ParquetReader) Close(ctx context.Context) error {
 	pr.pReader.ReadStop()
 	pr.fileReader.Close()
 	return nil
-}
-
-func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interface{}) (row.Row, error) {
-	allCols := r.sch.GetAllCols()
-
-	taggedVals := make(row.TaggedValues, allCols.Size())
-	for k, v := range rowMap {
-		col, ok := allCols.GetByName(k)
-		if !ok {
-			return nil, fmt.Errorf("column %s not found in schema", k)
-		}
-
-		taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
-
-	}
-
-	// todo: move null value checks to pipeline
-	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
-			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return row.New(r.vrw.Format(), r.sch, taggedVals)
 }
