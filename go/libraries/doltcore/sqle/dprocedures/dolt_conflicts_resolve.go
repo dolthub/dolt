@@ -527,7 +527,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	err = ResolveDataConflicts(ctx, dSess, ws.WorkingRoot(), dbName, ours, doltdb.ToTableNames(strTableNames, doltdb.DefaultSchemaName))
+	err = ResolveDataConflicts(ctx, dSess, ws.WorkingRoot(), dbName, ours, tableNames)
 	if err != nil {
 		return 1, err
 	}
