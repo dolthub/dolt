@@ -2055,6 +2055,8 @@ type FSCKReport struct {
 }
 
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
+// The success of failure of the scan are returned in the report as a list of errors. The error returned by this function
+// indicates a deeper issue such as having database in an old format.
 func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan string) (*FSCKReport, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 

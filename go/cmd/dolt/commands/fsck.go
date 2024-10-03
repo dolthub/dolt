@@ -18,8 +18,10 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/fatih/color"
 )
 
 type FsckCmd struct{}
@@ -62,11 +64,6 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return status
 	}
 
-	quiet := apr.Contains(cli.QuietFlag)
-	progress := make(chan string, 32)
-	defer close(progress)
-	fsckHandleProgress(progress, quiet)
-
 	threads, haveThreads := apr.GetInt(cli.ThreadsFlag)
 	if !haveThreads {
 		threads = 8
@@ -75,18 +72,31 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		threads = 1
 	}
 
-	report, err := dEnv.DoltDB.FSCK(ctx, threads, progress)
-	if err != nil {
-		cli.PrintErrln(err.Error())
-		return 1
-	}
+	quiet := apr.Contains(cli.QuietFlag)
 
-	// The ctx will only be done if it was cancelled.
-	select {
-	case <-ctx.Done():
-		cli.PrintErrln(ctx.Err().Error())
+	progress := make(chan string, 32)
+	fsckHandleProgress(ctx, progress, quiet)
+
+	var report *doltdb.FSCKReport
+	terminate = func() bool {
+		defer close(progress)
+		var err error
+		report, err = dEnv.DoltDB.FSCK(ctx, threads, progress)
+		if err != nil {
+			cli.PrintErrln(err.Error())
+			return true
+		}
+		// skip printing the report is we were cancelled. Most likely we tripped on the error above first.
+		select {
+		case <-ctx.Done():
+			cli.PrintErrln(ctx.Err().Error())
+			return true
+		default:
+			return false
+		}
+	}()
+	if terminate {
 		return 1
-	default:
 	}
 
 	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
@@ -95,6 +105,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	} else {
 		for _, e := range report.Problems {
+			cli.Println(color.RedString("------ Corruption Found ------"))
 			cli.PrintErrln(e.Error())
 		}
 
@@ -102,11 +113,16 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 }
 
-func fsckHandleProgress(progress chan string, quiet bool) {
+func fsckHandleProgress(ctx context.Context, progress chan string, quiet bool) {
 	go func() {
 		for item := range progress {
 			if !quiet {
 				cli.Println(item)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
 		}
 	}()
