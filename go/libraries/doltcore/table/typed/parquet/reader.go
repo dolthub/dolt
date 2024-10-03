@@ -18,20 +18,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/common"
-	"github.com/xitongsys/parquet-go/reader"
-	"github.com/xitongsys/parquet-go/source"
+	"math/big"
+"strings"
+"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/common"
+	"github.com/xitongsys/parquet-go/reader"
+	"github.com/xitongsys/parquet-go/source"
 )
 
 // ParquetReader implements TableReader.  It reads parquet files and returns rows.
@@ -97,6 +99,25 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	panic("deprecated")
 }
 
+// DECIMAL_BYTE_ARRAY_ToString converts a decimal byte array to a string
+// This is copied from parquet-go/types package, but handles panic correctly
+func DECIMAL_BYTE_ARRAY_ToString(dec []byte, prec int, scale int) string {
+	a := new(big.Int)
+	a.SetBytes(dec)
+	sa := a.Text(10)
+
+	if scale > 0 {
+		ln := len(sa)
+		off := ln - scale
+		if off < 0 {
+			sa = "0." + strings.Repeat("0", -off) + sa
+		} else {
+			sa = sa[:off] + "." + sa[off:]
+		}
+	}
+	return sa
+}
+
 func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if pr.rowReadCounter >= pr.numRow {
 		return nil, io.EOF
@@ -117,7 +138,8 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 
 		if col.Kind == types.DecimalKind {
 			valBytes := []byte(val.(string))
-			print(valBytes)
+			prec, scale := col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Precision(), col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Scale()
+			val = DECIMAL_BYTE_ARRAY_ToString(valBytes, int(prec), int(scale))
 		}
 
 		row[allCols.TagToIdx[tag]] = val
