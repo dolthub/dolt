@@ -20,6 +20,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
@@ -497,8 +498,7 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		return nil, err
 	}
 
-	// TODO: schema
-	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: table.Name()})
+	_, _, ok, err := resolve.Table(ctx, root, table.Name())
 	if err != nil {
 		return nil, err
 	}

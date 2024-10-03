@@ -1902,15 +1902,15 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
 			"call dolt_add('.')",
 			"call dolt_commit('-am', 'inserting into foo1', '--date', '2022-08-06T12:00:00');",
-			"set @Commit1 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
+			"set @Commit1 = (select hashof('HEAD'));",
 
 			"update foo1 set de='Eins' where n=1;",
 			"call dolt_commit('-am', 'updating data in foo1', '--date', '2022-08-06T12:00:01');",
-			"set @Commit2 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
+			"set @Commit2 = (select hashof('HEAD'));",
 
 			"insert into foo1 values (4, 'Vier');",
 			"call dolt_commit('-am', 'inserting data in foo1', '--date', '2022-08-06T12:00:02');",
-			"set @Commit3 = (select commit_hash from dolt_log order by date desc limit 1 offset 1);",
+			"set @Commit3 = (select hashof('HEAD'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1937,26 +1937,26 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t1 (n int primary key, de varchar(20));",
 			"call dolt_add('.')",
 			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting into t1', '--date', '2022-08-06T12:00:01');",
+			"call dolt_commit('-am', 'inserting into t1', '--date', '2022-08-06T12:00:01');",
+			"SET @Commit1 = (select hashof('HEAD'));",
 
 			"alter table t1 add column fr varchar(20);",
 			"insert into t1 values (4, 'Vier', 'Quatre');",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'adding column and inserting data in t1', '--date', '2022-08-06T12:00:02');",
+			"call dolt_commit('-am', 'adding column and inserting data in t1', '--date', '2022-08-06T12:00:02');",
+			"SET @Commit2 = (select hashof('HEAD'));",
 
 			"update t1 set fr='Un' where n=1;",
 			"update t1 set fr='Deux' where n=2;",
-			"set @Commit3 = '';",
-			"call dolt_commit_hash_out(@Commit3, '-am', 'updating data in t1', '--date', '2022-08-06T12:00:03');",
+			"call dolt_commit('-am', 'updating data in t1', '--date', '2022-08-06T12:00:03');",
+			"SET @Commit3 = (select hashof('HEAD'));",
 
 			"update t1 set de=concat(de, ', meine herren') where n>1;",
-			"set @Commit4 = '';",
-			"call dolt_commit_hash_out(@Commit4, '-am', 'be polite when you address a gentleman', '--date', '2022-08-06T12:00:04');",
+			"call dolt_commit('-am', 'be polite when you address a gentleman', '--date', '2022-08-06T12:00:04');",
+			"SET @Commit4 = (select hashof('HEAD'));",
 
 			"delete from t1 where n=2;",
-			"set @Commit5 = '';",
-			"call dolt_commit_hash_out(@Commit5, '-am', 'we don''t need the number 2', '--date', '2022-08-06T12:00:05');",
+			"call dolt_commit('-am', 'we don''t need the number 2', '--date', '2022-08-06T12:00:05');",
+			"SET @Commit5 = (select hashof('HEAD'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
