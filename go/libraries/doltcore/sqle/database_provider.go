@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -126,6 +127,11 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
+	tableFuncs := make(map[string]sql.TableFunction, len(dtablefunctions.DoltTableFunctions))
+	for _, fn := range dtablefunctions.DoltTableFunctions {
+		tableFuncs[strings.ToLower(fn.Name())] = fn
+	}
+
 	externalProcedures := sql.NewExternalStoredProcedureRegistry()
 	for _, esp := range dprocedures.DoltProcedures {
 		externalProcedures.Register(esp)
@@ -142,6 +148,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		dbLocations:            dbLocations,
 		databases:              dbs,
 		functions:              funcs,
+		tableFunctions:         tableFuncs,
 		externalProcedures:     externalProcedures,
 		mu:                     &sync.RWMutex{},
 		fs:                     fs,
@@ -1402,27 +1409,7 @@ func (p *DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name str
 
 // TableFunction implements the sql.TableFunctionProvider interface
 func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
-	// TODO: Clean this up and store table functions in a map, similar to regular functions.
-	switch strings.ToLower(name) {
-	case "dolt_diff":
-		return &DiffTableFunction{}, nil
-	case "dolt_diff_stat":
-		return &DiffStatTableFunction{}, nil
-	case "dolt_diff_summary":
-		return &DiffSummaryTableFunction{}, nil
-	case "dolt_log":
-		return &LogTableFunction{}, nil
-	case "dolt_patch":
-		return &PatchTableFunction{}, nil
-	case "dolt_schema_diff":
-		return &SchemaDiffTableFunction{}, nil
-	case "dolt_reflog":
-		return &ReflogTableFunction{}, nil
-	case "dolt_query_diff":
-		return &QueryDiffTableFunction{}, nil
-	}
-
-	if fun, ok := p.tableFunctions[name]; ok {
+	if fun, ok := p.tableFunctions[strings.ToLower(name)]; ok {
 		return fun, nil
 	}
 

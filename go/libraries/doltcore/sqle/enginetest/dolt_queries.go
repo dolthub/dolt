@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -3862,19 +3862,19 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:       "SELECT * from dolt_log(concat('fake', '-', 'branch'));",
-				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
 				Query:       "SELECT * from dolt_log(hashof('main'));",
-				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
 				Query:       "SELECT * from dolt_log(@Commit3, '--not', hashof('main'));",
-				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
 				Query:       "SELECT * from dolt_log(@Commit1, LOWER(@Commit2));",
-				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
 				Query:          "SELECT parents from dolt_log();",

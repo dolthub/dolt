@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtablefunctions
 
 import (
 	"bytes"
@@ -423,7 +423,7 @@ func (p *PatchTableFunction) WithDatabase(database sql.Database) (sql.Node, erro
 
 // Name implements the sql.TableFunction interface
 func (p *PatchTableFunction) Name() string {
-	return p.String()
+	return "dolt_patch"
 }
 
 // RowIter implements the sql.ExecSourceRel interface

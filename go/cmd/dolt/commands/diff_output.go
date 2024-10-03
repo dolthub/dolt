@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
@@ -180,7 +180,7 @@ func (t tabularDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldCo
 }
 
 func (t tabularDiffWriter) printStat(acc diff.DiffStatProgress, oldColLen, newColLen int) {
-	numCellInserts, numCellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
+	numCellInserts, numCellDeletes := dtablefunctions.GetCellsAddedAndDeleted(acc, newColLen)
 	rowsUnmodified := uint64(acc.OldRowSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
@@ -615,7 +615,7 @@ func (j *jsonDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColL
 	rowsUnmodified := acc.OldRowSize - acc.Changes - acc.Removes
 	j.wr.Write([]byte(fmt.Sprintf(`"rows_unmodified":%d,`, rowsUnmodified)))
 
-	cellAdds, cellDeletes := sqle.GetCellsAddedAndDeleted(acc, newColLen)
+	cellAdds, cellDeletes := dtablefunctions.GetCellsAddedAndDeleted(acc, newColLen)
 	j.wr.Write([]byte(fmt.Sprintf(`"cells_added":%d,`, cellAdds)))
 	j.wr.Write([]byte(fmt.Sprintf(`"cells_deleted":%d,`, cellDeletes)))
 	j.wr.Write([]byte(fmt.Sprintf(`"cells_modified":%d`, acc.CellChanges)))
