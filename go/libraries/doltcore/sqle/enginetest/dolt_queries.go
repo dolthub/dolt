@@ -2014,11 +2014,12 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t1 (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'initial table');",
+			"call dolt_commit('-am', 'initial table');",
+			"set @Commit1 = (select hashof('HEAD'));",
+
 			"insert into t1 values (5,6), (7,8)",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'two more rows');",
+			"call dolt_commit('-am', 'two more rows');",
+			"set @Commit2 = (select hashof('HEAD'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2099,15 +2100,16 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t1 (pk int primary key, c int);",
 			"call dolt_add('.')",
 			"insert into t1 values (1,2), (3,4)",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'initial table');",
+			"call dolt_commit('-am', 'initial table');",
+			"set @Commit1 = (select hashof('HEAD'));",
+
 			"insert into t1 values (5,6), (7,8)",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'two more rows');",
+			"call dolt_commit('-am', 'two more rows');",
+
 			"insert into t1 values (9,10), (11,12)",
 			"create index t1_c on t1(c)",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'two more rows and an index');",
+			"call dolt_commit('-am', 'two more rows and an index');",
+			"set @Commit2 = (select hashof('HEAD'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2173,16 +2175,16 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = (select hashof('HEAD'));",
 
 			"alter table t drop column c2;",
-			"set @Commit2 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping column c2');",
+			"CALL DOLT_COMMIT('-am', 'dropping column c2');",
+			"set @Commit2 = (select hashof('HEAD'));",
 
 			"alter table t rename column c1 to c2;",
-			"set @Commit3 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'renaming c1 to c2');",
+			"CALL DOLT_COMMIT('-am', 'renaming c1 to c2');",
+			"set @Commit3 = (select hashof('HEAD'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2266,13 +2268,14 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+
+			"CALL DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = dolt_hashof('HEAD');",
 
 			"alter table t rename to t2;",
 			"call dolt_add('.')",
-			"set @Commit2 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'renaming table to t2');",
+			"CALL DOLT_COMMIT('-am', 'renaming table to t2');",
+			"set @commit2 = dolt_hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2295,17 +2298,17 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"call dolt_add('.')",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'creating table t');",
+			"CALL DOLT_COMMIT('-am', 'creating table t');",
+			"set @Commit1 = dolt_hashof('HEAD');",
 
 			"drop table t;",
-			"set @Commit2 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'dropping table t');",
+			"CALL DOLT_COMMIT('-am', 'dropping table t');",
+			"SET @Commit2 = dolt_hashof('HEAD');",
 
 			"create table t (pk int primary key, c1 int);",
 			"call dolt_add('.')",
-			"set @Commit3 = '';",
-			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'recreating table t');",
+			"CALL DOLT_COMMIT('-am', 'recreating table t');",
+			"SET @Commit3 = dolt_hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
