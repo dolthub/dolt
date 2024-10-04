@@ -484,7 +484,7 @@ SQL
     # TODO: we can't round-trip binary data yet
 }
 
-@test "export-tables: table export decimal and bit types to parquet" {
+@test "export-tables: round trip decimals to and from parquet" {
     skiponwindows "Missing dependencies"
     dolt sql -q "CREATE TABLE dec (v DECIMAL(9,5));"
     dolt sql -q "INSERT INTO dec VALUES (1234.56789);"
