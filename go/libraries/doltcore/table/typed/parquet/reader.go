@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"strings"
 	"time"
-	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
