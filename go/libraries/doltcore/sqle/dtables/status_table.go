@@ -136,7 +136,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	for _, tbl := range cvTables {
 		rows = append(rows, statusTableRow{
-			tableName: tbl.Name,
+			tableName: tbl.String(),
 			status:    "constraint violation",
 		})
 	}
@@ -145,7 +145,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		ms := st.workingSet.MergeState()
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
 			rows = append(rows, statusTableRow{
-				tableName: tbl,
+				tableName: tbl.String(),
 				isStaged:  false,
 				status:    "schema conflict",
 			})
@@ -153,7 +153,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 		for _, tbl := range ms.MergedTables() {
 			rows = append(rows, statusTableRow{
-				tableName: tbl,
+				tableName: tbl.String(),
 				isStaged:  true,
 				status:    mergedStatus,
 			})
@@ -166,7 +166,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 	for _, tbl := range cnfTables {
 		rows = append(rows, statusTableRow{
-			tableName: tbl.Name,
+			tableName: tbl.String(),
 			status:    mergeConflictStatus,
 		})
 	}
@@ -231,7 +231,7 @@ func schemaStatusString(sd diff.DatabaseSchemaDelta) string {
 
 func tableName(td diff.TableDelta) string {
 	if td.IsRename() {
-		return fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
+		return fmt.Sprintf("%s -> %s", td.FromName.String(), td.ToName.String())
 	} else {
 		return td.CurName()
 	}

@@ -440,7 +440,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		sqlEngine := engine.GetUnderlyingEngine()
 		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
 		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
-		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), false)
+		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), nil, false)
 		if err != nil {
 			return err
 		}

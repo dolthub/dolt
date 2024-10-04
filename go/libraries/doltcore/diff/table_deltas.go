@@ -446,9 +446,9 @@ func (td TableDelta) HasChanges() (bool, error) {
 // CurName returns the most recent name of the table.
 func (td TableDelta) CurName() string {
 	if td.ToName.Name != "" {
-		return td.ToName.Name
+		return td.ToName.String()
 	}
-	return td.FromName.Name
+	return td.FromName.String()
 }
 
 func (td TableDelta) HasFKChanges() bool {

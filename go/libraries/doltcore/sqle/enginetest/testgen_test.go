@@ -49,7 +49,7 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 		_, _ = w.WriteString("\t{\n")
 		ctx := enginetest.NewContextWithEngine(harness, engine)
 		binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, sql.NewMysqlParser())
-		parsed, _, _, qFlags, err := binder.Parse(tt.Query, false)
+		parsed, _, _, qFlags, err := binder.Parse(tt.Query, nil, false)
 		require.NoError(t, err)
 
 		node, err := engine.EngineAnalyzer().Analyze(ctx, parsed, nil, qFlags)

@@ -318,7 +318,7 @@ func (ds *DiffStatTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			if errors.Is(err, diff.ErrPrimaryKeySetChanged) {
 				ctx.Warn(dtables.PrimaryKeyChangeWarningCode, fmt.Sprintf("stat for table %s cannot be determined. Primary key set changed.", tblName))
 				// Report an empty diff for tables that have primary key set changes
-				diffStats = append(diffStats, diffStatNode{tblName: tblName.Name})
+				diffStats = append(diffStats, diffStatNode{tblName: tblName})
 				continue
 			}
 			return nil, err
@@ -415,7 +415,7 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 		return diffStatNode{}, false, err
 	}
 
-	return diffStatNode{tableName.Name, diffStat, oldColLen, newColLen, keyless}, hasDiff, nil
+	return diffStatNode{tableName, diffStat, oldColLen, newColLen, keyless}, hasDiff, nil
 }
 
 // getDiffStat returns diff.DiffStatProgress object and whether there is a data diff or not.
@@ -491,7 +491,7 @@ func (d *diffStatTableFunctionRowIter) incrementIndexes() {
 }
 
 type diffStatNode struct {
-	tblName   string
+	tblName   doltdb.TableName
 	diffStat  diff.DiffStatProgress
 	oldColLen int
 	newColLen int
@@ -525,11 +525,11 @@ func (d *diffStatTableFunctionRowIter) Close(context *sql.Context) error {
 // getRowFromDiffStat takes diff.DiffStatProgress and calculates the row_modified, cell_added, cell_deleted.
 // If the number of cell change from old to new cell count does not equal to cell_added and/or cell_deleted, there
 // must be schema changes that affects cell_added and cell_deleted value addition to the row count * col length number.
-func getRowFromDiffStat(tblName string, dsp diff.DiffStatProgress, newColLen, oldColLen int, keyless bool) sql.Row {
+func getRowFromDiffStat(tblName doltdb.TableName, dsp diff.DiffStatProgress, newColLen, oldColLen int, keyless bool) sql.Row {
 	// if table is keyless table, match current CLI command result
 	if keyless {
 		return sql.Row{
-			tblName,            // table_name
+			tblName.String(),   // table_name
 			nil,                // rows_unmodified
 			int64(dsp.Adds),    // rows_added
 			int64(dsp.Removes), // rows_deleted
@@ -548,7 +548,7 @@ func getRowFromDiffStat(tblName string, dsp diff.DiffStatProgress, newColLen, ol
 	rowsUnmodified := dsp.OldRowSize - dsp.Changes - dsp.Removes
 
 	return sql.Row{
-		tblName,                // table_name
+		tblName.String(),       // table_name
 		int64(rowsUnmodified),  // rows_unmodified
 		int64(dsp.Adds),        // rows_added
 		int64(dsp.Removes),     // rows_deleted

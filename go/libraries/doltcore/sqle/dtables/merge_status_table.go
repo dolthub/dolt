@@ -96,15 +96,14 @@ func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatus
 		return nil, err
 	}
 
-	var schConflicts []string
+	var schConflicts []doltdb.TableName
 	if ws.MergeActive() {
 		schConflicts = ws.MergeState().TablesWithSchemaConflicts()
 	}
 
 	unmergedTblNames := doltdb.NewTableNameSet(inConflict)
 	unmergedTblNames.Add(tblsWithViolations...)
-	// TODO: schema name
-	unmergedTblNames.Add(doltdb.ToTableNames(schConflicts, doltdb.DefaultSchemaName)...)
+	unmergedTblNames.Add(schConflicts...)
 
 	var sourceCommitSpecStr *string
 	var sourceCommitHash *string
