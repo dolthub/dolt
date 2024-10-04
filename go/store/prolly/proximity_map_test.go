@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -74,7 +75,7 @@ func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, ve
 		values[i] = valueBuilder.Build(bp)
 	}
 
-	m, err := NewProximityMapFromTupleIter(ctx, ns, distanceType, kd, vd, keys, values, logChunkSize)
+	m, err := NewProximityMapFromTuples(ctx, ns, distanceType, kd, vd, keys, values, logChunkSize)
 	require.NoError(t, err)
 	mapCount, err := m.Count()
 	require.NoError(t, err)
@@ -190,10 +191,10 @@ func TestInsertOrderIndependence(t *testing.T) {
 	}
 	valueStrings2 := []int64{4, 3, 2, 1}
 	m1, _, _ := createProximityMap(t, ctx, ns, keyStrings1, valueStrings1, 1)
-	_, _ = keyStrings1, valueStrings1
 	m2, _, _ := createProximityMap(t, ctx, ns, keyStrings2, valueStrings2, 1)
-	require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m1.tuples.Root))
-	require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m2.tuples.Root))
 
-	require.Equal(t, m1.tuples.Root.HashOf(), m2.tuples.Root.HashOf())
+	if !assert.Equal(t, m1.tuples.Root.HashOf(), m2.tuples.Root.HashOf(), "trees have different hashes") {
+		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m1.tuples.Root))
+		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m2.tuples.Root))
+	}
 }
