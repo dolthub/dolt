@@ -476,6 +476,7 @@ SQL
     [ -f more.parquet ]
 
     # Note: parquet cat rounds decimal values for some reason
+    parquet cat more.parquet
     run parquet cat more.parquet
     [ "$status" -eq 0 ]
     [[ "$output" =~ '{"pk": 1, "v": "1234.57", "b": 511}' ]] || false
@@ -486,18 +487,18 @@ SQL
 
 @test "export-tables: round trip decimals to and from parquet" {
     skiponwindows "Missing dependencies"
-    dolt sql -q "CREATE TABLE dec (v DECIMAL(9,5));"
-    dolt sql -q "INSERT INTO dec VALUES (1234.56789);"
-    dolt sql -q "INSERT INTO dec VALUES (5235.66789);"
+    dolt sql -q "CREATE TABLE t (d DECIMAL(9,5));"
+    dolt sql -q "INSERT INTO t VALUES (1234.56789);"
+    dolt sql -q "INSERT INTO t VALUES (5235.66789);"
 
-    run dolt table export dec dec.parquet
+    run dolt table export t t.parquet
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f dec.parquet ]
+    [ -f t.parquet ]
 
-    dolt sql -q "delete from dec where true"
-    dolt table import -u dec dec.parquet
-    run dolt sql -q "SELECT * FROM dec order by v"
+    dolt sql -q "delete from t where true"
+    dolt table import -u t t.parquet
+    run dolt sql -q "SELECT * FROM t order by d"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1234.56789" ]] || false
     [[ "$output" =~ "5235.66789" ]] || false
