@@ -1825,7 +1825,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
 	b := planbuilder.New(ctx, db.getCatalog(ctx), sql.NewMysqlParser())
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
-	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), false)
+	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
 		return nil, err
 	}
