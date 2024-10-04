@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-"strings"
-"time"
+	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -100,22 +100,32 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 }
 
 // DECIMAL_BYTE_ARRAY_ToString converts a decimal byte array to a string
-// This is copied from parquet-go/types package, but handles panic correctly
+// This is copied from https://github.com/xitongsys/parquet-go/blob/master/types/converter.go
+// while we wait for official release
 func DECIMAL_BYTE_ARRAY_ToString(dec []byte, prec int, scale int) string {
+	sign := ""
+	if dec[0] > 0x7f {
+		sign = "-"
+		for i := range dec {
+			dec[i] = dec[i] ^ 0xff
+		}
+	}
 	a := new(big.Int)
 	a.SetBytes(dec)
+	if sign == "-" {
+		a = a.Add(a, big.NewInt(1))
+	}
 	sa := a.Text(10)
 
 	if scale > 0 {
 		ln := len(sa)
-		off := ln - scale
-		if off < 0 {
-			sa = "0." + strings.Repeat("0", -off) + sa
-		} else {
-			sa = sa[:off] + "." + sa[off:]
+		if ln < scale+1 {
+			sa = strings.Repeat("0", scale+1-ln) + sa
+			ln = scale + 1
 		}
+		sa = sa[:ln-scale] + "." + sa[ln-scale:]
 	}
-	return sa
+	return sign + sa
 }
 
 func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {

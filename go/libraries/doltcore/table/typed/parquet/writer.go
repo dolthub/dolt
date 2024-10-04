@@ -103,12 +103,6 @@ func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 				sqlType = types.Int64
 			case query.Type_BIT:
 				sqlType = types.Uint64
-			//case query.Type_DECIMAL:
-			//	decVal := val.(decimal.Decimal)
-			//	decVal.Shift(-decVal.Exponent())
-			//	prec, scale := sqlType.(types.DecimalType_).Precision(), sqlType.(types.DecimalType_).Scale()
-			//	val = parquettypes.DECIMAL_BYTE_ARRAY_ToString(decVal.BigInt().Bytes(), int(prec), int(scale))
-			//	sqlType = types.Text
 			}
 			v, err := sqlutil.SqlColToStr(sqlType, val)
 			if err != nil {
@@ -118,6 +112,7 @@ func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 		}
 	}
 
+	// TODO: the parquet-go library uses big.Float to write for some reason, and loses precision for long decimals
 	err := pwr.pwriter.WriteString(colValStrs)
 	if err != nil {
 		return err
