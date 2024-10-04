@@ -16,13 +16,15 @@ package prolly
 
 import (
 	"context"
+	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"io"
 )
 
 // ProximityMap wraps a tree.ProximityMap but operates on typed Tuples instead of raw bytestrings.
