@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -147,9 +148,8 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		}
 
 		if col.Kind == types.DecimalKind {
-			valBytes := []byte(val.(string))
 			prec, scale := col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Precision(), col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Scale()
-			val = DECIMAL_BYTE_ARRAY_ToString(valBytes, int(prec), int(scale))
+			val = DECIMAL_BYTE_ARRAY_ToString([]byte(val.(string)), int(prec), int(scale))
 		}
 
 		row[allCols.TagToIdx[tag]] = val
