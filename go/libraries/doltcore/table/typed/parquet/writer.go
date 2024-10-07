@@ -158,6 +158,6 @@ func mapTypeToParquetTypeDescription(t sql.Type) (string, error) {
 	case query.Type_BIT:
 		return "type=INT32, convertedtype=INT_16", nil
 	default:
-		return "", fmt.Errorf("unsupported type: %v", qt)
+		return "", fmt.Errorf("unsupported type: %v", t.Type())
 	}
 }
