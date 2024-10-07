@@ -47,11 +47,10 @@ func NewParquetRowWriter(outSch sql.Schema, w io.WriteCloser) (*ParquetRowWriter
 	// creates csv schema for handling parquet format using NewCSVWriter
 	for _, col := range outSch {
 		repetitionType = ""
-		colType := col.Type
 		if col.Nullable {
 			repetitionType = ", repetitiontype=OPTIONAL"
 		}
-		mappedType, err := mapTypeToParquetTypeDescription(colType.Type())
+		mappedType, err := mapTypeToParquetTypeDescription(col.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -112,6 +111,7 @@ func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 		}
 	}
 
+	// TODO: the parquet-go library uses big.Float to write for some reason, and loses precision for long decimals
 	err := pwr.pwriter.WriteString(colValStrs)
 	if err != nil {
 		return err
@@ -134,16 +134,19 @@ func (pwr *ParquetRowWriter) Close(_ context.Context) error {
 	return nil
 }
 
-// mapTypeToParquetTypeDescription maps |qt| from a query.Type to a text description of the type for Parquet.
-func mapTypeToParquetTypeDescription(qt query.Type) (string, error) {
-	switch qt {
+// mapTypeToParquetTypeDescription maps |t| from a sql.Type to a text description of the type for Parquet.
+func mapTypeToParquetTypeDescription(t sql.Type) (string, error) {
+	switch t.Type() {
 	case query.Type_DATETIME, query.Type_DATE, query.Type_TIMESTAMP:
 		return "type=INT64, convertedtype=TIMESTAMP_MICROS", nil
 	case query.Type_YEAR:
 		return "type=INT32, convertedtype=INT_32", nil
 	case query.Type_TIME:
 		return "type=INT64, convertedtype=TIMESPAN", nil
-	case query.Type_DECIMAL, query.Type_ENUM, query.Type_SET, query.Type_BLOB, query.Type_TUPLE, query.Type_VARBINARY,
+	case query.Type_DECIMAL:
+		dt := t.(types.DecimalType_)
+		return fmt.Sprintf("type=BYTE_ARRAY, convertedtype=DECIMAL, precision=%d, scale=%d", dt.Precision(), dt.Scale()), nil
+	case query.Type_ENUM, query.Type_SET, query.Type_BLOB, query.Type_TUPLE, query.Type_VARBINARY,
 		query.Type_JSON, query.Type_CHAR, query.Type_VARCHAR, query.Type_TEXT, query.Type_BINARY, query.Type_GEOMETRY:
 		return "type=BYTE_ARRAY, convertedtype=UTF8", nil
 	case query.Type_FLOAT32, query.Type_FLOAT64:
@@ -155,6 +158,6 @@ func mapTypeToParquetTypeDescription(qt query.Type) (string, error) {
 	case query.Type_BIT:
 		return "type=INT32, convertedtype=INT_16", nil
 	default:
-		return "", fmt.Errorf("unsupported type: %v", qt)
+		return "", fmt.Errorf("unsupported type: %v", t.Type())
 	}
 }

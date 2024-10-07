@@ -460,25 +460,23 @@ SQL
     row3='{"pk": 2, "int": 1, "string": "", "boolean": 1, "float": 0.0, "uint": 0, "uuid": "123e4567-e89b-12d3-a456-426655440000"}'
 }
 
-    [ "${lines[0]}" = "$row1" ]
-    [ "${lines[1]}" = "$row2" ]
-    [ "${lines[2]}" = "$row3" ]
-
-@test "export-tables: table export decimal and bit types to parquet" {
+@test "export-tables: round trip decimals to and from parquet" {
     skiponwindows "Missing dependencies"
-    dolt sql -q "CREATE TABLE more (pk BIGINT NOT NULL,v DECIMAL(9,5),b BIT(10),PRIMARY KEY (pk));"
-    dolt sql -q "INSERT INTO more VALUES (1, 1234.56789, 511);"
-    dolt sql -q "INSERT INTO more VALUES (2, 5235.66789, 514);"
+    dolt sql -q "CREATE TABLE t (d DECIMAL(9,5));"
+    dolt sql -q "INSERT INTO t VALUES (1234.56789);"
+    dolt sql -q "INSERT INTO t VALUES (5235.66789);"
 
-    run dolt table export more more.parquet
+    run dolt table export t t.parquet
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f more.parquet ]
+    [ -f t.parquet ]
 
-    run parquet cat more.parquet
+    dolt sql -q "delete from t where true"
+    dolt table import -u t t.parquet
+    run dolt sql -q "SELECT * FROM t order by d"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '{"pk": 1, "v": "1234.56789", "b": 511}' ]] || false
-    [[ "$output" =~ '{"pk": 2, "v": "5235.66789", "b": 514}' ]] || false
+    [[ "$output" =~ "1234.56789" ]] || false
+    [[ "$output" =~ "5235.66789" ]] || false
 }
 
 @test "export-tables: table export to sql with null values in different sql types" {

@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -97,6 +99,35 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	panic("deprecated")
 }
 
+// DecimalByteArrayToString converts a decimal byte array to a string
+// This is copied from https://github.com/xitongsys/parquet-go/blob/master/types/converter.go
+// while we wait for official release
+func DecimalByteArrayToString(dec []byte, prec int, scale int) string {
+	sign := ""
+	if dec[0] > 0x7f {
+		sign = "-"
+		for i := range dec {
+			dec[i] = dec[i] ^ 0xff
+		}
+	}
+	a := new(big.Int)
+	a.SetBytes(dec)
+	if sign == "-" {
+		a = a.Add(a, big.NewInt(1))
+	}
+	sa := a.Text(10)
+
+	if scale > 0 {
+		ln := len(sa)
+		if ln < scale+1 {
+			sa = strings.Repeat("0", scale+1-ln) + sa
+			ln = scale + 1
+		}
+		sa = sa[:ln-scale] + "." + sa[ln-scale:]
+	}
+	return sign + sa
+}
+
 func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if pr.rowReadCounter >= pr.numRow {
 		return nil, io.EOF
@@ -113,6 +144,11 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			case typeinfo.TimeTypeIdentifier:
 				val = gmstypes.Timespan(time.Duration(val.(int64)).Microseconds())
 			}
+		}
+
+		if col.Kind == types.DecimalKind {
+			prec, scale := col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Precision(), col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Scale()
+			val = DecimalByteArrayToString([]byte(val.(string)), int(prec), int(scale))
 		}
 
 		row[allCols.TagToIdx[tag]] = val
@@ -134,32 +170,4 @@ func (pr *ParquetReader) Close(ctx context.Context) error {
 	pr.pReader.ReadStop()
 	pr.fileReader.Close()
 	return nil
-}
-
-func (r *ParquetReader) convToRow(ctx context.Context, rowMap map[string]interface{}) (row.Row, error) {
-	allCols := r.sch.GetAllCols()
-
-	taggedVals := make(row.TaggedValues, allCols.Size())
-	for k, v := range rowMap {
-		col, ok := allCols.GetByName(k)
-		if !ok {
-			return nil, fmt.Errorf("column %s not found in schema", k)
-		}
-
-		taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(ctx, r.vrw, v)
-
-	}
-
-	// todo: move null value checks to pipeline
-	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
-			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return row.New(r.vrw.Format(), r.sch, taggedVals)
 }
