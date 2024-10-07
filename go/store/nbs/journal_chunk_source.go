@@ -209,28 +209,60 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
-func (s journalChunkSource) getAllChunkHashes(_ context.Context, out chan<- hash.Hash, wg *sync.WaitGroup) int {
-	chunkCount := s.journal.recordCount()
+func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
+	var finalErr error
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		s.journal.ranges.novel.Iter(func(k hash.Hash, v Range) (stop bool) {
-			out <- k
-			return false
-		})
+	s.journal.ranges.novel.Iter(func(h hash.Hash, r Range) (stop bool) {
+		if ctx.Err() != nil {
+			finalErr = ctx.Err()
+			return true
+		}
 
-		s.journal.ranges.cached.Iter(func(k addr16, v Range) (stop bool) {
-			// Currently we only have 16bytes of the hash. The value returned here will have 4 0xFF bytes at the end.
-			var h hash.Hash
-			copy(h[:], k[:])
-			out <- h
+		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		if err != nil {
+			finalErr = err
+			return true
+		}
 
-			return false
-		})
-	}()
+		chunk, err := cchk.ToChunk()
+		if err != nil {
+			finalErr = err
+			return true
+		}
+		cb(chunk)
+		return false
+	})
 
-	return int(chunkCount)
+	if finalErr != nil {
+		return finalErr
+	}
+
+	s.journal.ranges.cached.Iter(func(a16 addr16, r Range) (stop bool) {
+		if ctx.Err() != nil {
+			finalErr = ctx.Err()
+			return true
+		}
+
+		// We only have 16bytes of the hash. The value returned here will have 4 0x00 bytes at the end.
+		var h hash.Hash
+		copy(h[:], a16[:])
+
+		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
+		if err != nil {
+			finalErr = err
+			return true
+		}
+
+		chunk, err := cchk.ToChunk()
+		if err != nil {
+			finalErr = err
+			return true
+		}
+		cb(chunk)
+		return false
+	})
+
+	return finalErr
 }
 
 func equalSpecs(left, right []tableSpec) bool {

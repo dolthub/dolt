@@ -22,7 +22,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/gozstd"
@@ -717,6 +716,6 @@ func (tcs *testChunkSource) currentSize() uint64 {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getAllChunkHashes(ctx context.Context, hashes chan<- hash.Hash, group *sync.WaitGroup) int {
+func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
 	panic("never used")
 }

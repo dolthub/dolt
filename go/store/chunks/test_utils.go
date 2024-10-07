@@ -23,7 +23,6 @@ package chunks
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -100,9 +99,12 @@ func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []
 	return collector.MarkAndSweepChunks(ctx, hashes, collector)
 }
 
-func (s *TestStoreView) GetChunkHashes(ctx context.Context, hashes chan<- hash.Hash, wg *sync.WaitGroup) int {
-	//NM4 implement me
-	panic("implement me")
+func (s *TestStoreView) Count() (uint32, error) {
+	panic("currently unused")
+}
+
+func (s *TestStoreView) IterateAllChunks(_ context.Context, _ func(Chunk)) error {
+	panic("currently unused")
 }
 
 func (s *TestStoreView) Reads() int {

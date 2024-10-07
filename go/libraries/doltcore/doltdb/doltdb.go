@@ -2050,7 +2050,7 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 }
 
 type FSCKReport struct {
-	ChunkCount int
+	ChunkCount uint32
 	Problems   []error
 }
 
@@ -2067,16 +2067,18 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan string) 
 		return nil, errors.New("FSCK requires a local database")
 	}
 
-	// Channel receives hashes of chunks to check.
-	hashChan := make(chan hash.Hash, 128)
-	hashChanWg := &sync.WaitGroup{}
+	chunkCount, err := gs.OldGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount2, err := gs.NewGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount += chunkCount2
+	proccessedCnt := int64(0)
 
-	chkCount := gs.OldGen().GetChunkHashes(ctx, hashChan, hashChanWg)
-	chkCount += gs.NewGen().GetChunkHashes(ctx, hashChan, hashChanWg)
-
-	errChan := make(chan error, 128)
-
-	chksProcessed := int64(0)
+	var errs []error
 
 	decodeMsg := func(chk chunks.Chunk) string {
 		hrs := ""
@@ -2089,74 +2091,71 @@ func (ddb *DoltDB) FSCK(ctx context.Context, threads int, progress chan string) 
 		return hrs
 	}
 
-	verifyWg := &sync.WaitGroup{}
-	for i := 0; i < threads; i++ {
-		verifyWg.Add(1)
-		go func() {
-			defer verifyWg.Done()
-			for h := range hashChan {
-				chunkOk := true
-				pCnt := atomic.AddInt64(&chksProcessed, 1)
+	// Append safely to the slice of errors with a mutex.
+	errsLock := &sync.Mutex{}
+	appendErr := func(err error) {
+		errsLock.Lock()
+		defer errsLock.Unlock()
+		errs = append(errs, err)
+	}
 
-				chk, err := cs.Get(ctx, h)
-				if err != nil {
-					errChan <- errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error()))
-					chunkOk = false
-				} else if chk.Hash() != h {
-					hrs := decodeMsg(chk)
-					errChan <- errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), chk.Hash().String(), hrs))
-					chunkOk = false
-				} else {
-					raw := chk.Data()
-					calcChkSum := hash.Of(raw)
-					if chk.Hash() != calcChkSum {
-						fuzzyMatch := false
-						// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
-						if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
-							// Now we'll just verify that the first 16 bytes match.
-							ln := hash.ByteLen - 4
-							fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
-						}
-						if !fuzzyMatch {
-							hrs := decodeMsg(chk)
-							errChan <- errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs))
-							chunkOk = false
-						}
-					}
-				}
+	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
+	validationCallback := func(chunk chunks.Chunk) {
+		chunkOk := true
+		pCnt := atomic.AddInt64(&proccessedCnt, 1)
+		h := chunk.Hash()
+		raw := chunk.Data()
+		calcChkSum := hash.Of(raw)
 
-				percentage := (float64(pCnt) * 100) / float64(chkCount)
-				result := fmt.Sprintf("(%4.1f%% done)", percentage)
-
-				progStr := "OK: " + h.String()
-				if !chunkOk {
-					progStr = "FAIL: " + h.String()
-				}
-				progStr = result + " " + progStr
-
-				select {
-				case <-ctx.Done():
-					errChan <- ctx.Err()
-					return
-				default:
-					progress <- progStr
-				}
+		if h != calcChkSum {
+			fuzzyMatch := false
+			// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+			if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+				// Now we'll just verify that the first 16 bytes match.
+				ln := hash.ByteLen - 4
+				fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
 			}
-		}()
+			if !fuzzyMatch {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		if chunkOk {
+			// Round trip validation. Ensure that the top level store returns the same data.
+			c, err := cs.Get(ctx, h)
+			if err != nil {
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error())))
+				chunkOk = false
+			} else if bytes.Compare(raw, c.Data()) != 0 {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), c.Hash().String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		percentage := (float64(pCnt) * 100) / float64(chunkCount)
+		result := fmt.Sprintf("(%4.1f%% done)", percentage)
+
+		progStr := "OK: " + h.String()
+		if !chunkOk {
+			progStr = "FAIL: " + h.String()
+		}
+		progStr = result + " " + progStr
+		progress <- progStr
 	}
 
-	// When all stores are done putting hashes in the channel, close it.
-	hashChanWg.Wait()
-	close(hashChan)
-
-	// Wait for all the verification goroutines to finish.
-	verifyWg.Wait()
-	close(errChan)
-
-	FSCKReport := FSCKReport{ChunkCount: chkCount}
-	for err := range errChan {
-		FSCKReport.Problems = append(FSCKReport.Problems, err)
+	err = gs.OldGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
 	}
+	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
+	}
+
+	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
 
 	return &FSCKReport, nil
 }
