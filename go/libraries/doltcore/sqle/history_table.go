@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -497,8 +498,7 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		return nil, err
 	}
 
-	// TODO: schema
-	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: table.Name()})
+	_, _, ok, err := resolve.Table(ctx, root, table.Name())
 	if err != nil {
 		return nil, err
 	}
