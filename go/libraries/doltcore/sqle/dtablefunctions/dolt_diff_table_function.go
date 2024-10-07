@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtablefunctions
 
 import (
 	"fmt"
@@ -38,6 +38,7 @@ import (
 const diffTableDefaultRowCount = 1000
 
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
+var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)

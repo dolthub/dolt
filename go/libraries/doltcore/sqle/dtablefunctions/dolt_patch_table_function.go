@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtablefunctions
 
 import (
 	"bytes"
@@ -146,19 +146,21 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 	// If tableNameExpr defined, return a single table patch result
 	if p.tableNameExpr != nil {
-		_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
-		if err != nil {
-			return nil, err
-		}
-		_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !fromTblExists && !toTblExists {
-			return nil, sql.ErrTableNotFound.New(tableName)
+		delta := findMatchingDelta(tableDeltas, tableName)
+		if delta.FromTable == nil && delta.ToTable == nil {
+			_, _, fromTblExists, err := resolve.Table(ctx, fromRefDetails.root, tableName)
+			if err != nil {
+				return nil, err
+			}
+			_, _, toTblExists, err := resolve.Table(ctx, toRefDetails.root, tableName)
+			if err != nil {
+				return nil, err
+			}
+			if !fromTblExists && !toTblExists {
+				return nil, sql.ErrTableNotFound.New(tableName)
+			}
 		}
 
-		delta := findMatchingDelta(tableDeltas, tableName)
 		tableDeltas = []diff.TableDelta{delta}
 	}
 
@@ -423,7 +425,7 @@ func (p *PatchTableFunction) WithDatabase(database sql.Database) (sql.Node, erro
 
 // Name implements the sql.TableFunction interface
 func (p *PatchTableFunction) Name() string {
-	return p.String()
+	return "dolt_patch"
 }
 
 // RowIter implements the sql.ExecSourceRel interface
