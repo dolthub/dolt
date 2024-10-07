@@ -48,11 +48,11 @@ readTests="(
 )"
 
 medianLatencyChangeReadsQuery="
-with result(test_name, avg_from_latency, avg_to_latency) as (
+with result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
-    avg(f.latency_percentile) + 0.001,
-    avg(t.latency_percentile) + 0.001
+    avg(f.latency_percentile),
+    avg(t.latency_percentile)
   from
     from_results as f
   join
@@ -66,9 +66,9 @@ with result(test_name, avg_from_latency, avg_to_latency) as (
 )
 select
   test_name as read_tests,
-  avg_from_latency as from_latency_median,
-  avg_to_latency as to_latency_median,
-  round(100 * ((avg_from_latency - avg_to_latency) / avg_from_latency), 2) as percent_change
+  from_latency,
+  to_latency,
+  round(100 * ((from_latency - to_latency) / from_latency), 2) as percent_change
 from result;"
 
 writeTests="(
@@ -82,11 +82,11 @@ writeTests="(
 )"
 
 medianLatencyChangeWritesQuery="
-with result(test_name, avg_from_latency, avg_to_latency) as (
+with result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
-    avg(f.latency_percentile) + 0.001,
-    avg(t.latency_percentile) + 0.001
+    avg(f.latency_percentile),
+    avg(t.latency_percentile)
   from
     from_results as f
   join
@@ -100,13 +100,13 @@ with result(test_name, avg_from_latency, avg_to_latency) as (
 )
 select
   test_name as write_tests,
-  avg_from_latency as from_latency_median,
-  avg_to_latency as to_latency_median,
-  round(100 * ((avg_from_latency - avg_to_latency) / avg_from_latency), 2) as percent_change
+  from_latency,
+  to_latency,
+  round(100 * ((from_latency - to_latency) / from_latency), 2) as percent_change
 from result;"
 
 tpccLatencyQuery="
-with result(test_name, from_latency_p95, to_latency_p95) as (
+with result(test_name, from_latency, to_latency) as (
   select
     f.test_name,
     avg(f.latency_percentile) + 0.001,
@@ -124,9 +124,9 @@ with result(test_name, from_latency_p95, to_latency_p95) as (
 )
 select
   test_name,
-  from_latency_p95,
-  to_latency_p95,
-  round(100 * ((from_latency_p95 - to_latency_p95) / from_latency_p95), 2) as percentage_change
+  from_latency as from_latency_p95,
+  to_latency as to_latency_p95,
+  round(100 * ((from_latency - to_latency) / from_latency), 2) as percentage_change
 from result;"
 
 tpccTpsQuery="
@@ -148,7 +148,7 @@ with result(test_name, from_server_name, from_server_version, from_tps, to_serve
   where
     f.test_name LIKE 'tpcc%'
   group by
-    f.test_name;
+    f.test_name
 )
 select
   test_name,
