@@ -176,9 +176,6 @@ func getVectorIndexSubtrees(msg serial.Message) ([]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
-	if serial.ProllyTreeNodeNumFields < pm.Table().NumFields() {
-		return nil, fb.ErrTableHasUnknownFields
-	}
 
 	counts := make([]uint64, sz)
 
