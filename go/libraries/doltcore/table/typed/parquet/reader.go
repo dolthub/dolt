@@ -99,10 +99,10 @@ func (pr *ParquetReader) ReadRow(ctx context.Context) (row.Row, error) {
 	panic("deprecated")
 }
 
-// DECIMAL_BYTE_ARRAY_ToString converts a decimal byte array to a string
+// DecimalByteArrayToString converts a decimal byte array to a string
 // This is copied from https://github.com/xitongsys/parquet-go/blob/master/types/converter.go
 // while we wait for official release
-func DECIMAL_BYTE_ARRAY_ToString(dec []byte, prec int, scale int) string {
+func DecimalByteArrayToString(dec []byte, prec int, scale int) string {
 	sign := ""
 	if dec[0] > 0x7f {
 		sign = "-"
@@ -148,7 +148,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 
 		if col.Kind == types.DecimalKind {
 			prec, scale := col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Precision(), col.TypeInfo.ToSqlType().(gmstypes.DecimalType_).Scale()
-			val = DECIMAL_BYTE_ARRAY_ToString([]byte(val.(string)), int(prec), int(scale))
+			val = DecimalByteArrayToString([]byte(val.(string)), int(prec), int(scale))
 		}
 
 		row[allCols.TagToIdx[tag]] = val

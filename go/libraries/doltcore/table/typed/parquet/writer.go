@@ -47,11 +47,10 @@ func NewParquetRowWriter(outSch sql.Schema, w io.WriteCloser) (*ParquetRowWriter
 	// creates csv schema for handling parquet format using NewCSVWriter
 	for _, col := range outSch {
 		repetitionType = ""
-		colType := col.Type
 		if col.Nullable {
 			repetitionType = ", repetitiontype=OPTIONAL"
 		}
-		mappedType, err := mapTypeToParquetTypeDescription(colType, colType.Type())
+		mappedType, err := mapTypeToParquetTypeDescription(col.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -135,9 +134,9 @@ func (pwr *ParquetRowWriter) Close(_ context.Context) error {
 	return nil
 }
 
-// mapTypeToParquetTypeDescription maps |qt| from a query.Type to a text description of the type for Parquet.
-func mapTypeToParquetTypeDescription(t sql.Type, qt query.Type) (string, error) {
-	switch qt {
+// mapTypeToParquetTypeDescription maps |t| from a sql.Type to a text description of the type for Parquet.
+func mapTypeToParquetTypeDescription(t sql.Type) (string, error) {
+	switch t.Type() {
 	case query.Type_DATETIME, query.Type_DATE, query.Type_TIMESTAMP:
 		return "type=INT64, convertedtype=TIMESTAMP_MICROS", nil
 	case query.Type_YEAR:
