@@ -78,5 +78,5 @@ make_updates() {
 
     run dolt fsck
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 load failed with error: checksum error" ]] || false
+    [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }

@@ -243,7 +243,7 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 			return true
 		}
 
-		// We only have 16bytes of the hash. The value returned here will have 4 0x00 bytes at the end.
+		// We only have 16 bytes of the hash. The value returned here will have 4 0x00 bytes at the end.
 		var h hash.Hash
 		copy(h[:], a16[:])
 
