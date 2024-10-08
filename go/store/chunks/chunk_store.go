@@ -186,6 +186,13 @@ type ChunkStoreGarbageCollector interface {
 	// interactions with generational stores. See ValueStore and
 	// NomsBlockStore/GenerationalNBS for details.
 	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error
+
+	// Count returns the number of chunks in the store.
+	Count() (uint32, error)
+
+	// IterateAllChunks iterates over all chunks in the store, calling the provided callback for each chunk. This is
+	// a wrapper over the internal chunkSource.iterateAllChunks() method.
+	IterateAllChunks(context.Context, func(chunk Chunk)) error
 }
 
 type PrefixChunkStore interface {

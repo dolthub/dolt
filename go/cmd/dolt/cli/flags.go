@@ -62,6 +62,7 @@ const (
 	PasswordFlag         = "password"
 	PortFlag             = "port"
 	PruneFlag            = "prune"
+	QuietFlag            = "quiet"
 	RemoteParam          = "remote"
 	SetUpstreamFlag      = "set-upstream"
 	ShallowFlag          = "shallow"

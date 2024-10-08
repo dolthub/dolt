@@ -83,6 +83,14 @@ func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest)
 }
 
+func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {
+	return nbsMW.nbs.Count()
+}
+
+func (nbsMW *NBSMetricWrapper) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
+	return nbsMW.nbs.IterateAllChunks(ctx, cb)
+}
+
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 	return nbsMW.nbs.PruneTableFiles(ctx)

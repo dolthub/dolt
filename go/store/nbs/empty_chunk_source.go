@@ -93,3 +93,7 @@ func (ecs emptyChunkSource) close() error {
 func (ecs emptyChunkSource) clone() (chunkSource, error) {
 	return ecs, nil
 }
+
+func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
+	return nil
+}

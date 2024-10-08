@@ -1667,6 +1667,28 @@ LOOP:
 	return gcc.copyTablesToDir(ctx, tfp)
 }
 
+func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
+	for _, v := range nbs.tables.novel {
+		err := v.iterateAllChunks(ctx, cb)
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	for _, v := range nbs.tables.upstream {
+		err := v.iterateAllChunks(ctx, cb)
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()

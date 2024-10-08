@@ -99,6 +99,14 @@ func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []
 	return collector.MarkAndSweepChunks(ctx, hashes, collector)
 }
 
+func (s *TestStoreView) Count() (uint32, error) {
+	panic("currently unused")
+}
+
+func (s *TestStoreView) IterateAllChunks(_ context.Context, _ func(Chunk)) error {
+	panic("currently unused")
+}
+
 func (s *TestStoreView) Reads() int {
 	reads := atomic.LoadInt32(&s.reads)
 	return int(reads)
