@@ -3346,7 +3346,7 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "info_schema with detatched HEAD",
+		Name: "info_schema with detached HEAD",
 		SetUpScript: []string{
 			"create table t (a int primary key, b int);",
 			"call dolt_commit('-Am', 'creating table t');",
