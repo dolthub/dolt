@@ -48,12 +48,21 @@ func (c ExtendedTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp
 // CompareValues implements the TupleComparator interface.
 func (c ExtendedTupleComparator) CompareValues(index int, left, right []byte, typ Type) int {
 	switch typ.Enc {
-	case ExtendedEnc, ExtendedAddrEnc:
+	case ExtendedEnc:
 		cmp, err := c.handlers[index].SerializedCompare(left, right)
 		if err != nil {
 			panic(err)
 		}
 		return cmp
+
+	case ExtendedAddrEnc:
+		// For address encodings, we can't directly compare the content since we don't have a NodeStore reference
+		// to look up value in the address, so we just compare the content hash. This is enough to tell us if
+		// values are equivalent, but not enough to give correct sorting by content. This is the same behavior as
+		// the default TupleComparator used for Dolt, but it prevents us from using TEXT types in secondary indexes
+		// without first applying an implicit/hidden prefix length.
+		return compareAddr(readAddr(left), readAddr(right))
+
 	default:
 		return compare(typ, left, right)
 	}

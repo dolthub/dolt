@@ -1006,6 +1006,16 @@ func (di *doltIndex) PrefixLengths() []uint16 {
 	return di.prefixLengths
 }
 
+// SetPrefixLengths implements sql.Index
+func (di *doltIndex) SetPrefixLengths(prefixLengths []uint16) {
+	di.prefixLengths = prefixLengths
+}
+
+// SetPrefixLengths implements sql.Index
+func (p *CommitIndex) SetPrefixLengths(prefixLengths []uint16) {
+	p.prefixLengths = prefixLengths
+}
+
 // IndexType implements sql.Index
 func (di *doltIndex) IndexType() string {
 	return "BTREE"

@@ -689,12 +689,15 @@ func ConfigureServices(
 	controller.Register(RunClusterController)
 
 	RunSQLServer := &svcs.AnonService{
-		RunF: func(context.Context) {
+		InitF: func(ctx context.Context) error {
 			sqlserver.SetRunningServer(mySQLServer)
-			defer sqlserver.UnsetRunningServer()
+			return nil
+		},
+		RunF: func(context.Context) {
 			mySQLServer.Start()
 		},
 		StopF: func() error {
+			sqlserver.UnsetRunningServer()
 			sqlServerClosed = true
 			return mySQLServer.Close()
 		},
