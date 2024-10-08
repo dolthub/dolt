@@ -1426,12 +1426,11 @@ func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 		return []sql.DatabaseSchema{db}, nil
 	}
 
-	ws, err := db.GetWorkingSet(ctx)
+	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	root := ws.WorkingRoot()
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
 		return nil, err
