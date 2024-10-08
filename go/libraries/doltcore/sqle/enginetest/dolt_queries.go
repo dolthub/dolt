@@ -3345,6 +3345,58 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "info_schema with detatched HEAD",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"call dolt_checkout('b2');",
+			"alter table t add column c int;",
+			"call dolt_commit('-am', 'added column c on branch b2');",
+			"call dolt_tag('t2')",
+			"call dolt_checkout('b3');",
+			"alter table t add column d int;",
+			"call dolt_commit('-am', 'added column d on branch b3');",
+			"call dolt_tag('t3')",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:            "use mydb/t2;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/t2' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+			},
+			{
+				Query:            "use mydb/t3;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/t3' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+			},
+		},
+	},
 }
 
 var DoltBranchScripts = []queries.ScriptTest{
