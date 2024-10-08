@@ -44,7 +44,7 @@ require (
 	golang.org/x/sys v0.20.0
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.57.1
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.2-0.20241003233229-f43dafa9a8d6
+	github.com/dolthub/go-mysql-server v0.18.2-0.20241008171827-6c12b8406352
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
