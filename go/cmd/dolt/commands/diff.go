@@ -960,7 +960,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 
 	var cols []schema.Column
 	for _, col := range create.TableSpec.Columns {
-		internalTyp, err := types.ColumnTypeToType(&col.Type)
+		internalTyp, err := types.ColumnTypeToType(col.Type)
 		typeInfo, err := typeinfo.FromSqlType(internalTyp)
 		if err != nil {
 			return nil, err
