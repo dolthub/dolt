@@ -162,7 +162,7 @@ func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chun
 
 		// Reconstruct the hash from the prefix and suffix.
 		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
-		copy(h[hash.ByteLen-hash.SuffixLen:], suffix[:])
+		copy(h[uint64Size:], suffix[:])
 
 		if ctx.Err() != nil {
 			return ctx.Err()

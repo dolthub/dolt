@@ -212,6 +212,9 @@ func (s journalChunkSource) close() error {
 func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
 	var finalErr error
 
+	s.journal.lock.RLock()
+	defer s.journal.lock.RUnlock()
+
 	s.journal.ranges.novel.Iter(func(h hash.Hash, r Range) (stop bool) {
 		if ctx.Err() != nil {
 			finalErr = ctx.Err()

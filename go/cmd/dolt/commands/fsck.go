@@ -72,7 +72,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = dEnv.DoltDB.FSCK(ctx, threads, progress)
+		report, err = dEnv.DoltDB.FSCK(ctx, progress)
 		if err != nil {
 			cli.PrintErrln(err.Error())
 			return true
@@ -90,6 +90,10 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
+	return printFSCKReport(report)
+}
+
+func printFSCKReport(report *doltdb.FSCKReport) int {
 	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
 	if len(report.Problems) == 0 {
 		cli.Println("No problems found.")
