@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ var fsckDocs = cli.CommandDocumentationContent{
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
 		"[--quiet]",
-		"--threads 16",
 	},
 }
 
@@ -48,7 +47,6 @@ func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsInt(cli.ThreadsFlag, "", "thread_count", "Number of threads to use for fsck. Defaults to 8.")
 	ap.SupportsFlag(cli.QuietFlag, "", "Don't show progress. Just print final report.")
 
 	return ap
@@ -65,18 +63,10 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return status
 	}
 
-	threads, haveThreads := apr.GetInt(cli.ThreadsFlag)
-	if !haveThreads {
-		threads = 8
-	}
-	if threads <= 0 {
-		threads = 1
-	}
-
 	quiet := apr.Contains(cli.QuietFlag)
 
 	progress := make(chan string, 32)
-	fsckHandleProgress(ctx, progress, quiet)
+	go fsckHandleProgress(ctx, progress, quiet)
 
 	var report *doltdb.FSCKReport
 	terminate = func() bool {
@@ -115,16 +105,14 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func fsckHandleProgress(ctx context.Context, progress chan string, quiet bool) {
-	go func() {
-		for item := range progress {
-			if !quiet {
-				cli.Println(item)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
+	for item := range progress {
+		if !quiet {
+			cli.Println(item)
 		}
-	}()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+	}
 }

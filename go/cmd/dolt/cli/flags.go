@@ -79,7 +79,6 @@ const (
 	SystemFlag           = "system"
 	TablesFlag           = "tables"
 	TheirsFlag           = "theirs"
-	ThreadsFlag          = "threads"
 	TrackFlag            = "track"
 	UpperCaseAllFlag     = "ALL"
 	UserFlag             = "user"
