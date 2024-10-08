@@ -212,6 +212,9 @@ func (s journalChunkSource) close() error {
 func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
 	var finalErr error
 
+	// TODO - a less time consuming lock is possible here. Using s.journal.snapshot and processJournalRecords()
+	// would allow for no locking. Need to filter out the journal records which are actually chunks, then convert
+	// those to chunks and pass them to cb. When we support online FSCK this will allow the server to keep running uninterrupted.
 	s.journal.lock.RLock()
 	defer s.journal.lock.RUnlock()
 
