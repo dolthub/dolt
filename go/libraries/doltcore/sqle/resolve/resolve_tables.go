@@ -37,8 +37,8 @@ func Table(
 	return tName, tbl, tblExists, err
 }
 
-// TablesOnSearchPath returns all the tables in the root value given that are in a schema in the search path 
-func TablesOnSearchPath(	ctx *sql.Context, root doltdb.RootValue) ([]doltdb.TableName, error) {
+// TablesOnSearchPath returns all the tables in the root value given that are in a schema in the search path
+func TablesOnSearchPath(ctx *sql.Context, root doltdb.RootValue) ([]doltdb.TableName, error) {
 	schemasToSearch, err := SearchPath(ctx)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func TablesOnSearchPath(	ctx *sql.Context, root doltdb.RootValue) ([]doltdb.Tabl
 		}
 		tableNames = append(tableNames, doltdb.ToTableNames(names, schemaName)...)
 	}
-	
+
 	return tableNames, nil
 }
 

@@ -937,7 +937,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]
 		if err != nil {
 			return nil, err
 		}
-		// TODO: this method should probably return TableNames, but need to iron out the effective schema for system 
+		// TODO: this method should probably return TableNames, but need to iron out the effective schema for system
 		//  tables first
 		result = doltdb.FlattenTableNames(names)
 	} else {
