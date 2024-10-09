@@ -930,7 +930,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]
 	}
 
 	var result []string
-	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all 
+	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
 	// schemas in the search_path
 	if resolve.UseSearchPath && db.schemaName == "" {
 		names, err := resolve.TablesOnSearchPath(ctx, root)
@@ -946,7 +946,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]
 			return nil, err
 		}
 	}
-	
+
 	result = append(result, systemTables...)
 	return result, nil
 }
