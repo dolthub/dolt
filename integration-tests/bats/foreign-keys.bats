@@ -2203,7 +2203,6 @@ SQL
 }
 
 @test "foreign-keys: partial updates work against foreign key constraints" {
-    skip "Partial updates are unsupported"
     dolt sql <<SQL
 DROP TABLE IF EXISTS parent;
 DROP TABLE IF EXISTS child;
