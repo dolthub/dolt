@@ -930,7 +930,7 @@ func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) 
 	}
 
 	var result []string
-	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all 
+	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
 	// schemas in this DB
 	// TODO: is this the right behavior choice? Should we use the first schema in the search path instead?
 	if resolve.UseSearchPath && db.schemaName == "" {
@@ -945,7 +945,7 @@ func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) 
 			return nil, err
 		}
 	}
-	
+
 	result = append(result, systemTables...)
 	return result, nil
 }
