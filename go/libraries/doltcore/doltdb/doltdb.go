@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -22,6 +23,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -2044,4 +2047,115 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 // a shallow clone, but should not be called after the clone is complete.
 func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
+}
+
+type FSCKReport struct {
+	ChunkCount uint32
+	Problems   []error
+}
+
+// FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
+// The success of failure of the scan are returned in the report as a list of errors. The error returned by this function
+// indicates a deeper issue such as having database in an old format.
+func (ddb *DoltDB) FSCK(ctx context.Context, progress chan string) (*FSCKReport, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	vs := types.NewValueStore(cs)
+
+	gs, ok := cs.(*nbs.GenerationalNBS)
+	if !ok {
+		return nil, errors.New("FSCK requires a local database")
+	}
+
+	chunkCount, err := gs.OldGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount2, err := gs.NewGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount += chunkCount2
+	proccessedCnt := int64(0)
+
+	var errs []error
+
+	decodeMsg := func(chk chunks.Chunk) string {
+		hrs := ""
+		val, err := types.DecodeValue(chk, vs)
+		if err == nil {
+			hrs = val.HumanReadableString()
+		} else {
+			hrs = fmt.Sprintf("Unable to decode value: %s", err.Error())
+		}
+		return hrs
+	}
+
+	// Append safely to the slice of errors with a mutex.
+	errsLock := &sync.Mutex{}
+	appendErr := func(err error) {
+		errsLock.Lock()
+		defer errsLock.Unlock()
+		errs = append(errs, err)
+	}
+
+	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
+	validationCallback := func(chunk chunks.Chunk) {
+		chunkOk := true
+		pCnt := atomic.AddInt64(&proccessedCnt, 1)
+		h := chunk.Hash()
+		raw := chunk.Data()
+		calcChkSum := hash.Of(raw)
+
+		if h != calcChkSum {
+			fuzzyMatch := false
+			// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+			if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+				// Now we'll just verify that the first 16 bytes match.
+				ln := hash.ByteLen - 4
+				fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+			}
+			if !fuzzyMatch {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		if chunkOk {
+			// Round trip validation. Ensure that the top level store returns the same data.
+			c, err := cs.Get(ctx, h)
+			if err != nil {
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error())))
+				chunkOk = false
+			} else if bytes.Compare(raw, c.Data()) != 0 {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), c.Hash().String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		percentage := (float64(pCnt) * 100) / float64(chunkCount)
+		result := fmt.Sprintf("(%4.1f%% done)", percentage)
+
+		progStr := "OK: " + h.String()
+		if !chunkOk {
+			progStr = "FAIL: " + h.String()
+		}
+		progStr = result + " " + progStr
+		progress <- progStr
+	}
+
+	err = gs.OldGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
+	}
+	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
+	}
+
+	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
+
+	return &FSCKReport, nil
 }

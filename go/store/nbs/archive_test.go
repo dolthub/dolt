@@ -715,3 +715,7 @@ func (tcs *testChunkSource) clone() (chunkSource, error) {
 func (tcs *testChunkSource) currentSize() uint64 {
 	panic("never used")
 }
+
+func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
+	panic("never used")
+}

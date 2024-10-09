@@ -255,6 +255,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		}
 
 		if !validateJournalRecord(buf) {
+			// We read the journal file until we run into an invalid record.
 			break // stop if we can't validate |rec|
 		}
 

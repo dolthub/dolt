@@ -382,6 +382,14 @@ LOOP:
 	return nil
 }
 
+func (ms *MemoryStoreView) Count() (uint32, error) {
+	return uint32(len(ms.pending)), nil
+}
+
+func (ms *MemoryStoreView) IterateAllChunks(_ context.Context, _ func(Chunk)) error {
+	panic("runtime error: GetChunkHashes should never be called on the MemoryStoreView")
+}
+
 func (ms *MemoryStoreView) Stats() interface{} {
 	return nil
 }
