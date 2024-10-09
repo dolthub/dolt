@@ -928,9 +928,26 @@ func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) 
 	if err != nil {
 		return nil, err
 	}
-	result, err := root.GetTableNames(ctx, db.schemaName)
+
+	var result []string
+	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all 
+	// schemas in this DB
+	// TODO: is this the right behavior choice? Should we use the first schema in the search path instead?
+	if resolve.UseSearchPath && db.schemaName == "" {
+		names, err := doltdb.UnionTableNames(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		result = doltdb.FlattenTableNames(names)
+	} else {
+		result, err = root.GetTableNames(ctx, db.schemaName)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
 	result = append(result, systemTables...)
-	return result, err
+	return result, nil
 }
 
 func filterDoltInternalTables(tblNames []string) []string {
