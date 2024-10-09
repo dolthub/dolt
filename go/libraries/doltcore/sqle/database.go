@@ -923,7 +923,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
 	return db.getAllTableNames(ctx, root)
 }
 
-func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]string, error) {
 	systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
 	if err != nil {
 		return nil, err
@@ -931,13 +931,14 @@ func (db Database) getAllTableNames(ctx context.Context, root doltdb.RootValue) 
 
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all 
-	// schemas in this DB
-	// TODO: is this the right behavior choice? Should we use the first schema in the search path instead?
+	// schemas in the search_path
 	if resolve.UseSearchPath && db.schemaName == "" {
-		names, err := doltdb.UnionTableNames(ctx, root)
+		names, err := resolve.TablesOnSearchPath(ctx, root)
 		if err != nil {
 			return nil, err
 		}
+		// TODO: this method should probably return TableNames, but need to iron out the effective schema for system 
+		//  tables first
 		result = doltdb.FlattenTableNames(names)
 	} else {
 		result, err = root.GetTableNames(ctx, db.schemaName)
