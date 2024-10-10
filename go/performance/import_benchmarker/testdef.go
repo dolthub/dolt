@@ -635,7 +635,7 @@ func parseTableAndSchema(q string) (string, []string, []sql2.Type) {
 		table = n.Table.String()
 		for _, col := range n.TableSpec.Columns {
 			names = append(names, col.Name.String())
-			typ, err := gmstypes.ColumnTypeToType(&col.Type)
+			typ, err := gmstypes.ColumnTypeToType(col.Type)
 			if err != nil {
 				panic(fmt.Sprintf("unexpected error reading type: %s", err))
 			}

@@ -967,22 +967,22 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		}
 
 		defBuf := ast.NewTrackedBuffer(nil)
-		if col.Type.Default != nil {
+		if col.Type != nil && col.Type.Default != nil {
 			col.Type.Default.Format(defBuf)
 		}
 
 		genBuf := ast.NewTrackedBuffer(nil)
-		if col.Type.GeneratedExpr != nil {
+		if col.Type != nil && col.Type.GeneratedExpr != nil {
 			col.Type.GeneratedExpr.Format(genBuf)
 		}
 
 		onUpBuf := ast.NewTrackedBuffer(nil)
-		if col.Type.OnUpdate != nil {
+		if col.Type != nil && col.Type.OnUpdate != nil {
 			col.Type.OnUpdate.Format(onUpBuf)
 		}
 
 		var comment string
-		if col.Type.Comment != nil {
+		if col.Type != nil && col.Type.Comment != nil {
 			comment = col.Type.Comment.String()
 		}
 
@@ -995,7 +995,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 			Generated:     "",    // TODO
 			OnUpdate:      "",    // TODO
 			Virtual:       false, // TODO
-			AutoIncrement: col.Type.Autoincrement == true,
+			AutoIncrement: col.Type != nil && col.Type.Autoincrement == true,
 			Comment:       comment,
 		}
 		cols = append(cols, sCol)
