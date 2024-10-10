@@ -1369,6 +1369,7 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
+
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -1400,11 +1401,10 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 		return newInformationSchemaDatabase(db.Name()), true, nil
 	}
 
-	ws, err := db.GetWorkingSet(ctx)
+	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	root := ws.WorkingRoot()
 
 	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
