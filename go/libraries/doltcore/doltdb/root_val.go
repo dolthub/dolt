@@ -771,6 +771,10 @@ func (tn TableName) String() string {
 	return tn.Schema + "." + tn.Name
 }
 
+func (tn TableName) EqualFold(o TableName) bool {
+	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
+}
+
 // ToTableNames is a migration helper function that converts a slice of table names to a slice of TableName structs.
 func ToTableNames(names []string, schemaName string) []TableName {
 	tbls := make([]TableName, len(names))
@@ -1070,14 +1074,13 @@ func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValu
 		return nil, err
 	}
 
-	// TODO: schema name
-	allTablesSlice, err := root.GetTableNames(ctx, DefaultSchemaName)
+	allTablesSlice, err := UnionTableNames(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	allTablesSet := make(map[string]schema.Schema)
+	allTablesSet := make(map[TableName]schema.Schema)
 	for _, tableName := range allTablesSlice {
-		tbl, ok, err := root.GetTable(ctx, TableName{Name: tableName})
+		tbl, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
