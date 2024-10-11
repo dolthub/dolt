@@ -34,6 +34,7 @@ public class DoltSQL
             conn.Open();
             SetupTest(conn);
             QueryTest(conn);
+            WarningTest(conn);
         }
         catch (Exception ex)
         {
@@ -69,6 +70,28 @@ public class DoltSQL
                 if (r != 1)
                 {
                         TestException ex = new TestException($"Expected 1, Recieved {r}");
+                        throw ex;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+    }
+
+    public static void WarningTest(MySqlConnection conn)
+    {
+        string sql = "SELECT 1/0";
+        using (var cmd = new MySqlCommand(sql, conn))
+        try
+        {
+            object result = cmd.ExecuteScalar();
+            if (result != null)
+            {
+                if (!DBNull.Value.Equals(result))
+                {
+                        TestException ex = new TestException($"Expected NULL, Received {result}");
                         throw ex;
                 }
             }
