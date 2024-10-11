@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -34,9 +35,16 @@ import (
 
 const singleQuote = `'`
 
-// Quotes the identifier given with backticks.
+// QuoteIdentifier quotes the identifier given with backticks.
 func QuoteIdentifier(s string) string {
+	// TODO: quote character is different for different SQL modes / dialects
 	return "`" + s + "`"
+}
+
+// QuoteTableName quotes the table name given with backticks.
+func QuoteTableName(n doltdb.TableName) string {
+	// TODO: quote character is different for different SQL modes / dialects
+	return "`" + n.String() + "`"
 }
 
 // QuoteComment quotes the given string with apostrophes, and escapes any contained within the string.
