@@ -34,6 +34,7 @@ public class DoltSQL
             conn.Open();
             SetupTest(conn);
             QueryTest(conn);
+            WarningTest(conn);
         }
         catch (Exception ex)
         {
@@ -70,6 +71,49 @@ public class DoltSQL
                 {
                         TestException ex = new TestException($"Expected 1, Recieved {r}");
                         throw ex;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+    }
+
+    public static void WarningTest(MySqlConnection conn)
+    {
+        string sql = "SELECT 1/0";
+        using (var cmd = new MySqlCommand(sql, conn))
+        try
+        {
+            object result = cmd.ExecuteScalar();
+            if (result != null)
+            {
+                if (!DBNull.Value.Equals(result))
+                {
+                        TestException ex = new TestException($"Expected NULL, Received {result}");
+                        throw ex;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+
+        sql = "SHOW WARNINGS";
+        using (var cmd = new MySqlCommand(sql, conn))
+        try
+        {
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(2) != "Division by 0")
+                    {
+                        TestException ex = new TestException($"Expected 'Division by 0', Received {reader.GetString(0)}");
+                        throw ex;
+                    }
                 }
             }
         }
