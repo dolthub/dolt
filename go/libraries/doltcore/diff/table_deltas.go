@@ -216,8 +216,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.ForeignKey) (map[doltdb.TableName]schema.Schema, error) {
 	schs := make(map[doltdb.TableName]schema.Schema)
 	for _, toFk := range fks {
-		// TODO: schema
-		toRefTable, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: toFk.ReferencedTableName})
+		toRefTable, _, ok, err := doltdb.GetTableInsensitive(ctx, root, toFk.ReferencedTableName)
 		if err != nil {
 			return nil, err
 		}
@@ -228,8 +227,7 @@ func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.F
 		if err != nil {
 			return nil, err
 		}
-		// TODO: schema name
-		schs[doltdb.TableName{Name: toFk.ReferencedTableName}] = toRefSch
+		schs[toFk.ReferencedTableName] = toRefSch
 	}
 	return schs, nil
 }
