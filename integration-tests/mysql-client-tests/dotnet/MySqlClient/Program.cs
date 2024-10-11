@@ -100,6 +100,27 @@ public class DoltSQL
         {
             Console.WriteLine(ex.ToString());
         }
+
+        sql = "SHOW WARNINGS";
+        using (var cmd = new MySqlCommand(sql, conn))
+        try
+        {
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (reader.GetString(2) != "Division by 0")
+                    {
+                        TestException ex = new TestException($"Expected 'Division by 0', Received {reader.GetString(0)}");
+                        throw ex;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
     }
 
     public static void DoltSqlTest(MySqlConnection conn)
