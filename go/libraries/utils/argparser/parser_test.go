@@ -150,6 +150,13 @@ func TestArgParser(t *testing.T) {
 			map[string]string{"param": "value", "optional": ""},
 			[]string{},
 		},
+		{
+			NewArgParserWithVariableArgs("test").SupportsString("param", "p", "", ""),
+			[]string{"--param", "value", "arg1", "--", "table1", "table2"},
+			nil,
+			map[string]string{"param": "value"},
+			[]string{"arg1", "--", "table1", "table2"},
+		},
 	}
 
 	for _, test := range tests {

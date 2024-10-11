@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -80,7 +81,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if apr.Contains(cli.TrackFlag) && apr.NArg() > 0 {
 		return 1, "", errors.New("Improper usage. Too many arguments provided.")
 	}
-	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
+	if !branchOrTrack && apr.NArg() == 0 {
 		return 1, "", errors.New("Improper usage.")
 	}
 
@@ -122,8 +123,23 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if err != nil {
 		return 1, "", err
 	}
-	if !isModification {
+	if !isModification && apr.NArg() == 1 {
 		return 0, fmt.Sprintf("Already on branch '%s'", branchName), nil
+	}
+
+	// Handle dolt_checkout HEAD~3 -- table1 table2 table3
+	if apr.NArg() > 1 {
+		database := ctx.GetCurrentDatabase()
+		if database == "" {
+			return 1,  "", sql.ErrNoDatabaseSelected.New()
+		}
+		err = checkoutTablesFromCommit(ctx, database, branchName, apr.Args[1:])
+		if err != nil {
+			return 0, "", err
+		}
+
+		dsess.WaitForReplicationController(ctx, rsc)
+		return 0, generateSuccessMessage(branchName, ""), nil
 	}
 
 	// Check if user wants to checkout branch.
@@ -190,7 +206,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, "", err
 	}
 
-	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
+	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, branchName, apr, &rsc)
 		if err != nil {
@@ -479,6 +495,74 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	return nil
 }
 
+// checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the 
+// staged root.
+func checkoutTablesFromCommit(
+		ctx *sql.Context,
+		databaseName string,
+		commitRef string,
+		tables []string,
+) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := dSess.GetDbData(ctx, databaseName)
+	if !ok {
+		return fmt.Errorf("Could not load database %s", ctx.GetCurrentDatabase())
+	}
+
+	currentBranch, err := dSess.GetBranch()
+	if err != nil {
+		return err
+	}
+	if currentBranch == "" {
+		return fmt.Errorf("error: no current branch")
+	}
+	currentBranchRef := ref.NewBranchRef(currentBranch)
+
+	cs, err := doltdb.NewCommitSpec(commitRef)
+	if err != nil {
+		return err
+	}
+
+	headCommit, err := dbData.Ddb.Resolve(ctx, cs, currentBranchRef)
+	if err != nil {
+		return err
+	}
+	cm, ok := headCommit.ToCommit()
+	if !ok {
+		return fmt.Errorf("HEAD is not a commit")
+	}
+	
+	headRoot, err := cm.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	ws, err := dSess.WorkingSet(ctx, databaseName)
+	if err != nil {
+		return err
+	}
+	
+	tableNames := make([]doltdb.TableName, len(tables))
+	for i, table := range tables {
+		// TODO: we should allow schema-qualified table names here as well 
+		name, _, tableExistsInHead, err := resolve.Table(ctx, headRoot, table)
+		if err != nil {
+			return err
+		}
+		if !tableExistsInHead {
+			return fmt.Errorf("error: table %s does not exist in branch %s", table, commitRef)
+		}
+		tableNames[i] = name
+	}
+
+	newStagedRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.StagedRoot())
+	if err != nil {
+		return err
+	}
+
+	return dSess.SetWorkingSet(ctx, databaseName, ws.WithStagedRoot(newStagedRoot))
+}
+
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
 // the new branch and persisting the checked-out branch into future sessions
 func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
@@ -490,7 +574,9 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 	return nil
 }
 
-func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
+// checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the 
+// working root. The working root is then set as the new staged root.
+func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
 	tableNames := make([]doltdb.TableName, len(tables))
 
 	for i, table := range tables {
