@@ -3174,6 +3174,29 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Checkout tables from commit",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int);",
+			"create table t2 (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating tables');",
+			"insert into t1 values (1, 1);",
+			"insert into t2 values (2, 2);",
+			"call dolt_commit('-Am', 'one row in each table');",
+			"call dolt_branch('b1');",
+			"call dolt_tag('tag1');",
+			"insert into t1 values (3, 3);",
+			"insert into t2 values (4, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_checkout('HEAD~', '--', 't1')",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 0}},
+				},
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{

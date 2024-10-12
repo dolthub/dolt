@@ -18,10 +18,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,8 +25,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
@@ -139,7 +138,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		}
 
 		dsess.WaitForReplicationController(ctx, rsc)
-		return 0, generateSuccessMessage(branchName, ""), nil
+		return 0, "", nil
 	}
 
 	// Check if user wants to checkout branch.
@@ -496,7 +495,7 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 }
 
 // checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the 
-// staged root.
+// staged and working roots.
 func checkoutTablesFromCommit(
 		ctx *sql.Context,
 		databaseName string,
@@ -555,12 +554,12 @@ func checkoutTablesFromCommit(
 		tableNames[i] = name
 	}
 
-	newStagedRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.StagedRoot())
+	newRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.WorkingRoot())
 	if err != nil {
 		return err
 	}
 
-	return dSess.SetWorkingSet(ctx, databaseName, ws.WithStagedRoot(newStagedRoot))
+	return dSess.SetWorkingSet(ctx, databaseName, ws.WithStagedRoot(newRoot).WithWorkingRoot(newRoot))
 }
 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
