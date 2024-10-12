@@ -18,6 +18,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,8 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
@@ -130,7 +131,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if apr.NArg() > 1 {
 		database := ctx.GetCurrentDatabase()
 		if database == "" {
-			return 1,  "", sql.ErrNoDatabaseSelected.New()
+			return 1, "", sql.ErrNoDatabaseSelected.New()
 		}
 		err = checkoutTablesFromCommit(ctx, database, branchName, apr.Args[1:])
 		if err != nil {
@@ -494,13 +495,13 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	return nil
 }
 
-// checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the 
+// checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the
 // staged and working roots.
 func checkoutTablesFromCommit(
-		ctx *sql.Context,
-		databaseName string,
-		commitRef string,
-		tables []string,
+	ctx *sql.Context,
+	databaseName string,
+	commitRef string,
+	tables []string,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, databaseName)
@@ -530,7 +531,7 @@ func checkoutTablesFromCommit(
 	if !ok {
 		return fmt.Errorf("HEAD is not a commit")
 	}
-	
+
 	headRoot, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return err
@@ -540,7 +541,7 @@ func checkoutTablesFromCommit(
 	if err != nil {
 		return err
 	}
-	
+
 	var tableNames []doltdb.TableName
 	if len(tables) == 1 && tables[0] == "." {
 		tableNames, err = doltdb.UnionTableNames(ctx, ws.WorkingRoot())
@@ -550,7 +551,7 @@ func checkoutTablesFromCommit(
 	} else {
 		tableNames = make([]doltdb.TableName, len(tables))
 		for i, table := range tables {
-			// TODO: we should allow schema-qualified table names here as well 
+			// TODO: we should allow schema-qualified table names here as well
 			name, _, tableExistsInHead, err := resolve.Table(ctx, headRoot, table)
 			if err != nil {
 				return err
@@ -581,7 +582,7 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 	return nil
 }
 
-// checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the 
+// checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
 // working root. The working root is then set as the new staged root.
 func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
 	tableNames := make([]doltdb.TableName, len(tables))

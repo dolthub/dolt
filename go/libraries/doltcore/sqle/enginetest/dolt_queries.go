@@ -3284,11 +3284,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select * from t1 order by 1",
+				Query:    "select * from t1 order by 1",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select * from t2 order by 1",
+				Query:    "select * from t2 order by 1",
 				Expected: []sql.Row{},
 			},
 			{
@@ -3305,7 +3305,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SET @commit1 = (select commit_hash from dolt_log order by date desc limit 1);",
+				Query:    "SET @commit1 = (select commit_hash from dolt_log order by date desc limit 1);",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -3328,11 +3328,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "call dolt_checkout('nosuchbranch', 't1')",
+				Query:          "call dolt_checkout('nosuchbranch', 't1')",
 				ExpectedErrStr: "branch not found: nosuchbranch",
 			},
 			{
-				Query: "call dolt_checkout('HEAD', 't3')",
+				Query:          "call dolt_checkout('HEAD', 't3')",
 				ExpectedErrStr: "table t3 does not exist in HEAD",
 			},
 		},
