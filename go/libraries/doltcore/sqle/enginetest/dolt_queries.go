@@ -3180,20 +3180,160 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			"create table t1 (a int primary key, b int);",
 			"create table t2 (a int primary key, b int);",
 			"call dolt_commit('-Am', 'creating tables');",
+			"call dolt_tag('tag1');",
 			"insert into t1 values (1, 1);",
 			"insert into t2 values (2, 2);",
 			"call dolt_commit('-Am', 'one row in each table');",
 			"call dolt_branch('b1');",
-			"call dolt_tag('tag1');",
 			"insert into t1 values (3, 3);",
 			"insert into t2 values (4, 4);",
+			"call dolt_commit('-Am', 'two rows in each table');",
+			"insert into t1 values (5, 5);",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call dolt_checkout('HEAD~', '--', 't1')",
 				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 0}},
+					{0, ""},
 				},
+			},
+			{
+				Query: "select * from t1 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+				},
+			},
+			{
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{
+					{2, 2},
+					{4, 4},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t1", true, "modified"},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "call dolt_checkout('HEAD~', '--', 't2')",
+				Expected: []sql.Row{
+					{0, ""},
+				},
+			},
+			{
+				Query: "select * from t1 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+					{3, 3},
+				},
+			},
+			{
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{
+					{2, 2},
+				},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t2", true, "modified"},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "call dolt_checkout('b1', 't2', 't1')",
+				Expected: []sql.Row{
+					{0, ""},
+				},
+			},
+			{
+				Query: "select * from t1 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+				},
+			},
+			{
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{
+					{2, 2},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "call dolt_checkout('tag1', '.')",
+				Expected: []sql.Row{
+					{0, ""},
+				},
+			},
+			{
+				Query: "select * from t1 order by 1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select * from dolt_status",
+				Expected: []sql.Row{
+					{"t1", true, "modified"},
+					{"t2", true, "modified"},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "SET @commit1 = (select commit_hash from dolt_log order by date desc limit 1);",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query: "call dolt_checkout(@commit1, 't1')",
+				Expected: []sql.Row{
+					{0, ""},
+				},
+			},
+			{
+				Query: "select * from t1 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+					{3, 3},
+				},
+			},
+			{
+				Query: "call dolt_reset('--hard')",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "call dolt_checkout('nosuchbranch', 't1')",
+				ExpectedErrStr: "branch not found: nosuchbranch",
+			},
+			{
+				Query: "call dolt_checkout('HEAD', 't3')",
+				ExpectedErrStr: "table t3 does not exist in HEAD",
 			},
 		},
 	},

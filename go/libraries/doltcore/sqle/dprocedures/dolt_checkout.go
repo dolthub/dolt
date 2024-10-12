@@ -541,17 +541,25 @@ func checkoutTablesFromCommit(
 		return err
 	}
 	
-	tableNames := make([]doltdb.TableName, len(tables))
-	for i, table := range tables {
-		// TODO: we should allow schema-qualified table names here as well 
-		name, _, tableExistsInHead, err := resolve.Table(ctx, headRoot, table)
+	var tableNames []doltdb.TableName
+	if len(tables) == 1 && tables[0] == "." {
+		tableNames, err = doltdb.UnionTableNames(ctx, ws.WorkingRoot())
 		if err != nil {
 			return err
 		}
-		if !tableExistsInHead {
-			return fmt.Errorf("error: table %s does not exist in branch %s", table, commitRef)
+	} else {
+		tableNames = make([]doltdb.TableName, len(tables))
+		for i, table := range tables {
+			// TODO: we should allow schema-qualified table names here as well 
+			name, _, tableExistsInHead, err := resolve.Table(ctx, headRoot, table)
+			if err != nil {
+				return err
+			}
+			if !tableExistsInHead {
+				return fmt.Errorf("table %s does not exist in %s", table, commitRef)
+			}
+			tableNames[i] = name
 		}
-		tableNames[i] = name
 	}
 
 	newRoot, err := actions.MoveTablesBetweenRoots(ctx, tableNames, headRoot, ws.WorkingRoot())
