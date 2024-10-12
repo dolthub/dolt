@@ -44,6 +44,9 @@ dolt checkout {{.LessThan}}branch{{.GreaterThan}}
    To prepare for working on {{.LessThan}}branch{{.GreaterThan}}, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
    tree are kept, so that they can be committed to the {{.LessThan}}branch{{.GreaterThan}}.
 
+dolt checkout {{.LessThan}}commit{{.GreaterThan}} [--] {{.LessThan}}table{{.GreaterThan}}...
+	 Specifying table names after a commit reference (branch, commit hash, tag, etc.) updates the working set to match that commit for one or more tables, but keeps the current branch. Local modifications to the tables named will be overwritten by their versions in the commit named.
+
 dolt checkout -b {{.LessThan}}new_branch{{.GreaterThan}} [{{.LessThan}}start_point{{.GreaterThan}}]
    Specifying -b causes a new branch to be created as if dolt branch were called and then checked out.
 
@@ -51,6 +54,7 @@ dolt checkout {{.LessThan}}table{{.GreaterThan}}...
   To update table(s) with their values in HEAD `,
 	Synopsis: []string{
 		`{{.LessThan}}branch{{.GreaterThan}}`,
+		`{{.LessThan}}commit{{.GreaterThan}} [--] {{.LessThan}}table{{.GreaterThan}}...`,
 		`{{.LessThan}}table{{.GreaterThan}}...`,
 		`-b {{.LessThan}}new-branch{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
 		`--track {{.LessThan}}remote{{.GreaterThan}}/{{.LessThan}}branch{{.GreaterThan}}`,

@@ -249,6 +249,30 @@ SQL
     [[ "$output" =~ "foreign_key1" ]] || false
 }
 
+@test "checkout: dolt checkout table from another branch" {
+    dolt sql -q "create table t (c1 int primary key, c2 int, check(c2 > 0))"
+    dolt sql -q "create table z (c1 int primary key, c2 int)"
+    dolt sql -q "insert into t values (1,1)"
+    dolt sql -q "insert into z values (2,2);"
+    dolt commit -Am "new values in t"    
+    dolt branch b1
+    dolt sql -q "insert into t values (3,3);"
+    dolt sql -q "insert into z values (4,4);"
+    dolt checkout b1 -- t
+
+    dolt status
+    run dolt status
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "modified:         z" ]] || false
+    [[ ! "$output" =~ "modified:         t" ]] || false
+
+    run dolt sql -q "select count(*) from t" -r csv
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "select count(*) from z" -r csv
+    [[ "$output" =~ "2" ]] || false
+}
+
 @test "checkout: with -f flag without conflict" {
     dolt sql -q 'create table test (id int primary key);'
     dolt sql -q 'insert into test (id) values (8);'

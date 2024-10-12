@@ -106,39 +106,7 @@ func TestSchemaOverrides(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	t.Skip()
 
-	var scripts = []queries.ScriptTest{
-		{
-			Name: "create database in a transaction",
-			SetUpScript: []string{
-				"START TRANSACTION",
-				"CREATE DATABASE test",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:            "USE test",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "CREATE TABLE foo (bar INT)",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "USE mydb",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "INSERT INTO test.foo VALUES (1)",
-					SkipResultsCheck: true,
-				},
-				{
-					Query: "SELECT * FROM test.foo",
-					Expected: []sql.Row{
-						{1},
-					},
-				},
-			},
-		},
-	}
+	var scripts = []queries.ScriptTest{}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
