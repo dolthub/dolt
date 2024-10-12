@@ -106,8 +106,7 @@ func TestSchemaOverrides(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	t.Skip()
 
-	var scripts = []queries.ScriptTest{
-	}
+	var scripts = []queries.ScriptTest{}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
