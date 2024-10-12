@@ -155,7 +155,7 @@ func TestArgParser(t *testing.T) {
 			[]string{"--param", "value", "arg1", "--", "table1", "table2"},
 			nil,
 			map[string]string{"param": "value"},
-			[]string{"arg1", "--", "table1", "table2"},
+			[]string{"arg1", "table1", "table2"},
 		},
 	}
 
