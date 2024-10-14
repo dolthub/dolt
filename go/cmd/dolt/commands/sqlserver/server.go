@@ -771,7 +771,7 @@ func (h *heartbeatService) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			t := events.NowTimestamp()
-			logrus.Infof("sending heartbeat event to %s:%s", events.DefaultMetricsHost, events.DefaultMetricsPort)
+			logrus.Debugf("sending heartbeat event to %s:%s", events.DefaultMetricsHost, events.DefaultMetricsPort)
 			err := h.eventEmitter.LogEvents(ctx, h.version, []*eventsapi.ClientEvent{
 				{
 					Id:        uuid.New().String(),
