@@ -96,6 +96,16 @@ func newDbStats(dbName string) *dbToStats {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
+func (p *Provider) Close() error {
+	var lastErr error
+	for _, db := range p.statDbs {
+		if err := db.Close(); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
 func (p *Provider) TryLockForUpdate(branch, db, table string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -397,19 +407,18 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 func (p *Provider) Purge(ctx *sql.Context) error {
 	for _, sqlDb := range p.pro.DoltDatabases() {
 		dbName := strings.ToLower(sqlDb.Name())
+		var branches []string
 		db, ok := p.getStatDb(dbName)
-		if !ok {
-			continue
+		if ok {
+			p.CancelRefreshThread(dbName)
+			branches = db.Branches()
+			err := p.DropDbStats(ctx, dbName, true)
+			if err != nil {
+				return fmt.Errorf("failed to drop stats: %w", err)
+			}
 		}
 
-		p.CancelRefreshThread(dbName)
-
-		branches := db.Branches()
-
-		err := p.DropDbStats(ctx, dbName, true)
-		if err != nil {
-			return fmt.Errorf("failed to drop stats: %w", err)
-		}
+		// if the database's failed to load, we still want to delete the folder
 
 		fs, err := p.pro.FileSystemForDatabase(dbName)
 		if err != nil {
@@ -435,6 +444,10 @@ func (p *Provider) Purge(ctx *sql.Context) error {
 
 		if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms")); err != nil {
 			return err
+		}
+		if len(branches) == 0 {
+			// if stats db was invalid on startup, recreate from baseline
+			branches = p.getStatsBranches(ctx)
 		}
 		p.Load(ctx, fs, sqlDb, branches)
 	}

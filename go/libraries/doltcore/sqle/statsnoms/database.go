@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
 	"path"
 	"strings"
 	"sync"
@@ -139,9 +140,16 @@ func (n *NomsStatsDatabase) Branches() []string {
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
 	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
 	if errors.Is(err, doltdb.ErrNoStatistics) {
-		return nil
+		return n.trackBranch(ctx, branch)
+	} else if errors.Is(err, datas.ErrNoBranchStats) {
+		return n.trackBranch(ctx, branch)
 	} else if err != nil {
 		return err
+	}
+	if cnt, err := statsMap.Count(); err != nil {
+		return err
+	} else if cnt == 0 {
+		return n.trackBranch(ctx, branch)
 	}
 	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)
 	if err != nil {
