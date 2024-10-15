@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -427,6 +428,14 @@ func (p *Provider) Purge(ctx *sql.Context) error {
 			}
 		}
 
+		dropDbLoc, err := statsFs.Abs("")
+		if err != nil {
+			return err
+		}
+
+		if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms")); err != nil {
+			return err
+		}
 		p.Load(ctx, fs, sqlDb, branches)
 	}
 	return nil
