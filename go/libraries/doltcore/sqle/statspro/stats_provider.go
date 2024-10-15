@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"strings"
 	"sync"
 
@@ -335,4 +336,98 @@ func (p *Provider) DataLength(ctx *sql.Context, db string, table sql.Table) (uin
 	}
 
 	return priStats.AvgSize(), nil
+}
+
+func (p *Provider) Prune(ctx *sql.Context) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	for _, sqlDb := range p.pro.DoltDatabases() {
+		dbName := strings.ToLower(sqlDb.Name())
+		sqlDb, ok, err := dSess.Provider().SessionDatabase(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		statDb, ok := p.getStatDb(dbName)
+		if !ok {
+			continue
+		}
+		for _, b := range statDb.Branches() {
+			p.CancelRefreshThread(dbName)
+
+			tables, err := sqlDb.GetTableNames(ctx)
+			if err != nil {
+				return err
+			}
+
+			var stats []sql.Statistic
+			for _, t := range tables {
+				table, _, err := sqlDb.GetTableInsensitive(ctx, t)
+				if err != nil {
+					return err
+				}
+				tableStats, err := p.GetTableStats(ctx, dbName, table)
+				stats = append(stats, tableStats...)
+			}
+
+			if err := p.DropDbStats(ctx, dbName, true); err != nil {
+				return err
+			}
+
+			for _, s := range stats {
+				ds, ok := s.(*DoltStats)
+				if !ok {
+					return fmt.Errorf("unexpected statistics type found: %T", s)
+				}
+				if err := statDb.SetStat(ctx, b, ds.Qualifier(), ds); err != nil {
+					return err
+				}
+			}
+			if err := statDb.Flush(ctx, b); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Provider) Purge(ctx *sql.Context) error {
+	for _, sqlDb := range p.pro.DoltDatabases() {
+		dbName := strings.ToLower(sqlDb.Name())
+		db, ok := p.getStatDb(dbName)
+		if !ok {
+			continue
+		}
+
+		p.CancelRefreshThread(dbName)
+
+		branches := db.Branches()
+
+		err := p.DropDbStats(ctx, dbName, true)
+		if err != nil {
+			return fmt.Errorf("failed to drop stats: %w", err)
+		}
+
+		fs, err := p.pro.FileSystemForDatabase(dbName)
+		if err != nil {
+			return err
+		}
+
+		//remove from filesystem
+		statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+		if err != nil {
+			return err
+		}
+
+		if ok, _ := statsFs.Exists(""); ok {
+			if err := statsFs.Delete("", true); err != nil {
+				return err
+			}
+		}
+
+		p.Load(ctx, fs, sqlDb, branches)
+	}
+	return nil
 }
