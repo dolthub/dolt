@@ -52,6 +52,8 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_stats_restart", Schema: statsFuncSchema, Function: statsFunc(statsRestart)},
 	{Name: "dolt_stats_stop", Schema: statsFuncSchema, Function: statsFunc(statsStop)},
 	{Name: "dolt_stats_status", Schema: statsFuncSchema, Function: statsFunc(statsStatus)},
+	{Name: "dolt_stats_prune", Schema: statsFuncSchema, Function: statsFunc(statsPrune)},
+	{Name: "dolt_stats_purge", Schema: statsFuncSchema, Function: statsFunc(statsPurge)},
 }
 
 // stringSchema returns a non-nullable schema with all columns as LONGTEXT.
