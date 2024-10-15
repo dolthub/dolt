@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -72,13 +73,17 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() != 0 {
-		return cmdFailure, InvalidArgErr
+		return cmdFailure, fmt.Errorf("cannot supply both --shallow and --full to dolt_gc: %w", InvalidArgErr)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	if apr.Contains(cli.ShallowFlag) && apr.Contains(cli.FullFlag) {
+		return cmdFailure, InvalidArgErr
 	}
 
 	if apr.Contains(cli.ShallowFlag) {
@@ -106,10 +111,15 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			origepoch = epoch.(int)
 		}
 
+		var mode doltdb.GCMode = doltdb.GCModeDefault
+		if apr.Contains(cli.FullFlag) {
+			mode = doltdb.GCModeFull
+		}
+
 		// TODO: If we got a callback at the beginning and an
 		// (allowed-to-block) callback at the end, we could more
 		// gracefully tear things down.
-		err = ddb.GC(ctx, func() error {
+		err = ddb.GC(ctx, mode, func() error {
 			if origepoch != -1 {
 				// Here we need to sanity check role and epoch.
 				if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
