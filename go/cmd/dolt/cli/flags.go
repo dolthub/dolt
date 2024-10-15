@@ -37,6 +37,7 @@ const (
 	DryRunFlag           = "dry-run"
 	EmptyParam           = "empty"
 	ForceFlag            = "force"
+	FullFlag             = "full"
 	GraphFlag            = "graph"
 	HardResetParam       = "hard"
 	HostFlag             = "host"
