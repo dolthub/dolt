@@ -36,8 +36,8 @@ type MergeSpec struct {
 	HeadC           *doltdb.Commit
 	MergeC          *doltdb.Commit
 	MergeCSpecStr   string
-	StompedTblNames []string
-	WorkingDiffs    map[string]hash.Hash
+	StompedTblNames []doltdb.TableName
+	WorkingDiffs    map[doltdb.TableName]hash.Hash
 	Squash          bool
 	NoFF            bool
 	NoCommit        bool

@@ -1658,7 +1658,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 						for name, _ := range exp {
 							_, ok := act[name]
 							assert.True(t, ok)
-							actTbl, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
+							actTbl, _, err := result.Root.GetTable(ctx, name)
 							require.NoError(t, err)
 							hasConflict, err := actTbl.HasConflicts(ctx)
 							require.NoError(t, err)
@@ -1666,7 +1666,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 						}
 						if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
 							for name, _ := range exp {
-								table, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
+								table, _, err := result.Root.GetTable(ctx, name)
 								require.NoError(t, err)
 								t.Logf("table %s:", name)
 								t.Log(table.DebugString(ctx, m.NodeStore()))
@@ -1678,7 +1678,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							a, ok := act[name]
 							assert.True(t, ok)
 
-							actTbl, _, err := result.Root.GetTable(ctx, doltdb.TableName{Name: name})
+							actTbl, _, err := result.Root.GetTable(ctx, name)
 							require.NoError(t, err)
 							hasConflict, err := actTbl.HasConflicts(ctx)
 							require.NoError(t, err)
@@ -1712,7 +1712,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 								}
 							} else {
 								if addr != a {
-									expTbl, _, err := m.GetTable(ctx, doltdb.TableName{Name: name})
+									expTbl, _, err := m.GetTable(ctx, name)
 									require.NoError(t, err)
 									expSchema, err := expTbl.GetSchema(ctx)
 									require.NoError(t, err)
