@@ -598,7 +598,8 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 
 		newGenRefs.Insert(root)
 
-		err = lvs.gc(ctx, oldGenRefs, oldGen.HasMany, newGen, oldGen, nil, func() hash.HashSet {
+		var finalizer chunks.GCFinalizer
+		finalizer, err = lvs.gc(ctx, oldGenRefs, oldGen.HasMany, newGen, oldGen, nil, func() hash.HashSet {
 			n := lvs.transitionToNewGenGC()
 			newGenRefs.InsertAll(n)
 			return make(hash.HashSet)
@@ -608,12 +609,25 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, safepointF, lvs.transitionToFinalizingGC)
-		newGen.EndGC()
+		_, err = finalizer.AddChunksToStore(ctx)
 		if err != nil {
+			newGen.EndGC()
 			return err
 		}
 
+		finalizer, err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, safepointF, lvs.transitionToFinalizingGC)
+		if err != nil {
+			newGen.EndGC()
+			return err
+		}
+
+		err = finalizer.SwapChunksInStore(ctx)
+		if err != nil {
+			newGen.EndGC()
+			return err
+		}
+
+		newGen.EndGC()
 	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
 		extraNewGenRefs := lvs.transitionToNewGenGC()
 		newGenRefs.InsertAll(extraNewGenRefs)
@@ -638,11 +652,20 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 
 		newGenRefs.Insert(root)
 
-		err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
-		collector.EndGC()
+		var finalizer chunks.GCFinalizer
+		finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
 		if err != nil {
+			collector.EndGC()
 			return err
 		}
+
+		err = finalizer.SwapChunksInStore(ctx)
+		if err != nil {
+			collector.EndGC()
+			return err
+		}
+
+		collector.EndGC()
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
@@ -663,12 +686,16 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	hashFilter HashFilterFunc,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointF func() error,
-	finalize func() hash.HashSet) error {
+	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
 	keepChunks := make(chan []hash.Hash, gcBuffSize)
+
+	var gcFinalizer chunks.GCFinalizer
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return src.MarkAndSweepChunks(ctx, keepChunks, dest)
+		var err error
+		gcFinalizer, err = src.MarkAndSweepChunks(ctx, keepChunks, dest)
+		return err
 	})
 
 	keepHashes := func(hs []hash.Hash) error {
@@ -706,7 +733,8 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		return nil
 	})
 
-	return eg.Wait()
+	err := eg.Wait()
+	return gcFinalizer, err
 }
 
 func (lvs *ValueStore) gcProcessRefs(ctx context.Context,

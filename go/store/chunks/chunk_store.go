@@ -152,6 +152,32 @@ type LoggingChunkStore interface {
 
 var ErrAddChunkMustBlock = errors.New("chunk keeper: add chunk must block")
 
+type HasManyF func(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
+
+// A GCFinalizer is returned from MarkAndSweepChunks after the keep hashes channel is closed.
+//
+// A GCFinalizer is a handle to one or more table files which has been
+// constructed as part of the GC process. It can be used to add the table files
+// to the existing store, as we do in the case of a default-mode collection
+// into the old gen, and it can be used to replace all existing table files in
+// the store with the new table files, as we do in the collection into the new
+// gen.
+//
+// In addition, adding the table files to an existing store exposes a HasMany
+// implementation which inspects only the table files that were added, not all
+// the table files in the resulting store. This is an important part of the
+// full gc protocol, which works as follows:
+//
+// * Collect everything reachable from old gen refs into a new table file in the old gen.
+// * Add the new table file to the old gen.
+// * Collect everything reachable from new gen refs into the new gen, skipping stuff that is in the new old gen table file.
+// * Swap to the new gen table file.
+// * Swap to the old gen table file.
+type GCFinalizer interface {
+	AddChunksToStore(ctx context.Context) (HasManyF, error)
+	SwapChunksInStore(ctx context.Context) error
+}
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -185,7 +211,7 @@ type ChunkStoreGarbageCollector interface {
 	// This behavior is a little different for ValueStore.GC()'s
 	// interactions with generational stores. See ValueStore and
 	// NomsBlockStore/GenerationalNBS for details.
-	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error
+	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) (GCFinalizer, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

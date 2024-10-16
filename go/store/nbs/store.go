@@ -1569,10 +1569,10 @@ func (nbs *NomsBlockStore) EndGC() {
 	nbs.cond.Broadcast()
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) error {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
-		return chunks.ErrUnsupportedOperation
+		return nil, chunks.ErrUnsupportedOperation
 	}
 
 	precheck := func() error {
@@ -1589,7 +1589,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 	}
 	err := precheck()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var destNBS *NomsBlockStore
@@ -1600,7 +1600,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 		case NBSMetricWrapper:
 			destNBS = typed.nbs
 		default:
-			return fmt.Errorf("cannot MarkAndSweep into a non-NomsBlockStore ChunkStore: %w", chunks.ErrUnsupportedOperation)
+			return nil, fmt.Errorf("cannot MarkAndSweep into a non-NomsBlockStore ChunkStore: %w", chunks.ErrUnsupportedOperation)
 		}
 	} else {
 		destNBS = nbs
@@ -1608,18 +1608,31 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 
 	specs, err := nbs.copyMarkedChunks(ctx, hashes, destNBS)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	if destNBS == nbs {
-		return nbs.swapTables(ctx, specs)
-	} else {
-		fileIdToNumChunks := tableSpecsToMap(specs)
-		return destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)
-	}
+	return gcFinalizer{
+		nbs:   destNBS,
+		specs: specs,
+	}, nil
+}
+
+type gcFinalizer struct {
+	nbs   *NomsBlockStore
+	specs []tableSpec
+}
+
+func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyF, error) {
+	// TODO: HasManyF
+	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
+	return nil, gcf.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+}
+
+func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
+	return gcf.nbs.swapTables(ctx, gcf.specs)
 }
 
 func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, dest *NomsBlockStore) ([]tableSpec, error) {
