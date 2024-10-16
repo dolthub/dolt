@@ -216,7 +216,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
-		Default: int8(1),
+		Default: int8(0),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsBootstrapEnabled,
@@ -443,7 +443,7 @@ func AddDoltSystemVariables() {
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
-			Default: int8(1),
+			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsBootstrapEnabled,
