@@ -152,7 +152,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 
 	for _, tblName := range tblNames {
-		destRoot, verr = pullTableValue(ctx, dEnv, srcDB, srcRoot, destRoot, downloadLanguage, tblName, commitStr)
+		destRoot, verr = pullTableValue(ctx, dEnv, srcDB, srcRoot, destRoot, downloadLanguage, doltdb.TableName{Name: tblName}, commitStr)
 
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
@@ -168,8 +168,8 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	return 0
 }
 
-func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot doltdb.RootValue, language progLanguage, tblName, commitStr string) (doltdb.RootValue, errhand.VerboseError) {
-	tbl, ok, err := srcRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
+func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot doltdb.RootValue, language progLanguage, tblName doltdb.TableName, commitStr string) (doltdb.RootValue, errhand.VerboseError) {
+	tbl, ok, err := srcRoot.GetTable(ctx, tblName)
 	if !ok {
 		return nil, errhand.BuildDError("No table named '%s' at '%s'", tblName, commitStr).Build()
 	} else if err != nil {
