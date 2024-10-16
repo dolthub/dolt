@@ -1592,14 +1592,18 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 		return err
 	}
 
-	destNBS := nbs
+	var destNBS *NomsBlockStore
 	if dest != nil {
 		switch typed := dest.(type) {
 		case *NomsBlockStore:
 			destNBS = typed
 		case NBSMetricWrapper:
 			destNBS = typed.nbs
+		default:
+			return fmt.Errorf("cannot MarkAndSweep into a non-NomsBlockStore ChunkStore: %w", chunks.ErrUnsupportedOperation)
 		}
+	} else {
+		destNBS = nbs
 	}
 
 	specs, err := nbs.copyMarkedChunks(ctx, hashes, destNBS)
