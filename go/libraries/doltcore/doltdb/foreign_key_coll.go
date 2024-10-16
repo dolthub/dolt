@@ -246,6 +246,8 @@ func (fk ForeignKey) HashOf() (hash.Hash, error) {
 			_, err = bb.Write(t)
 		case uint64:
 			err = binary.Write(&bb, binary.LittleEndian, t)
+		case TableName:
+			_, err = bb.Write([]byte(t.String()))
 		default:
 			return hash.Hash{}, fmt.Errorf("unsupported type %T", t)
 		}
