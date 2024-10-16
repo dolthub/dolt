@@ -36,7 +36,7 @@ to see what we're building next.
 
 Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
-it so far](https://www.dolthub.com/blog/2022-07-11-dolt-case-studies/).
+it so far](https://dolthub.com/blog/2024-10-15-dolt-use-cases/).
 
 Dolt can be [set up as a replica of your existing MySQL or MariaDB](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
 database using standard MySQL binlog replication. Every write becomes

@@ -498,7 +498,7 @@ func (as ArtifactStatus) HasConstraintViolations() bool {
 }
 
 // MergeWouldStompChanges returns list of table names that are stomped and the diffs map between head and working set.
-func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
+func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]doltdb.TableName, map[doltdb.TableName]hash.Hash, error) {
 	mergeRoot, err := mergeCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -522,7 +522,7 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
 	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
 
-	stompedTables := make([]string, 0, len(headWorkingDiffs))
+	stompedTables := make([]doltdb.TableName, 0, len(headWorkingDiffs))
 	for tName, _ := range headWorkingDiffs {
 		if _, ok := mergedHeadDiffs[tName]; ok {
 			// even if the working changes match the merge changes, don't allow (matches git behavior).
@@ -533,8 +533,8 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 	return stompedTables, headWorkingDiffs, nil
 }
 
-func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
-	diffs := make(map[string]hash.Hash)
+func diffTableHashes(headTableHashes, otherTableHashes map[doltdb.TableName]hash.Hash) map[doltdb.TableName]hash.Hash {
+	diffs := make(map[doltdb.TableName]hash.Hash)
 	for tName, hh := range headTableHashes {
 		if h, ok := otherTableHashes[tName]; ok {
 			if h != hh {
