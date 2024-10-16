@@ -308,7 +308,6 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot doltd
 		}
 	}
 
-	// TODO: schema names
 	tblNames, err = doltdb.UnionTableNames(ctx, changedRoot)
 	if err != nil {
 		return nil, err
