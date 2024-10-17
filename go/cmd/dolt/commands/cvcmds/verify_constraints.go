@@ -129,7 +129,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		}
 
 		for _, tableName := range tablesWithViolations.AsSortedSlice() {
-			tbl, ok, err := endRoot.GetTable(ctx, doltdb.TableName{Name: tableName})
+			tbl, ok, err := endRoot.GetTable(ctx, tableName)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading table.").AddCause(err).Build(), nil)
 			}
@@ -137,8 +137,8 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load table '%s'.", tableName).Build(), nil)
 			}
 			cli.Println("")
-			cli.Println(doltdb.DoltConstViolTablePrefix + tableName)
-			dErr := printViolationsForTable(ctx, dbName, tableName, tbl, eng)
+			cli.Println(doltdb.DoltConstViolTablePrefix + tableName.Name)
+			dErr := printViolationsForTable(ctx, dbName, tableName.Name, tbl, eng)
 			if dErr != nil {
 				return commands.HandleVErrAndExitCode(dErr, nil)
 			}
