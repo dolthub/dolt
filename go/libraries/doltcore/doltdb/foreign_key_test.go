@@ -336,7 +336,7 @@ var foreignKeyTests = []foreignKeyTest{
 			},
 			{
 				Name:                   "fk2",
-				TableName:             doltdb.TableName{Name: "child"},
+				TableName:              doltdb.TableName{Name: "child"},
 				TableIndex:             "v2_idx",
 				TableColumns:           []uint64{8734},
 				ReferencedTableName:    doltdb.TableName{Name: "parent"},

@@ -256,7 +256,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		onUpdate = fk.OnUpdate.String()
 	}
-	
+
 	// TODO: schema name
 	return sql.GenerateCreateTableForiegnKeyDefinition(fk.Name, fkCols, fk.ReferencedTableName.Name, parentCols, onDelete, onUpdate)
 }
