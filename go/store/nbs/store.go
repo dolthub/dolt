@@ -1598,6 +1598,10 @@ func (nbs *NomsBlockStore) EndGC() {
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
+	return markAndSweepChunks(ctx, hashes, nbs, nbs, dest)
+}
+
+func markAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, nbs *NomsBlockStore, src NBSCompressedChunkStore, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -1634,7 +1638,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 		destNBS = nbs
 	}
 
-	specs, err := nbs.copyMarkedChunks(ctx, hashes, destNBS)
+	specs, err := copyMarkedChunks(ctx, hashes, src, destNBS)
 	if err != nil {
 		return nil, err
 	}
@@ -1670,7 +1674,7 @@ func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
 	return gcf.nbs.swapTables(ctx, gcf.specs)
 }
 
-func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, dest *NomsBlockStore) ([]tableSpec, error) {
+func copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, src NBSCompressedChunkStore, dest *NomsBlockStore) ([]tableSpec, error) {
 	tfp, ok := dest.p.(tableFilePersister)
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
@@ -1694,7 +1698,7 @@ LOOP:
 			mu := new(sync.Mutex)
 			hashset := hash.NewHashSet(hs...)
 			found := 0
-			err := nbs.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
+			err := src.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
 				mu.Lock()
 				defer mu.Unlock()
 				if addErr != nil {
