@@ -115,6 +115,15 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 	return f(ts.upstream)
 }
 
+// Updates the records in |addrs| for whether they exist in this table set, but
+// only consults tables whose names appear in |srcs|, ignoring all other tables
+// in the table set. Returns |remaining| as true if all addresses were not
+// found in the consulted tables, and false otherwise.
+//
+// Intended to be exactly like |hasMany|, except filtering for the files
+// consulted. Only used for part of the GC workflow where we want to have
+// access to all chunks in the store but need to check for existing chunk
+// presence in only a subset of its files.
 func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord) (remaining bool, err error) {
 	for _, rec := range addrs {
 		if !rec.has {

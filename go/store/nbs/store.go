@@ -1037,7 +1037,7 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	return nbs.hasMany(toHasRecords(hashes))
 }
 
-func (nbs *NomsBlockStore) hasManyInSources(ctx context.Context, srcs []hash.Hash, hashes hash.HashSet) (hash.HashSet, error) {
+func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSet) (hash.HashSet, error) {
 	if hashes.Size() == 0 {
 		return nil, nil
 	}
@@ -1657,14 +1657,14 @@ type gcFinalizer struct {
 	specs []tableSpec
 }
 
-func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyF, error) {
+func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc, error) {
 	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
 	var addrs []hash.Hash
 	for _, spec := range gcf.specs {
 		addrs = append(addrs, spec.name)
 	}
 	f := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
-		return gcf.nbs.hasManyInSources(ctx, addrs, hashes)
+		return gcf.nbs.hasManyInSources(addrs, hashes)
 	}
 	return f, gcf.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }

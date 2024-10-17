@@ -348,7 +348,7 @@ type msvGcFinalizer struct {
 	keepers map[hash.Hash]Chunk
 }
 
-func (mgcf msvGcFinalizer) AddChunksToStore(ctx context.Context) (HasManyF, error) {
+func (mgcf msvGcFinalizer) AddChunksToStore(ctx context.Context) (HasManyFunc, error) {
 	panic("unsupported")
 }
 

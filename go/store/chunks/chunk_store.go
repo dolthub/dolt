@@ -152,7 +152,9 @@ type LoggingChunkStore interface {
 
 var ErrAddChunkMustBlock = errors.New("chunk keeper: add chunk must block")
 
-type HasManyF func(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
+// The function type for ChunkStore.HasMany. Used as a return value in the
+// GCFinalizer interface.
+type HasManyFunc func(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
 
 // A GCFinalizer is returned from MarkAndSweepChunks after the keep hashes channel is closed.
 //
@@ -174,7 +176,7 @@ type HasManyF func(ctx context.Context, hashes hash.HashSet) (absent hash.HashSe
 // * Swap to the new gen table file.
 // * Swap to the old gen table file.
 type GCFinalizer interface {
-	AddChunksToStore(ctx context.Context) (HasManyF, error)
+	AddChunksToStore(ctx context.Context) (HasManyFunc, error)
 	SwapChunksInStore(ctx context.Context) error
 }
 

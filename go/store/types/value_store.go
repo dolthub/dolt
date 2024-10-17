@@ -582,7 +582,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
 
-		var oldGenHasMany chunks.HasManyF
+		var oldGenHasMany chunks.HasManyFunc
 		switch mode {
 		case GCModeDefault:
 			oldGenHasMany = oldGen.HasMany
@@ -592,113 +592,115 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			return fmt.Errorf("unsupported GCMode %v", mode)
 		}
 
-		err := collector.BeginGC(lvs.gcAddChunk)
-		if err != nil {
-			return err
-		}
-
-		root, err := lvs.Root(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		if root == (hash.Hash{}) {
-			// empty root
-			collector.EndGC()
-			return nil
-		}
-
-		oldGenRefs, err = oldGenHasMany(ctx, oldGenRefs)
-		if err != nil {
-			return err
-		}
-
-		newGenRefs.Insert(root)
-
-		var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
-		oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, collector, oldGen, nil, func() hash.HashSet {
-			n := lvs.transitionToNewGenGC()
-			newGenRefs.InsertAll(n)
-			return make(hash.HashSet)
-		})
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		var newFileHasMany chunks.HasManyF
-		newFileHasMany, err = oldGenFinalizer.AddChunksToStore(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		if mode == GCModeDefault {
-			oldGenHasMany = oldGen.HasMany
-		} else {
-			oldGenHasMany = newFileHasMany
-		}
-
-		newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		err = newGenFinalizer.SwapChunksInStore(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		if mode == GCModeFull {
-			err = oldGenFinalizer.SwapChunksInStore(ctx)
+		err := func() error {
+			err := collector.BeginGC(lvs.gcAddChunk)
 			if err != nil {
-				collector.EndGC()
 				return err
 			}
-		}
+			defer collector.EndGC()
 
-		collector.EndGC()
+			root, err := lvs.Root(ctx)
+			if err != nil {
+				return err
+			}
+
+			if root == (hash.Hash{}) {
+				// empty root
+				return nil
+			}
+
+			oldGenRefs, err = oldGenHasMany(ctx, oldGenRefs)
+			if err != nil {
+				return err
+			}
+
+			newGenRefs.Insert(root)
+
+			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, collector, oldGen, nil, func() hash.HashSet {
+				n := lvs.transitionToNewGenGC()
+				newGenRefs.InsertAll(n)
+				return make(hash.HashSet)
+			})
+			if err != nil {
+				return err
+			}
+
+			var newFileHasMany chunks.HasManyFunc
+			newFileHasMany, err = oldGenFinalizer.AddChunksToStore(ctx)
+			if err != nil {
+				return err
+			}
+
+			if mode == GCModeDefault {
+				oldGenHasMany = oldGen.HasMany
+			} else {
+				oldGenHasMany = newFileHasMany
+			}
+
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
+			if err != nil {
+				return err
+			}
+
+			err = newGenFinalizer.SwapChunksInStore(ctx)
+			if err != nil {
+				return err
+			}
+
+			if mode == GCModeFull {
+				err = oldGenFinalizer.SwapChunksInStore(ctx)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}()
+
+		if err != nil {
+			return err
+		}
 	} else if collectorOK {
 		extraNewGenRefs := lvs.transitionToNewGenGC()
 		newGenRefs.InsertAll(extraNewGenRefs)
 		newGenRefs.InsertAll(oldGenRefs)
 
-		err := collector.BeginGC(lvs.gcAddChunk)
-		if err != nil {
-			return err
-		}
+		err := func() error {
+			err := collector.BeginGC(lvs.gcAddChunk)
+			if err != nil {
+				return err
+			}
 
-		root, err := lvs.Root(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
+			root, err := lvs.Root(ctx)
+			if err != nil {
+				return err
+			}
 
-		if root == (hash.Hash{}) {
-			// empty root
-			collector.EndGC()
+			if root == (hash.Hash{}) {
+				// empty root
+				return nil
+			}
+
+			newGenRefs.Insert(root)
+
+			var finalizer chunks.GCFinalizer
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
+			if err != nil {
+				return err
+			}
+
+			err = finalizer.SwapChunksInStore(ctx)
+			if err != nil {
+				return err
+			}
+
 			return nil
-		}
+		}()
 
-		newGenRefs.Insert(root)
-
-		var finalizer chunks.GCFinalizer
-		finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
 		if err != nil {
-			collector.EndGC()
 			return err
 		}
-
-		err = finalizer.SwapChunksInStore(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
-
-		collector.EndGC()
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
@@ -716,7 +718,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
-	hashFilter chunks.HasManyF,
+	hashFilter chunks.HasManyFunc,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointF func() error,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
@@ -772,7 +774,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 
 func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 	initialToVisit hash.HashSet, keepHashes func(hs []hash.Hash) error,
-	walker *parallelRefWalker, hashFilter chunks.HasManyF,
+	walker *parallelRefWalker, hashFilter chunks.HasManyFunc,
 	safepointF func() error,
 	finalize func() hash.HashSet) error {
 	visited := make(hash.HashSet)
