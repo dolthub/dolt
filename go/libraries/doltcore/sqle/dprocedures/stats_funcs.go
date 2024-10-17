@@ -53,6 +53,10 @@ type AutoRefreshStatsProvider interface {
 	ThreadStatus(string) string
 }
 
+type BranchStatsProvider interface {
+	DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error
+}
+
 // statsRestart tries to stop and then start a refresh thread
 func statsRestart(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -114,13 +118,21 @@ func statsDrop(ctx *sql.Context) (interface{}, error) {
 	pro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
+	branch, err := dSess.GetBranch()
+	if err != nil {
+		return nil, fmt.Errorf("failed to drop stats: %w", err)
+	}
+
 	if afp, ok := pro.(AutoRefreshStatsProvider); ok {
 		// currently unsafe to drop stats while running refresh
 		afp.CancelRefreshThread(dbName)
 	}
-	err := pro.DropDbStats(ctx, dbName, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to drop stats: %w", err)
+	if bsp, ok := pro.(BranchStatsProvider); ok {
+		err := bsp.DropBranchDbStats(ctx, branch, dbName, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to drop stats: %w", err)
+		}
 	}
+
 	return fmt.Sprintf("deleted stats ref for %s", dbName), nil
 }

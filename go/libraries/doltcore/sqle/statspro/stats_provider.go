@@ -243,7 +243,7 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 	return stat, true
 }
 
-func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+func (p *Provider) DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error {
 	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return nil
@@ -252,11 +252,17 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	return statDb.DeleteBranchStats(ctx, branch, flush)
+}
+
+func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+	statDb, ok := p.getStatDb(db)
+	if !ok {
+		return nil
+	}
 	for _, branch := range statDb.Branches() {
 		// remove provider access
-		if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
-			return err
-		}
+		p.DropBranchDbStats(ctx, db, branch, flush)
 	}
 
 	p.status[db] = "dropped"
