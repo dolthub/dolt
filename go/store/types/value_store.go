@@ -585,12 +585,6 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		var oldGenHasMany chunks.HasManyF
 		switch mode {
 		case GCModeDefault:
-			// We use the newGen directly as a the collector here,
-			// since all chunks we will ever source come from
-			// newGen. This allows dolt gc to continue working with
-			// old gens that contain archive files, whereas |dolt
-			// gc --full| does not currently support them.
-			collector = newGen
 			oldGenHasMany = oldGen.HasMany
 		case GCModeFull:
 			oldGenHasMany = unfilteredHashFunc
