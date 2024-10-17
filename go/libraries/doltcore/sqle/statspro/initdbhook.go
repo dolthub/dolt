@@ -54,7 +54,9 @@ func NewStatsInitDatabaseHook(
 func NewStatsDropDatabaseHook(statsProv *Provider) sqle.DropDatabaseHook {
 	return func(ctx *sql.Context, name string) {
 		statsProv.CancelRefreshThread(name)
-		statsProv.DropDbStats(ctx, name, false)
+		if err := statsProv.DropDbStats(ctx, name, false); err != nil {
+			ctx.GetLogger().Debugf("failed to close stats database: %s", err)
+		}
 
 		if db, ok := statsProv.getStatDb(name); ok {
 			if err := db.Close(); err != nil {

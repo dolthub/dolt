@@ -249,18 +249,14 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 		return nil
 	}
 
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// remove provider access
-	if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
-		return nil
+	for _, branch := range statDb.Branches() {
+		// remove provider access
+		if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
+			return err
+		}
 	}
 
 	p.status[db] = "dropped"
