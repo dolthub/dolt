@@ -584,12 +584,12 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 
 		var oldGenHasMany chunks.HasManyF
 		switch mode {
-			case GCModeDefault:
-				oldGenHasMany = oldGen.HasMany
-			case GCModeFull:
-				oldGenHasMany = unfilteredHashFunc
-			default:
-				return fmt.Errorf("unsupported GCMode %v", mode)
+		case GCModeDefault:
+			oldGenHasMany = oldGen.HasMany
+		case GCModeFull:
+			oldGenHasMany = unfilteredHashFunc
+		default:
+			return fmt.Errorf("unsupported GCMode %v", mode)
 		}
 
 		err := collector.BeginGC(lvs.gcAddChunk)
@@ -646,18 +646,18 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			return err
 		}
 
+		err = newGenFinalizer.SwapChunksInStore(ctx)
+		if err != nil {
+			collector.EndGC()
+			return err
+		}
+
 		if mode == GCModeFull {
 			err = oldGenFinalizer.SwapChunksInStore(ctx)
 			if err != nil {
 				collector.EndGC()
 				return err
 			}
-		}
-
-		err = newGenFinalizer.SwapChunksInStore(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
 		}
 
 		collector.EndGC()

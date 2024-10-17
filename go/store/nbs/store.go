@@ -1658,7 +1658,6 @@ type gcFinalizer struct {
 }
 
 func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyF, error) {
-	// TODO: HasManyF
 	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
 	var addrs []hash.Hash
 	for _, spec := range gcf.specs {

@@ -73,7 +73,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() != 0 {
-		return cmdFailure, fmt.Errorf("cannot supply both --shallow and --full to dolt_gc: %w", InvalidArgErr)
+		return cmdFailure, InvalidArgErr
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -83,7 +83,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.Contains(cli.ShallowFlag) && apr.Contains(cli.FullFlag) {
-		return cmdFailure, InvalidArgErr
+		return cmdFailure, fmt.Errorf("cannot supply both --shallow and --full to dolt_gc: %w", InvalidArgErr)
 	}
 
 	if apr.Contains(cli.ShallowFlag) {
