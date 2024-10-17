@@ -135,12 +135,12 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 		if !ok {
 			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ChildTableName()))
 		}
-		
+
 		parentTableName, ok := decodeTableNameFromSerialization(string(fk.ParentTableName()))
 		if !ok {
 			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ParentTableName()))
 		}
-		
+
 		err := collection.AddKeys(ForeignKey{
 			Name:                   string(fk.Name()),
 			TableName:              tableName,

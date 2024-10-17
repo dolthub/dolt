@@ -2630,7 +2630,7 @@ func (t *WritableDoltTable) createForeignKey(
 	tbl *doltdb.Table,
 	sqlFk sql.ForeignKeyConstraint,
 	onUpdateRefAction, onDeleteRefAction doltdb.ForeignKeyReferentialAction) (doltdb.ForeignKey, error) {
-	
+
 	if !sqlFk.IsResolved {
 		// TODO: schema should be part of the foreign key defn
 		return doltdb.ForeignKey{
@@ -2707,7 +2707,7 @@ func (t *WritableDoltTable) createForeignKey(
 	if ok {
 		refTableIndexName = refTableIndex.Name()
 	}
-	
+
 	// TODO: foreign key defn should include schema names
 	return doltdb.ForeignKey{
 		Name:                   sqlFk.Name,
@@ -2835,7 +2835,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	}
 	fkc.RemoveKeyByName(doltFk.Name)
 	doltFk.Name = sqlFk.Name
-	
+
 	// TODO: need schema name in foreign key defn
 	doltFk.TableName = doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()}
 	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()}
@@ -2917,7 +2917,7 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 // toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
 // function should not be used.
 func toForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
-	// TODO: foreign key defn should include schema name 
+	// TODO: foreign key defn should include schema name
 	cst = sql.ForeignKeyConstraint{
 		Name:           fk.Name,
 		Database:       dbName,

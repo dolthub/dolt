@@ -455,8 +455,8 @@ func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.Databas
 	return b.EndVector(len(offsets))
 }
 
-// encodeTableNameForSerialization encodes a table name for serialization. Table names with no schema are encoded as 
-// just the bare table name. Table names with schemas are encoded by surrounding the schema name with null bytes and 
+// encodeTableNameForSerialization encodes a table name for serialization. Table names with no schema are encoded as
+// just the bare table name. Table names with schemas are encoded by surrounding the schema name with null bytes and
 // appending the table name.
 func encodeTableNameForSerialization(name TableName) string {
 	if name.Schema == "" {
@@ -477,13 +477,13 @@ func decodeTableNameFromSerialization(encodedName string) (TableName, bool) {
 			Name:   encodedName[schemaEnd+1:],
 		}, true
 	}
-	
+
 	// invalid encoding
 	return TableName{}, false
 }
 
 // decodeTableNameForAddressMap decodes a table name from an address map key, expecting a particular schema name. See
-// notes on serialization in |encodeTableNameForSerialization| 
+// notes on serialization in |encodeTableNameForSerialization|
 func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool) {
 	if schemaName == "" && encodedName[0] != 0 {
 		return encodedName, true
