@@ -423,7 +423,7 @@ func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *r
 			return
 		}
 		if status.Code(err) == codes.FailedPrecondition {
-			c.lgr.Warnf("drop of [%s] to %s will note be replicated; FailedPrecondition", dbname, client.remote)
+			c.lgr.Warnf("drop of [%s] to %s will not be replicated; FailedPrecondition", dbname, client.remote)
 			return
 		}
 		c.lgr.Warnf("failed to replicate drop of [%s] to %s: %v", dbname, client.remote, err)
