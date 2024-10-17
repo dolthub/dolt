@@ -115,6 +115,35 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 	return f(ts.upstream)
 }
 
+func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord) (remaining bool, err error) {
+	for _, rec := range addrs {
+		if !rec.has {
+			remaining = true
+			break
+		}
+	}
+	if !remaining {
+		return false, nil
+	}
+	for _, srcAddr := range srcs {
+		src, ok := ts.novel[srcAddr]
+		if !ok {
+			src, ok = ts.upstream[srcAddr]
+			if !ok {
+				continue
+			}
+		}
+		remaining, err = src.hasMany(addrs)
+		if err != nil {
+			return false, err
+		}
+		if !remaining {
+			break
+		}
+	}
+	return remaining, nil
+}
+
 func (ts tableSet) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

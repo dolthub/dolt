@@ -1037,6 +1037,34 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	return nbs.hasMany(toHasRecords(hashes))
 }
 
+func (nbs *NomsBlockStore) hasManyInSources(ctx context.Context, srcs []hash.Hash, hashes hash.HashSet) (hash.HashSet, error) {
+	if hashes.Size() == 0 {
+		return nil, nil
+	}
+
+	t1 := time.Now()
+	defer nbs.stats.HasLatency.SampleTimeSince(t1)
+	nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
+
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+
+	records := toHasRecords(hashes)
+
+	_, err := nbs.tables.hasManyInSources(srcs, records)
+	if err != nil {
+		return nil, err
+	}
+
+	absent := hash.HashSet{}
+	for _, r := range records {
+		if !r.has {
+			absent.Insert(*r.a)
+		}
+	}
+	return absent, nil
+}
+
 func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
 		tables = nbs.tables
@@ -1628,7 +1656,14 @@ type gcFinalizer struct {
 func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyF, error) {
 	// TODO: HasManyF
 	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
-	return nil, gcf.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+	var addrs []hash.Hash
+	for _, spec := range gcf.specs {
+		addrs = append(addrs, spec.name)
+	}
+	f := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return gcf.nbs.hasManyInSources(ctx, addrs, hashes)
+	}
+	return f, gcf.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
 
 func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {

@@ -1624,6 +1624,7 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 }
 
 type GCMode int
+
 const (
 	GCModeDefault GCMode = iota
 	GCModeFull
