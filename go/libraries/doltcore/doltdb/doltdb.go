@@ -1623,13 +1623,6 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 	return datas.ChunkStoreFromDatabase(ddb.db).Rebase(ctx)
 }
 
-type GCMode int
-
-const (
-	GCModeDefault GCMode = iota
-	GCModeFull
-)
-
 // GC performs garbage collection on this ddb.
 //
 // If |safepointF| is non-nil, it will be called at some point after the GC begins
@@ -1640,7 +1633,7 @@ const (
 // until no possibly-stale ChunkStore state is retained in memory, or failing
 // certain in-progress operations which cannot be finalized in a timely manner,
 // etc.
-func (ddb *DoltDB) GC(ctx context.Context, mode GCMode, safepointF func() error) error {
+func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, safepointF func() error) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1684,7 +1677,7 @@ func (ddb *DoltDB) GC(ctx context.Context, mode GCMode, safepointF func() error)
 		return err
 	}
 
-	return collector.GC(ctx, oldGen, newGen, safepointF)
+	return collector.GC(ctx, mode, oldGen, newGen, safepointF)
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {

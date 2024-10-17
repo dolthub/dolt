@@ -139,7 +139,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	err := dEnv.DoltDB.GC(ctx, doltdb.GCModeDefault, nil)
+	err := dEnv.DoltDB.GC(ctx, types.GCModeDefault, nil)
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
 
@@ -208,7 +208,7 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	_, err = ns.Write(ctx, c1.Node())
 	require.NoError(t, err)
 
-	err = ddb.GC(ctx, doltdb.GCModeDefault, nil)
+	err = ddb.GC(ctx, types.GCModeDefault, nil)
 	require.NoError(t, err)
 
 	c2 := newIntMap(t, ctx, ns, 2, 2)

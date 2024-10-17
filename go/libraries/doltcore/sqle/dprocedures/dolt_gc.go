@@ -26,8 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -111,9 +111,9 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			origepoch = epoch.(int)
 		}
 
-		var mode doltdb.GCMode = doltdb.GCModeDefault
+		var mode types.GCMode = types.GCModeDefault
 		if apr.Contains(cli.FullFlag) {
-			mode = doltdb.GCModeFull
+			mode = types.GCModeFull
 		}
 
 		// TODO: If we got a callback at the beginning and an

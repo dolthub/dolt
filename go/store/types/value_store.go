@@ -36,8 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
-type HashFilterFunc func(context.Context, hash.HashSet) (hash.HashSet, error)
-
 func unfilteredHashFunc(_ context.Context, hs hash.HashSet) (hash.HashSet, error) {
 	return hs, nil
 }
@@ -563,8 +561,15 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 	return res
 }
 
+type GCMode int
+
+const (
+	GCModeDefault GCMode = iota
+	GCModeFull
+)
+
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -573,6 +578,16 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 	if gcs, ok := lvs.cs.(chunks.GenerationalCS); ok {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
+
+		var oldGenHasMany chunks.HasManyF
+		switch mode {
+			case GCModeDefault:
+				oldGenHasMany = oldGen.HasMany
+			case GCModeFull:
+				oldGenHasMany = unfilteredHashFunc
+			default:
+				return fmt.Errorf("unsupported GCMode %v", mode)
+		}
 
 		err := newGen.BeginGC(lvs.gcAddChunk)
 		if err != nil {
@@ -591,15 +606,15 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return nil
 		}
 
-		oldGenRefs, err = oldGen.HasMany(ctx, oldGenRefs)
+		oldGenRefs, err = oldGenHasMany(ctx, oldGenRefs)
 		if err != nil {
 			return err
 		}
 
 		newGenRefs.Insert(root)
 
-		var finalizer chunks.GCFinalizer
-		finalizer, err = lvs.gc(ctx, oldGenRefs, oldGen.HasMany, newGen, oldGen, nil, func() hash.HashSet {
+		var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
+		oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, newGen, oldGen, nil, func() hash.HashSet {
 			n := lvs.transitionToNewGenGC()
 			newGenRefs.InsertAll(n)
 			return make(hash.HashSet)
@@ -609,19 +624,34 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 			return err
 		}
 
-		_, err = finalizer.AddChunksToStore(ctx)
+		var newFileHasMany chunks.HasManyF
+		newFileHasMany, err = oldGenFinalizer.AddChunksToStore(ctx)
 		if err != nil {
 			newGen.EndGC()
 			return err
 		}
 
-		finalizer, err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, safepointF, lvs.transitionToFinalizingGC)
+		if mode == GCModeDefault {
+			oldGenHasMany = oldGen.HasMany
+		} else {
+			oldGenHasMany = newFileHasMany
+		}
+
+		newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, newGen, newGen, safepointF, lvs.transitionToFinalizingGC)
 		if err != nil {
 			newGen.EndGC()
 			return err
 		}
 
-		err = finalizer.SwapChunksInStore(ctx)
+		if mode == GCModeFull {
+			err = oldGenFinalizer.SwapChunksInStore(ctx)
+			if err != nil {
+				newGen.EndGC()
+				return err
+			}
+		}
+
+		err = newGenFinalizer.SwapChunksInStore(ctx)
 		if err != nil {
 			newGen.EndGC()
 			return err
@@ -683,7 +713,7 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
-	hashFilter HashFilterFunc,
+	hashFilter chunks.HasManyF,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointF func() error,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
@@ -739,7 +769,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 
 func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 	initialToVisit hash.HashSet, keepHashes func(hs []hash.Hash) error,
-	walker *parallelRefWalker, hashFilter HashFilterFunc,
+	walker *parallelRefWalker, hashFilter chunks.HasManyF,
 	safepointF func() error,
 	finalize func() hash.HashSet) error {
 	visited := make(hash.HashSet)
