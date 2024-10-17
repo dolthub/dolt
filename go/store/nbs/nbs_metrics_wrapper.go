@@ -79,7 +79,7 @@ func (nbsMW *NBSMetricWrapper) EndGC() {
 	nbsMW.nbs.EndGC()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) error {
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
 	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest)
 }
 

@@ -36,8 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
-type HashFilterFunc func(context.Context, hash.HashSet) (hash.HashSet, error)
-
 func unfilteredHashFunc(_ context.Context, hs hash.HashSet) (hash.HashSet, error) {
 	return hs, nil
 }
@@ -563,83 +561,143 @@ func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
 	return res
 }
 
+type GCMode int
+
+const (
+	GCModeDefault GCMode = iota
+	GCModeFull
+)
+
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
 	defer lvs.transitionToNoGC()
 
-	if gcs, ok := lvs.cs.(chunks.GenerationalCS); ok {
+	gcs, gcsOK := lvs.cs.(chunks.GenerationalCS)
+	collector, collectorOK := lvs.cs.(chunks.ChunkStoreGarbageCollector)
+
+	if gcsOK && collectorOK {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
 
-		err := newGen.BeginGC(lvs.gcAddChunk)
-		if err != nil {
-			return err
+		var oldGenHasMany chunks.HasManyFunc
+		switch mode {
+		case GCModeDefault:
+			oldGenHasMany = oldGen.HasMany
+		case GCModeFull:
+			oldGenHasMany = unfilteredHashFunc
+		default:
+			return fmt.Errorf("unsupported GCMode %v", mode)
 		}
 
-		root, err := lvs.Root(ctx)
-		if err != nil {
-			newGen.EndGC()
-			return err
-		}
+		err := func() error {
+			err := collector.BeginGC(lvs.gcAddChunk)
+			if err != nil {
+				return err
+			}
+			defer collector.EndGC()
 
-		if root == (hash.Hash{}) {
-			// empty root
-			newGen.EndGC()
+			root, err := lvs.Root(ctx)
+			if err != nil {
+				return err
+			}
+
+			if root == (hash.Hash{}) {
+				// empty root
+				return nil
+			}
+
+			oldGenRefs, err = oldGenHasMany(ctx, oldGenRefs)
+			if err != nil {
+				return err
+			}
+
+			newGenRefs.Insert(root)
+
+			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, collector, oldGen, nil, func() hash.HashSet {
+				n := lvs.transitionToNewGenGC()
+				newGenRefs.InsertAll(n)
+				return make(hash.HashSet)
+			})
+			if err != nil {
+				return err
+			}
+
+			var newFileHasMany chunks.HasManyFunc
+			newFileHasMany, err = oldGenFinalizer.AddChunksToStore(ctx)
+			if err != nil {
+				return err
+			}
+
+			if mode == GCModeDefault {
+				oldGenHasMany = oldGen.HasMany
+			} else {
+				oldGenHasMany = newFileHasMany
+			}
+
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
+			if err != nil {
+				return err
+			}
+
+			err = newGenFinalizer.SwapChunksInStore(ctx)
+			if err != nil {
+				return err
+			}
+
+			if mode == GCModeFull {
+				err = oldGenFinalizer.SwapChunksInStore(ctx)
+				if err != nil {
+					return err
+				}
+			}
+
 			return nil
-		}
+		}()
 
-		oldGenRefs, err = oldGen.HasMany(ctx, oldGenRefs)
 		if err != nil {
 			return err
 		}
-
-		newGenRefs.Insert(root)
-
-		err = lvs.gc(ctx, oldGenRefs, oldGen.HasMany, newGen, oldGen, nil, func() hash.HashSet {
-			n := lvs.transitionToNewGenGC()
-			newGenRefs.InsertAll(n)
-			return make(hash.HashSet)
-		})
-		if err != nil {
-			newGen.EndGC()
-			return err
-		}
-
-		err = lvs.gc(ctx, newGenRefs, oldGen.HasMany, newGen, newGen, safepointF, lvs.transitionToFinalizingGC)
-		newGen.EndGC()
-		if err != nil {
-			return err
-		}
-
-	} else if collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector); ok {
+	} else if collectorOK {
 		extraNewGenRefs := lvs.transitionToNewGenGC()
 		newGenRefs.InsertAll(extraNewGenRefs)
 		newGenRefs.InsertAll(oldGenRefs)
 
-		err := collector.BeginGC(lvs.gcAddChunk)
-		if err != nil {
-			return err
-		}
+		err := func() error {
+			err := collector.BeginGC(lvs.gcAddChunk)
+			if err != nil {
+				return err
+			}
 
-		root, err := lvs.Root(ctx)
-		if err != nil {
-			collector.EndGC()
-			return err
-		}
+			root, err := lvs.Root(ctx)
+			if err != nil {
+				return err
+			}
 
-		if root == (hash.Hash{}) {
-			// empty root
-			collector.EndGC()
+			if root == (hash.Hash{}) {
+				// empty root
+				return nil
+			}
+
+			newGenRefs.Insert(root)
+
+			var finalizer chunks.GCFinalizer
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
+			if err != nil {
+				return err
+			}
+
+			err = finalizer.SwapChunksInStore(ctx)
+			if err != nil {
+				return err
+			}
+
 			return nil
-		}
+		}()
 
-		newGenRefs.Insert(root)
-
-		err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
-		collector.EndGC()
 		if err != nil {
 			return err
 		}
@@ -660,15 +718,19 @@ func (lvs *ValueStore) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashS
 
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
-	hashFilter HashFilterFunc,
+	hashFilter chunks.HasManyFunc,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointF func() error,
-	finalize func() hash.HashSet) error {
+	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
 	keepChunks := make(chan []hash.Hash, gcBuffSize)
+
+	var gcFinalizer chunks.GCFinalizer
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return src.MarkAndSweepChunks(ctx, keepChunks, dest)
+		var err error
+		gcFinalizer, err = src.MarkAndSweepChunks(ctx, keepChunks, dest)
+		return err
 	})
 
 	keepHashes := func(hs []hash.Hash) error {
@@ -706,12 +768,13 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		return nil
 	})
 
-	return eg.Wait()
+	err := eg.Wait()
+	return gcFinalizer, err
 }
 
 func (lvs *ValueStore) gcProcessRefs(ctx context.Context,
 	initialToVisit hash.HashSet, keepHashes func(hs []hash.Hash) error,
-	walker *parallelRefWalker, hashFilter HashFilterFunc,
+	walker *parallelRefWalker, hashFilter chunks.HasManyFunc,
 	safepointF func() error,
 	finalize func() hash.HashSet) error {
 	visited := make(hash.HashSet)

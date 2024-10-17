@@ -33,9 +33,17 @@ var gcDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Cleans up unreferenced data from the repository.",
 	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
 
-If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.`,
+Dolt GC is generational. When a GC is run, everything reachable from any commit on any branch
+is put into the old generation. Data which is only reachable from uncommited branch HEADs is kept in
+the new generation. By default, Dolt GC will only visit data in the new generation, and so will never
+collect data from deleted branches which has previously made its way to the old generation from being
+copied during a prior garbage collection.
+
+If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.
+
+If the {{.EmphasisLeft}}--full{{.EmphasisRight}} flag is supplied, a more thorough garbage collection, fully collecting the old gen and new gen, will be performed.`,
 	Synopsis: []string{
-		"[--shallow]",
+		"[--shallow|--full]",
 	},
 }
 
@@ -83,6 +91,10 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	if apr.Contains(cli.ShallowFlag) && apr.Contains(cli.FullFlag) {
+		return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: --shallow is not compatible with --full").SetPrintUsage().Build(), usage)
+	}
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -109,6 +121,9 @@ func constructDoltGCQuery(apr *argparser.ArgParseResults) (string, error) {
 	query := "call DOLT_GC("
 	if apr.Contains(cli.ShallowFlag) {
 		query += "'--shallow'"
+	}
+	if apr.Contains(cli.FullFlag) {
+		query += "'--full'"
 	}
 	query += ")"
 	return query, nil

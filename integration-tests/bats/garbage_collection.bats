@@ -404,3 +404,75 @@ SQL
     echo "$AFTER"
     [ "$BEFORE" -gt "$AFTER" ]
 }
+
+@test "garbage_collection: dolt gc --full" {
+    # Create a lot of data on a new branch.
+    dolt checkout -b to_keep
+    dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
+    str="hex(random_bytes(1024))"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+
+    dolt commit -Am 'create some data on a new commit.'
+
+    # Create a lot of data on another new branch.
+    dolt checkout main
+    dolt checkout -b to_delete
+    dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
+    str="hex(random_bytes(1024))"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    str="$str,$str"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
+
+    dolt commit -Am 'create some data on a new commit.'
+
+    # GC it into the old gen.
+    dolt gc
+
+    # Get repository size. Note, this is in 512 byte blocks.
+    BEFORE=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+
+    # Delete the branch with all the data.
+    dolt checkout main
+    dolt branch -D to_delete
+
+    # Check that a regular GC does not delete this data.
+    dolt gc
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+    [ $(($BEFORE - $AFTER)) -lt 16 ]
+
+    # Check that a full GC does delete this data.
+    # NOTE: We create and drop the tmp table here to get around Dolt's "GC is
+    # a no-op if there have been no writes since the last GC" check.
+    dolt sql -q 'create table tmp (id int); drop table tmp;'
+    dolt gc --full
+    AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
+    [ $(($BEFORE - $AFTER)) -gt 8192 ] # Reclaim at least 4MBs, in 512-byte blocks.
+
+    # Sanity check that the stuff on to_keep is still accessible.
+    dolt checkout to_keep
+    dolt sql -q 'select length(val) from vals;'
+}
