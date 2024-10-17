@@ -31,7 +31,6 @@ import (
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	diff2 "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -75,8 +74,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 		return err
 	}
 	for _, foreignKey := range fkColl.AllKeys() {
-		// TODO: schema names
-		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(doltdb.TableName{Name: foreignKey.TableName})) {
+		if !foreignKey.IsResolved() || (tables.Size() != 0 && !tables.Contains(foreignKey.TableName)) {
 			continue
 		}
 
@@ -157,8 +155,8 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
 // todo(andy): pass doltdb.Rootish
-func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, theirRootIsh hash.Hash) (doltdb.RootValue, *set.StrSet, error) {
-	violationWriter := &foreignKeyViolationWriter{rootValue: newRoot, theirRootIsh: theirRootIsh, violatedTables: set.NewStrSet(nil)}
+func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, theirRootIsh hash.Hash) (doltdb.RootValue, *doltdb.TableNameSet, error) {
+	violationWriter := &foreignKeyViolationWriter{rootValue: newRoot, theirRootIsh: theirRootIsh, violatedTables: doltdb.NewTableNameSet(nil)}
 	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, violationWriter)
 	if err != nil {
 		return nil, nil, err
@@ -168,8 +166,8 @@ func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // GetForeignKeyViolatedTables returns a list of tables that have foreign key
 // violations based on the diff between |newRoot| and |baseRoot|.
-func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet) (*set.StrSet, error) {
-	handler := &foreignKeyViolationTracker{tableSet: set.NewStrSet(nil)}
+func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet) (*doltdb.TableNameSet, error) {
+	handler := &foreignKeyViolationTracker{tableSet: doltdb.NewTableNameSet(nil)}
 	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, handler)
 	if err != nil {
 		return nil, err
@@ -179,7 +177,7 @@ func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.R
 
 // foreignKeyViolationTracker tracks which tables have foreign key violations
 type foreignKeyViolationTracker struct {
-	tableSet *set.StrSet
+	tableSet *doltdb.TableNameSet
 	currFk   doltdb.ForeignKey
 }
 
@@ -208,7 +206,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationTracker)(nil)
 type foreignKeyViolationWriter struct {
 	rootValue      doltdb.RootValue
 	theirRootIsh   hash.Hash
-	violatedTables *set.StrSet
+	violatedTables *doltdb.TableNameSet
 
 	currFk  doltdb.ForeignKey
 	currTbl *doltdb.Table
@@ -228,7 +226,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.ForeignKey) error {
 	f.currFk = fk
 
-	tbl, ok, err := f.rootValue.GetTable(ctx, doltdb.TableName{Name: fk.TableName})
+	tbl, ok, err := f.rootValue.GetTable(ctx, fk.TableName)
 	if err != nil {
 		return err
 	}
@@ -238,7 +236,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.Forei
 
 	f.currTbl = tbl
 
-	refTbl, ok, err := f.rootValue.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})
+	refTbl, ok, err := f.rootValue.GetTable(ctx, fk.ReferencedTableName)
 	if err != nil {
 		return err
 	}
@@ -297,7 +295,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
+		f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
 		if err != nil {
 			return err
 		}
@@ -312,7 +310,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
+	f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
 	if err != nil {
 		return err
 	}
@@ -678,9 +676,8 @@ func childFkConstraintViolationsProcess(
 
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
-func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
-	// TODO: schema name
-	tbl, trueTblName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tblName})
+func newConstraintViolationsLoadedTable(ctx context.Context, tblName doltdb.TableName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
+	tbl, trueTblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -794,6 +791,9 @@ func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) (
 		}
 	}
 
+	// TODO: we need to change our serialization strategy for table names with schemas in order to properly store these.
+	//  You can't encode a null byte in a JSON blob like we do elsewhere. Probably the right move is to swap this JSON
+	//  blob out for an actual flatbuffer.
 	m := FkCVMeta{
 		Columns:           fkCols,
 		ForeignKey:        foreignKey.Name,
@@ -802,8 +802,8 @@ func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) (
 		OnUpdate:          foreignKey.OnUpdate.ReducedString(),
 		ReferencedColumns: refFkCols,
 		ReferencedIndex:   foreignKey.ReferencedTableIndex,
-		ReferencedTable:   foreignKey.ReferencedTableName,
-		Table:             foreignKey.TableName,
+		ReferencedTable:   foreignKey.ReferencedTableName.Name,
+		Table:             foreignKey.TableName.Name,
 	}
 	d, err := json.Marshal(m)
 	if err != nil {

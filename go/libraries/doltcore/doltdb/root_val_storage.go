@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
@@ -358,7 +359,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			if err != nil {
 				return nil, err
 			}
-			newaddr, err := am.Get(ctx, encodeTableNameForAddressMap(e.name))
+			newaddr, err := am.Get(ctx, encodeTableNameForSerialization(e.name))
 			if err != nil {
 				return nil, err
 			}
@@ -372,18 +373,18 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			if err != nil {
 				return nil, err
 			}
-			err = ae.Update(ctx, encodeTableNameForAddressMap(e.name), oldaddr)
+			err = ae.Update(ctx, encodeTableNameForSerialization(e.name), oldaddr)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			if e.ref == nil {
-				err := ae.Delete(ctx, encodeTableNameForAddressMap(e.name))
+				err := ae.Delete(ctx, encodeTableNameForSerialization(e.name))
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				err := ae.Update(ctx, encodeTableNameForAddressMap(e.name), e.ref.TargetHash())
+				err := ae.Update(ctx, encodeTableNameForSerialization(e.name), e.ref.TargetHash())
 				if err != nil {
 					return nil, err
 				}
@@ -454,13 +455,35 @@ func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.Databas
 	return b.EndVector(len(offsets))
 }
 
-func encodeTableNameForAddressMap(name TableName) string {
+// encodeTableNameForSerialization encodes a table name for serialization. Table names with no schema are encoded as
+// just the bare table name. Table names with schemas are encoded by surrounding the schema name with null bytes and
+// appending the table name.
+func encodeTableNameForSerialization(name TableName) string {
 	if name.Schema == "" {
 		return name.Name
 	}
 	return fmt.Sprintf("\000%s\000%s", name.Schema, name.Name)
 }
 
+// decodeTableNameFromSerialization decodes a table name from a serialized string. See notes on serialization in
+// |encodeTableNameForSerialization|
+func decodeTableNameFromSerialization(encodedName string) (TableName, bool) {
+	if encodedName[0] != 0 {
+		return TableName{Name: encodedName}, true
+	} else if len(encodedName) >= 4 { // 2 null bytes plus at least one char for schema and table name
+		schemaEnd := strings.LastIndexByte(encodedName, 0)
+		return TableName{
+			Schema: encodedName[1:schemaEnd],
+			Name:   encodedName[schemaEnd+1:],
+		}, true
+	}
+
+	// invalid encoding
+	return TableName{}, false
+}
+
+// decodeTableNameForAddressMap decodes a table name from an address map key, expecting a particular schema name. See
+// notes on serialization in |encodeTableNameForSerialization|
 func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool) {
 	if schemaName == "" && encodedName[0] != 0 {
 		return encodedName, true
@@ -478,7 +501,7 @@ type fbTableMap struct {
 }
 
 func (m fbTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
-	return m.AddressMap.Get(ctx, encodeTableNameForAddressMap(TableName{Name: name, Schema: m.schemaName}))
+	return m.AddressMap.Get(ctx, encodeTableNameForSerialization(TableName{Name: name, Schema: m.schemaName}))
 }
 
 func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, error)) error {

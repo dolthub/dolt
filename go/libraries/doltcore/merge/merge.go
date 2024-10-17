@@ -483,37 +483,6 @@ func getConstraintViolationStats(ctx context.Context, root doltdb.RootValue, tbl
 	return nil
 }
 
-// MayHaveConstraintViolations returns whether the given roots may have constraint violations. For example, a fast
-// forward merge that does not involve any tables with foreign key constraints or check constraints will not be able
-// to generate constraint violations. Unique key constraint violations would be caught during the generation of the
-// merged root, therefore it is not a factor for this function.
-func MayHaveConstraintViolations(ctx context.Context, ancestor, merged doltdb.RootValue) (bool, error) {
-	ancTables, err := doltdb.MapTableHashes(ctx, ancestor)
-	if err != nil {
-		return false, err
-	}
-	mergedTables, err := doltdb.MapTableHashes(ctx, merged)
-	if err != nil {
-		return false, err
-	}
-	fkColl, err := merged.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return false, err
-	}
-	tablesInFks := fkColl.Tables()
-	for tblName := range tablesInFks {
-		if ancHash, ok := ancTables[doltdb.TableName{Name: tblName}]; !ok {
-			// If a table used in a foreign key is new then it's treated as a change
-			return true, nil
-		} else if mergedHash, ok := mergedTables[doltdb.TableName{Name: tblName}]; !ok {
-			return false, fmt.Errorf("foreign key uses table '%s' but no hash can be found for this table", tblName)
-		} else if !ancHash.Equal(mergedHash) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 type ArtifactStatus struct {
 	SchemaConflictsTables      []string
 	DataConflictTables         []string

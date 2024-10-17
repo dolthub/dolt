@@ -88,10 +88,10 @@ const (
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
 	Name                   string                      `noms:"name" json:"name"`
-	TableName              string                      `noms:"tbl_name" json:"tbl_name"`
+	TableName              TableName                   `noms:"tbl_name" json:"tbl_name"`
 	TableIndex             string                      `noms:"tbl_index" json:"tbl_index"`
 	TableColumns           []uint64                    `noms:"tbl_cols" json:"tbl_cols"`
-	ReferencedTableName    string                      `noms:"ref_tbl_name" json:"ref_tbl_name"`
+	ReferencedTableName    TableName                   `noms:"ref_tbl_name" json:"ref_tbl_name"`
 	ReferencedTableIndex   string                      `noms:"ref_tbl_index" json:"ref_tbl_index"`
 	ReferencedTableColumns []uint64                    `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
 	OnUpdate               ForeignKeyReferentialAction `noms:"on_update" json:"on_update"`
@@ -167,7 +167,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.TableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.TableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[TableName{Name: resolvedFK.TableName}]
+		resolvedSch, ok := resolvedSchemasByName[resolvedFK.TableName]
 		if !ok {
 			return false
 		}
@@ -186,7 +186,7 @@ func (fk ForeignKey) Equals(other ForeignKey, fkSchemasByName, otherSchemasByNam
 	}
 	for i, tag := range resolvedFK.ReferencedTableColumns {
 		unresolvedColName := unresolvedFK.UnresolvedFKDetails.ReferencedTableColumns[i]
-		resolvedSch, ok := resolvedSchemasByName[TableName{Name: unresolvedFK.ReferencedTableName}]
+		resolvedSch, ok := resolvedSchemasByName[unresolvedFK.ReferencedTableName]
 		if !ok {
 			return false
 		}
@@ -246,6 +246,8 @@ func (fk ForeignKey) HashOf() (hash.Hash, error) {
 			_, err = bb.Write(t)
 		case uint64:
 			err = binary.Write(&bb, binary.LittleEndian, t)
+		case TableName:
+			_, err = bb.Write([]byte(t.String()))
 		default:
 			return hash.Hash{}, fmt.Errorf("unsupported type %T", t)
 		}
@@ -278,7 +280,7 @@ func CombinedHash(fks []ForeignKey) (hash.Hash, error) {
 
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
 func (fk ForeignKey) IsSelfReferential() bool {
-	return strings.EqualFold(fk.TableName, fk.ReferencedTableName)
+	return fk.TableName.EqualFold(fk.ReferencedTableName)
 }
 
 // IsResolved returns whether the foreign key has been resolved.
@@ -543,13 +545,13 @@ OuterLoopResolved:
 				len(fk.ReferencedTableColumns) != len(existingFk.UnresolvedFKDetails.ReferencedTableColumns) {
 				continue
 			}
-			// TODO: schema name
-			tblSch, ok := allSchemas[TableName{Name: existingFk.TableName}]
+
+			tblSch, ok := allSchemas[existingFk.TableName]
 			if !ok {
 				continue
 			}
-			// TODO: schema name
-			refTblSch, ok := allSchemas[TableName{Name: existingFk.ReferencedTableName}]
+
+			refTblSch, ok := allSchemas[existingFk.ReferencedTableName]
 			if !ok {
 				continue
 			}
@@ -590,10 +592,10 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForTable(tableName TableName) (declaredFk, referencedByFk []ForeignKey) {
 	for _, foreignKey := range fkc.foreignKeys {
-		if strings.EqualFold(foreignKey.TableName, tableName.Name) {
+		if foreignKey.TableName.EqualFold(tableName) {
 			declaredFk = append(declaredFk, foreignKey)
 		}
-		if strings.EqualFold(foreignKey.ReferencedTableName, tableName.Name) {
+		if foreignKey.ReferencedTableName.EqualFold(tableName) {
 			referencedByFk = append(referencedByFk, foreignKey)
 		}
 	}
@@ -643,9 +645,9 @@ func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...TableName) error {
 	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		// TODO: schema names
-		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
-		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
+
+		dropChild := outgoing.Contains(fk.TableName)
+		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
 			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
@@ -666,8 +668,8 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...Tab
 func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, root RootValue, tables ...TableName) error {
 	outgoing := NewTableNameSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(TableName{Name: fk.TableName})
-		dropParent := outgoing.Contains(TableName{Name: fk.ReferencedTableName})
+		dropChild := outgoing.Contains(fk.TableName)
+		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
 			if !fk.IsResolved() {
 				continue
@@ -682,7 +684,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
 			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
 
-			tbl, ok, err := root.GetTable(ctx, TableName{Name: fk.TableName})
+			tbl, ok, err := root.GetTable(ctx, fk.TableName)
 			if err != nil {
 				return err
 			}
@@ -703,7 +705,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 				fk.UnresolvedFKDetails.TableColumns[i] = col.Name
 			}
 
-			refTbl, ok, err := root.GetTable(ctx, TableName{Name: fk.ReferencedTableName})
+			refTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 			if err != nil {
 				return err
 			}
@@ -747,8 +749,8 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 }
 
 // Tables returns the set of all tables that either declare a foreign key or are referenced by a foreign key.
-func (fkc *ForeignKeyCollection) Tables() map[string]struct{} {
-	tables := make(map[string]struct{})
+func (fkc *ForeignKeyCollection) Tables() map[TableName]struct{} {
+	tables := make(map[TableName]struct{})
 	for _, fk := range fkc.foreignKeys {
 		tables[fk.TableName] = struct{}{}
 		tables[fk.ReferencedTableName] = struct{}{}

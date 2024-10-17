@@ -131,12 +131,22 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 			}
 		}
 
+		tableName, ok := decodeTableNameFromSerialization(string(fk.ChildTableName()))
+		if !ok {
+			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ChildTableName()))
+		}
+
+		parentTableName, ok := decodeTableNameFromSerialization(string(fk.ParentTableName()))
+		if !ok {
+			return nil, fmt.Errorf("could not decode table name: %s", string(fk.ParentTableName()))
+		}
+
 		err := collection.AddKeys(ForeignKey{
 			Name:                   string(fk.Name()),
-			TableName:              string(fk.ChildTableName()),
+			TableName:              tableName,
 			TableIndex:             string(fk.ChildTableIndex()),
 			TableColumns:           childCols,
-			ReferencedTableName:    string(fk.ParentTableName()),
+			ReferencedTableName:    parentTableName,
 			ReferencedTableIndex:   string(fk.ParentTableIndex()),
 			ReferencedTableColumns: parentCols,
 			OnUpdate:               ForeignKeyReferentialAction(fk.OnUpdate()),
@@ -181,9 +191,9 @@ func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessa
 		}
 		parentCols = serializeUint64Vector(b, fk.ReferencedTableColumns)
 		childCols = serializeUint64Vector(b, fk.TableColumns)
-		parentTable = b.CreateString(fk.ReferencedTableName)
+		parentTable = b.CreateString(encodeTableNameForSerialization(fk.ReferencedTableName))
 		parentIndex = b.CreateString(fk.ReferencedTableIndex)
-		childTable = b.CreateString(fk.TableName)
+		childTable = b.CreateString(encodeTableNameForSerialization(fk.TableName))
 		childIndex = b.CreateString(fk.TableIndex)
 		foreignKeyName = b.CreateString(fk.Name)
 

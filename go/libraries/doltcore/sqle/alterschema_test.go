@@ -472,7 +472,7 @@ func TestDropPks(t *testing.T) {
 
 				fk, ok := foreignKeyCollection.GetByNameCaseInsensitive(childFkName)
 				assert.True(t, ok)
-				assert.Equal(t, childName, fk.TableName)
+				assert.Equal(t, childName, fk.TableName.Name)
 				if tt.fkIdxName != "" && fk.ReferencedTableIndex != "" {
 					assert.Equal(t, tt.fkIdxName, fk.ReferencedTableIndex)
 				}
