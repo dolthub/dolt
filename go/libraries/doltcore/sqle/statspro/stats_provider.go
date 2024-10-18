@@ -198,6 +198,12 @@ func (p *Provider) getStatDb(name string) (Database, bool) {
 	return statDb, ok
 }
 
+func (p *Provider) deleteStatDb(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.statDbs, strings.ToLower(name))
+}
+
 func (p *Provider) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	statDb, ok := p.getStatDb(s.Qualifier().Db())
 	if !ok {
@@ -252,6 +258,8 @@ func (p *Provider) DropBranchDbStats(ctx *sql.Context, branch, db string, flush 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.status[db] = "dropped"
+
 	return statDb.DeleteBranchStats(ctx, branch, flush)
 }
 
@@ -265,7 +273,7 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 		p.DropBranchDbStats(ctx, db, branch, flush)
 	}
 
-	p.status[db] = "dropped"
+	p.deleteStatDb(db)
 
 	return nil
 }
