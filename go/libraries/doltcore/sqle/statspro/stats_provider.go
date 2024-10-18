@@ -198,6 +198,12 @@ func (p *Provider) getStatDb(name string) (Database, bool) {
 	return statDb, ok
 }
 
+func (p *Provider) deleteStatDb(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.statDbs, strings.ToLower(name))
+}
+
 func (p *Provider) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	statDb, ok := p.getStatDb(s.Qualifier().Db())
 	if !ok {
@@ -243,27 +249,33 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 	return stat, true
 }
 
-func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+func (p *Provider) DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error {
 	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return nil
 	}
 
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
-	}
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// remove provider access
-	if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
+	p.status[db] = "dropped"
+
+	return statDb.DeleteBranchStats(ctx, branch, flush)
+}
+
+func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+	statDb, ok := p.getStatDb(db)
+	if !ok {
 		return nil
 	}
+	for _, branch := range statDb.Branches() {
+		// remove provider access
+		p.DropBranchDbStats(ctx, branch, db, flush)
+	}
 
-	p.status[db] = "dropped"
+	if flush {
+		p.deleteStatDb(db)
+	}
 
 	return nil
 }
