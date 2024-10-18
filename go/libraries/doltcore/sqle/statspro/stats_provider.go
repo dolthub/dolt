@@ -51,13 +51,14 @@ type updateOrdinal struct {
 
 func NewProvider(pro *sqle.DoltDatabaseProvider, sf StatsFactory) *Provider {
 	return &Provider{
-		pro:          pro,
-		sf:           sf,
-		mu:           &sync.Mutex{},
-		statDbs:      make(map[string]Database),
-		cancelers:    make(map[string]context.CancelFunc),
-		status:       make(map[string]string),
-		lockedTables: make(map[string]bool),
+		pro:                 pro,
+		sf:                  sf,
+		mu:                  &sync.Mutex{},
+		statDbs:             make(map[string]Database),
+		autoCtxCancelers:    make(map[string]context.CancelFunc),
+		analyzeCtxCancelers: make(map[string]context.CancelFunc),
+		status:              make(map[string]string),
+		lockedTables:        make(map[string]bool),
 	}
 }
 
@@ -65,14 +66,15 @@ func NewProvider(pro *sqle.DoltDatabaseProvider, sf StatsFactory) *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu           *sync.Mutex
-	pro          *sqle.DoltDatabaseProvider
-	sf           StatsFactory
-	statDbs      map[string]Database
-	cancelers    map[string]context.CancelFunc
-	starter      sqle.InitDatabaseHook
-	status       map[string]string
-	lockedTables map[string]bool
+	mu                  *sync.Mutex
+	pro                 *sqle.DoltDatabaseProvider
+	sf                  StatsFactory
+	statDbs             map[string]Database
+	autoCtxCancelers    map[string]context.CancelFunc
+	analyzeCtxCancelers map[string]context.CancelFunc
+	starter             sqle.InitDatabaseHook
+	status              map[string]string
+	lockedTables        map[string]bool
 }
 
 // each database has one statistics table that is a collection of the
@@ -142,7 +144,7 @@ func (p *Provider) SetStarter(hook sqle.InitDatabaseHook) {
 
 func (p *Provider) CancelRefreshThread(dbName string) {
 	p.mu.Lock()
-	if cancel, ok := p.cancelers[dbName]; ok {
+	if cancel, ok := p.autoCtxCancelers[dbName]; ok {
 		cancel()
 	}
 	p.mu.Unlock()
@@ -370,6 +372,8 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 			continue
 		}
 
+		// Canceling refresh thread prevents background thread from
+		// making progress. Prune should succeed.
 		p.CancelRefreshThread(dbName)
 
 		tables, err := sqlDb.GetTableNames(ctx)
@@ -380,6 +384,14 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 		for _, branch := range statDb.Branches() {
 			var stats []sql.Statistic
 			for _, t := range tables {
+
+				// XXX: avoid races with ANALYZE with the table locks.
+				// Either concurrent purge or analyze (or both) will fail.
+				if !p.TryLockForUpdate(branch, dbName, t) {
+					return fmt.Errorf("concurrent statistics update and prune; retry prune when update is finished")
+				}
+				defer p.UnlockTable(branch, dbName, t)
+
 				tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, t)
 				if err != nil {
 					return err
@@ -411,14 +423,34 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 func (p *Provider) Purge(ctx *sql.Context) error {
 	for _, sqlDb := range p.pro.DoltDatabases() {
 		dbName := strings.ToLower(sqlDb.Name())
+
+		tables, err := sqlDb.GetTableNames(ctx)
+		if err != nil {
+			return err
+		}
+
 		var branches []string
 		db, ok := p.getStatDb(dbName)
 		if ok {
+			// Canceling refresh thread prevents background thread from
+			// making progress. Purge should succeed.
 			p.CancelRefreshThread(dbName)
+
 			branches = db.Branches()
-			err := p.DropDbStats(ctx, dbName, true)
-			if err != nil {
-				return fmt.Errorf("failed to drop stats: %w", err)
+			for _, branch := range branches {
+				for _, t := range tables {
+					// XXX: avoid races with ANALYZE with the table locks.
+					// Either concurrent purge or analyze (or both) will fail.
+					if !p.TryLockForUpdate(branch, dbName, t) {
+						return fmt.Errorf("concurrent statistics update and prune; retry purge when update is finished")
+					}
+					defer p.UnlockTable(branch, dbName, t)
+				}
+
+				err := p.DropDbBranchStats(ctx, branch, dbName, true)
+				if err != nil {
+					return fmt.Errorf("failed to drop stats: %w", err)
+				}
 			}
 		}
 
