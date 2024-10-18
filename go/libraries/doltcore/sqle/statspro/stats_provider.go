@@ -270,10 +270,12 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 	}
 	for _, branch := range statDb.Branches() {
 		// remove provider access
-		p.DropBranchDbStats(ctx, db, branch, flush)
+		p.DropBranchDbStats(ctx, branch, db, flush)
 	}
 
-	p.deleteStatDb(db)
+	if flush {
+		p.deleteStatDb(db)
+	}
 
 	return nil
 }
