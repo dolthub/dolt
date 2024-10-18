@@ -255,16 +255,10 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 	return stat, true
 }
 
-func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+func (p *Provider) DropDbBranchStats(ctx *sql.Context, branch, db string, flush bool) error {
 	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return nil
-	}
-
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
 	}
 
 	p.mu.Lock()
@@ -278,6 +272,16 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 	p.status[db] = "dropped"
 
 	return nil
+}
+
+func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	branch, err := dSess.GetBranch()
+	if err != nil {
+		return err
+	}
+
+	return p.DropDbBranchStats(ctx, branch, db, flush)
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, _ []string) error {
@@ -365,25 +369,25 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 		if !ok {
 			continue
 		}
-		for _, b := range statDb.Branches() {
-			p.CancelRefreshThread(dbName)
 
-			tables, err := sqlDb.GetTableNames(ctx)
-			if err != nil {
-				return err
-			}
+		p.CancelRefreshThread(dbName)
 
+		tables, err := sqlDb.GetTableNames(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, branch := range statDb.Branches() {
 			var stats []sql.Statistic
 			for _, t := range tables {
-				table, _, err := sqlDb.GetTableInsensitive(ctx, t)
+				tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, t)
 				if err != nil {
 					return err
 				}
-				tableStats, err := p.GetTableStats(ctx, dbName, table)
 				stats = append(stats, tableStats...)
 			}
 
-			if err := p.DropDbStats(ctx, dbName, true); err != nil {
+			if err := p.DropDbBranchStats(ctx, branch, dbName, true); err != nil {
 				return err
 			}
 
@@ -392,11 +396,11 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 				if !ok {
 					return fmt.Errorf("unexpected statistics type found: %T", s)
 				}
-				if err := statDb.SetStat(ctx, b, ds.Qualifier(), ds); err != nil {
+				if err := statDb.SetStat(ctx, branch, ds.Qualifier(), ds); err != nil {
 					return err
 				}
 			}
-			if err := statDb.Flush(ctx, b); err != nil {
+			if err := statDb.Flush(ctx, branch); err != nil {
 				return err
 			}
 		}
