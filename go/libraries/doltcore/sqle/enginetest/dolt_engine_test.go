@@ -2052,3 +2052,8 @@ func TestDoltWorkspace(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltWorkspaceTests(t, harness)
 }
+
+func TestDoltCIConfig(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltCIConfigTests(t, h)
+}

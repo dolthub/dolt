@@ -23,7 +23,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2695,7 +2694,7 @@ func (t *WritableDoltTable) createForeignKey(
 	}
 
 	var tableIndexName, refTableIndexName string
-	tableIndex, ok, err := findIndexWithPrefix(t.sch, sqlFk.Columns)
+	tableIndex, ok, err := FindIndexWithPrefix(t.sch, sqlFk.Columns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -2703,7 +2702,7 @@ func (t *WritableDoltTable) createForeignKey(
 	if ok {
 		tableIndexName = tableIndex.Name()
 	}
-	refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
+	refTableIndex, ok, err := FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -2741,7 +2740,6 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if !strings.EqualFold(sqlFk.Database, sqlFk.ParentDatabase) || !strings.EqualFold(sqlFk.Database, t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
@@ -2750,12 +2748,23 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
+	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	// empty string foreign key names are replaced with a generated name elsewhere
+	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
+		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
+	}
 
-	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
+	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
+		return fmt.Errorf("only foreign keys on the same database are currently supported")
+	}
+
+	onUpdateRefAction, err := ParseFkReferentialAction(sqlFk.OnUpdate)
 	if err != nil {
 		return err
 	}
-	onDeleteRefAction, err := parseFkReferentialAction(sqlFk.OnDelete)
+	onDeleteRefAction, err := ParseFkReferentialAction(sqlFk.OnDelete)
 	if err != nil {
 		return err
 	}
@@ -2769,6 +2778,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err != nil {
 		return err
 	}
+
 	err = fkc.AddKeys(doltFk)
 	if err != nil {
 		return err
@@ -2974,7 +2984,7 @@ func toReferentialAction(opt doltdb.ForeignKeyReferentialAction) sql.ForeignKeyR
 	}
 }
 
-func parseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.ForeignKeyReferentialAction, error) {
+func ParseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.ForeignKeyReferentialAction, error) {
 	switch refOp {
 	case sql.ForeignKeyReferentialAction_DefaultAction:
 		return doltdb.ForeignKeyReferentialAction_DefaultAction, nil
@@ -3020,7 +3030,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 			col, _ := oldIdx.GetColumn(colTag)
 			fkParentCols[i] = col.Name
 		}
-		newIdx, ok, err := findIndexWithPrefix(t.sch, fkParentCols)
+		newIdx, ok, err := FindIndexWithPrefix(t.sch, fkParentCols)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3305,89 +3315,4 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 
 func (t *WritableDoltTable) SetWriteSession(session dsess.WriteSession) {
 	t.pinnedWriteSession = session
-}
-
-func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
-	type idxWithLen struct {
-		schema.Index
-		colLen int
-	}
-
-	prefixCols = lowercaseSlice(prefixCols)
-	indexes := sch.Indexes().AllIndexes()
-	colLen := len(prefixCols)
-	var indexesWithLen []idxWithLen
-	for _, idx := range indexes {
-		idxCols := lowercaseSlice(idx.ColumnNames())
-		if ok, prefixCount := colsAreIndexSubset(prefixCols, idxCols); ok && prefixCount == colLen {
-			indexesWithLen = append(indexesWithLen, idxWithLen{idx, len(idxCols)})
-		}
-	}
-	if len(indexesWithLen) == 0 {
-		return nil, false, nil
-	}
-
-	sort.Slice(indexesWithLen, func(i, j int) bool {
-		idxI := indexesWithLen[i]
-		idxJ := indexesWithLen[j]
-		if idxI.colLen == colLen && idxJ.colLen != colLen {
-			return true
-		} else if idxI.colLen != colLen && idxJ.colLen == colLen {
-			return false
-		} else if idxI.colLen != idxJ.colLen {
-			return idxI.colLen > idxJ.colLen
-		} else if idxI.IsUnique() != idxJ.IsUnique() {
-			// prefer unique indexes
-			return idxI.IsUnique() && !idxJ.IsUnique()
-		} else {
-			return idxI.Index.Name() < idxJ.Index.Name()
-		}
-	})
-	sortedIndexes := make([]schema.Index, len(indexesWithLen))
-	for i := 0; i < len(sortedIndexes); i++ {
-		sortedIndexes[i] = indexesWithLen[i].Index
-	}
-	return sortedIndexes[0], true, nil
-}
-
-func colsAreIndexSubset(cols, indexCols []string) (ok bool, prefixCount int) {
-	if len(cols) > len(indexCols) {
-		return false, 0
-	}
-
-	visitedIndexCols := make([]bool, len(indexCols))
-	for _, expr := range cols {
-		found := false
-		for j, indexExpr := range indexCols {
-			if visitedIndexCols[j] {
-				continue
-			}
-			if expr == indexExpr {
-				visitedIndexCols[j] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false, 0
-		}
-	}
-
-	// This checks the length of the prefix by checking how many true booleans are encountered before the first false
-	for i, visitedCol := range visitedIndexCols {
-		if visitedCol {
-			continue
-		}
-		return true, i
-	}
-
-	return true, len(cols)
-}
-
-func lowercaseSlice(strs []string) []string {
-	newStrs := make([]string, len(strs))
-	for i, str := range strs {
-		newStrs[i] = strings.ToLower(str)
-	}
-	return newStrs
 }
