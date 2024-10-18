@@ -775,6 +775,23 @@ func (tn TableName) EqualFold(o TableName) bool {
 	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
 }
 
+// The ForeignKey struct used to include referenced table names as strings and
+// now includes them as TableName structs. LD_1 format repositories serialized
+// the ForeignKey struct directly to a noms struct with the string fields. So
+// we need to maintain that behavior.
+func (tn TableName) MarshalNoms(vrw types.ValueReadWriter) (val types.Value, err error) {
+	return types.String(tn.Name), nil
+}
+
+func (tn TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
+	str, ok := v.(types.String)
+	if !ok {
+		return fmt.Errorf("could not unmarshal %v to doltdb.TableName; expected only a string.", v)
+	}
+	tn.Name = string(str)
+	return nil
+}
+
 // ToTableNames is a migration helper function that converts a slice of table names to a slice of TableName structs.
 func ToTableNames(names []string, schemaName string) []TableName {
 	tbls := make([]TableName, len(names))
