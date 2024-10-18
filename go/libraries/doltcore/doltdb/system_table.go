@@ -65,6 +65,11 @@ func IsFullTextTable(name string) bool {
 		strings.HasSuffix(name, "_fts_row_count"))
 }
 
+// IsDoltCITable returns whether the table name given is a dolt-ci table
+func IsDoltCITable(name string) bool {
+	return HasDoltPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+}
+
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
