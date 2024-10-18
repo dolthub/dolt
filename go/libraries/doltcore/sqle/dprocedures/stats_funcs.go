@@ -127,7 +127,8 @@ func statsDrop(ctx *sql.Context) (interface{}, error) {
 	return fmt.Sprintf("deleted stats ref for %s", dbName), nil
 }
 
-// statsDrop deletes the stats ref
+// statsPrune replaces the current disk contents with only the currently
+// tracked in memory statistics.
 func statsPrune(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)
@@ -140,7 +141,7 @@ func statsPrune(ctx *sql.Context) (interface{}, error) {
 	return "pruned all stats databases", nil
 }
 
-// statsDrop deletes the stats ref
+// statsPurge removes the stats database from disk
 func statsPurge(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)

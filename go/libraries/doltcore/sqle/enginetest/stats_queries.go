@@ -536,52 +536,6 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "test purge",
-		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
-			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
-			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{1}, {1}},
-			},
-			{
-				Query: "call dolt_stats_purge()",
-			},
-			{
-				Query:    "select count(*) from dolt_statistics;",
-				Expected: []sql.Row{{0}},
-			},
-		},
-	},
-	{
-		Name: "test prune",
-		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
-			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
-			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{1}, {1}},
-			},
-			{
-				Query: "call dolt_stats_prune()",
-			},
-			{
-				Query:    "select count(*) from dolt_statistics;",
-				Expected: []sql.Row{{2}},
-			},
-		},
-	},
 }
 
 var StatBranchTests = []queries.ScriptTest{
@@ -859,6 +813,52 @@ var StatProcTests = []queries.ScriptTest{
 			{
 				Query:    "select count(*) from dolt_statistics",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "test purge",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
+				Expected: []sql.Row{{1}, {1}},
+			},
+			{
+				Query: "call dolt_stats_purge()",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "test prune",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
+				Expected: []sql.Row{{1}, {1}},
+			},
+			{
+				Query: "call dolt_stats_prune()",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics;",
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
