@@ -141,6 +141,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	if err != nil {
 		return nil, err
 	}
+
 	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
 }
 

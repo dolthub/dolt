@@ -65,6 +65,11 @@ func IsFullTextTable(name string) bool {
 		strings.HasSuffix(name, "_fts_row_count"))
 }
 
+// IsDoltCITable returns whether the table name given is a dolt-ci table
+func IsDoltCITable(name string) bool {
+	return HasDoltPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+}
+
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
@@ -144,6 +149,8 @@ var writeableSystemTables = []string{
 	ProceduresTableName,
 	IgnoreTableName,
 	RebaseTableName,
+	WorkflowsTableName,
+	WorkflowEventsTableName,
 }
 
 var persistedSystemTables = []string{
@@ -296,6 +303,32 @@ const (
 
 	// StatisticsTableName is the statistics system table name
 	StatisticsTableName = "dolt_statistics"
+)
+
+const (
+	// WorkflowsTableName is the dolt CI workflows system table name
+	WorkflowsTableName = "dolt_ci_workflows"
+
+	// WorkflowsNameColName is the name of the column storing the name of the workflow.
+	WorkflowsNameColName = "name"
+
+	// WorkflowsCreatedAtColName is the name of the column storing the creation time of the row entry.
+	WorkflowsCreatedAtColName = "created_at"
+
+	// WorkflowsUpdatedAtColName is the name of the column storing the update time of the row entry.
+	WorkflowsUpdatedAtColName = "updated_at"
+
+	// WorkflowEventsTableName is the dolt CI workflow events system table name
+	WorkflowEventsTableName = "dolt_ci_workflow_events"
+
+	// WorkflowEventsIdPkColName is the name of the primary key id column on the workflow events table.
+	WorkflowEventsIdPkColName = "id"
+
+	// WorkflowEventsWorkflowNameFkColName is the name of the workflows name foreign key in the workflow events table.
+	WorkflowEventsWorkflowNameFkColName = "workflow_name_fk"
+
+	// WorkflowEventsEventTypeColName is the name of the event type column in the workflow events table.
+	WorkflowEventsEventTypeColName = "event_type"
 )
 
 const (
