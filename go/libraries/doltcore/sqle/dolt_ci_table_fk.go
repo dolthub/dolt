@@ -35,10 +35,10 @@ func CreateDoltCITableForeignKey(
 	if !sqlFk.IsResolved {
 		return doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
-			TableName:              sqlFk.Table,
+			TableName:              doltdb.TableName{Name: sqlFk.Table},
 			TableIndex:             "",
 			TableColumns:           nil,
-			ReferencedTableName:    sqlFk.ParentTable,
+			ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable},
 			ReferencedTableIndex:   "",
 			ReferencedTableColumns: nil,
 			OnUpdate:               onUpdateRefAction,
@@ -109,10 +109,10 @@ func CreateDoltCITableForeignKey(
 	}
 	return doltdb.ForeignKey{
 		Name:                   sqlFk.Name,
-		TableName:              sqlFk.Table,
+		TableName:              doltdb.TableName{Name: sqlFk.Table},
 		TableIndex:             tableIndexName,
 		TableColumns:           colTags,
-		ReferencedTableName:    sqlFk.ParentTable,
+		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable},
 		ReferencedTableIndex:   refTableIndexName,
 		ReferencedTableColumns: refColTags,
 		OnUpdate:               onUpdateRefAction,
