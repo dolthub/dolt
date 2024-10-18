@@ -824,6 +824,7 @@ var StatProcTests = []queries.ScriptTest{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
 			"analyze table xy",
+			"call dolt_stats_stop()",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -847,6 +848,7 @@ var StatProcTests = []queries.ScriptTest{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
 			"analyze table xy",
+			"call dolt_stats_stop()",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
