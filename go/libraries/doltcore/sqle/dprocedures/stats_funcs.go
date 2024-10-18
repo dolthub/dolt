@@ -51,6 +51,8 @@ type AutoRefreshStatsProvider interface {
 	CancelRefreshThread(string)
 	StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error
 	ThreadStatus(string) string
+	Prune(ctx *sql.Context) error
+	Purge(ctx *sql.Context) error
 }
 
 // statsRestart tries to stop and then start a refresh thread
@@ -123,4 +125,31 @@ func statsDrop(ctx *sql.Context) (interface{}, error) {
 		return nil, fmt.Errorf("failed to drop stats: %w", err)
 	}
 	return fmt.Sprintf("deleted stats ref for %s", dbName), nil
+}
+
+// statsPrune replaces the current disk contents with only the currently
+// tracked in memory statistics.
+func statsPrune(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)
+	if !ok {
+		return nil, fmt.Errorf("stats not persisted, cannot purge")
+	}
+	if err := pro.Prune(ctx); err != nil {
+		return "failed to prune stats databases", err
+	}
+	return "pruned all stats databases", nil
+}
+
+// statsPurge removes the stats database from disk
+func statsPurge(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)
+	if !ok {
+		return nil, fmt.Errorf("stats not persisted, cannot purge")
+	}
+	if err := pro.Purge(ctx); err != nil {
+		return "failed to purged databases", err
+	}
+	return "purged all database stats", nil
 }

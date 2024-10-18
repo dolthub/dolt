@@ -46,6 +46,9 @@ func (n *NomsStatsDatabase) replaceStats(ctx context.Context, statsMap *prolly.M
 }
 
 func deleteIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *statspro.DoltStats) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	sch := schema.StatsTableDoltSchema
 	kd, _ := sch.GetMapDescriptors()
 
@@ -89,6 +92,9 @@ func deleteIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *s
 }
 
 func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *statspro.DoltStats) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors()
 
