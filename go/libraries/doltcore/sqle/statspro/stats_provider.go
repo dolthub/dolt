@@ -382,37 +382,46 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 		}
 
 		for _, branch := range statDb.Branches() {
-			var stats []sql.Statistic
-			for _, t := range tables {
+			err := func() error {
+				// function closure ensures safe defers
+				var stats []sql.Statistic
+				for _, t := range tables {
+					// XXX: avoid races with ANALYZE with the table locks.
+					// Either concurrent purge or analyze (or both) will fail.
+					if !p.TryLockForUpdate(branch, dbName, t) {
+						p.mu.Lock()
+						fmt.Println(p.lockedTables)
+						p.mu.Unlock()
+						return fmt.Errorf("concurrent statistics update and prune; retry prune when update is finished")
+					}
+					defer p.UnlockTable(branch, dbName, t)
 
-				// XXX: avoid races with ANALYZE with the table locks.
-				// Either concurrent purge or analyze (or both) will fail.
-				if !p.TryLockForUpdate(branch, dbName, t) {
-					return fmt.Errorf("concurrent statistics update and prune; retry prune when update is finished")
+					tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, t)
+					if err != nil {
+						return err
+					}
+					stats = append(stats, tableStats...)
 				}
-				defer p.UnlockTable(branch, dbName, t)
 
-				tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, t)
-				if err != nil {
+				if err := p.DropDbBranchStats(ctx, branch, dbName, true); err != nil {
 					return err
 				}
-				stats = append(stats, tableStats...)
-			}
 
-			if err := p.DropDbBranchStats(ctx, branch, dbName, true); err != nil {
-				return err
-			}
-
-			for _, s := range stats {
-				ds, ok := s.(*DoltStats)
-				if !ok {
-					return fmt.Errorf("unexpected statistics type found: %T", s)
+				for _, s := range stats {
+					ds, ok := s.(*DoltStats)
+					if !ok {
+						return fmt.Errorf("unexpected statistics type found: %T", s)
+					}
+					if err := statDb.SetStat(ctx, branch, ds.Qualifier(), ds); err != nil {
+						return err
+					}
 				}
-				if err := statDb.SetStat(ctx, branch, ds.Qualifier(), ds); err != nil {
+				if err := statDb.Flush(ctx, branch); err != nil {
 					return err
 				}
-			}
-			if err := statDb.Flush(ctx, branch); err != nil {
+				return nil
+			}()
+			if err != nil {
 				return err
 			}
 		}
@@ -438,18 +447,24 @@ func (p *Provider) Purge(ctx *sql.Context) error {
 
 			branches = db.Branches()
 			for _, branch := range branches {
-				for _, t := range tables {
-					// XXX: avoid races with ANALYZE with the table locks.
-					// Either concurrent purge or analyze (or both) will fail.
-					if !p.TryLockForUpdate(branch, dbName, t) {
-						return fmt.Errorf("concurrent statistics update and prune; retry purge when update is finished")
+				err := func() error {
+					for _, t := range tables {
+						// XXX: avoid races with ANALYZE with the table locks.
+						// Either concurrent purge or analyze (or both) will fail.
+						if !p.TryLockForUpdate(branch, dbName, t) {
+							return fmt.Errorf("concurrent statistics update and prune; retry purge when update is finished")
+						}
+						defer p.UnlockTable(branch, dbName, t)
 					}
-					defer p.UnlockTable(branch, dbName, t)
-				}
 
-				err := p.DropDbBranchStats(ctx, branch, dbName, true)
+					err := p.DropDbBranchStats(ctx, branch, dbName, true)
+					if err != nil {
+						return fmt.Errorf("failed to drop stats: %w", err)
+					}
+					return nil
+				}()
 				if err != nil {
-					return fmt.Errorf("failed to drop stats: %w", err)
+					return err
 				}
 			}
 		}
