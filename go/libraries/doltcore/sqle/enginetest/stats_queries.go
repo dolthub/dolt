@@ -819,12 +819,10 @@ var StatProcTests = []queries.ScriptTest{
 	{
 		Name: "test purge",
 		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;",
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
 			"analyze table xy",
-			"call dolt_stats_stop()",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -843,12 +841,10 @@ var StatProcTests = []queries.ScriptTest{
 	{
 		Name: "test prune",
 		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;",
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (1, 1, 'a'), (2,1,'a'), (3,1,'a'), (4,2,'b'), (5,2,'b'), (6,3,'c');",
 			"analyze table xy",
-			"call dolt_stats_stop()",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
