@@ -22,7 +22,18 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+var ExpectedDoltCITables = []string{
+	doltdb.WorkflowsTableName,
+	doltdb.WorkflowEventsTableName,
+}
+
 type DoltCITablesCreator interface {
+	// HasTables is used to check whether the database
+	// already contains dolt ci tables. If any expected tables are missing,
+	// an error is returned
+	HasTables(ctx *sql.Context) (bool, error)
+
+	// CreateTables creates all tables required for dolt ci
 	CreateTables(ctx *sql.Context) error
 }
 
@@ -49,6 +60,29 @@ func (d *doltCITablesCreator) createTables(ctx *sql.Context) error {
 		return err
 	}
 	return d.workflowEventsTC.CreateTable(ctx)
+}
+
+func (d *doltCITablesCreator) HasTables(ctx *sql.Context) (bool, error) {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return false, err
+	}
+
+	root := ws.WorkingRoot()
+
+	for _, tableName := range ExpectedDoltCITables {
+		found, err := root.HasTable(ctx, doltdb.TableName{Name: tableName})
+		if err != nil {
+			return false, err
+		}
+		if !found {
+			return false, fmt.Errorf("required dolt ci table `%s` not found", doltdb.WorkflowsTableName)
+		}
+	}
+
+	return true, nil
 }
 
 func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
