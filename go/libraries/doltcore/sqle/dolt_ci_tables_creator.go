@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
+	"time"
 )
 
 var ExpectedDoltCITables = []string{
@@ -40,14 +42,18 @@ type DoltCITablesCreator interface {
 type doltCITablesCreator struct {
 	ctx              *sql.Context
 	db               Database
+	commiterName     string
+	commiterEmail    string
 	workflowsTC      DoltCITableCreator
 	workflowEventsTC DoltCITableCreator
 }
 
-func NewDoltCITablesCreator(ctx *sql.Context, db Database) *doltCITablesCreator {
+func NewDoltCITablesCreator(ctx *sql.Context, db Database, committerName, commiterEmail string) *doltCITablesCreator {
 	return &doltCITablesCreator{
 		ctx:              ctx,
 		db:               db,
+		commiterName:     committerName,
+		commiterEmail:    commiterEmail,
 		workflowsTC:      NewDoltCIWorkflowsTableCreator(),
 		workflowEventsTC: NewDoltCIWorkflowEventsTableCreator(),
 	}
@@ -111,6 +117,27 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		return fmt.Errorf("database not found in database %s", dbName)
 	}
 	err = ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, wsHash, doltdb.TodoWorkingSetMeta(), nil)
+	if err != nil {
+		return err
+	}
+
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return fmt.Errorf("failed to get roots from session in database: %s", dbName)
+	}
+
+	t := time.Now()
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
+		Message: "Initialize Dolt CI",
+		Date:    t,
+		Name:    d.commiterName,
+		Email:   d.commiterEmail,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
 		return err
 	}
