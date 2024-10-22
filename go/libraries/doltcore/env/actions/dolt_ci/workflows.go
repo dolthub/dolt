@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dolt_ci
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	stypes "github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
-type doltCIWorkflowsTableCreator struct{}
-
-var _ DoltCITableCreator = (*doltCIWorkflowsTableCreator)(nil)
-
-func NewDoltCIWorkflowsTableCreator() *doltCIWorkflowsTableCreator {
-	return &doltCIWorkflowsTableCreator{}
-}
-
-func (d *doltCIWorkflowsTableCreator) CreateTable(ctx *sql.Context) error {
+func createDoltCIWorkflowsTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ws, err := dSess.WorkingSet(ctx, dbName)

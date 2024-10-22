@@ -17,6 +17,7 @@ package ci
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -96,9 +97,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	tc := sqle.NewDoltCITablesCreator(sqlCtx, db, name, email)
-
-	hasTables, err := tc.HasTables(sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(sqlCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -108,7 +107,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var verr errhand.VerboseError
-	err = tc.CreateTables(sqlCtx)
+	err = dolt_ci.CreateDoltCITables(sqlCtx, db, name, email)
 	if err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
