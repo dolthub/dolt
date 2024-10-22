@@ -95,21 +95,20 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	var verr errhand.VerboseError
 	tc := sqle.NewDoltCITablesCreator(sqlCtx, db, name, email)
 
 	hasTables, err := tc.HasTables(sqlCtx)
 	if err != nil {
-		verr = errhand.VerboseErrorFromError(err)
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	if hasTables {
-		verr = errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has already been initialized"))
-		return commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has already been initialized")), usage)
 	}
 
-	// this also creates a commit
-	if err = tc.CreateTables(sqlCtx); err != nil {
+	var verr errhand.VerboseError
+	err = tc.CreateTables(sqlCtx)
+	if err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
 
