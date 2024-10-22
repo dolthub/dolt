@@ -1263,10 +1263,12 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			toReturn[i] = sql.ForeignKeyConstraint{
 				Name:           fk.Name,
 				Database:       t.db.Name(),
-				Table:          fk.TableName.Name, // TODO: schema name
+				Table:          fk.TableName.Name,
+				SchemaName:     fk.TableName.Schema,
 				Columns:        fk.UnresolvedFKDetails.TableColumns,
 				ParentDatabase: t.db.Name(),
-				ParentTable:    fk.ReferencedTableName.Name, // TODO: schema name
+				ParentTable:    fk.ReferencedTableName.Name,
+				ParentSchema:   fk.ReferencedTableName.Schema,
 				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
 				OnUpdate:       toReferentialAction(fk.OnUpdate),
 				OnDelete:       toReferentialAction(fk.OnDelete),
@@ -2918,13 +2920,14 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 // toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
 // function should not be used.
 func toForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
-	// TODO: foreign key defn should include schema name
 	cst = sql.ForeignKeyConstraint{
 		Name:           fk.Name,
 		Database:       dbName,
+		SchemaName:     fk.TableName.Schema,
 		Table:          fk.TableName.Name,
 		Columns:        make([]string, len(fk.TableColumns)),
 		ParentDatabase: dbName,
+		ParentSchema:   fk.ReferencedTableName.Schema,
 		ParentTable:    fk.ReferencedTableName.Name,
 		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
 		OnUpdate:       toReferentialAction(fk.OnUpdate),
