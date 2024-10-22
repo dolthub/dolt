@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"time"
 )
@@ -78,16 +78,27 @@ func (d *doltCITablesCreator) HasTables(ctx *sql.Context) (bool, error) {
 
 	root := ws.WorkingRoot()
 
+	exists := 0
+	var hasSome bool
+	var hasAll bool
 	for _, tableName := range ExpectedDoltCITables {
 		found, err := root.HasTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return false, err
 		}
-		if !found {
-			return false, fmt.Errorf("required dolt ci table `%s` not found", doltdb.WorkflowsTableName)
+		if found {
+			exists++
 		}
 	}
 
+	hasSome = exists > 0 && exists < len(ExpectedDoltCITables)
+	hasAll = exists == len(ExpectedDoltCITables)
+	if !hasSome && !hasAll {
+		return false, nil
+	}
+	if hasSome && !hasAll {
+		return true, fmt.Errorf("found some but not all of required dolt ci tables")
+	}
 	return true, nil
 }
 
@@ -116,33 +127,50 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 	if !exists {
 		return fmt.Errorf("database not found in database %s", dbName)
 	}
-	err = ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, wsHash, doltdb.TodoWorkingSetMeta(), nil)
-	if err != nil {
-		return err
+
+	wsMeta := &datas.WorkingSetMeta{
+		Name:      d.commiterName,
+		Email:     d.commiterEmail,
+		Timestamp: uint64(time.Now().Unix()),
 	}
+
+	// todo: if this is commented out, then i dont get optimistic lock failure
+	// but my tables are not committed
+	//err = ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, wsHash, wsMeta, nil)
+	//if err != nil {
+	//	return err
+	//}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return fmt.Errorf("failed to get roots from session in database: %s", dbName)
+		return fmt.Errorf("roots not found in database %s", dbName)
 	}
 
-	t := time.Now()
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message: "Initialize Dolt CI",
-		Date:    t,
-		Name:    d.commiterName,
-		Email:   d.commiterEmail,
-	})
+	wRef := ws.Ref()
+	pRef, err := wRef.ToHeadRef()
 	if err != nil {
 		return err
 	}
 
-	_, err = dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
+	parent, err := ddb.ResolveCommitRef(ctx, pRef)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	parents := []*doltdb.Commit{parent}
+
+	meta, err := datas.NewCommitMeta(d.commiterName, d.commiterEmail, "Successfully created Dolt CI tables")
+	if err != nil {
+		return err
+	}
+
+	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, meta)
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.CommitWithWorkingSet(ctx, pRef, wRef, pcm, ws, wsHash, wsMeta, nil)
+	return err
 }
 
 var _ DoltCITablesCreator = &doltCITablesCreator{}
