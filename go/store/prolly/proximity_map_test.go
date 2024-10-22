@@ -61,21 +61,29 @@ func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, ve
 
 	distanceType := expression.DistanceL2Squared{}
 
+	builder, err := NewProximityMapFromTuples(ctx, ns, distanceType, kd, vd, logChunkSize)
+	require.NoError(t, err)
+
 	keys := make([][]byte, count)
+	values := make([][]byte, count)
 	keyBuilder := val.NewTupleBuilder(kd)
+	valueBuilder := val.NewTupleBuilder(vd)
 	for i, vector := range vectors {
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, vector))
-		keys[i] = keyBuilder.Build(bp)
+		nextKey := keyBuilder.Build(bp)
+		keys[i] = nextKey
+
+		valueBuilder.PutInt64(0, pks[i])
+		nextValue := valueBuilder.Build(bp)
+		values[i] = nextValue
+
+		err = builder.Insert(ctx, nextKey, nextValue)
+		require.NoError(t, err)
 	}
 
-	valueBuilder := val.NewTupleBuilder(vd)
-	values := make([][]byte, count)
-	for i, pk := range pks {
-		valueBuilder.PutInt64(0, pk)
-		values[i] = valueBuilder.Build(bp)
-	}
+	m, err := builder.Flush(ctx)
+	require.NoError(t, err)
 
-	m, err := NewProximityMapFromTuples(ctx, ns, distanceType, kd, vd, keys, values, logChunkSize)
 	require.NoError(t, err)
 	mapCount, err := m.Count()
 	require.NoError(t, err)
