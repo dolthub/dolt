@@ -141,7 +141,6 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, committerName, commi
 }
 
 func createDoltCITables(ctx *sql.Context) error {
-	// TOD0: maybe CreateTable(...) should take in old RootVal and return new RootVal?
 	err := createDoltCIWorkflowsTable(ctx)
 	if err != nil {
 		return err

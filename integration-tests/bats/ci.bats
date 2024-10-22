@@ -14,11 +14,15 @@ teardown() {
     run dolt ci init
     [ "$status" -eq 0 ]
 
+    run dolt log -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully created Dolt CI tables" ]] || false
+
     run dolt sql -q "select * from dolt_ci_workflows;"
     [ "$status" -eq 0 ]
 }
 
-@test "ci: dolt_ci_workflows should not allow users to alter the rows or schema of dolt ci workflow tables directly" {
+@test "ci: should not allow users to alter the rows or schema of dolt ci workflow tables directly" {
     run dolt ci init
     [ "$status" -eq 0 ]
 
