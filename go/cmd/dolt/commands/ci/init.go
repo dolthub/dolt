@@ -90,8 +90,13 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	name, email, err := env.GetNameAndEmail(dEnv.Config)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	var verr errhand.VerboseError
-	tc := sqle.NewDoltCITablesCreator(sqlCtx, db)
+	tc := sqle.NewDoltCITablesCreator(sqlCtx, db, name, email)
 
 	hasTables, err := tc.HasTables(sqlCtx)
 	if err != nil {
@@ -103,6 +108,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
+	// this also creates a commit
 	if err = tc.CreateTables(sqlCtx); err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
