@@ -15,11 +15,12 @@
 package enginetest
 
 import (
+	"testing"
+	"time"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"testing"
-	"time"
 )
 
 var DoltCIConfigTests = []queries.ScriptTest{

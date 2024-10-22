@@ -16,13 +16,15 @@ package sqle
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/go-mysql-server/sql"
-	"time"
 )
 
 var ExpectedDoltCITables = []doltdb.TableName{
@@ -48,6 +50,8 @@ type doltCITablesCreator struct {
 	workflowsTC      DoltCITableCreator
 	workflowEventsTC DoltCITableCreator
 }
+
+var _ DoltCITablesCreator = &doltCITablesCreator{}
 
 func NewDoltCITablesCreator(ctx *sql.Context, db Database, committerName, commiterEmail string) *doltCITablesCreator {
 	return &doltCITablesCreator{
@@ -113,18 +117,9 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		return err
 	}
 
-	// update doltdb workingset exactly once
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return err
-	}
 
-	//wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
-	//if err != nil {
-	//	return err
-	//}
 	ddb, exists := dSess.GetDoltDB(ctx, dbName)
 	if !exists {
 		return fmt.Errorf("database not found in database %s", dbName)
@@ -136,13 +131,6 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		Timestamp: uint64(time.Now().Unix()),
 	}
 
-	// todo: if this is commented out, then i dont get optimistic lock failure
-	// but my tables are not committed
-	//err = ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, wsHash, wsMeta, nil)
-	//if err != nil {
-	//	return err
-	//}
-
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return fmt.Errorf("roots not found in database %s", dbName)
@@ -153,10 +141,15 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 		return err
 	}
 
+	ws, err := dSess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
 	ws = ws.WithWorkingRoot(roots.Working)
 	ws = ws.WithStagedRoot(roots.Staged)
 
-	wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
+	wsHash, err := ws.HashOf()
 	if err != nil {
 		return err
 	}
@@ -187,5 +180,3 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 	_, err = ddb.CommitWithWorkingSet(ctx, pRef, wRef, pcm, ws, wsHash, wsMeta, nil)
 	return err
 }
-
-var _ DoltCITablesCreator = &doltCITablesCreator{}
