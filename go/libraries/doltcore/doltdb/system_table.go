@@ -149,8 +149,10 @@ var writeableSystemTables = []string{
 	ProceduresTableName,
 	IgnoreTableName,
 	RebaseTableName,
-	WorkflowsTableName,
-	WorkflowEventsTableName,
+
+	// todo: for now do not let users write to the tables or alter their schemas
+	//WorkflowsTableName,
+	//WorkflowEventsTableName,
 }
 
 var persistedSystemTables = []string{
