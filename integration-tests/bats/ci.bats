@@ -20,6 +20,12 @@ teardown() {
 
     run dolt sql -q "select * from dolt_ci_workflows;"
     [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from dolt_ci_workflow_events;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from dolt_ci_workflow_event_triggers;"
+    [ "$status" -eq 0 ]
 }
 
 @test "ci: should not allow users to alter the rows or schema of dolt ci workflow tables directly" {

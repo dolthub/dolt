@@ -135,4 +135,13 @@ const (
 
 	// WorkflowEventsEventTypeTag is the tag of the events typ column in the workflow events table
 	WorkflowEventsEventTypeTag
+
+	// WorkflowEventTriggersIdTag is the tag of the id column of the workflow event triggers table
+	WorkflowEventTriggersIdTag
+
+	// WorkflowEventTriggerWorkflowEventIdFkTag is the tag of the workflow events id fk column in the workflow event triggers table
+	WorkflowEventTriggerWorkflowEventIdFkTag
+
+	// WorkflowEventTriggerEventTriggerTypeTag is the tag of the event trigger type column on the workflow event triggers table
+	WorkflowEventTriggerEventTriggerTypeTag
 )
