@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -118,7 +117,6 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idxRows)
-		m = prolly.ConvertToSecondaryKeylessIndex(m)
 
 		keyDesc, _ := m.Descriptors()
 

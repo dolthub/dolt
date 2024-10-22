@@ -175,7 +175,6 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		return nil
 	}
 
-	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)

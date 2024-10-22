@@ -850,7 +850,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns)
+	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns, false)
 	if err != nil {
 		return nil, err
 	}

@@ -715,9 +715,6 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		return uniqIndex{}, err
 	}
 
-	if schema.IsKeyless(sch) { // todo(andy): sad panda
-		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
-	}
 	p := clustered.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())

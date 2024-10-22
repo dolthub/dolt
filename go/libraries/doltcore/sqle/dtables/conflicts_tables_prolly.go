@@ -416,7 +416,7 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, baseHash, thei
 
 		var idx durable.Index
 		if !ok {
-			idx, err = durable.NewEmptyIndex(ctx, itr.vrw, itr.ns, itr.ourSch)
+			idx, err = durable.NewEmptyIndex(ctx, itr.vrw, itr.ns, itr.ourSch, false)
 		} else {
 			idx, err = baseTbl.GetRowData(ctx)
 		}

@@ -83,7 +83,7 @@ func CreateTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schem
 
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) durable.Index {
 	if types.Format_Default == types.Format_DOLT {
-		idx, err := durable.NewEmptyIndex(context.Background(), vrw, ns, sch)
+		idx, err := durable.NewEmptyIndex(context.Background(), vrw, ns, sch, false)
 		require.NoError(t, err)
 		return idx
 	}
@@ -303,7 +303,7 @@ func TestLDNoms(t *testing.T) {
 
 		ctx := context.Background()
 		tSchema := createTestSchema(t)
-		rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
+		rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema, false)
 		if err != nil {
 			t.Fatal("Failed to create new empty index")
 		}

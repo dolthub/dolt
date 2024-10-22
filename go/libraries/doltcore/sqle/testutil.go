@@ -425,7 +425,7 @@ func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
 
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
 	if err != nil {
 		return err
 	}

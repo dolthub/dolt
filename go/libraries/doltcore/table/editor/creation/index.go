@@ -214,14 +214,11 @@ func BuildUniqueProllyIndex(
 	primary prolly.Map,
 	cb DupEntryCb,
 ) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema(), schema.IsKeyless(sch))
 	if err != nil {
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
-	if schema.IsKeyless(sch) {
-		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
-	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
