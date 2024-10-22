@@ -18,15 +18,16 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"time"
 )
 
-var ExpectedDoltCITables = []string{
-	doltdb.WorkflowsTableName,
-	doltdb.WorkflowEventsTableName,
+var ExpectedDoltCITables = []doltdb.TableName{
+	doltdb.TableName{Name: doltdb.WorkflowsTableName},
+	doltdb.TableName{Name: doltdb.WorkflowEventsTableName},
 }
 
 type DoltCITablesCreator interface {
@@ -82,7 +83,7 @@ func (d *doltCITablesCreator) HasTables(ctx *sql.Context) (bool, error) {
 	var hasSome bool
 	var hasAll bool
 	for _, tableName := range ExpectedDoltCITables {
-		found, err := root.HasTable(ctx, doltdb.TableName{Name: tableName})
+		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
 		}
@@ -119,10 +120,11 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
-	if err != nil {
-		return err
-	}
+
+	//wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
+	//if err != nil {
+	//	return err
+	//}
 	ddb, exists := dSess.GetDoltDB(ctx, dbName)
 	if !exists {
 		return fmt.Errorf("database not found in database %s", dbName)
@@ -144,6 +146,19 @@ func (d *doltCITablesCreator) CreateTables(ctx *sql.Context) error {
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return fmt.Errorf("roots not found in database %s", dbName)
+	}
+
+	roots, err = actions.StageTables(ctx, roots, ExpectedDoltCITables, true)
+	if err != nil {
+		return err
+	}
+
+	ws = ws.WithWorkingRoot(roots.Working)
+	ws = ws.WithStagedRoot(roots.Staged)
+
+	wsHash, err := ws.HashOf() // TODO: setting the WorkingRoot of WorkingSet has no impact on hash
+	if err != nil {
+		return err
 	}
 
 	wRef := ws.Ref()
