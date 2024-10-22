@@ -16,6 +16,7 @@ package ci
 
 import (
 	"context"
+	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -89,8 +90,19 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	tc := sqle.NewDoltCITablesCreator(sqlCtx, db)
 	var verr errhand.VerboseError
+	tc := sqle.NewDoltCITablesCreator(sqlCtx, db)
+
+	hasTables, err := tc.HasTables(sqlCtx)
+	if err != nil {
+		verr = errhand.VerboseErrorFromError(err)
+	}
+
+	if hasTables {
+		verr = errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has already been initialized"))
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
 	if err = tc.CreateTables(sqlCtx); err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
