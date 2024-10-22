@@ -78,17 +78,30 @@ func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, key
 	}
 }
 
+var levelMapKeyDesc = val.NewTupleDescriptor(
+	val.Type{Enc: val.Uint8Enc, Nullable: false},
+	val.Type{Enc: val.ByteStringEnc, Nullable: false},
+)
+
 // NewProximityMapFromTuples creates a new ProximityMap from a given list of key-value pairs.
-func NewProximityMapFromTuples(ctx context.Context, ns tree.NodeStore, distanceType expression.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, keys [][]byte, values [][]byte, logChunkSize uint8) (ProximityMap, error) {
-	builder := proximityMapBuilder{
+func NewProximityMapFromTuples(ctx context.Context, ns tree.NodeStore, distanceType expression.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, logChunkSize uint8) (proximityMapBuilder, error) {
+
+	emptyLevelMap, err := NewMapFromTuples(ctx, ns, levelMapKeyDesc, valDesc)
+	if err != nil {
+		return proximityMapBuilder{}, err
+	}
+	mutableLevelMap := newMutableMap(emptyLevelMap)
+	return proximityMapBuilder{
 		ns:                    ns,
 		vectorIndexSerializer: message.NewVectorIndexSerializer(ns.Pool()),
 		distanceType:          distanceType,
 		keyDesc:               keyDesc,
 		valDesc:               valDesc,
 		logChunkSize:          logChunkSize,
-	}
-	return builder.build(ctx, keys, values)
+
+		maxLevel: 0,
+		levelMap: mutableLevelMap,
+	}, nil
 }
 
 // proximityMapBuilder is effectively a namespace for helper functions used in creating a ProximityMap.
@@ -100,6 +113,21 @@ type proximityMapBuilder struct {
 	distanceType          expression.DistanceType
 	keyDesc, valDesc      val.TupleDesc
 	logChunkSize          uint8
+
+	maxLevel uint8
+	levelMap *MutableMap
+}
+
+func (b *proximityMapBuilder) Insert(ctx context.Context, key, value []byte) error {
+	keyLevel := tree.DeterministicHashLevel(b.logChunkSize, key)
+	if keyLevel > b.maxLevel {
+		b.maxLevel = keyLevel
+	}
+
+	levelMapKeyBuilder := val.NewTupleBuilder(levelMapKeyDesc)
+	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
+	levelMapKeyBuilder.PutByteString(1, key)
+	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
 }
 
 func (b *proximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][]byte, subtrees []uint64, level int) (ProximityMap, error) {
@@ -116,7 +144,7 @@ func (b *proximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 	return NewProximityMap(ctx, b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType), nil
 }
 
-func (b *proximityMapBuilder) build(ctx context.Context, keys, values [][]byte) (ProximityMap, error) {
+func (b *proximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
 	// The algorithm for building a ProximityMap's tree requires us to start at the root and build out to the leaf nodes.
 	// Given that our trees are Merkle Trees, this presents an obvious problem.
 	// Our solution is to create the final tree by applying a series of transformations to intermediate trees.
@@ -148,62 +176,46 @@ func (b *proximityMapBuilder) build(ctx context.Context, keys, values [][]byte) 
 	// separate in-memory NodeStore for these values.
 
 	// Check if index is empty.
-	if len(keys) == 0 {
+	if !b.levelMap.HasEdits() {
 		return b.makeRootNode(ctx, nil, nil, nil, 0)
 	}
 
 	// Step 1: Create `levelMap`, a map from (indexLevel, keyBytes) -> values
 	// We want the index to be sorted by level (descending), so currently we store the level in the map as
 	// 255 - the actual level. TODO: Implement a ReverseIter for MutableMap and use that instead.
-	levelMap, maxLevel, err := b.makeLevelMap(ctx, keys, values)
-	if err != nil {
-		return ProximityMap{}, err
-	}
 
-	if maxLevel == 0 {
+	if b.maxLevel == 0 {
 		// index is a single node.
 		// assuming that the keys are already sorted, we can return them unmodified.
+		levelMapIter, err := b.levelMap.IterAll(ctx)
+		if err != nil {
+			return ProximityMap{}, err
+		}
+		var keys, values [][]byte
+		for {
+			key, value, err := levelMapIter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			originalKey, _ := levelMapKeyDesc.GetBytes(1, key)
+			if err != nil {
+				return ProximityMap{}, err
+			}
+			keys = append(keys, originalKey)
+			values = append(values, value)
+		}
 		return b.makeRootNode(ctx, keys, values, nil, 0)
 	}
 
 	// Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
-	pathMaps, err := b.makePathMaps(ctx, levelMap)
+	pathMaps, err := b.makePathMaps(ctx, b.levelMap)
+	if err != nil {
+		return ProximityMap{}, err
+	}
 
 	// Step 3: Create an iter over each `pathMap` created in the previous step, and walk the shape of the final ProximityMap,
 	// generating Nodes as we go.
 	return b.makeProximityMapFromPathMaps(ctx, pathMaps)
-}
-
-// makeLevelMap creates a prolly map where the key is prefixed by the maximum level of that row in the corresponding ProximityMap.
-func (b *proximityMapBuilder) makeLevelMap(ctx context.Context, keys [][]byte, values [][]byte) (levelMap *MutableMap, maxLevel uint8, err error) {
-	levelMapKeyDesc := val.NewTupleDescriptor(
-		val.Type{Enc: val.Uint8Enc, Nullable: false},
-		val.Type{Enc: val.ByteStringEnc, Nullable: false},
-	)
-
-	emptyLevelMap, err := NewMapFromTuples(ctx, b.ns, levelMapKeyDesc, b.valDesc)
-	if err != nil {
-		return nil, 0, err
-	}
-	mutableLevelMap := newMutableMap(emptyLevelMap)
-
-	for i := 0; i < len(keys); i++ {
-		key := keys[i]
-		keyLevel := tree.DeterministicHashLevel(b.logChunkSize, []byte(key))
-		if keyLevel > maxLevel {
-			maxLevel = keyLevel
-		}
-
-		levelMapKeyBuilder := val.NewTupleBuilder(levelMapKeyDesc)
-		levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
-		levelMapKeyBuilder.PutByteString(1, key)
-		err = mutableLevelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), values[i])
-		if err != nil {
-			return nil, 0, err
-		}
-	}
-
-	return mutableLevelMap, maxLevel, nil
 }
 
 // makePathMaps creates a set of prolly maps, each of which corresponds to a different level in the to-be-built ProximityMap
