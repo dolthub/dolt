@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dolt_ci
 
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -93,7 +91,7 @@ func CreateDoltCITableForeignKey(
 	}
 
 	var tableIndexName, refTableIndexName string
-	tableIndex, ok, err := FindIndexWithPrefix(sch, sqlFk.Columns)
+	tableIndex, ok, err := sqle.FindIndexWithPrefix(sch, sqlFk.Columns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -101,7 +99,7 @@ func CreateDoltCITableForeignKey(
 	if ok {
 		tableIndexName = tableIndex.Name()
 	}
-	refTableIndex, ok, err := FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
+	refTableIndex, ok, err := sqle.FindIndexWithPrefix(refSch, sqlFk.ParentColumns)
 	if err != nil {
 		return doltdb.ForeignKey{}, err
 	}
@@ -124,89 +122,4 @@ func CreateDoltCITableForeignKey(
 			ReferencedTableColumns: sqlFk.ParentColumns,
 		},
 	}, nil
-}
-
-func FindIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
-	type idxWithLen struct {
-		schema.Index
-		colLen int
-	}
-
-	prefixCols = lowercaseSlice(prefixCols)
-	indexes := sch.Indexes().AllIndexes()
-	colLen := len(prefixCols)
-	var indexesWithLen []idxWithLen
-	for _, idx := range indexes {
-		idxCols := lowercaseSlice(idx.ColumnNames())
-		if ok, prefixCount := colsAreIndexSubset(prefixCols, idxCols); ok && prefixCount == colLen {
-			indexesWithLen = append(indexesWithLen, idxWithLen{idx, len(idxCols)})
-		}
-	}
-	if len(indexesWithLen) == 0 {
-		return nil, false, nil
-	}
-
-	sort.Slice(indexesWithLen, func(i, j int) bool {
-		idxI := indexesWithLen[i]
-		idxJ := indexesWithLen[j]
-		if idxI.colLen == colLen && idxJ.colLen != colLen {
-			return true
-		} else if idxI.colLen != colLen && idxJ.colLen == colLen {
-			return false
-		} else if idxI.colLen != idxJ.colLen {
-			return idxI.colLen > idxJ.colLen
-		} else if idxI.IsUnique() != idxJ.IsUnique() {
-			// prefer unique indexes
-			return idxI.IsUnique() && !idxJ.IsUnique()
-		} else {
-			return idxI.Index.Name() < idxJ.Index.Name()
-		}
-	})
-	sortedIndexes := make([]schema.Index, len(indexesWithLen))
-	for i := 0; i < len(sortedIndexes); i++ {
-		sortedIndexes[i] = indexesWithLen[i].Index
-	}
-	return sortedIndexes[0], true, nil
-}
-
-func colsAreIndexSubset(cols, indexCols []string) (ok bool, prefixCount int) {
-	if len(cols) > len(indexCols) {
-		return false, 0
-	}
-
-	visitedIndexCols := make([]bool, len(indexCols))
-	for _, expr := range cols {
-		found := false
-		for j, indexExpr := range indexCols {
-			if visitedIndexCols[j] {
-				continue
-			}
-			if expr == indexExpr {
-				visitedIndexCols[j] = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false, 0
-		}
-	}
-
-	// This checks the length of the prefix by checking how many true booleans are encountered before the first false
-	for i, visitedCol := range visitedIndexCols {
-		if visitedCol {
-			continue
-		}
-		return true, i
-	}
-
-	return true, len(cols)
-}
-
-func lowercaseSlice(strs []string) []string {
-	newStrs := make([]string, len(strs))
-	for i, str := range strs {
-		newStrs[i] = strings.ToLower(str)
-	}
-	return newStrs
 }
