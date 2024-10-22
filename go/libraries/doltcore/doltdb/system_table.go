@@ -348,6 +348,18 @@ const (
 
 	// WorkflowEventsEventTypeColName is the name of the event type column in the workflow events table.
 	WorkflowEventsEventTypeColName = "event_type"
+
+	// WorkflowEventTriggersTableName is the dolt CI workflow event triggers system table name
+	WorkflowEventTriggersTableName = "dolt_ci_workflow_event_triggers"
+
+	// WorkflowEventTriggersIdPkColName is the name of the primary key id column on the workflow event triggers table.
+	WorkflowEventTriggersIdPkColName = "id"
+
+	// WorkflowEventTriggersWorkflowEventsIdFkColName is the name of the workflow event id foreign key in the workflow event triggers table.
+	WorkflowEventTriggersWorkflowEventsIdFkColName = "workflow_event_id_fk"
+
+	// WorkflowEventTriggerEventTriggerTypeColName is the type of the event trigger on the workflow event triggers table.
+	WorkflowEventTriggersEventTriggerTypeColName = "event_trigger_type"
 )
 
 const (
