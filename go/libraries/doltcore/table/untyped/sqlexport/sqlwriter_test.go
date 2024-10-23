@@ -92,7 +92,7 @@ func TestEndToEnd(t *testing.T) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), tt.sch)
+			empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), tt.sch, false)
 			require.NoError(t, err)
 
 			indexes, err := durable.NewIndexSet(ctx, root.VRW(), root.NodeStore())

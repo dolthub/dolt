@@ -34,12 +34,15 @@ func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
-func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore) (prolly.Map, error) {
+func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
 	root, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
 	kd := sch.GetKeyDescriptor()
+	if isKeylessSecondary {
+		kd = prolly.AddHashToSchema(kd)
+	}
 	vd := sch.GetValueDescriptor()
 	return prolly.NewMap(root, ns, kd, vd), nil
 }

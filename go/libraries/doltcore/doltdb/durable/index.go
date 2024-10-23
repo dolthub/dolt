@@ -96,11 +96,12 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 }
 
 // indexFromRef reads the types.Ref from storage and returns the Index it points to.
+// This is only used by noms format and can be removed.
 func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, r types.Ref) (Index, error) {
-	return indexFromAddr(ctx, vrw, ns, sch, r.TargetHash())
+	return indexFromAddr(ctx, vrw, ns, sch, r.TargetHash(), false)
 }
 
-func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash) (Index, error) {
+func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, addr hash.Hash, isKeylessTable bool) (Index, error) {
 	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -111,7 +112,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
-		pm, err := shim.MapFromValue(v, sch, ns)
+		pm, err := shim.MapFromValue(v, sch, ns, isKeylessTable)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +124,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 }
 
 // NewEmptyIndex returns an index with no rows.
-func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
+func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isKeylessSecondary bool) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
@@ -134,6 +135,9 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 
 	case types.Format_DOLT:
 		kd, vd := sch.GetMapDescriptors()
+		if isKeylessSecondary {
+			kd = prolly.AddHashToSchema(kd)
+		}
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err
@@ -370,7 +374,7 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema())
+		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema(), false)
 		if err != nil {
 			return nil, err
 		}
@@ -507,7 +511,7 @@ func (is doltDevIndexSet) GetIndex(ctx context.Context, tableSch schema.Schema, 
 	if idxSch == nil {
 		idxSch = idx.Schema()
 	}
-	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, foundAddr)
+	return indexFromAddr(ctx, is.vrw, is.ns, idxSch, foundAddr, schema.IsKeyless(tableSch))
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {

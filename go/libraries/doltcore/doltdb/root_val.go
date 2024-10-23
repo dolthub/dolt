@@ -908,7 +908,7 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 func CreateEmptyTable(ctx context.Context, root RootValue, tName TableName, sch schema.Schema) (RootValue, error) {
 	ns := root.NodeStore()
 	vrw := root.VRW()
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
 	if err != nil {
 		return nil, err
 	}
