@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -50,11 +51,11 @@ func NewEmptyDocsTable(_ *sql.Context) sql.Table {
 }
 
 func (dt *DocsTable) Name() string {
-	return doltdb.DocTableName
+	return doltdb.GetDocTableName()
 }
 
 func (dt *DocsTable) String() string {
-	return doltdb.DocTableName
+	return doltdb.GetDocTableName()
 }
 
 const defaultStringsLen = 16383 / 16
@@ -65,8 +66,8 @@ var GetDocsSchema = getDoltDocsSchema
 
 func getDoltDocsSchema() sql.Schema {
 	return []*sql.Column{
-		{Name: doltdb.DocPkColumnName, Type: sqlTypes.MustCreateString(sqltypes.VarChar, defaultStringsLen, sql.Collation_Default), Source: doltdb.DocTableName, PrimaryKey: true, Nullable: false},
-		{Name: doltdb.DocTextColumnName, Type: sqlTypes.LongText, Source: doltdb.DocTableName, PrimaryKey: false},
+		{Name: doltdb.DocPkColumnName, Type: sqlTypes.MustCreateString(sqltypes.VarChar, defaultStringsLen, sql.Collation_Default), Source: doltdb.GetDocTableName(), PrimaryKey: true, Nullable: false},
+		{Name: doltdb.DocTextColumnName, Type: sqlTypes.LongText, Source: doltdb.GetDocTableName(), PrimaryKey: false},
 	}
 }
 
@@ -187,6 +188,13 @@ func (iw *docsWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	return iw.tableWriter.Delete(ctx, r)
 }
 
+func getDoltDocsTableName() doltdb.TableName {
+	if resolve.UseSearchPath {
+		return doltdb.TableName{Schema: "dolt", Name: doltdb.GetDocTableName()}
+	}
+	return doltdb.TableName{Name: doltdb.GetDocTableName()}
+}
+
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
@@ -213,7 +221,8 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.DocTableName})
+	docsTableName := getDoltDocsTableName()
+	found, err := roots.Working.HasTable(ctx, docsTableName)
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
@@ -226,7 +235,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		newSchema := doltdb.DocsSchema
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.DocTableName}, newSchema)
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, docsTableName, newSchema)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
@@ -257,7 +266,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.DocTableName}, dbName, dSess.SetWorkingRoot, false)
+		tableWriter, err := ws.GetTableWriter(ctx, docsTableName, dbName, dSess.SetWorkingRoot, false)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return

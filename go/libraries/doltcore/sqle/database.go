@@ -508,8 +508,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
-	case doltdb.DocTableName:
-		backingTable, _, err := db.getTable(ctx, root, doltdb.DocTableName)
+	case doltdb.GetDocTableName():
+		backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
 		if err != nil {
 			return nil, false, err
 		}
@@ -799,9 +799,7 @@ func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (s
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
-	// dolt_docs table is branch-specific, not schema-specific for doltgres
-	isDoltDocs := tableName == doltdb.DocTableName
-	if resolve.UseSearchPath && db.schemaName == "" && !isDoltDocs {
+	if resolve.UseSearchPath && db.schemaName == "" {
 		return resolve.TableWithSearchPath(ctx, root, tableName)
 	} else {
 		return db.tableInsensitive(ctx, root, tableName)
