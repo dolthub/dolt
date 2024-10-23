@@ -29,7 +29,8 @@ import (
 
 const (
 	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
-	DoltNamespace = "dolt"
+	DoltNamespace   = "dolt"
+	DoltCINamespace = DoltNamespace + "_ci"
 )
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
@@ -54,6 +55,12 @@ func HasDoltPrefix(s string) bool {
 	return strings.HasPrefix(strings.ToLower(s), DoltNamespace)
 }
 
+// HasDoltCIPrefix returns a boolean whether or not the provided string is prefixed with the DoltCINamespace. Users should
+// not be able to create tables in this reserved namespace.
+func HasDoltCIPrefix(s string) bool {
+	return strings.HasPrefix(strings.ToLower(s), DoltCINamespace)
+}
+
 // IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
 // indexes.
 // TODO: Schema name
@@ -67,7 +74,7 @@ func IsFullTextTable(name string) bool {
 
 // IsDoltCITable returns whether the table name given is a dolt-ci table
 func IsDoltCITable(name string) bool {
-	return HasDoltPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+	return HasDoltCIPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
