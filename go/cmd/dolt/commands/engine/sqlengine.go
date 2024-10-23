@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -48,7 +47,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -94,15 +92,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	nbf := types.Format_Default
-	if len(dbs) > 0 {
-		nbf = dbs[0].DbData().Ddb.Format()
-	}
-	parallelism := runtime.GOMAXPROCS(0)
-	if types.IsFormat_DOLT(nbf) {
-		parallelism = 1
-	}
-
 	bThreads := sql.NewBackgroundThreads()
 	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
@@ -146,7 +135,7 @@ func NewSqlEngine(
 	sqlEngine := &SqlEngine{}
 
 	// Create the engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
+	engine := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)

@@ -71,33 +71,29 @@ var DoltCommitPlanTests = []queries.QueryPlanTest{
 	{
 		Query: "select * from dolt_log order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_log.commit_hash ASC)\n" +
-			" └─ Exchange\n" +
-			"     └─ Table\n" +
-			"         └─ name: dolt_log\n" +
+			" └─ Table\n" +
+			"     └─ name: dolt_log\n" +
 			"",
 	},
 	{
 		Query: "select * from dolt_diff order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_diff.commit_hash ASC)\n" +
-			" └─ Exchange\n" +
-			"     └─ Table\n" +
-			"         └─ name: dolt_diff\n" +
+			" └─ Table\n" +
+			"     └─ name: dolt_diff\n" +
 			"",
 	},
 	{
 		Query: "select * from dolt_commits order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_commits.commit_hash ASC)\n" +
-			" └─ Exchange\n" +
-			"     └─ Table\n" +
-			"         └─ name: dolt_commits\n" +
+			" └─ Table\n" +
+			"     └─ name: dolt_commits\n" +
 			"",
 	},
 	{
 		Query: "select * from dolt_commit_ancestors order by commit_hash;",
 		ExpectedPlan: "Sort(dolt_commit_ancestors.commit_hash ASC)\n" +
-			" └─ Exchange\n" +
-			"     └─ Table\n" +
-			"         └─ name: dolt_commit_ancestors\n" +
+			" └─ Table\n" +
+			"     └─ name: dolt_commit_ancestors\n" +
 			"",
 	},
 }
