@@ -420,7 +420,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	var dt sql.Table
 	found := false
 	switch lwrName {
-	case doltdb.LogTableName:
+	case doltdb.GetLogTableName():
+		// TODO: This should be moved once all the system tables are moved to the dolt schema
+		if resolve.UseSearchPath && db.schemaName != "dolt" {
+			return nil, false, nil
+		}
 		if head == nil {
 			var err error
 			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -456,7 +460,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
-	case doltdb.BranchesTableName:
+	case doltdb.GetBranchesTableName():
+		// TODO: This should be moved once all the system tables are moved to the dolt schema
+		if resolve.UseSearchPath && db.schemaName != "dolt" {
+			return nil, false, nil
+		}
 		dt, found = dtables.NewBranchesTable(ctx, db), true
 	case doltdb.RemoteBranchesTableName:
 		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
@@ -509,6 +517,10 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
 	case doltdb.GetDocTableName():
+		// TODO: This should be moved once all the system tables are moved to the dolt schema
+		if resolve.UseSearchPath && db.schemaName != "dolt" {
+			return nil, false, nil
+		}
 		backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
 		if err != nil {
 			return nil, false, err
@@ -952,7 +964,8 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]
 func filterDoltInternalTables(tblNames []string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) {
+		// TODO: Need to consider dolt schema
+		if !doltdb.HasDoltPrefix(tbl) && tbl != doltdb.GetBranchesTableName() && tbl != doltdb.GetLogTableName() {
 			result = append(result, tbl)
 		}
 	}

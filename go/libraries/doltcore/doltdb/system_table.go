@@ -120,7 +120,7 @@ func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, er
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
 func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	s := set.NewStrSet(generatedSystemTables)
+	s := set.NewStrSet(getGeneratedSystemTables())
 
 	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
@@ -148,16 +148,18 @@ var getWriteableSystemTables = func() []string {
 	}
 }
 
-var generatedSystemTables = []string{
-	BranchesTableName,
-	RemoteBranchesTableName,
-	LogTableName,
-	TableOfTablesInConflictName,
-	TableOfTablesWithViolationsName,
-	CommitsTableName,
-	CommitAncestorsTableName,
-	StatusTableName,
-	RemotesTableName,
+var getGeneratedSystemTables = func() []string {
+	return []string{
+		GetBranchesTableName(),
+		RemoteBranchesTableName,
+		GetLogTableName(),
+		TableOfTablesInConflictName,
+		TableOfTablesWithViolationsName,
+		CommitsTableName,
+		CommitAncestorsTableName,
+		StatusTableName,
+		RemotesTableName,
+	}
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -176,7 +178,7 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-// DocTableName is the name of the dolt table containing documents such as the license and readme
+// GetDocTableName returns the name of the dolt table containing documents such as the license and readme
 var GetDocTableName = func() string {
 	return "dolt_docs"
 }
@@ -243,10 +245,17 @@ const (
 	DoltWorkspaceTablePrefix = "dolt_workspace_"
 )
 
-const (
-	// LogTableName is the log system table name
-	LogTableName = "dolt_log"
+// GetBranchesTableName returns the branches system table name
+var GetBranchesTableName = func() string {
+	return "dolt_branches"
+}
 
+// GetLogTableName returns the log system table name
+var GetLogTableName = func() string {
+	return "dolt_log"
+}
+
+const (
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
 
@@ -261,9 +270,6 @@ const (
 
 	// SchemaConflictsTableName is the schema conflicts system table name
 	SchemaConflictsTableName = "dolt_schema_conflicts"
-
-	// BranchesTableName is the branches system table name
-	BranchesTableName = "dolt_branches"
 
 	// RemoteBranchesTableName is the all-branches system table name
 	RemoteBranchesTableName = "dolt_remote_branches"

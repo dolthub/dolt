@@ -66,27 +66,27 @@ func (bt *BranchesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return branchesDefaultRowCount, false, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// BranchesTableName
+// Name is a sql.Table interface function which returns the name of the table
+// which is defined by the function GetBranchesTableName()
 func (bt *BranchesTable) Name() string {
 	if bt.remote {
 		return doltdb.RemoteBranchesTableName
 	}
-	return doltdb.BranchesTableName
+	return doltdb.GetBranchesTableName()
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// BranchesTableName
+// String is a sql.Table interface function which returns the name of the table
+// which is defined by the function GetBranchesTableName()
 func (bt *BranchesTable) String() string {
 	if bt.remote {
 		return doltdb.RemoteBranchesTableName
 	}
-	return doltdb.BranchesTableName
+	return doltdb.GetBranchesTableName()
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
 func (bt *BranchesTable) Schema() sql.Schema {
-	tableName := doltdb.BranchesTableName
+	tableName := doltdb.GetBranchesTableName()
 	if bt.remote {
 		tableName = doltdb.RemoteBranchesTableName
 	}
