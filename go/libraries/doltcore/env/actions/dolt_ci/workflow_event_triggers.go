@@ -118,7 +118,7 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 	vrw := nrv.VRW()
 	ns := nrv.NodeStore()
 
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}
