@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-		"strconv"
+	"strconv"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -47,7 +47,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	)
+)
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {

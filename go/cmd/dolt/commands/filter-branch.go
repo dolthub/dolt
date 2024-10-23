@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-		"strings"
+	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
