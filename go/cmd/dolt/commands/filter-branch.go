@@ -18,8 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime"
-	"strings"
+		"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -370,8 +369,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 		return nil, nil, err
 	}
 
-	parallelism := runtime.GOMAXPROCS(0)
-	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()
+	azr := analyzer.NewDefault(pro)
 
 	err = db.SetRoot(sqlCtx, root)
 	if err != nil {

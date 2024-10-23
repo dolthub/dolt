@@ -1121,7 +1121,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	return gms.New(analyzer.NewBuilder(pro).WithParallelism(1).Build(), &gms.Config{
+	return gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     false,
 		IsServerLocked: false,
 	}), sqlCtx
