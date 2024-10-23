@@ -441,24 +441,15 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	return sb.String(), nil
 }
 
-// ConvertToSecondaryKeylessIndex converts the given map to a keyless index map.
-func ConvertToSecondaryKeylessIndex(m Map) Map {
-	keyDesc, valDesc := m.Descriptors()
+func AddHashToSchema(keyDesc val.TupleDesc) val.TupleDesc {
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
 	handlers := make([]val.TupleTypeHandler, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)
 	copy(handlers, keyDesc.Handlers)
 	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
 	handlers[len(handlers)-1] = nil
-	newKeyDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
+	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{
 		Comparator: keyDesc.Comparator(),
 		Handlers:   handlers,
 	}, newTypes...)
-	newTuples := m.tuples
-	newTuples.Order = newKeyDesc
-	return Map{
-		tuples:  newTuples,
-		keyDesc: newKeyDesc,
-		valDesc: valDesc,
-	}
 }
