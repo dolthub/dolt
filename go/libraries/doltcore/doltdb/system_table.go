@@ -68,7 +68,7 @@ func IsFullTextTable(name string) bool {
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+	return HasDoltPrefix(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
@@ -137,21 +137,15 @@ func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, er
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
-var writeableSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
-	RebaseTableName,
-}
-
-var persistedSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
+var getWriteableSystemTables = func() []string {
+	return []string{
+		GetDocTableName(),
+		DoltQueryCatalogTableName,
+		SchemasTableName,
+		ProceduresTableName,
+		IgnoreTableName,
+		RebaseTableName,
+	}
 }
 
 var generatedSystemTables = []string{
@@ -182,9 +176,12 @@ const (
 	ReadmeDoc = "README.md"
 )
 
+// DocTableName is the name of the dolt table containing documents such as the license and readme
+var GetDocTableName = func() string {
+	return "dolt_docs"
+}
+
 const (
-	// DocTableName is the name of the dolt table containing documents such as the license and readme
-	DocTableName = "dolt_docs"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
 	// DocTextColumnName is the name of the column containing the document contents in the docs table

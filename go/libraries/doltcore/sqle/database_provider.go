@@ -533,6 +533,12 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		if err != nil {
 			return err
 		}
+		workingRoot, err = workingRoot.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+			Name: "dolt",
+		})
+		if err != nil {
+			return err
+		}
 
 		if err = newEnv.UpdateWorkingRoot(ctx, workingRoot); err != nil {
 			return err
