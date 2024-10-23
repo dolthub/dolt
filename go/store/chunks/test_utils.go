@@ -91,10 +91,10 @@ func (s *TestStoreView) EndGC() {
 	collector.EndGC()
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) error {
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) (GCFinalizer, error) {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok || dest != s {
-		return ErrUnsupportedOperation
+		return nil, ErrUnsupportedOperation
 	}
 	return collector.MarkAndSweepChunks(ctx, hashes, collector)
 }

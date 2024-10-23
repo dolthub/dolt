@@ -30,6 +30,8 @@ import (
 var _ chunks.ChunkStore = (*GenerationalNBS)(nil)
 var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
+var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
+var _ chunks.ChunkStoreGarbageCollector = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
 	oldGen   *NomsBlockStore
@@ -491,4 +493,40 @@ func (gcs *GenerationalNBS) Path() (string, bool) {
 
 func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	return gcs.newGen.UpdateManifest(ctx, updates)
+}
+
+func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool) error {
+	return gcs.newGen.BeginGC(keeper)
+}
+
+func (gcs *GenerationalNBS) EndGC() {
+	gcs.newGen.EndGC()
+}
+
+func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
+	return markAndSweepChunks(ctx, hashes, gcs.newGen, gcs, dest)
+}
+
+func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
+	err := gcs.newGen.IterateAllChunks(ctx, cb)
+	if err != nil {
+		return err
+	}
+	err = gcs.oldGen.IterateAllChunks(ctx, cb)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (gcs *GenerationalNBS) Count() (uint32, error) {
+	newGenCnt, err := gcs.newGen.Count()
+	if err != nil {
+		return 0, err
+	}
+	oldGenCnt, err := gcs.oldGen.Count()
+	if err != nil {
+		return 0, err
+	}
+	return newGenCnt + oldGenCnt, nil
 }

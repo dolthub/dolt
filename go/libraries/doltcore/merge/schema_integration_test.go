@@ -484,10 +484,10 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 		setup: []testCommand{},
 		fkColl: fkCollection(doltdb.ForeignKey{
 			Name:                   "q1_fk",
-			TableName:              "quiz",
+			TableName:              doltdb.TableName{Name: "quiz"},
 			TableIndex:             "q1_fk",
 			TableColumns:           []uint64{13001},
-			ReferencedTableName:    "test",
+			ReferencedTableName:    doltdb.TableName{Name: "test"},
 			ReferencedTableIndex:   "t1_idx",
 			ReferencedTableColumns: []uint64{12111},
 			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{

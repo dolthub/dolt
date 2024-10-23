@@ -139,11 +139,14 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 	}
 
 	for _, branch := range branches {
-		err = statsDb.LoadBranchStats(ctx, branch)
-		if err != nil {
+		if err = statsDb.LoadBranchStats(ctx, branch); err != nil {
 			// if branch name is invalid, continue loading rest
 			// TODO: differentiate bad branch name from other errors
-			ctx.GetLogger().Errorf("load stats failure: %s\n", err.Error())
+			ctx.GetLogger().Errorf("load stats init failure: %s\n", err.Error())
+			continue
+		}
+		if err := statsDb.Flush(ctx, branch); err != nil {
+			ctx.GetLogger().Errorf("load stats flush failure: %s\n", err.Error())
 			continue
 		}
 	}

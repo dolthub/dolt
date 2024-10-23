@@ -30,6 +30,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var ErrNoBranchStats = errors.New("stats for branch not found")
+
 type Statistics struct {
 	m    prolly.Map
 	addr hash.Hash
@@ -76,7 +78,7 @@ func LoadStatistics(ctx context.Context, nbf *types.NomsBinFormat, ns tree.NodeS
 	}
 
 	if val == nil {
-		return nil, errors.New("root hash doesn't exist")
+		return nil, ErrNoBranchStats
 	}
 
 	return parse_Statistics(ctx, []byte(val.(types.SerialMessage)), ns, vr)
@@ -120,7 +122,7 @@ func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr type
 		return nil, err
 	}
 
-	m, err := shim.MapFromValue(value, schema.StatsTableDoltSchema, ns)
+	m, err := shim.MapFromValue(value, schema.StatsTableDoltSchema, ns, false)
 	if err != nil {
 		return nil, err
 	}

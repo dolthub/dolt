@@ -110,7 +110,7 @@ type RootValue interface {
 	// SetFeatureVersion sets the feature version and returns a new root.
 	SetFeatureVersion(v FeatureVersion) (RootValue, error)
 	// SetTableHash sets the table with the given case-sensitive name to the new hash, and returns a new root.
-	SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error)
+	SetTableHash(ctx context.Context, tName TableName, h hash.Hash) (RootValue, error)
 	// TableListHash returns a unique digest of the list of table names
 	TableListHash() uint64
 	// VRW returns this root's ValueReadWriter.
@@ -490,7 +490,7 @@ func (root *rootValue) GetTableHash(ctx context.Context, tName TableName) (hash.
 	return tVal, !tVal.IsEmpty(), nil
 }
 
-func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Hash) (RootValue, error) {
+func (root *rootValue) SetTableHash(ctx context.Context, tName TableName, h hash.Hash) (RootValue, error) {
 	val, err := root.vrw.ReadValue(ctx, h)
 
 	if err != nil {
@@ -503,7 +503,7 @@ func (root *rootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 		return nil, err
 	}
 
-	return root.putTable(ctx, TableName{Name: tName}, ref, hash.Hash{})
+	return root.putTable(ctx, tName, ref, hash.Hash{})
 }
 
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
@@ -771,6 +771,27 @@ func (tn TableName) String() string {
 	return tn.Schema + "." + tn.Name
 }
 
+func (tn TableName) EqualFold(o TableName) bool {
+	return strings.EqualFold(tn.Name, o.Name) && strings.EqualFold(tn.Schema, o.Schema)
+}
+
+// The ForeignKey struct used to include referenced table names as strings and
+// now includes them as TableName structs. LD_1 format repositories serialized
+// the ForeignKey struct directly to a noms struct with the string fields. So
+// we need to maintain that behavior.
+func (tn TableName) MarshalNoms(vrw types.ValueReadWriter) (val types.Value, err error) {
+	return types.String(tn.Name), nil
+}
+
+func (tn TableName) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
+	str, ok := v.(types.String)
+	if !ok {
+		return fmt.Errorf("could not unmarshal %v to doltdb.TableName; expected only a string.", v)
+	}
+	tn.Name = string(str)
+	return nil
+}
+
 // ToTableNames is a migration helper function that converts a slice of table names to a slice of TableName structs.
 func ToTableNames(names []string, schemaName string) []TableName {
 	tbls := make([]TableName, len(names))
@@ -887,7 +908,7 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 func CreateEmptyTable(ctx context.Context, root RootValue, tName TableName, sch schema.Schema) (RootValue, error) {
 	ns := root.NodeStore()
 	vrw := root.VRW()
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1070,14 +1091,13 @@ func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValu
 		return nil, err
 	}
 
-	// TODO: schema name
-	allTablesSlice, err := root.GetTableNames(ctx, DefaultSchemaName)
+	allTablesSlice, err := UnionTableNames(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	allTablesSet := make(map[string]schema.Schema)
+	allTablesSet := make(map[TableName]schema.Schema)
 	for _, tableName := range allTablesSlice {
-		tbl, ok, err := root.GetTable(ctx, TableName{Name: tableName})
+		tbl, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -1294,15 +1314,15 @@ func (root *rootValue) DebugString(ctx context.Context, transitive bool) string 
 }
 
 // MapTableHashes returns a map of each table name and hash.
-func MapTableHashes(ctx context.Context, root RootValue) (map[string]hash.Hash, error) {
-	// TODO: schema name
-	names, err := root.GetTableNames(ctx, DefaultSchemaName)
+func MapTableHashes(ctx context.Context, root RootValue) (map[TableName]hash.Hash, error) {
+	names, err := UnionTableNames(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	nameToHash := make(map[string]hash.Hash)
+
+	nameToHash := make(map[TableName]hash.Hash)
 	for _, name := range names {
-		h, ok, err := root.GetTableHash(ctx, TableName{Name: name})
+		h, ok, err := root.GetTableHash(ctx, name)
 		if err != nil {
 			return nil, err
 		} else if !ok {

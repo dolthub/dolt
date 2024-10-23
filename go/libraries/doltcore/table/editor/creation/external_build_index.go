@@ -41,14 +41,11 @@ const (
 // single prolly tree materialization by presorting the index keys in an
 // intermediate file format.
 func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema(), schema.IsKeyless(sch))
 	if err != nil {
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
-	if schema.IsKeyless(sch) {
-		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
-	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {

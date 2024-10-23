@@ -1037,6 +1037,34 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	return nbs.hasMany(toHasRecords(hashes))
 }
 
+func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSet) (hash.HashSet, error) {
+	if hashes.Size() == 0 {
+		return nil, nil
+	}
+
+	t1 := time.Now()
+	defer nbs.stats.HasLatency.SampleTimeSince(t1)
+	nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
+
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+
+	records := toHasRecords(hashes)
+
+	_, err := nbs.tables.hasManyInSources(srcs, records)
+	if err != nil {
+		return nil, err
+	}
+
+	absent := hash.HashSet{}
+	for _, r := range records {
+		if !r.has {
+			absent.Insert(*r.a)
+		}
+	}
+	return absent, nil
+}
+
 func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
 		tables = nbs.tables
@@ -1569,10 +1597,14 @@ func (nbs *NomsBlockStore) EndGC() {
 	nbs.cond.Broadcast()
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) error {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
+	return markAndSweepChunks(ctx, hashes, nbs, nbs, dest)
+}
+
+func markAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, nbs *NomsBlockStore, src NBSCompressedChunkStore, dest chunks.ChunkStore) (chunks.GCFinalizer, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
-		return chunks.ErrUnsupportedOperation
+		return nil, chunks.ErrUnsupportedOperation
 	}
 
 	precheck := func() error {
@@ -1589,36 +1621,59 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan
 	}
 	err := precheck()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	destNBS := nbs
+	var destNBS *NomsBlockStore
 	if dest != nil {
 		switch typed := dest.(type) {
 		case *NomsBlockStore:
 			destNBS = typed
 		case NBSMetricWrapper:
 			destNBS = typed.nbs
+		default:
+			return nil, fmt.Errorf("cannot MarkAndSweep into a non-NomsBlockStore ChunkStore: %w", chunks.ErrUnsupportedOperation)
 		}
+	} else {
+		destNBS = nbs
 	}
 
-	specs, err := nbs.copyMarkedChunks(ctx, hashes, destNBS)
+	specs, err := copyMarkedChunks(ctx, hashes, src, destNBS)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	if destNBS == nbs {
-		return nbs.swapTables(ctx, specs)
-	} else {
-		fileIdToNumChunks := tableSpecsToMap(specs)
-		return destNBS.AddTableFilesToManifest(ctx, fileIdToNumChunks)
-	}
+	return gcFinalizer{
+		nbs:   destNBS,
+		specs: specs,
+	}, nil
 }
 
-func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, dest *NomsBlockStore) ([]tableSpec, error) {
+type gcFinalizer struct {
+	nbs   *NomsBlockStore
+	specs []tableSpec
+}
+
+func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc, error) {
+	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
+	var addrs []hash.Hash
+	for _, spec := range gcf.specs {
+		addrs = append(addrs, spec.name)
+	}
+	f := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return gcf.nbs.hasManyInSources(addrs, hashes)
+	}
+	return f, gcf.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+}
+
+func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
+	return gcf.nbs.swapTables(ctx, gcf.specs)
+}
+
+func copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, src NBSCompressedChunkStore, dest *NomsBlockStore) ([]tableSpec, error) {
 	tfp, ok := dest.p.(tableFilePersister)
 	if !ok {
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
@@ -1642,7 +1697,7 @@ LOOP:
 			mu := new(sync.Mutex)
 			hashset := hash.NewHashSet(hs...)
 			found := 0
-			err := nbs.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
+			err := src.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
 				mu.Lock()
 				defer mu.Unlock()
 				if addErr != nil {

@@ -269,7 +269,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	if err != nil {
 		return nil, err
 	}
-	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch)
+	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch, false)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +472,7 @@ func TestDropPks(t *testing.T) {
 
 				fk, ok := foreignKeyCollection.GetByNameCaseInsensitive(childFkName)
 				assert.True(t, ok)
-				assert.Equal(t, childName, fk.TableName)
+				assert.Equal(t, childName, fk.TableName.Name)
 				if tt.fkIdxName != "" && fk.ReferencedTableIndex != "" {
 					assert.Equal(t, tt.fkIdxName, fk.ReferencedTableIndex)
 				}

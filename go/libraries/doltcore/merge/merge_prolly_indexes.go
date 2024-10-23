@@ -60,9 +60,6 @@ func mergeProllySecondaryIndexes(
 				return prolly.Map{}, false, err
 			}
 			m := durable.ProllyMapFromIndex(idx)
-			if schema.IsKeyless(sch) {
-				m = prolly.ConvertToSecondaryKeylessIndex(m)
-			}
 			return m, true, nil
 		}
 		return prolly.Map{}, false, nil

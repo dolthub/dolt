@@ -251,7 +251,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			assert.NoError(t, err)
 
 			tSchema := createTestSchema(t)
-			rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema)
+			rowData, err := durable.NewEmptyIndex(ctx, ddb.vrw, ddb.ns, tSchema, false)
 			require.NoError(t, err)
 			tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
 			require.NoError(t, err)

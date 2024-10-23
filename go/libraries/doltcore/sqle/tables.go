@@ -932,7 +932,7 @@ func emptyFulltextTable(
 		return nil, nil, err
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema)
+	empty, err := durable.NewEmptyIndex(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1036,7 +1036,7 @@ func (t *WritableDoltTable) truncate(
 	}
 
 	for _, idx := range sch.Indexes().AllIndexes() {
-		empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx.Schema())
+		empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx.Schema(), false)
 		if err != nil {
 			return nil, err
 		}
@@ -1060,7 +1060,7 @@ func (t *WritableDoltTable) truncate(
 		}
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1258,10 +1258,10 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			toReturn[i] = sql.ForeignKeyConstraint{
 				Name:           fk.Name,
 				Database:       t.db.Name(),
-				Table:          fk.TableName,
+				Table:          fk.TableName.Name, // TODO: schema name
 				Columns:        fk.UnresolvedFKDetails.TableColumns,
 				ParentDatabase: t.db.Name(),
-				ParentTable:    fk.ReferencedTableName,
+				ParentTable:    fk.ReferencedTableName.Name, // TODO: schema name
 				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
 				OnUpdate:       toReferentialAction(fk.OnUpdate),
 				OnDelete:       toReferentialAction(fk.OnDelete),
@@ -1269,7 +1269,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			}
 			continue
 		}
-		parent, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName, Schema: t.db.Schema()})
+		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 		if err != nil {
 			return nil, err
 		}
@@ -1310,10 +1310,10 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 			toReturn[i] = sql.ForeignKeyConstraint{
 				Name:           fk.Name,
 				Database:       t.db.Name(),
-				Table:          fk.TableName,
+				Table:          fk.TableName.Name, // TODO: schema name
 				Columns:        fk.UnresolvedFKDetails.TableColumns,
 				ParentDatabase: t.db.Name(),
-				ParentTable:    fk.ReferencedTableName,
+				ParentTable:    fk.ReferencedTableName.Name, // TODO: schema name
 				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
 				OnUpdate:       toReferentialAction(fk.OnUpdate),
 				OnDelete:       toReferentialAction(fk.OnDelete),
@@ -1321,7 +1321,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 			}
 			continue
 		}
-		child, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.TableName, Schema: t.db.Schema()})
+		child, ok, err := root.GetTable(ctx, fk.TableName)
 		if err != nil {
 			return nil, err
 		}
@@ -2594,10 +2594,10 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 		}
 		for _, fk := range fkc.AllKeys() {
 			newFk := fk
-			if t.tableName == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
+			if t.TableName() == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
 				newFk.TableIndex = ret.NewIndex.Name()
 			}
-			if t.tableName == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
+			if t.TableName() == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
 				newFk.ReferencedTableIndex = ret.NewIndex.Name()
 			}
 			fkc.RemoveKeys(fk)
@@ -2630,13 +2630,15 @@ func (t *WritableDoltTable) createForeignKey(
 	tbl *doltdb.Table,
 	sqlFk sql.ForeignKeyConstraint,
 	onUpdateRefAction, onDeleteRefAction doltdb.ForeignKeyReferentialAction) (doltdb.ForeignKey, error) {
+
 	if !sqlFk.IsResolved {
+		// TODO: schema should be part of the foreign key defn
 		return doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
-			TableName:              sqlFk.Table,
+			TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
 			TableIndex:             "",
 			TableColumns:           nil,
-			ReferencedTableName:    sqlFk.ParentTable,
+			ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()},
 			ReferencedTableIndex:   "",
 			ReferencedTableColumns: nil,
 			OnUpdate:               onUpdateRefAction,
@@ -2705,12 +2707,14 @@ func (t *WritableDoltTable) createForeignKey(
 	if ok {
 		refTableIndexName = refTableIndex.Name()
 	}
+
+	// TODO: foreign key defn should include schema names
 	return doltdb.ForeignKey{
 		Name:                   sqlFk.Name,
-		TableName:              sqlFk.Table,
+		TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
 		TableIndex:             tableIndexName,
 		TableColumns:           colTags,
-		ReferencedTableName:    sqlFk.ParentTable,
+		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()},
 		ReferencedTableIndex:   refTableIndexName,
 		ReferencedTableColumns: refColTags,
 		OnUpdate:               onUpdateRefAction,
@@ -2831,8 +2835,10 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 	}
 	fkc.RemoveKeyByName(doltFk.Name)
 	doltFk.Name = sqlFk.Name
-	doltFk.TableName = sqlFk.Table
-	doltFk.ReferencedTableName = sqlFk.ParentTable
+
+	// TODO: need schema name in foreign key defn
+	doltFk.TableName = doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()}
+	doltFk.ReferencedTableName = doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()}
 	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
 	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
 
@@ -2911,13 +2917,14 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 // toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
 // function should not be used.
 func toForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+	// TODO: foreign key defn should include schema name
 	cst = sql.ForeignKeyConstraint{
 		Name:           fk.Name,
 		Database:       dbName,
-		Table:          fk.TableName,
+		Table:          fk.TableName.Name,
 		Columns:        make([]string, len(fk.TableColumns)),
 		ParentDatabase: dbName,
-		ParentTable:    fk.ReferencedTableName,
+		ParentTable:    fk.ReferencedTableName.Name,
 		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
 		OnUpdate:       toReferentialAction(fk.OnUpdate),
 		OnDelete:       toReferentialAction(fk.OnDelete),
