@@ -145,21 +145,36 @@ const (
 	// WorkflowEventTriggerEventTriggerTypeTag is the tag of the event trigger type column on the workflow event triggers table
 	WorkflowEventTriggerEventTriggerTypeTag
 
-	// WorkflowEventTriggerBranchesIdTag is the tag of the id column tag of the workflow event trigger branches table
+	// WorkflowEventTriggerBranchesIdTag is the tag of the id columnof the workflow event trigger branches table
 	WorkflowEventTriggerBranchesIdTag
 
 	// WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag is the tag of the workflow event trigger id foreign key column tag on the workflow event trigger branches table
 	WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag
 
-	// WorkflowEventTriggerBranchesBranchTag is the tag of the branch column tag on the workflow event trigger branches table
+	// WorkflowEventTriggerBranchesBranchTag is the tag of the branch column on the workflow event trigger branches table
 	WorkflowEventTriggerBranchesBranchTag
 
-	// WorkflowEventTriggerActivitiesIdTag is the tag of the id column tag on the workflow event trigger activities table
+	// WorkflowEventTriggerActivitiesIdTag is the tag of the id column on the workflow event trigger activities table
 	WorkflowEventTriggerActivitiesIdTag
 
-	// WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag is the name of the workflow event trigger id foreign key column tag on the workflow event trigger activities table
+	// WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag is the name of the tag on the workflow event trigger id foreign key column on the workflow event trigger activities table
 	WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag
 
-	// WorkflowEventTriggerActivitiesActivityTag is the name of the activity column tag on the workflow event trigger activities table.
+	// WorkflowEventTriggerActivitiesActivityTag is the name of the tag on the activity column on the workflow event trigger activities table.
 	WorkflowEventTriggerActivitiesActivityTag
+
+	// WorkflowJobsIdTag is the name of the tag on the id column on the workflow jobs table
+	WorkflowJobsIdTag
+
+	// WorkflowJobsNameTag is the name of the tag on the name column on the workflow jobs table
+	WorkflowJobsNameTag
+
+	// WorkflowJobsWorkflowNameFkTag is the name of the tag on the workflow name foreign key column on the
+	WorkflowJobsWorkflowNameFkTag
+
+	// WorkflowJobsCreatedAtTag is the name of the tag on the created at column on the workflow jobs table
+	WorkflowJobsCreatedAtTag
+
+	// WorkflowJobsUpdatedAtTag is the name of the tag on the updated at column on the workflow jobs table
+	WorkflowJobsUpdatedAtTag
 )

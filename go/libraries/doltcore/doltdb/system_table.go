@@ -391,6 +391,24 @@ const (
 
 	// WorkflowEventTriggerActivitiesActivity is the name of the activity column on the workflow event trigger activities table.
 	WorkflowEventTriggerActivitiesActivityColName = "activity"
+
+	// WorkflowJobsTableName is the name of the workflow jobs table name
+	WorkflowJobsTableName = "dolt_ci_workflow_jobs"
+
+	// WorkflowJobsIdPkColName is the name of the id column on the workflow jobs table
+	WorkflowJobsIdPkColName = "id"
+
+	// WorkflowJobsNameColName is the name of the name column on the workflow jobs table
+	WorkflowJobsNameColName = "name"
+
+	// WorkflowJobsWorkflowNameFkColName is the name of the workflow name foreign key column name on the workflow jobs table
+	WorkflowJobsWorkflowNameFkColName = "workflow_name_fk"
+
+	// WorkflowJobsCreatedAtColName is the name of the created at column on the workflow jobs table
+	WorkflowJobsCreatedAtColName = "created_at"
+
+	// WorkflowJobsUpdatedAtColName is the name of the updated at column on the workflow jobs table
+	WorkflowJobsUpdatedAtColName = "updated_at"
 )
 
 const (
