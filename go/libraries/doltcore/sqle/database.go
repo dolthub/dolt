@@ -314,6 +314,27 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
+// checkDoltSchema checks if using the search path, and if so that dolt is the
+// current schema or exists on the search path.
+func (db Database) checkDoltSchema(ctx *sql.Context) bool {
+	if !resolve.UseSearchPath || db.schemaName == "dolt" {
+		return true
+	}
+
+	if db.schemaName == "" {
+		schemasToSearch, err := resolve.SearchPath(ctx)
+		if err != nil {
+			return false
+		}
+		for _, schemaName := range schemasToSearch {
+			if schemaName == "dolt" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
@@ -422,18 +443,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	switch lwrName {
 	case doltdb.GetLogTableName():
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if resolve.UseSearchPath && db.schemaName != "dolt" {
-			return nil, false, nil
-		}
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-			if err != nil {
-				return nil, false, err
+		if db.checkDoltSchema(ctx) {
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
 			}
-		}
 
-		dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
+			dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
+		}
 	case doltdb.DiffTableName:
 		if head == nil {
 			var err error
@@ -462,10 +482,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.GetBranchesTableName():
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if resolve.UseSearchPath && db.schemaName != "dolt" {
-			return nil, false, nil
+		if db.checkDoltSchema(ctx) {
+			dt, found = dtables.NewBranchesTable(ctx, db), true
 		}
-		dt, found = dtables.NewBranchesTable(ctx, db), true
 	case doltdb.RemoteBranchesTableName:
 		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
 	case doltdb.RemotesTableName:
@@ -476,29 +495,27 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.GetStatusTableName():
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if resolve.UseSearchPath && db.schemaName != "dolt" {
-			return nil, false, nil
-		}
-		sess := dsess.DSessFromSess(ctx.Session)
-		adapter := dsess.NewSessionStateAdapter(
-			sess, db.RevisionQualifiedName(),
-			concurrentmap.New[string, env.Remote](),
-			concurrentmap.New[string, env.BranchConfig](),
-			concurrentmap.New[string, env.Remote]())
-		ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
-		if err != nil {
-			return nil, false, err
-		}
+		if db.checkDoltSchema(ctx) {
+			sess := dsess.DSessFromSess(ctx.Session)
+			adapter := dsess.NewSessionStateAdapter(
+				sess, db.RevisionQualifiedName(),
+				concurrentmap.New[string, env.Remote](),
+				concurrentmap.New[string, env.BranchConfig](),
+				concurrentmap.New[string, env.Remote]())
+			ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
 
-		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
+			dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
+		}
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
 	case doltdb.GetTagsTableName():
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if resolve.UseSearchPath && db.schemaName != "dolt" {
-			return nil, false, nil
+		if db.checkDoltSchema(ctx) {
+			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 		}
-		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 	case dtables.AccessTableName:
 		basCtx := branch_control.GetBranchAwareSession(ctx)
 		if basCtx != nil {
@@ -526,18 +543,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 	case doltdb.GetDocTableName():
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if resolve.UseSearchPath && db.schemaName != "dolt" {
-			return nil, false, nil
-		}
-		backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
-		if err != nil {
-			return nil, false, err
-		}
-		if backingTable == nil {
-			dt, found = dtables.NewEmptyDocsTable(ctx), true
-		} else {
-			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+		if db.checkDoltSchema(ctx) {
+			backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
+			if err != nil {
+				return nil, false, err
+			}
+			if backingTable == nil {
+				dt, found = dtables.NewEmptyDocsTable(ctx), true
+			} else {
+				versionableTable := backingTable.(dtables.VersionableTable)
+				dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+			}
 		}
 	case doltdb.StatisticsTableName:
 		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
