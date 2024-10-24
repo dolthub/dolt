@@ -409,6 +409,30 @@ const (
 
 	// WorkflowJobsUpdatedAtColName is the name of the updated at column on the workflow jobs table
 	WorkflowJobsUpdatedAtColName = "updated_at"
+
+	// WorkflowStepsTableName is the name of the workflow steps table
+	WorkflowStepsTableName = "dolt_ci_workflow_steps"
+
+	// WorkflowStepsIdPkColName is the name of the id column on the workflow steps table
+	WorkflowStepsIdPkColName = "id"
+
+	// WorkflowStepsNameColName is the name of the name column on the workflow steps table
+	WorkflowStepsNameColName = "name"
+
+	// WorkflowStepsWorkflowJobIdFkColName is the name of the workflow job id foreign key column on the workflow steps table
+	WorkflowStepsWorkflowJobIdFkColName = "workflow_job_id_fk"
+
+	// WorkflowStepsStepOrderColName is the name of the step order column on the workflow steps stable
+	WorkflowStepsStepOrderColName = "step_order"
+
+	// WorkflowStepsStepTypeColName is the name of the step type column on the workflow steps table
+	WorkflowStepsStepTypeColName = "step_type"
+
+	// WorkflowStepsCreatedAtColName is the name of the created at column on the workflow steps table
+	WorkflowStepsCreatedAtColName = "created_at"
+
+	// WorkflowStepsUpdatedAtColName is the name of the updated at column on the workflow steps table
+	WorkflowStepsUpdatedAtColName = "updated_at"
 )
 
 const (

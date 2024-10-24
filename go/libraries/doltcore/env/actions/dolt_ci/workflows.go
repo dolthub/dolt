@@ -24,7 +24,7 @@ import (
 	stypes "github.com/dolthub/dolt/go/store/types"
 )
 
-func createDoltCIWorkflowsTable(ctx *sql.Context) error {
+func createWorkflowsTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ws, err := dSess.WorkingSet(ctx, dbName)
