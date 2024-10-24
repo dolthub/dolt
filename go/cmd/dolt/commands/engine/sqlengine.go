@@ -112,6 +112,11 @@ func NewSqlEngine(
 
 	all := dbs[:]
 
+	// this is overwritten only for server sessions
+	for _, db := range dbs {
+		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
+	}
+
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
 		all = append(all, clusterDB.(dsess.SqlDatabase))
@@ -205,11 +210,6 @@ func NewSqlEngine(
 		if verbose, ok := os.LookupEnv(dconfig.EnvSqlDebugLogVerbose); ok && strings.EqualFold(verbose, "true") {
 			engine.Analyzer.Verbose = true
 		}
-	}
-
-	// this is overwritten only for server sessions
-	for _, db := range dbs {
-		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
 	}
 
 	err = sql.SystemVariables.SetGlobal(dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
