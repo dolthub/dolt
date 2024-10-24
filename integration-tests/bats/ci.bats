@@ -40,6 +40,9 @@ skip_remote_engine() {
 
     run dolt sql -q "select * from dolt_ci_workflow_event_trigger_activities;"
     [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from dolt_ci_workflow_jobs;"
+    [ "$status" -eq 0 ]
 }
 
 @test "ci: should not allow users to alter the rows or schema of dolt ci workflow tables directly" {

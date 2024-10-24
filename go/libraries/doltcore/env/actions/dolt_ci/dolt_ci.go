@@ -34,6 +34,7 @@ var ExpectedDoltCITables = []doltdb.TableName{
 	doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName},
 	doltdb.TableName{Name: doltdb.WorkflowEventTriggerBranchesTableName},
 	doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
+	doltdb.TableName{Name: doltdb.WorkflowJobsTableName},
 }
 
 func HasDoltCITables(ctx *sql.Context) (bool, error) {
@@ -160,5 +161,9 @@ func createDoltCITables(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	return createWorkflowEventTriggerActivitiesTable(ctx)
+	err = createWorkflowEventTriggerActivitiesTable(ctx)
+	if err != nil {
+		return err
+	}
+	return createWorkflowJobsTable(ctx)
 }
