@@ -190,7 +190,7 @@ func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []stri
 
 func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
 	lowerName := strings.ToLower(indexName)
-	if strings.HasPrefix(lowerName, "dolt_") {
+	if strings.HasPrefix(lowerName, "dolt_") && !strings.HasPrefix(lowerName, "dolt_ci_") {
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
 	if ixc.Contains(lowerName) {

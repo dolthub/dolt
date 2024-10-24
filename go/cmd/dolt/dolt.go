@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/ci"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
@@ -126,6 +127,7 @@ var doltSubCommands = []cli.Command{
 	commands.ReflogCmd{},
 	commands.RebaseCmd{},
 	commands.ArchiveCmd{},
+	ci.Commands,
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -166,6 +168,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.ConfigCmd{},
+	ci.Commands,
 }
 
 // commands that do not need write access for the current directory

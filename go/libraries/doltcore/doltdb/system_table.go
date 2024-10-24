@@ -29,7 +29,8 @@ import (
 
 const (
 	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
-	DoltNamespace = "dolt"
+	DoltNamespace   = "dolt"
+	DoltCINamespace = DoltNamespace + "_ci"
 )
 
 var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
@@ -54,6 +55,12 @@ func HasDoltPrefix(s string) bool {
 	return strings.HasPrefix(strings.ToLower(s), DoltNamespace)
 }
 
+// HasDoltCIPrefix returns a boolean whether or not the provided string is prefixed with the DoltCINamespace. Users should
+// not be able to create tables in this reserved namespace.
+func HasDoltCIPrefix(s string) bool {
+	return strings.HasPrefix(strings.ToLower(s), DoltCINamespace)
+}
+
 // IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
 // indexes.
 // TODO: Schema name
@@ -63,6 +70,11 @@ func IsFullTextTable(name string) bool {
 		strings.HasSuffix(name, "_fts_doc_count") ||
 		strings.HasSuffix(name, "_fts_global_count") ||
 		strings.HasSuffix(name, "_fts_row_count"))
+}
+
+// IsDoltCITable returns whether the table name given is a dolt-ci table
+func IsDoltCITable(name string) bool {
+	return HasDoltCIPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
@@ -144,6 +156,10 @@ var writeableSystemTables = []string{
 	ProceduresTableName,
 	IgnoreTableName,
 	RebaseTableName,
+
+	// todo: for now do not let users write to the tables or alter their schemas
+	//WorkflowsTableName,
+	//WorkflowEventsTableName,
 }
 
 var persistedSystemTables = []string{
@@ -296,6 +312,110 @@ const (
 
 	// StatisticsTableName is the statistics system table name
 	StatisticsTableName = "dolt_statistics"
+)
+
+const (
+	// WorkflowsTableName is the dolt CI workflows system table name
+	WorkflowsTableName = "dolt_ci_workflows"
+
+	// WorkflowsNameColName is the name of the column storing the name of the workflow.
+	WorkflowsNameColName = "name"
+
+	// WorkflowsCreatedAtColName is the name of the column storing the creation time of the row entry.
+	WorkflowsCreatedAtColName = "created_at"
+
+	// WorkflowsUpdatedAtColName is the name of the column storing the update time of the row entry.
+	WorkflowsUpdatedAtColName = "updated_at"
+
+	// WorkflowEventsTableName is the dolt CI workflow events system table name
+	WorkflowEventsTableName = "dolt_ci_workflow_events"
+
+	// WorkflowEventsIdPkColName is the name of the primary key id column on the workflow events table.
+	WorkflowEventsIdPkColName = "id"
+
+	// WorkflowEventsWorkflowNameFkColName is the name of the workflows name foreign key in the workflow events table.
+	WorkflowEventsWorkflowNameFkColName = "workflow_name_fk"
+
+	// WorkflowEventsEventTypeColName is the name of the event type column in the workflow events table.
+	WorkflowEventsEventTypeColName = "event_type"
+
+	// WorkflowEventTriggersTableName is the dolt CI workflow event triggers system table name
+	WorkflowEventTriggersTableName = "dolt_ci_workflow_event_triggers"
+
+	// WorkflowEventTriggersIdPkColName is the name of the primary key id column on the workflow event triggers table.
+	WorkflowEventTriggersIdPkColName = "id"
+
+	// WorkflowEventTriggersWorkflowEventsIdFkColName is the name of the workflow event id foreign key in the workflow event triggers table.
+	WorkflowEventTriggersWorkflowEventsIdFkColName = "workflow_event_id_fk"
+
+	// WorkflowEventTriggerEventTriggerTypeColName is the type of the event trigger on the workflow event triggers table.
+	WorkflowEventTriggersEventTriggerTypeColName = "event_trigger_type"
+
+	// WorkflowEventTriggerBranchesTableName is the name of the workflow event trigger branches table name
+	WorkflowEventTriggerBranchesTableName = "dolt_ci_workflow_event_trigger_branches"
+
+	// WorkflowEventTriggerBranchesIdPkColName is the name of the id column on the workflow event trigger branches table.
+	WorkflowEventTriggerBranchesIdPkColName = "id"
+
+	// WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName is the name of the workflow event triggers id foreign key column on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName = "workflow_event_triggers_id_fk"
+
+	// WorkflowEventTriggerBranchesBranch is the name of the branch column on the workflow event trigger branches table.
+	WorkflowEventTriggerBranchesBranchColName = "branch"
+
+	// WorkflowEventTriggerActivitiesTableName is the name of the workflow event trigger activities table name
+	WorkflowEventTriggerActivitiesTableName = "dolt_ci_workflow_event_trigger_activities"
+
+	// WorkflowEventTriggerActivitiesIdPkColName is the name of the id column on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesIdPkColName = "id"
+
+	// WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName is the name of the workflow event triggers id foreign key column on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName = "workflow_event_triggers_id_fk"
+
+	// WorkflowEventTriggerActivitiesActivity is the name of the activity column on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesActivityColName = "activity"
+
+	// WorkflowJobsTableName is the name of the workflow jobs table name
+	WorkflowJobsTableName = "dolt_ci_workflow_jobs"
+
+	// WorkflowJobsIdPkColName is the name of the id column on the workflow jobs table
+	WorkflowJobsIdPkColName = "id"
+
+	// WorkflowJobsNameColName is the name of the name column on the workflow jobs table
+	WorkflowJobsNameColName = "name"
+
+	// WorkflowJobsWorkflowNameFkColName is the name of the workflow name foreign key column name on the workflow jobs table
+	WorkflowJobsWorkflowNameFkColName = "workflow_name_fk"
+
+	// WorkflowJobsCreatedAtColName is the name of the created at column on the workflow jobs table
+	WorkflowJobsCreatedAtColName = "created_at"
+
+	// WorkflowJobsUpdatedAtColName is the name of the updated at column on the workflow jobs table
+	WorkflowJobsUpdatedAtColName = "updated_at"
+
+	// WorkflowStepsTableName is the name of the workflow steps table
+	WorkflowStepsTableName = "dolt_ci_workflow_steps"
+
+	// WorkflowStepsIdPkColName is the name of the id column on the workflow steps table
+	WorkflowStepsIdPkColName = "id"
+
+	// WorkflowStepsNameColName is the name of the name column on the workflow steps table
+	WorkflowStepsNameColName = "name"
+
+	// WorkflowStepsWorkflowJobIdFkColName is the name of the workflow job id foreign key column on the workflow steps table
+	WorkflowStepsWorkflowJobIdFkColName = "workflow_job_id_fk"
+
+	// WorkflowStepsStepOrderColName is the name of the step order column on the workflow steps stable
+	WorkflowStepsStepOrderColName = "step_order"
+
+	// WorkflowStepsStepTypeColName is the name of the step type column on the workflow steps table
+	WorkflowStepsStepTypeColName = "step_type"
+
+	// WorkflowStepsCreatedAtColName is the name of the created at column on the workflow steps table
+	WorkflowStepsCreatedAtColName = "created_at"
+
+	// WorkflowStepsUpdatedAtColName is the name of the updated at column on the workflow steps table
+	WorkflowStepsUpdatedAtColName = "updated_at"
 )
 
 const (
