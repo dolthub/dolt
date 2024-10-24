@@ -144,4 +144,22 @@ const (
 
 	// WorkflowEventTriggerEventTriggerTypeTag is the tag of the event trigger type column on the workflow event triggers table
 	WorkflowEventTriggerEventTriggerTypeTag
+
+	// WorkflowEventTriggerBranchesIdTag is the tag of the id column tag of the workflow event trigger branches table
+	WorkflowEventTriggerBranchesIdTag
+
+	// WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag is the tag of the workflow event trigger id foreign key column tag on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag
+
+	// WorkflowEventTriggerBranchesBranchTag is the tag of the branch column tag on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesBranchTag
+
+	// WorkflowEventTriggerActivitiesIdTag is the tag of the id column tag on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesIdTag
+
+	// WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag is the name of the workflow event trigger id foreign key column tag on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag
+
+	// WorkflowEventTriggerActivitiesActivityTag is the name of the activity column tag on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesActivityTag
 )
