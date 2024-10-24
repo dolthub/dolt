@@ -177,4 +177,25 @@ const (
 
 	// WorkflowJobsUpdatedAtTag is the name of the tag on the updated at column on the workflow jobs table
 	WorkflowJobsUpdatedAtTag
+
+	// WorkflowStepsIdTag is the name of the tag on the id column on the workflow steps table
+	WorkflowStepsIdTag
+
+	// WorkflowStepsNameTag is the name of the tag on the name tag on the workflow steps table
+	WorkflowStepsNameTag
+
+	// WorkflowStepsWorkflowJobIdFkTag is the name of the tag on the workflow job id foreign key column on the workflow steps table
+	WorkflowStepsWorkflowJobIdFkTag
+
+	// WorkflowStepsStepOrderTag is the name of the tag on the step order column on the workflow steps table
+	WorkflowStepsStepOrderTag
+
+	// WorkflowStepsStepTypeTag is the name of the tag on the step type column on the workflow steps table
+	WorkflowStepsStepTypeTag
+
+	// WorkflowStepsCreatedAtTag is the name of the tag on the created at column on the workflow steps table
+	WorkflowStepsCreatedAtTag
+
+	// WorkflowStepsUpdatedAtTag is the name of the tag on the updated at column on the workflow steps table
+	WorkflowStepsUpdatedAtTag
 )
