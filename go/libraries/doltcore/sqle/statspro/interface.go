@@ -50,7 +50,6 @@ type Database interface {
 	Flush(ctx context.Context, branch string) error
 	// Close finalizes any file references.
 	Close() error
-
 	SetLatestHash(branch, tableName string, h hash.Hash)
 	GetLatestHash(branch, tableName string) hash.Hash
 	Branches() []string

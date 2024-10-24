@@ -236,7 +236,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Name:    dsess.DoltStatsAutoRefreshThreshold,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 10),
+		Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshThreshold, 0, 10),
 		Default: float64(.5),
 	},
 	&sql.MysqlSystemVariable{
@@ -463,7 +463,7 @@ func AddDoltSystemVariables() {
 			Name:    dsess.DoltStatsAutoRefreshThreshold,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 10),
+			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshThreshold, 0, 10),
 			Default: float64(.5),
 		},
 		&sql.MysqlSystemVariable{

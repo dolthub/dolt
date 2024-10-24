@@ -212,6 +212,12 @@ func (p *Provider) getStatDb(name string) (Database, bool) {
 	return statDb, ok
 }
 
+func (p *Provider) deleteStatDb(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.statDbs, strings.ToLower(name))
+}
+
 func (p *Provider) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	statDb, ok := p.getStatDb(s.Qualifier().Db())
 	if !ok {
@@ -257,7 +263,7 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 	return stat, true
 }
 
-func (p *Provider) DropDbBranchStats(ctx *sql.Context, branch, db string, flush bool) error {
+func (p *Provider) DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error {
 	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return nil
@@ -266,24 +272,26 @@ func (p *Provider) DropDbBranchStats(ctx *sql.Context, branch, db string, flush 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// remove provider access
-	if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
-		return nil
-	}
-
 	p.status[db] = "dropped"
 
-	return nil
+	return statDb.DeleteBranchStats(ctx, branch, flush)
 }
 
 func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
+	statDb, ok := p.getStatDb(db)
+	if !ok {
+		return nil
+	}
+	for _, branch := range statDb.Branches() {
+		// remove provider access
+		p.DropBranchDbStats(ctx, branch, db, flush)
 	}
 
-	return p.DropDbBranchStats(ctx, branch, db, flush)
+	if flush {
+		p.deleteStatDb(db)
+	}
+
+	return nil
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, _ []string) error {
@@ -403,7 +411,7 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 					stats = append(stats, tableStats...)
 				}
 
-				if err := p.DropDbBranchStats(ctx, branch, dbName, true); err != nil {
+				if err := p.DropBranchDbStats(ctx, branch, dbName, true); err != nil {
 					return err
 				}
 
@@ -457,7 +465,7 @@ func (p *Provider) Purge(ctx *sql.Context) error {
 						defer p.UnlockTable(branch, dbName, t)
 					}
 
-					err := p.DropDbBranchStats(ctx, branch, dbName, true)
+					err := p.DropBranchDbStats(ctx, branch, dbName, true)
 					if err != nil {
 						return fmt.Errorf("failed to drop stats: %w", err)
 					}
