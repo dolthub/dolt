@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -132,12 +133,23 @@ func (n *NomsStatsDatabase) Close() error {
 	return n.destDb.DbData().Ddb.Close()
 }
 
+func (n *NomsStatsDatabase) Branches() []string {
+	return n.branches
+}
+
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
 	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
 	if errors.Is(err, doltdb.ErrNoStatistics) {
-		return nil
+		return n.trackBranch(ctx, branch)
+	} else if errors.Is(err, datas.ErrNoBranchStats) {
+		return n.trackBranch(ctx, branch)
 	} else if err != nil {
 		return err
+	}
+	if cnt, err := statsMap.Count(); err != nil {
+		return err
+	} else if cnt == 0 {
+		return n.trackBranch(ctx, branch)
 	}
 	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)
 	if err != nil {

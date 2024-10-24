@@ -76,11 +76,13 @@ func (b *doltgresBenchmarkerImpl) createTestingDb(ctx context.Context) error {
 	// close database
 	defer db.Close()
 
+	// todo: currently db.Ping is busted in doltgres,
+	// results in error
 	// check db
-	err = db.PingContext(ctx)
-	if err != nil {
-		return err
-	}
+	//err = db.PingContext(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
 	_, err = db.ExecContext(ctx, fmt.Sprintf(createDatabaseTemplate, dbName))
 	return err

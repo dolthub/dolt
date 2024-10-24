@@ -47,7 +47,7 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 	_, _ = w.WriteString("var NewFormatQueryPlanTests = []queries.QueryPlanTest{\n")
 	for _, tt := range queries.PlanTests {
 		_, _ = w.WriteString("\t{\n")
-		ctx := enginetest.NewContextWithEngine(harness, engine)
+		ctx := enginetest.NewContext(harness)
 		binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, sql.NewMysqlParser())
 		parsed, _, _, qFlags, err := binder.Parse(tt.Query, nil, false)
 		require.NoError(t, err)

@@ -294,6 +294,7 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
+	ap.SupportsFlag(FullFlag, "f", "perform a full garbage collection, including the old generation")
 	return ap
 }
 

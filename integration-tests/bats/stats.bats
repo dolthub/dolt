@@ -91,8 +91,11 @@ teardown() {
     [ "${lines[1]}" = "8" ]
 }
 
-@test "stats: bootrap on server startup" {
+@test "stats: bootstrap on server startup" {
     cd repo2
+
+    # disable higher precedence auto-update
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;"
 
     dolt sql -q "insert into xy values (0,0), (1,1)"
 
@@ -104,7 +107,29 @@ teardown() {
     [ "${lines[1]}" = "2" ]
 }
 
-@test "stats: only bootrap server startup" {
+@test "stats: auto-update on server startup" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_threshold = 0"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    start_sql_server
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    sleep 1
+    stop_sql_server
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+}
+
+
+@test "stats: only bootstrap server startup" {
     cd repo2
 
     dolt sql -q "insert into xy values (0,0), (1,1)"
@@ -222,6 +247,114 @@ EOF
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "4" ]
+}
+
+@test "stats: dolt_state_purge cli" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 0;"
+
+    dolt sql -q "analyze table xy"
+    #start_sql_server
+
+    #sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "call dolt_stats_purge()"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+}
+
+@test "stats: dolt_state_purge server" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 0;"
+
+    start_sql_server
+
+    sleep 1
+
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "call dolt_stats_purge()"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    stop_sql_server
+}
+
+@test "stats: dolt_state_prune cli" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 0;"
+
+    dolt sql -q "analyze table xy"
+    #start_sql_server
+
+    #sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "call dolt_stats_prune()"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+}
+
+@test "stats: dolt_state_prune server" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 0;"
+
+    start_sql_server
+
+    sleep 1
+
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "call dolt_stats_prune()"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    stop_sql_server
 }
 
 @test "stats: add/delete table" {

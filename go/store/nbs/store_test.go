@@ -339,7 +339,11 @@ func TestNBSCopyGC(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		require.NoError(t, st.BeginGC(nil))
-		msErr = st.MarkAndSweepChunks(ctx, keepChan, nil)
+		var finalizer chunks.GCFinalizer
+		finalizer, msErr = st.MarkAndSweepChunks(ctx, keepChan, nil)
+		if msErr == nil {
+			msErr = finalizer.SwapChunksInStore(ctx)
+		}
 		st.EndGC()
 		wg.Done()
 	}()

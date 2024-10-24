@@ -198,7 +198,7 @@ func TestGC(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(v2)
 
-	err = vs.GC(ctx, hash.HashSet{}, hash.HashSet{}, nil)
+	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, nil)
 	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil

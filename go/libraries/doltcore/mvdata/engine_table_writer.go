@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
@@ -342,8 +341,6 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	if err != nil {
 		return nil, err
 	}
-
-	analyzed = analyzer.StripPassthroughNodes(analyzed)
 
 	// Get the first insert (wrapped with the error handler)
 	transform.Inspect(analyzed, func(node sql.Node) bool {
