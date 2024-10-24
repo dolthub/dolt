@@ -53,18 +53,18 @@ func (s StatusTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 func (s StatusTable) Name() string {
-	return doltdb.StatusTableName
+	return doltdb.GetStatusTableName()
 }
 
 func (s StatusTable) String() string {
-	return doltdb.StatusTableName
+	return doltdb.GetStatusTableName()
 }
 
 func (s StatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "table_name", Type: types.Text, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
 	}
 }
 
