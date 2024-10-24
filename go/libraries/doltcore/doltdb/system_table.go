@@ -157,7 +157,7 @@ var getGeneratedSystemTables = func() []string {
 		TableOfTablesWithViolationsName,
 		CommitsTableName,
 		CommitAncestorsTableName,
-		StatusTableName,
+		GetStatusTableName(),
 		RemotesTableName,
 	}
 }
@@ -255,6 +255,16 @@ var GetLogTableName = func() string {
 	return "dolt_log"
 }
 
+// GetStatusTableName returns the status system table name.
+var GetStatusTableName = func() string {
+	return "dolt_status"
+}
+
+// GetTagsTableName returns the tags table name
+var GetTagsTableName = func() string {
+	return "dolt_tags"
+}
+
 const (
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
@@ -283,14 +293,8 @@ const (
 	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
 
-	// StatusTableName is the status system table name.
-	StatusTableName = "dolt_status"
-
 	// MergeStatusTableName is the merge status system table name.
 	MergeStatusTableName = "dolt_merge_status"
-
-	// TagsTableName is the tags table name
-	TagsTableName = "dolt_tags"
 
 	IgnoreTableName = "dolt_ignore"
 
