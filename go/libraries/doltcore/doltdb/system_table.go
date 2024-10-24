@@ -367,6 +367,30 @@ const (
 
 	// WorkflowEventTriggerEventTriggerTypeColName is the type of the event trigger on the workflow event triggers table.
 	WorkflowEventTriggersEventTriggerTypeColName = "event_trigger_type"
+
+	// WorkflowEventTriggerBranchesTableName is the name of the workflow event trigger branches table name
+	WorkflowEventTriggerBranchesTableName = "dolt_ci_workflow_event_trigger_branches"
+
+	// WorkflowEventTriggerBranchesIdPkColName is the name of the id column on the workflow event trigger branches table.
+	WorkflowEventTriggerBranchesIdPkColName = "id"
+
+	// WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName is the name of the workflow event triggers id foreign key column on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName = "workflow_event_triggers_id_fk"
+
+	// WorkflowEventTriggerBranchesBranch is the name of the branch column on the workflow event trigger branches table.
+	WorkflowEventTriggerBranchesBranchColName = "branch"
+
+	// WorkflowEventTriggerActivitiesTableName is the name of the workflow event trigger activities table name
+	WorkflowEventTriggerActivitiesTableName = "dolt_ci_workflow_event_trigger_activities"
+
+	// WorkflowEventTriggerActivitiesIdPkColName is the name of the id column on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesIdPkColName = "id"
+
+	// WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName is the name of the workflow event triggers id foreign key column on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName = "workflow_event_triggers_id_fk"
+
+	// WorkflowEventTriggerActivitiesActivity is the name of the activity column on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesActivityColName = "activity"
 )
 
 const (

@@ -29,7 +29,7 @@ import (
 	stypes "github.com/dolthub/dolt/go/store/types"
 )
 
-func createWorkflowEventTriggersTable(ctx *sql.Context) error {
+func createWorkflowEventTriggerActivitiesTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ws, err := dSess.WorkingSet(ctx, dbName)
@@ -39,7 +39,7 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 
 	root := ws.WorkingRoot()
 
-	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName})
+	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName})
 	if err != nil {
 		return err
 	}
@@ -49,8 +49,8 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 
 	colCollection := schema.NewColCollection(
 		schema.Column{
-			Name:          doltdb.WorkflowEventTriggersIdPkColName,
-			Tag:           schema.WorkflowEventTriggersIdTag,
+			Name:          doltdb.WorkflowEventTriggerActivitiesIdPkColName,
+			Tag:           schema.WorkflowEventTriggerActivitiesIdTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    true,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -60,8 +60,8 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName,
-			Tag:           schema.WorkflowEventTriggerWorkflowEventIdFkTag,
+			Name:          doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName,
+			Tag:           schema.WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    false,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -71,11 +71,11 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowEventTriggersEventTriggerTypeColName,
-			Tag:           schema.WorkflowEventTriggerEventTriggerTypeTag,
-			Kind:          stypes.IntKind,
+			Name:          doltdb.WorkflowEventTriggerActivitiesActivityColName,
+			Tag:           schema.WorkflowEventTriggerActivitiesActivityTag,
+			Kind:          stypes.StringKind,
 			IsPartOfPK:    false,
-			TypeInfo:      typeinfo.FromKind(stypes.IntKind),
+			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
 			Default:       "",
 			AutoIncrement: false,
 			Comment:       "",
@@ -89,19 +89,19 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}, sch)
+	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName}, sch)
 	if err != nil {
 		return err
 	}
 
 	sfkc := sql.ForeignKeyConstraint{
-		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName),
+		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventTriggerActivitiesTableName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName),
 		Database:       dbName,
-		Table:          doltdb.WorkflowEventTriggersTableName,
-		Columns:        []string{doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName},
+		Table:          doltdb.WorkflowEventTriggerActivitiesTableName,
+		Columns:        []string{doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName},
 		ParentDatabase: dbName,
-		ParentTable:    doltdb.WorkflowEventsTableName,
-		ParentColumns:  []string{doltdb.WorkflowEventsIdPkColName},
+		ParentTable:    doltdb.WorkflowEventTriggersTableName,
+		ParentColumns:  []string{doltdb.WorkflowEventTriggersIdPkColName},
 		OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
 		OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 		IsResolved:     false,
@@ -135,7 +135,7 @@ func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 		return err
 	}
 
-	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}, tbl)
+	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName}, tbl)
 	if err != nil {
 		return err
 	}
