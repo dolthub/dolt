@@ -54,26 +54,26 @@ func (dt *TagsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// TagsTableName
+// GetTagsTableName()
 func (dt *TagsTable) Name() string {
-	return doltdb.TagsTableName
+	return doltdb.GetTagsTableName()
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// TagsTableName
+// GetTagsTableName()
 func (dt *TagsTable) String() string {
-	return doltdb.TagsTableName
+	return doltdb.GetTagsTableName()
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the tags system table.
 func (dt *TagsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "tag_name", Type: types.Text, Source: doltdb.TagsTableName, PrimaryKey: true},
-		{Name: "tag_hash", Type: types.Text, Source: doltdb.TagsTableName, PrimaryKey: true},
-		{Name: "tagger", Type: types.Text, Source: doltdb.TagsTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.TagsTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.TagsTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.TagsTableName, PrimaryKey: false},
+		{Name: "tag_name", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: true},
+		{Name: "tag_hash", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: true},
+		{Name: "tagger", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
 	}
 }
 

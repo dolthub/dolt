@@ -177,7 +177,7 @@ func validateTablesExist(ctx context.Context, currRoot doltdb.RootValue, unknown
 func RemoveDocsTable(tbls []string) []string {
 	var result []string
 	for _, tblName := range tbls {
-		if tblName != doltdb.DocTableName {
+		if tblName != doltdb.GetDocTableName() {
 			result = append(result, tblName)
 		}
 	}

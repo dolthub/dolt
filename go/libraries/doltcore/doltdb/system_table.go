@@ -68,7 +68,7 @@ func IsFullTextTable(name string) bool {
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+	return HasDoltPrefix(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
@@ -120,7 +120,7 @@ func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, er
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
 func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	s := set.NewStrSet(generatedSystemTables)
+	s := set.NewStrSet(getGeneratedSystemTables())
 
 	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
@@ -137,33 +137,29 @@ func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, er
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
-var writeableSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
-	RebaseTableName,
+var getWriteableSystemTables = func() []string {
+	return []string{
+		GetDocTableName(),
+		DoltQueryCatalogTableName,
+		SchemasTableName,
+		ProceduresTableName,
+		IgnoreTableName,
+		RebaseTableName,
+	}
 }
 
-var persistedSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
-}
-
-var generatedSystemTables = []string{
-	BranchesTableName,
-	RemoteBranchesTableName,
-	LogTableName,
-	TableOfTablesInConflictName,
-	TableOfTablesWithViolationsName,
-	CommitsTableName,
-	CommitAncestorsTableName,
-	StatusTableName,
-	RemotesTableName,
+var getGeneratedSystemTables = func() []string {
+	return []string{
+		GetBranchesTableName(),
+		RemoteBranchesTableName,
+		GetLogTableName(),
+		TableOfTablesInConflictName,
+		TableOfTablesWithViolationsName,
+		CommitsTableName,
+		CommitAncestorsTableName,
+		GetStatusTableName(),
+		RemotesTableName,
+	}
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -182,9 +178,12 @@ const (
 	ReadmeDoc = "README.md"
 )
 
+// GetDocTableName returns the name of the dolt table containing documents such as the license and readme
+var GetDocTableName = func() string {
+	return "dolt_docs"
+}
+
 const (
-	// DocTableName is the name of the dolt table containing documents such as the license and readme
-	DocTableName = "dolt_docs"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
 	// DocTextColumnName is the name of the column containing the document contents in the docs table
@@ -246,10 +245,27 @@ const (
 	DoltWorkspaceTablePrefix = "dolt_workspace_"
 )
 
-const (
-	// LogTableName is the log system table name
-	LogTableName = "dolt_log"
+// GetBranchesTableName returns the branches system table name
+var GetBranchesTableName = func() string {
+	return "dolt_branches"
+}
 
+// GetLogTableName returns the log system table name
+var GetLogTableName = func() string {
+	return "dolt_log"
+}
+
+// GetStatusTableName returns the status system table name.
+var GetStatusTableName = func() string {
+	return "dolt_status"
+}
+
+// GetTagsTableName returns the tags table name
+var GetTagsTableName = func() string {
+	return "dolt_tags"
+}
+
+const (
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
 
@@ -265,9 +281,6 @@ const (
 	// SchemaConflictsTableName is the schema conflicts system table name
 	SchemaConflictsTableName = "dolt_schema_conflicts"
 
-	// BranchesTableName is the branches system table name
-	BranchesTableName = "dolt_branches"
-
 	// RemoteBranchesTableName is the all-branches system table name
 	RemoteBranchesTableName = "dolt_remote_branches"
 
@@ -280,14 +293,8 @@ const (
 	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
 
-	// StatusTableName is the status system table name.
-	StatusTableName = "dolt_status"
-
 	// MergeStatusTableName is the merge status system table name.
 	MergeStatusTableName = "dolt_merge_status"
-
-	// TagsTableName is the tags table name
-	TagsTableName = "dolt_tags"
 
 	IgnoreTableName = "dolt_ignore"
 
