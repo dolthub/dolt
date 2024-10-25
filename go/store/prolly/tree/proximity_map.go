@@ -17,9 +17,10 @@ package tree
 import (
 	"context"
 	"fmt"
+	"math"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"math"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
