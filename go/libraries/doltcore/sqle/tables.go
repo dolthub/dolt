@@ -1974,6 +1974,7 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 			IsUnique:           idx.IsUnique(),
 			IsSpatial:          idx.IsSpatial(),
 			IsFullText:         true,
+			IsVector:           false,
 			IsUserDefined:      true,
 			Comment:            idx.Comment(),
 			FullTextProperties: ft,
@@ -2031,6 +2032,7 @@ func modifyFulltextIndexForColumnDrop(index schema.Index, newSch schema.Schema, 
 			IsUnique:           index.IsUnique(),
 			IsSpatial:          false,
 			IsFullText:         true,
+			IsVector:           false,
 			IsUserDefined:      index.IsUserDefined(),
 			Comment:            index.Comment(),
 			FullTextProperties: index.FullTextProperties(),
@@ -2085,9 +2087,11 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				IsUnique:           index.IsUnique(),
 				IsSpatial:          index.IsSpatial(),
 				IsFullText:         index.IsFullText(),
+				IsVector:           index.IsVector(),
 				IsUserDefined:      index.IsUserDefined(),
 				Comment:            index.Comment(),
 				FullTextProperties: index.FullTextProperties(),
+				VectorProperties:   index.VectorProperties(),
 			})
 	}
 
@@ -2547,11 +2551,11 @@ func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.Index
 		return fmt.Errorf("attempted to create non-FullText index through FullText interface")
 	}
 
-	return t.createIndex(ctx, idx, keyCols, tableNames)
+	return t.createIndex(ctx, idx, keyCols, tableNames, schema.VectorProperties{})
 }
 
 // createIndex handles the common functionality between CreateIndex and CreateFulltextIndex.
-func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
+func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames, vectorProperties schema.VectorProperties) error {
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {
 		columns[i] = indexCol.Name
@@ -2574,6 +2578,7 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
 		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
 		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsVector:      idx.Constraint == sql.IndexConstraint_Vector,
 		IsUserDefined: true,
 		Comment:       idx.Comment,
 		FullTextProperties: schema.FullTextProperties{
@@ -2586,6 +2591,7 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 			KeyName:          keyCols.Name,
 			KeyPositions:     keyPositions,
 		},
+		VectorProperties: vectorProperties,
 	}, t.opts)
 	if err != nil {
 		return err
@@ -2888,7 +2894,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
-		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
+		return fmt.Errorf("only the following types of index constraints are supported for foriegn keys: none, unique, spatial")
 	}
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {
@@ -2903,7 +2909,8 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 	ret, err := creation.CreateIndex(ctx, table, t.Name(), idx.Name, columns, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
 		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
 		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsFullText:    false,
+		IsVector:      false,
 		IsUserDefined: false,
 		Comment:       "",
 	}, t.opts)
