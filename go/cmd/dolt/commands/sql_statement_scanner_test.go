@@ -188,6 +188,7 @@ insert into foo values (1,2,3)|`,
 			lineNums: []int{1, 2},
 		},
 		{
+			// https://github.com/dolthub/dolt/issues/8495
 			input: strings.Repeat(" ", 4096) + `insert into foo values (1,2,3)`,
 			statements: []string{
 				"insert into foo values (1,2,3)",
