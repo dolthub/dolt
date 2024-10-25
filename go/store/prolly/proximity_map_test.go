@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,7 +59,7 @@ func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, ve
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	distanceType := expression.DistanceL2Squared{}
+	distanceType := vector.DistanceL2Squared{}
 
 	builder, err := NewProximityMapFromTuples(ctx, ns, distanceType, kd, vd, logChunkSize)
 	require.NoError(t, err)
