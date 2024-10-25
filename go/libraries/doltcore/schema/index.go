@@ -47,6 +47,8 @@ type Index interface {
 	IsSpatial() bool
 	// IsFullText returns whether the given index has the FULLTEXT constraint.
 	IsFullText() bool
+	// IsVector returns whether the given index has the VECTOR constraint.
+	IsVector() bool
 	// IsUserDefined returns whether the given index was created by a user or automatically generated.
 	IsUserDefined() bool
 	// Name returns the name of the index.
@@ -62,22 +64,26 @@ type Index interface {
 	PrefixLengths() []uint16
 	// FullTextProperties returns all properties belonging to a Full-Text index.
 	FullTextProperties() FullTextProperties
+	// VectorProperties returns all properties belonging to a vector index.
+	VectorProperties() VectorProperties
 }
 
 var _ Index = (*indexImpl)(nil)
 
 type indexImpl struct {
-	name          string
-	tags          []uint64
-	allTags       []uint64
-	indexColl     *indexCollectionImpl
-	isUnique      bool
-	isSpatial     bool
-	isFullText    bool
-	isUserDefined bool
-	comment       string
-	prefixLengths []uint16
-	fullTextProps FullTextProperties
+	name             string
+	tags             []uint64
+	allTags          []uint64
+	indexColl        *indexCollectionImpl
+	isUnique         bool
+	isSpatial        bool
+	isFullText       bool
+	isVector         bool
+	isUserDefined    bool
+	comment          string
+	prefixLengths    []uint16
+	fullTextProps    FullTextProperties
+	vectorProperties VectorProperties
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, props IndexProperties) Index {
@@ -87,16 +93,18 @@ func NewIndex(name string, tags, allTags []uint64, indexColl IndexCollection, pr
 	}
 
 	return &indexImpl{
-		name:          name,
-		tags:          tags,
-		allTags:       allTags,
-		indexColl:     indexCollImpl,
-		isUnique:      props.IsUnique,
-		isSpatial:     props.IsSpatial,
-		isFullText:    props.IsFullText,
-		isUserDefined: props.IsUserDefined,
-		comment:       props.Comment,
-		fullTextProps: props.FullTextProperties,
+		name:             name,
+		tags:             tags,
+		allTags:          allTags,
+		indexColl:        indexCollImpl,
+		isUnique:         props.IsUnique,
+		isSpatial:        props.IsSpatial,
+		isFullText:       props.IsFullText,
+		isVector:         props.IsVector,
+		isUserDefined:    props.IsUserDefined,
+		comment:          props.Comment,
+		fullTextProps:    props.FullTextProperties,
+		vectorProperties: props.VectorProperties,
 	}
 }
 
@@ -209,6 +217,11 @@ func (ix *indexImpl) IsFullText() bool {
 	return ix.isFullText
 }
 
+// IsVector implements Index.
+func (ix *indexImpl) IsVector() bool {
+	return ix.isVector
+}
+
 // IsUserDefined implements Index.
 func (ix *indexImpl) IsUserDefined() bool {
 	return ix.isUserDefined
@@ -307,6 +320,11 @@ func (ix *indexImpl) PrefixLengths() []uint16 {
 // FullTextProperties implements Index.
 func (ix *indexImpl) FullTextProperties() FullTextProperties {
 	return ix.fullTextProps
+}
+
+// VectorProperties implements Index.
+func (ix *indexImpl) VectorProperties() VectorProperties {
+	return ix.vectorProperties
 }
 
 // copy returns an exact copy of the calling index.
