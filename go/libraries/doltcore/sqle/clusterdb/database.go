@@ -17,6 +17,7 @@ package clusterdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -191,4 +192,20 @@ func (n noopRepoStateWriter) TempTableFilesDir() (string, error) {
 
 func (n noopRepoStateWriter) UpdateBranch(name string, new env.BranchConfig) error {
 	return nil
+}
+
+func (db database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
+	panic(fmt.Sprintf("GetSchema is not implemented for database %T", db))
+}
+
+func (db database) CreateSchema(ctx *sql.Context, schemaName string) error {
+	panic(fmt.Sprintf("CreateSchema is not implemented for database %T", db))
+}
+
+func (db database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
+	panic(fmt.Sprintf("AllSchemas is not implemented for database %T", db))
+}
+
+func (db database) SchemaName() string {
+	return ""
 }
