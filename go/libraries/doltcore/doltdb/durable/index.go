@@ -243,6 +243,8 @@ func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
 	switch indexType := i.(type) {
 	case prollyIndex:
 		return indexType.index
+	case proximityIndex:
+		return indexType.index
 	}
 	return i.(prollyIndex).index
 }
