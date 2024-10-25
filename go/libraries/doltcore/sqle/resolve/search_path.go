@@ -78,3 +78,36 @@ func FirstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (s
 
 	return schemaName, nil
 }
+
+// SystemTable returns whether a table is a system table or not
+func SystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (bool, error) {
+	if doltdb.HasDoltPrefix(tableName.Name) || !UseSearchPath || tableName.Schema == "dolt" {
+		return true, nil
+	}
+
+	if tableName.Schema == "" {
+		schemasToSearch, err := SearchPath(ctx)
+		if err != nil {
+			return false, nil
+		}
+		for _, schemaName := range schemasToSearch {
+			if schemaName != "dolt" {
+				tablesInSchema, err := root.GetTableNames(ctx, schemaName)
+				if err != nil {
+					return false, err
+				}
+				for _, table := range tablesInSchema {
+					if table == tableName.Name {
+						return false, nil
+					}
+				}
+			}
+
+			if schemaName == "dolt" {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}

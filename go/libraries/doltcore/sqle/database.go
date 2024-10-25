@@ -314,28 +314,6 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-// isDoltSystemTable checks if the current table is a dolt system table. If
-// using the search path, also checks that dolt is the current schema or exists
-// on the search path.
-func (db Database) isDoltSystemTable(ctx *sql.Context, tableName string) bool {
-	if doltdb.HasDoltPrefix(tableName) || !resolve.UseSearchPath || db.schemaName == "dolt" {
-		return true
-	}
-
-	if db.schemaName == "" {
-		schemasToSearch, err := resolve.SearchPath(ctx)
-		if err != nil {
-			return false
-		}
-		for _, schemaName := range schemasToSearch {
-			if schemaName == "dolt" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
@@ -441,10 +419,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	var dt sql.Table
 	found := false
+	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
 	switch lwrName {
 	case doltdb.GetLogTableName(), doltdb.LogTableName:
-		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.isDoltSystemTable(ctx, lwrName) {
+		systemTable, err := resolve.SystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if systemTable {
 			if head == nil {
 				var err error
 				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -482,8 +464,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.GetBranchesTableName(), doltdb.BranchesTableName:
-		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.isDoltSystemTable(ctx, lwrName) {
+		systemTable, err := resolve.SystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if systemTable {
 			dt, found = dtables.NewBranchesTable(ctx, db), true
 		}
 	case doltdb.RemoteBranchesTableName:
@@ -495,8 +480,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
-		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.isDoltSystemTable(ctx, lwrName) {
+		systemTable, err := resolve.SystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if systemTable {
 			sess := dsess.DSessFromSess(ctx.Session)
 			adapter := dsess.NewSessionStateAdapter(
 				sess, db.RevisionQualifiedName(),
@@ -513,8 +501,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
 	case doltdb.GetTagsTableName(), doltdb.TagsTableName:
-		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.isDoltSystemTable(ctx, lwrName) {
+		systemTable, err := resolve.SystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if systemTable {
 			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 		}
 	case dtables.AccessTableName:
@@ -543,8 +534,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
 	case doltdb.GetDocTableName(), doltdb.DocTableName:
-		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.isDoltSystemTable(ctx, lwrName) {
+		systemTable, err := resolve.SystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if systemTable {
 			if resolve.UseSearchPath && lwrName == doltdb.DocTableName {
 				db.schemaName = "dolt"
 			}
