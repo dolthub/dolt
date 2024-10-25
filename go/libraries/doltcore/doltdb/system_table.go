@@ -180,10 +180,12 @@ const (
 
 // GetDocTableName returns the name of the dolt table containing documents such as the license and readme
 var GetDocTableName = func() string {
-	return "dolt_docs"
+	return DocTableName
 }
 
 const (
+	// DocTableName is the name of the dolt table containing documents such as the license and readme
+	DocTableName = "dolt_docs"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
 	// DocTextColumnName is the name of the column containing the document contents in the docs table
@@ -247,25 +249,28 @@ const (
 
 // GetBranchesTableName returns the branches system table name
 var GetBranchesTableName = func() string {
-	return "dolt_branches"
+	return BranchesTableName
 }
 
 // GetLogTableName returns the log system table name
 var GetLogTableName = func() string {
-	return "dolt_log"
+	return LogTableName
 }
 
 // GetStatusTableName returns the status system table name.
 var GetStatusTableName = func() string {
-	return "dolt_status"
+	return StatusTableName
 }
 
 // GetTagsTableName returns the tags table name
 var GetTagsTableName = func() string {
-	return "dolt_tags"
+	return TagsTableName
 }
 
 const (
+	// LogTableName is the log system table name
+	LogTableName = "dolt_log"
+
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
 
@@ -281,6 +286,9 @@ const (
 	// SchemaConflictsTableName is the schema conflicts system table name
 	SchemaConflictsTableName = "dolt_schema_conflicts"
 
+	// BranchesTableName is the branches system table name
+	BranchesTableName = "dolt_branches"
+
 	// RemoteBranchesTableName is the all-branches system table name
 	RemoteBranchesTableName = "dolt_remote_branches"
 
@@ -293,8 +301,14 @@ const (
 	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
 
+	// StatusTableName is the status system table name.
+	StatusTableName = "dolt_status"
+
 	// MergeStatusTableName is the merge status system table name.
 	MergeStatusTableName = "dolt_merge_status"
+
+	// TagsTableName is the tags table name
+	TagsTableName = "dolt_tags"
 
 	IgnoreTableName = "dolt_ignore"
 

@@ -314,10 +314,11 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-// checkDoltSchema checks if using the search path, and if so that dolt is the
-// current schema or exists on the search path.
-func (db Database) checkDoltSchema(ctx *sql.Context) bool {
-	if !resolve.UseSearchPath || db.schemaName == "dolt" {
+// isDoltSystemTable checks if the current table is a dolt system table. If
+// using the search path, also checks that dolt is the current schema or exists
+// on the search path.
+func (db Database) isDoltSystemTable(ctx *sql.Context, tableName string) bool {
+	if doltdb.HasDoltPrefix(tableName) || !resolve.UseSearchPath || db.schemaName == "dolt" {
 		return true
 	}
 
@@ -441,9 +442,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	var dt sql.Table
 	found := false
 	switch lwrName {
-	case doltdb.GetLogTableName():
+	case doltdb.GetLogTableName(), doltdb.LogTableName:
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.checkDoltSchema(ctx) {
+		if db.isDoltSystemTable(ctx, lwrName) {
 			if head == nil {
 				var err error
 				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -480,9 +481,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
-	case doltdb.GetBranchesTableName():
+	case doltdb.GetBranchesTableName(), doltdb.BranchesTableName:
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.checkDoltSchema(ctx) {
+		if db.isDoltSystemTable(ctx, lwrName) {
 			dt, found = dtables.NewBranchesTable(ctx, db), true
 		}
 	case doltdb.RemoteBranchesTableName:
@@ -493,9 +494,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewCommitsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
-	case doltdb.GetStatusTableName():
+	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.checkDoltSchema(ctx) {
+		if db.isDoltSystemTable(ctx, lwrName) {
 			sess := dsess.DSessFromSess(ctx.Session)
 			adapter := dsess.NewSessionStateAdapter(
 				sess, db.RevisionQualifiedName(),
@@ -511,9 +512,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
-	case doltdb.GetTagsTableName():
+	case doltdb.GetTagsTableName(), doltdb.TagsTableName:
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.checkDoltSchema(ctx) {
+		if db.isDoltSystemTable(ctx, lwrName) {
 			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 		}
 	case dtables.AccessTableName:
@@ -541,9 +542,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
-	case doltdb.GetDocTableName():
+	case doltdb.GetDocTableName(), doltdb.DocTableName:
 		// TODO: This should be moved once all the system tables are moved to the dolt schema
-		if db.checkDoltSchema(ctx) {
+		if db.isDoltSystemTable(ctx, lwrName) {
+			if resolve.UseSearchPath && lwrName == doltdb.DocTableName {
+				db.schemaName = "dolt"
+			}
 			backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
 			if err != nil {
 				return nil, false, err
