@@ -223,7 +223,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableIndexDefinition(index schema.Index) string {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.Name(),
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.IsVector(), index.Name(),
 		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 
