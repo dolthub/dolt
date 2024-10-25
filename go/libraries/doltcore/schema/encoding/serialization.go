@@ -17,9 +17,9 @@ package encoding
 import (
 	"context"
 	"fmt"
-
 	fb "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -415,6 +415,11 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 			ftInfo = serializeFullTextInfo(b, idx)
 		}
 
+		var vectorInfo fb.UOffsetT
+		if idx.IsVector() {
+			vectorInfo = serializeVectorInfo(b, idx)
+		}
+
 		serial.IndexStart(b)
 		serial.IndexAddName(b, no)
 		serial.IndexAddComment(b, co)
@@ -428,6 +433,10 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddFulltextKey(b, idx.IsFullText())
 		if idx.IsFullText() {
 			serial.IndexAddFulltextInfo(b, ftInfo)
+		}
+		if idx.IsVector() {
+			serial.IndexAddVectorKey(b, true)
+			serial.IndexAddVectorInfo(b, vectorInfo)
 		}
 		offs[i] = serial.IndexEnd(b)
 	}
@@ -454,14 +463,21 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 			return err
 		}
 
+		vi, err := deserializeVectorInfo(&idx)
+		if err != nil {
+			return err
+		}
+
 		name := string(idx.Name())
 		props := schema.IndexProperties{
 			IsUnique:           idx.UniqueKey(),
 			IsSpatial:          idx.SpatialKey(),
 			IsFullText:         idx.FulltextKey(),
+			IsVector:           idx.VectorKey(),
 			IsUserDefined:      !idx.SystemDefined(),
 			Comment:            string(idx.Comment()),
 			FullTextProperties: fti,
+			VectorProperties:   vi,
 		}
 
 		tags := make([]uint64, idx.IndexColumnsLength())
@@ -555,6 +571,19 @@ func serializeFullTextInfo(b *fb.Builder, idx schema.Index) fb.UOffsetT {
 	return serial.FulltextInfoEnd(b)
 }
 
+func serializeVectorInfo(b *fb.Builder, idx schema.Index) fb.UOffsetT {
+	props := idx.VectorProperties()
+
+	serial.VectorInfoStart(b)
+
+	switch props.DistanceType {
+	case vector.DistanceL2Squared{}:
+		serial.VectorInfoAddDistanceType(b, serial.DistanceTypeL2_Squared)
+	}
+
+	return serial.VectorInfoEnd(b)
+}
+
 func deserializeFullTextInfo(idx *serial.Index) (schema.FullTextProperties, error) {
 	fulltext := serial.FulltextInfo{}
 	has, err := idx.TryFulltextInfo(&fulltext)
@@ -584,6 +613,25 @@ func deserializeFullTextInfo(idx *serial.Index) (schema.FullTextProperties, erro
 		KeyName:          string(fulltext.KeyName()),
 		KeyPositions:     keyPositions,
 	}, nil
+}
+
+func deserializeVectorInfo(idx *serial.Index) (schema.VectorProperties, error) {
+	vectorInfo := serial.VectorInfo{}
+	has, err := idx.TryVectorInfo(&vectorInfo)
+	if err != nil {
+		return schema.VectorProperties{}, err
+	}
+	if has == nil {
+		return schema.VectorProperties{}, nil
+	}
+
+	switch vectorInfo.DistanceType() {
+	case serial.DistanceTypeL2_Squared:
+		return schema.VectorProperties{
+			DistanceType: vector.DistanceL2Squared{},
+		}, nil
+	}
+	return schema.VectorProperties{}, fmt.Errorf("unknown distance type in vector index info: %s", vectorInfo.DistanceType())
 }
 
 func keylessSerialSchema(s *serial.TableSchema) (bool, error) {
