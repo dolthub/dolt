@@ -56,6 +56,7 @@ func ParseCreateTableStatement(ctx *sql.Context, root doltdb.RootValue, engine *
 			IsUnique:   idx.IsUnique(),
 			IsSpatial:  idx.IsSpatial(),
 			IsFullText: idx.IsFullText(),
+			IsVector:   idx.IsVector(),
 			Comment:    idx.Comment,
 		}
 		name := getIndexName(idx)

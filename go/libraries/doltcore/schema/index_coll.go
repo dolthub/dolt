@@ -16,6 +16,7 @@ package schema
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"sort"
 	"strings"
 )
@@ -83,6 +84,8 @@ type IndexProperties struct {
 	IsUserDefined bool
 	Comment       string
 	FullTextProperties
+	IsVector bool
+	VectorProperties
 }
 
 type FullTextProperties struct {
@@ -94,6 +97,10 @@ type FullTextProperties struct {
 	KeyType          uint8
 	KeyName          string
 	KeyPositions     []uint16
+}
+
+type VectorProperties struct {
+	DistanceType vector.DistanceType
 }
 
 type indexCollectionImpl struct {
@@ -210,17 +217,19 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	}
 
 	index := &indexImpl{
-		indexColl:     ixc,
-		name:          indexName,
-		tags:          tags,
-		allTags:       combineAllTags(tags, ixc.pks),
-		isUnique:      props.IsUnique,
-		isSpatial:     props.IsSpatial,
-		isFullText:    props.IsFullText,
-		isUserDefined: props.IsUserDefined,
-		comment:       props.Comment,
-		prefixLengths: prefixLengths,
-		fullTextProps: props.FullTextProperties,
+		indexColl:        ixc,
+		name:             indexName,
+		tags:             tags,
+		allTags:          combineAllTags(tags, ixc.pks),
+		isUnique:         props.IsUnique,
+		isSpatial:        props.IsSpatial,
+		isFullText:       props.IsFullText,
+		isVector:         props.IsVector,
+		isUserDefined:    props.IsUserDefined,
+		comment:          props.Comment,
+		prefixLengths:    prefixLengths,
+		fullTextProps:    props.FullTextProperties,
+		vectorProperties: props.VectorProperties,
 	}
 	ixc.indexes[lowerName] = index
 	for _, tag := range tags {
@@ -243,6 +252,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		isUnique:      props.IsUnique,
 		isSpatial:     props.IsSpatial,
 		isFullText:    props.IsFullText,
+		isVector:      props.IsVector,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 		prefixLengths: prefixLengths,
@@ -410,6 +420,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				isUnique:      index.IsUnique(),
 				isSpatial:     index.IsSpatial(),
 				isFullText:    index.IsFullText(),
+				isVector:      index.IsVector(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
 				prefixLengths: index.PrefixLengths(),
