@@ -102,6 +102,10 @@ func (t *DoltTable) TableName() doltdb.TableName {
 	return doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()}
 }
 
+func (t *DoltTable) DatabaseSchema() sql.DatabaseSchema {
+	return t.db
+}
+
 func (t *DoltTable) SkipIndexCosting() bool {
 	return false
 }
@@ -291,6 +295,7 @@ type doltReadOnlyTableInterface interface {
 	sql.CheckTable
 	sql.PrimaryKeyTable
 	sql.CommentedTable
+	sql.DatabaseSchemaTable
 }
 
 var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
@@ -1258,10 +1263,12 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			toReturn[i] = sql.ForeignKeyConstraint{
 				Name:           fk.Name,
 				Database:       t.db.Name(),
-				Table:          fk.TableName.Name, // TODO: schema name
+				Table:          fk.TableName.Name,
+				SchemaName:     fk.TableName.Schema,
 				Columns:        fk.UnresolvedFKDetails.TableColumns,
 				ParentDatabase: t.db.Name(),
-				ParentTable:    fk.ReferencedTableName.Name, // TODO: schema name
+				ParentTable:    fk.ReferencedTableName.Name,
+				ParentSchema:   fk.ReferencedTableName.Schema,
 				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
 				OnUpdate:       toReferentialAction(fk.OnUpdate),
 				OnDelete:       toReferentialAction(fk.OnDelete),
@@ -2632,13 +2639,12 @@ func (t *WritableDoltTable) createForeignKey(
 	onUpdateRefAction, onDeleteRefAction doltdb.ForeignKeyReferentialAction) (doltdb.ForeignKey, error) {
 
 	if !sqlFk.IsResolved {
-		// TODO: schema should be part of the foreign key defn
 		return doltdb.ForeignKey{
 			Name:                   sqlFk.Name,
-			TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
+			TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: sqlFk.SchemaName},
 			TableIndex:             "",
 			TableColumns:           nil,
-			ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()},
+			ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema},
 			ReferencedTableIndex:   "",
 			ReferencedTableColumns: nil,
 			OnUpdate:               onUpdateRefAction,
@@ -2666,9 +2672,7 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		var ok bool
 		var err error
-		// TODO: the parent table can be in another schema
-
-		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.schemaName})
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema})
 		if err != nil {
 			return doltdb.ForeignKey{}, err
 		}
@@ -2708,13 +2712,12 @@ func (t *WritableDoltTable) createForeignKey(
 		refTableIndexName = refTableIndex.Name()
 	}
 
-	// TODO: foreign key defn should include schema names
 	return doltdb.ForeignKey{
 		Name:                   sqlFk.Name,
 		TableName:              doltdb.TableName{Name: sqlFk.Table, Schema: t.db.SchemaName()},
 		TableIndex:             tableIndexName,
 		TableColumns:           colTags,
-		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: t.db.SchemaName()},
+		ReferencedTableName:    doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema},
 		ReferencedTableIndex:   refTableIndexName,
 		ReferencedTableColumns: refColTags,
 		OnUpdate:               onUpdateRefAction,
@@ -2917,13 +2920,14 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 // toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
 // function should not be used.
 func toForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
-	// TODO: foreign key defn should include schema name
 	cst = sql.ForeignKeyConstraint{
 		Name:           fk.Name,
 		Database:       dbName,
+		SchemaName:     fk.TableName.Schema,
 		Table:          fk.TableName.Name,
 		Columns:        make([]string, len(fk.TableColumns)),
 		ParentDatabase: dbName,
+		ParentSchema:   fk.ReferencedTableName.Schema,
 		ParentTable:    fk.ReferencedTableName.Name,
 		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
 		OnUpdate:       toReferentialAction(fk.OnUpdate),

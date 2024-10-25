@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -136,4 +138,20 @@ func (db *UserSpaceDatabase) RevisionQualifiedName() string {
 
 func (db *UserSpaceDatabase) RequestedName() string {
 	return db.Name()
+}
+
+func (db *UserSpaceDatabase) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
+	panic(fmt.Sprintf("GetSchema is not implemented for database %T", db))
+}
+
+func (db *UserSpaceDatabase) CreateSchema(ctx *sql.Context, schemaName string) error {
+	panic(fmt.Sprintf("CreateSchema is not implemented for database %T", db))
+}
+
+func (db *UserSpaceDatabase) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
+	panic(fmt.Sprintf("AllSchemas is not implemented for database %T", db))
+}
+
+func (db *UserSpaceDatabase) SchemaName() string {
+	return ""
 }
