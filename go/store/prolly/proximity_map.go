@@ -35,6 +35,20 @@ type ProximityMap struct {
 	valDesc val.TupleDesc
 }
 
+func (m ProximityMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
+	return m.tuples.WalkNodes(ctx, cb)
+}
+
+func (m ProximityMap) Node() tree.Node {
+	return m.tuples.Root
+}
+
+func (m ProximityMap) HashOf() hash.Hash {
+	return m.tuples.HashOf()
+}
+
+var _ MapInterface = ProximityMap{}
+
 // Count returns the number of key-value pairs in the Map.
 func (m ProximityMap) Count() (int, error) {
 	return m.tuples.Count()
