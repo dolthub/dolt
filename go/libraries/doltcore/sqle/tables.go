@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"math"
 	"os"
@@ -2463,11 +2464,17 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
+	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial && idx.Constraint != sql.IndexConstraint_Vector {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 
-	return t.createIndex(ctx, idx, fulltext.KeyColumns{}, fulltext.IndexTableNames{})
+	var vectorProperties schema.VectorProperties
+	if idx.Constraint == sql.IndexConstraint_Vector {
+		vectorProperties = schema.VectorProperties{
+			DistanceType: vector.DistanceL2Squared{},
+		}
+	}
+	return t.createIndex(ctx, idx, fulltext.KeyColumns{}, fulltext.IndexTableNames{}, vectorProperties)
 }
 
 // DropIndex implements sql.IndexAlterableTable
