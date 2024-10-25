@@ -87,7 +87,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
 
 	case types.Format_DOLT:
-		b := shim.ValueFromMap(idx.(prollyIndex).index)
+		b := shim.ValueFromMap(MapFromIndex(idx))
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -235,6 +235,17 @@ type prollyIndex struct {
 
 // ProllyMapFromIndex unwraps the Index and returns the underlying prolly.Map.
 func ProllyMapFromIndex(i Index) prolly.Map {
+	return i.(prollyIndex).index
+}
+
+// MapFromIndex unwraps the Index and returns the underlying prolly.Map or prolly.ProximityMap.
+func MapFromIndex(i Index) prolly.MapInterface {
+	switch indexType := i.(type) {
+	case prollyIndex:
+		return indexType.index
+	case proximityIndex:
+		return indexType.index
+	}
 	return i.(prollyIndex).index
 }
 

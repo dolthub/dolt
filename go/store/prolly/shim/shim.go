@@ -26,7 +26,7 @@ func NodeFromValue(v types.Value) (tree.Node, error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
-func ValueFromMap(m prolly.Map) types.Value {
+func ValueFromMap[M prolly.MapInterface](m M) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 

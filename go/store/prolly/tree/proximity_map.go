@@ -18,14 +18,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"math"
 	"sort"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) error
@@ -35,7 +34,7 @@ type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) err
 type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	Root         Node
 	NodeStore    NodeStore
-	DistanceType expression.DistanceType
+	DistanceType vector.DistanceType
 	Convert      func([]byte) []float64
 	Order        O
 }
@@ -291,7 +290,7 @@ func serializeMemoryNode[K ~[]byte, O Ordering[K]](ctx context.Context, m memory
 	return serializeAndWriteNode(ctx, ns, s, level, subTrees, m.keys, values)
 }
 
-func (m *memoryNode) insert(ctx context.Context, ns NodeStore, distanceType expression.DistanceType, vectorHash hash.Hash, key Item, value Item, vector []float64, level int, isLeaf bool) error {
+func (m *memoryNode) insert(ctx context.Context, ns NodeStore, distanceType vector.DistanceType, vectorHash hash.Hash, key Item, value Item, vector []float64, level int, isLeaf bool) error {
 	if level == 0 {
 		if isLeaf {
 			if bytes.Equal(m.keys[0], key) {
@@ -374,7 +373,7 @@ func levelTraversal(ctx context.Context, nd Node, ns NodeStore, level int, cb fu
 //   - All other keys within a node are sorted.
 //   - Each non-root node contains only the keys (including transitively) that are closer to that node's defining key than
 //     any other key in that node's parent.
-func FixupProximityMap[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, distanceType expression.DistanceType, n Node, getHash func([]byte) hash.Hash, order O) (Node, error) {
+func FixupProximityMap[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, distanceType vector.DistanceType, n Node, getHash func([]byte) hash.Hash, order O) (Node, error) {
 	if n.Level() == 0 {
 		return n, nil
 	}

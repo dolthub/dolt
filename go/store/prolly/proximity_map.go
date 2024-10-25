@@ -16,16 +16,15 @@ package prolly
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"iter"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // ProximityMap wraps a tree.ProximityMap but operates on typed Tuples instead of raw bytestrings.
@@ -34,6 +33,20 @@ type ProximityMap struct {
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 }
+
+func (m ProximityMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
+	return m.tuples.WalkNodes(ctx, cb)
+}
+
+func (m ProximityMap) Node() tree.Node {
+	return m.tuples.Root
+}
+
+func (m ProximityMap) HashOf() hash.Hash {
+	return m.tuples.HashOf()
+}
+
+var _ MapInterface = ProximityMap{}
 
 // Count returns the number of key-value pairs in the Map.
 func (m ProximityMap) Count() (int, error) {
@@ -51,7 +64,7 @@ func (m ProximityMap) GetClosest(ctx context.Context, query interface{}, cb tree
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType expression.DistanceType) ProximityMap {
+func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType) ProximityMap {
 	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         node,
 		NodeStore:    ns,
@@ -84,7 +97,7 @@ var levelMapKeyDesc = val.NewTupleDescriptor(
 )
 
 // NewProximityMapFromTuples creates a new ProximityMap from a given list of key-value pairs.
-func NewProximityMapFromTuples(ctx context.Context, ns tree.NodeStore, distanceType expression.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, logChunkSize uint8) (proximityMapBuilder, error) {
+func NewProximityMapFromTuples(ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, logChunkSize uint8) (proximityMapBuilder, error) {
 
 	emptyLevelMap, err := NewMapFromTuples(ctx, ns, levelMapKeyDesc, valDesc)
 	if err != nil {
@@ -110,7 +123,7 @@ func NewProximityMapFromTuples(ctx context.Context, ns tree.NodeStore, distanceT
 type proximityMapBuilder struct {
 	ns                    tree.NodeStore
 	vectorIndexSerializer message.VectorIndexSerializer
-	distanceType          expression.DistanceType
+	distanceType          vector.DistanceType
 	keyDesc, valDesc      val.TupleDesc
 	logChunkSize          uint8
 
