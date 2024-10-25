@@ -332,6 +332,7 @@ func (sd encodedSchemaData) decodeSchema() (schema.Schema, error) {
 				IsUnique:      encodedIndex.Unique,
 				IsSpatial:     encodedIndex.Spatial,
 				IsFullText:    encodedIndex.FullText,
+				IsVector:      false, // noms encoding does not support vector indexes
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 				FullTextProperties: schema.FullTextProperties{
