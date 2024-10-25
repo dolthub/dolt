@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"strings"
 
@@ -263,6 +264,8 @@ func ProllyMapFromIndex(i Index) prolly.Map {
 func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
 	switch indexType := i.(type) {
 	case prollyIndex:
+		return indexType.index
+	case proximityIndex:
 		return indexType.index
 	}
 	return i.(prollyIndex).index
