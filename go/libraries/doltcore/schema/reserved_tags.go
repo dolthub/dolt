@@ -198,4 +198,16 @@ const (
 
 	// WorkflowStepsUpdatedAtTag is the name of the tag on the updated at column on the workflow steps table
 	WorkflowStepsUpdatedAtTag
+
+	// WorkflowSavedQueryStepsIdTag is the name of the tag on the id column on the workflow saved query steps table
+	WorkflowSavedQueryStepsIdTag
+
+	// WorkflowSavedQueryStepsWorkflowStepIdFkTag is the name of the tag on the workflow step id foreign key column of the workflow saved query steps table
+	WorkflowSavedQueryStepsWorkflowStepIdFkTag
+
+	// WorkflowSavedQueryStepsSavedQueryNameTag is the name of the tag on the saved query name column on the workflow saved query steps table
+	WorkflowSavedQueryStepsSavedQueryNameTag
+
+	// WorkflowSavedQueryStepsExpectedResultsTypeTag is the name of the tag on the expected results type column on the workflow saved queyr steps table
+	WorkflowSavedQueryStepsExpectedResultsTypeTag
 )

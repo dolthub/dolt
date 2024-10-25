@@ -433,6 +433,21 @@ const (
 
 	// WorkflowStepsUpdatedAtColName is the name of the updated at column on the workflow steps table
 	WorkflowStepsUpdatedAtColName = "updated_at"
+
+	// WorkflowSavedQueryStepsTableName is the name of the workflow saved query steps table name
+	WorkflowSavedQueryStepsTableName = "dolt_ci_workflow_saved_query_steps"
+
+	// WorkflowSavedQueryStepsIdPkColName is the name of the id column on the workflows saved query steps table
+	WorkflowSavedQueryStepsIdPkColName = "id"
+
+	// WorkflowSavedQueryStepsWorkflowStepIdFkColName is the name of the workflow step id foreign key column on the workflow saved query steps table
+	WorkflowSavedQueryStepsWorkflowStepIdFkColName = "workflow_step_id_fk"
+
+	// WorkflowSavedQueryStepsSavedQueryNameColName is the name of the saved query name column on the workflow saved query steps table
+	WorkflowSavedQueryStepsSavedQueryNameColName = "saved_query_name"
+
+	// WorkflowSavedQueryStepsExpectedResultsTypeColName is the name of the expected results type column on the workflow saved query steps table
+	WorkflowSavedQueryStepsExpectedResultsTypeColName = "expected_results_type"
 )
 
 const (

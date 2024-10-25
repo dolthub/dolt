@@ -36,6 +36,7 @@ var ExpectedDoltCITables = []doltdb.TableName{
 	doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
 	doltdb.TableName{Name: doltdb.WorkflowJobsTableName},
 	doltdb.TableName{Name: doltdb.WorkflowStepsTableName},
+	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName},
 }
 
 func HasDoltCITables(ctx *sql.Context) (bool, error) {
@@ -146,6 +147,8 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, committerName, commi
 }
 
 func createDoltCITables(ctx *sql.Context) error {
+	// creation order matters here
+	// for foreign key creation
 	err := createWorkflowsTable(ctx)
 	if err != nil {
 		return err
@@ -170,5 +173,9 @@ func createDoltCITables(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	return createWorkflowStepsTable(ctx)
+	err = createWorkflowStepsTable(ctx)
+	if err != nil {
+		return err
+	}
+	return createWorkflowSavedQueryStepsTable(ctx)
 }
