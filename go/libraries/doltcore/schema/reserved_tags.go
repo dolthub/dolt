@@ -210,4 +210,19 @@ const (
 
 	// WorkflowSavedQueryStepsExpectedResultsTypeTag is the name of the tag on the expected results type column on the workflow saved queyr steps table
 	WorkflowSavedQueryStepsExpectedResultsTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkTag is the name of the tag on the workflow saved query step id foreign key column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeTag is the name of the tag on the expected column count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeTag is the name of the tag on the expected row count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountTag is the name of the tag on the expected column count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountTag is the name of the tag on the expected row count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountTag
 )

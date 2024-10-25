@@ -37,6 +37,7 @@ var ExpectedDoltCITables = []doltdb.TableName{
 	doltdb.TableName{Name: doltdb.WorkflowJobsTableName},
 	doltdb.TableName{Name: doltdb.WorkflowStepsTableName},
 	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName},
+	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
 }
 
 func HasDoltCITables(ctx *sql.Context) (bool, error) {
@@ -177,5 +178,9 @@ func createDoltCITables(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	return createWorkflowSavedQueryStepsTable(ctx)
+	err = createWorkflowSavedQueryStepsTable(ctx)
+	if err != nil {
+		return err
+	}
+	return createWorkflowSavedQueryStepExpectedRowColumnResultsTable(ctx)
 }

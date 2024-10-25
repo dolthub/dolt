@@ -448,6 +448,24 @@ const (
 
 	// WorkflowSavedQueryStepsExpectedResultsTypeColName is the name of the expected results type column on the workflow saved query steps table
 	WorkflowSavedQueryStepsExpectedResultsTypeColName = "expected_results_type"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsTableName is the name of the saved query step expected row column results table name
+	WorkflowSavedQueryStepExpectedRowColumnResultsTableName = "dolt_ci_workflow_saved_query_step_expected_row_column_results"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName is the name of the workflow saved query step id foreign key column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName = "workflow_saved_query_step_id_fk"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName is the name of the expected column count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName = "expected_column_count_comparison_type"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName is the name of the expected row count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName = "expected_column_row_comparison_type"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName is the name of the expected column count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName = "expected_column_count"
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName is the name of the expected row count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName = "expected_column_row"
 )
 
 const (
