@@ -83,7 +83,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 				continue
 			}
 
-			if err := proximityMapBuilder.Insert(ctx, idxKey, nil); err != nil {
+			if err := proximityMapBuilder.Insert(ctx, idxKey, val.EmptyTuple); err != nil {
 				return nil, err
 			}
 		}
