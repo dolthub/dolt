@@ -81,7 +81,8 @@ func (streamer *binlogStreamer) startStream(ctx *sql.Context, conn *mysql.Conn, 
 
 		case <-streamer.ticker.C:
 			logrus.Debug("sending binlog heartbeat")
-			if err := sendHeartbeat(conn, binlogFormat, *binlogEventMeta); err != nil {
+			currentLogFilename := filepath.Base(streamer.currentLogFile.Name())
+			if err := sendHeartbeat(conn, binlogFormat, *binlogEventMeta, currentLogFilename); err != nil {
 				return err
 			}
 			if err := conn.FlushBuffer(); err != nil {
@@ -254,10 +255,14 @@ func (m *binlogStreamerManager) removeStreamer(streamer *binlogStreamer) {
 	}
 }
 
-func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+// sendHeartbeat sends a heartbeat event over |conn| using the specified |binlogFormat| and |binlogEventMeta| as well
+// as |currentLogFilename| to create the event payload.
+func sendHeartbeat(conn *mysql.Conn, binlogFormat *mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata, currentLogFilename string) error {
 	binlogEventMeta.Timestamp = uint32(0) // Timestamp is zero for a heartbeat event
 	logrus.WithField("log_position", binlogEventMeta.NextLogPosition).Tracef("sending heartbeat")
 
-	binlogEvent := mysql.NewHeartbeatEvent(*binlogFormat, binlogEventMeta)
+	// MySQL 8.4 requires that we pass the binlog filename in the heartbeat; previous versions accepted
+	// heartbeat events without a filename, but those cause crashes on MySQL 8.4.
+	binlogEvent := mysql.NewHeartbeatEventWithLogFile(*binlogFormat, binlogEventMeta, currentLogFilename)
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
