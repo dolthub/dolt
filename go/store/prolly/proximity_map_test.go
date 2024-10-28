@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -152,6 +153,40 @@ func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 	err := m.GetClosest(ctx, newJsonValue(t, "[0.0, 0.0]"), cb, 1)
 	require.NoError(t, err)
 	require.Equal(t, matches, 1)
+}
+
+func TestProximityMapGetManyClosest(t *testing.T) {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+	vectors := []interface{}{
+		"[0.0, 0.0]",
+		"[0.0, 10.0]",
+		"[10.0, 10.0]",
+		"[10.0, 0.0]",
+	}
+	queryVector := "[3.0, 1.0]"
+	sortOrder := []int{0, 3, 1, 2} // indexes in sorted order: [0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]
+	distances := []float64{10.0, 50.0, 90.0, 130.0}
+	m, keys, values := createProximityMap(t, ctx, ns, vectors, []int64{1, 2, 3, 4}, 2)
+
+	for limit := 0; limit <= 4; limit++ {
+		t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
+			matches := 0
+
+			cb := func(foundKey val.Tuple, foundValue val.Tuple, distance float64) error {
+				require.Equal(t, val.Tuple(keys[sortOrder[matches]]), foundKey)
+				require.Equal(t, val.Tuple(values[sortOrder[matches]]), foundValue)
+				require.InDelta(t, distance, distances[matches], 0.1)
+				matches++
+				return nil
+			}
+
+			err := m.GetClosest(ctx, newJsonValue(t, queryVector), cb, limit)
+			require.NoError(t, err)
+			require.Equal(t, matches, limit)
+		})
+	}
+
 }
 
 func TestMultilevelProximityMap(t *testing.T) {
