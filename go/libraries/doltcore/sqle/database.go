@@ -419,17 +419,24 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	var dt sql.Table
 	found := false
+	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
 	switch lwrName {
-	case doltdb.LogTableName:
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-			if err != nil {
-				return nil, false, err
-			}
+	case doltdb.GetLogTableName(), doltdb.LogTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
 		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
+			}
 
-		dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
+			dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
+		}
 	case doltdb.DiffTableName:
 		if head == nil {
 			var err error
@@ -456,8 +463,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.SchemaConflictsTableName:
 		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
-	case doltdb.BranchesTableName:
-		dt, found = dtables.NewBranchesTable(ctx, db), true
+	case doltdb.GetBranchesTableName(), doltdb.BranchesTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewBranchesTable(ctx, db), true
+		}
 	case doltdb.RemoteBranchesTableName:
 		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
 	case doltdb.RemotesTableName:
@@ -466,23 +479,35 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		dt, found = dtables.NewCommitsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
-	case doltdb.StatusTableName:
-		sess := dsess.DSessFromSess(ctx.Session)
-		adapter := dsess.NewSessionStateAdapter(
-			sess, db.RevisionQualifiedName(),
-			concurrentmap.New[string, env.Remote](),
-			concurrentmap.New[string, env.BranchConfig](),
-			concurrentmap.New[string, env.Remote]())
-		ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			sess := dsess.DSessFromSess(ctx.Session)
+			adapter := dsess.NewSessionStateAdapter(
+				sess, db.RevisionQualifiedName(),
+				concurrentmap.New[string, env.Remote](),
+				concurrentmap.New[string, env.BranchConfig](),
+				concurrentmap.New[string, env.Remote]())
+			ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
 
-		dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
+			dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
+		}
 	case doltdb.MergeStatusTableName:
 		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
-	case doltdb.TagsTableName:
-		dt, found = dtables.NewTagsTable(ctx, db.ddb), true
+	case doltdb.GetTagsTableName(), doltdb.TagsTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
+		}
 	case dtables.AccessTableName:
 		basCtx := branch_control.GetBranchAwareSession(ctx)
 		if basCtx != nil {
@@ -508,16 +533,25 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
-	case doltdb.DocTableName:
-		backingTable, _, err := db.getTable(ctx, root, doltdb.DocTableName)
+	case doltdb.GetDocTableName(), doltdb.DocTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
-		if backingTable == nil {
-			dt, found = dtables.NewEmptyDocsTable(ctx), true
-		} else {
-			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if resolve.UseSearchPath && lwrName == doltdb.DocTableName {
+				db.schemaName = "dolt"
+			}
+			backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
+			if err != nil {
+				return nil, false, err
+			}
+			if backingTable == nil {
+				dt, found = dtables.NewEmptyDocsTable(ctx), true
+			} else {
+				versionableTable := backingTable.(dtables.VersionableTable)
+				dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+			}
 		}
 	case doltdb.StatisticsTableName:
 		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
@@ -691,11 +725,12 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, nil
 	}
 
-	tblNames, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	tblNames, err := db.getAllTableNames(ctx, root, false)
 	if err != nil {
 		return nil, err
 	}
-	return filterDoltInternalTables(tblNames), nil
+
+	return filterDoltInternalTables(tblNames, db.schemaName), nil
 }
 
 // getTable returns the user table with the given baseName from the root given
@@ -799,9 +834,7 @@ func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (s
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
 func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
-	// dolt_docs table is branch-specific, not schema-specific for doltgres
-	isDoltDocs := tableName == doltdb.DocTableName
-	if resolve.UseSearchPath && db.schemaName == "" && !isDoltDocs {
+	if resolve.UseSearchPath && db.schemaName == "" {
 		return resolve.TableWithSearchPath(ctx, root, tableName)
 	} else {
 		return db.tableInsensitive(ctx, root, tableName)
@@ -838,7 +871,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root)
+	tableNames, err := db.getAllTableNames(ctx, root, true)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -891,20 +924,23 @@ func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb
 // name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
 // tables in user space.
 func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
-	tblNames, err := db.GetAllTableNames(ctx)
+	showSystemTablesVar, err := ctx.GetSessionVariable(ctx, dsess.ShowSystemTables)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: should just elide system table gathering if we don't need them
-	showSystemTables, err := ctx.GetSessionVariable(ctx, dsess.ShowSystemTables)
+
+	showSystemTables := showSystemTablesVar.(int8) == 1
+	tblNames, err := db.GetAllTableNames(ctx, showSystemTables)
 	if err != nil {
 		return nil, err
 	}
-	if showSystemTables.(int8) == 1 {
+
+	if showSystemTables {
 		return tblNames, nil
-	} else {
-		return filterDoltInternalTables(tblNames), nil
 	}
+
+	// TODO: Figure out way to remove filterDoltInternalTables
+	return filterDoltInternalTables(tblNames, db.schemaName), nil
 }
 
 func (db Database) SchemaName() string {
@@ -913,22 +949,17 @@ func (db Database) SchemaName() string {
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
 // (e.g. dolt_docs, dolt_query_catalog).
-func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
+func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]string, error) {
 	root, err := db.GetRoot(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return db.getAllTableNames(ctx, root)
+	return db.getAllTableNames(ctx, root, showSystemTables)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]string, error) {
-	systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, showSystemTables bool) ([]string, error) {
+	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
 	// schemas in the search_path
@@ -947,14 +978,21 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue) ([]
 		}
 	}
 
-	result = append(result, systemTables...)
+	if showSystemTables {
+		systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, systemTables...)
+	}
+
 	return result, nil
 }
 
-func filterDoltInternalTables(tblNames []string) []string {
+func filterDoltInternalTables(tblNames []string, schemaName string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) {
+		if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
 			result = append(result, tbl)
 		}
 	}
@@ -1174,7 +1212,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 
 // CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
 func (db Database) CreateFulltextTableNames(ctx *sql.Context, parentTableName string, parentIndexName string) (fulltext.IndexTableNames, error) {
-	allTableNames, err := db.GetAllTableNames(ctx)
+	allTableNames, err := db.GetAllTableNames(ctx, true)
 	if err != nil {
 		return fulltext.IndexTableNames{}, err
 	}

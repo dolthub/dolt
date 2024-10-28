@@ -68,7 +68,7 @@ func IsFullTextTable(name string) bool {
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+	return HasDoltPrefix(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
@@ -120,7 +120,7 @@ func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, er
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
 func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	s := set.NewStrSet(generatedSystemTables)
+	s := set.NewStrSet(getGeneratedSystemTables())
 
 	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
@@ -137,33 +137,29 @@ func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, er
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
-var writeableSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
-	RebaseTableName,
+var getWriteableSystemTables = func() []string {
+	return []string{
+		GetDocTableName(),
+		DoltQueryCatalogTableName,
+		SchemasTableName,
+		ProceduresTableName,
+		IgnoreTableName,
+		RebaseTableName,
+	}
 }
 
-var persistedSystemTables = []string{
-	DocTableName,
-	DoltQueryCatalogTableName,
-	SchemasTableName,
-	ProceduresTableName,
-	IgnoreTableName,
-}
-
-var generatedSystemTables = []string{
-	BranchesTableName,
-	RemoteBranchesTableName,
-	LogTableName,
-	TableOfTablesInConflictName,
-	TableOfTablesWithViolationsName,
-	CommitsTableName,
-	CommitAncestorsTableName,
-	StatusTableName,
-	RemotesTableName,
+var getGeneratedSystemTables = func() []string {
+	return []string{
+		GetBranchesTableName(),
+		RemoteBranchesTableName,
+		GetLogTableName(),
+		TableOfTablesInConflictName,
+		TableOfTablesWithViolationsName,
+		CommitsTableName,
+		CommitAncestorsTableName,
+		GetStatusTableName(),
+		RemotesTableName,
+	}
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -181,6 +177,11 @@ const (
 	// ReadmeDoc is the key for accessing the readme within the docs table
 	ReadmeDoc = "README.md"
 )
+
+// GetDocTableName returns the name of the dolt table containing documents such as the license and readme
+var GetDocTableName = func() string {
+	return DocTableName
+}
 
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
@@ -245,6 +246,26 @@ const (
 	// DoltWorkspaceTablePrefix is the prefix assigned to all the generated workspace tables
 	DoltWorkspaceTablePrefix = "dolt_workspace_"
 )
+
+// GetBranchesTableName returns the branches system table name
+var GetBranchesTableName = func() string {
+	return BranchesTableName
+}
+
+// GetLogTableName returns the log system table name
+var GetLogTableName = func() string {
+	return LogTableName
+}
+
+// GetStatusTableName returns the status system table name.
+var GetStatusTableName = func() string {
+	return StatusTableName
+}
+
+// GetTagsTableName returns the tags table name
+var GetTagsTableName = func() string {
+	return TagsTableName
+}
 
 const (
 	// LogTableName is the log system table name

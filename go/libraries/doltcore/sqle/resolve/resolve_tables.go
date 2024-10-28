@@ -78,7 +78,6 @@ func TableWithSearchPath(
 			continue
 		}
 
-		// TODO: what schema name do we use for system tables?
 		candidate := doltdb.TableName{Name: correctedTableName, Schema: schemaName}
 		tbl, ok, err := root.GetTable(ctx, candidate)
 		if err != nil {
