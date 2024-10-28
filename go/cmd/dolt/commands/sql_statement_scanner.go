@@ -96,16 +96,20 @@ func (s *streamScanner) Scan() bool {
 	}
 
 	// discard leading whitespace
-	for ; unicode.IsSpace(rune(s.buf[s.i])); s.i++ {
-		if s.buf[s.i] == '\n' {
-			s.lineNum++
-		}
+	for {
 		if s.i >= s.fill {
 			if err := s.read(); err != nil {
 				s.err = err
 				return false
 			}
 		}
+		if !unicode.IsSpace(rune(s.buf[s.i])) {
+			break
+		}
+		if s.buf[s.i] == '\n' {
+			s.lineNum++
+		}
+		s.i++
 	}
 	s.truncate()
 
