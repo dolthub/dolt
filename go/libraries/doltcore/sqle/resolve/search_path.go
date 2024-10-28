@@ -84,6 +84,9 @@ func IsSystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.Roo
 	if tableName.Schema == "dolt" {
 		return true, nil
 	}
+	if tableName.Schema != "" {
+		return false, nil
+	}
 
 	schemasToSearch, err := SearchPath(ctx)
 	if err != nil {

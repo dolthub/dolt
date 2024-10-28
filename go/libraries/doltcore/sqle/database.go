@@ -430,7 +430,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if isDoltSystemTable(lwrName) && systemTable {
+		if isDoltSystemTable(lwrName) || systemTable {
 			if head == nil {
 				var err error
 				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -472,7 +472,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if isDoltSystemTable(lwrName) && systemTable {
+		if isDoltSystemTable(lwrName) || systemTable {
 			dt, found = dtables.NewBranchesTable(ctx, db), true
 		}
 	case doltdb.RemoteBranchesTableName:
@@ -488,7 +488,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if isDoltSystemTable(lwrName) && systemTable {
+		if isDoltSystemTable(lwrName) || systemTable {
 			sess := dsess.DSessFromSess(ctx.Session)
 			adapter := dsess.NewSessionStateAdapter(
 				sess, db.RevisionQualifiedName(),
@@ -509,7 +509,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if isDoltSystemTable(lwrName) && systemTable {
+		if isDoltSystemTable(lwrName) || systemTable {
 			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
 		}
 	case dtables.AccessTableName:
@@ -542,7 +542,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if isDoltSystemTable(lwrName) && systemTable {
+		if isDoltSystemTable(lwrName) || systemTable {
 			if resolve.UseSearchPath && lwrName == doltdb.DocTableName {
 				db.schemaName = "dolt"
 			}
