@@ -195,6 +195,15 @@ insert into foo values (1,2,3)|`,
 			},
 			lineNums: []int{1, 2},
 		},
+		{
+			input: "DELIMITER" + strings.Repeat(" ", 4096) + `|
+insert into foo values (1,2,3)|`,
+			statements: []string{
+				"",
+				"insert into foo values (1,2,3)",
+			},
+			lineNums: []int{1, 2},
+		},
 	}
 
 	for _, tt := range testcases {

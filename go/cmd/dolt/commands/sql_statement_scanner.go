@@ -96,20 +96,8 @@ func (s *streamScanner) Scan() bool {
 	}
 
 	// discard leading whitespace
-	for {
-		if s.i >= s.fill {
-			if err := s.read(); err != nil {
-				s.err = err
-				return false
-			}
-		}
-		if !unicode.IsSpace(rune(s.buf[s.i])) {
-			break
-		}
-		if s.buf[s.i] == '\n' {
-			s.lineNum++
-		}
-		s.i++
+	if !s.skipWhitespace() {
+		return false
 	}
 	s.truncate()
 
@@ -141,6 +129,28 @@ func (s *streamScanner) Scan() bool {
 			return false
 		}
 	}
+}
+
+func (s *streamScanner) skipWhitespace() bool {
+	for {
+		if s.i >= s.fill {
+			if err := s.read(); err != nil {
+				s.err = err
+				return false
+			}
+		}
+		if s.isEOF {
+			return true
+		}
+		if !unicode.IsSpace(rune(s.buf[s.i])) {
+			break
+		}
+		if s.buf[s.i] == '\n' {
+			s.lineNum++
+		}
+		s.i++
+	}
+	return true
 }
 
 func (s *streamScanner) truncate() {
@@ -213,13 +223,8 @@ func (s *streamScanner) isDelimiterExpr() (error, bool) {
 	if s.fill-s.i >= delimPrefixLen && bytes.EqualFold(s.buf[s.i:s.i+delimPrefixLen], delimPrefix) {
 		delimTokenIdx := s.i
 		s.i += delimPrefixLen
-		for ; !s.isEOF && unicode.IsSpace(rune(s.buf[s.i])); s.i++ {
-			if s.i >= s.fill {
-				if err := s.read(); err != nil {
-					s.err = err
-					return err, false
-				}
-			}
+		if !s.skipWhitespace() {
+			return nil, false
 		}
 		if s.isEOF {
 			// invalid delimiter
