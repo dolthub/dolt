@@ -33,6 +33,7 @@ var doltReplicationPrimarySystemVars = map[string]string{
 	"log_bin":                  "1",
 	"enforce_gtid_consistency": "ON",
 	"gtid_mode":                "ON",
+	"server_id":                "42",
 }
 
 // TestBinlogPrimary_BinlogNotEnabled tests that when binary logging is NOT enabled, primary commands such as
@@ -1023,9 +1024,6 @@ func setupForDoltToMySqlReplication() {
 	var tempDatabase = primaryDatabase
 	primaryDatabase = replicaDatabase
 	replicaDatabase = tempDatabase
-
-	// On the Primary, make sure we have a unique, non-zero SERVER_ID set
-	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.

@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // getServerId returns the @@server_id global system variable value. If the value of @@server_id is 0 or is not a
@@ -29,7 +30,14 @@ func getServerId() (uint32, error) {
 		return 0, fmt.Errorf("global variable 'server_id' not found")
 	}
 
-	if i, ok := value.(uint32); ok {
+	// Attempt to convert the server_id value into a UINT32, in case it has been loaded as a string
+	// through global JSON configuration.
+	convertedValue, _, err := types.Uint32.Convert(value)
+	if err != nil {
+		return 0, err
+	}
+
+	if i, ok := convertedValue.(uint32); ok {
 		if i == 0 {
 			return 0, fmt.Errorf("@@server_id is zero – must be set to a non-zero value")
 		}
