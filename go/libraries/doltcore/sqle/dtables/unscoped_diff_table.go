@@ -47,6 +47,7 @@ var filterColumnNameSet = set.NewStrSet([]string{commitHashCol})
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
 	dbName           string
+	tableName        string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
@@ -58,8 +59,8 @@ var _ sql.StatisticsTable = (*UnscopedDiffTable)(nil)
 var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)
 
 // NewUnscopedDiffTable creates an UnscopedDiffTable
-func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
+func NewUnscopedDiffTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &UnscopedDiffTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head}
 }
 
 func (dt *UnscopedDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -75,29 +76,27 @@ func (dt *UnscopedDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return unscopedDiffDefaultRowCount, false, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// DiffTableName
+// Name is a sql.Table interface function which returns the name of the table
 func (dt *UnscopedDiffTable) Name() string {
-	return doltdb.DiffTableName
+	return dt.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// DiffTableName
+// String is a sql.Table interface function which returns the name of the table
 func (dt *UnscopedDiffTable) String() string {
-	return doltdb.DiffTableName
+	return dt.tableName
 }
 
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "data_change", Type: types.Boolean, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "schema_change", Type: types.Boolean, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 

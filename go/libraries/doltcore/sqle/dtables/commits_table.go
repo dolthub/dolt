@@ -33,8 +33,9 @@ const commitsDefaultRowCount = 10
 // CommitsTable is a sql.Table that implements a system table which
 // shows the combined commit log for all branches in the repo.
 type CommitsTable struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	dbName    string
+	tableName string
+	ddb       *doltdb.DoltDB
 }
 
 var _ sql.Table = (*CommitsTable)(nil)
@@ -42,87 +43,87 @@ var _ sql.IndexAddressable = (*CommitsTable)(nil)
 var _ sql.StatisticsTable = (*CommitsTable)(nil)
 
 // NewCommitsTable creates a CommitsTable
-func NewCommitsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
-	return &CommitsTable{dbName: dbName, ddb: ddb}
+func NewCommitsTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB) sql.Table {
+	return &CommitsTable{dbName: dbName, tableName: tableName, ddb: ddb}
 }
 
-func (dt *CommitsTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, _, err := dt.RowCount(ctx)
+func (ct *CommitsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ct.Schema())
+	numRows, _, err := ct.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *CommitsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (ct *CommitsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return commitsDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table.
-func (dt *CommitsTable) Name() string {
-	return doltdb.CommitsTableName
+func (ct *CommitsTable) Name() string {
+	return ct.tableName
 }
 
 // String is a sql.Table interface function which returns the name of the table.
-func (dt *CommitsTable) String() string {
-	return doltdb.CommitsTableName
+func (ct *CommitsTable) String() string {
+	return ct.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the commits system table.
-func (dt *CommitsTable) Schema() sql.Schema {
+func (ct *CommitsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "commit_hash", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
+		{Name: "committer", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "message", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 	}
 }
 
 // Collation implements the sql.Table interface.
-func (dt *CommitsTable) Collation() sql.CollationID {
+func (ct *CommitsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
-func (dt *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (ct *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
-func (dt *CommitsTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
+func (ct *CommitsTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
 	switch p := p.(type) {
 	case *doltdb.CommitPart:
 		return sql.RowsToRowIter(formatCommitTableRow(p.Hash(), p.Meta())), nil
 	default:
-		return NewCommitsRowItr(ctx, dt.ddb)
+		return NewCommitsRowItr(ctx, ct.ddb)
 	}
 }
 
 // GetIndexes implements sql.IndexAddressable
-func (dt *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, true)
+func (ct *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltCommitIndexes(ct.dbName, ct.Name(), ct.ddb, true)
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	nt := *dt
+func (ct *CommitsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	nt := *ct
 	return &nt
 }
 
-func (dt *CommitsTable) PreciseMatch() bool {
+func (ct *CommitsTable) PreciseMatch() bool {
 	return true
 }
 
-func (dt *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+func (ct *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hashStrs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}
-		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hashStrs, nil, false)
+		hashes, commits, metas := index.HashesToCommits(ctx, ct.ddb, hashStrs, nil, false)
 		if len(hashes) == 0 {
 			return sql.PartitionsToPartitionIter(), nil
 		}
@@ -130,7 +131,7 @@ func (dt *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 		return doltdb.NewCommitSlicePartitionIter(hashes, commits, metas), nil
 	}
 
-	return dt.Partitions(ctx)
+	return ct.Partitions(ctx)
 }
 
 // CommitsRowItr is a sql.RowItr which iterates over each commit as if it's a row in the table.

@@ -151,14 +151,14 @@ var getWriteableSystemTables = func() []string {
 var getGeneratedSystemTables = func() []string {
 	return []string{
 		GetBranchesTableName(),
-		RemoteBranchesTableName,
+		GetRemoteBranchesTableName(),
 		GetLogTableName(),
 		TableOfTablesInConflictName,
 		TableOfTablesWithViolationsName,
-		CommitsTableName,
-		CommitAncestorsTableName,
+		GetCommitsTableName(),
+		GetCommitAncestorsTableName(),
 		GetStatusTableName(),
-		RemotesTableName,
+		GetRemotesTableName(),
 	}
 }
 
@@ -252,9 +252,39 @@ var GetBranchesTableName = func() string {
 	return BranchesTableName
 }
 
+// GetColumnDiffTableName returns the column diff system table name
+var GetColumnDiffTableName = func() string {
+	return ColumnDiffTableName
+}
+
+// GetCommitAncestorsTableName returns the commit_ancestors system table name
+var GetCommitAncestorsTableName = func() string {
+	return CommitAncestorsTableName
+}
+
+// GetCommitsTableName returns the commits system table name
+var GetCommitsTableName = func() string {
+	return CommitsTableName
+}
+
+// GetDiffTableName returns the diff system table name
+var GetDiffTableName = func() string {
+	return DiffTableName
+}
+
 // GetLogTableName returns the log system table name
 var GetLogTableName = func() string {
 	return LogTableName
+}
+
+// GetRemoteBranchesTableName returns the all-branches system table name
+var GetRemoteBranchesTableName = func() string {
+	return RemoteBranchesTableName
+}
+
+// GetRemotesTableName returns the remotes system table name
+var GetRemotesTableName = func() string {
+	return RemotesTableName
 }
 
 // GetStatusTableName returns the status system table name.

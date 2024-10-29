@@ -32,6 +32,7 @@ const statusDefaultRowCount = 10
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
+	tableName     string
 	ddb           *doltdb.DoltDB
 	workingSet    *doltdb.WorkingSet
 	rootsProvider env.RootsProvider
@@ -39,57 +40,58 @@ type StatusTable struct {
 
 var _ sql.StatisticsTable = (*StatusTable)(nil)
 
-func (s StatusTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(s.Schema())
-	numRows, _, err := s.RowCount(ctx)
+func (st StatusTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(st.Schema())
+	numRows, _, err := st.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (s StatusTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (st StatusTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return statusDefaultRowCount, false, nil
 }
 
-func (s StatusTable) Name() string {
-	return doltdb.GetStatusTableName()
+func (st StatusTable) Name() string {
+	return st.tableName
 }
 
-func (s StatusTable) String() string {
-	return doltdb.GetStatusTableName()
+func (st StatusTable) String() string {
+	return st.tableName
 }
 
-func (s StatusTable) Schema() sql.Schema {
+func (st StatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: doltdb.GetStatusTableName(), PrimaryKey: true, Nullable: false},
+		{Name: "table_name", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: st.tableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
 	}
 }
 
-func (s StatusTable) Collation() sql.CollationID {
+func (st StatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (st StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
-func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return newStatusItr(context, &s)
+func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return newStatusItr(context, &st)
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider) sql.Table {
+func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider) sql.Table {
 	return &StatusTable{
+		tableName:     tableName,
 		ddb:           ddb,
 		workingSet:    ws,
 		rootsProvider: rp,
 	}
 }
 
-// StatusItr is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
+// StatusItr is a sql.RowIter implementation which iterates over each commit as if it'st a row in the table.
 type StatusItr struct {
 	rows []statusTableRow
 }
@@ -102,7 +104,7 @@ type statusTableRow struct {
 
 func containsTableName(name string, names []doltdb.TableName) bool {
 	for _, s := range names {
-		if s.Name == name {
+		if s.String() == name {
 			return true
 		}
 	}

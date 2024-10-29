@@ -39,62 +39,61 @@ var _ sql.StatisticsTable = (*RemotesTable)(nil)
 
 // RemotesTable is a sql.Table implementation that implements a system table which shows the dolt remotes
 type RemotesTable struct {
-	ddb *doltdb.DoltDB
+	ddb       *doltdb.DoltDB
+	tableName string
 }
 
 // NewRemotesTable creates a RemotesTable
-func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &RemotesTable{ddb}
+func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB, tableName string) sql.Table {
+	return &RemotesTable{ddb, tableName}
 }
 
-func (bt *RemotesTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(bt.Schema())
-	numRows, _, err := bt.RowCount(ctx)
+func (rt *RemotesTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(rt.Schema())
+	numRows, _, err := rt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (bt *RemotesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (rt *RemotesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return remotesDefaultRowCount, false, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// RemotesTableName
-func (bt *RemotesTable) Name() string {
-	return doltdb.RemotesTableName
+// Name is a sql.Table interface function which returns the name of the table
+func (rt *RemotesTable) Name() string {
+	return rt.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// RemotesTableName
-func (bt *RemotesTable) String() string {
-	return doltdb.RemotesTableName
+// String is a sql.Table interface function which returns the name of the table
+func (rt *RemotesTable) String() string {
+	return rt.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
-func (bt *RemotesTable) Schema() sql.Schema {
+func (rt *RemotesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "name", Type: types.Text, Source: doltdb.RemotesTableName, PrimaryKey: true, Nullable: false},
-		{Name: "url", Type: types.Text, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: false},
-		{Name: "fetch_specs", Type: types.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "params", Type: types.JSON, Source: doltdb.RemotesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "name", Type: types.Text, Source: rt.tableName, PrimaryKey: true, Nullable: false},
+		{Name: "url", Type: types.Text, Source: rt.tableName, PrimaryKey: false, Nullable: false},
+		{Name: "fetch_specs", Type: types.JSON, Source: rt.tableName, PrimaryKey: false, Nullable: true},
+		{Name: "params", Type: types.JSON, Source: rt.tableName, PrimaryKey: false, Nullable: true},
 	}
 }
 
 // Collation implements the sql.Table interface.
-func (bt *RemotesTable) Collation() sql.CollationID {
+func (rt *RemotesTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
-func (bt *RemotesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (rt *RemotesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (bt *RemotesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewRemoteItr(ctx, bt.ddb)
+func (rt *RemotesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return NewRemoteItr(ctx, rt.ddb)
 }
 
 // RemoteItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -163,26 +162,26 @@ func (itr *RemoteItr) Close(*sql.Context) error {
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
 // for each row, followed by a call to Close() when all rows have been processed.
-func (bt *RemotesTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return remoteWriter{bt}
+func (rt *RemotesTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return remoteWriter{rt}
 }
 
 // Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
 // updated, followed by a call to Close() when all rows have been processed.
-func (bt *RemotesTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return remoteWriter{bt}
+func (rt *RemotesTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return remoteWriter{rt}
 }
 
 // Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
 // inserted, and will end with a call to Close() to finalize the insert operation.
-func (bt *RemotesTable) Inserter(*sql.Context) sql.RowInserter {
-	return remoteWriter{bt}
+func (rt *RemotesTable) Inserter(*sql.Context) sql.RowInserter {
+	return remoteWriter{rt}
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
-func (bt *RemotesTable) Deleter(*sql.Context) sql.RowDeleter {
-	return remoteWriter{bt}
+func (rt *RemotesTable) Deleter(*sql.Context) sql.RowDeleter {
+	return remoteWriter{rt}
 }
 
 var _ sql.RowReplacer = remoteWriter{nil}
@@ -191,7 +190,7 @@ var _ sql.RowInserter = remoteWriter{nil}
 var _ sql.RowDeleter = remoteWriter{nil}
 
 type remoteWriter struct {
-	bt *RemotesTable
+	rt *RemotesTable
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process

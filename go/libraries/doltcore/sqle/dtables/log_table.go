@@ -34,6 +34,7 @@ const logsDefaultRowCount = 100
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	dbName            string
+	tableName         string
 	ddb               *doltdb.DoltDB
 	head              *doltdb.Commit
 	headHash          hash.Hash
@@ -45,8 +46,8 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &LogTable{dbName: dbName, ddb: ddb, head: head}
+func NewLogTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -73,26 +74,24 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	return uint64(cnt + 1), true, err
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// GetLogTableName()
+// Name is a sql.Table interface function which returns the name of the table
 func (dt *LogTable) Name() string {
-	return doltdb.GetLogTableName()
+	return dt.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// GetLogTableName()
+// String is a sql.Table interface function which returns the name of the table
 func (dt *LogTable) String() string {
-	return doltdb.GetLogTableName()
+	return dt.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.GetLogTableName(), PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: doltdb.GetLogTableName(), PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: doltdb.GetLogTableName(), PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: doltdb.GetLogTableName(), PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: doltdb.GetLogTableName(), PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 

@@ -39,18 +39,19 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
 // BranchesTable is the system table that accesses branches
 type BranchesTable struct {
-	db     dsess.SqlDatabase
-	remote bool
+	db        dsess.SqlDatabase
+	remote    bool
+	tableName string
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase) sql.Table {
-	return &BranchesTable{db: db}
+func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase, tableName string) sql.Table {
+	return &BranchesTable{db: db, tableName: tableName}
 }
 
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
-func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase) sql.Table {
-	return &BranchesTable{ddb, true}
+func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase, tableName string) sql.Table {
+	return &BranchesTable{ddb, true, tableName}
 }
 
 func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -67,41 +68,28 @@ func (bt *BranchesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 // Name is a sql.Table interface function which returns the name of the table
-// which is defined by the function GetBranchesTableName()
 func (bt *BranchesTable) Name() string {
-	if bt.remote {
-		return doltdb.RemoteBranchesTableName
-	}
-	return doltdb.GetBranchesTableName()
+	return bt.tableName
 }
 
 // String is a sql.Table interface function which returns the name of the table
-// which is defined by the function GetBranchesTableName()
 func (bt *BranchesTable) String() string {
-	if bt.remote {
-		return doltdb.RemoteBranchesTableName
-	}
-	return doltdb.GetBranchesTableName()
+	return bt.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
 func (bt *BranchesTable) Schema() sql.Schema {
-	tableName := doltdb.GetBranchesTableName()
-	if bt.remote {
-		tableName = doltdb.RemoteBranchesTableName
-	}
-
 	columns := []*sql.Column{
-		{Name: "name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bt.db.Name()},
-		{Name: "hash", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},
-		{Name: "latest_committer", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
-		{Name: "latest_committer_email", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
-		{Name: "latest_commit_date", Type: types.Datetime, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
-		{Name: "latest_commit_message", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "name", Type: types.Text, Source: bt.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bt.db.Name()},
+		{Name: "hash", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},
+		{Name: "latest_committer", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_committer_email", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_commit_date", Type: types.Datetime, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_commit_message", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
 	}
 	if !bt.remote {
-		columns = append(columns, &sql.Column{Name: "remote", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true})
-		columns = append(columns, &sql.Column{Name: "branch", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true})
+		columns = append(columns, &sql.Column{Name: "remote", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true})
+		columns = append(columns, &sql.Column{Name: "branch", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: true})
 	}
 	return columns
 }

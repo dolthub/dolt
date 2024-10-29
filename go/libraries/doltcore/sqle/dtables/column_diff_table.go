@@ -41,6 +41,7 @@ const columnDiffDefaultRowCount = 100
 // changed in each commit, across all branches.
 type ColumnDiffTable struct {
 	dbName           string
+	tableName        string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
@@ -53,14 +54,14 @@ var _ sql.StatisticsTable = (*ColumnDiffTable)(nil)
 // var _ sql.IndexAddressable = (*ColumnDiffTable)(nil)
 
 // NewColumnDiffTable creates an ColumnDiffTable
-func NewColumnDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &ColumnDiffTable{dbName: dbName, ddb: ddb, head: head}
+func NewColumnDiffTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &ColumnDiffTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// ColumnDiffTableName
+// GetColumnDiffTableName()
 func (dt *ColumnDiffTable) Name() string {
-	return doltdb.ColumnDiffTableName
+	return dt.tableName
 }
 
 func (dt *ColumnDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -77,22 +78,22 @@ func (dt *ColumnDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// ColumnDiffTableName
+// GetColumnDiffTableName()
 func (dt *ColumnDiffTable) String() string {
-	return doltdb.ColumnDiffTableName
+	return dt.tableName
 }
 
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *ColumnDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "table_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "column_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "diff_type", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "column_name", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "diff_type", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -637,7 +638,7 @@ func calculateColSchemaDiff(toCols *schema.ColCollection, fromCols *schema.ColCo
 	}
 
 	if fromCols != nil {
-		for tag, _ := range fromColTags {
+		for tag := range fromColTags {
 			// all remaining tags are columns not in toColumnTags, i.e. dropped columns
 			droppedCols = append(droppedCols, fromCols.TagToCol[tag].Name)
 			allCols = append(allCols, fromCols.TagToCol[tag].Name)
