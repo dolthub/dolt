@@ -663,17 +663,23 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 	case doltdb.StatisticsTableName:
 		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
-	case doltdb.ProceduresTableName:
-		found = true
-		backingTable, _, err := db.getTable(ctx, root, doltdb.ProceduresTableName)
+	case doltdb.ProceduresTableName, doltdb.GetProceduresTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
-		if backingTable == nil {
-			dt = NewEmptyProceduresTable()
-		} else {
-			writeTable := backingTable.(*WritableDoltTable)
-			dt = NewProceduresTable(writeTable)
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			found = true
+			backingTable, _, err := db.getTable(ctx, root, doltdb.ProceduresTableName)
+			if err != nil {
+				return nil, false, err
+			}
+			if backingTable == nil {
+				dt = NewEmptyProceduresTable()
+			} else {
+				writeTable := backingTable.(*WritableDoltTable)
+				dt = NewProceduresTable(writeTable)
+			}
 		}
 	case doltdb.SchemasTableName:
 		found = true

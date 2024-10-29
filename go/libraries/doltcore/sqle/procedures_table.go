@@ -31,29 +31,16 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	// ProceduresTableName is the name of the dolt stored procedures table.
-	ProceduresTableName = "dolt_procedures"
-	// ProceduresTableNameCol is the name of the stored procedure. Using CREATE PROCEDURE, will always be lowercase.
-	ProceduresTableNameCol = "name"
-	// ProceduresTableCreateStmtCol is the CREATE PROCEDURE statement for this stored procedure.
-	ProceduresTableCreateStmtCol = "create_stmt"
-	// ProceduresTableCreatedAtCol is the time that the stored procedure was created at, in UTC.
-	ProceduresTableCreatedAtCol = "created_at"
-	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
-	ProceduresTableModifiedAtCol = "modified_at"
-)
-
 type ProceduresTable struct {
 	backingTable *WritableDoltTable
 }
 
 func (pt *ProceduresTable) Name() string {
-	return ProceduresTableName
+	return doltdb.ProceduresTableName
 }
 
 func (pt *ProceduresTable) String() string {
-	return ProceduresTableName
+	return doltdb.ProceduresTableName
 }
 
 func (pt *ProceduresTable) Schema() sql.Schema {
@@ -176,7 +163,7 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 			return nil, fmt.Errorf("expected a ProceduresTable, but got %T", tbl)
 		}
 		if wrapper.backingTable == nil {
-			return nil, sql.ErrTableNotFound.New(ProceduresTableName)
+			return nil, sql.ErrTableNotFound.New(doltdb.ProceduresTableName)
 		}
 		return wrapper.backingTable, nil
 	} else {
