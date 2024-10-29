@@ -120,7 +120,7 @@ teardown() {
 
     start_sql_server
     run dolt sql -q "insert into xy values (0,0), (1,1)"
-    sleep 3
+    sleep 5
     stop_sql_server
 
     dolt sql -r csv -q "select count(*) from dolt_statistics"
