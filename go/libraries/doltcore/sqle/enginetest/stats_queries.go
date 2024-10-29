@@ -536,6 +536,71 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/8504
+		Name: "alter index column type",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"CREATE table xy (x bigint primary key, y varchar(16))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: "alter table xy modify column x varchar(16);",
+			},
+			{
+				Query: "insert into xy values ('3', '3')",
+			},
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.2)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "drop primary key",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"CREATE table xy (x bigint primary key, y varchar(16))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query: "alter table xy drop primary key",
+			},
+			{
+				Query: "insert into xy values ('3', '3')",
+			},
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.2)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var StatBranchTests = []queries.ScriptTest{
