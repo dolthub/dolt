@@ -266,6 +266,11 @@ const (
 	QueryCatalogDescriptionCol = "description"
 )
 
+// GetSchemasTableName returns the name of the dolt schema fragment table
+var GetSchemasTableName = func() string {
+	return SchemasTableName
+}
+
 const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"

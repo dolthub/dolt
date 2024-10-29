@@ -219,11 +219,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	schemaName := doltdb.DefaultSchemaName
 	if resolve.UseSearchPath {
 		if db.schemaName == "" {
-			schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
-			if err != nil {
-				return nil, err
-			}
-			db.schemaName = schemaName
+			db.schemaName = "dolt"
 		} else {
 			schemaName = db.schemaName
 		}

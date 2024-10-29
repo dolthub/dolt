@@ -681,13 +681,24 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				dt = NewProceduresTable(writeTable)
 			}
 		}
-	case doltdb.SchemasTableName:
-		found = true
-		backingTable, _, err := db.getTable(ctx, root, doltdb.SchemasTableName)
+	case doltdb.SchemasTableName, doltdb.GetSchemasTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
-		dt = NewSchemaTable(backingTable)
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			found = true
+			backingTable, _, err := db.getTable(ctx, root, doltdb.SchemasTableName)
+			if err != nil {
+				return nil, false, err
+			}
+			if backingTable == nil {
+				dt = NewEmptySchemaTable()
+			} else {
+				writeTable := backingTable.(*WritableDoltTable)
+				dt = NewSchemaTable(writeTable)
+			}
+		}
 	}
 
 	if found {
