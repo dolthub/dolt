@@ -123,7 +123,7 @@ teardown() {
     sleep 2
     stop_sql_server
 
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "2" ]
 }
