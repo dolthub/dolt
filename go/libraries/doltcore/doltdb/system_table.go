@@ -74,7 +74,7 @@ func IsFullTextTable(name string) bool {
 
 // IsDoltCITable returns whether the table name given is a dolt-ci table
 func IsDoltCITable(name string) bool {
-	return HasDoltCIPrefix(name) && set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
+	return HasDoltCIPrefix(name) && set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
