@@ -163,7 +163,9 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			return err
 		}
 
-		if statDb.GetSchemaHash(branch, table) != schHash {
+		if oldSchHash := statDb.GetSchemaHash(branch, table); oldSchHash.IsEmpty() {
+			statDb.SetSchemaHash(branch, table, schHash)
+		} else if oldSchHash != schHash {
 			ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
 			statDb.SetSchemaHash(branch, table, schHash)
 
