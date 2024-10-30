@@ -281,6 +281,8 @@ func IndexFromMapInterface(m prolly.MapInterface) Index {
 	switch m := m.(type) {
 	case prolly.Map:
 		return IndexFromProllyMap(m)
+	case prolly.ProximityMap:
+		return IndexFromProximityMap(m)
 	default:
 		panic("unknown map type")
 	}
