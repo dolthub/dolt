@@ -571,7 +571,7 @@ func runMain() int {
 	defer emitUsageEvents(metricsEmitter, args)
 
 	if needsWriteAccess(subcommandName) {
-		err = reconfigIfTempFileMoveFails(dEnv)
+		err = reconfigIfTempFileMoveFails(dataDirFS)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
