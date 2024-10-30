@@ -17,63 +17,57 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-// returns false if it fails to verify that it can move files from the default temp directory to the local directory.
-func canMoveTempFile() bool {
-	const testfile = "./testfile"
-
-	f, err := os.CreateTemp("", "")
-
+// reconfigIfTempFileMoveFails checks to see if the file system used for the data directory supports moved from TMPDIR.
+// If this is not possible, we can't perform automic moves of storage files, so we force the temp dir to be the data dir
+// to assure they are on the same file system.
+func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
+	absP, err := dataDir.Abs("")
 	if err != nil {
-		return false
+		return err
 	}
-
-	name := f.Name()
-	err = f.Close()
-
+	doltTmpDir := filepath.Join(absP, ".dolt", "tmp")
+	stat, err := os.Stat(doltTmpDir)
 	if err != nil {
-		return false
-	}
-
-	err = file.Rename(name, testfile)
-
-	if err != nil {
-		_ = file.Remove(name)
-		return false
-	}
-
-	_ = file.Remove(testfile)
-	return true
-}
-
-// If we cannot verify that we can move files for any reason, use a ./.dolt/tmp as the temp dir.
-func reconfigIfTempFileMoveFails(dEnv *env.DoltEnv) error {
-	if !canMoveTempFile() {
-		tmpDir := "./.dolt/tmp"
-
-		if !dEnv.HasDoltDir() {
-			tmpDir = "./.tmp"
-		}
-
-		stat, err := os.Stat(tmpDir)
-
+		err := os.MkdirAll(doltTmpDir, os.ModePerm)
 		if err != nil {
-			err := os.MkdirAll(tmpDir, os.ModePerm)
-
-			if err != nil {
-				return fmt.Errorf("failed to create temp dir '%s': %s", tmpDir, err.Error())
-			}
-		} else if !stat.IsDir() {
-			return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", tmpDir)
+			return fmt.Errorf("failed to create temp dir '%s': %s", doltTmpDir, err.Error())
 		}
-
-		tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(tmpDir)
+	} else if !stat.IsDir() {
+		// Should the file exist?? If it does is it a problem? Is it a directory??
+		return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", doltTmpDir)
 	}
+
+	tmpF, err := os.CreateTemp("", "")
+	if err != nil {
+		return err
+	}
+
+	name := tmpF.Name()
+	err = tmpF.Close()
+	if err != nil {
+		return err
+	}
+
+	err = file.Rename(name, absP)
+	if err == nil {
+		// tmp file system is the same as the data dir, so no need to change it.
+		_ = file.Remove(name)
+
+		// What about the tmp dir? Remove it???? only if we created it?
+
+		return nil
+	}
+	_ = file.Remove(absP)
+
+	// Rename failed. So we force the tmp dir to be the data dir.
+	tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(doltTmpDir)
 
 	return nil
 }
