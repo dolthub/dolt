@@ -194,10 +194,14 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
 
 			// clustered index
-			node, err := tree.NodeFromBytes(msg.PrimaryIndexBytes())
+			node, fileId, err := tree.NodeFromBytes(msg.PrimaryIndexBytes())
 			if err != nil {
 				return err
 			}
+			if fileId != serial.ProllyTreeNodeFileID {
+				return fmt.Errorf("unexpected file ID for primary index, expected %s, found %s", serial.ProllyTreeNodeFileID, fileId)
+			}
+
 			c, err := node.TreeCount()
 			if err != nil {
 				return err
@@ -208,9 +212,12 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			fmt.Fprintf(w, "\t}\n")
 
 			// secondary indexes
-			node, err = tree.NodeFromBytes(msg.SecondaryIndexesBytes())
+			node, fileId, err = tree.NodeFromBytes(msg.SecondaryIndexesBytes())
 			if err != nil {
 				return err
+			}
+			if fileId != serial.AddressMapFileID {
+				return fmt.Errorf("unexpected file ID for secondary index map, expected %s, found %s", serial.AddressMapFileID, fileId)
 			}
 			c, err = node.TreeCount()
 			if err != nil {
@@ -232,7 +239,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 				return err
 			}
 			ambytes := msg.AddressMapBytes()
-			node, err := tree.NodeFromBytes(ambytes)
+			node, _, err := tree.NodeFromBytes(ambytes)
 			if err != nil {
 				return err
 			}
@@ -240,7 +247,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 		case serial.ProllyTreeNodeFileID:
 			fallthrough
 		case serial.AddressMapFileID:
-			node, err := shim.NodeFromValue(value)
+			node, _, err := shim.NodeFromValue(value)
 			if err != nil {
 				return err
 			}

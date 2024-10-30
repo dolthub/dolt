@@ -15,6 +15,7 @@
 package datas
 
 import (
+	"fmt"
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -41,9 +42,12 @@ func parse_storeroot(bs []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
 		return prolly.AddressMap{}, err
 	}
 	mapbytes := sr.AddressMapBytes()
-	node, err := tree.NodeFromBytes(mapbytes)
+	node, fileId, err := tree.NodeFromBytes(mapbytes)
 	if err != nil {
 		return prolly.AddressMap{}, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return prolly.AddressMap{}, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
 	}
 	return prolly.NewAddressMap(node, ns)
 }

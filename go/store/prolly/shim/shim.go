@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NodeFromValue(v types.Value) (tree.Node, error) {
+func NodeFromValue(v types.Value) (node tree.Node, fileId string, err error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
@@ -35,7 +35,7 @@ func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+	root, _, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -48,7 +48,7 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 }
 
 func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+	root, _, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}

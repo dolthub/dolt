@@ -170,7 +170,7 @@ func newLeafNode(keys, values []Item) Node {
 
 	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(kk, vv, nil, 0)
-	n, err := NodeFromBytes(msg)
+	n, _, err := NodeFromBytes(msg)
 	if err != nil {
 		panic(err)
 	}

@@ -229,7 +229,7 @@ func (lw *blobLevelWriter) Write(ctx context.Context, r io.Reader) (hash.Hash, u
 // the level corresponds to our root level.
 func (b *BlobBuilder) write(ctx context.Context, keys, vals [][]byte, subtrees []uint64, level int) (hash.Hash, error) {
 	msg := b.S.Serialize(keys, vals, subtrees, level)
-	node, err := NodeFromBytes(msg)
+	node, _, err := NodeFromBytes(msg)
 	if err != nil {
 		return hash.Hash{}, err
 	}

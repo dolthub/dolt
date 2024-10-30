@@ -93,7 +93,7 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	}
 	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
 
-	n, err = NodeFromBytes(c.Data())
+	n, _, err = NodeFromBytes(c.Data())
 	if err != nil {
 		return Node{}, err
 	}
@@ -119,7 +119,7 @@ func (ns nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node,
 	var nerr error
 	mu := new(sync.Mutex)
 	err := ns.store.GetMany(ctx, gets, func(ctx context.Context, chunk *chunks.Chunk) {
-		n, err := NodeFromBytes(chunk.Data())
+		n, _, err := NodeFromBytes(chunk.Data())
 		if err != nil {
 			nerr = err
 		}
