@@ -118,13 +118,14 @@ func NewNomsStats(sourceDb, statsDb dsess.SqlDatabase) *NomsStatsDatabase {
 type dbStats map[sql.StatQualifier]*statspro.DoltStats
 
 type NomsStatsDatabase struct {
-	mu               *sync.Mutex
-	destDb           dsess.SqlDatabase
-	sourceDb         dsess.SqlDatabase
-	stats            []dbStats
-	branches         []string
-	latestTableRoots []map[string]hash.Hash
-	dirty            []*prolly.MutableMap
+	mu           *sync.Mutex
+	destDb       dsess.SqlDatabase
+	sourceDb     dsess.SqlDatabase
+	stats        []dbStats
+	branches     []string
+	tableHashes  []map[string]hash.Hash
+	schemaHashes []map[string]hash.Hash
+	dirty        []*prolly.MutableMap
 }
 
 var _ statspro.Database = (*NomsStatsDatabase)(nil)
@@ -158,7 +159,8 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	n.branches = append(n.branches, branch)
 	n.stats = append(n.stats, doltStats)
 	n.dirty = append(n.dirty, nil)
-	n.latestTableRoots = append(n.latestTableRoots, make(map[string]hash.Hash))
+	n.tableHashes = append(n.tableHashes, make(map[string]hash.Hash))
+	n.schemaHashes = append(n.schemaHashes, make(map[string]hash.Hash))
 	return nil
 }
 
@@ -223,7 +225,8 @@ func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql
 func (n *NomsStatsDatabase) trackBranch(ctx context.Context, branch string) error {
 	n.branches = append(n.branches, branch)
 	n.stats = append(n.stats, make(dbStats))
-	n.latestTableRoots = append(n.latestTableRoots, make(map[string]hash.Hash))
+	n.tableHashes = append(n.tableHashes, make(map[string]hash.Hash))
+	n.schemaHashes = append(n.schemaHashes, make(map[string]hash.Hash))
 
 	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 	newMap, err := prolly.NewMapFromTuples(ctx, n.destDb.DbData().Ddb.NodeStore(), kd, vd)
@@ -268,7 +271,7 @@ func (n *NomsStatsDatabase) DeleteBranchStats(ctx *sql.Context, branch string, f
 			n.branches = append(n.branches[:i], n.branches[i+1:]...)
 			n.dirty = append(n.dirty[:i], n.dirty[i+1:]...)
 			n.stats = append(n.stats[:i], n.stats[i+1:]...)
-			n.latestTableRoots = append(n.latestTableRoots[:i], n.latestTableRoots[i+1:]...)
+			n.tableHashes = append(n.tableHashes[:i], n.tableHashes[i+1:]...)
 		}
 	}
 	if flush {
@@ -339,23 +342,45 @@ func (n *NomsStatsDatabase) Flush(ctx context.Context, branch string) error {
 	return nil
 }
 
-func (n *NomsStatsDatabase) GetLatestHash(branch, tableName string) hash.Hash {
+func (n *NomsStatsDatabase) GetTableHash(branch, tableName string) hash.Hash {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
-			return n.latestTableRoots[i][tableName]
+			return n.tableHashes[i][tableName]
 		}
 	}
 	return hash.Hash{}
 }
 
-func (n *NomsStatsDatabase) SetLatestHash(branch, tableName string, h hash.Hash) {
+func (n *NomsStatsDatabase) SetTableHash(branch, tableName string, h hash.Hash) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
-			n.latestTableRoots[i][tableName] = h
+			n.tableHashes[i][tableName] = h
+			break
+		}
+	}
+}
+
+func (n *NomsStatsDatabase) GetSchemaHash(branch, tableName string) hash.Hash {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for i, b := range n.branches {
+		if strings.EqualFold(branch, b) {
+			return n.schemaHashes[i][tableName]
+		}
+	}
+	return hash.Hash{}
+}
+
+func (n *NomsStatsDatabase) SetSchemaHash(branch, tableName string, h hash.Hash) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for i, b := range n.branches {
+		if strings.EqualFold(branch, b) {
+			n.schemaHashes[i][tableName] = h
 			break
 		}
 	}

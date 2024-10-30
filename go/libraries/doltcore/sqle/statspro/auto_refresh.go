@@ -149,13 +149,33 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			return err
 		}
 
-		if statDb.GetLatestHash(branch, table) == tableHash {
+		if statDb.GetTableHash(branch, table) == tableHash {
 			// no data changes since last check
 			tableExistsAndSkipped[table] = true
 			ctx.GetLogger().Debugf("statistics refresh: table hash unchanged since last check: %s", tableHash)
 			continue
 		} else {
 			ctx.GetLogger().Debugf("statistics refresh: new table hash: %s", tableHash)
+		}
+
+		schHash, err := dTab.GetSchemaHash(ctx)
+		if err != nil {
+			return err
+		}
+
+		if oldSchHash := statDb.GetSchemaHash(branch, table); oldSchHash.IsEmpty() {
+			statDb.SetSchemaHash(branch, table, schHash)
+		} else if oldSchHash != schHash {
+			ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
+			statDb.SetSchemaHash(branch, table, schHash)
+
+			stats, err := p.GetTableDoltStats(ctx, branch, dbName, table)
+			if err != nil {
+				return err
+			}
+			for _, stat := range stats {
+				statDb.DeleteStats(ctx, branch, stat.Qualifier())
+			}
 		}
 
 		iat, ok := sqlTable.(sql.IndexAddressableTable)
@@ -205,7 +225,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 				// mark index for updating
 				idxMetas = append(idxMetas, updateMeta)
 				// update latest hash if we haven't already
-				statDb.SetLatestHash(branch, table, tableHash)
+				statDb.SetTableHash(branch, table, tableHash)
 			}
 		}
 

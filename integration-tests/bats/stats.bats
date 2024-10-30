@@ -119,7 +119,7 @@ teardown() {
     [ "${lines[1]}" = "0" ]
 
     start_sql_server
-    dolt sql -q "insert into xy values (0,0), (1,1)"
+    run dolt sql -q "insert into xy values (0,0), (1,1)"
     sleep 1
     stop_sql_server
 
