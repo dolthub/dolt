@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"iter"
@@ -53,14 +54,77 @@ func (m ProximityMap) Count() (int, error) {
 	return m.tuples.Count()
 }
 
+func (m ProximityMap) Descriptors() (val.TupleDesc, val.TupleDesc) {
+	return m.keyDesc, m.valDesc
+}
+
+func (m ProximityMap) NodeStore() tree.NodeStore {
+	return m.tuples.NodeStore
+}
+
+func (m ProximityMap) ValDesc() val.TupleDesc {
+	return m.valDesc
+}
+
+func (m ProximityMap) KeyDesc() val.TupleDesc {
+	return m.keyDesc
+}
+
+func (m ProximityMap) Pool() pool.BuffPool {
+	return m.tuples.NodeStore.Pool()
+}
+
+func (m ProximityMap) IterAll(ctx context.Context) (MapIter, error) {
+	return m.tuples.IterAll(ctx)
+}
+
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
-func (m ProximityMap) Get(ctx context.Context, query interface{}, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+func (m ProximityMap) Get(ctx context.Context, query val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
 	return m.tuples.GetExact(ctx, query, cb)
 }
 
-func (m ProximityMap) GetClosest(ctx context.Context, query interface{}, cb tree.KeyValueDistanceFn[val.Tuple, val.Tuple], limit int) (err error) {
-	return m.tuples.GetClosest(ctx, query, cb, limit)
+// Has returns true is |key| is present in the Map.
+func (m ProximityMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
+	return m.tuples.Has(ctx, key)
+}
+
+func (m ProximityMap) GetClosest(ctx context.Context, query interface{}, limit int) (mapIter MapIter, err error) {
+	kvPairs := make([]kvPair, 0, limit)
+	cb := func(key val.Tuple, value val.Tuple, distance float64) error {
+		kvPairs = append(kvPairs, kvPair{key, value})
+		return nil
+	}
+	err = m.tuples.GetClosest(ctx, query, cb, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &proximityMapIter{
+		m.keyDesc, m.valDesc, kvPairs, 0,
+	}, nil
+}
+
+type kvPair struct {
+	key, value val.Tuple
+}
+
+type proximityMapIter struct {
+	keyDesc, valueDesc val.TupleDesc
+	kvPairs            []kvPair
+	i                  int
+}
+
+var _ MapIter = (*proximityMapIter)(nil)
+
+func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, err error) {
+	if p.i >= len(p.kvPairs) {
+		return nil, nil, io.EOF
+	}
+	pair := p.kvPairs[p.i]
+	k = pair.key
+	v = pair.value
+	p.i++
+	return
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
