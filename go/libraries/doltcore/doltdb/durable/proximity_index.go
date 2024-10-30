@@ -73,7 +73,7 @@ func (i proximityIndex) bytes() ([]byte, error) {
 	return shim.ValueFromMap(i.index).(types.SerialMessage), nil
 }
 
-var _ Index = prollyIndex{}
+var _ Index = proximityIndex{}
 
 func (i proximityIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
 	var last bool
