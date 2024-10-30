@@ -861,7 +861,7 @@ func TestVectorIndexes(t *testing.T) {
 func TestVectorFunctions(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
-	enginetest.TestVectorIndexes(t, harness)
+	enginetest.TestVectorFunctions(t, harness)
 }
 
 func TestIndexPrefix(t *testing.T) {
