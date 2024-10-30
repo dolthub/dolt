@@ -61,13 +61,10 @@ func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 }
 
 // GetExact searches for an exact vector in the index, calling |cb| with the matching key-value pairs.
-func (t ProximityMap[K, V, O]) GetExact(ctx context.Context, query interface{}, cb KeyValueFn[K, V]) (err error) {
+func (t ProximityMap[K, V, O]) GetExact(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	nd := t.Root
 
-	queryVector, err := sql.ConvertToVector(query)
-	if err != nil {
-		return err
-	}
+	queryVector := t.Convert(query)
 
 	// Find the child with the minimum distance.
 
