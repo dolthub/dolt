@@ -146,7 +146,7 @@ func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIn
 }
 
 var _ sql.PartitionIter = (*pointPartition)(nil)
-var _ sql.Partition = (*pointPartition)(nil)
+var _ sql.Partition = pointPartition{}
 
 type pointPartition struct {
 	r    prolly.Range
@@ -442,6 +442,18 @@ func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) 
 	}
 }
 
+func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorPartitionIter) (prolly.MapIter, error) {
+	candidateVector, err := part.Literal.Eval(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := part.Limit.Eval(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limit.(int64)))
+}
+
 // coveringIndexImplBuilder constructs row iters for covering lookups,
 // where we only need to cursor seek on a single index to both identify
 // target keys and fill all requested projections
@@ -533,13 +545,19 @@ func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r proll
 
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	rangeIter, err := ib.rangeIter(ctx, part)
+	var indexIter prolly.MapIter
+	var err error
+	if proximityPartition, ok := part.(vectorPartitionIter); ok {
+		indexIter, err = ib.proximityIter(ctx, proximityPartition)
+	} else {
+		indexIter, err = ib.rangeIter(ctx, part)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return prollyCoveringIndexIter{
 		idx:         ib.idx,
-		indexIter:   rangeIter,
+		indexIter:   indexIter,
 		keyDesc:     ib.secKd,
 		valDesc:     ib.secVd,
 		keyMap:      ib.keyMap,
