@@ -34,70 +34,70 @@ var _ sql.Table = (*SchemaConflictsTable)(nil)
 
 // SchemaConflictsTable is a sql.Table implementation that implements a system table which shows the current conflicts
 type SchemaConflictsTable struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	dbName    string
+	tableName string
+	ddb       *doltdb.DoltDB
 }
 
 // NewSchemaConflictsTable creates a SchemaConflictsTable
-func NewSchemaConflictsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
-	return &SchemaConflictsTable{dbName: dbName, ddb: ddb}
+func NewSchemaConflictsTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB) sql.Table {
+	return &SchemaConflictsTable{dbName: dbName, tableName: tableName, ddb: ddb}
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// SchemaConflictsTableName
-func (dt *SchemaConflictsTable) Name() string {
-	return doltdb.SchemaConflictsTableName
+// Name is a sql.Table interface function which returns the name of the table
+func (sct *SchemaConflictsTable) Name() string {
+	return sct.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// SchemaConflictsTableName
-func (dt *SchemaConflictsTable) String() string {
-	return doltdb.SchemaConflictsTableName
+// String is a sql.Table interface function which returns the name of the table
+func (sct *SchemaConflictsTable) String() string {
+	return sct.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (dt *SchemaConflictsTable) Schema() sql.Schema {
+func (sct *SchemaConflictsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "base_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "our_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "their_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "description", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: sct.tableName, PrimaryKey: true, DatabaseSource: sct.dbName},
+		{Name: "base_schema", Type: types.Text, Source: sct.tableName, PrimaryKey: false, DatabaseSource: sct.dbName},
+		{Name: "our_schema", Type: types.Text, Source: sct.tableName, PrimaryKey: false, DatabaseSource: sct.dbName},
+		{Name: "their_schema", Type: types.Text, Source: sct.tableName, PrimaryKey: false, DatabaseSource: sct.dbName},
+		{Name: "description", Type: types.Text, Source: sct.tableName, PrimaryKey: false, DatabaseSource: sct.dbName},
 	}
 }
 
 // Collation implements the sql.Table interface.
-func (dt *SchemaConflictsTable) Collation() sql.CollationID {
+func (sct *SchemaConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data for all tables exists in a single partition.
-func (dt *SchemaConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (sct *SchemaConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	ws, err := sess.WorkingSet(ctx, dt.dbName)
+	ws, err := sess.WorkingSet(ctx, sct.dbName)
 	if err != nil {
 		return nil, err
 	}
-	dbd, _ := sess.GetDbData(ctx, dt.dbName)
+	dbd, _ := sess.GetDbData(ctx, sct.dbName)
 
 	if ws.MergeState() == nil || !ws.MergeState().HasSchemaConflicts() {
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	head, err := sess.GetHeadCommit(ctx, dt.dbName)
+	head, err := sess.GetHeadCommit(ctx, sct.dbName)
 	if err != nil {
 		return nil, err
 	}
 
 	return sql.PartitionsToPartitionIter(schemaConflictsPartition{
-		state: ws.MergeState(),
-		head:  head,
-		ddb:   dbd.Ddb,
+		tableName: sct.tableName,
+		state:     ws.MergeState(),
+		head:      head,
+		ddb:       dbd.Ddb,
 	}), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (sct *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	p, ok := part.(schemaConflictsPartition)
 	if !ok {
 		return nil, errors.New("unexpected partition for schema conflicts table")
@@ -136,13 +136,14 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 }
 
 type schemaConflictsPartition struct {
-	state *doltdb.MergeState
-	head  *doltdb.Commit
-	ddb   *doltdb.DoltDB
+	tableName string
+	state     *doltdb.MergeState
+	head      *doltdb.Commit
+	ddb       *doltdb.DoltDB
 }
 
 func (p schemaConflictsPartition) Key() []byte {
-	return []byte(doltdb.SchemaConflictsTableName)
+	return []byte(p.tableName)
 }
 
 type schemaConflict struct {

@@ -28,31 +28,32 @@ import (
 // TableOfTablesWithViolations is a sql.Table implementation that implements a system table which shows the
 // tables that contain constraint violations.
 type TableOfTablesWithViolations struct {
-	root doltdb.RootValue
+	tableName string
+	root      doltdb.RootValue
 }
 
 var _ sql.Table = (*TableOfTablesWithViolations)(nil)
 
 // NewTableOfTablesConstraintViolations creates a TableOfTablesWithViolations.
-func NewTableOfTablesConstraintViolations(ctx *sql.Context, root doltdb.RootValue) sql.Table {
-	return &TableOfTablesWithViolations{root: root}
+func NewTableOfTablesConstraintViolations(ctx *sql.Context, tableName string, root doltdb.RootValue) sql.Table {
+	return &TableOfTablesWithViolations{tableName: tableName, root: root}
 }
 
 // Name implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Name() string {
-	return doltdb.TableOfTablesWithViolationsName
+	return totwv.tableName
 }
 
 // String implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) String() string {
-	return doltdb.TableOfTablesWithViolationsName
+	return totwv.tableName
 }
 
 // Schema implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table", Type: types.Text, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: true},
-		{Name: "num_violations", Type: types.Uint64, Source: doltdb.TableOfTablesWithViolationsName, PrimaryKey: false},
+		{Name: "table", Type: types.Text, Source: totwv.tableName, PrimaryKey: true},
+		{Name: "num_violations", Type: types.Uint64, Source: totwv.tableName, PrimaryKey: false},
 	}
 }
 

@@ -29,38 +29,39 @@ import (
 // MergeStatusTable is a sql.Table implementation that implements a system table
 // which shows information about an active merge.
 type MergeStatusTable struct {
-	dbName string
+	dbName    string
+	tableName string
 }
 
-func (s MergeStatusTable) Name() string {
-	return doltdb.MergeStatusTableName
+func (mst MergeStatusTable) Name() string {
+	return mst.tableName
 }
 
-func (s MergeStatusTable) String() string {
-	return doltdb.MergeStatusTableName
+func (mst MergeStatusTable) String() string {
+	return mst.tableName
 }
 
-func (s MergeStatusTable) Schema() sql.Schema {
+func (mst MergeStatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "is_merging", Type: types.Boolean, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: false, DatabaseSource: s.dbName},
-		{Name: "source", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
-		{Name: "source_commit", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
-		{Name: "target", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
-		{Name: "unmerged_tables", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
+		{Name: "is_merging", Type: types.Boolean, Source: mst.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: mst.dbName},
+		{Name: "source", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
+		{Name: "source_commit", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
+		{Name: "target", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
+		{Name: "unmerged_tables", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
 	}
 }
 
-func (s MergeStatusTable) Collation() sql.CollationID {
+func (mst MergeStatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (s MergeStatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (mst MergeStatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
-func (s MergeStatusTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+func (mst MergeStatusTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	sesh := dsess.DSessFromSess(ctx.Session)
-	ws, err := sesh.WorkingSet(ctx, s.dbName)
+	ws, err := sesh.WorkingSet(ctx, mst.dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +70,8 @@ func (s MergeStatusTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.
 }
 
 // NewMergeStatusTable creates a StatusTable
-func NewMergeStatusTable(dbName string) sql.Table {
-	return &MergeStatusTable{dbName}
+func NewMergeStatusTable(dbName, tableName string) sql.Table {
+	return &MergeStatusTable{dbName, tableName}
 }
 
 // MergeStatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
