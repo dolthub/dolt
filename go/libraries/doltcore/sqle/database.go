@@ -435,50 +435,104 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				}
 			}
 
-			dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
+			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
 		}
-	case doltdb.DiffTableName:
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-			if err != nil {
-				return nil, false, err
+	case doltdb.DiffTableName, doltdb.GetDiffTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
 			}
-		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.Name(), db.ddb, head), true
-	case doltdb.ColumnDiffTableName:
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-			if err != nil {
-				return nil, false, err
+			dt, found = dtables.NewUnscopedDiffTable(ctx, db.Name(), lwrName, db.ddb, head), true
+		}
+	case doltdb.ColumnDiffTableName, doltdb.GetColumnDiffTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
 			}
-		}
 
-		dt, found = dtables.NewColumnDiffTable(ctx, db.Name(), db.ddb, head), true
-	case doltdb.TableOfTablesInConflictName:
-		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.RevisionQualifiedName(), db.ddb), true
-	case doltdb.TableOfTablesWithViolationsName:
-		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
-	case doltdb.SchemaConflictsTableName:
-		dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
+			dt, found = dtables.NewColumnDiffTable(ctx, db.Name(), lwrName, db.ddb, head), true
+		}
+	case doltdb.TableOfTablesInConflictName, doltdb.GetTableOfTablesInConflictName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewTableOfTablesInConflict(ctx, db.RevisionQualifiedName(), lwrName, db.ddb), true
+		}
+	case doltdb.TableOfTablesWithViolationsName, doltdb.GetTableOfTablesWithViolationsName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, lwrName, root), true
+		}
+	case doltdb.SchemaConflictsTableName, doltdb.GetSchemaConflictsTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewSchemaConflictsTable(ctx, db.RevisionQualifiedName(), lwrName, db.ddb), true
+		}
 	case doltdb.GetBranchesTableName(), doltdb.BranchesTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			dt, found = dtables.NewBranchesTable(ctx, db), true
+			dt, found = dtables.NewBranchesTable(ctx, db, lwrName), true
 		}
-	case doltdb.RemoteBranchesTableName:
-		dt, found = dtables.NewRemoteBranchesTable(ctx, db), true
-	case doltdb.RemotesTableName:
-		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
-	case doltdb.CommitsTableName:
-		dt, found = dtables.NewCommitsTable(ctx, db.Name(), db.ddb), true
-	case doltdb.CommitAncestorsTableName:
-		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
+	case doltdb.RemoteBranchesTableName, doltdb.GetRemoteBranchesTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewRemoteBranchesTable(ctx, db, lwrName), true
+		}
+	case doltdb.RemotesTableName, doltdb.GetRemotesTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewRemotesTable(ctx, db.ddb, lwrName), true
+		}
+	case doltdb.CommitsTableName, doltdb.GetCommitsTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewCommitsTable(ctx, db.Name(), lwrName, db.ddb), true
+		}
+	case doltdb.CommitAncestorsTableName, doltdb.GetCommitAncestorsTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), lwrName, db.ddb), true
+		}
 	case doltdb.GetStatusTableName(), doltdb.StatusTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
@@ -496,17 +550,23 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 
-			dt, found = dtables.NewStatusTable(ctx, db.ddb, ws, adapter), true
+			dt, found = dtables.NewStatusTable(ctx, lwrName, db.ddb, ws, adapter), true
 		}
-	case doltdb.MergeStatusTableName:
-		dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName()), true
+	case doltdb.MergeStatusTableName, doltdb.GetMergeStatusTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewMergeStatusTable(db.RevisionQualifiedName(), lwrName), true
+		}
 	case doltdb.GetTagsTableName(), doltdb.TagsTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			dt, found = dtables.NewTagsTable(ctx, db.ddb), true
+			dt, found = dtables.NewTagsTable(ctx, lwrName, db.ddb), true
 		}
 	case dtables.AccessTableName:
 		basCtx := branch_control.GetBranchAwareSession(ctx)

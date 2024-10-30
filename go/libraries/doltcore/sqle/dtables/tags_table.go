@@ -32,64 +32,63 @@ var _ sql.StatisticsTable = (*TagsTable)(nil)
 
 // TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
 type TagsTable struct {
-	ddb *doltdb.DoltDB
+	tableName string
+	ddb       *doltdb.DoltDB
 }
 
 // NewTagsTable creates a TagsTable
-func NewTagsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &TagsTable{ddb: ddb}
+func NewTagsTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB) sql.Table {
+	return &TagsTable{tableName: tableName, ddb: ddb}
 }
 
-func (dt *TagsTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, _, err := dt.RowCount(ctx)
+func (tt *TagsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(tt.Schema())
+	numRows, _, err := tt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *TagsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (tt *TagsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return tagsDefaultRowCount, false, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// GetTagsTableName()
-func (dt *TagsTable) Name() string {
-	return doltdb.GetTagsTableName()
+// Name is a sql.Table interface function which returns the name of the table.
+func (tt *TagsTable) Name() string {
+	return tt.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// GetTagsTableName()
-func (dt *TagsTable) String() string {
-	return doltdb.GetTagsTableName()
+// String is a sql.Table interface function which returns the name of the table.
+func (tt *TagsTable) String() string {
+	return tt.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the tags system table.
-func (dt *TagsTable) Schema() sql.Schema {
+func (tt *TagsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "tag_name", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: true},
-		{Name: "tag_hash", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: true},
-		{Name: "tagger", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.GetTagsTableName(), PrimaryKey: false},
+		{Name: "tag_name", Type: types.Text, Source: tt.tableName, PrimaryKey: true},
+		{Name: "tag_hash", Type: types.Text, Source: tt.tableName, PrimaryKey: true},
+		{Name: "tagger", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
+		{Name: "email", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
+		{Name: "date", Type: types.Datetime, Source: tt.tableName, PrimaryKey: false},
+		{Name: "message", Type: types.Text, Source: tt.tableName, PrimaryKey: false},
 	}
 }
 
 // Collation implements the sql.Table interface.
-func (dt *TagsTable) Collation() sql.CollationID {
+func (tt *TagsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data. Currently, the data is unpartitioned.
-func (dt *TagsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (tt *TagsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *TagsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewTagsItr(ctx, dt.ddb)
+func (tt *TagsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return NewTagsItr(ctx, tt.ddb)
 }
 
 // TagsItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.

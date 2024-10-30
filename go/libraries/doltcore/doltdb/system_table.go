@@ -151,14 +151,14 @@ var getWriteableSystemTables = func() []string {
 var getGeneratedSystemTables = func() []string {
 	return []string{
 		GetBranchesTableName(),
-		RemoteBranchesTableName,
+		GetRemoteBranchesTableName(),
 		GetLogTableName(),
-		TableOfTablesInConflictName,
-		TableOfTablesWithViolationsName,
-		CommitsTableName,
-		CommitAncestorsTableName,
+		GetTableOfTablesInConflictName(),
+		GetTableOfTablesWithViolationsName(),
+		GetCommitsTableName(),
+		GetCommitAncestorsTableName(),
 		GetStatusTableName(),
-		RemotesTableName,
+		GetRemotesTableName(),
 	}
 }
 
@@ -252,9 +252,59 @@ var GetBranchesTableName = func() string {
 	return BranchesTableName
 }
 
+// GetColumnDiffTableName returns the column diff system table name
+var GetColumnDiffTableName = func() string {
+	return ColumnDiffTableName
+}
+
+// GetCommitAncestorsTableName returns the commit_ancestors system table name
+var GetCommitAncestorsTableName = func() string {
+	return CommitAncestorsTableName
+}
+
+// GetCommitsTableName returns the commits system table name
+var GetCommitsTableName = func() string {
+	return CommitsTableName
+}
+
+// GetTableOfTablesWithViolationsName returns the conflicts system table name
+var GetTableOfTablesInConflictName = func() string {
+	return TableOfTablesInConflictName
+}
+
+// GetTableOfTablesWithViolationsName returns the constraint violations system table name
+var GetTableOfTablesWithViolationsName = func() string {
+	return TableOfTablesWithViolationsName
+}
+
+// GetDiffTableName returns the diff system table name
+var GetDiffTableName = func() string {
+	return DiffTableName
+}
+
 // GetLogTableName returns the log system table name
 var GetLogTableName = func() string {
 	return LogTableName
+}
+
+// GetMergeStatusTableName returns the merge status system table name
+var GetMergeStatusTableName = func() string {
+	return MergeStatusTableName
+}
+
+// GetRemoteBranchesTableName returns the all-branches system table name
+var GetRemoteBranchesTableName = func() string {
+	return RemoteBranchesTableName
+}
+
+// GetRemotesTableName returns the remotes system table name
+var GetRemotesTableName = func() string {
+	return RemotesTableName
+}
+
+// GetSchemaConflictsTableName returns the schema conflicts system table name
+var GetSchemaConflictsTableName = func() string {
+	return SchemaConflictsTableName
 }
 
 // GetStatusTableName returns the status system table name.
@@ -310,6 +360,7 @@ const (
 	// TagsTableName is the tags table name
 	TagsTableName = "dolt_tags"
 
+	// IgnoreTableName is the ignore table name
 	IgnoreTableName = "dolt_ignore"
 
 	// RebaseTableName is the rebase system table name.

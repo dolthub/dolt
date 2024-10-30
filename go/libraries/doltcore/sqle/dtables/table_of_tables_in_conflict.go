@@ -28,37 +28,36 @@ var _ sql.Table = (*TableOfTablesInConflict)(nil)
 
 // TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
 type TableOfTablesInConflict struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	dbName    string
+	tableName string
+	ddb       *doltdb.DoltDB
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
-func NewTableOfTablesInConflict(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
-	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}
+func NewTableOfTablesInConflict(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB) sql.Table {
+	return &TableOfTablesInConflict{dbName: dbName, tableName: tableName, ddb: ddb}
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// TableOfTablesInConflictName
-func (dt *TableOfTablesInConflict) Name() string {
-	return doltdb.TableOfTablesInConflictName
+// Name is a sql.Table interface function which returns the name of the table
+func (ct *TableOfTablesInConflict) Name() string {
+	return ct.tableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// TableOfTablesInConflictName
-func (dt *TableOfTablesInConflict) String() string {
-	return doltdb.TableOfTablesInConflictName
+// String is a sql.Table interface function which returns the name of the table
+func (ct *TableOfTablesInConflict) String() string {
+	return ct.tableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (dt *TableOfTablesInConflict) Schema() sql.Schema {
+func (ct *TableOfTablesInConflict) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table", Type: types.Text, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "num_conflicts", Type: types.Uint64, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "table", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
+		{Name: "num_conflicts", Type: types.Uint64, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 	}
 }
 
 // Collation implements the sql.Table interface.
-func (dt *TableOfTablesInConflict) Collation() sql.CollationID {
+func (ct *TableOfTablesInConflict) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
@@ -114,9 +113,9 @@ func (p *tablesInConflict) Close(*sql.Context) error {
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data is partitioned by table.
-func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (ct *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	ws, err := sess.WorkingSet(ctx, dt.dbName)
+	ws, err := sess.WorkingSet(ctx, ct.dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +150,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *TableOfTablesInConflict) PartitionRows(_ *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (ct *TableOfTablesInConflict) PartitionRows(_ *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*tableInConflict)
 	return cp, nil
 }
