@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/serial"
 	"io"
 	"math/rand"
 	"strconv"

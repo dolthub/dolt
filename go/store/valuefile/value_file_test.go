@@ -16,6 +16,7 @@ package valuefile
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"os"
 	"path/filepath"
 	"testing"

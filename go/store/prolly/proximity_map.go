@@ -209,7 +209,7 @@ func (b *proximityMapBuilder) Insert(ctx context.Context, key, value []byte) err
 
 func (b *proximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][]byte, subtrees []uint64, level int) (ProximityMap, error) {
 	rootMsg := b.vectorIndexSerializer.Serialize(keys, values, subtrees, level)
-	rootNode, err := tree.NodeFromBytes(rootMsg)
+	rootNode, _, err := tree.NodeFromBytes(rootMsg)
 	if err != nil {
 		return ProximityMap{}, err
 	}
@@ -582,7 +582,7 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 	for {
 		if c.atEnd || c.lastPathSegment != parentPathSegment {
 			msg := serializer.Serialize(indexMapKeys, indexMapValues, indexMapSubtrees, level)
-			node, err := tree.NodeFromBytes(msg)
+			node, _, err := tree.NodeFromBytes(msg)
 			if err != nil {
 				return tree.Node{}, 0, hash.Hash{}, err
 			}
