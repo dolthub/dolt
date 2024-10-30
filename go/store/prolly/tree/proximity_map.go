@@ -318,7 +318,7 @@ func (m memoryNodeSort[K, O]) Swap(i, j int) {
 
 func serializeAndWriteNode(ctx context.Context, ns NodeStore, s message.Serializer, level int, subtrees []uint64, keys [][]byte, values [][]byte) (node Node, err error) {
 	msg := s.Serialize(keys, values, subtrees, level)
-	node, err = NodeFromBytes(msg)
+	node, _, err = NodeFromBytes(msg)
 	if err != nil {
 		return Node{}, err
 	}
