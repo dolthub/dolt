@@ -316,6 +316,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
+	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
@@ -349,33 +350,52 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		return dt, true, nil
 
-	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
-		baseTable, ok, err := db.getTable(ctx, root, baseTableName)
+	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix), strings.HasPrefix(lwrName, doltdb.GetDoltHistoryTablePrefix()):
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
 		}
-		if !ok {
-			return nil, false, nil
-		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			pref := doltdb.DoltHistoryTablePrefix
+			if strings.HasPrefix(lwrName, doltdb.GetDoltHistoryTablePrefix()) {
+				pref = doltdb.GetDoltHistoryTablePrefix()
+			}
 
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if resolve.UseSearchPath && (db.schemaName == "" || db.schemaName == "dolt") {
+				// TODO: Need a way to specify schema for base table
+				schemaName, err := resolve.FirstExistingNonSystemSchemaOnSearchPath(ctx, root)
+				if err != nil {
+					return nil, false, err
+				}
+				db.schemaName = schemaName
+			}
+
+			baseTableName := tblName[len(pref):]
+			baseTable, ok, err := db.getTable(ctx, root, baseTableName)
 			if err != nil {
 				return nil, false, err
 			}
-		}
+			if !ok {
+				return nil, false, nil
+			}
 
-		switch t := baseTable.(type) {
-		case *AlterableDoltTable:
-			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
-		case *WritableDoltTable:
-			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
-		default:
-			return nil, false, fmt.Errorf("expected Alterable or WritableDoltTable, found %T", baseTable)
-		}
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
+			}
 
+			switch t := baseTable.(type) {
+			case *AlterableDoltTable:
+				return NewHistoryTable(t.DoltTable, pref, db.ddb, head), true, nil
+			case *WritableDoltTable:
+				return NewHistoryTable(t.DoltTable, pref, db.ddb, head), true, nil
+			default:
+				return nil, false, fmt.Errorf("expected Alterable or WritableDoltTable, found %T", baseTable)
+			}
+		}
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
 		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix, asOf)
@@ -419,7 +439,6 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	var dt sql.Table
 	found := false
-	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
 	switch lwrName {
 	case doltdb.GetLogTableName(), doltdb.LogTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)

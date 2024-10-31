@@ -60,6 +60,7 @@ var _ sql.PrimaryKeyTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
+	tablePrefix                string
 	doltTable                  *DoltTable
 	commitFilters              []sql.Expression
 	cmItr                      doltdb.CommitItr
@@ -168,7 +169,7 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+func NewHistoryTable(table *DoltTable, tablePrefix string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
 
 	// System tables don't currently use overridden schemas, so if one is set on |table|,
@@ -179,6 +180,7 @@ func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) 
 
 	h := &HistoryTable{
 		doltTable:                  table,
+		tablePrefix:                tablePrefix,
 		cmItr:                      cmItr,
 		conversionWarningsByColumn: make(map[string]struct{}),
 	}
@@ -375,12 +377,12 @@ func (ht *HistoryTable) ProjectedTags() []uint64 {
 
 // Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
-	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
+	return ht.tablePrefix + ht.doltTable.Name()
 }
 
 // String returns the name of the history table
 func (ht *HistoryTable) String() string {
-	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
+	return ht.tablePrefix + ht.doltTable.Name()
 }
 
 // Schema returns the schema for the history table

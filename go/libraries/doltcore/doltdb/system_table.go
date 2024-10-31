@@ -127,7 +127,7 @@ func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, er
 		return nil, err
 	}
 
-	for _, pre := range generatedSystemTablePrefixes {
+	for _, pre := range getGeneratedSystemTablePrefixes() {
 		s.Add(funcitr.MapStrings(tn, func(s string) string { return pre + s })...)
 	}
 
@@ -162,13 +162,15 @@ var getGeneratedSystemTables = func() []string {
 	}
 }
 
-var generatedSystemTablePrefixes = []string{
-	DoltDiffTablePrefix,
-	DoltCommitDiffTablePrefix,
-	DoltHistoryTablePrefix,
-	DoltConfTablePrefix,
-	DoltConstViolTablePrefix,
-	DoltWorkspaceTablePrefix,
+var getGeneratedSystemTablePrefixes = func() []string {
+	return []string{
+		DoltDiffTablePrefix,
+		DoltCommitDiffTablePrefix,
+		GetDoltHistoryTablePrefix(),
+		DoltConfTablePrefix,
+		DoltConstViolTablePrefix,
+		DoltWorkspaceTablePrefix,
+	}
 }
 
 const (
@@ -229,6 +231,11 @@ const (
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	SchemasTablesSqlModeCol = "sql_mode"
 )
+
+// GetDoltHistoryTablePrefix returns the prefix assigned to all the generated history tables
+var GetDoltHistoryTablePrefix = func() string {
+	return DoltHistoryTablePrefix
+}
 
 const (
 	// DoltBlameViewPrefix is the prefix assigned to all the generated blame tables

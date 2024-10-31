@@ -79,6 +79,38 @@ func FirstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (s
 	return schemaName, nil
 }
 
+// isSystemSchema returns whether a schema is a system schema or not
+func isSystemSchema(schemaName string) bool {
+	return schemaName == "dolt" || schemaName == "information_schema" || schemaName == "pg_catalog"
+}
+
+// FirstExistingNonSystemSchemaOnSearchPath returns the first schema in the search path that exists in the database and is not a system schema.
+func FirstExistingNonSystemSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (string, error) {
+	schemas, err := SearchPath(ctx)
+	if err != nil {
+		return "", err
+	}
+	schemaName := ""
+	for _, s := range schemas {
+		var exists bool
+		schemaName, exists, err = doltdb.ResolveDatabaseSchema(ctx, root, s)
+		if err != nil {
+			return "", err
+		}
+
+		if !isSystemSchema(schemaName) && exists {
+			break
+		}
+	}
+
+	// No existing schema found in the search_path and none specified in the statement means we can't create the table
+	if schemaName == "" {
+		return "", sql.ErrDatabaseNoDatabaseSchemaSelectedCreate.New()
+	}
+
+	return schemaName, nil
+}
+
 // IsDoltgresSystemTable returns whether a table is a doltgres system table or not
 func IsDoltgresSystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (bool, error) {
 	if tableName.Schema == "dolt" || doltdb.HasDoltPrefix(tableName.Name) {
