@@ -350,6 +350,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		return dt, true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
+		if resolve.UseSearchPath && db.schemaName == "" {
+			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+			if err != nil {
+				return nil, false, err
+			}
+			db.schemaName = schemaName
+		}
+
 		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
 		baseTable, ok, err := db.getTable(ctx, root, baseTableName)
 		if err != nil {
