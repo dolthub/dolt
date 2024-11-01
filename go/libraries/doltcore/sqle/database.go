@@ -1970,7 +1970,7 @@ func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
 	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
 }
 
-// getCatalog creates and returns the analyzer.Catalog instance for this database.
+// getEventScheduler retrieves the EventScheduler for this database
 func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	return sqle.NewDefault(doltSession.Provider()).EventScheduler
