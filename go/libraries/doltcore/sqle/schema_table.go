@@ -201,8 +201,11 @@ func NewEmptySchemaTable() sql.Table {
 	return &SchemaTable{}
 }
 
-func NewSchemaTable(backingTable *WritableDoltTable) (sql.Table, error) {
-	return &SchemaTable{backingTable: backingTable}, nil
+func NewSchemaTable(backingTable sql.Table) *SchemaTable {
+	if backingTable == nil {
+		return &SchemaTable{}
+	}
+	return &SchemaTable{backingTable: backingTable.(*WritableDoltTable)}
 }
 
 // getOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
