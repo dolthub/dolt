@@ -880,6 +880,8 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
 			// todo: delete all push events and triggers and trigger branches for this workflow
+
+			// todo: create a push event but dont create triggers
 		} else {
 			// todo: create a map of config branches
 			// todo: list all trigger branches for this workflow push event
@@ -895,20 +897,58 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	if config.On.PullRequest != nil {
 		if len(config.On.PullRequest.Branches) == 0 {
 			// todo: delete all pull request events and triggers and branches for this workflow
+		} else {
+			// todo: create a map of config branches
+			// todo: list all trigger branches for this workflow pull request event
+			// todo: iterate all branches
+			// todo: for each branch, check config map
+			// todo: if not in config map, delete branch in db
+			// todo: if is in config map, delete from config map
+			// todo: after loop, if any branches are left in the config map
+			// todo: create those trigger branches
 		}
+
 		if len(config.On.PullRequest.Activities) == 0 {
 			// todo: delete all pull request events and triggers and activities for this workflow
+		} else {
+			// todo: create a map of config activities
+			// todo: list all trigger activities for this workflow pull request event
+			// todo: iterate all activities
+			// todo: for each activity, check config map
+			// todo: if not in config map, delete activity in db
+			// todo: if is in config map, delete from config map
+			// todo: after loop, if any activities are left in the config map
+			// todo: create those trigger activities
+		}
+
+		if len(config.On.PullRequest.Branches) == 0 && len(config.On.PullRequest.Activities) == 0 {
+			// todo: create a pull request event but no triggers
 		}
 	}
 
-	// todo: update triggers to match config
-	// todo: update t branches to match config
-	// todo: update t activities to match config
+	if config.On.WorkflowDispatch != nil {
+		// todo: create a workflow dispatch event, no triggers
+	}
 
-	// todo: update jobs to match config
-	// todo: update steps to match config
-	// todo: update sqs to match config
-	// todo: update results to match config
+	// todo: create a map of config jobs
+	// todo: create a map of config steps
+
+	// todo: list all existing jobs for this workflow
+	// todo: iterate existing jobs
+	// todo: for each db job, check config job map
+	// todo: if job is not in config map, delete it from db
+	// todo: if it is in map
+	// todo: list all steps in db for this job
+	// todo: iterate existing steps
+	// todo: for each step, check config step map
+	// todo: if step is not in config map, delete it from the db
+	// todo: if it is in map
+	// todo: get existing saved query step for db step
+	// todo: if saved query name matches whats in config
+	// todo: update the expected result values
+	// todo: if name does not match, delete the saved query step
+	// todo: then create a new saved query step
+
 	return nil
 }
 
