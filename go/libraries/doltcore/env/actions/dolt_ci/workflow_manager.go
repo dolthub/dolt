@@ -566,12 +566,7 @@ func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, workflowName stri
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
-	_, rowIter, _, err := d.queryFunc(ctx, query)
-	if err != nil {
-		return err
-	}
-	_, err = sql.RowIterToRows(ctx, rowIter)
-	return err
+	return SqlWriteQuery(ctx, d.queryFunc, query)
 }
 
 func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb func(ctx *sql.Context, cvs ColumnValues) error) error {
@@ -896,7 +891,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 			// todo: create those trigger branches
 		}
 	}
-	
+
 	if config.On.PullRequest != nil {
 		if len(config.On.PullRequest.Branches) == 0 {
 			// todo: delete all pull request events and triggers and branches for this workflow
@@ -1215,4 +1210,13 @@ func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database,
 	}
 
 	return d.commitWorkflow(ctx, config.Name)
+}
+
+func SqlWriteQuery(ctx *sql.Context, queryFunc QueryFunc, query string) error {
+	_, rowIter, _, err := queryFunc(ctx, query)
+	if err != nil {
+		return err
+	}
+	_, err = sql.RowIterToRows(ctx, rowIter)
+	return err
 }
