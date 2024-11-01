@@ -396,7 +396,7 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 			eventSchedulerPeriod = i
 		}
 	}
-	
+
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
