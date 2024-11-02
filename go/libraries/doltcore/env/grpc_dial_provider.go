@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 	"unicode"
 
 	"google.golang.org/grpc"
@@ -32,6 +33,26 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 )
+
+var defaultDialer = &net.Dialer{
+	Timeout:   30 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
+var defaultTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           defaultDialer.DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          1024,
+	MaxIdleConnsPerHost:   256,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
+var defaultHttpFetcher grpcendpoint.HTTPFetcher = &http.Client{
+	Transport: defaultTransport,
+}
 
 // GRPCDialProvider implements dbfactory.GRPCDialProvider. By default, it is not able to use custom user credentials, but
 // if it is initialized with a DoltEnv, it will load custom user credentials from it.
@@ -66,18 +87,26 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		}
 	}
 
-	var httpfetcher grpcendpoint.HTTPFetcher = http.DefaultClient
+	var httpfetcher grpcendpoint.HTTPFetcher = defaultHttpFetcher
 
 	var opts []grpc.DialOption
 	if config.TLSConfig != nil {
 		tc := credentials.NewTLS(config.TLSConfig)
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 
+		transport := &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           defaultDialer.DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          1024,
+			MaxIdleConnsPerHost:   256,
+			IdleConnTimeout:       90 * time.Second,
+			TLSClientConfig:       config.TLSConfig,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
 		httpfetcher = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig:   config.TLSConfig,
-				ForceAttemptHTTP2: true,
-			},
+			Transport: transport,
 		}
 	} else if config.Insecure {
 		opts = append(opts, grpc.WithInsecure())
@@ -109,6 +138,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
 		}
 	}
+
 	return dbfactory.GRPCRemoteConfig{
 		Endpoint:    endpoint,
 		DialOptions: opts,
