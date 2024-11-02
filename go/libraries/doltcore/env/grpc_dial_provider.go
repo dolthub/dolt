@@ -94,11 +94,19 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		tc := credentials.NewTLS(config.TLSConfig)
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 
-		transport := *defaultTransport
-		transport.TLSClientConfig = config.TLSConfig
-		transport.ForceAttemptHTTP2 = true
+		transport := &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           defaultDialer.DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          1024,
+			MaxIdleConnsPerHost:   256,
+			IdleConnTimeout:       90 * time.Second,
+			TLSClientConfig:       config.TLSConfig,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
 		httpfetcher = &http.Client{
-			Transport: &transport,
+			Transport: transport,
 		}
 	} else if config.Insecure {
 		opts = append(opts, grpc.WithInsecure())
