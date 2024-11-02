@@ -17,6 +17,7 @@ package durable
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"

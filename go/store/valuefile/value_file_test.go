@@ -16,7 +16,6 @@ package valuefile
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
