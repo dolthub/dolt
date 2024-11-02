@@ -1938,7 +1938,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), sql.NewMysqlParser())
+	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
@@ -1968,6 +1968,12 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
+}
+
+// getEventScheduler retrieves the EventScheduler for this database
+func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	return sqle.NewDefault(doltSession.Provider()).EventScheduler
 }
 
 // SaveEvent implements sql.EventDatabase.
