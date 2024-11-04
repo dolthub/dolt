@@ -1401,7 +1401,12 @@ func diffRows(
 		toSch = pkSch.Schema
 	}
 
-	unionSch := unionSchemas(fromSch, toSch)
+	var unionSch sql.Schema
+	if fromSch.Equals(toSch) {
+		unionSch = fromSch
+	} else {
+		unionSch = unionSchemas(fromSch, toSch)
+	}
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
@@ -1561,12 +1566,12 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 //
 // Note this is only for printing the diff. This is not robust for other purposes.
 func chooseMostFlexibleType(origA, origB sql.Type) sql.Type {
-	if origA == origB {
-		return origA
-	}
-
 	at := origA.Type()
 	bt := origB.Type()
+
+	if at == bt {
+		return origA
+	}
 
 	// If both are numbers, we'll take the float.
 	if sqltypes.IsIntegral(at) && sqltypes.IsFloat(bt) {
