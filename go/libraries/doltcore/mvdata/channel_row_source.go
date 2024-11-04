@@ -75,11 +75,6 @@ func (c *ChannelRowSource) WithChildren(children ...sql.Node) (sql.Node, error) 
 	return c, nil
 }
 
-// CheckPrivileges implements the sql.Node interface.
-func (c *ChannelRowSource) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	return true
-}
-
 // channelRowIter wraps the channel under the sql.RowIter interface
 type channelRowIter struct {
 	rowChannel chan sql.Row

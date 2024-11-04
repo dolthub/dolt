@@ -34,6 +34,7 @@ const diffSummaryDefaultRowCount = 10
 
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffSummaryTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*DiffSummaryTableFunction)(nil)
 
 type DiffSummaryTableFunction struct {
 	ctx *sql.Context
@@ -149,11 +150,11 @@ func (ds *DiffSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node
 	return ds, nil
 }
 
-// CheckPrivileges implements the interface sql.Node.
-func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type()) {
-			return false
+			return ExpressionIsDeferred(ds.tableNameExpr)
 		}
 
 		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
