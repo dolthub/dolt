@@ -37,6 +37,7 @@ const diffStatDefaultRowCount = 10
 
 var _ sql.TableFunction = (*DiffStatTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffStatTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*DiffStatTableFunction)(nil)
 
 type DiffStatTableFunction struct {
 	ctx *sql.Context
@@ -159,11 +160,11 @@ func (ds *DiffStatTableFunction) WithChildren(children ...sql.Node) (sql.Node, e
 	return ds, nil
 }
 
-// CheckPrivileges implements the interface sql.Node.
-func (ds *DiffStatTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (ds *DiffStatTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
 		if !types.IsText(ds.tableNameExpr.Type()) {
-			return false
+			return ExpressionIsDeferred(ds.tableNameExpr)
 		}
 
 		tableNameVal, err := ds.tableNameExpr.Eval(ds.ctx, nil)
@@ -176,8 +177,6 @@ func (ds *DiffStatTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql
 		}
 
 		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
-
-		// TODO: Add tests for privilege checking
 		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 

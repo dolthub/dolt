@@ -46,6 +46,7 @@ var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
 var _ sql.IndexAddressable = (*PatchTableFunction)(nil)
 var _ sql.IndexedTable = (*PatchTableFunction)(nil)
 var _ sql.TableNode = (*PatchTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*PatchTableFunction)(nil)
 
 const (
 	diffTypeSchema = "schema"
@@ -304,11 +305,11 @@ func (p *PatchTableFunction) WithChildren(children ...sql.Node) (sql.Node, error
 	return p, nil
 }
 
-// CheckPrivileges implements the interface sql.Node.
-func (p *PatchTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (p *PatchTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if p.tableNameExpr != nil {
 		if !sqltypes.IsText(p.tableNameExpr.Type()) {
-			return false
+			return ExpressionIsDeferred(p.tableNameExpr)
 		}
 
 		tableNameVal, err := p.tableNameExpr.Eval(p.ctx, nil)

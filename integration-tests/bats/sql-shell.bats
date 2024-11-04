@@ -51,11 +51,7 @@ teardown() {
     run dolt --user=new_user sql <<< "select user from mysql.user"
     [ "$status" -eq 1 ]
     # https://github.com/dolthub/dolt/issues/6307 
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      [[ "$output" =~ "Access denied for user 'new_user'@'localhost'" ]] || false
-    else
-      [[ "$output" =~ "command denied to user 'new_user'@'localhost'" ]] || false
-    fi
+    [[ "$output" =~ "Access denied for user 'new_user'@'localhost'" ]] || false
 
     rm -rf .doltcfg
 }

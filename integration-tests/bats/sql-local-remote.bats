@@ -594,10 +594,10 @@ SQL
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "Access denied for user 'joe'" ]] || false
 
-    # Get an permission error when attempting to access forbidden info as an authenticated user.
+    # Get a permission error when attempting to access forbidden info as an authenticated user.
     run dolt --verbose-engine-setup --user joe --password "joe123" sql -q "SELECT user, host FROM mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "command denied to user 'joe'@'%'" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
 
     # Similar test to above, but will get different results because the dolt user doesn't exist (it was
     # used to start sql-server
@@ -657,10 +657,10 @@ SQL
     [[ "$output" =~ "Access denied for user 'joe'" ]] || false
 
     export DOLT_CLI_PASSWORD="joe123"
-    # Get an permission error when attempting to access forbidden info as an authenticated user.
+    # Get a permission error when attempting to access forbidden info as an authenticated user.
     run dolt --user joe sql -q "SELECT user, host FROM mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "command denied to user 'joe'@'%'" ]] || false
+    [[ "$output" =~ "Access denied for user 'joe'" ]] || false
 
     export DOLT_CLI_PASSWORD="badpwd"
     run dolt --user rambo --use-db defaultDB sql -q "show tables"

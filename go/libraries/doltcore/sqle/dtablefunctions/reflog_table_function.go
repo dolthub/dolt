@@ -219,12 +219,6 @@ func (rltf *ReflogTableFunction) WithChildren(children ...sql.Node) (sql.Node, e
 	return rltf, nil
 }
 
-func (rltf *ReflogTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	// Currently, we only support viewing the reflog for the HEAD ref of the current session,
-	// so no privileges need to be checked.
-	return true
-}
-
 func (rltf *ReflogTableFunction) IsReadOnly() bool {
 	return true
 }
