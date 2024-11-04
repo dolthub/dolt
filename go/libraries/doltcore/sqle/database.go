@@ -1566,7 +1566,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	scheTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1574,7 +1574,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	key := doltdb.DataCacheKey{scheTblHash}
+	key := doltdb.DataCacheKey{Hash: schTblHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
