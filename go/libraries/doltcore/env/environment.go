@@ -149,7 +149,7 @@ func (dEnv *DoltEnv) ReloadRepoState() error {
 	return nil
 }
 
-func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 
 	repoState, rsErr := createRepoState(fs)

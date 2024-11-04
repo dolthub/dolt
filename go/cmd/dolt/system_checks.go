@@ -32,13 +32,30 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 	if err != nil {
 		return err
 	}
-	doltTmpDir := filepath.Join(absP, ".dolt", "tmp")
-	stat, err := os.Stat(doltTmpDir)
+
+	dotDoltCreated := false
+	tmpDirCreated := false
+
+	doltDir := filepath.Join(absP, ".dolt")
+	stat, err := os.Stat(doltDir)
+	if err != nil {
+		err := os.MkdirAll(doltDir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create dolt dir '%s': %s", doltDir, err.Error())
+		}
+
+		dotDoltCreated = true
+	}
+
+	doltTmpDir := filepath.Join(doltDir, "tmp")
+	stat, err = os.Stat(doltTmpDir)
 	if err != nil {
 		err := os.MkdirAll(doltTmpDir, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("failed to create temp dir '%s': %s", doltTmpDir, err.Error())
 		}
+		tmpDirCreated = true
+
 	} else if !stat.IsDir() {
 		// Should the file exist?? If it does is it a problem? Is it a directory??
 		return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", doltTmpDir)
@@ -55,16 +72,24 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 		return err
 	}
 
-	err = file.Rename(name, absP)
+	movedName := filepath.Join(doltTmpDir, "testfile")
+
+	err = file.Rename(name, movedName)
 	if err == nil {
 		// tmp file system is the same as the data dir, so no need to change it.
-		_ = file.Remove(name)
+		_ = file.Remove(movedName)
 
-		// What about the tmp dir? Remove it???? only if we created it?
+		if tmpDirCreated {
+			_ = file.Remove(doltTmpDir)
+		}
+
+		if dotDoltCreated {
+			_ = file.Remove(doltDir)
+		}
 
 		return nil
 	}
-	_ = file.Remove(absP)
+	_ = file.Remove(movedName)
 
 	// Rename failed. So we force the tmp dir to be the data dir.
 	tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(doltTmpDir)
