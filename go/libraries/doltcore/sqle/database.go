@@ -633,15 +633,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if backingTable == nil {
-			dt = NewEmptySchemaTable()
-		} else {
-			writeTable := backingTable.(*WritableDoltTable)
-			dt, err = NewSchemaTable(writeTable)
-			if err != nil {
-				return nil, false, err
-			}
-		}
+		dt = NewSchemaTable(backingTable)
 	}
 
 	if found {
@@ -1634,10 +1626,15 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+	if !ok {
+		return sql.ViewDefinition{}, false, nil
+	}
+
+	key := doltdb.DataCacheKey{Hash: schTblHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())

@@ -901,6 +901,7 @@ func (root *rootValue) putTable(ctx context.Context, tName TableName, ref types.
 		// certain updates can safely reuse the previous map
 		ret.schemaHashes = root.schemaHashes
 	}
+
 	return ret, nil
 }
 
