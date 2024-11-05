@@ -818,7 +818,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "/* client a */ set session transaction isolation level read-committed",
+				Query:            "/* client a */ set session transaction isolation level read committed",
 				SkipResultsCheck: true,
 			},
 			{
@@ -827,7 +827,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select @@transaction_isolation, @@autocommit",
-				Expected: []sql.Row{{"READ-COMMITTED", false}},
+				Expected: []sql.Row{{"READ-COMMITTED", 0}},
 			},
 			{
 				Query:            "/* client a */ savepoint abc",
