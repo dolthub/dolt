@@ -1464,7 +1464,7 @@ on a.to_pk = b.to_pk;`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from v;",
+				Query: "select * from v;",
 				Expected: []sql.Row{
 					{nil, "HEAD~1", 1, "HEAD", "removed"},
 					{nil, "HEAD~1", 2, "HEAD", "removed"},
@@ -1473,15 +1473,14 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query:    "insert into t values (4), (5), (6);",
-				Expected: []sql.Row{
-				},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:            "call dolt_commit('-Am', 'inserted into table again');",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "select * from v;",
+				Query: "select * from v;",
 				Expected: []sql.Row{
 					{nil, "HEAD~1", 4, "HEAD", "removed"},
 					{nil, "HEAD~1", 5, "HEAD", "removed"},
