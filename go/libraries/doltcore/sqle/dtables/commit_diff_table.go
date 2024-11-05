@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -39,7 +38,7 @@ var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filt
 var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one 'to_commit' and one 'from_commit'")
 
 type CommitDiffTable struct {
-	name        string
+	tableName   doltdb.TableName
 	dbName      string
 	ddb         *doltdb.DoltDB
 	joiner      *rowconv.Joiner
@@ -58,10 +57,10 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 
-func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
-	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
+func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
+	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName.Name
 
-	_, table, tableExists, err := resolve.Table(ctx, wRoot, tblName)
+	table, tableExists, err := wRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.Do
 
 	return &CommitDiffTable{
 		dbName:       dbName,
-		name:         tblName,
+		tableName:    tblName,
 		ddb:          ddb,
 		workingRoot:  wRoot,
 		stagedRoot:   sRoot,
@@ -110,11 +109,11 @@ func (dt *CommitDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 func (dt *CommitDiffTable) Name() string {
-	return doltdb.DoltCommitDiffTablePrefix + dt.name
+	return doltdb.DoltCommitDiffTablePrefix + dt.tableName.Name
 }
 
 func (dt *CommitDiffTable) String() string {
-	return doltdb.DoltCommitDiffTablePrefix + dt.name
+	return doltdb.DoltCommitDiffTablePrefix + dt.tableName.Name
 }
 
 func (dt *CommitDiffTable) Schema() sql.Schema {
@@ -128,7 +127,7 @@ func (dt *CommitDiffTable) Collation() sql.CollationID {
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return []sql.Index{index.DoltToFromCommitIndex(dt.name)}, nil
+	return []sql.Index{index.DoltToFromCommitIndex(dt.tableName.Name)}, nil
 }
 
 // IndexedAccess implements sql.IndexAddressable
@@ -197,12 +196,12 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		return nil, err
 	}
 
-	toTable, _, _, err := doltdb.GetTableInsensitive(ctx, toRoot, doltdb.TableName{Name: dt.name})
+	toTable, _, _, err := doltdb.GetTableInsensitive(ctx, toRoot, dt.tableName)
 	if err != nil {
 		return nil, err
 	}
 
-	fromTable, _, _, err := doltdb.GetTableInsensitive(ctx, fromRoot, doltdb.TableName{Name: dt.name})
+	fromTable, _, _, err := doltdb.GetTableInsensitive(ctx, fromRoot, dt.tableName)
 	if err != nil {
 		return nil, err
 	}

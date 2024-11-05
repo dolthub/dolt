@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -52,7 +51,7 @@ import (
 const stagedColumnIdx = 1
 
 type WorkspaceTable struct {
-	userTblName string
+	userTblName doltdb.TableName
 	ws          *doltdb.WorkingSet
 	head        doltdb.RootValue
 
@@ -65,7 +64,7 @@ type WorkspaceTable struct {
 }
 
 type WorkspaceTableModifier struct {
-	tableName string
+	tableName doltdb.TableName
 	ws        *doltdb.WorkingSet
 	head      doltdb.RootValue
 
@@ -265,7 +264,7 @@ func (wtm *WorkspaceTableModifier) getWorkspaceTableWriter(ctx *sql.Context, tar
 
 	writeSession := writer.NewWriteSession(types.Format_DOLT, wtm.ws, gst, editor.Options{TargetStaging: targetStaging})
 
-	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: wtm.tableName}, ctx.GetCurrentDatabase(), setter, targetStaging)
+	tableWriter, err := writeSession.GetTableWriter(ctx, wtm.tableName, ctx.GetCurrentDatabase(), setter, targetStaging)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -344,14 +343,14 @@ var _ sql.Table = (*WorkspaceTable)(nil)
 var _ sql.UpdatableTable = (*WorkspaceTable)(nil)
 var _ sql.DeletableTable = (*WorkspaceTable)(nil)
 
-func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head doltdb.RootValue, ws *doltdb.WorkingSet) (sql.Table, error) {
+func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName doltdb.TableName, head doltdb.RootValue, ws *doltdb.WorkingSet) (sql.Table, error) {
 	stageDlt, err := diff.GetTableDeltas(ctx, head, ws.StagedRoot())
 	if err != nil {
 		return nil, err
 	}
 	var stgDel *diff.TableDelta
 	for _, delta := range stageDlt {
-		if delta.FromName.Name == userName || delta.ToName.Name == userName {
+		if delta.FromName.EqualFold(tableName) || delta.ToName.EqualFold(tableName) {
 			stgDel = &delta
 			break
 		}
@@ -364,14 +363,14 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head do
 
 	var wkDel *diff.TableDelta
 	for _, delta := range workingDlt {
-		if delta.FromName.Name == userName || delta.ToName.Name == userName {
+		if delta.FromName.EqualFold(tableName) || delta.ToName.EqualFold(tableName) {
 			wkDel = &delta
 			break
 		}
 	}
 
 	if wkDel == nil && stgDel == nil {
-		emptyTable := emptyWorkspaceTable{tableName: userName}
+		emptyTable := emptyWorkspaceTable{tableName}
 		return &emptyTable, nil
 	}
 
@@ -411,7 +410,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head do
 	if err != nil {
 		return nil, err
 	}
-	finalSch, err := sqlutil.FromDoltSchema("", workspaceName, totalSch)
+	finalSch, err := sqlutil.FromDoltSchema("", tableName.Name, totalSch)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +418,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head do
 	return &WorkspaceTable{
 		ws:            ws,
 		head:          head,
-		userTblName:   userName,
+		userTblName:   tableName,
 		sqlSchema:     finalSch.Schema,
 		stagedDeltas:  stgDel,
 		workingDeltas: wkDel,
@@ -428,7 +427,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceName, userName string, head do
 }
 
 func (wt *WorkspaceTable) Name() string {
-	return doltdb.DoltWorkspaceTablePrefix + wt.userTblName
+	return doltdb.DoltWorkspaceTablePrefix + wt.userTblName.Name
 }
 
 func (wt *WorkspaceTable) String() string {
@@ -528,7 +527,7 @@ func (w *WorkspacePartition) Key() []byte {
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	_, baseTable, baseTableExists, err := resolve.Table(ctx, wt.head, wt.userTblName)
+	baseTable, baseTableExists, err := wt.head.GetTable(ctx, wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +538,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, stagingTable, stagingTableExists, err := resolve.Table(ctx, wt.ws.StagedRoot(), wt.userTblName)
+	stagingTable, stagingTableExists, err := wt.ws.StagedRoot().GetTable(ctx, wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -550,7 +549,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	_, workingTable, workingTableExists, err := resolve.Table(ctx, wt.ws.WorkingRoot(), wt.userTblName)
+	workingTable, workingTableExists, err := wt.ws.WorkingRoot().GetTable(ctx, wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -855,13 +854,13 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 }
 
 type emptyWorkspaceTable struct {
-	tableName string
+	tableName doltdb.TableName
 }
 
 var _ sql.Table = (*emptyWorkspaceTable)(nil)
 
 func (e emptyWorkspaceTable) Name() string {
-	return doltdb.DoltWorkspaceTablePrefix + e.tableName
+	return doltdb.DoltWorkspaceTablePrefix + e.tableName.Name
 }
 
 func (e emptyWorkspaceTable) String() string {

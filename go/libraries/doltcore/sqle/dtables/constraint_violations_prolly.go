@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -33,8 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	resolvedName, tbl, ok, err := resolve.Table(ctx, root, tblName)
+func newProllyCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	tbl, ok, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -44,7 +43,7 @@ func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, r
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+resolvedName.Name, cvSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+tblName.Name, cvSch)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,7 @@ func newProllyCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, r
 	}
 	m := durable.ProllyMapFromArtifactIndex(arts)
 	return &prollyConstraintViolationsTable{
-		tblName: resolvedName,
+		tblName: tblName,
 		root:    root,
 		sqlSch:  sqlSch,
 		tbl:     tbl,

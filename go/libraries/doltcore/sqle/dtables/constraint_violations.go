@@ -27,7 +27,7 @@ import (
 )
 
 // NewConstraintViolationsTable returns a sql.Table that lists constraint violations.
-func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func NewConstraintViolationsTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	if root.VRW().Format() == types.Format_DOLT {
 		return newProllyCVTable(ctx, tblName, root, rs)
 	}
@@ -35,8 +35,8 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName string, root doltdb.
 	return newNomsCVTable(ctx, tblName, root, rs)
 }
 
-func newNomsCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, tblName, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: tblName})
+func newNomsCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -46,7 +46,7 @@ func newNomsCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs 
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+tblName, cvSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+tblName.Name, cvSch)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func newNomsCVTable(ctx *sql.Context, tblName string, root doltdb.RootValue, rs 
 // constraintViolationsTable is a sql.Table implementation that provides access to the constraint violations that exist
 // for a user table for the old format.
 type constraintViolationsTable struct {
-	tblName string
+	tblName doltdb.TableName
 	root    doltdb.RootValue
 	cvSch   schema.Schema
 	sqlSch  sql.PrimaryKeySchema
@@ -77,12 +77,12 @@ var _ sql.DeletableTable = (*constraintViolationsTable)(nil)
 
 // Name implements the interface sql.Table.
 func (cvt *constraintViolationsTable) Name() string {
-	return doltdb.DoltConstViolTablePrefix + cvt.tblName
+	return doltdb.DoltConstViolTablePrefix + cvt.tblName.Name
 }
 
 // String implements the interface sql.Table.
 func (cvt *constraintViolationsTable) String() string {
-	return doltdb.DoltConstViolTablePrefix + cvt.tblName
+	return doltdb.DoltConstViolTablePrefix + cvt.tblName.Name
 }
 
 // Schema implements the interface sql.Table.
@@ -193,7 +193,7 @@ func (cvd *constraintViolationsDeleter) Close(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	updatedRoot, err := cvd.cvt.root.PutTable(ctx, doltdb.TableName{Name: cvd.cvt.tblName}, updatedTbl)
+	updatedRoot, err := cvd.cvt.root.PutTable(ctx, cvd.cvt.tblName, updatedTbl)
 	if err != nil {
 		return err
 	}

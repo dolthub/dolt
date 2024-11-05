@@ -30,10 +30,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -59,7 +57,7 @@ var _ sql.IndexAddressable = (*DiffTable)(nil)
 var _ sql.StatisticsTable = (*DiffTable)(nil)
 
 type DiffTable struct {
-	name        string
+	tableName   doltdb.TableName
 	ddb         *doltdb.DoltDB
 	workingRoot doltdb.RootValue
 	head        *doltdb.Commit
@@ -88,10 +86,10 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	diffTblName := doltdb.DoltDiffTablePrefix + tblName
+func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, root doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+	diffTblName := doltdb.DoltDiffTablePrefix + tblName.Name
 
-	resolvedTableName, table, tableExists, err := resolve.Table(ctx, root, tblName)
+	table, tableExists, err := root.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +112,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, 
 	}
 
 	return &DiffTable{
-		name:             resolvedTableName.Name,
+		tableName:        tblName,
 		ddb:              ddb,
 		workingRoot:      root,
 		head:             head,
@@ -141,11 +139,11 @@ func (dt *DiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
 }
 
 func (dt *DiffTable) Name() string {
-	return doltdb.DoltDiffTablePrefix + dt.name
+	return doltdb.DoltDiffTablePrefix + dt.tableName.Name
 }
 
 func (dt *DiffTable) String() string {
-	return doltdb.DoltDiffTablePrefix + dt.name
+	return doltdb.DoltDiffTablePrefix + dt.tableName.Name
 }
 
 func (dt *DiffTable) Schema() sql.Schema {
@@ -164,15 +162,15 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	exactName, t, exists, err := resolve.Table(ctx, dt.workingRoot, dt.name)
+	table, exists, err := dt.workingRoot.GetTable(ctx, dt.tableName)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("table: %s does not exist", dt.name)
+		return nil, fmt.Errorf("table: %s does not exist", dt.tableName.String())
 	}
 
-	wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
+	wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, dt.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +181,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	cmHashToTblInfo := make(map[hash.Hash]TblInfoAtCommit)
-	cmHashToTblInfo[cmHash] = TblInfoAtCommit{"WORKING", nil, t, wrTblHash}
+	cmHashToTblInfo[cmHash] = TblInfoAtCommit{"WORKING", nil, table, wrTblHash}
 
 	err = cmItr.Reset(ctx)
 	if err != nil {
@@ -191,7 +189,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	return &DiffPartitions{
-		tblName:         exactName,
+		tblName:         dt.tableName,
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
 		selectFunc:      sf,
@@ -253,21 +251,21 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}
-		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hs, dt.head, false)
+		hashes, commits, _ := index.HashesToCommits(ctx, dt.ddb, hs, dt.head, false)
 		if len(hashes) == 0 {
 			return sql.PartitionsToPartitionIter(), nil
 		}
-		return dt.toCommitLookupPartitions(ctx, hashes, commits, metas)
+		return dt.toCommitLookupPartitions(ctx, hashes, commits)
 	case index.FromCommitIndexId:
 		hs, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}
-		hashes, commits, metas := index.HashesToCommits(ctx, dt.ddb, hs, nil, false)
+		hashes, commits, _ := index.HashesToCommits(ctx, dt.ddb, hs, nil, false)
 		if len(hashes) == 0 {
 			return sql.PartitionsToPartitionIter(), nil
 		}
-		return dt.fromCommitLookupPartitions(ctx, hashes, commits, metas)
+		return dt.fromCommitLookupPartitions(ctx, hashes, commits)
 	default:
 		return dt.Partitions(ctx)
 	}
@@ -280,12 +278,12 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 // for the |from_commit| diff partitions we will iterate.
 // TODO the structure of the diff iterator doesn't appear to accommodate
 // several children for a parent hash.
-func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	exactName, tbl, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
+func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
+	tbl, ok, err := dt.workingRoot.GetTable(ctx, dt.tableName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, fmt.Errorf("table: %s does not exist", dt.name)
+		return nil, fmt.Errorf("table: %s does not exist", dt.tableName.String())
 	}
 
 	var parentHashes []hash.Hash
@@ -300,7 +298,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 			// If from_commit specifies the 'HEAD' commit, we need to include
 			// the working root in the parent commits because 'WORKING' is one step
 			// above 'HEAD'.
-			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
+			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, dt.tableName)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +330,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		}
 
 		if childCm != nil {
-			ti, err := tableInfoForCommit(ctx, dt.name, childCm, childHs)
+			ti, err := tableInfoForCommit(ctx, dt.tableName, childCm, childHs)
 			if err != nil {
 				return nil, err
 			}
@@ -352,12 +350,9 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 	}
 
 	cmItr := doltdb.NewCommitSliceIter(pCommits, parentHashes)
-	if err != nil {
-		return nil, err
-	}
 
 	return &DiffPartitions{
-		tblName:         exactName,
+		tblName:         dt.tableName,
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
 		selectFunc:      sf,
@@ -441,13 +436,13 @@ func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*d
 	}
 }
 
-func tableInfoForCommit(ctx *sql.Context, table string, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
+func tableInfoForCommit(ctx *sql.Context, tableName doltdb.TableName, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {
 	r, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
 
-	exactName, tbl, exists, err := resolve.Table(ctx, r, table)
+	tbl, exists, err := r.GetTable(ctx, tableName)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
@@ -455,7 +450,7 @@ func tableInfoForCommit(ctx *sql.Context, table string, cm *doltdb.Commit, hs ha
 		return TblInfoAtCommit{}, nil
 	}
 
-	tblHash, _, err := r.GetTableHash(ctx, exactName)
+	tblHash, _, err := r.GetTableHash(ctx, tableName)
 	if err != nil {
 		return TblInfoAtCommit{}, err
 	}
@@ -472,12 +467,12 @@ func tableInfoForCommit(ctx *sql.Context, table string, cm *doltdb.Commit, hs ha
 // toCommitLookupPartitions creates a diff partition iterator for a set of
 // commits. The structure of the iter requires we pre-populate the parents
 // of to_commit for diffing.
-func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit, metas []*datas.CommitMeta) (sql.PartitionIter, error) {
-	exactName, t, ok, err := resolve.Table(ctx, dt.workingRoot, dt.name)
+func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Hash, commits []*doltdb.Commit) (sql.PartitionIter, error) {
+	t, ok, err := dt.workingRoot.GetTable(ctx, dt.tableName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, fmt.Errorf("table: %s does not exist", dt.name)
+		return nil, fmt.Errorf("table: %s does not exist", dt.tableName.String())
 	}
 
 	working, err := dt.head.HashOf()
@@ -493,7 +488,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 
 		var toCmInfo TblInfoAtCommit
 		if hs == working && cm == nil {
-			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
+			wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, dt.tableName)
 			if err != nil {
 				return nil, err
 			}
@@ -518,7 +513,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 			continue
 		}
 
-		ti, err := tableInfoForCommit(ctx, dt.name, cm, hs)
+		ti, err := tableInfoForCommit(ctx, dt.tableName, cm, hs)
 		if err != nil {
 			return nil, err
 		}
@@ -558,12 +553,9 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 	}
 
 	cmItr := doltdb.NewCommitSliceIter(pCommits, parentHashes)
-	if err != nil {
-		return nil, err
-	}
 
 	return &DiffPartitions{
-		tblName:         exactName,
+		tblName:         dt.tableName,
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
 		selectFunc:      sf,
@@ -574,7 +566,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
+	return index.DoltDiffIndexesFromTable(ctx, "", dt.tableName.Name, dt.table)
 }
 
 // IndexedAccess implements sql.IndexAddressable
