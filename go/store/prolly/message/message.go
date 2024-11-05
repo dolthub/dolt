@@ -64,6 +64,7 @@ func UnpackFields(msg serial.Message) (fileId string, keys, values ItemAccess, l
 		return
 	case serial.BlobFileID:
 		keys, values, level, count, err = getBlobKeysAndValues(msg)
+		return
 	default:
 		panic(fmt.Sprintf("unknown message id %s", serial.GetFileID(msg)))
 	}
