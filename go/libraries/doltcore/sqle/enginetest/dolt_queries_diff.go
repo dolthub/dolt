@@ -1474,6 +1474,7 @@ on a.to_pk = b.to_pk;`,
 			{
 				Query:    "insert into t values (4), (5), (6);",
 				Expected: []sql.Row{
+					{gmstypes.NewOkResult(3)},
 				},
 			},
 			{
