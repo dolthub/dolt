@@ -814,7 +814,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		},
 	},
 	{
-		Name: "TRANSACTION ISOLATION READ-COMMITTED does not break AUTOCOMMIT=OFF",
+		Name:        "TRANSACTION ISOLATION READ-COMMITTED does not break AUTOCOMMIT=OFF",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
 			{
