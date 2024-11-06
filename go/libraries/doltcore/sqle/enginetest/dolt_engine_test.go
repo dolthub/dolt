@@ -104,9 +104,32 @@ func TestSchemaOverrides(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
-	var scripts = []queries.ScriptTest{}
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "test script",
+			SetUpScript: []string{
+				"create view v as select 1;",
+				"call dolt_commit('-Am', 'created view on main');",
+				"call dolt_checkout('-b', 'other');",
+				"drop view v;",
+				"create table v (i int);",
+				"call dolt_commit('-Am', 'replace with table on other');",
+				"call dolt_checkout('main');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query: "show create table v as of other;",
+					Expected: []sql.Row{
+						{"v", "CREATE TABLE `v` (\n" +
+							"  `i` int\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+					},
+				},
+			},
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
