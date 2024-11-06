@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+package dolt_ci
 
 import (
 	"fmt"
@@ -28,19 +28,19 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-var ExpectedDoltCITablesOrdered = []doltdb.TableName{
-	doltdb.TableName{Name: doltdb.WorkflowsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggerBranchesTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
-	doltdb.TableName{Name: doltdb.WorkflowJobsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowStepsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
+var expectedDoltCITablesOrdered = []doltdb.TableName{
+	{Name: doltdb.WorkflowsTableName},
+	{Name: doltdb.WorkflowEventsTableName},
+	{Name: doltdb.WorkflowEventTriggersTableName},
+	{Name: doltdb.WorkflowEventTriggerBranchesTableName},
+	{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
+	{Name: doltdb.WorkflowJobsTableName},
+	{Name: doltdb.WorkflowStepsTableName},
+	{Name: doltdb.WorkflowSavedQueryStepsTableName},
+	{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
 }
 
-type QueryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
+type queryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
 
 func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	dbName := ctx.GetCurrentDatabase()
@@ -55,7 +55,7 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	exists := 0
 	var hasSome bool
 	var hasAll bool
-	for _, tableName := range ExpectedDoltCITablesOrdered {
+	for _, tableName := range expectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
@@ -65,8 +65,8 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 		}
 	}
 
-	hasSome = exists > 0 && exists < len(ExpectedDoltCITablesOrdered)
-	hasAll = exists == len(ExpectedDoltCITablesOrdered)
+	hasSome = exists > 0 && exists < len(expectedDoltCITablesOrdered)
+	hasAll = exists == len(expectedDoltCITablesOrdered)
 	if !hasSome && !hasAll {
 		return false, nil
 	}
@@ -87,7 +87,7 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 
 	root := ws.WorkingRoot()
 
-	for _, tableName := range ExpectedDoltCITablesOrdered {
+	for _, tableName := range expectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return nil, err
@@ -100,7 +100,7 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 	return existing, nil
 }
 
-func sqlWriteQuery(ctx *sql.Context, queryFunc QueryFunc, query string) error {
+func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 	_, rowIter, _, err := queryFunc(ctx, query)
 	if err != nil {
 		return err
@@ -109,11 +109,11 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc QueryFunc, query string) error {
 	return err
 }
 
-func commitCIDestroy(ctx *sql.Context, queryFunc QueryFunc, commiterName, commiterEmail string) error {
+func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-Am' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
-func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc QueryFunc, commiterName, commiterEmail string) error {
+func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, commiterName, commit
 		return fmt.Errorf("roots not found in database %s", dbName)
 	}
 
-	roots, err = actions.StageTables(ctx, roots, ExpectedDoltCITablesOrdered, true)
+	roots, err = actions.StageTables(ctx, roots, expectedDoltCITablesOrdered, true)
 	if err != nil {
 		return err
 	}

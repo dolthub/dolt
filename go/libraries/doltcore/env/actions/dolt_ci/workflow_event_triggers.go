@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+package dolt_ci
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ import (
 	stypes "github.com/dolthub/dolt/go/store/types"
 )
 
-func createWorkflowEventsTable(ctx *sql.Context) error {
+func createWorkflowEventTriggersTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ws, err := dSess.WorkingSet(ctx, dbName)
@@ -39,7 +39,7 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 
 	root := ws.WorkingRoot()
 
-	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
+	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName})
 	if err != nil {
 		return err
 	}
@@ -49,8 +49,8 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 
 	colCollection := schema.NewColCollection(
 		schema.Column{
-			Name:          doltdb.WorkflowEventsIdPkColName,
-			Tag:           schema.WorkflowEventsIdTag,
+			Name:          doltdb.WorkflowEventTriggersIdPkColName,
+			Tag:           schema.WorkflowEventTriggersIdTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    true,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -60,8 +60,8 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowEventsWorkflowNameFkColName,
-			Tag:           schema.WorkflowEventsWorkflowNameFkTag,
+			Name:          doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName,
+			Tag:           schema.WorkflowEventTriggerWorkflowEventIdFkTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    false,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -71,8 +71,8 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowEventsEventTypeColName,
-			Tag:           schema.WorkflowEventsEventTypeTag,
+			Name:          doltdb.WorkflowEventTriggersEventTriggerTypeColName,
+			Tag:           schema.WorkflowEventTriggerEventTriggerTypeTag,
 			Kind:          stypes.IntKind,
 			IsPartOfPK:    false,
 			TypeInfo:      typeinfo.FromKind(stypes.IntKind),
@@ -89,19 +89,19 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, sch)
+	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}, sch)
 	if err != nil {
 		return err
 	}
 
 	sfkc := sql.ForeignKeyConstraint{
-		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName),
+		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName),
 		Database:       dbName,
-		Table:          doltdb.WorkflowEventsTableName,
-		Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
+		Table:          doltdb.WorkflowEventTriggersTableName,
+		Columns:        []string{doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName},
 		ParentDatabase: dbName,
-		ParentTable:    doltdb.WorkflowsTableName,
-		ParentColumns:  []string{doltdb.WorkflowsNameColName},
+		ParentTable:    doltdb.WorkflowEventsTableName,
+		ParentColumns:  []string{doltdb.WorkflowEventsIdPkColName},
 		OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
 		OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 		IsResolved:     false,
@@ -135,7 +135,7 @@ func createWorkflowEventsTable(ctx *sql.Context) error {
 		return err
 	}
 
-	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, tbl)
+	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}, tbl)
 	if err != nil {
 		return err
 	}

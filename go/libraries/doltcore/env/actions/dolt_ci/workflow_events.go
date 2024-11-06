@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+package dolt_ci
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ import (
 	stypes "github.com/dolthub/dolt/go/store/types"
 )
 
-func createWorkflowStepsTable(ctx *sql.Context) error {
+func createWorkflowEventsTable(ctx *sql.Context) error {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ws, err := dSess.WorkingSet(ctx, dbName)
@@ -39,7 +39,7 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 
 	root := ws.WorkingRoot()
 
-	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowStepsTableName})
+	found, err := root.HasTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName})
 	if err != nil {
 		return err
 	}
@@ -49,8 +49,8 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 
 	colCollection := schema.NewColCollection(
 		schema.Column{
-			Name:          doltdb.WorkflowStepsIdPkColName,
-			Tag:           schema.WorkflowStepsIdTag,
+			Name:          doltdb.WorkflowEventsIdPkColName,
+			Tag:           schema.WorkflowEventsIdTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    true,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -60,8 +60,8 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowStepsNameColName,
-			Tag:           schema.WorkflowStepsNameTag,
+			Name:          doltdb.WorkflowEventsWorkflowNameFkColName,
+			Tag:           schema.WorkflowEventsWorkflowNameFkTag,
 			Kind:          stypes.StringKind,
 			IsPartOfPK:    false,
 			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
@@ -71,55 +71,11 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
 		},
 		schema.Column{
-			Name:          doltdb.WorkflowStepsWorkflowJobIdFkColName,
-			Tag:           schema.WorkflowStepsWorkflowJobIdFkTag,
-			Kind:          stypes.StringKind,
-			IsPartOfPK:    false,
-			TypeInfo:      typeinfo.FromKind(stypes.StringKind),
-			Default:       "",
-			AutoIncrement: false,
-			Comment:       "",
-			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
-		},
-		schema.Column{
-			Name:          doltdb.WorkflowStepsStepOrderColName,
-			Tag:           schema.WorkflowStepsStepOrderTag,
+			Name:          doltdb.WorkflowEventsEventTypeColName,
+			Tag:           schema.WorkflowEventsEventTypeTag,
 			Kind:          stypes.IntKind,
 			IsPartOfPK:    false,
 			TypeInfo:      typeinfo.FromKind(stypes.IntKind),
-			Default:       "",
-			AutoIncrement: false,
-			Comment:       "",
-			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
-		},
-		schema.Column{
-			Name:          doltdb.WorkflowStepsStepTypeColName,
-			Tag:           schema.WorkflowStepsStepTypeTag,
-			Kind:          stypes.IntKind,
-			IsPartOfPK:    false,
-			TypeInfo:      typeinfo.FromKind(stypes.IntKind),
-			Default:       "",
-			AutoIncrement: false,
-			Comment:       "",
-			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
-		},
-		schema.Column{
-			Name:          doltdb.WorkflowStepsCreatedAtColName,
-			Tag:           schema.WorkflowStepsCreatedAtTag,
-			Kind:          stypes.TimestampKind,
-			IsPartOfPK:    false,
-			TypeInfo:      typeinfo.FromKind(stypes.TimestampKind),
-			Default:       "",
-			AutoIncrement: false,
-			Comment:       "",
-			Constraints:   []schema.ColConstraint{schema.NotNullConstraint{}},
-		},
-		schema.Column{
-			Name:          doltdb.WorkflowStepsUpdatedAtColName,
-			Tag:           schema.WorkflowStepsUpdatedAtTag,
-			Kind:          stypes.TimestampKind,
-			IsPartOfPK:    false,
-			TypeInfo:      typeinfo.FromKind(stypes.TimestampKind),
 			Default:       "",
 			AutoIncrement: false,
 			Comment:       "",
@@ -133,19 +89,19 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 	}
 
 	// underlying table doesn't exist. Record this, then create the table.
-	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowStepsTableName}, sch)
+	nrv, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, sch)
 	if err != nil {
 		return err
 	}
 
 	sfkc := sql.ForeignKeyConstraint{
-		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsWorkflowJobIdFkColName),
+		Name:           fmt.Sprintf("%s_%s", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName),
 		Database:       dbName,
-		Table:          doltdb.WorkflowStepsTableName,
-		Columns:        []string{doltdb.WorkflowStepsWorkflowJobIdFkColName},
+		Table:          doltdb.WorkflowEventsTableName,
+		Columns:        []string{doltdb.WorkflowEventsWorkflowNameFkColName},
 		ParentDatabase: dbName,
-		ParentTable:    doltdb.WorkflowJobsTableName,
-		ParentColumns:  []string{doltdb.WorkflowJobsIdPkColName},
+		ParentTable:    doltdb.WorkflowsTableName,
+		ParentColumns:  []string{doltdb.WorkflowsNameColName},
 		OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
 		OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
 		IsResolved:     false,
@@ -179,7 +135,7 @@ func createWorkflowStepsTable(ctx *sql.Context) error {
 		return err
 	}
 
-	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowStepsTableName}, tbl)
+	nrv, err = nrv.PutTable(ctx, doltdb.TableName{Name: doltdb.WorkflowEventsTableName}, tbl)
 	if err != nil {
 		return err
 	}

@@ -16,8 +16,7 @@ package ci
 
 import (
 	"context"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -96,7 +95,7 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 	}
 
 	var verr errhand.VerboseError
-	err = schema.DestroyDoltCITables(sqlCtx, db, queryist.Query, name, email)
+	err = dolt_ci.DestroyDoltCITables(sqlCtx, db, queryist.Query, name, email)
 	if err != nil {
 		verr = errhand.VerboseErrorFromError(err)
 	}
