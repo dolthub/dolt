@@ -1601,12 +1601,24 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	return db.SetRoot(ctx, newRoot)
 }
 
+func (db Database) GetViewDefinitionAsOf(ctx *sql.Context, viewName string, asOf interface{}) (sql.ViewDefinition, bool, error) {
+	_, root, err := resolveAsOf(ctx, db, asOf)
+	if err != nil {
+		return sql.ViewDefinition{}, false, err
+	}
+	return db.getViewDefinitionWithRoot(ctx, viewName, root)
+}
+
 // GetViewDefinition implements sql.ViewDatabase
 func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+	return db.getViewDefinitionWithRoot(ctx, viewName, root)
+}
+
+func (db Database) getViewDefinitionWithRoot(ctx *sql.Context, viewName string, root doltdb.RootValue) (sql.ViewDefinition, bool, error) {
 	// attempts to define the db schema name if applicable
 	if resolve.UseSearchPath && db.schemaName == "" {
 		if schemaName, _ := resolve.FirstExistingSchemaOnSearchPath(ctx, root); schemaName != "" {
