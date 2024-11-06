@@ -110,7 +110,10 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 }
 
 func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
-	for _, tableName := range expectedDoltCITablesOrdered {
+	// stage table in reverse order so child tables
+	// are staged before parent tables
+	for i := len(expectedDoltCITablesOrdered) - 1; i >= 0; i-- {
+		tableName := expectedDoltCITablesOrdered[i]
 		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
 		if err != nil {
 			return err
