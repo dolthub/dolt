@@ -115,3 +115,123 @@ const (
 	DoltIgnorePatternTag = iota + SystemTableReservedMin + uint64(8000)
 	DoltIgnoreIgnoredTag
 )
+
+// Tags for dolt_ci_workflows table
+const (
+	// WorkflowsNameTag is the tag of the name column in the workflows table
+	WorkflowsNameTag = iota + SystemTableReservedMin + uint64(9000)
+
+	// WorkflowsCreatedAtTag is the tag of the created_at column in the workflows table
+	WorkflowsCreatedAtTag
+
+	// WorkflowsUpdatedAtTag is the tag of the updated_at column in the workflows table
+	WorkflowsUpdatedAtTag
+
+	// WorkflowEventsIdTag is the tag of the id column in the workflow events table
+	WorkflowEventsIdTag
+
+	// WorkflowEventsWorkflowNameFkTag is the tag of the workflow name fk column in the workflow events table
+	WorkflowEventsWorkflowNameFkTag
+
+	// WorkflowEventsEventTypeTag is the tag of the events typ column in the workflow events table
+	WorkflowEventsEventTypeTag
+
+	// WorkflowEventTriggersIdTag is the tag of the id column of the workflow event triggers table
+	WorkflowEventTriggersIdTag
+
+	// WorkflowEventTriggerWorkflowEventIdFkTag is the tag of the workflow events id fk column in the workflow event triggers table
+	WorkflowEventTriggerWorkflowEventIdFkTag
+
+	// WorkflowEventTriggerEventTriggerTypeTag is the tag of the event trigger type column on the workflow event triggers table
+	WorkflowEventTriggerEventTriggerTypeTag
+
+	// WorkflowEventTriggerBranchesIdTag is the tag of the id columnof the workflow event trigger branches table
+	WorkflowEventTriggerBranchesIdTag
+
+	// WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag is the tag of the workflow event trigger id foreign key column tag on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesWorkflowEventTriggerIdFkTag
+
+	// WorkflowEventTriggerBranchesBranchTag is the tag of the branch column on the workflow event trigger branches table
+	WorkflowEventTriggerBranchesBranchTag
+
+	// WorkflowEventTriggerActivitiesIdTag is the tag of the id column on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesIdTag
+
+	// WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag is the name of the tag on the workflow event trigger id foreign key column on the workflow event trigger activities table
+	WorkflowEventTriggerActivitiesWorkflowEventTriggerIdFkTag
+
+	// WorkflowEventTriggerActivitiesActivityTag is the name of the tag on the activity column on the workflow event trigger activities table.
+	WorkflowEventTriggerActivitiesActivityTag
+
+	// WorkflowJobsIdTag is the name of the tag on the id column on the workflow jobs table
+	WorkflowJobsIdTag
+
+	// WorkflowJobsNameTag is the name of the tag on the name column on the workflow jobs table
+	WorkflowJobsNameTag
+
+	// WorkflowJobsWorkflowNameFkTag is the name of the tag on the workflow name foreign key column on the
+	WorkflowJobsWorkflowNameFkTag
+
+	// WorkflowJobsCreatedAtTag is the name of the tag on the created at column on the workflow jobs table
+	WorkflowJobsCreatedAtTag
+
+	// WorkflowJobsUpdatedAtTag is the name of the tag on the updated at column on the workflow jobs table
+	WorkflowJobsUpdatedAtTag
+
+	// WorkflowStepsIdTag is the name of the tag on the id column on the workflow steps table
+	WorkflowStepsIdTag
+
+	// WorkflowStepsNameTag is the name of the tag on the name tag on the workflow steps table
+	WorkflowStepsNameTag
+
+	// WorkflowStepsWorkflowJobIdFkTag is the name of the tag on the workflow job id foreign key column on the workflow steps table
+	WorkflowStepsWorkflowJobIdFkTag
+
+	// WorkflowStepsStepOrderTag is the name of the tag on the step order column on the workflow steps table
+	WorkflowStepsStepOrderTag
+
+	// WorkflowStepsStepTypeTag is the name of the tag on the step type column on the workflow steps table
+	WorkflowStepsStepTypeTag
+
+	// WorkflowStepsCreatedAtTag is the name of the tag on the created at column on the workflow steps table
+	WorkflowStepsCreatedAtTag
+
+	// WorkflowStepsUpdatedAtTag is the name of the tag on the updated at column on the workflow steps table
+	WorkflowStepsUpdatedAtTag
+
+	// WorkflowSavedQueryStepsIdTag is the name of the tag on the id column on the workflow saved query steps table
+	WorkflowSavedQueryStepsIdTag
+
+	// WorkflowSavedQueryStepsWorkflowStepIdFkTag is the name of the tag on the workflow step id foreign key column of the workflow saved query steps table
+	WorkflowSavedQueryStepsWorkflowStepIdFkTag
+
+	// WorkflowSavedQueryStepsSavedQueryNameTag is the name of the tag on the saved query name column on the workflow saved query steps table
+	WorkflowSavedQueryStepsSavedQueryNameTag
+
+	// WorkflowSavedQueryStepsExpectedResultsTypeTag is the name of the tag on the expected results type column on the workflow saved queyr steps table
+	WorkflowSavedQueryStepsExpectedResultsTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsIdPkTag is the name of the tag of the id column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsIdPkTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkTag is the name of the tag of the workflow saved query step id foreign key column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeTag is the name of the tag on the expected column count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeTag is the name of the tag on the expected row count comparison type column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountTag is the name of the tag on the expected column count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountTag is the name of the tag on the expected row count column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtTag is the name of the tag on the created at column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtTag
+
+	// WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtTag is the name of the tag on the updated at column on the workflow saved query step expected row column results table
+	WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtTag
+)

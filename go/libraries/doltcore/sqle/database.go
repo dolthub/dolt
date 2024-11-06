@@ -962,6 +962,8 @@ func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb
 	var table sql.Table
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
+	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
+		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
