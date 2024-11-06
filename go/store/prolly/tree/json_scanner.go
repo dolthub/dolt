@@ -38,7 +38,7 @@ type JsonScanner struct {
 	valueOffset int
 }
 
-var jsonParseError = fmt.Errorf("an error occurred while reading or writing JSON to/from the database. This is most likely a bug, but could indicate database corruption")
+var jsonParseError = fmt.Errorf("encountered invalid JSON while reading JSON from the database, or while preparing to write JSON to the database. This is most likely a bug in JSON diffing")
 
 func (j JsonScanner) Clone() JsonScanner {
 	return JsonScanner{
