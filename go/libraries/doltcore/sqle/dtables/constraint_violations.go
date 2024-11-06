@@ -36,11 +36,11 @@ func NewConstraintViolationsTable(ctx *sql.Context, tblName doltdb.TableName, ro
 }
 
 func newNomsCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
+	var tbl *doltdb.Table
+	var err error
+	tbl, tblName, err = mustGetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, err
-	} else if !ok {
-		return nil, sql.ErrTableNotFound.New(tblName)
 	}
 	cvSch, err := tbl.GetConstraintViolationsSchema(ctx)
 	if err != nil {

@@ -29,11 +29,11 @@ import (
 
 // NewConflictsTable returns a new ConflictsTable instance
 func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTbl sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, ok, err := root.GetTable(ctx, tblName)
+	var tbl *doltdb.Table
+	var err error
+	tbl, tblName, err = mustGetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, err
-	} else if !ok {
-		return nil, sql.ErrTableNotFound.New(tblName)
 	}
 
 	if types.IsFormat_DOLT(tbl.Format()) {

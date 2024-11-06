@@ -410,7 +410,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 	if err != nil {
 		return nil, err
 	}
-	finalSch, err := sqlutil.FromDoltSchema("", tableName.Name, totalSch)
+	finalSch, err := sqlutil.FromDoltSchema("", workspaceTableName, totalSch)
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +527,7 @@ func (w *WorkspacePartition) Key() []byte {
 }
 
 func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	baseTable, baseTableExists, err := wt.head.GetTable(ctx, wt.userTblName)
+	baseTable, _, baseTableExists, err := doltdb.GetTableInsensitive(ctx, wt.head, wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +538,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	stagingTable, stagingTableExists, err := wt.ws.StagedRoot().GetTable(ctx, wt.userTblName)
+	stagingTable, _, stagingTableExists, err := doltdb.GetTableInsensitive(ctx, wt.ws.StagedRoot(), wt.userTblName)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +549,7 @@ func (wt *WorkspaceTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		}
 	}
 
-	workingTable, workingTableExists, err := wt.ws.WorkingRoot().GetTable(ctx, wt.userTblName)
+	workingTable, _, workingTableExists, err := doltdb.GetTableInsensitive(ctx, wt.ws.WorkingRoot(), wt.userTblName)
 	if err != nil {
 		return nil, err
 	}

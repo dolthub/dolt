@@ -39,6 +39,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
+				// Test case-insensitive table name
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_T;",
+				Expected: []sql.Row{{2}},
+			},
+			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
@@ -4745,6 +4750,14 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+				},
+			},
+			{
+				// Test case-insensitive table name
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_T WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0;",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},

@@ -60,12 +60,11 @@ var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName.Name
 
-	table, tableExists, err := wRoot.GetTable(ctx, tblName)
+	var table *doltdb.Table
+	var err error
+	table, tblName, err = mustGetTableInsensitive(ctx, wRoot, tblName)
 	if err != nil {
 		return nil, err
-	}
-	if !tableExists {
-		return nil, sql.ErrTableNotFound.New(diffTblName)
 	}
 
 	sch, err := table.GetSchema(ctx)
