@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-func CreateDoltCITableForeignKey(
+func createDoltCITableForeignKey(
 	ctx context.Context,
 	root doltdb.RootValue,
 	tbl *doltdb.Table,

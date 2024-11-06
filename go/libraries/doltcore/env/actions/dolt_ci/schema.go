@@ -110,7 +110,13 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 }
 
 func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
-	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-Am' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
+	for _, tableName := range expectedDoltCITablesOrdered {
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+		if err != nil {
+			return err
+		}
+	}
+	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
 func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {

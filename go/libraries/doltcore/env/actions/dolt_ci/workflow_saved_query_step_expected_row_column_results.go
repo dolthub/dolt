@@ -195,7 +195,7 @@ func createWorkflowSavedQueryStepExpectedRowColumnResultsTable(ctx *sql.Context)
 		return err
 	}
 
-	doltFk, err := CreateDoltCITableForeignKey(ctx, nrv, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, dbName)
+	doltFk, err := createDoltCITableForeignKey(ctx, nrv, tbl, sch, sfkc, onUpdateRefAction, onDeleteRefAction, dbName)
 	if err != nil {
 		return err
 	}
