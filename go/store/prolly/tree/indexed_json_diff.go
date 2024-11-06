@@ -46,13 +46,14 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 
 	var currentFromCursor, currentToCursor *JsonCursor
 	if differ.from == nil {
-		// This can happen when either document fits in a single chunk.
-		// We don't use the chunk differ in this case, and instead we create the cursors without it.
+		// The "from" document fits inside a single chunk.
+		// We can't create the "from" cursor from the differ, so we create it here instead.
 		diffKey := []byte{byte(startOfValue)}
 		currentFromCursor, err = newJsonCursorAtStartOfChunk(ctx, from.m.NodeStore, from.m.Root, diffKey)
 		if err != nil {
 			return nil, err
 		}
+		// Advance the cursor past the "beginning of document" location, so that it aligns with the "to" cursor no matter what.
 		err = advanceCursor(ctx, &currentFromCursor)
 		if err != nil {
 			return nil, err
@@ -60,13 +61,14 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 	}
 
 	if differ.to == nil {
-		// This can happen when either document fits in a single chunk.
-		// We don't use the chunk differ in this case, and instead we create the cursors without it.
+		// The "to" document fits inside a single chunk.
+		// We can't create the "from" cursor from the differ, so we create it here instead.
 		diffKey := []byte{byte(startOfValue)}
 		currentToCursor, err = newJsonCursorAtStartOfChunk(ctx, to.m.NodeStore, to.m.Root, diffKey)
 		if err != nil {
 			return nil, err
 		}
+		// Advance the cursor past the "beginning of document" location, so that it aligns with the "from" cursor no matter what.
 		err = advanceCursor(ctx, &currentToCursor)
 		if err != nil {
 			return nil, err
@@ -161,8 +163,11 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 				return JsonDiff{}, err
 			}
 		} else if jd.currentFromCursor == nil {
-			// We exhausted the current `from` chunk but not the `to` chunk. Since the chunk boundaries don't align on
+			// We exhausted the current `from` chunk but not the current `to` chunk. Since the chunk boundaries don't align on
 			// the same key, we need to continue into the next chunk.
+
+			// Alternatively, the "to" cursor was created during construction because the "to" document fit in a single chunk,
+			// and the "from" cursor hasn't been created yet.
 
 			jd.currentFromCursor, err = newJsonCursorFromCursor(ctx, jd.differ.from)
 			if err != nil {
@@ -175,8 +180,11 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			}
 			continue
 		} else if jd.currentToCursor == nil {
-			// We exhausted the current `to` chunk but not the `from` chunk. Since the chunk boundaries don't align on
+			// We exhausted the current `to` chunk but not the current `from` chunk. Since the chunk boundaries don't align on
 			// the same key, we need to continue into the next chunk.
+
+			// Alternatively, the "from" cursor was created during construction because the "from" document fit in a single chunk,
+			// and the "to" cursor hasn't been created yet.
 
 			jd.currentToCursor, err = newJsonCursorFromCursor(ctx, jd.differ.to)
 			if err != nil {
