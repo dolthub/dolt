@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression/function/json"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -415,6 +416,34 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			from: largeObject,
 			to:   insert(emptyDocument, "$.level6", insert(emptyDocument, "$.level4", lookup(largeObject, "$.level6.level4"))),
 		},
+		{
+			// This is a regression test.
+			//
+			// If:
+			// - A chunk begins with an object "A"
+			// - If a value "A.b" within this object was modified
+			// - The previous chunk was also modified
+			// Then the differ would incorrectly report that the entire "A" object had been modified, instead of the sub-value "A.b"
+			// The values in this test case are specifically chosen to meet these conditions,
+			// as there is a chunk boundary immediately before "$.level5.level3.level1"
+			name: "correctly diff object that begins on chunk boundary",
+			from: largeObject,
+			to:   set(set(largeObject, "$.level5.level2.number", 2), "$.level5.level3.level1.number", 2),
+			expectedDiffs: []JsonDiff{
+				{
+					Key:  makeJsonPathKey(`level5`, `level2`, `number`),
+					From: types.JSONDocument{Val: 1},
+					To:   types.JSONDocument{Val: 2},
+					Type: ModifiedDiff,
+				},
+				{
+					Key:  makeJsonPathKey(`level5`, `level3`, `level1`, `number`),
+					From: types.JSONDocument{Val: 1},
+					To:   types.JSONDocument{Val: 2},
+					Type: ModifiedDiff,
+				},
+			},
+		},
 	}
 }
 
@@ -489,7 +518,10 @@ func runTest(t *testing.T, test jsonDiffTest) {
 		return cmp == 0
 	}
 	if test.expectedDiffs != nil {
-		require.Equal(t, len(test.expectedDiffs), len(actualDiffs))
+
+		if !assert.Equal(t, len(test.expectedDiffs), len(actualDiffs)) {
+			require.Fail(t, "Diffs don't match", "Expected: %v\nActual: %v", test.expectedDiffs, actualDiffs)
+		}
 		for i, expected := range test.expectedDiffs {
 			actual := actualDiffs[i]
 			require.True(t, diffsEqual(expected, actual), fmt.Sprintf("Expected: %v\nActual: %v", expected, actual))
