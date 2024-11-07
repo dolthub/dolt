@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// dolt is the command line tool for working with Dolt databases.
-package doltversion
+package ci
 
-const (
-	Version = "1.43.13"
+import (
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
+
+var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
+	InitCmd{},
+	DestroyCmd{},
+})

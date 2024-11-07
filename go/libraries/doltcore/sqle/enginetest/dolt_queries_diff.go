@@ -1458,6 +1458,44 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		Name: "diff table function works with views",
+		SetUpScript: []string{
+			"create table t (i int primary key);",
+			"call dolt_commit('-Am', 'created table')",
+			"insert into t values (1), (2), (3);",
+			"call dolt_commit('-Am', 'inserted into table')",
+			"create view v as select to_i, to_commit, from_i, from_commit, diff_type from dolt_diff('HEAD', 'HEAD~1', 't');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from v;",
+				Expected: []sql.Row{
+					{nil, "HEAD~1", 1, "HEAD", "removed"},
+					{nil, "HEAD~1", 2, "HEAD", "removed"},
+					{nil, "HEAD~1", 3, "HEAD", "removed"},
+				},
+			},
+			{
+				Query: "insert into t values (4), (5), (6);",
+				Expected: []sql.Row{
+					{gmstypes.NewOkResult(3)},
+				},
+			},
+			{
+				Query:            "call dolt_commit('-Am', 'inserted into table again');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from v;",
+				Expected: []sql.Row{
+					{nil, "HEAD~1", 4, "HEAD", "removed"},
+					{nil, "HEAD~1", 5, "HEAD", "removed"},
+					{nil, "HEAD~1", 6, "HEAD", "removed"},
+				},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
