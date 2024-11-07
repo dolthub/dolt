@@ -52,7 +52,7 @@ func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData, er
 func NewMemoryDoltDB(ctx context.Context, initBranch string) (*doltdb.DoltDB, error) {
 	ts := &chunks.TestStorage{}
 	cs := ts.NewViewWithDefaultFormat()
-	ddb := doltdb.DoltDBFromCS(cs)
+	ddb := doltdb.DoltDBFromCS(cs, "")
 
 	m := "memory"
 	branchRef := ref.NewBranchRef(initBranch)
