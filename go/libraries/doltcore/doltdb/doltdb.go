@@ -97,6 +97,8 @@ func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
 	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
 }
 
+// GetDatabaseName returns the name of the database.
+// Note: This can return an empty string if the database name is not populated.
 func (ddb *DoltDB) GetDatabaseName() string {
 	return ddb.databaseName
 }
