@@ -245,10 +245,24 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			case 0:
 				key := fromCurrentLocation.Clone().key
 
+				fromNextCharacter, err := jd.currentFromCursor.nextCharacter(ctx)
+				if err == io.EOF {
+					return JsonDiff{}, jsonParseError
+				}
+				if err != nil {
+					return JsonDiff{}, err
+				}
+				toNextCharacter, err := jd.currentToCursor.nextCharacter(ctx)
+				if err == io.EOF {
+					return JsonDiff{}, jsonParseError
+				}
+				if err != nil {
+					return JsonDiff{}, err
+				}
 				// Both sides have the same key. If they're both an object or both an array, continue.
 				// Otherwise, compare them and possibly return a modification.
-				if (fromScanner.current() == '{' && toScanner.current() == '{') ||
-					(fromScanner.current() == '[' && toScanner.current() == '[') {
+				if (fromNextCharacter == '{' && toNextCharacter == '{') ||
+					(fromNextCharacter == '[' && toNextCharacter == '[') {
 					err = advanceCursor(ctx, &jd.currentFromCursor)
 					if err != nil {
 						return JsonDiff{}, err
