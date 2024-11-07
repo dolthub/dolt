@@ -28,7 +28,9 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-var expectedDoltCITablesOrdered = []doltdb.TableName{
+// ExpectedDoltCITablesOrdered contains the tables names for the dolt ci workflow tables, in parent to child table order.
+// This is exported for use in DoltHub/DoltLab.
+var ExpectedDoltCITablesOrdered = []doltdb.TableName{
 	{Name: doltdb.WorkflowsTableName},
 	{Name: doltdb.WorkflowEventsTableName},
 	{Name: doltdb.WorkflowEventTriggersTableName},
@@ -55,7 +57,7 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	exists := 0
 	var hasSome bool
 	var hasAll bool
-	for _, tableName := range expectedDoltCITablesOrdered {
+	for _, tableName := range ExpectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
@@ -65,8 +67,8 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 		}
 	}
 
-	hasSome = exists > 0 && exists < len(expectedDoltCITablesOrdered)
-	hasAll = exists == len(expectedDoltCITablesOrdered)
+	hasSome = exists > 0 && exists < len(ExpectedDoltCITablesOrdered)
+	hasAll = exists == len(ExpectedDoltCITablesOrdered)
 	if !hasSome && !hasAll {
 		return false, nil
 	}
@@ -87,7 +89,7 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 
 	root := ws.WorkingRoot()
 
-	for _, tableName := range expectedDoltCITablesOrdered {
+	for _, tableName := range ExpectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return nil, err
@@ -112,8 +114,8 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(expectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := expectedDoltCITablesOrdered[i]
+	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
+		tableName := ExpectedDoltCITablesOrdered[i]
 		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
 		if err != nil {
 			return err
@@ -177,7 +179,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, commiterName, commit
 		return fmt.Errorf("roots not found in database %s", dbName)
 	}
 
-	roots, err = actions.StageTables(ctx, roots, expectedDoltCITablesOrdered, true)
+	roots, err = actions.StageTables(ctx, roots, ExpectedDoltCITablesOrdered, true)
 	if err != nil {
 		return err
 	}
