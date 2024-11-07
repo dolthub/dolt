@@ -330,20 +330,38 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		tableName := tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := dtables.NewDiffTable(ctx, db.Name(), tableName, db.ddb, root, head)
+		baseTableName := tblName[len(doltdb.DoltDiffTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, err := dtables.NewDiffTable(ctx, db.Name(), tname, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		ws, err := ds.WorkingSet(ctx, db.RevisionQualifiedName())
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root, ws.StagedRoot())
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, ws.StagedRoot())
 		if err != nil {
 			return nil, false, err
 		}
@@ -377,22 +395,40 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
-		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix, asOf)
+		baseTableName := tblName[len(doltdb.DoltConfTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, tname.Name, asOf)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
 			return nil, false, nil
 		}
-		dt, err := dtables.NewConflictsTable(ctx, suffix, srcTable, root, dtables.RootSetter(db))
+		dt, err := dtables.NewConflictsTable(ctx, tname, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConstViolTablePrefix):
-		suffix := tblName[len(doltdb.DoltConstViolTablePrefix):]
-		dt, err := dtables.NewConstraintViolationsTable(ctx, suffix, root, dtables.RootSetter(db))
+		baseTableName := tblName[len(doltdb.DoltConstViolTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, err := dtables.NewConstraintViolationsTable(ctx, tname, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
@@ -408,9 +444,21 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		roots, _ := sess.GetRoots(ctx, db.RevisionQualifiedName())
 		head := roots.Head
 
-		userTable := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			baseName, _, exists, err := resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+			// Only set tname if table exists so that emptyWorkspaceTable is used if the table does not exist
+			if exists {
+				tname = baseName
+			}
+		}
 
-		dt, err := dtables.NewWorkspaceTable(ctx, tblName, userTable, head, ws)
+		dt, err := dtables.NewWorkspaceTable(ctx, tblName, tname, head, ws)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1621,7 +1669,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
 		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
 
-		blameViewTextDef, err := dtables.NewBlameView(ctx, tableName, root)
+		blameViewTextDef, err := dtables.NewBlameView(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}

@@ -1078,6 +1078,11 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
+				// Test case-insensitive table name
+				Query:    "SELECT count(*) from dolt_conflicts_TeST",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('--abort')",
 				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
 			},
@@ -1273,6 +1278,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}},
+			},
+			{
+				// Test case-insensitive table name
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_CHILD;",
 				Expected: []sql.Row{{"foreign key", 1, 1}},
 			},
 			{

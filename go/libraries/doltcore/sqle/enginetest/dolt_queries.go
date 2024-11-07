@@ -1276,6 +1276,13 @@ var DoltScripts = []queries.ScriptTest{
 					{"zzz", 4, "add rows"},
 				},
 			},
+			{
+				// Test case-insensitive table name
+				Query: "SELECT count(*) FROM dolt_blame_T",
+				Expected: []sql.Row{
+					{8},
+				},
+			},
 		},
 	},
 	{

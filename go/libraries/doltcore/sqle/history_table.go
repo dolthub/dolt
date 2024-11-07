@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -498,7 +497,7 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		return nil, err
 	}
 
-	_, _, ok, err := resolve.Table(ctx, root, table.Name())
+	_, ok, err := root.GetTable(ctx, table.TableName())
 	if err != nil {
 		return nil, err
 	}
@@ -521,10 +520,6 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
 				histTable = lockedTable.IndexedAccess(lookup)
-				if err != nil {
-					return nil, err
-				}
-
 				if histTable != nil {
 					newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
 					partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
