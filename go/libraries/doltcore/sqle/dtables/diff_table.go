@@ -86,7 +86,7 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func mustGetTableInsensitive(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (*doltdb.Table, doltdb.TableName, error) {
+func getTableInsensitiveOrError(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (*doltdb.Table, doltdb.TableName, error) {
 	table, correctedTableName, tableExists, err := doltdb.GetTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, tblName, err
@@ -103,7 +103,7 @@ func NewDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb
 
 	var table *doltdb.Table
 	var err error
-	table, tblName, err = mustGetTableInsensitive(ctx, root, tblName)
+	table, tblName, err = getTableInsensitiveOrError(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}

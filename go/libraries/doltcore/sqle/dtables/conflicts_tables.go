@@ -28,16 +28,16 @@ import (
 )
 
 // NewConflictsTable returns a new ConflictsTable instance
-func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTbl sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+func NewConflictsTable(ctx *sql.Context, tblName doltdb.TableName, srcTable sql.Table, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	var tbl *doltdb.Table
 	var err error
-	tbl, tblName, err = mustGetTableInsensitive(ctx, root, tblName)
+	tbl, tblName, err = getTableInsensitiveOrError(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
 
 	if types.IsFormat_DOLT(tbl.Format()) {
-		upd, ok := srcTbl.(sql.UpdatableTable)
+		upd, ok := srcTable.(sql.UpdatableTable)
 		if !ok {
 			return nil, fmt.Errorf("%s can not have conflicts because it is not updateable", tblName)
 		}

@@ -70,7 +70,7 @@ const (
 func NewBlameView(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (string, error) {
 	var table *doltdb.Table
 	var err error
-	table, tableName, err = mustGetTableInsensitive(ctx, root, tableName)
+	table, tableName, err = getTableInsensitiveOrError(ctx, root, tableName)
 	if err != nil {
 		return "", err
 	}

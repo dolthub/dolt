@@ -62,7 +62,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 
 	var table *doltdb.Table
 	var err error
-	table, tblName, err = mustGetTableInsensitive(ctx, wRoot, tblName)
+	table, tblName, err = getTableInsensitiveOrError(ctx, wRoot, tblName)
 	if err != nil {
 		return nil, err
 	}

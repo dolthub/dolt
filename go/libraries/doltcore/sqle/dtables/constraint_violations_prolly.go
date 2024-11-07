@@ -35,7 +35,7 @@ import (
 func newProllyCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	var tbl *doltdb.Table
 	var err error
-	tbl, tblName, err = mustGetTableInsensitive(ctx, root, tblName)
+	tbl, tblName, err = getTableInsensitiveOrError(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}

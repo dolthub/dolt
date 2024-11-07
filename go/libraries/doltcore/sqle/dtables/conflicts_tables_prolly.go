@@ -119,8 +119,7 @@ func (ct ProllyConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partitio
 }
 
 func (ct ProllyConflictsTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	ourUpdater := ct.sqlTable.Updater(ctx)
-	return newProllyConflictOurTableUpdater(ourUpdater, ct.versionMappings, ct.baseSch, ct.ourSch, ct.theirSch)
+	return newProllyConflictOurTableUpdater(ctx, ct)
 }
 
 func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
@@ -469,11 +468,12 @@ type prollyConflictOurTableUpdater struct {
 	schemaOK                  bool
 }
 
-func newProllyConflictOurTableUpdater(ourUpdater sql.RowUpdater, versionMappings *versionMappings, baseSch, ourSch, theirSch schema.Schema) *prollyConflictOurTableUpdater {
+func newProllyConflictOurTableUpdater(ctx *sql.Context, ct ProllyConflictsTable) *prollyConflictOurTableUpdater {
+	ourUpdater := ct.sqlTable.Updater(ctx)
 	return &prollyConflictOurTableUpdater{
 		srcUpdater:      ourUpdater,
-		versionMappings: versionMappings,
-		pkOrdinals:      ourSch.GetPkOrdinals(),
+		versionMappings: ct.versionMappings,
+		pkOrdinals:      ct.ourSch.GetPkOrdinals(),
 	}
 }
 
