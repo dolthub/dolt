@@ -104,7 +104,7 @@ func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowE
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsActivitiesQuery(eventID string) string {
-	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, eventID, eventID, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeActivities)
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, eventID, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeActivities)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggerBranchesTableByEventTriggerIdQuery(triggerID string) string {
@@ -932,7 +932,6 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	// handle push
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
-
 			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
 			if err != nil {
 				return err
@@ -959,7 +958,6 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 			}
 
 		} else {
-			// todo: create a map of config branches
 			configBranches := make(map[string]string)
 			for _, branch := range config.On.Push.Branches {
 				configBranches[branch] = branch
@@ -1061,14 +1059,83 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 		} else {
-			// todo: create a map of config branches
-			// todo: list all trigger branches for this workflow pull request event
-			// todo: iterate all branches
-			// todo: for each branch, check config map
-			// todo: if not in config map, delete branch in db
-			// todo: if is in config map, delete from config map
-			// todo: after loop, if any branches are left in the config map
-			// todo: create those trigger branches
+			configBranches := make(map[string]string)
+			for _, branch := range config.On.PullRequest.Branches {
+				configBranches[branch] = branch
+			}
+
+			// select * events of type pull request
+			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			if err != nil {
+				return err
+			}
+
+			for _, event := range prEvents {
+				triggers, err := d.listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsBranches(ctx, *event.Id)
+				if err != nil {
+					return err
+				}
+
+				for _, trigger := range triggers {
+					branches, err := d.listWorkflowEventTriggerBranchesByEventTriggerId(ctx, *trigger.Id)
+					if err != nil {
+						return err
+					}
+					for _, branch := range branches {
+						_, ok := configBranches[branch.Branch]
+						if !ok {
+							err = d.deleteWorkflowEventTriggerBranch(ctx, *branch.Id)
+							if err != nil {
+								return err
+							}
+						} else {
+							delete(configBranches, branch.Branch)
+						}
+					}
+
+					for branch := range configBranches {
+						_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, *trigger.Id, branch)
+						if err != nil {
+							return err
+						}
+						delete(configBranches, branch)
+					}
+				}
+
+				// handle case where theres a defined pr event, but no triggers yet
+				if len(triggers) == 0 {
+					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeBranches)
+					if err != nil {
+						return err
+					}
+					for branch := range configBranches {
+						_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, triggerID, branch)
+						if err != nil {
+							return err
+						}
+						delete(configBranches, branch)
+					}
+				}
+			}
+
+			// handle case where theres no defined push event
+			if len(prEvents) == 0 {
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+				if err != nil {
+					return err
+				}
+				triggerID, err := d.writeWorkflowEventTriggerRow(ctx, eventID, WorkflowEventTriggerTypeBranches)
+				if err != nil {
+					return err
+				}
+				for branch := range configBranches {
+					_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, triggerID, branch)
+					if err != nil {
+						return err
+					}
+					delete(configBranches, branch)
+				}
+			}
 		}
 
 		if len(config.On.PullRequest.Activities) == 0 {
@@ -1091,14 +1158,83 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 		} else {
-			// todo: create a map of config activities
-			// todo: list all trigger activities for this workflow pull request event
-			// todo: iterate all activities
-			// todo: for each activity, check config map
-			// todo: if not in config map, delete activity in db
-			// todo: if is in config map, delete from config map
-			// todo: after loop, if any activities are left in the config map
-			// todo: create those trigger activities
+			configActivities := make(map[string]string)
+			for _, activity := range config.On.PullRequest.Activities {
+				configActivities[activity] = activity
+			}
+
+			// select * events of type pull request
+			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			if err != nil {
+				return err
+			}
+
+			for _, event := range prEvents {
+				triggers, err := d.listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsActivities(ctx, *event.Id)
+				if err != nil {
+					return err
+				}
+
+				for _, trigger := range triggers {
+					activities, err := d.listWorkflowEventTriggerActivitiesByEventTriggerId(ctx, *trigger.Id)
+					if err != nil {
+						return err
+					}
+					for _, activity := range activities {
+						_, ok := configActivities[activity.Activity]
+						if !ok {
+							err = d.deleteWorkflowEventTriggerActivity(ctx, *activity.Id)
+							if err != nil {
+								return err
+							}
+						} else {
+							delete(configActivities, activity.Activity)
+						}
+					}
+
+					for activity := range configActivities {
+						_, err = d.writeWorkflowEventTriggerActivitiesRow(ctx, *trigger.Id, activity)
+						if err != nil {
+							return err
+						}
+						delete(configActivities, activity)
+					}
+				}
+
+				// handle case where theres a defined pr event, but no triggers yet
+				if len(triggers) == 0 {
+					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeActivities)
+					if err != nil {
+						return err
+					}
+					for activity := range configActivities {
+						_, err = d.writeWorkflowEventTriggerActivitiesRow(ctx, triggerID, activity)
+						if err != nil {
+							return err
+						}
+						delete(configActivities, activity)
+					}
+				}
+			}
+
+			// handle case where theres no defined pull request event
+			if len(prEvents) == 0 {
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+				if err != nil {
+					return err
+				}
+				triggerID, err := d.writeWorkflowEventTriggerRow(ctx, eventID, WorkflowEventTriggerTypeActivities)
+				if err != nil {
+					return err
+				}
+				for activity := range configActivities {
+					_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, triggerID, activity)
+					if err != nil {
+						return err
+					}
+					delete(configActivities, activity)
+				}
+			}
 		}
 
 		if len(config.On.PullRequest.Branches) == 0 && len(config.On.PullRequest.Activities) == 0 {
@@ -1153,6 +1289,11 @@ func (d *doltWorkflowManager) deleteWorkflowEventTriggerBranch(ctx *sql.Context,
 	return d.sqlWriteQuery(ctx, query)
 }
 
+func (d *doltWorkflowManager) deleteWorkflowEventTriggerActivity(ctx *sql.Context, activityID WorkflowEventTriggerActivityId) error {
+	query := d.deleteFromWorkflowEventTriggerActivitiesTableByEventTriggerActivityIdQuery(string(activityID))
+	return d.sqlWriteQuery(ctx, query)
+}
+
 func (d *doltWorkflowManager) deleteWorkflowEventTrigger(ctx *sql.Context, triggerID WorkflowEventTriggerId) error {
 	query := d.deleteFromWorkflowEventTriggersTableByWorkflowEventTriggerIdQuery(string(triggerID))
 	return d.sqlWriteQuery(ctx, query)
@@ -1200,7 +1341,7 @@ func (d *doltWorkflowManager) writeWorkflowEventTriggerBranchesRow(ctx *sql.Cont
 }
 
 func (d *doltWorkflowManager) writeWorkflowEventTriggerActivitiesRow(ctx *sql.Context, triggerID WorkflowEventTriggerId, activity string) (WorkflowEventTriggerActivityId, error) {
-	activityID, query := d.insertIntoWorkflowEventTriggerBranchesTableQuery(string(triggerID), activity)
+	activityID, query := d.insertIntoWorkflowEventTriggerActivitiesTableQuery(string(triggerID), activity)
 	err := d.sqlWriteQuery(ctx, query)
 	if err != nil {
 		return "", err

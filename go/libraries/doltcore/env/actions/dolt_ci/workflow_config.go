@@ -67,6 +67,10 @@ func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
 }
 
 func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
+	if workflow.On.WorkflowDispatch == nil && workflow.On.Push == nil && workflow.On.PullRequest == nil {
+		return fmt.Errorf("invalid config: no event triggers defined for workflow")
+	}
+
 	if workflow.On.Push != nil {
 
 		branches := make(map[string]bool)
@@ -82,7 +86,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 
 	if workflow.On.PullRequest != nil {
 		branches := make(map[string]bool)
-		for _, branch := range workflow.On.Push.Branches {
+		for _, branch := range workflow.On.PullRequest.Branches {
 			_, ok := branches[branch]
 			if ok {
 				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch)
