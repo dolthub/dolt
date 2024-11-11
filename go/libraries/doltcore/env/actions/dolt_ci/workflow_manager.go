@@ -976,6 +976,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				if err != nil {
 					return err
 				}
+
 				for _, trigger := range triggers {
 					branches, err := d.listWorkflowEventTriggerBranchesByEventTriggerId(ctx, *trigger.Id)
 					if err != nil {
@@ -993,13 +994,47 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 						}
 					}
 
-					// todo: is this right?
 					for branch := range configBranches {
 						_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, *trigger.Id, branch)
 						if err != nil {
 							return err
 						}
+						delete(configBranches, branch)
 					}
+				}
+
+				// handle case where theres a defined push event, but no triggers yet
+				if len(triggers) == 0 {
+					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeBranches)
+					if err != nil {
+						return err
+					}
+					for branch := range configBranches {
+						_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, triggerID, branch)
+						if err != nil {
+							return err
+						}
+						delete(configBranches, branch)
+					}
+				}
+			}
+
+			// handle case where theres no defined push event
+			if len(pushEvents) == 0 {
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
+				if err != nil {
+					return err
+				}
+				triggerID, err := d.writeWorkflowEventTriggerRow(ctx, eventID, WorkflowEventTriggerTypeBranches)
+				if err != nil {
+					return err
+				}
+				for branch := range configBranches {
+					_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, triggerID, branch)
+					if err != nil {
+						return err
+					}
+					delete(configBranches, branch)
 				}
 			}
 		}
