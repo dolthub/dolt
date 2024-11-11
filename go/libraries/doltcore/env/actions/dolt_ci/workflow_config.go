@@ -15,6 +15,7 @@
 package dolt_ci
 
 import (
+	"fmt"
 	"io"
 
 	"gopkg.in/yaml.v3"
@@ -66,7 +67,40 @@ func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
 }
 
 func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
-	// todo: ensure branch names exist only once for each event
-	// todo: ensure activities exist only once for each event
+	if workflow.On.Push != nil {
+
+		branches := make(map[string]bool)
+		for _, branch := range workflow.On.Push.Branches {
+			_, ok := branches[branch]
+			if ok {
+				return fmt.Errorf("invalid config: on push branch duplicated: %s", branch)
+			} else {
+				branches[branch] = true
+			}
+		}
+	}
+
+	if workflow.On.PullRequest != nil {
+		branches := make(map[string]bool)
+		for _, branch := range workflow.On.Push.Branches {
+			_, ok := branches[branch]
+			if ok {
+				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch)
+			} else {
+				branches[branch] = true
+			}
+		}
+
+		activities := make(map[string]bool)
+		for _, activity := range workflow.On.PullRequest.Activities {
+			_, ok := activities[activity]
+			if ok {
+				return fmt.Errorf("invalid config: on pull request activities duplicated: %s", activity)
+			} else {
+				activities[activity] = true
+			}
+		}
+	}
+
 	return nil
 }

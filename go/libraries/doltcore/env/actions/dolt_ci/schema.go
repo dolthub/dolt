@@ -161,6 +161,8 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, commiterName, commit
 		return err
 	}
 
+	// todo: refactor to use query func
+	// todo: then after creating all the tables, run delete from workflows to create all indexes on tables
 	err := createDoltCITables(ctx)
 	if err != nil {
 		return err

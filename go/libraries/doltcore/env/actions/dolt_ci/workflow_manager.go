@@ -72,11 +72,11 @@ func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameQuer
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPullRequestQuery(workflowName string) string {
-	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` is %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPushQuery(workflowName string) string {
-	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` is %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowJobsTableByWorkflowNameQuery(workflowName string) string {
@@ -151,7 +151,7 @@ func (d *doltWorkflowManager) insertIntoWorkflowStepsTableQuery(stepName, jobID 
 
 func (d *doltWorkflowManager) insertIntoWorkflowSavedQueryStepsTableQuery(savedQueryName, stepID string, expectedResultsType int) (string, string) {
 	savedQueryStepID := uuid.NewString()
-	return savedQueryStepID, fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`) values ('%s', '%s', '%s', %d);", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName, savedQueryStepID, stepID, savedQueryName, expectedResultsType, stepID)
+	return savedQueryStepID, fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`) values ('%s', '%s', '%s', %d);", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName, savedQueryStepID, stepID, savedQueryName, expectedResultsType)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery(savedQueryStepID string, expectedColumnComparisonType, expectedRowComparisonType int, expectedColumnCount, expectedRowCount int64) (string, string) {
@@ -575,7 +575,16 @@ func (d *doltWorkflowManager) validateWorkflowTables(ctx *sql.Context) error {
 }
 
 func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, workflowName string) error {
-	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-Am' 'Successfully stored workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
+	// stage table in reverse order so child tables
+	// are staged before parent tables
+	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
+		tableName := ExpectedDoltCITablesOrdered[i]
+		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+		if err != nil {
+			return err
+		}
+	}
+	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully stored workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
@@ -923,15 +932,32 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	// handle push
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
-			err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
+
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
 			if err != nil {
 				return err
 			}
 
-			_, err = d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
-			if err != nil {
-				return err
+			if len(events) == 0 {
+				_, err = d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
+				if err != nil {
+					return err
+				}
+			} else {
+				for _, event := range events {
+					triggers, err := d.listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsBranches(ctx, *event.Id)
+					if err != nil {
+						return err
+					}
+					for _, trigger := range triggers {
+						err = d.deleteWorkflowEventTrigger(ctx, *trigger.Id)
+						if err != nil {
+							return err
+						}
+					}
+				}
 			}
+
 		} else {
 			// todo: create a map of config branches
 			configBranches := make(map[string]string)

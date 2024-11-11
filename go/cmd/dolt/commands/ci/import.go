@@ -17,8 +17,10 @@ package ci
 import (
 	"context"
 	"fmt"
+	"github.com/fatih/color"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -132,7 +134,14 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	err = wr.StoreAndCommit(sqlCtx, db, workflowConfig)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		errorText := err.Error()
+		switch {
+		case strings.Contains("nothing to commit", errorText):
+			cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' up to date.", workflowConfig.Name)))
+			return 0
+		default:
+			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	return 0
