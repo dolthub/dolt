@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -105,7 +104,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	hasTables, err := schema.HasDoltCITables(sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(sqlCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

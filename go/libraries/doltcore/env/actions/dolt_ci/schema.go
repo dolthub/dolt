@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -59,7 +57,7 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	exists := 0
 	var hasSome bool
 	var hasAll bool
-	for _, tableName := range dolt_ci.ExpectedDoltCITablesOrdered {
+	for _, tableName := range ExpectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
@@ -69,8 +67,8 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 		}
 	}
 
-	hasSome = exists > 0 && exists < len(dolt_ci.ExpectedDoltCITablesOrdered)
-	hasAll = exists == len(dolt_ci.ExpectedDoltCITablesOrdered)
+	hasSome = exists > 0 && exists < len(ExpectedDoltCITablesOrdered)
+	hasAll = exists == len(ExpectedDoltCITablesOrdered)
 	if !hasSome && !hasAll {
 		return false, nil
 	}
@@ -91,7 +89,7 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 
 	root := ws.WorkingRoot()
 
-	for _, tableName := range dolt_ci.ExpectedDoltCITablesOrdered {
+	for _, tableName := range ExpectedDoltCITablesOrdered {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return nil, err
@@ -132,7 +130,7 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	}
 
 	// disable foreign key checks
-	err := dolt_ci.SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
+	err := SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
 	if err != nil {
 		return err
 	}
@@ -143,14 +141,14 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	}
 
 	for _, tableName := range existing {
-		err = dolt_ci.SqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
+		err = SqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
 		if err != nil {
 			return err
 		}
 	}
 
 	// enable foreign keys again
-	err = dolt_ci.SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
+	err = SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
 	if err != nil {
 		return err
 	}
@@ -181,7 +179,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, commiterName, commit
 		return fmt.Errorf("roots not found in database %s", dbName)
 	}
 
-	roots, err = actions.StageTables(ctx, roots, dolt_ci.ExpectedDoltCITablesOrdered, true)
+	roots, err = actions.StageTables(ctx, roots, ExpectedDoltCITablesOrdered, true)
 	if err != nil {
 		return err
 	}

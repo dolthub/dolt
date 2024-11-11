@@ -38,20 +38,6 @@ var ErrWorkflowNameIsNil = errors.New("workflow name is nil")
 var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
-var ExpectedDoltCITablesOrdered = []doltdb.TableName{
-	doltdb.TableName{Name: doltdb.WorkflowsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggerBranchesTableName},
-	doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
-	doltdb.TableName{Name: doltdb.WorkflowJobsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowStepsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName},
-	doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
-}
-
-type QueryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
-
 type WorkflowManager interface {
 	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
 }
@@ -59,12 +45,12 @@ type WorkflowManager interface {
 type doltWorkflowManager struct {
 	commiterName  string
 	commiterEmail string
-	queryFunc     QueryFunc
+	queryFunc     queryFunc
 }
 
 var _ WorkflowManager = &doltWorkflowManager{}
 
-func NewWorkflowManager(commiterName, commiterEmail string, queryFunc QueryFunc) *doltWorkflowManager {
+func NewWorkflowManager(commiterName, commiterEmail string, queryFunc queryFunc) *doltWorkflowManager {
 	return &doltWorkflowManager{
 		commiterName:  commiterName,
 		commiterEmail: commiterEmail,
@@ -1252,8 +1238,8 @@ func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database,
 	return d.commitWorkflow(ctx, config.Name)
 }
 
-func SqlWriteQuery(ctx *sql.Context, queryFunc QueryFunc, query string) error {
-	_, rowIter, _, err := queryFunc(ctx, query)
+func SqlWriteQuery(ctx *sql.Context, qf queryFunc, query string) error {
+	_, rowIter, _, err := qf(ctx, query)
 	if err != nil {
 		return err
 	}
