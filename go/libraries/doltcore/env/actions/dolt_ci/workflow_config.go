@@ -63,6 +63,8 @@ func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
 	decoder.KnownFields(true)
 
 	err = decoder.Decode(workflow)
+
+	// todo: read config again and check for raw fields, like push and pull request and workflow dispatch
 	return
 }
 
