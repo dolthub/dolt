@@ -34,7 +34,6 @@ const (
 	doltCITimeFormat = "2006-01-02 15:04:05"
 )
 
-var ErrWorkflowNameIsNil = errors.New("workflow name is nil")
 var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
@@ -72,6 +71,9 @@ func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameQuer
 	return fmt.Sprintf("select * from %s where `%s` = '%s';", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName)
 }
 
+func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPullRequestQuery(workflowName string) string {
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` is %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
+}
 func (d *doltWorkflowManager) selectAllFromWorkflowJobsTableByWorkflowNameQuery(workflowName string) string {
 	return fmt.Sprintf("select * from %s where `%s` = '%s';", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsWorkflowNameFkColName, workflowName)
 }
@@ -90,6 +92,14 @@ func (d *doltWorkflowManager) selectAllFromWorkflowStepsTableByWorkflowJobIdQuer
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdQuery(eventID string) string {
 	return fmt.Sprintf("select * from %s where `%s` = '%s';", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, eventID)
+}
+
+func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsBranchesQuery(eventID string) string {
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, eventID, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeBranches)
+}
+
+func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsActivitiesQuery(eventID string) string {
+	return fmt.Sprintf("select * from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, eventID, eventID, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeActivities)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggerBranchesTableByEventTriggerIdQuery(triggerID string) string {
@@ -170,6 +180,18 @@ func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQuery(w
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowEventIdQuery(eventId string) string {
 	return fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, eventId)
+}
+
+func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPush(workflowName string) string {
+	return fmt.Sprintf("delete from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
+}
+
+func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPullRequest(workflowName string) string {
+	return fmt.Sprintf("delete from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
+}
+
+func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsWorkflowDispatch(workflowName string) string {
+	return fmt.Sprintf("delete from %s where `%s` = '%s' and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypeWorkflowDispatch)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventTriggersTableByWorkflowEventTriggerIdQuery(triggerID string) string {
@@ -641,9 +663,24 @@ func (d *doltWorkflowManager) listWorkflowEventTriggersByEventId(ctx *sql.Contex
 
 }
 
-func (d *doltWorkflowManager) listWorkflowEventsByWorkflowName(ctx *sql.Context, workflowName string) ([]*WorkflowEvent, error) {
+func (d *doltWorkflowManager) listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsBranches(ctx *sql.Context, eventID WorkflowEventId) ([]*WorkflowEventTrigger, error) {
+	query := d.selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsBranchesQuery(string(eventID))
+	return d.retrieveWorkflowEventTriggers(ctx, query)
+}
+
+func (d *doltWorkflowManager) listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsActivities(ctx *sql.Context, eventID WorkflowEventId) ([]*WorkflowEventTrigger, error) {
+	query := d.selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsActivitiesQuery(string(eventID))
+	return d.retrieveWorkflowEventTriggers(ctx, query)
+}
+
+func (d *doltWorkflowManager) listWorkflowEventsByWorkflowName(ctx *sql.Context, workflowName WorkflowName) ([]*WorkflowEvent, error) {
 	query := d.selectAllFromWorkflowEventsTableByWorkflowNameQuery(string(workflowName))
-	return d.retrieveWorkflowEvent(ctx, query)
+	return d.retrieveWorkflowEvents(ctx, query)
+}
+
+func (d *doltWorkflowManager) listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx *sql.Context, workflowName WorkflowName) ([]*WorkflowEvent, error) {
+	query := d.selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPullRequestQuery(string(workflowName))
+	return d.retrieveWorkflowEvents(ctx, query)
 }
 
 func (d *doltWorkflowManager) listWorkflowEventTriggerBranchesByEventTriggerId(ctx *sql.Context, triggerID WorkflowEventTriggerId) ([]*WorkflowEventTriggerBranch, error) {
@@ -795,7 +832,7 @@ func (d *doltWorkflowManager) retrieveWorkflowEventTriggers(ctx *sql.Context, qu
 	return workflowEventTriggers, nil
 }
 
-func (d *doltWorkflowManager) retrieveWorkflowEvent(ctx *sql.Context, query string) ([]*WorkflowEvent, error) {
+func (d *doltWorkflowManager) retrieveWorkflowEvents(ctx *sql.Context, query string) ([]*WorkflowEvent, error) {
 	workflowEvents := make([]*WorkflowEvent, 0)
 
 	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
@@ -851,23 +888,41 @@ func (d *doltWorkflowManager) getWorkflow(ctx *sql.Context, workflowName string)
 
 func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
 	// todo: update events to match config
+
 	// handle deletes
 	if config.On.Push == nil {
-		// todo: delete all push events for this workflow
+		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
+		if err != nil {
+			return err
+		}
 	}
+
 	if config.On.PullRequest == nil {
-		// todo: delete all pull request events for this workflow
+		err := d.deletePullRequestWorkflowEvents(ctx, WorkflowName(config.Name))
+		if err != nil {
+			return err
+		}
 	}
+
 	if config.On.WorkflowDispatch == nil {
-		// todo: delete all workflow dispatch events for this workflow
+		err := d.deleteWorkflowDispatchWorkflowEvents(ctx, WorkflowName(config.Name))
+		if err != nil {
+			return err
+		}
 	}
 
 	// handle push
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
-			// todo: delete all push events and triggers and trigger branches for this workflow
+			err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
+			if err != nil {
+				return err
+			}
 
-			// todo: create a push event but dont create triggers
+			_, err = d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
+			if err != nil {
+				return err
+			}
 		} else {
 			// todo: create a map of config branches
 			// todo: list all trigger branches for this workflow push event
@@ -882,7 +937,24 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 	if config.On.PullRequest != nil {
 		if len(config.On.PullRequest.Branches) == 0 {
-			// todo: delete all pull request events and triggers and branches for this workflow
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			if err != nil {
+				return err
+			}
+
+			for _, event := range events {
+				triggers, err := d.listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsBranches(ctx, *event.Id)
+				if err != nil {
+					return err
+				}
+
+				for _, trigger := range triggers {
+					err = d.deleteWorkflowEventTrigger(ctx, *trigger.Id)
+					if err != nil {
+						return err
+					}
+				}
+			}
 		} else {
 			// todo: create a map of config branches
 			// todo: list all trigger branches for this workflow pull request event
@@ -895,7 +967,24 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 
 		if len(config.On.PullRequest.Activities) == 0 {
-			// todo: delete all pull request events and triggers and activities for this workflow
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			if err != nil {
+				return err
+			}
+
+			for _, event := range events {
+				triggers, err := d.listWorkflowEventTriggersByEventIdWhereEventTriggerTypeIsActivities(ctx, *event.Id)
+				if err != nil {
+					return err
+				}
+
+				for _, trigger := range triggers {
+					err = d.deleteWorkflowEventTrigger(ctx, *trigger.Id)
+					if err != nil {
+						return err
+					}
+				}
+			}
 		} else {
 			// todo: create a map of config activities
 			// todo: list all trigger activities for this workflow pull request event
@@ -908,7 +997,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 
 		if len(config.On.PullRequest.Branches) == 0 && len(config.On.PullRequest.Activities) == 0 {
-			// todo: create a pull request event but no triggers
+			_, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -936,6 +1028,26 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	// todo: then create a new saved query step
 
 	return nil
+}
+
+func (d *doltWorkflowManager) deletePushWorkflowEvents(ctx *sql.Context, workflowName WorkflowName) error {
+	query := d.deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPush(string(workflowName))
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) deletePullRequestWorkflowEvents(ctx *sql.Context, workflowName WorkflowName) error {
+	query := d.deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPullRequest(string(workflowName))
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) deleteWorkflowEventTrigger(ctx *sql.Context, triggerID WorkflowEventTriggerId) error {
+	query := d.deleteFromWorkflowEventTriggersTableByWorkflowEventTriggerIdQuery(string(triggerID))
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) deleteWorkflowDispatchWorkflowEvents(ctx *sql.Context, workflowName WorkflowName) error {
+	query := d.deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsWorkflowDispatch(string(workflowName))
+	return d.sqlWriteQuery(ctx, query)
 }
 
 func (d *doltWorkflowManager) writeWorkflowRow(ctx *sql.Context, workflowName WorkflowName) (WorkflowName, error) {
