@@ -68,7 +68,6 @@ func UnpackFields(msg serial.Message) (fileId string, keys, values ItemAccess, l
 	default:
 		panic(fmt.Sprintf("unknown message id %s", serial.GetFileID(msg)))
 	}
-	return
 }
 
 func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
