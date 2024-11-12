@@ -1276,7 +1276,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 
-	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	if (doltdb.HasDoltPrefix(tableName) || doltdb.HasDoltCIPrefix(tableName)) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
