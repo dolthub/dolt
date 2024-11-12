@@ -991,6 +991,11 @@ func (di *doltIndex) IsFullText() bool {
 	return di.fulltext
 }
 
+// IsVector implements sql.Index
+func (di *doltIndex) IsVector() bool {
+	return false
+}
+
 // IsPrimaryKey implements DoltIndex.
 func (di *doltIndex) IsPrimaryKey() bool {
 	return di.isPk
