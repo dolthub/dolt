@@ -15,6 +15,8 @@
 package dolt_ci
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 
@@ -50,7 +52,6 @@ type On struct {
 	WorkflowDispatch *WorkflowDispatch `yaml:"workflow_dispatch,omitempty"`
 }
 
-// todo: add marshal method or to yaml method
 type WorkflowConfig struct {
 	Name string `yaml:"name"`
 	On   On     `yaml:"on"`
@@ -66,6 +67,22 @@ func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
 	err = decoder.Decode(workflow)
 
 	// todo: read config again and check for raw fields, like push and pull request and workflow dispatch
+	return
+}
+
+func WorkflowConfigToYaml(workflow *WorkflowConfig) (r io.Reader, err error) {
+	if workflow == nil {
+		err = errors.New("workflow config is nil")
+		return
+	}
+
+	var b []byte
+	b, err = yaml.Marshal(workflow)
+	if err != nil {
+		return
+	}
+
+	r = bytes.NewReader(b)
 	return
 }
 

@@ -22,4 +22,5 @@ var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with D
 	InitCmd{},
 	DestroyCmd{},
 	ImportCmd{},
+	ExportCmd{},
 })
