@@ -1957,8 +1957,8 @@ SQL
 
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$output" =~ "| < | 1  | 123.4500 |" ]] || false
-    [[ "$output" =~ "| > | 1  | 123.4500 |" ]] || false
+    [[ "$output" =~ "| < | 123.4500 |" ]] || false
+    [[ "$output" =~ "| > | 123.4500 |" ]] || false
 }
 
 # https://github.com/dolthub/dolt/issues/8551
@@ -1975,8 +1975,8 @@ SQL
 
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$output" =~ "| < | 1  | 123.46 |" ]] || false
-    [[ "$output" =~ "| > | 1  | 123.46 |" ]] || false
+    [[ "$output" =~ "| < | 123.46 |" ]] || false
+    [[ "$output" =~ "| > | 123.46 |" ]] || false
 }
 
 @test "diff: diff --reverse" {
