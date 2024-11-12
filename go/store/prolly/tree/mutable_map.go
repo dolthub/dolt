@@ -16,7 +16,6 @@ package tree
 
 import (
 	"context"
-
 	"github.com/dolthub/dolt/go/store/skip"
 )
 

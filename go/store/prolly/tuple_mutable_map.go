@@ -169,8 +169,7 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
 		cp.Edits.Revert()
 		stash = &cp
 	}
-	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
-	sm, err := mut.flusher.ApplyMutationsWithSerializer(ctx, serializer, mut)
+	sm, err := mut.Map(ctx)
 	if err != nil {
 		return err
 	}
