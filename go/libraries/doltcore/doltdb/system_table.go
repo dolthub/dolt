@@ -96,7 +96,7 @@ func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, erro
 		return nil, err
 	}
 	tn = funcitr.FilterStrings(tn, func(n string) bool {
-		return !HasDoltPrefix(n)
+		return !HasDoltPrefix(n) && !HasDoltCIPrefix(n)
 	})
 	sort.Strings(tn)
 	return tn, nil

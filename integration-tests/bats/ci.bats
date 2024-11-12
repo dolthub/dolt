@@ -91,6 +91,14 @@ skip_remote_engine() {
     [[ "$output" =~ "Invalid table name" ]] || false
 }
 
+@test "ci: workflow tables do not appear in show tables output" {
+    skip_remote_engine
+}
+
+@test "ci: workflow tables do not appear in dolt ls" {
+    skip_remote_engine
+}
+
 @test "ci: init command should only commit changes relevant to the ci tables" {
     skip_remote_engine
 
@@ -126,5 +134,13 @@ skip_remote_engine() {
 }
 
 @test "ci: import command will update existing workflow" {
+    skip_remote_engine
+}
+
+@test "ci: export exports a workflow to a yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: ls lists existing workflows" {
     skip_remote_engine
 }
