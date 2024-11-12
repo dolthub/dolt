@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -80,8 +79,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
-	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(newCtx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

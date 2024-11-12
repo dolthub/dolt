@@ -184,14 +184,16 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		deleteAllFromWorkflowsTableQuery(), // as last step run delete to create resolve all indexes/fks
 	}
 
+	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
+
 	for _, query := range orderedCreateTableQueries {
-		err := SqlWriteQuery(ctx, queryFunc, query)
+		err := SqlWriteQuery(newCtx, queryFunc, query)
 		if err != nil {
 			return err
 		}
 	}
 
-	return commitCIInit(ctx, queryFunc, commiterName, commiterEmail)
+	return commitCIInit(newCtx, queryFunc, commiterName, commiterEmail)
 }
 
 func createWorkflowsTableQuery() string {

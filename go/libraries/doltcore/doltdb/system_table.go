@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -61,10 +63,13 @@ func init() {
 	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 }
 
-func ContextWithDoltCICreateBypassKey(ctx context.Context) context.Context {
-	return context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow)
+// ContextWithDoltCICreateBypassKey returns the sql.Context with a key that will
+// allow dolt_ci tables to be created
+func ContextWithDoltCICreateBypassKey(ctx *sql.Context) *sql.Context {
+	return ctx.WithContext(context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow))
 }
 
+// IsDoltCICreateAllowed checks whether dolt_ci tables can be created
 func IsDoltCICreateAllowed(ctx context.Context) bool {
 	if v := ctx.Value(doltCICtxKey); v != nil {
 		if v == doltCICtxValueAllow {
