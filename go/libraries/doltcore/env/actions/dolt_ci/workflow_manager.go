@@ -920,7 +920,6 @@ func (d *doltWorkflowManager) getWorkflow(ctx *sql.Context, workflowName string)
 }
 
 func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
-	// delete where there is no On field definition
 	if config.On.Push == nil {
 		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name.Value))
 		if err != nil {
