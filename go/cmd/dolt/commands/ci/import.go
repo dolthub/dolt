@@ -94,7 +94,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	querist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -126,14 +126,14 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	wr := dolt_ci.NewWorkflowManager(user, email, querist.Query)
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
 
 	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = wr.StoreAndCommit(sqlCtx, db, workflowConfig)
+	err = wm.StoreAndCommit(sqlCtx, db, workflowConfig)
 	if err != nil {
 		errorText := err.Error()
 		switch {

@@ -40,6 +40,7 @@ var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
 type WorkflowManager interface {
+	ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error)
 	GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error)
 	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
 }
@@ -698,6 +699,11 @@ func (d *doltWorkflowManager) listWorkflowEventTriggersByEventIdWhereEventTrigge
 func (d *doltWorkflowManager) listWorkflowEventsByWorkflowName(ctx *sql.Context, workflowName WorkflowName) ([]*WorkflowEvent, error) {
 	query := d.selectAllFromWorkflowEventsTableByWorkflowNameQuery(string(workflowName))
 	return d.retrieveWorkflowEvents(ctx, query)
+}
+
+func (d *doltWorkflowManager) listWorkflows(ctx *sql.Context) ([]*Workflow, error) {
+	query := d.selectAllFromWorkflowsTableQuery()
+	return d.retrieveWorkflows(ctx, query)
 }
 
 func (d *doltWorkflowManager) listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx *sql.Context, workflowName WorkflowName) ([]*WorkflowEvent, error) {
@@ -1938,6 +1944,24 @@ func (d *doltWorkflowManager) GetWorkflowConfig(ctx *sql.Context, db sqle.Databa
 		return nil, err
 	}
 	return d.getWorkflowConfig(ctx, workflowName)
+}
+
+func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error) {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Read); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0)
+	workflows, err := d.listWorkflows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(workflows, func(i, j int) bool {
+		return *workflows[i].Name < *workflows[j].Name
+	})
+	for _, w := range workflows {
+		names = append(names, string(*w.Name))
+	}
+	return names, nil
 }
 
 func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error {

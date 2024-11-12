@@ -91,7 +91,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	workflowName := apr.Arg(0)
 
-	querist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -113,14 +113,14 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has not been initialized, please initialize with: dolt ci init")), usage)
 	}
 
-	wr := dolt_ci.NewWorkflowManager(user, email, querist.Query)
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
 
 	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	config, err := wr.GetWorkflowConfig(sqlCtx, db, workflowName)
+	config, err := wm.GetWorkflowConfig(sqlCtx, db, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
