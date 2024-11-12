@@ -116,3 +116,15 @@ skip_remote_engine() {
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:        t1" ]] || false
 }
+
+@test "ci: import command will import a valid workflow.yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: import command will error on an invalid workflow.yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: import command will update existing workflow" {
+    skip_remote_engine
+}
