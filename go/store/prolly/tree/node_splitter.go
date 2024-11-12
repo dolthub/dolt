@@ -25,6 +25,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"math"
+	"math/bits"
 
 	"github.com/kch42/buzhash"
 	"github.com/zeebo/xxh3"
@@ -111,7 +112,7 @@ func newRollingHashSplitter(salt uint8) nodeSplitter {
 
 var _ splitterFactory = newRollingHashSplitter
 
-// Append implements NodeSplitter
+// Append implements nodeSplitter
 func (sns *rollingHashSplitter) Append(key, value Item) (err error) {
 	for _, byt := range key {
 		_ = sns.hashByte(byt)
@@ -146,12 +147,12 @@ func (sns *rollingHashSplitter) hashByte(b byte) bool {
 	return sns.crossedBoundary
 }
 
-// CrossedBoundary implements NodeSplitter
+// CrossedBoundary implements nodeSplitter
 func (sns *rollingHashSplitter) CrossedBoundary() bool {
 	return sns.crossedBoundary
 }
 
-// Reset implements NodeSplitter
+// Reset implements nodeSplitter
 func (sns *rollingHashSplitter) Reset() {
 	sns.crossedBoundary = false
 	sns.offset = 0
@@ -263,4 +264,9 @@ func xxHash32(b []byte, salt uint64) uint32 {
 func saltFromLevel(level uint8) (salt uint64) {
 	full := sha512.Sum512([]byte{level})
 	return binary.LittleEndian.Uint64(full[:8])
+}
+
+func DeterministicHashLevel(leadingZerosPerLevel uint8, key Item) uint8 {
+	h := xxHash32(key, levelSalt[1])
+	return uint8(bits.LeadingZeros32(h)) / leadingZerosPerLevel
 }
