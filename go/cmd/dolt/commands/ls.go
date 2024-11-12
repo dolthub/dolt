@@ -115,7 +115,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	var systemTables []string
 	for _, row := range rows {
 		tableName := row[0].(string)
-		if doltdb.HasDoltPrefix(tableName) {
+		if doltdb.HasDoltPrefix(tableName) || doltdb.HasDoltCIPrefix(tableName) {
 			systemTables = append(systemTables, tableName)
 		} else {
 			userTables = append(userTables, tableName)

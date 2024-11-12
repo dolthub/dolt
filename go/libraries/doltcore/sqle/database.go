@@ -1094,7 +1094,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 func filterDoltInternalTables(tblNames []string, schemaName string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
+		if !doltdb.HasDoltPrefix(tbl) && !doltdb.HasDoltCIPrefix(tbl) && schemaName != "dolt" {
 			result = append(result, tbl)
 		}
 	}
@@ -1280,6 +1280,12 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
+	}
+
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(tableName)
 	}
@@ -1299,6 +1305,12 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
@@ -1486,6 +1498,12 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
+	}
+
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(tableName)
 	}
@@ -1628,6 +1646,12 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 
 	if doltdb.HasDoltPrefix(newName) {
 		return ErrReservedTableName.New(newName)
+	}
+
+	if doltdb.HasDoltCIPrefix(newName) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
+			return ErrReservedTableName.New(newName)
+		}
 	}
 
 	if strings.HasPrefix(newName, diff.DBPrefix) {

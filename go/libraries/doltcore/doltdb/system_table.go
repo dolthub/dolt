@@ -20,11 +20,25 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
+)
+
+type ctxKey int
+type ctxValue int
+
+const (
+	doltCICtxKey ctxKey = iota
+)
+
+const (
+	doltCICtxValueUnspecified ctxValue = iota
+	doltCICtxValueAllow
 )
 
 const (
@@ -47,6 +61,22 @@ func init() {
 		docTextCol,
 	)
 	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+}
+
+// ContextWithDoltCICreateBypassKey returns the sql.Context with a key that will
+// allow dolt_ci tables to be created
+func ContextWithDoltCICreateBypassKey(ctx *sql.Context) *sql.Context {
+	return ctx.WithContext(context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow))
+}
+
+// IsDoltCICreateAllowed checks whether dolt_ci tables can be created
+func IsDoltCICreateAllowed(ctx context.Context) bool {
+	if v := ctx.Value(doltCICtxKey); v != nil {
+		if v == doltCICtxValueAllow {
+			return true
+		}
+	}
+	return false
 }
 
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
@@ -96,7 +126,7 @@ func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, erro
 		return nil, err
 	}
 	tn = funcitr.FilterStrings(tn, func(n string) bool {
-		return !HasDoltPrefix(n)
+		return !HasDoltPrefix(n) && !HasDoltCIPrefix(n)
 	})
 	sort.Strings(tn)
 	return tn, nil

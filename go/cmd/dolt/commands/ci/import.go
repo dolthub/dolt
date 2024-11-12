@@ -138,7 +138,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		errorText := err.Error()
 		switch {
 		case strings.Contains("nothing to commit", errorText):
-			cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' up to date.", workflowConfig.Name)))
+			cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' up to date.", workflowConfig.Name.Value)))
 			return 0
 		default:
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
