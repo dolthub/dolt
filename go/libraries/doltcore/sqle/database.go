@@ -1770,7 +1770,8 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.GetSchemasTableName(), Schema: db.schemaName})
+	schemasTableName := getDoltSchemasTableName()
+	schTblHash, ok, err := root.GetTableHash(ctx, schemasTableName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1791,6 +1792,10 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if ok {
 			return view, ok, nil
 		}
+	}
+
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
@@ -1856,6 +1861,10 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 
 // AllViews implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
+	}
+
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, err
@@ -1921,6 +1930,9 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
 	}()
 
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
+	}
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, err
@@ -1974,6 +1986,9 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 
 // GetEvent implements sql.EventDatabase.
 func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
+	}
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return sql.EventDefinition{}, false, err
@@ -2006,6 +2021,9 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 
 // GetEvents implements sql.EventDatabase.
 func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, token interface{}, err error) {
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
+	}
 	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, nil, err
@@ -2253,16 +2271,8 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-	if resolve.UseSearchPath && db.schemaName == "" {
-		schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
-		if err != nil {
-			return err
-		}
-		db.schemaName = schemaName
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
 	}
 
 	stbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())

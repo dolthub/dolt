@@ -224,7 +224,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	}
 
 	tname := getDoltSchemasTableName()
-	if resolve.UseSearchPath && db.schemaName == "" {
+	if resolve.UseSearchPath {
 		db.schemaName = "dolt"
 	}
 
@@ -330,6 +330,10 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 	err = db.createDoltTable(ctx, tname, root, SchemaTableSchema())
 	if err != nil {
 		return nil, err
+	}
+
+	if resolve.UseSearchPath {
+		db.schemaName = "dolt"
 	}
 
 	tbl, _, err := db.GetTableInsensitive(ctx, tname.Name)
