@@ -252,7 +252,7 @@ func MergeRoots(
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
 
-		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name) {
+		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName.Name, doltdb.HasDoltPrefix(tblName.Name)) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
@@ -277,7 +277,7 @@ func MergeRoots(
 		if stats.Operation != TableUnmodified {
 			visitedTables[tblName.Name] = struct{}{}
 		}
-		if doltdb.IsFullTextTable(tblName.Name) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
+		if doltdb.IsFullTextTable(tblName.Name, doltdb.HasDoltPrefix(tblName.Name)) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.
 			// We do not handle adding new tables, so we allow that to proceed.
 			continue

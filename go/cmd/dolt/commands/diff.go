@@ -780,7 +780,8 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 	doltSchemasChanged := false
 	for _, delta := range deltas {
-		if doltdb.IsFullTextTable(delta.TableName.Name) {
+		tableName := delta.TableName.Name
+		if doltdb.IsFullTextTable(tableName, doltdb.HasDoltPrefix(tableName)) {
 			continue
 		}
 
@@ -852,7 +853,7 @@ func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName
 }
 
 func isDoltSchemasTable(toTableName, fromTableName string) bool {
-	return fromTableName == doltdb.SchemasTableName || toTableName == doltdb.SchemasTableName
+	return fromTableName == doltdb.GetSchemasTableName() || toTableName == doltdb.GetSchemasTableName()
 }
 
 func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (diff.TableInfo, error) {
@@ -1204,7 +1205,7 @@ func diffDoltSchemasTable(
 	query, err := dbr.InterpolateForDialect("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
 		"from dolt_diff(?, ?, ?) "+
 		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
-		[]interface{}{dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName}, dialect.MySQL)
+		[]interface{}{dArgs.fromRef, dArgs.toRef, doltdb.GetSchemasTableName()}, dialect.MySQL)
 	if err != nil {
 		return errhand.BuildDError("Error building diff query").AddCause(err).Build()
 	}

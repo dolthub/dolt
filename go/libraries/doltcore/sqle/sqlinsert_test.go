@@ -397,7 +397,7 @@ var systemTableInsertTests = []InsertTest{
 	},
 	{
 		Name:            "insert into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(), ""),
+		AdditionalSetup: CreateTableFn(doltdb.GetSchemasTableName(), SchemaTableSchema(), ""),
 		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 2+2 from dual')",
 		ExpectedErr:     "table doesn't support INSERT INTO",
 	},

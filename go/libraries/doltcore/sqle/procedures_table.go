@@ -150,7 +150,8 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 		if err != nil {
 			return nil, err
 		}
-		err = db.createDoltTable(ctx, doltdb.ProceduresTableName, doltdb.DefaultSchemaName, root, ProceduresTableSchema())
+		tname := doltdb.TableName{Name: doltdb.ProceduresTableName, Schema: doltdb.DefaultSchemaName}
+		err = db.createDoltTable(ctx, tname, root, ProceduresTableSchema())
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +231,8 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 		return nil, err
 	}
 
-	err = db.createDoltTable(ctx, doltdb.ProceduresTableName, doltdb.DefaultSchemaName, root, ProceduresTableSchema())
+	tname := doltdb.TableName{Name: doltdb.ProceduresTableName, Schema: doltdb.DefaultSchemaName}
+	err = db.createDoltTable(ctx, tname, root, ProceduresTableSchema())
 	if err != nil {
 		return nil, err
 	}

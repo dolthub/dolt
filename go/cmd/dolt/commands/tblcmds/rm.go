@@ -77,7 +77,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	for _, tableName := range apr.Args {
-		if doltdb.IsReadOnlySystemTable(tableName) {
+		if doltdb.IsReadOnlySystemTable(tableName, doltdb.HasDoltPrefix(tableName)) {
 			return commands.HandleVErrAndExitCode(
 				errhand.BuildDError("error removing table %s", tableName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
 		}

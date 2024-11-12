@@ -82,7 +82,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	}
 
 	// Special case for schemas table
-	if w.tableName == doltdb.SchemasTableName {
+	if w.tableName == doltdb.GetSchemasTableName() {
 		stmt, err := sqlfmt.SqlRowAsCreateFragStmt(r)
 		if err != nil {
 			return err
@@ -117,7 +117,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 
 func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	// Never write create table for DoltSchemasTable
-	if w.tableName == doltdb.SchemasTableName || w.tableName == doltdb.ProceduresTableName {
+	if w.tableName == doltdb.GetSchemasTableName() || w.tableName == doltdb.ProceduresTableName {
 		return nil
 	}
 

@@ -449,6 +449,14 @@ func (td TableDelta) CurName() string {
 	return td.FromName.String()
 }
 
+// CurTableName returns the most recent TableName of the table.
+func (td TableDelta) CurTableName() doltdb.TableName {
+	if td.ToName.Name != "" {
+		return td.ToName
+	}
+	return td.FromName
+}
+
 func (td TableDelta) HasFKChanges() bool {
 	if len(td.FromFks) != len(td.ToFks) {
 		return true

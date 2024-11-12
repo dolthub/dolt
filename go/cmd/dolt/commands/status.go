@@ -217,7 +217,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 				}
 				shouldIgnoreTable = ignored == doltdb.Ignore
 			}
-			shouldIgnoreTable = shouldIgnoreTable || doltdb.IsFullTextTable(tableName)
+			shouldIgnoreTable = shouldIgnoreTable || doltdb.IsFullTextTable(tableName, doltdb.HasDoltPrefix(tableName))
 
 			switch status {
 			case "renamed":
@@ -536,7 +536,7 @@ and have %v and %v different commits each, respectively.
 		cli.Println(stagedHeader)
 		cli.Println(stagedHeaderHelp)
 		for tableName, status := range data.stagedTables {
-			if !doltdb.IsReadOnlySystemTable(tableName) {
+			if !doltdb.IsReadOnlySystemTable(tableName, doltdb.HasDoltPrefix(tableName)) {
 				text := fmt.Sprintf(statusFmt, status+":", tableName)
 				greenText := color.GreenString(text)
 				cli.Println(greenText)

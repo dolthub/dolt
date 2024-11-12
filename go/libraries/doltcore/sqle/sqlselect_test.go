@@ -1307,7 +1307,7 @@ var systemTableSelectTests = []SelectTest{
 	},
 	{
 		Name: "select from dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
+		AdditionalSetup: CreateTableFn(doltdb.GetSchemasTableName(), SchemaTableSchema(),
 			`CREATE VIEW name as select 2+2 from dual`),
 		Query:          "select * from dolt_schemas",
 		ExpectedRows:   []sql.Row{{"view", "name", "CREATE VIEW name as select 2+2 from dual", ignoreVal, "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"}},

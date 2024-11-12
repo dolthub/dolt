@@ -35,8 +35,9 @@ type rebuildableFulltextTable struct {
 	Schema schema.Schema
 }
 
-// rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the pseudo-index tables that were modified by both
-// roots (ours and theirs), or had parents that were modified by both roots.
+// rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the
+// pseudo-index tables that were modified by both roots (ours and theirs), or
+// had parents that were modified by both roots.
 func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}) (doltdb.RootValue, error) {
 	// Grab a list of all tables on the root
 	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
@@ -75,7 +76,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 	// involved in an actual three-way merge and the full-text index
 	// pseudo-tables could be out of date.
 	for _, tblName := range allTableNames {
-		if doltdb.IsFullTextTable(tblName) {
+		if doltdb.IsFullTextTable(tblName, doltdb.HasDoltPrefix(tblName)) {
 			continue
 		}
 		// Add this table to the non-deletion set tables, since it's not a pseudo-index table.
@@ -121,7 +122,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot dol
 
 	// Our last loop removes any orphaned pseudo-index tables
 	for _, tblName := range allTableNames {
-		if _, doNotDelete := doNotDeleteTables[tblName]; doNotDelete || !doltdb.IsFullTextTable(tblName) {
+		if _, doNotDelete := doNotDeleteTables[tblName]; doNotDelete || !doltdb.IsFullTextTable(tblName, doltdb.HasDoltPrefix(tblName)) {
 			continue
 		}
 		// TODO: schema name
@@ -313,7 +314,7 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 // Also ignores Full-Text config tables. Returns the updated root with the tables purged.
 func purgeFulltextTableData(ctx *sql.Context, root doltdb.RootValue, tableNames ...string) (doltdb.RootValue, error) {
 	for _, tableName := range tableNames {
-		if !doltdb.IsFullTextTable(tableName) {
+		if !doltdb.IsFullTextTable(tableName, doltdb.HasDoltPrefix(tableName)) {
 			continue
 		} else if strings.HasSuffix(tableName, "config") {
 			// We don't want to purge the config table, we'll just roll with whatever is there for now

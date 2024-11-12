@@ -123,7 +123,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
+	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root, doltdb.HasDoltPrefix)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get tables").AddCause(err).Build(), usage)
 	}
@@ -325,7 +325,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 }
 
 func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
+	_, _, ok, err := doltdb.GetTableInsensitive(sqlCtx, root, doltdb.TableName{Name: doltdb.GetSchemasTableName()})
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 		return nil
 	}
 
-	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(sqlCtx, "select * from "+doltdb.GetSchemasTableName())
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 }
 
 func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue, writer io.WriteCloser) (rerr error) {
-	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: doltdb.SchemasTableName})
+	_, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: doltdb.GetSchemasTableName()})
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		return nil
 	}
 
-	sch, iter, _, err := engine.Query(ctx, "select * from "+doltdb.SchemasTableName)
+	sch, iter, _, err := engine.Query(ctx, "select * from "+doltdb.GetSchemasTableName())
 	if err != nil {
 		return err
 	}

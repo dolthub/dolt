@@ -947,7 +947,7 @@ func emptyFulltextTable(
 		return nil, nil, err
 	}
 
-	newTable, err := parentTable.db.newDoltTable(fulltextTable.Name(), doltSchema, dt)
+	newTable, err := parentTable.db.newDoltTable(ctx, fulltextTable.Name(), doltSchema, dt, workingRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1785,7 +1785,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		}
 	} else {
 		// we need a temp version of a sql.Table here to get key columns
-		newTbl, err := t.db.newDoltTable(t.Name(), newSch, dt)
+		newTbl, err := t.db.newDoltTable(ctx, t.Name(), newSch, dt, headRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -1892,7 +1892,7 @@ func fullTextRewriteEditor(
 	workingRoot doltdb.RootValue,
 ) (sql.RowInserter, error) {
 
-	newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
+	newTable, err := t.db.newDoltTable(ctx, t.Name(), newSch, dt, workingRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -3089,8 +3089,13 @@ func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root doltdb.RootVal
 	if !ok {
 		return fmt.Errorf("table `%s` cannot find itself", t.tableName)
 	}
+
+	isSystemTable, err := isSystemTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, root)
+	if err != nil {
+		return err
+	}
 	var updatedTable *AlterableDoltTable
-	if doltdb.HasDoltPrefix(t.tableName) && !doltdb.IsReadOnlySystemTable(t.tableName) && !doltdb.IsDoltCITable(t.tableName) {
+	if isSystemTable && !doltdb.IsReadOnlySystemTable(t.tableName, isSystemTable) && !doltdb.IsDoltCITable(t.tableName, isSystemTable) {
 		updatedTable = &AlterableDoltTable{*updatedTableSql.(*WritableDoltTable)}
 	} else {
 		updatedTable = updatedTableSql.(*AlterableDoltTable)

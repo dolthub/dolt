@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 )
 
 const statusDefaultRowCount = 10
@@ -111,6 +112,17 @@ func containsTableName(name string, names []doltdb.TableName) bool {
 	return false
 }
 
+func isSystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (bool, error) {
+	if resolve.UseSearchPath {
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tableName, root)
+		if err != nil {
+			return false, err
+		}
+		return isDoltgresSystemTable, nil
+	}
+	return doltdb.HasDoltPrefix(tableName.Name), nil
+}
+
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	rp := st.rootsProvider
 
@@ -174,29 +186,37 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 
 	for _, td := range stagedTables {
-		tblName := tableName(td)
-		if doltdb.IsFullTextTable(tblName) {
+		tname := td.CurTableName()
+		isSysTable, err := isSystemTable(ctx, tname, roots.Staged)
+		if err != nil {
+			return nil, err
+		}
+		if doltdb.IsFullTextTable(tname.Name, isSysTable) {
 			continue
 		}
-		if containsTableName(tblName, cvTables) {
+		if containsTableName(tname.Name, cvTables) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			tableName: tblName,
+			tableName: tableName(td),
 			isStaged:  true,
 			status:    statusString(td),
 		})
 	}
 	for _, td := range unstagedTables {
-		tblName := tableName(td)
-		if doltdb.IsFullTextTable(tblName) {
+		tname := td.CurTableName()
+		isSysTable, err := isSystemTable(ctx, tname, roots.Working)
+		if err != nil {
+			return nil, err
+		}
+		if doltdb.IsFullTextTable(tname.Name, isSysTable) {
 			continue
 		}
-		if containsTableName(tblName, cvTables) {
+		if containsTableName(tname.Name, cvTables) {
 			continue
 		}
 		rows = append(rows, statusTableRow{
-			tableName: tblName,
+			tableName: tableName(td),
 			isStaged:  false,
 			status:    statusString(td),
 		})

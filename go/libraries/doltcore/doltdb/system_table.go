@@ -93,9 +93,8 @@ func HasDoltCIPrefix(s string) bool {
 
 // IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
 // indexes.
-// TODO: Schema name
-func IsFullTextTable(name string) bool {
-	return HasDoltPrefix(name) && (strings.HasSuffix(name, "_fts_config") ||
+func IsFullTextTable(name string, isSystemTable bool) bool {
+	return isSystemTable && (strings.HasSuffix(name, "_fts_config") ||
 		strings.HasSuffix(name, "_fts_position") ||
 		strings.HasSuffix(name, "_fts_doc_count") ||
 		strings.HasSuffix(name, "_fts_global_count") ||
@@ -103,38 +102,38 @@ func IsFullTextTable(name string) bool {
 }
 
 // IsDoltCITable returns whether the table name given is a dolt-ci table
-func IsDoltCITable(name string) bool {
-	return HasDoltCIPrefix(name) && set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
+func IsDoltCITable(name string, isSystemTable bool) bool {
+	return HasDoltCIPrefix(name) && set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name, isSystemTable)
 }
 
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
-func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
+func IsReadOnlySystemTable(name string, isSystemTable bool) bool {
+	return isSystemTable && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name, isSystemTable)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
 // by the user.
-func IsNonAlterableSystemTable(name string) bool {
-	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name)) || strings.EqualFold(name, SchemasTableName)
+func IsNonAlterableSystemTable(name string, isSystemTable bool) bool {
+	return (IsReadOnlySystemTable(name, isSystemTable) && !IsFullTextTable(name, isSystemTable)) || strings.EqualFold(name, GetSchemasTableName())
 }
 
 // GetNonSystemTableNames gets non-system table names
-func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
+func GetNonSystemTableNames(ctx context.Context, root RootValue, isSystemTableFn func(n string) bool) ([]string, error) {
 	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 	tn = funcitr.FilterStrings(tn, func(n string) bool {
-		return !HasDoltPrefix(n) && !HasDoltCIPrefix(n)
+		return !isSystemTableFn(n) && !HasDoltCIPrefix(n)
 	})
 	sort.Strings(tn)
 	return tn, nil
 }
 
 // GetSystemTableNames gets system table names
-func GetSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	p, err := GetPersistedSystemTables(ctx, root)
+func GetSystemTableNames(ctx context.Context, root RootValue, isSystemTableFn func(n string) bool) ([]string, error) {
+	p, err := GetPersistedSystemTables(ctx, root, isSystemTableFn)
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +150,13 @@ func GetSystemTableNames(ctx context.Context, root RootValue) ([]string, error) 
 }
 
 // GetPersistedSystemTables returns table names of all persisted system tables.
-func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
+func GetPersistedSystemTables(ctx context.Context, root RootValue, isSystemTableFn func(n string) bool) ([]string, error) {
 	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
 	sort.Strings(tn)
-	return funcitr.FilterStrings(tn, HasDoltPrefix), nil
+	return funcitr.FilterStrings(tn, isSystemTableFn), nil
 }
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
@@ -183,7 +182,7 @@ var getWriteableSystemTables = func() []string {
 	return []string{
 		GetDocTableName(),
 		DoltQueryCatalogTableName,
-		SchemasTableName,
+		GetSchemasTableName(),
 		GetProceduresTableName(),
 		IgnoreTableName,
 		RebaseTableName,

@@ -127,7 +127,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root dol
 		}
 		tablesToExport = []string{tblName}
 	} else {
-		tablesToExport, err = doltdb.GetNonSystemTableNames(ctx, root)
+		tablesToExport, err = doltdb.GetNonSystemTableNames(ctx, root, doltdb.HasDoltPrefix)
 		if err != nil {
 			return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
 		}

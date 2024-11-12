@@ -142,7 +142,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 
 		var notFound []string
 		for _, tblName := range tables {
-			if doltdb.IsFullTextTable(tblName) {
+			if doltdb.IsFullTextTable(tblName, doltdb.HasDoltPrefix(tblName)) {
 				continue
 			}
 			ok, err := root.HasTable(ctx, doltdb.TableName{Name: tblName})

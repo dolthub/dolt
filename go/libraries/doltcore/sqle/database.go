@@ -289,7 +289,11 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	isSysTable, err := isSystemTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
+	if err != nil {
+		return nil, false, err
+	}
+	if doltdb.IsReadOnlySystemTable(tableName, isSysTable) {
 		// currently, system tables do not need to be "locked to root"
 		//  see comment below in getTableInsensitive
 		return table, ok, nil
@@ -687,8 +691,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if resolve.UseSearchPath && lwrName == doltdb.SchemasTableName {
+				db.schemaName = "dolt"
+			}
 			found = true
-			backingTable, _, err := db.getTable(ctx, root, doltdb.SchemasTableName)
+			backingTable, _, err := db.getTable(ctx, root, doltdb.GetSchemasTableName())
 			if err != nil {
 				return nil, false, err
 			}
@@ -909,7 +916,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		}
 	}
 
-	table, err := db.newDoltTable(tableName, sch, tbl)
+	table, err := db.newDoltTable(ctx, tableName, sch, tbl, root)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1019,17 +1026,32 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	return tname, tbl, true, nil
 }
 
-func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+func isSystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (bool, error) {
+	if resolve.UseSearchPath {
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tableName, root)
+		if err != nil {
+			return false, err
+		}
+		return isDoltgresSystemTable, nil
+	}
+	return doltdb.HasDoltPrefix(tableName.Name), nil
+}
+
+func (db Database) newDoltTable(ctx *sql.Context, tableName string, sch schema.Schema, tbl *doltdb.Table, root doltdb.RootValue) (sql.Table, error) {
 	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
 		return nil, err
 	}
+	isSysTable, err := isSystemTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
+	if err != nil {
+		return nil, err
+	}
 	var table sql.Table
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsReadOnlySystemTable(tableName, isSysTable) {
 		table = readonlyTable
-	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
+	} else if doltdb.IsDoltCITable(tableName, isSysTable) && !doltdb.IsFullTextTable(tableName, isSysTable) {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
-	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	} else if isSysTable && !doltdb.IsFullTextTable(tableName, isSysTable) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
@@ -1181,7 +1203,15 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsNonAlterableSystemTable(tableName) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	isSysTable, err := isSystemTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
+	if err != nil {
+		return err
+	}
+	if doltdb.IsNonAlterableSystemTable(tableName, isSysTable) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
@@ -1213,7 +1243,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	if err != nil {
 		return err
 	} else if !tblExists {
-		return sql.ErrTableNotFound.New(tableName)
+		return sql.ErrTableNotFound.New(tblName.String())
 	}
 
 	tableName = tblName.Name
@@ -1298,7 +1328,17 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 
-	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	isSysTable, err := isSystemTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
+	if err != nil {
+		return err
+	}
+
+	if isSysTable && !doltdb.IsFullTextTable(tableName, isSysTable) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -1421,7 +1461,7 @@ func (db Database) createSqlTable(ctx *sql.Context, table string, schemaName str
 		ait.AddNewTable(tableName.Name)
 	}
 
-	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
+	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
@@ -1478,12 +1518,12 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, table string, schemaN
 		ait.AddNewTable(tableName.Name)
 	}
 
-	return db.createDoltTable(ctx, tableName.Name, tableName.Schema, root, doltSch)
+	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
 // createDoltTable creates a table on the database using the given dolt schema while not enforcing table baseName checks.
-func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaName string, root doltdb.RootValue, doltSch schema.Schema) error {
-	if exists, err := root.HasTable(ctx, doltdb.TableName{Name: tableName, Schema: schemaName}); err != nil {
+func (db Database) createDoltTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue, doltSch schema.Schema) error {
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -1495,8 +1535,8 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		if err != nil {
 			return true, err
 		}
-		if exists && oldTableName.Name != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
+		if exists && oldTableName.Name != tableName.Name {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName.String(), oldTableName.Name).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
 		return false, nil
@@ -1506,7 +1546,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
-	newRoot, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
+	newRoot, err := doltdb.CreateEmptyTable(ctx, root, tableName, doltSch)
 	if err != nil {
 		return err
 	}
@@ -1662,11 +1702,19 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsNonAlterableSystemTable(oldName) {
+	oldIsSystemTable, err := isSystemTable(ctx, doltdb.TableName{Name: oldName, Schema: db.schemaName}, root)
+	if err != nil {
+		return err
+	}
+	if doltdb.IsNonAlterableSystemTable(oldName, oldIsSystemTable) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 
-	if doltdb.HasDoltPrefix(newName) {
+	newIsSystemTable, err := isSystemTable(ctx, doltdb.TableName{Name: newName, Schema: db.schemaName}, root)
+	if err != nil {
+		return err
+	}
+	if newIsSystemTable {
 		return ErrReservedTableName.New(newName)
 	}
 
@@ -1722,7 +1770,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})
+	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.GetSchemasTableName(), Schema: db.schemaName})
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1745,7 +1793,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		}
 	}
 
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1808,7 +1856,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 
 // AllViews implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, err
 	}
@@ -1873,7 +1921,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		dbState.SessionCache().CacheTriggers(key, triggers, db.schemaName)
 	}()
 
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, err
 	}
@@ -1926,7 +1974,7 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 
 // GetEvent implements sql.EventDatabase.
 func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition, bool, error) {
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return sql.EventDefinition{}, false, err
 	}
@@ -1958,7 +2006,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 
 // GetEvents implements sql.EventDatabase.
 func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, token interface{}, err error) {
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2025,7 +2073,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 		return hash.Hash{}, err
 	}
 
-	tableHash, _, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	tableHash, _, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.GetSchemasTableName()})
 	return tableHash, err
 }
 
@@ -2217,7 +2265,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		db.schemaName = schemaName
 	}
 
-	stbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	stbl, _, err := db.GetTableInsensitive(ctx, doltdb.GetSchemasTableName())
 	if err != nil {
 		return err
 	}
@@ -2251,7 +2299,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 
 	// If the dolt schemas table is now empty, drop it entirely. This is necessary to prevent the creation and
 	// immediate dropping of views or triggers, when none previously existed, from changing the database state.
-	return db.dropTableIfEmpty(ctx, doltdb.SchemasTableName)
+	return db.dropTableIfEmpty(ctx, doltdb.GetSchemasTableName())
 }
 
 // dropTableIfEmpty drops the table named if it exists and has at least one row.

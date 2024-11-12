@@ -207,7 +207,7 @@ var systemTableDeleteTests = []DeleteTest{
 	},
 	{
 		Name: "delete dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
+		AdditionalSetup: CreateTableFn(doltdb.GetSchemasTableName(), SchemaTableSchema(),
 			"CREATE VIEW name as select 2+2 from dual"),
 		DeleteQuery: "delete from dolt_schemas",
 		ExpectedErr: "table doesn't support DELETE FROM",
