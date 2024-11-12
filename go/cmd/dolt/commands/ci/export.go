@@ -17,6 +17,7 @@ package ci
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,68 +32,64 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var importDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Import a Dolt continuous integration workflow file into the database",
-	LongDesc:  "Import a Dolt continuous integration workflow file into the database",
+var exportDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Export a Dolt continuous integration workflow file by name",
+	LongDesc:  "Export a Dolt continuous integration workflow file by name",
 	Synopsis: []string{
-		"{{.LessThan}}file{{.GreaterThan}}",
+		"{{.LessThan}}workflow name{{.GreaterThan}}",
 	},
 }
 
-type ImportCmd struct{}
+type ExportCmd struct{}
 
 // Name implements cli.Command.
-func (cmd ImportCmd) Name() string {
-	return "import"
+func (cmd ExportCmd) Name() string {
+	return "export"
 }
 
 // Description implements cli.Command.
-func (cmd ImportCmd) Description() string {
-	return importDocs.ShortDesc
+func (cmd ExportCmd) Description() string {
+	return exportDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd ImportCmd) RequiresRepo() bool {
+func (cmd ExportCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
+func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(importDocs, ap)
+	return cli.NewCommandDocumentation(exportDocs, ap)
 }
 
 // Hidden should return true if this command should be hidden from the help text
-func (cmd ImportCmd) Hidden() bool {
+func (cmd ExportCmd) Hidden() bool {
 	return true
 }
 
 // ArgParser implements cli.Command.
-func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
+func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if !cli.CheckEnvIsValid(dEnv) {
 		return 1
 	}
 
 	var verr errhand.VerboseError
-	verr = validateImportArgs(apr)
+	verr = validateExportArgs(apr)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	path := apr.Arg(0)
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
+	workflowName := apr.Arg(0)
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -116,16 +113,6 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has not been initialized, please initialize with: dolt ci init")), usage)
 	}
 
-	workflowConfig, err := parseWorkflowConfig(absPath)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	err = dolt_ci.ValidateWorkflowConfig(workflowConfig)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
 
 	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
@@ -133,24 +120,30 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = wm.StoreAndCommit(sqlCtx, db, workflowConfig)
+	config, err := wm.GetWorkflowConfig(sqlCtx, db, workflowName)
 	if err != nil {
-		errorText := err.Error()
-		switch {
-		case strings.Contains("nothing to commit", errorText):
-			cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' up to date.", workflowConfig.Name)))
-			return 0
-		default:
-			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	outpath, err := writeWorkflowConfig(config, cwd)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' exported to %s.", config.Name.Value, outpath)))
 	return 0
 }
 
-func parseWorkflowConfig(path string) (workflow *dolt_ci.WorkflowConfig, err error) {
+func writeWorkflowConfig(config *dolt_ci.WorkflowConfig, dir string) (outpath string, err error) {
+	filename := strings.Replace(config.Name.Value, " ", "_", -1)
+	outpath = filepath.Join(dir, fmt.Sprintf("%s.yaml", filename))
 	var f *os.File
-	f, err = os.Open(path)
+	f, err = os.Create(outpath)
 	if err != nil {
 		return
 	}
@@ -160,11 +153,18 @@ func parseWorkflowConfig(path string) (workflow *dolt_ci.WorkflowConfig, err err
 			err = rerr
 		}
 	}()
-	workflow, err = dolt_ci.ParseWorkflowConfig(f)
+
+	var r io.Reader
+	r, err = dolt_ci.WorkflowConfigToYaml(config)
+	if err != nil {
+		return
+	}
+
+	_, err = io.Copy(f, r)
 	return
 }
 
-func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
+func validateExportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 1 {
 		return errhand.BuildDError("expected 1 argument").SetPrintUsage().Build()
 	}
