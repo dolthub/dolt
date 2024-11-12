@@ -17,6 +17,7 @@ package dolt_ci
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
 type WorkflowManager interface {
+	GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error)
 	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
 }
 
@@ -1599,9 +1601,32 @@ func (d *doltWorkflowManager) parseSavedQueryExpectedResultString(str string) (W
 			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThan, i, nil
 		case "<=":
 			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThanOrEqual, i, nil
+		default:
+			return 0, 0, errors.New("unknown comparison type")
 		}
 	}
 	return 0, 0, fmt.Errorf("unable to parse comparison string: %s", str)
+}
+
+func (d *doltWorkflowManager) toSavedQueryExpectedResultString(comparisonType WorkflowSavedQueryExpectedRowColumnComparisonType, count int64) (string, error) {
+	var compareStr string
+	switch comparisonType {
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals:
+		compareStr = "=="
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeNotEquals:
+		compareStr = "!="
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThan:
+		compareStr = ">"
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThanOrEqual:
+		compareStr = ">="
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThan:
+		compareStr = "<"
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThanOrEqual:
+		compareStr = "<="
+	default:
+		return "", errors.New("unknown comparison type")
+	}
+	return fmt.Sprintf("%s %d", compareStr, count), nil
 }
 
 func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
@@ -1767,6 +1792,135 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	return nil
 }
 
+func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName string) (*WorkflowConfig, error) {
+	config := &WorkflowConfig{}
+
+	workflow, err := d.getWorkflow(ctx, workflowName)
+	if err != nil {
+		return nil, err
+	}
+
+	config.Name = string(*workflow.Name)
+
+	events, err := d.listWorkflowEventsByWorkflowName(ctx, *workflow.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	on := On{}
+
+	for _, event := range events {
+		triggers, err := d.listWorkflowEventTriggersByEventId(ctx, *event.Id)
+		if err != nil {
+			return nil, err
+		}
+
+		activities := make([]string, 0)
+		branches := make([]string, 0)
+
+		for _, trigger := range triggers {
+			if trigger.EventTriggerType == WorkflowEventTriggerTypeActivities {
+				acts, err := d.listWorkflowEventTriggerActivitiesByEventTriggerId(ctx, *trigger.Id)
+				if err != nil {
+					return nil, err
+				}
+				for _, act := range acts {
+					activities = append(activities, act.Activity)
+				}
+			} else if trigger.EventTriggerType == WorkflowEventTriggerTypeBranches {
+				brns, err := d.listWorkflowEventTriggerBranchesByEventTriggerId(ctx, *trigger.Id)
+				if err != nil {
+					return nil, err
+				}
+				for _, brn := range brns {
+					branches = append(branches, brn.Branch)
+				}
+			}
+		}
+
+		if event.EventType == WorkflowEventTypePush {
+			on.Push = &Push{}
+			if len(branches) > 0 {
+				on.Push.Branches = branches
+			}
+		} else if event.EventType == WorkflowEventTypePullRequest {
+			on.PullRequest = &PullRequest{}
+			if len(branches) > 0 {
+				on.PullRequest.Branches = branches
+			}
+			if len(activities) > 0 {
+				on.PullRequest.Activities = activities
+			}
+		} else if event.EventType == WorkflowEventTypeWorkflowDispatch {
+			on.WorkflowDispatch = &WorkflowDispatch{}
+		}
+	}
+
+	config.On = on
+
+	jobs := make([]Job, 0)
+
+	jbs, err := d.listWorkflowJobsByWorkflowName(ctx, *workflow.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, jb := range jbs {
+		steps := make([]Step, 0)
+
+		stps, err := d.listWorkflowStepsByJobId(ctx, *jb.Id)
+		if err != nil {
+			return nil, err
+		}
+
+		sort.Slice(stps, func(i, j int) bool {
+			return stps[i].StepOrder < stps[j].StepOrder
+		})
+
+		for _, stp := range stps {
+			if stp.StepType == WorkflowStepTypeSavedQuery {
+				savedQueryStep, err := d.getWorkflowSavedQueryStepByStepId(ctx, *stp.Id)
+				if err != nil {
+					return nil, err
+				}
+
+				expectedResult, err := d.getWorkflowSavedQueryExpectedRowColumnResultBySavedQueryStepId(ctx, *savedQueryStep.Id)
+				if err != nil {
+					return nil, err
+				}
+
+				expectedColumnsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedColumnCountComparisonType, expectedResult.ExpectedColumnCount)
+				if err != nil {
+					return nil, err
+				}
+
+				expectedRowsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedRowCountComparisonType, expectedResult.ExpectedRowCount)
+				if err != nil {
+					return nil, err
+				}
+
+				step := Step{
+					Name:            stp.Name,
+					SavedQueryName:  savedQueryStep.SavedQueryName,
+					ExpectedColumns: expectedColumnsStr,
+					ExpectedRows:    expectedRowsStr,
+				}
+				steps = append(steps, step)
+			}
+		}
+
+		job := Job{
+			Name:  jb.Name,
+			Steps: steps,
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	config.Jobs = jobs
+	return config, nil
+}
+
 func (d *doltWorkflowManager) storeFromConfig(ctx *sql.Context, config *WorkflowConfig) error {
 	_, err := d.getWorkflow(ctx, config.Name)
 	if err != nil {
@@ -1776,6 +1930,13 @@ func (d *doltWorkflowManager) storeFromConfig(ctx *sql.Context, config *Workflow
 		return err
 	}
 	return d.updateExistingWorkflow(ctx, config)
+}
+
+func (d *doltWorkflowManager) GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error) {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Read); err != nil {
+		return nil, err
+	}
+	return d.getWorkflowConfig(ctx, workflowName)
 }
 
 func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error {

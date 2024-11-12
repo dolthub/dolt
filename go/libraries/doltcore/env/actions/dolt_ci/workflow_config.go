@@ -50,6 +50,7 @@ type On struct {
 	WorkflowDispatch *WorkflowDispatch `yaml:"workflow_dispatch,omitempty"`
 }
 
+// todo: add marshal method or to yaml method
 type WorkflowConfig struct {
 	Name string `yaml:"name"`
 	On   On     `yaml:"on"`

@@ -17,10 +17,11 @@ package ci
 import (
 	"context"
 	"fmt"
-	"github.com/fatih/color"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
