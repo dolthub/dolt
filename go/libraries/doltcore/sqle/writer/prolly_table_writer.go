@@ -78,14 +78,14 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 		if err != nil {
 			return nil, err
 		}
-		idxMap := durable.ProllyMapFromIndex(idxRows)
+		idxMap := durable.MapFromIndex(idxRows)
 
 		keyDesc, _ := idxMap.Descriptors()
 
 		// mapping from secondary index key to primary key
 		writers[defName] = prollySecondaryIndexWriter{
 			name:          defName,
-			mut:           idxMap.Mutate(),
+			mut:           idxMap.MutateInterface(),
 			unique:        def.IsUnique,
 			prefixLengths: def.PrefixLengths,
 			idxCols:       def.Count,
@@ -337,7 +337,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
-	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(pm))
+	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromMapInterface(pm))
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +353,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		if err != nil {
 			return nil, err
 		}
-		idx := durable.IndexFromProllyMap(sm)
+		idx := durable.IndexFromMapInterface(sm)
 
 		s, err = s.PutIndex(ctx, wrSecondary.Name(), idx)
 		if err != nil {

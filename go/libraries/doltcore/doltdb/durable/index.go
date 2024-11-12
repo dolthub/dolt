@@ -87,7 +87,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
 
 	case types.Format_DOLT:
-		b := shim.ValueFromMap(idx.(prollyIndex).index)
+		b := shim.ValueFromMap(MapFromIndex(idx))
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -112,11 +112,11 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
-		pm, err := shim.MapFromValue(v, sch, ns, isKeylessTable)
+		m, err := shim.MapInterfaceFromValue(v, sch, ns, isKeylessTable)
 		if err != nil {
 			return nil, err
 		}
-		return IndexFromProllyMap(pm), nil
+		return IndexFromMapInterface(m), nil
 
 	default:
 		return nil, errNbfUnknown
@@ -238,9 +238,30 @@ func ProllyMapFromIndex(i Index) prolly.Map {
 	return i.(prollyIndex).index
 }
 
+// MapFromIndex unwraps the Index and returns the underlying prolly.Map or prolly.ProximityMap.
+func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
+	switch indexType := i.(type) {
+	case prollyIndex:
+		return indexType.index
+	}
+	return i.(prollyIndex).index
+}
+
 // IndexFromProllyMap wraps a prolly.Map and returns it as an Index.
 func IndexFromProllyMap(m prolly.Map) Index {
 	return prollyIndex{index: m}
+}
+
+// IndexFromMapInterface wraps a prolly.MapInterface and returns it as an Index.
+func IndexFromMapInterface(m prolly.MapInterface) Index {
+	switch m := m.(type) {
+	case prolly.Map:
+		return IndexFromProllyMap(m)
+	case prolly.ProximityMap:
+		return IndexFromProximityMap(m)
+	default:
+		panic("unknown map type")
+	}
 }
 
 var _ Index = prollyIndex{}

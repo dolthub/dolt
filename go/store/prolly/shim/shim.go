@@ -15,27 +15,29 @@
 package shim
 
 import (
+	"fmt"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 )
 
 func NodeFromValue(v types.Value) (tree.Node, error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
-func ValueFromMap(m prolly.Map) types.Value {
-	return tree.ValueFromNode(m.Node())
-}
-
-func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
+func ValueFromMap(m prolly.MapInterface) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+	root, fileId, err := NodeFromValue(v)
+	if fileId == serial.VectorIndexNodeFileID {
+		return prolly.Map{}, fmt.Errorf("can't make a prolly.Map from a vector index node")
+	}
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -47,10 +49,33 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
-func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
+	root, fileId, err := NodeFromValue(v)
+	if err != nil {
+		return nil, err
+	}
+	kd := sch.GetKeyDescriptor()
+	if isKeylessSecondary {
+		kd = prolly.AddHashToSchema(kd)
+	}
+	vd := sch.GetValueDescriptor()
+	switch fileId {
+	case serial.VectorIndexNodeFileID:
+		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+	default:
+		return prolly.NewMap(root, ns, kd, vd), nil
+	}
+}
+
+func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.MapInterface, error) {
+	root, fileId, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
-	return prolly.NewMap(root, ns, kd, vd), nil
+	switch fileId {
+	case serial.VectorIndexNodeFileID:
+		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+	default:
+		return prolly.NewMap(root, ns, kd, vd), nil
+	}
 }
