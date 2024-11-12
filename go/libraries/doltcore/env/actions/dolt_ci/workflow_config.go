@@ -97,7 +97,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 		for _, branch := range workflow.On.Push.Branches {
 			_, ok := branches[branch.Value]
 			if ok {
-				return fmt.Errorf("invalid config: on push branch duplicated: %s", branch)
+				return fmt.Errorf("invalid config: on push branch duplicated: %s", branch.Value)
 			} else {
 				branches[branch.Value] = true
 			}
@@ -109,7 +109,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 		for _, branch := range workflow.On.PullRequest.Branches {
 			_, ok := branches[branch.Value]
 			if ok {
-				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch)
+				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch.Value)
 			} else {
 				branches[branch.Value] = true
 			}
@@ -119,7 +119,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 		for _, activity := range workflow.On.PullRequest.Activities {
 			_, ok := activities[activity.Value]
 			if ok {
-				return fmt.Errorf("invalid config: on pull request activities duplicated: %s", activity)
+				return fmt.Errorf("invalid config: on pull request activities duplicated: %s", activity.Value)
 			} else {
 				activities[activity.Value] = true
 			}
@@ -130,17 +130,17 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 	steps := make(map[string]bool)
 
 	if len(workflow.Jobs) == 0 {
-		return fmt.Errorf("invalid config: no jobs defined for workflow: %s", workflow.Name)
+		return fmt.Errorf("invalid config: no jobs defined for workflow: %s", workflow.Name.Value)
 	}
 
 	for _, job := range workflow.Jobs {
 		if len(job.Steps) == 0 {
-			return fmt.Errorf("invalid config: no steps defined for job: %s", job.Name)
+			return fmt.Errorf("invalid config: no steps defined for job: %s", job.Name.Value)
 		}
 
 		_, ok := jobs[job.Name.Value]
 		if ok {
-			return fmt.Errorf("invalid config: job duplicated: %s", job.Name)
+			return fmt.Errorf("invalid config: job duplicated: %s", job.Name.Value)
 		} else {
 			jobs[job.Name.Value] = true
 		}
@@ -148,7 +148,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 		for _, step := range job.Steps {
 			_, ok := steps[step.Name.Value]
 			if ok {
-				return fmt.Errorf("invalid config: step duplicated: %s", step.Name)
+				return fmt.Errorf("invalid config: step duplicated: %s", step.Name.Value)
 			} else {
 				steps[step.Name.Value] = true
 			}
