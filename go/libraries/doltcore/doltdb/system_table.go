@@ -27,6 +27,18 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type ctxKey int
+type ctxValue int
+
+const (
+	DoltCICtxKey ctxKey = iota
+)
+
+const (
+	DoltCICtxValueUnspecified ctxValue = iota
+	DoltCICtxValueAllow
+)
+
 const (
 	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
 	DoltNamespace   = "dolt"

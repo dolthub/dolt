@@ -46,7 +46,7 @@ skip_remote_engine() {
     [[ "$output" =~ "Successfully initialized Dolt CI" ]] || false
 
     dolt sql -q "insert into dolt_ci_workflows values('workflow_1', now(), now());"
-    dolt sql -q "insert into dolt_ci_workflow_events values(uuid(), 'workflow_1', 1);"
+    dolt sql -q "insert into dolt_ci_workflow_events values(uuid(), 1, 'workflow_1');"
     dolt ci destroy
 
     run dolt log -n 1
