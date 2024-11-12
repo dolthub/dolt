@@ -80,7 +80,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
-	newCtx := context.WithValue(ctx, doltdb.DoltCICtxKey, doltdb.DoltCICtxValueAllow)
+	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(newCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

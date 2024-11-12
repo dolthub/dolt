@@ -1270,15 +1270,6 @@ func (db Database) removeTableFromAutoIncrementTracker(
 	return nil
 }
 
-func (db Database) allowDoltCIBypass(ctx *sql.Context) bool {
-	if v := ctx.Value(doltdb.DoltCICtxKey); v != nil {
-		if v == doltdb.DoltCICtxValueAllow {
-			return true
-		}
-	}
-	return false
-}
-
 // CreateTable creates a table with the name and schema given.
 func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
@@ -1290,7 +1281,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !db.allowDoltCIBypass(ctx) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1317,7 +1308,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !db.allowDoltCIBypass(ctx) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1508,7 +1499,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !db.allowDoltCIBypass(ctx) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1658,7 +1649,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	}
 
 	if doltdb.HasDoltCIPrefix(newName) {
-		if !db.allowDoltCIBypass(ctx) {
+		if !doltdb.IsDoltCICreateAllowed(ctx) {
 			return ErrReservedTableName.New(newName)
 		}
 	}

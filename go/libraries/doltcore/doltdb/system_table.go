@@ -31,12 +31,12 @@ type ctxKey int
 type ctxValue int
 
 const (
-	DoltCICtxKey ctxKey = iota
+	doltCICtxKey ctxKey = iota
 )
 
 const (
-	DoltCICtxValueUnspecified ctxValue = iota
-	DoltCICtxValueAllow
+	doltCICtxValueUnspecified ctxValue = iota
+	doltCICtxValueAllow
 )
 
 const (
@@ -59,6 +59,19 @@ func init() {
 		docTextCol,
 	)
 	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+}
+
+func ContextWithDoltCICreateBypassKey(ctx context.Context) context.Context {
+	return context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow)
+}
+
+func IsDoltCICreateAllowed(ctx context.Context) bool {
+	if v := ctx.Value(doltCICtxKey); v != nil {
+		if v == doltCICtxValueAllow {
+			return true
+		}
+	}
+	return false
 }
 
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
