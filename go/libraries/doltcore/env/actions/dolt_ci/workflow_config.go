@@ -26,8 +26,8 @@ import (
 type Step struct {
 	Name            yaml.Node `yaml:"name"`
 	SavedQueryName  yaml.Node `yaml:"saved_query_name"`
-	ExpectedColumns yaml.Node `yaml:"expected_columns"`
-	ExpectedRows    yaml.Node `yaml:"expected_rows"`
+	ExpectedColumns yaml.Node `yaml:"expected_columns,omitempty"`
+	ExpectedRows    yaml.Node `yaml:"expected_rows,omitempty"`
 }
 
 type Job struct {
@@ -151,6 +151,9 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 				return fmt.Errorf("invalid config: step duplicated: %s", step.Name.Value)
 			} else {
 				steps[step.Name.Value] = true
+			}
+			if step.SavedQueryName.Value == "" {
+				return fmt.Errorf("invalid config: step %s is missing saved_query_name", step.Name.Value)
 			}
 		}
 	}
