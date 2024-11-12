@@ -115,6 +115,8 @@ func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggerActivitiesTableBy
 	return fmt.Sprintf("select * from %s where `%s` = '%s';", doltdb.WorkflowEventTriggerActivitiesTableName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, triggerID)
 }
 
+// inserts
+
 func (d *doltWorkflowManager) insertIntoWorkflowsTableQuery(workflowName string) (string, string) {
 	return workflowName, fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values ('%s', now(), now());", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName, doltdb.WorkflowsCreatedAtColName, doltdb.WorkflowsUpdatedAtColName, workflowName)
 }
@@ -909,7 +911,7 @@ func (d *doltWorkflowManager) getWorkflow(ctx *sql.Context, workflowName string)
 }
 
 func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
-	// handle deletes
+	// delete where there is no On field definition
 	if config.On.Push == nil {
 		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
 		if err != nil {
@@ -931,7 +933,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 	}
 
-	// handle push
+	// handle on push
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
 			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
@@ -965,7 +967,6 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				configBranches[branch] = branch
 			}
 
-			// select * events of type push
 			pushEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
 			if err != nil {
 				return err
@@ -1003,7 +1004,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 					}
 				}
 
-				// handle case where theres a defined push event, but no triggers yet
+				// handle case where there's a defined push event, but no triggers yet
 				if len(triggers) == 0 {
 					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeBranches)
 					if err != nil {
@@ -1019,7 +1020,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 
-			// handle case where theres no defined push event
+			// handle case where there's no defined push event
 			if len(pushEvents) == 0 {
 				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
 				if err != nil {
@@ -1066,7 +1067,6 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				configBranches[branch] = branch
 			}
 
-			// select * events of type pull request
 			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
 			if err != nil {
 				return err
@@ -1104,7 +1104,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 					}
 				}
 
-				// handle case where theres a defined pr event, but no triggers yet
+				// handle case where there's a defined pull request event, but no triggers yet
 				if len(triggers) == 0 {
 					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeBranches)
 					if err != nil {
@@ -1120,7 +1120,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 
-			// handle case where theres no defined push event
+			// handle case where there's no defined pull request event
 			if len(prEvents) == 0 {
 				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
 				if err != nil {
@@ -1165,7 +1165,6 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				configActivities[activity] = activity
 			}
 
-			// select * events of type pull request
 			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
 			if err != nil {
 				return err
@@ -1203,7 +1202,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 					}
 				}
 
-				// handle case where theres a defined pr event, but no triggers yet
+				// handle case where there's a defined pull request event, but no triggers yet
 				if len(triggers) == 0 {
 					triggerID, err := d.writeWorkflowEventTriggerRow(ctx, *event.Id, WorkflowEventTriggerTypeActivities)
 					if err != nil {
@@ -1219,7 +1218,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 
-			// handle case where theres no defined pull request event
+			// handle case where there's no defined pull request event
 			if len(prEvents) == 0 {
 				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
 				if err != nil {
@@ -1358,57 +1357,14 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 
-			// should not happen since a jobs should always have at least one step
-			if len(steps) == 0 {
-				for _, step := range configSteps {
-					orderIdx, ok := orderedSteps[step.Name]
-					if !ok {
-						return errors.New("failed to get step order")
-					}
-
-					stepOrder := orderIdx + 1
-					stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name, stepOrder, WorkflowStepTypeSavedQuery)
-					if err != nil {
-						return err
-					}
-
-					savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
-					if err != nil {
-						return err
-					}
-
-					expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
-					if err != nil {
-						return err
-					}
-
-					expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
-					if err != nil {
-						return err
-					}
-
-					_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
-					if err != nil {
-						return err
-					}
-
-					delete(configSteps, step.Name)
-					delete(orderedSteps, step.Name)
+			for _, step := range configSteps {
+				orderIdx, ok := orderedSteps[step.Name]
+				if !ok {
+					return errors.New("failed to get step order")
 				}
-			}
 
-			delete(configJobs, job.Name)
-		}
-	}
-
-	if len(jobs) == 0 {
-		for _, job := range configJobs {
-			jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name), job.Name)
-			if err != nil {
-				return err
-			}
-			for idx, step := range job.Steps {
-				stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name, idx+1, WorkflowStepTypeSavedQuery)
+				stepOrder := orderIdx + 1
+				stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name, stepOrder, WorkflowStepTypeSavedQuery)
 				if err != nil {
 					return err
 				}
@@ -1432,8 +1388,49 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				if err != nil {
 					return err
 				}
+
+				delete(configSteps, step.Name)
+				delete(orderedSteps, step.Name)
+			}
+
+			delete(configJobs, job.Name)
+		}
+	}
+
+	// create all jobs that do not yet exist
+	for _, job := range configJobs {
+		jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name), job.Name)
+		if err != nil {
+			return err
+		}
+		for idx, step := range job.Steps {
+			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name, idx+1, WorkflowStepTypeSavedQuery)
+			if err != nil {
+				return err
+			}
+
+			savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+			if err != nil {
+				return err
+			}
+
+			expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+			if err != nil {
+				return err
+			}
+
+			expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+			if err != nil {
+				return err
+			}
+
+			_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
+			if err != nil {
+				return err
 			}
 		}
+
+		delete(configJobs, job.Name)
 	}
 
 	return nil
