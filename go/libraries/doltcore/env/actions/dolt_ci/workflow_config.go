@@ -108,5 +108,34 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 		}
 	}
 
+	jobs := make(map[string]bool)
+	steps := make(map[string]bool)
+
+	if len(workflow.Jobs) == 0 {
+		return fmt.Errorf("invalid config: no jobs defined for workflow: %s", workflow.Name)
+	}
+
+	for _, job := range workflow.Jobs {
+		if len(job.Steps) == 0 {
+			return fmt.Errorf("invalid config: no steps defined for job: %s", job.Name)
+		}
+
+		_, ok := jobs[job.Name]
+		if ok {
+			return fmt.Errorf("invalid config: job duplicated: %s", job.Name)
+		} else {
+			jobs[job.Name] = true
+		}
+
+		for _, step := range job.Steps {
+			_, ok := steps[step.Name]
+			if ok {
+				return fmt.Errorf("invalid config: step duplicated: %s", step.Name)
+			} else {
+				steps[step.Name] = true
+			}
+		}
+	}
+
 	return nil
 }

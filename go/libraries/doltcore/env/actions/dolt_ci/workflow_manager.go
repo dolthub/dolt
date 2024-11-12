@@ -165,12 +165,16 @@ func (d *doltWorkflowManager) updateWorkflowJobsTableQuery(jobID, jobName string
 	return fmt.Sprintf("update %s set `%s` = '%s', `%s` = now(), where `%s` = '%s';", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsNameColName, jobName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsIdPkColName, jobID)
 }
 
-func (d *doltWorkflowManager) updateWorkflowStepsTableQuery(stepID, stepName string) string {
-	return fmt.Sprintf("update %s set `%s` = '%s', `%s` = now(), where `%s` = '%s';", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsNameColName, stepName, doltdb.WorkflowStepsUpdatedAtColName, doltdb.WorkflowStepsIdPkColName, stepID)
+func (d *doltWorkflowManager) updateWorkflowStepsTableQuery(stepID string, stepOrder int) string {
+	return fmt.Sprintf("update %s set `%s` = %d, `%s` = now(), where `%s` = '%s';", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsStepOrderColName, stepOrder, doltdb.WorkflowStepsUpdatedAtColName, doltdb.WorkflowStepsIdPkColName, stepID)
 }
 
-func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsExpectedRowColumnResultsTableQuery(expectedResultID, expectedColumnComparisonType, expectedRowComparisonType int, expectedColumnCount, expectedRowCount int64) string {
-	return fmt.Sprintf("update %s set `%s` = '%d', `%s` = '%d', `%s` = '%d', `%s` = '%d', `%s` = now(), where `%s` = '%s';", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, expectedColumnComparisonType, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, expectedRowComparisonType, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, expectedColumnCount, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, expectedRowCount, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, expectedResultID)
+func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsTableQuery(savedQueryStepID, savedQueryName string) string {
+	return fmt.Sprintf("update %s set `%s` = '%s' where `%s` = '%s';", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, savedQueryName, doltdb.WorkflowSavedQueryStepsIdPkColName, savedQueryStepID)
+}
+
+func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsExpectedRowColumnResultsTableQuery(expectedResultID string, expectedColumnComparisonType, expectedRowComparisonType int, expectedColumnCount, expectedRowCount int64) string {
+	return fmt.Sprintf("update %s set `%s` = %d, `%s` = %d, `%s` = %d, `%s` = %d, `%s` = now() where `%s` = '%s';", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, expectedColumnComparisonType, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, expectedRowComparisonType, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, expectedColumnCount, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, expectedRowCount, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, expectedResultID)
 }
 
 // deletes
@@ -641,7 +645,7 @@ func (d *doltWorkflowManager) getWorkflowSavedQueryExpectedRowColumnResultBySave
 	return workflowSavedQueryExpectedResults[0], nil
 }
 
-func (d *doltWorkflowManager) getWorkflowSavedQueryStepsByStepId(ctx *sql.Context, stepID WorkflowStepId) (*WorkflowSavedQueryStep, error) {
+func (d *doltWorkflowManager) getWorkflowSavedQueryStepByStepId(ctx *sql.Context, stepID WorkflowStepId) (*WorkflowSavedQueryStep, error) {
 	query := d.selectAllFromSavedQueryStepsTableByWorkflowStepIdQuery(string(stepID))
 	savedQuerySteps, err := d.retrieveWorkflowSavedQuerySteps(ctx, query)
 	if err != nil {
@@ -661,7 +665,7 @@ func (d *doltWorkflowManager) listWorkflowStepsByJobId(ctx *sql.Context, jobID W
 	return d.retrieveWorkflowSteps(ctx, query)
 }
 
-func (d *doltWorkflowManager) listWorkflowJobsByWorkflowName(ctx *sql.Context, workflowName string) ([]*WorkflowJob, error) {
+func (d *doltWorkflowManager) listWorkflowJobsByWorkflowName(ctx *sql.Context, workflowName WorkflowName) ([]*WorkflowJob, error) {
 	query := d.selectAllFromWorkflowJobsTableByWorkflowNameQuery(string(workflowName))
 	return d.retrieveWorkflowJobs(ctx, query)
 }
@@ -905,8 +909,6 @@ func (d *doltWorkflowManager) getWorkflow(ctx *sql.Context, workflowName string)
 }
 
 func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
-	// todo: update events to match config
-
 	// handle deletes
 	if config.On.Push == nil {
 		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
@@ -1252,24 +1254,187 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 	}
 
-	// todo: create a map of config jobs
-	// todo: create a map of config steps
+	configJobs := make(map[string]Job)
+	for _, job := range config.Jobs {
+		configJobs[job.Name] = job
+	}
 
-	// todo: list all existing jobs for this workflow
-	// todo: iterate existing jobs
-	// todo: for each db job, check config job map
-	// todo: if job is not in config map, delete it from db
-	// todo: if it is in map
-	// todo: list all steps in db for this job
-	// todo: iterate existing steps
-	// todo: for each step, check config step map
-	// todo: if step is not in config map, delete it from the db
-	// todo: if it is in map
-	// todo: get existing saved query step for db step
-	// todo: if saved query name matches whats in config
-	// todo: update the expected result values
-	// todo: if name does not match, delete the saved query step
-	// todo: then create a new saved query step
+	jobs, err := d.listWorkflowJobsByWorkflowName(ctx, WorkflowName(config.Name))
+	if err != nil {
+		return err
+	}
+
+	for _, job := range jobs {
+		_, ok := configJobs[job.Name]
+		if !ok {
+			err = d.deleteWorkflowJob(ctx, *job.Id)
+			if err != nil {
+				return err
+			}
+		} else {
+			configSteps := make(map[string]Step)
+			orderedSteps := make(map[string]int)
+
+			for _, configJob := range config.Jobs {
+				if configJob.Name == job.Name {
+					for idx, step := range configJob.Steps {
+						orderedSteps[step.Name] = idx
+						configSteps[step.Name] = step
+					}
+					break
+				}
+			}
+
+			steps, err := d.listWorkflowStepsByJobId(ctx, *job.Id)
+			if err != nil {
+				return err
+			}
+
+			for _, step := range steps {
+				configStep, ok := configSteps[step.Name]
+				if !ok {
+					err = d.deleteWorkflowStep(ctx, *step.Id)
+					if err != nil {
+						return err
+					}
+				} else {
+					orderIdx, ok := orderedSteps[step.Name]
+					if !ok {
+						return errors.New("failed to get step order")
+					}
+
+					stepOrder := orderIdx + 1
+					if step.StepOrder != stepOrder {
+						err = d.updateWorkflowStepRow(ctx, *step.Id, stepOrder)
+						if err != nil {
+							return err
+						}
+					}
+
+					if configStep.SavedQueryName != "" {
+						newExpectedColumnComparisonType, newExpectedColumnCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedColumns)
+						if err != nil {
+							return err
+						}
+
+						newExpectedRowComparisonType, newExpectedRowCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedRows)
+						if err != nil {
+							return err
+						}
+
+						savedQueryStep, err := d.getWorkflowSavedQueryStepByStepId(ctx, *step.Id)
+						if err != nil {
+							return err
+						}
+
+						if savedQueryStep.SavedQueryExpectedResultsType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
+							if configStep.SavedQueryName != savedQueryStep.SavedQueryName {
+								err = d.updateWorkflowSavedQueryStepRow(ctx, *savedQueryStep.Id, configStep.SavedQueryName)
+								if err != nil {
+									return err
+								}
+							}
+
+							result, err := d.getWorkflowSavedQueryExpectedRowColumnResultBySavedQueryStepId(ctx, *savedQueryStep.Id)
+							if err != nil {
+								return err
+							}
+
+							if newExpectedRowComparisonType != result.ExpectedRowCountComparisonType ||
+								newExpectedColumnComparisonType != result.ExpectedColumnCountComparisonType ||
+								newExpectedRowCount != result.ExpectedRowCount ||
+								newExpectedColumnCount != result.ExpectedColumnCount {
+
+								err = d.updateWorkflowSavedQueryStepsExpectedRowColumnResultsRow(ctx, *result.Id, newExpectedColumnComparisonType, newExpectedRowComparisonType, newExpectedColumnCount, newExpectedRowCount)
+								if err != nil {
+									return err
+								}
+							}
+						}
+					}
+
+					delete(configSteps, step.Name)
+					delete(orderedSteps, step.Name)
+				}
+			}
+
+			// should not happen since a jobs should always have at least one step
+			if len(steps) == 0 {
+				for _, step := range configSteps {
+					orderIdx, ok := orderedSteps[step.Name]
+					if !ok {
+						return errors.New("failed to get step order")
+					}
+
+					stepOrder := orderIdx + 1
+					stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name, stepOrder, WorkflowStepTypeSavedQuery)
+					if err != nil {
+						return err
+					}
+
+					savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+					if err != nil {
+						return err
+					}
+
+					expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+					if err != nil {
+						return err
+					}
+
+					expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+					if err != nil {
+						return err
+					}
+
+					_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
+					if err != nil {
+						return err
+					}
+
+					delete(configSteps, step.Name)
+					delete(orderedSteps, step.Name)
+				}
+			}
+
+			delete(configJobs, job.Name)
+		}
+	}
+
+	if len(jobs) == 0 {
+		for _, job := range configJobs {
+			jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name), job.Name)
+			if err != nil {
+				return err
+			}
+			for idx, step := range job.Steps {
+				stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name, idx+1, WorkflowStepTypeSavedQuery)
+				if err != nil {
+					return err
+				}
+
+				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+				if err != nil {
+					return err
+				}
+
+				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+				if err != nil {
+					return err
+				}
+
+				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+				if err != nil {
+					return err
+				}
+
+				_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 
 	return nil
 }
@@ -1296,6 +1461,16 @@ func (d *doltWorkflowManager) deleteWorkflowEventTriggerActivity(ctx *sql.Contex
 
 func (d *doltWorkflowManager) deleteWorkflowEventTrigger(ctx *sql.Context, triggerID WorkflowEventTriggerId) error {
 	query := d.deleteFromWorkflowEventTriggersTableByWorkflowEventTriggerIdQuery(string(triggerID))
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) deleteWorkflowJob(ctx *sql.Context, jobID WorkflowJobId) error {
+	query := d.deleteFromWorkflowJobsTableByWorkflowJobIdQuery(string(jobID))
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) deleteWorkflowStep(ctx *sql.Context, stepID WorkflowStepId) error {
+	query := d.deleteFromWorkflowStepsTableByWorkflowStepIdQuery(string(stepID))
 	return d.sqlWriteQuery(ctx, query)
 }
 
@@ -1365,6 +1540,21 @@ func (d *doltWorkflowManager) writeWorkflowStepRow(ctx *sql.Context, jobID Workf
 		return "", err
 	}
 	return WorkflowStepId(stepID), nil
+}
+
+func (d *doltWorkflowManager) updateWorkflowStepRow(ctx *sql.Context, stepID WorkflowStepId, stepOrder int) error {
+	query := d.updateWorkflowStepsTableQuery(string(stepID), stepOrder)
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) updateWorkflowSavedQueryStepRow(ctx *sql.Context, savedQueryStepID WorkflowSavedQueryStepId, savedQueryName string) error {
+	query := d.updateWorkflowSavedQueryStepsTableQuery(string(savedQueryStepID), savedQueryName)
+	return d.sqlWriteQuery(ctx, query)
+}
+
+func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsExpectedRowColumnResultsRow(ctx *sql.Context, resultID WorkflowSavedQueryExpectedRowColumnResultId, expectedColumnComparisonType, expectedRowComparisonType WorkflowSavedQueryExpectedRowColumnComparisonType, expectedColumnCount, expectedRowCount int64) error {
+	query := d.updateWorkflowSavedQueryStepsExpectedRowColumnResultsTableQuery(string(resultID), int(expectedColumnComparisonType), int(expectedRowComparisonType), expectedColumnCount, expectedRowCount)
+	return d.sqlWriteQuery(ctx, query)
 }
 
 func (d *doltWorkflowManager) writeWorkflowSavedQueryStepRow(ctx *sql.Context, stepID WorkflowStepId, savedQueryName string, expectedResultType WorkflowSavedQueryExpectedResultsType) (WorkflowSavedQueryStepId, error) {
