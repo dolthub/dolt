@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -76,7 +77,7 @@ func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 // Exec implements cli.Command.
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if !cli.CheckEnvIsValid(dEnv) {
 		return 1
@@ -134,12 +135,13 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' exported to %s.", config.Name, outpath)))
+	cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' exported to %s.", config.Name.Value, outpath)))
 	return 0
 }
 
 func writeWorkflowConfig(config *dolt_ci.WorkflowConfig, dir string) (outpath string, err error) {
-	outpath = filepath.Join(dir, config.Name)
+	filename := strings.Replace(config.Name.Value, " ", "_", -1)
+	outpath = filepath.Join(dir, fmt.Sprintf("%s.yaml", filename))
 	var f *os.File
 	f, err = os.Create(outpath)
 	if err != nil {

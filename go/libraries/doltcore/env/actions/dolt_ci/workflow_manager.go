@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -915,21 +916,21 @@ func (d *doltWorkflowManager) getWorkflow(ctx *sql.Context, workflowName string)
 func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
 	// delete where there is no On field definition
 	if config.On.Push == nil {
-		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name))
+		err := d.deletePushWorkflowEvents(ctx, WorkflowName(config.Name.Value))
 		if err != nil {
 			return err
 		}
 	}
 
 	if config.On.PullRequest == nil {
-		err := d.deletePullRequestWorkflowEvents(ctx, WorkflowName(config.Name))
+		err := d.deletePullRequestWorkflowEvents(ctx, WorkflowName(config.Name.Value))
 		if err != nil {
 			return err
 		}
 	}
 
 	if config.On.WorkflowDispatch == nil {
-		err := d.deleteWorkflowDispatchWorkflowEvents(ctx, WorkflowName(config.Name))
+		err := d.deleteWorkflowDispatchWorkflowEvents(ctx, WorkflowName(config.Name.Value))
 		if err != nil {
 			return err
 		}
@@ -938,13 +939,13 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	// handle on push
 	if config.On.Push != nil {
 		if len(config.On.Push.Branches) == 0 {
-			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
 
 			if len(events) == 0 {
-				_, err = d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
+				_, err = d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypePush)
 				if err != nil {
 					return err
 				}
@@ -966,10 +967,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		} else {
 			configBranches := make(map[string]string)
 			for _, branch := range config.On.Push.Branches {
-				configBranches[branch] = branch
+				configBranches[branch.Value] = branch.Value
 			}
 
-			pushEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name))
+			pushEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPush(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
@@ -1024,7 +1025,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 			// handle case where there's no defined push event
 			if len(pushEvents) == 0 {
-				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePush)
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypePush)
 				if err != nil {
 					return err
 				}
@@ -1045,7 +1046,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 	if config.On.PullRequest != nil {
 		if len(config.On.PullRequest.Branches) == 0 {
-			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
@@ -1066,10 +1067,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		} else {
 			configBranches := make(map[string]string)
 			for _, branch := range config.On.PullRequest.Branches {
-				configBranches[branch] = branch
+				configBranches[branch.Value] = branch.Value
 			}
 
-			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
@@ -1124,7 +1125,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 			// handle case where there's no defined pull request event
 			if len(prEvents) == 0 {
-				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypePullRequest)
 				if err != nil {
 					return err
 				}
@@ -1143,7 +1144,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 
 		if len(config.On.PullRequest.Activities) == 0 {
-			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			events, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
@@ -1164,10 +1165,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		} else {
 			configActivities := make(map[string]string)
 			for _, activity := range config.On.PullRequest.Activities {
-				configActivities[activity] = activity
+				configActivities[activity.Value] = activity.Value
 			}
 
-			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name))
+			prEvents, err := d.listWorkflowEventsByWorkflowNameWhereEventTypeIsPullRequest(ctx, WorkflowName(config.Name.Value))
 			if err != nil {
 				return err
 			}
@@ -1222,7 +1223,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 			// handle case where there's no defined pull request event
 			if len(prEvents) == 0 {
-				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+				eventID, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypePullRequest)
 				if err != nil {
 					return err
 				}
@@ -1241,7 +1242,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 
 		if len(config.On.PullRequest.Branches) == 0 && len(config.On.PullRequest.Activities) == 0 {
-			_, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypePullRequest)
+			_, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypePullRequest)
 			if err != nil {
 				return err
 			}
@@ -1249,7 +1250,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	}
 
 	if config.On.WorkflowDispatch != nil {
-		_, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name), WorkflowEventTypeWorkflowDispatch)
+		_, err := d.writeWorkflowEventRow(ctx, WorkflowName(config.Name.Value), WorkflowEventTypeWorkflowDispatch)
 		if err != nil {
 			return err
 		}
@@ -1257,10 +1258,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 	configJobs := make(map[string]Job)
 	for _, job := range config.Jobs {
-		configJobs[job.Name] = job
+		configJobs[job.Name.Value] = job
 	}
 
-	jobs, err := d.listWorkflowJobsByWorkflowName(ctx, WorkflowName(config.Name))
+	jobs, err := d.listWorkflowJobsByWorkflowName(ctx, WorkflowName(config.Name.Value))
 	if err != nil {
 		return err
 	}
@@ -1277,10 +1278,10 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 			orderedSteps := make(map[string]int)
 
 			for _, configJob := range config.Jobs {
-				if configJob.Name == job.Name {
+				if configJob.Name.Value == job.Name {
 					for idx, step := range configJob.Steps {
-						orderedSteps[step.Name] = idx
-						configSteps[step.Name] = step
+						orderedSteps[step.Name.Value] = idx
+						configSteps[step.Name.Value] = step
 					}
 					break
 				}
@@ -1312,13 +1313,13 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 						}
 					}
 
-					if configStep.SavedQueryName != "" {
-						newExpectedColumnComparisonType, newExpectedColumnCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedColumns)
+					if configStep.SavedQueryName.Value != "" {
+						newExpectedColumnComparisonType, newExpectedColumnCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedColumns.Value)
 						if err != nil {
 							return err
 						}
 
-						newExpectedRowComparisonType, newExpectedRowCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedRows)
+						newExpectedRowComparisonType, newExpectedRowCount, err := d.parseSavedQueryExpectedResultString(configStep.ExpectedRows.Value)
 						if err != nil {
 							return err
 						}
@@ -1329,8 +1330,8 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 						}
 
 						if savedQueryStep.SavedQueryExpectedResultsType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
-							if configStep.SavedQueryName != savedQueryStep.SavedQueryName {
-								err = d.updateWorkflowSavedQueryStepRow(ctx, *savedQueryStep.Id, configStep.SavedQueryName)
+							if configStep.SavedQueryName.Value != savedQueryStep.SavedQueryName {
+								err = d.updateWorkflowSavedQueryStepRow(ctx, *savedQueryStep.Id, configStep.SavedQueryName.Value)
 								if err != nil {
 									return err
 								}
@@ -1360,28 +1361,28 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 			}
 
 			for _, step := range configSteps {
-				orderIdx, ok := orderedSteps[step.Name]
+				orderIdx, ok := orderedSteps[step.Name.Value]
 				if !ok {
 					return errors.New("failed to get step order")
 				}
 
 				stepOrder := orderIdx + 1
-				stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name, stepOrder, WorkflowStepTypeSavedQuery)
+				stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name.Value, stepOrder, WorkflowStepTypeSavedQuery)
 				if err != nil {
 					return err
 				}
 
-				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
 				if err != nil {
 					return err
 				}
 
-				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 				if err != nil {
 					return err
 				}
 
-				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 				if err != nil {
 					return err
 				}
@@ -1391,8 +1392,8 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 					return err
 				}
 
-				delete(configSteps, step.Name)
-				delete(orderedSteps, step.Name)
+				delete(configSteps, step.Name.Value)
+				delete(orderedSteps, step.Name.Value)
 			}
 
 			delete(configJobs, job.Name)
@@ -1401,27 +1402,27 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 
 	// create all jobs that do not yet exist
 	for _, job := range configJobs {
-		jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name), job.Name)
+		jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name.Value), job.Name.Value)
 		if err != nil {
 			return err
 		}
 		for idx, step := range job.Steps {
-			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name, idx+1, WorkflowStepTypeSavedQuery)
+			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name.Value, idx+1, WorkflowStepTypeSavedQuery)
 			if err != nil {
 				return err
 			}
 
-			savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+			savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
 			if err != nil {
 				return err
 			}
 
-			expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+			expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 			if err != nil {
 				return err
 			}
 
-			expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+			expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 			if err != nil {
 				return err
 			}
@@ -1432,7 +1433,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 			}
 		}
 
-		delete(configJobs, job.Name)
+		delete(configJobs, job.Name.Value)
 	}
 
 	return nil
@@ -1630,7 +1631,7 @@ func (d *doltWorkflowManager) toSavedQueryExpectedResultString(comparisonType Wo
 }
 
 func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowConfig) error {
-	workflowName, err := d.writeWorkflowRow(ctx, WorkflowName(config.Name))
+	workflowName, err := d.writeWorkflowRow(ctx, WorkflowName(config.Name.Value))
 	if err != nil {
 		return err
 	}
@@ -1713,7 +1714,7 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	// handle pushes
 	if pushBranchesTriggerEventID != "" {
 		for _, branch := range config.On.Push.Branches {
-			_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, pushBranchesTriggerEventID, branch)
+			_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, pushBranchesTriggerEventID, branch.Value)
 			if err != nil {
 				return err
 			}
@@ -1723,7 +1724,7 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	// handle pull requests
 	if pullRequestBranchesTriggerEventID != "" {
 		for _, branch := range config.On.PullRequest.Branches {
-			_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, pullRequestBranchesTriggerEventID, branch)
+			_, err = d.writeWorkflowEventTriggerBranchesRow(ctx, pullRequestBranchesTriggerEventID, branch.Value)
 			if err != nil {
 				return err
 			}
@@ -1734,7 +1735,7 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	// handle pull requests
 	if pullRequestActivitiesTriggerEventID != "" {
 		for _, activity := range config.On.PullRequest.Activities {
-			_, err = d.writeWorkflowEventTriggerActivitiesRow(ctx, pullRequestActivitiesTriggerEventID, activity)
+			_, err = d.writeWorkflowEventTriggerActivitiesRow(ctx, pullRequestActivitiesTriggerEventID, activity.Value)
 			if err != nil {
 				return err
 			}
@@ -1744,7 +1745,7 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	// handle jobs
 	for _, job := range config.Jobs {
 		// insert into jobs
-		jobID, err := d.writeWorkflowJobRow(ctx, workflowName, job.Name)
+		jobID, err := d.writeWorkflowJobRow(ctx, workflowName, job.Name.Value)
 		if err != nil {
 			return err
 		}
@@ -1755,29 +1756,29 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 			order := idx + 1
 
 			var stepType WorkflowStepType
-			if step.SavedQueryName != "" {
+			if step.SavedQueryName.Value != "" {
 				stepType = WorkflowStepTypeSavedQuery
 			}
 
-			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name, order, stepType)
+			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name.Value, order, stepType)
 			if err != nil {
 				return err
 			}
 
 			// insert into saved query steps
 			if stepType == WorkflowStepTypeSavedQuery {
-				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
+				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
 				if err != nil {
 					return err
 				}
 
 				// insert into expected results
-				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns)
+				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 				if err != nil {
 					return err
 				}
 
-				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows)
+				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 				if err != nil {
 					return err
 				}
@@ -1800,7 +1801,7 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 		return nil, err
 	}
 
-	config.Name = string(*workflow.Name)
+	config.Name = newScalarDoubleQuotedYamlNode(string(*workflow.Name))
 
 	events, err := d.listWorkflowEventsByWorkflowName(ctx, *workflow.Name)
 	if err != nil {
@@ -1815,8 +1816,8 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 			return nil, err
 		}
 
-		activities := make([]string, 0)
-		branches := make([]string, 0)
+		activities := make([]yaml.Node, 0)
+		branches := make([]yaml.Node, 0)
 
 		for _, trigger := range triggers {
 			if trigger.EventTriggerType == WorkflowEventTriggerTypeActivities {
@@ -1825,7 +1826,7 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 					return nil, err
 				}
 				for _, act := range acts {
-					activities = append(activities, act.Activity)
+					activities = append(activities, newScalarDoubleQuotedYamlNode(act.Activity))
 				}
 			} else if trigger.EventTriggerType == WorkflowEventTriggerTypeBranches {
 				brns, err := d.listWorkflowEventTriggerBranchesByEventTriggerId(ctx, *trigger.Id)
@@ -1833,7 +1834,7 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 					return nil, err
 				}
 				for _, brn := range brns {
-					branches = append(branches, brn.Branch)
+					branches = append(branches, newScalarDoubleQuotedYamlNode(brn.Branch))
 				}
 			}
 		}
@@ -1900,17 +1901,17 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 				}
 
 				step := Step{
-					Name:            stp.Name,
-					SavedQueryName:  savedQueryStep.SavedQueryName,
-					ExpectedColumns: expectedColumnsStr,
-					ExpectedRows:    expectedRowsStr,
+					Name:            newScalarDoubleQuotedYamlNode(stp.Name),
+					SavedQueryName:  newScalarDoubleQuotedYamlNode(savedQueryStep.SavedQueryName),
+					ExpectedColumns: newScalarDoubleQuotedYamlNode(expectedColumnsStr),
+					ExpectedRows:    newScalarDoubleQuotedYamlNode(expectedRowsStr),
 				}
 				steps = append(steps, step)
 			}
 		}
 
 		job := Job{
-			Name:  jb.Name,
+			Name:  newScalarDoubleQuotedYamlNode(jb.Name),
 			Steps: steps,
 		}
 
@@ -1922,7 +1923,7 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 }
 
 func (d *doltWorkflowManager) storeFromConfig(ctx *sql.Context, config *WorkflowConfig) error {
-	_, err := d.getWorkflow(ctx, config.Name)
+	_, err := d.getWorkflow(ctx, config.Name.Value)
 	if err != nil {
 		if err == ErrWorkflowNotFound {
 			return d.createWorkflow(ctx, config)
@@ -1949,7 +1950,7 @@ func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database,
 		return err
 	}
 
-	return d.commitWorkflow(ctx, config.Name)
+	return d.commitWorkflow(ctx, config.Name.Value)
 }
 
 func SqlWriteQuery(ctx *sql.Context, qf queryFunc, query string) error {
@@ -1959,4 +1960,12 @@ func SqlWriteQuery(ctx *sql.Context, qf queryFunc, query string) error {
 	}
 	_, err = sql.RowIterToRows(ctx, rowIter)
 	return err
+}
+
+func newScalarDoubleQuotedYamlNode(value string) yaml.Node {
+	return yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Style: yaml.DoubleQuotedStyle,
+		Value: value,
+	}
 }

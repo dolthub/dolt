@@ -24,24 +24,24 @@ import (
 )
 
 type Step struct {
-	Name            string `yaml:"name"`
-	SavedQueryName  string `yaml:"saved_query_name"`
-	ExpectedColumns string `yaml:"expected_columns"`
-	ExpectedRows    string `yaml:"expected_rows"`
+	Name            yaml.Node `yaml:"name"`
+	SavedQueryName  yaml.Node `yaml:"saved_query_name"`
+	ExpectedColumns yaml.Node `yaml:"expected_columns"`
+	ExpectedRows    yaml.Node `yaml:"expected_rows"`
 }
 
 type Job struct {
-	Name  string `yaml:"name"`
-	Steps []Step `yaml:"steps"`
+	Name  yaml.Node `yaml:"name"`
+	Steps []Step    `yaml:"steps"`
 }
 
 type Push struct {
-	Branches []string `yaml:"branches"`
+	Branches []yaml.Node `yaml:"branches"`
 }
 
 type PullRequest struct {
-	Branches   []string `yaml:"branches"`
-	Activities []string `yaml:"activities"`
+	Branches   []yaml.Node `yaml:"branches"`
+	Activities []yaml.Node `yaml:"activities"`
 }
 
 type WorkflowDispatch struct{}
@@ -53,9 +53,9 @@ type On struct {
 }
 
 type WorkflowConfig struct {
-	Name string `yaml:"name"`
-	On   On     `yaml:"on"`
-	Jobs []Job  `yaml:"jobs"`
+	Name yaml.Node `yaml:"name"`
+	On   On        `yaml:"on"`
+	Jobs []Job     `yaml:"jobs"`
 }
 
 func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
@@ -95,11 +95,11 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 
 		branches := make(map[string]bool)
 		for _, branch := range workflow.On.Push.Branches {
-			_, ok := branches[branch]
+			_, ok := branches[branch.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on push branch duplicated: %s", branch)
 			} else {
-				branches[branch] = true
+				branches[branch.Value] = true
 			}
 		}
 	}
@@ -107,21 +107,21 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 	if workflow.On.PullRequest != nil {
 		branches := make(map[string]bool)
 		for _, branch := range workflow.On.PullRequest.Branches {
-			_, ok := branches[branch]
+			_, ok := branches[branch.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch)
 			} else {
-				branches[branch] = true
+				branches[branch.Value] = true
 			}
 		}
 
 		activities := make(map[string]bool)
 		for _, activity := range workflow.On.PullRequest.Activities {
-			_, ok := activities[activity]
+			_, ok := activities[activity.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on pull request activities duplicated: %s", activity)
 			} else {
-				activities[activity] = true
+				activities[activity.Value] = true
 			}
 		}
 	}
@@ -138,19 +138,19 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 			return fmt.Errorf("invalid config: no steps defined for job: %s", job.Name)
 		}
 
-		_, ok := jobs[job.Name]
+		_, ok := jobs[job.Name.Value]
 		if ok {
 			return fmt.Errorf("invalid config: job duplicated: %s", job.Name)
 		} else {
-			jobs[job.Name] = true
+			jobs[job.Name.Value] = true
 		}
 
 		for _, step := range job.Steps {
-			_, ok := steps[step.Name]
+			_, ok := steps[step.Name.Value]
 			if ok {
 				return fmt.Errorf("invalid config: step duplicated: %s", step.Name)
 			} else {
-				steps[step.Name] = true
+				steps[step.Name.Value] = true
 			}
 		}
 	}
