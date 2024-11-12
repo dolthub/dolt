@@ -15,17 +15,14 @@
 package tree
 
 import (
-	"bytes"
 	"container/heap"
 	"context"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/skip"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/esote/minmaxheap"
 	"math"
-	"sort"
-
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) error
@@ -38,6 +35,37 @@ type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	DistanceType vector.DistanceType
 	Convert      func([]byte) []float64
 	Order        O
+}
+
+func (t ProximityMap[K, V, O]) GetRoot() Node {
+	return t.Root
+}
+
+func (t ProximityMap[K, V, O]) GetNodeStore() NodeStore {
+	return t.NodeStore
+}
+
+func (t ProximityMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t ProximityMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t ProximityMap[K, V, O]) Mutate() MutableMap[K, V, O, ProximityMap[K, V, O]] {
+	return MutableMap[K, V, O, ProximityMap[K, V, O]]{
+		Edits: skip.NewSkipList(func(left, right []byte) int {
+			return t.Order.Compare(left, right)
+		}),
+		Static: t,
+	}
+}
+
+func (t ProximityMap[K, V, O]) IterKeyRange(ctx context.Context, start, stop K) (*OrderedTreeIter[K, V], error) {
+	panic("Not implemented")
 }
 
 func (t ProximityMap[K, V, O]) Count() (int, error) {
@@ -60,8 +88,8 @@ func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 	return WalkNodes(ctx, t.Root, t.NodeStore, cb)
 }
 
-// GetExact searches for an exact vector in the index, calling |cb| with the matching key-value pairs.
-func (t ProximityMap[K, V, O]) GetExact(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
+// Get searches for an exact vector in the index, calling |cb| with the matching key-value pairs.
+func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	nd := t.Root
 
 	queryVector := t.Convert(query)
@@ -98,7 +126,7 @@ func (t ProximityMap[K, V, O]) GetExact(ctx context.Context, query K, cb KeyValu
 }
 
 func (t ProximityMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err error) {
-	err = t.GetExact(ctx, query, func(_ K, _ V) error {
+	err = t.Get(ctx, query, func(_ K, _ V) error {
 		ok = true
 		return nil
 	})

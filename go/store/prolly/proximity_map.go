@@ -35,6 +35,10 @@ type ProximityMap struct {
 	valDesc val.TupleDesc
 }
 
+func (m ProximityMap) MutateInterface() MutableMapInterface {
+	return newProximityMutableMap(m)
+}
+
 func (m ProximityMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
 	return m.tuples.WalkNodes(ctx, cb)
 }
@@ -81,7 +85,7 @@ func (m ProximityMap) IterAll(ctx context.Context) (MapIter, error) {
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m ProximityMap) Get(ctx context.Context, query val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return m.tuples.GetExact(ctx, query, cb)
+	return m.tuples.Get(ctx, query, cb)
 }
 
 // Has returns true is |key| is present in the Map.
