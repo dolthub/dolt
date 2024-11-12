@@ -830,7 +830,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, err
 	}
 
-	return filterDoltInternalTables(tblNames, db.schemaName), nil
+	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
 }
 
 // getTable returns the user table with the given baseName from the root given
@@ -1042,7 +1042,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 
 	// TODO: Figure out way to remove filterDoltInternalTables
-	return filterDoltInternalTables(tblNames, db.schemaName), nil
+	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
 }
 
 func (db Database) SchemaName() string {
@@ -1091,10 +1091,15 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 	return result, nil
 }
 
-func filterDoltInternalTables(tblNames []string, schemaName string) []string {
+func filterDoltInternalTables(ctx *sql.Context, tblNames []string, schemaName string) []string {
 	result := []string{}
+
 	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) && !doltdb.HasDoltCIPrefix(tbl) && schemaName != "dolt" {
+		if doltdb.IsDoltCITable(tbl) {
+			if doltdb.DoltCICanBypass(ctx) {
+				result = append(result, tbl)
+			}
+		} else if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
 			result = append(result, tbl)
 		}
 	}
@@ -1281,7 +1286,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.IsDoltCICreateAllowed(ctx) {
+		if !doltdb.DoltCICanBypass(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1308,7 +1313,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.IsDoltCICreateAllowed(ctx) {
+		if !doltdb.DoltCICanBypass(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1499,7 +1504,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	}
 
 	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.IsDoltCICreateAllowed(ctx) {
+		if !doltdb.DoltCICanBypass(ctx) {
 			return ErrReservedTableName.New(tableName)
 		}
 	}
@@ -1649,7 +1654,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	}
 
 	if doltdb.HasDoltCIPrefix(newName) {
-		if !doltdb.IsDoltCICreateAllowed(ctx) {
+		if !doltdb.DoltCICanBypass(ctx) {
 			return ErrReservedTableName.New(newName)
 		}
 	}

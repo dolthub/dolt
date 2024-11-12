@@ -99,6 +99,10 @@ skip_remote_engine() {
     skip_remote_engine
 }
 
+@test "ci: workflow tables do appear in diffs" {
+    skip_remote_engine
+}
+
 @test "ci: init command should only commit changes relevant to the ci tables" {
     skip_remote_engine
 

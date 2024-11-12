@@ -69,8 +69,8 @@ func ContextWithDoltCICreateBypassKey(ctx *sql.Context) *sql.Context {
 	return ctx.WithContext(context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow))
 }
 
-// IsDoltCICreateAllowed checks whether dolt_ci tables can be created
-func IsDoltCICreateAllowed(ctx context.Context) bool {
+// DoltCICanBypass checks whether dolt_ci tables can be created
+func DoltCICanBypass(ctx context.Context) bool {
 	if v := ctx.Value(doltCICtxKey); v != nil {
 		if v == doltCICtxValueAllow {
 			return true
