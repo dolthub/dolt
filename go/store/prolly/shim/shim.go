@@ -15,14 +15,11 @@
 package shim
 
 import (
-	"fmt"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 )
 
 func NodeFromValue(v types.Value) (tree.Node, error) {
@@ -34,10 +31,7 @@ func ValueFromMap(m prolly.MapInterface) types.Value {
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
-	root, fileId, err := NodeFromValue(v)
-	if fileId == serial.VectorIndexNodeFileID {
-		return prolly.Map{}, fmt.Errorf("can't make a prolly.Map from a vector index node")
-	}
+	root, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -50,7 +44,7 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 }
 
 func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
-	root, fileId, err := NodeFromValue(v)
+	root, err := NodeFromValue(v)
 	if err != nil {
 		return nil, err
 	}
@@ -59,23 +53,13 @@ func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, 
 		kd = prolly.AddHashToSchema(kd)
 	}
 	vd := sch.GetValueDescriptor()
-	switch fileId {
-	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
-	default:
-		return prolly.NewMap(root, ns, kd, vd), nil
-	}
+	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
 func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.MapInterface, error) {
-	root, fileId, err := NodeFromValue(v)
+	root, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
-	switch fileId {
-	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
-	default:
-		return prolly.NewMap(root, ns, kd, vd), nil
-	}
+	return prolly.NewMap(root, ns, kd, vd), nil
 }

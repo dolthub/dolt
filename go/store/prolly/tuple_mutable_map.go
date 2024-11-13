@@ -61,7 +61,7 @@ func (mut *GenericMutableMap[M, T]) MapInterface(ctx context.Context) (MapInterf
 
 // TreeMap materializes all pending and applied mutations in the GenericMutableMap, producing the resulting tree.MapInterface.
 func (mut *GenericMutableMap[M, T]) TreeMap(ctx context.Context) (T, error) {
-	return mut.flusher.ApplyMutations(ctx, mut.NodeStore(), mut.tuples.Static.GetRoot(), mut.keyDesc, mut.tuples.Mutations())
+	return mut.flusher.ApplyMutations(ctx, mut)
 }
 
 // Map materializes all pending and applied mutations in the GenericMutableMap, producing the specific MapInterface implementation
@@ -94,7 +94,7 @@ func newMutableMapWithDescriptors(m Map, kd, vd val.TupleDesc) *MutableMap {
 }
 
 func (mut *GenericMutableMap[M, T]) flushWithSerializer(ctx context.Context, s message.Serializer) (T, error) {
-	return mut.flusher.ApplyMutationsWithSerializer(ctx, mut.NodeStore(), mut.tuples.Static.GetRoot(), mut.keyDesc, s, mut.tuples.Mutations())
+	return mut.flusher.ApplyMutationsWithSerializer(ctx, s, mut)
 }
 
 // WithMaxPending returns a MutableMap with a new pending buffer size.
@@ -174,7 +174,7 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
 		cp.Edits.Revert()
 		stash = &cp
 	}
-	sm, err := mut.flusher.ApplyMutations(ctx, mut.NodeStore(), mut.tuples.Static.GetRoot(), mut.keyDesc, mut.tuples.Mutations())
+	sm, err := mut.flusher.ApplyMutations(ctx, mut)
 	if err != nil {
 		return err
 	}
@@ -331,32 +331,23 @@ func (f ProllyFlusher) TreeMap(ctx context.Context, mut *MutableMap) (tree.Stati
 
 var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProllyFlusher{}
 
-func (f ProllyFlusher) ApplyMutations(
-	ctx context.Context,
-	ns tree.NodeStore,
-	root tree.Node,
-	order val.TupleDesc,
-	edits tree.MutationIter,
-) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	serializer := message.NewVectorIndexSerializer(ns.Pool())
-	return f.ApplyMutationsWithSerializer(ctx, ns, root, order, serializer, edits)
+func (f ProllyFlusher) ApplyMutations(ctx context.Context, m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
+	serializer := message.NewProllyMapSerializer(m.valDesc, m.NodeStore().Pool())
+	return f.ApplyMutationsWithSerializer(ctx, serializer, m)
 }
 
 func (f ProllyFlusher) ApplyMutationsWithSerializer(
 	ctx context.Context,
-	ns tree.NodeStore,
-	root tree.Node,
-	order val.TupleDesc,
 	serializer message.Serializer,
-	edits tree.MutationIter,
+	m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]],
 ) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	newRoot, err := tree.ApplyMutations(ctx, ns, root, order, serializer, edits)
+	newRoot, err := tree.ApplyMutations(ctx, m.NodeStore(), m.tuples.Static.GetRoot(), m.keyDesc, serializer, m.tuples.Mutations())
 	if err != nil {
 		return tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
 	return tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:      newRoot,
-		NodeStore: ns,
-		Order:     order,
+		NodeStore: m.NodeStore(),
+		Order:     m.keyDesc,
 	}, nil
 }
