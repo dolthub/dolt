@@ -40,7 +40,8 @@ func toWorkflowSavedQueryExpectedResultsType(t int) (WorkflowSavedQueryExpectedR
 	switch t {
 	case int(WorkflowSavedQueryExpectedResultsTypeRowColumnCount):
 		return WorkflowSavedQueryExpectedResultsTypeRowColumnCount, nil
-
+	case int(WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified):
+		return WorkflowSavedQueryExpectedResultsTypeUnspecified, nil
 	default:
 		return WorkflowSavedQueryExpectedResultsTypeUnspecified, ErrUnknownWorkflowSavedQueryExpectedResultsType
 	}
