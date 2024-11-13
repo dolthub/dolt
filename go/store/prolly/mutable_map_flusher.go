@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
