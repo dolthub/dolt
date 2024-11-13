@@ -48,7 +48,7 @@ func (db *UserSpaceDatabase) Schema() string {
 }
 
 func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if doltdb.IsReadOnlySystemTable(tableName, false) {
+	if doltdb.IsReadOnlySystemTable(tableName, doltdb.HasDoltPrefix(tableName)) {
 		return nil, false, nil
 	}
 	table, tableName, ok, err := doltdb.GetTableInsensitive(ctx, db.RootValue, doltdb.TableName{Name: tableName})
@@ -76,7 +76,7 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 	resultingTblNames := []string{}
 	for _, tbl := range tableNames {
-		if !doltdb.IsReadOnlySystemTable(tbl, false) {
+		if !doltdb.IsReadOnlySystemTable(tbl, doltdb.HasDoltPrefix(tbl)) {
 			resultingTblNames = append(resultingTblNames, tbl)
 		}
 	}

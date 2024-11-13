@@ -1134,7 +1134,7 @@ func filterDoltInternalTables(ctx *sql.Context, tblNames []string, schemaName st
 	result := []string{}
 
 	for _, tbl := range tblNames {
-		if doltdb.IsDoltCITable(tbl) {
+		if doltdb.IsDoltCITable(tbl, doltdb.HasDoltCIPrefix(tbl)) {
 			if doltdb.DoltCICanBypass(ctx) {
 				result = append(result, tbl)
 			}

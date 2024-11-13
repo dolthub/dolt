@@ -570,7 +570,7 @@ func (d *doltWorkflowManager) validateWorkflowTables(ctx *sql.Context) error {
 
 	tableMap := make(map[string]struct{})
 	for _, table := range tables {
-		if doltdb.IsDoltCITable(table) {
+		if doltdb.IsDoltCITable(table, doltdb.HasDoltPrefix(table)) {
 			tableMap[table] = struct{}{}
 		}
 	}
