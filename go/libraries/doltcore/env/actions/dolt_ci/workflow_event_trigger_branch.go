@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ci
+package dolt_ci
 
-import (
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-)
+type WorkflowEventTriggerBranchId string
 
-var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
-	InitCmd{},
-	DestroyCmd{},
-	ImportCmd{},
-	ExportCmd{},
-	ListCmd{},
-})
+type WorkflowEventTriggerBranch struct {
+	Id                       *WorkflowEventTriggerBranchId `db:"id"`
+	WorkflowEventTriggerIdFk *WorkflowEventTriggerId       `db:"workflow_event_trigger_id_fk"`
+	Branch                   string                        `db:"branch"`
+}

@@ -16,16 +16,13 @@ package dolt_ci
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // ExpectedDoltCITablesOrdered contains the tables names for the dolt ci workflow tables, in parent to child table order.
@@ -124,13 +121,26 @@ func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commit
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
+func commitCIInit(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
+	// stage table in reverse order so child tables
+	// are staged before parent tables
+	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
+		tableName := ExpectedDoltCITablesOrdered[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+		if err != nil {
+			return err
+		}
+	}
+	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully initialized Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
+}
+
 func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 
 	// disable foreign key checks
-	err := sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
+	err := SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
 	if err != nil {
 		return err
 	}
@@ -141,14 +151,14 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	}
 
 	for _, tableName := range existing {
-		err = sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
+		err = SqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
 		if err != nil {
 			return err
 		}
 	}
 
 	// enable foreign keys again
-	err = sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
+	err = SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
 	if err != nil {
 		return err
 	}
@@ -156,113 +166,72 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	return commitCIDestroy(ctx, queryFunc, commiterName, commiterEmail)
 }
 
-func CreateDoltCITables(ctx *sql.Context, db sqle.Database, commiterName, commiterEmail string) error {
+func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 
-	err := createDoltCITables(ctx)
-	if err != nil {
-		return err
+	orderedCreateTableQueries := []string{
+		createWorkflowsTableQuery(),
+		createWorkflowEventsTableQuery(),
+		createWorkflowEventTriggersTableQuery(),
+		createWorkflowEventTriggerBranchesTableQuery(),
+		createWorkflowEventTriggerActivitiesTableQuery(),
+		createWorkflowJobsTableQuery(),
+		createWorkflowStepsTableQuery(),
+		createWorkflowSavedQueryStepsTableQuery(),
+		createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery(),
+		deleteAllFromWorkflowsTableQuery(), // as last step run delete to create resolve all indexes/fks
 	}
 
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
+	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
 
-	ddb, exists := dSess.GetDoltDB(ctx, dbName)
-	if !exists {
-		return fmt.Errorf("database not found in database %s", dbName)
+	for _, query := range orderedCreateTableQueries {
+		err := SqlWriteQuery(newCtx, queryFunc, query)
+		if err != nil {
+			return err
+		}
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return fmt.Errorf("roots not found in database %s", dbName)
-	}
-
-	roots, err = actions.StageTables(ctx, roots, ExpectedDoltCITablesOrdered, true)
-	if err != nil {
-		return err
-	}
-
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	ws = ws.WithWorkingRoot(roots.Working)
-	ws = ws.WithStagedRoot(roots.Staged)
-
-	wsHash, err := ws.HashOf()
-	if err != nil {
-		return err
-	}
-
-	wRef := ws.Ref()
-	pRef, err := wRef.ToHeadRef()
-	if err != nil {
-		return err
-	}
-
-	parent, err := ddb.ResolveCommitRef(ctx, pRef)
-	if err != nil {
-		return err
-	}
-
-	parents := []*doltdb.Commit{parent}
-
-	meta, err := datas.NewCommitMeta(commiterName, commiterEmail, "Successfully initialized Dolt CI")
-	if err != nil {
-		return err
-	}
-
-	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, meta)
-	if err != nil {
-		return err
-	}
-
-	wsMeta := &datas.WorkingSetMeta{
-		Name:      commiterName,
-		Email:     commiterEmail,
-		Timestamp: uint64(time.Now().Unix()),
-	}
-	_, err = ddb.CommitWithWorkingSet(ctx, pRef, wRef, pcm, ws, wsHash, wsMeta, nil)
-	return err
+	return commitCIInit(newCtx, queryFunc, commiterName, commiterEmail)
 }
 
-func createDoltCITables(ctx *sql.Context) error {
-	// creation order matters here
-	// for foreign key creation
-	err := createWorkflowsTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowEventsTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowEventTriggersTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowEventTriggerBranchesTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowEventTriggerActivitiesTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowJobsTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowStepsTable(ctx)
-	if err != nil {
-		return err
-	}
-	err = createWorkflowSavedQueryStepsTable(ctx)
-	if err != nil {
-		return err
-	}
-	return createWorkflowSavedQueryStepExpectedRowColumnResultsTable(ctx)
+func createWorkflowsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(2048) primary key, `%s` datetime(6) not null, `%s` datetime(6) not null);", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName, doltdb.WorkflowsCreatedAtColName, doltdb.WorkflowsUpdatedAtColName)
+}
+
+func createWorkflowEventsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` int not null, `%s` varchar(2048) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, doltdb.WorkflowEventsEventTypeColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
+}
+
+func createWorkflowEventTriggersTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` int not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName)
+}
+
+func createWorkflowEventTriggerBranchesTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName, doltdb.WorkflowEventTriggerBranchesBranchColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
+}
+
+func createWorkflowEventTriggerActivitiesTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerActivitiesTableName, doltdb.WorkflowEventTriggerActivitiesIdPkColName, doltdb.WorkflowEventTriggerActivitiesActivityColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
+}
+
+func createWorkflowJobsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) not null, `%s` datetime(6) not null, `%s` datetime(6) not null, `%s` varchar(2048) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsCreatedAtColName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
+}
+
+func createWorkflowStepsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) not null, `%s` int not null, `%s` int not null, `%s` datetime(6) not null, `%s` datetime(6) not null,`%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName, doltdb.WorkflowStepsNameColName, doltdb.WorkflowStepsStepOrderColName, doltdb.WorkflowStepsStepTypeColName, doltdb.WorkflowStepsCreatedAtColName, doltdb.WorkflowStepsUpdatedAtColName, doltdb.WorkflowStepsWorkflowJobIdFkColName, doltdb.WorkflowStepsWorkflowJobIdFkColName, doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName)
+}
+
+func createWorkflowSavedQueryStepsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(2048) not null, `%s` int not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName)
+}
+
+func createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key,`%s` int not null, `%s` int not null,`%s` bigint not null,`%s` bigint not null,`%s` datetime(6) not null,`%s` datetime(6) not null,`%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName)
+}
+
+func deleteAllFromWorkflowsTableQuery() string {
+	return fmt.Sprintf("delete from %s;", doltdb.WorkflowsTableName)
 }

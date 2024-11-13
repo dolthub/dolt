@@ -18,62 +18,62 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var initDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Creates database tables used to store continuous integration configuration",
-	LongDesc:  "Creates database tables used to store continuous integration configuration",
+var listDocs = cli.CommandDocumentationContent{
+	ShortDesc: "List Dolt CI workflows",
+	LongDesc:  "List Dolt CI workflows",
 	Synopsis: []string{
-		"{{.LessThan}}init{{.GreaterThan}}",
+		"{{.LessThan}}ls{{.GreaterThan}}",
 	},
 }
 
-type InitCmd struct{}
+type ListCmd struct{}
 
 // Name implements cli.Command.
-func (cmd InitCmd) Name() string {
-	return "init"
+func (cmd ListCmd) Name() string {
+	return "ls"
 }
 
 // Description implements cli.Command.
-func (cmd InitCmd) Description() string {
-	return initDocs.ShortDesc
+func (cmd ListCmd) Description() string {
+	return listDocs.ShortDesc
 }
 
 // RequiresRepo implements cli.Command.
-func (cmd InitCmd) RequiresRepo() bool {
+func (cmd ListCmd) RequiresRepo() bool {
 	return true
 }
 
 // Docs implements cli.Command.
-func (cmd InitCmd) Docs() *cli.CommandDocumentation {
+func (cmd ListCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.NewCommandDocumentation(initDocs, ap)
+	return cli.NewCommandDocumentation(listDocs, ap)
 }
 
 // Hidden should return true if this command should be hidden from the help text
-func (cmd InitCmd) Hidden() bool {
+func (cmd ListCmd) Hidden() bool {
 	return true
 }
 
 // ArgParser implements cli.Command.
-func (cmd InitCmd) ArgParser() *argparser.ArgParser {
+func (cmd ListCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	return ap
 }
 
 // Exec implements cli.Command.
-func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd ListCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
+	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, listDocs, ap))
 
 	if !cli.CheckEnvIsValid(dEnv) {
 		return 1
@@ -102,31 +102,20 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	if hasTables {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has already been initialized")), usage)
+	if !hasTables {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has not been initialized, please initialize with: dolt ci init")), usage)
 	}
 
-	var verr errhand.VerboseError
-	err = dolt_ci.CreateDoltCITables(sqlCtx, db, queryist.Query, name, email)
+	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Query)
+
+	workflows, err := wm.ListWorkflows(sqlCtx, db)
 	if err != nil {
-		verr = errhand.VerboseErrorFromError(err)
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return commands.HandleVErrAndExitCode(verr, usage)
-}
+	for _, w := range workflows {
+		cli.Println(color.CyanString(fmt.Sprintf("%s", w)))
+	}
 
-func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	deaf := dEnv.DbEaFactory()
-	if useBulkEditor {
-		deaf = dEnv.BulkDbEaFactory()
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return sqle.Database{}, err
-	}
-	opts := editor.Options{
-		Deaf:    deaf,
-		Tempdir: tmpDir,
-	}
-	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
+	return 0
 }

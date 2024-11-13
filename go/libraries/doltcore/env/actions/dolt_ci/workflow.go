@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ci
+package dolt_ci
 
 import (
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"time"
 )
 
-var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
-	InitCmd{},
-	DestroyCmd{},
-	ImportCmd{},
-	ExportCmd{},
-	ListCmd{},
-})
+type WorkflowName string
+
+type Workflow struct {
+	Name      *WorkflowName `db:"name"`
+	CreatedAt time.Time     `db:"created_at"`
+	UpdatedAt time.Time     `db:"updated_at"`
+}

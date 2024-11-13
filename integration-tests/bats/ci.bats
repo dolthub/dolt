@@ -46,7 +46,7 @@ skip_remote_engine() {
     [[ "$output" =~ "Successfully initialized Dolt CI" ]] || false
 
     dolt sql -q "insert into dolt_ci_workflows values('workflow_1', now(), now());"
-    dolt sql -q "insert into dolt_ci_workflow_events values(uuid(), 'workflow_1', 1);"
+    dolt sql -q "insert into dolt_ci_workflow_events values(uuid(), 1, 'workflow_1');"
     dolt ci destroy
 
     run dolt log -n 1
@@ -91,6 +91,18 @@ skip_remote_engine() {
     [[ "$output" =~ "Invalid table name" ]] || false
 }
 
+@test "ci: workflow tables do not appear in show tables output" {
+    skip_remote_engine
+}
+
+@test "ci: workflow tables do not appear in dolt ls" {
+    skip_remote_engine
+}
+
+@test "ci: workflow tables do appear in diffs" {
+    skip_remote_engine
+}
+
 @test "ci: init command should only commit changes relevant to the ci tables" {
     skip_remote_engine
 
@@ -115,4 +127,24 @@ skip_remote_engine() {
     [[ "$output" =~ "Untracked tables:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:        t1" ]] || false
+}
+
+@test "ci: import command will import a valid workflow.yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: import command will error on an invalid workflow.yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: import command will update existing workflow" {
+    skip_remote_engine
+}
+
+@test "ci: export exports a workflow to a yaml file" {
+    skip_remote_engine
+}
+
+@test "ci: ls lists existing workflows" {
+    skip_remote_engine
 }

@@ -199,7 +199,8 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, oldSqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	sqlCtx := doltdb.ContextWithDoltCICreateBypassKey(oldSqlCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

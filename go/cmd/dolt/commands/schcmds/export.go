@@ -122,7 +122,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root dol
 	var tablesToExport []string
 	var err error
 	if tblName != "" {
-		if doltdb.HasDoltPrefix(tblName) {
+		if doltdb.HasDoltPrefix(tblName) || doltdb.HasDoltCIPrefix(tblName) {
 			return errhand.BuildDError("%s not found", tblName).Build()
 		}
 		tablesToExport = []string{tblName}
