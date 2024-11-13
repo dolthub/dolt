@@ -184,7 +184,7 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 	}
 }
 
-// IterAll returns an MapIter for all artifacts.
+// IterAll returns a MapIter for all artifacts.
 func (m ArtifactMap) IterAll(ctx context.Context) (MapIter, error) {
 	return m.tuples.IterAll(ctx)
 }

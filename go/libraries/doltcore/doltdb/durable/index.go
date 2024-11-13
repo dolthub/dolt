@@ -238,7 +238,7 @@ func ProllyMapFromIndex(i Index) prolly.Map {
 	return i.(prollyIndex).index
 }
 
-// MapFromIndex unwraps the Index and returns the underlying prolly.Map or prolly.ProximityMap.
+// MapFromIndex unwraps the Index and returns the underlying map as an interface.
 func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
 	switch indexType := i.(type) {
 	case prollyIndex:
