@@ -25,8 +25,6 @@ import (
 // MutableMapFlusher provides methods for flushing the edits in a MutableMap, producing a new static MapInterface
 // containing the edits.
 type MutableMapFlusher[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple, val.Tuple, val.TupleDesc]] interface {
-	ApplyMutations(ctx context.Context, m *GenericMutableMap[MapType, TreeMap]) (TreeMap, error)
-
 	ApplyMutationsWithSerializer(
 		ctx context.Context,
 		serializer message.Serializer,
@@ -34,4 +32,6 @@ type MutableMapFlusher[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple
 	) (TreeMap, error)
 
 	Map(ctx context.Context, m *GenericMutableMap[MapType, TreeMap]) (MapType, error)
+
+	GetDefaultSerializer(ctx context.Context, mut *GenericMutableMap[MapType, TreeMap]) message.Serializer
 }

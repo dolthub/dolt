@@ -59,11 +59,6 @@ func (mut *GenericMutableMap[M, T]) MapInterface(ctx context.Context) (MapInterf
 	return mut.Map(ctx)
 }
 
-// TreeMap materializes all pending and applied mutations in the GenericMutableMap, producing the resulting tree.MapInterface.
-func (mut *GenericMutableMap[M, T]) TreeMap(ctx context.Context) (T, error) {
-	return mut.flusher.ApplyMutations(ctx, mut)
-}
-
 // Map materializes all pending and applied mutations in the GenericMutableMap, producing the specific MapInterface implementation
 // that the struct has been specialized with.
 func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
@@ -174,7 +169,8 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
 		cp.Edits.Revert()
 		stash = &cp
 	}
-	sm, err := mut.flusher.ApplyMutations(ctx, mut)
+	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
+	sm, err := mut.flusher.ApplyMutationsWithSerializer(ctx, serializer, mut)
 	if err != nil {
 		return err
 	}
@@ -311,8 +307,13 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 
 type ProllyFlusher struct{}
 
+func (f ProllyFlusher) GetDefaultSerializer(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
+	return message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
+}
+
 func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) (Map, error) {
-	treeMap, err := f.TreeMap(ctx, mut)
+	s := f.GetDefaultSerializer(ctx, mut)
+	treeMap, err := f.ApplyMutationsWithSerializer(ctx, s, mut)
 	if err != nil {
 		return Map{}, err
 	}
@@ -321,12 +322,6 @@ func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree
 		keyDesc: mut.keyDesc,
 		valDesc: mut.valDesc,
 	}, nil
-}
-
-// TreeMap materializes all pending and applied mutations in the MutableMap.
-func (f ProllyFlusher) TreeMap(ctx context.Context, mut *MutableMap) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	s := message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
-	return mut.flushWithSerializer(ctx, s)
 }
 
 var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProllyFlusher{}
