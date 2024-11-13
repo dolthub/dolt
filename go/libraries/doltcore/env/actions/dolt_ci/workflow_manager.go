@@ -40,6 +40,7 @@ var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
 type WorkflowManager interface {
+	RemoveWorkflow(ctx *sql.Context, db sqle.Database, workflowName string) error
 	ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error)
 	GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error)
 	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
@@ -595,6 +596,19 @@ func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, workflowName stri
 		}
 	}
 	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully stored workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
+}
+
+func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, workflowName string) error {
+	// stage table in reverse order so child tables
+	// are staged before parent tables
+	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
+		tableName := ExpectedDoltCITablesOrdered[i]
+		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+		if err != nil {
+			return err
+		}
+	}
+	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully removed workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
@@ -1463,6 +1477,11 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 	return nil
 }
 
+func (d *doltWorkflowManager) deleteWorkflow(ctx *sql.Context, workflowName WorkflowName) error {
+	query := d.deleteFromWorkflowsTableByWorkflowNameQuery(string(workflowName))
+	return d.sqlWriteQuery(ctx, query)
+}
+
 func (d *doltWorkflowManager) deletePushWorkflowEvents(ctx *sql.Context, workflowName WorkflowName) error {
 	query := d.deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPush(string(workflowName))
 	return d.sqlWriteQuery(ctx, query)
@@ -2000,6 +2019,22 @@ func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context, db sqle.Database) 
 		names = append(names, string(*w.Name))
 	}
 	return names, nil
+}
+
+func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, db sqle.Database, workflowName string) error {
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	_, err := d.getWorkflow(ctx, workflowName)
+	if err != nil {
+		return err
+	}
+
+	err = d.deleteWorkflow(ctx, WorkflowName(workflowName))
+	if err != nil {
+		return err
+	}
+	return d.commitRemoveWorkflow(ctx, workflowName)
 }
 
 func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error {
