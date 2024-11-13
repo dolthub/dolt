@@ -176,6 +176,7 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 			keyDesc:    m.keyDesc,
 			valDesc:    m.valDesc,
 			maxPending: artifactMapPendingBufferSize,
+			flusher:    ProllyFlusher{},
 		},
 		artKB: val.NewTupleBuilder(artKD),
 		artVB: val.NewTupleBuilder(artVD),
