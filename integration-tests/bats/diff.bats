@@ -1943,6 +1943,42 @@ SQL
     [[ "$output" =~ "| > | 1  | 2023-01-01 00:00:00 |" ]] || false
 }
 
+# https://github.com/dolthub/dolt/issues/8551
+@test "diff: schema change increase decimal precision" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (d decimal(10, 2));
+insert into t1 values (123.45);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column d decimal(10, 4);
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| - | 123.4500 |" ]] || false
+    [[ "$output" =~ "| + | 123.4500 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8551
+@test "diff: schema change decrease decimal precision" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (d decimal(10, 4));
+insert into t1 values (123.4567);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column d decimal(10, 2);
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| - | 123.46 |" ]] || false
+    [[ "$output" =~ "| + | 123.46 |" ]] || false
+}
+
 @test "diff: diff --reverse" {
   run dolt diff -R
   [ $status -eq 0 ]
