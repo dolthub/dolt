@@ -286,6 +286,9 @@ const (
 	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	SchemasTablesSqlModeCol = "sql_mode"
+	// SchemasTablesSchemaNameCol is the name of the column that stores the name of the schema that the fragment
+	// is part of. Used by Doltgres only.
+	SchemasTablesSchemaNameCol = "schema_name"
 )
 
 const (

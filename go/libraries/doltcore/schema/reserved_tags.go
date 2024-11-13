@@ -80,6 +80,7 @@ const (
 	DoltSchemasFragmentTag
 	DoltSchemasExtraTag
 	DoltSchemasSqlModeTag
+	DoltSchemasSchemaNameTag
 )
 
 // Tags for hidden columns in keyless rows

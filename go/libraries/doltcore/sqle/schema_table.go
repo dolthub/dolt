@@ -55,10 +55,15 @@ func (st *SchemaTable) String() string {
 	return doltdb.GetSchemasTableName()
 }
 
+// GetSchemasSchema returns the schema of the dolt_schemas system table. This is used
+// by Doltgres to update the dolt_schemas schema with an additional schema_name column.
+var GetSchemasSchema = SchemaTableSchema
+
 func (st *SchemaTable) Schema() sql.Schema {
+	currentSchema := toSqlSchemaTableSchema(GetSchemasSchema())
 	if st.backingTable == nil {
 		// No backing table; return a current schema.
-		return SchemaTableSqlSchema().Schema
+		return currentSchema.Schema
 	}
 
 	if !st.backingTable.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.GetSchemasTableName()) {
@@ -71,7 +76,7 @@ func (st *SchemaTable) Schema() sql.Schema {
 		return SchemaTableV1SqlSchema()
 	}
 
-	return SchemaTableSqlSchema().Schema
+	return currentSchema.Schema
 }
 
 func (st *SchemaTable) Collation() sql.CollationID {
@@ -127,8 +132,8 @@ var _ sql.IndexAddressableTable = (*SchemaTable)(nil)
 var _ sql.UpdatableTable = (*SchemaTable)(nil)
 var _ WritableDoltTableWrapper = (*SchemaTable)(nil)
 
-func SchemaTableSqlSchema() sql.PrimaryKeySchema {
-	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.GetSchemasTableName(), SchemaTableSchema())
+func toSqlSchemaTableSchema(sch schema.Schema) sql.PrimaryKeySchema {
+	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.GetSchemasTableName(), sch)
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -250,7 +255,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	}
 
 	// Create new empty table
-	err = db.createDoltTable(ctx, tname, root, SchemaTableSchema())
+	err = db.createDoltTable(ctx, tname, root, GetSchemasSchema())
 	if err != nil {
 		return nil, err
 	}
@@ -367,8 +372,8 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
-func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType string, name string) (r sql.Row, found bool, rerr error) {
-	fragType, name = strings.ToLower(fragType), strings.ToLower(name)
+func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType, name, schemaName string) (r sql.Row, found bool, rerr error) {
+	fragType, name, schemaName = strings.ToLower(fragType), strings.ToLower(name), strings.ToLower(schemaName)
 
 	// This performs a full table scan in the worst case, but it's only used when adding or dropping a trigger or view
 	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
@@ -387,6 +392,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	// need to get the column indexes from the current schema
 	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
 	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
+	schemaNameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesSchemaNameCol)
 
 	for {
 		sqlRow, err := iter.Next(ctx)
@@ -397,8 +403,13 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 			return nil, false, err
 		}
 
+		sqlRowSchemaName := ""
+		if schemaNameIdx >= 0 {
+			sqlRowSchemaName = sqlRow[schemaNameIdx].(string)
+		}
+
 		// These columns are case insensitive, make sure to do a case-insensitive comparison
-		if strings.EqualFold(sqlRow[typeIdx].(string), fragType) && strings.EqualFold(sqlRow[nameIdx].(string), name) {
+		if strings.EqualFold(sqlRow[typeIdx].(string), fragType) && strings.EqualFold(sqlRow[nameIdx].(string), name) && strings.EqualFold(sqlRowSchemaName, schemaName) {
 			return sqlRow, true, nil
 		}
 	}
@@ -407,9 +418,10 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 }
 
 type schemaFragment struct {
-	name     string
-	fragment string
-	created  time.Time
+	name       string
+	schemaName string
+	fragment   string
+	created    time.Time
 	// sqlMode indicates the SQL_MODE that was used when this schema fragment was initially parsed. SQL_MODE settings
 	// such as ANSI_QUOTES control customized parsing behavior needed for some schema fragments.
 	sqlMode string
@@ -424,6 +436,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 	// The dolt_schemas table has undergone various changes over time and multiple possible schemas for it exist, so we
 	// need to get the column indexes from the current schema
 	nameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesNameCol)
+	schemaNameIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesSchemaNameCol)
 	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragmentIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	extraIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
@@ -463,13 +476,21 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			sqlModeString = defaultSqlMode
 		}
 
+		schemaNameString := ""
+		if schemaNameIdx >= 0 {
+			if s, ok := sqlRow[schemaNameIdx].(string); ok {
+				schemaNameString = s
+			}
+		}
+
 		// For older tables, use 1 as the trigger creation time
 		if extraIdx < 0 || sqlRow[extraIdx] == nil {
 			frags = append(frags, schemaFragment{
-				name:     sqlRow[nameIdx].(string),
-				fragment: sqlRow[fragmentIdx].(string),
-				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
-				sqlMode:  sqlModeString,
+				name:       sqlRow[nameIdx].(string),
+				schemaName: schemaNameString,
+				fragment:   sqlRow[fragmentIdx].(string),
+				created:    time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
+				sqlMode:    sqlModeString,
 			})
 			continue
 		}
@@ -481,10 +502,11 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		}
 
 		frags = append(frags, schemaFragment{
-			name:     sqlRow[nameIdx].(string),
-			fragment: sqlRow[fragmentIdx].(string),
-			created:  time.Unix(createdTime, 0).UTC(),
-			sqlMode:  sqlModeString,
+			name:       sqlRow[nameIdx].(string),
+			schemaName: schemaNameString,
+			fragment:   sqlRow[fragmentIdx].(string),
+			created:    time.Unix(createdTime, 0).UTC(),
+			sqlMode:    sqlModeString,
 		})
 	}
 

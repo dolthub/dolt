@@ -1758,6 +1758,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		}
 	}
 
+	schemaName := db.schemaName
 	lwrViewName := strings.ToLower(viewName)
 	switch {
 	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
@@ -1767,7 +1768,12 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
-		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
+		return sql.ViewDefinition{
+				Name:                viewName,
+				SchemaName:          db.schemaName,
+				TextDefinition:      blameViewTextDef,
+				CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)},
+			true, nil
 	}
 
 	schemasTableName := getDoltSchemasTableName()
@@ -1809,22 +1815,22 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	}
 
 	if wrapper.backingTable == nil {
-		dbState.SessionCache().CacheViews(key, nil, db.schemaName)
+		dbState.SessionCache().CacheViews(key, nil, schemaName)
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, viewName)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, viewName, schemaName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
 
 	// TODO: only cache views from a single schema here
-	dbState.SessionCache().CacheViews(key, views, db.schemaName)
+	dbState.SessionCache().CacheViews(key, views, schemaName)
 
 	return viewDef, found, nil
 }
 
-func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName, schemaName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
 	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
 	if err != nil {
 		return nil, sql.ViewDefinition{}, false, err
@@ -1843,14 +1849,15 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 			}
 		} else {
 			views[i] = sql.ViewDefinition{
-				Name: fragments[i].name,
+				Name:       fragments[i].name,
+				SchemaName: fragments[i].schemaName,
 				// TODO: need to define TextDefinition
 				CreateViewStatement: fragments[i].fragment,
 				SqlMode:             fragment.sqlMode,
 			}
 		}
 
-		if strings.EqualFold(fragment.name, viewName) {
+		if strings.EqualFold(fragment.name, viewName) && strings.EqualFold(fragment.schemaName, schemaName) {
 			found = true
 			viewDef = views[i]
 		}
@@ -1878,7 +1885,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, "")
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -1974,7 +1981,7 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 		definition.Name,
 		definition.CreateStatement,
 		definition.CreatedAt,
-		fmt.Errorf("triggers `%s` already exists", definition.Name), //TODO: add a sql error and return that instead
+		fmt.Errorf("triggers `%s` already exists", definition.Name), // TODO: add a sql error and return that instead
 	)
 }
 
@@ -2236,7 +2243,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	_, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
+	_, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name, db.schemaName)
 	if err != nil {
 		return err
 	}
@@ -2263,7 +2270,26 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 
 	sqlMode := sql.LoadSqlMode(ctx)
 
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.String()})
+	row := sql.Row{fragType, name, definition, extraJSON, sqlMode.String()}
+
+	// Include schema_name column for doltgres
+	if resolve.UseSearchPath && tbl.Schema().Contains(doltdb.SchemasTablesSchemaNameCol, tbl.Name()) {
+		if db.schemaName == "" {
+			root, err := db.GetRoot(ctx)
+			if err != nil {
+				return err
+			}
+			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+			if err != nil {
+				return err
+			}
+			db.schemaName = schemaName
+		}
+
+		row = sql.Row{fragType, name, db.schemaName, definition, extraJSON, sqlMode.String()}
+	}
+
+	return inserter.Insert(ctx, row)
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
@@ -2271,6 +2297,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return err
 	}
 
+	schemaName := db.schemaName
 	if resolve.UseSearchPath {
 		db.schemaName = "dolt"
 	}
@@ -2288,14 +2315,26 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 		return missingErr
 	}
 
+	if resolve.UseSearchPath && schemaName == "" {
+		root, err := db.GetRoot(ctx)
+		if err != nil {
+			return err
+		}
+		schemaName, err = resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+		if err != nil {
+			return err
+		}
+	}
+
 	tbl := swrapper.backingTable
-	row, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name)
+	row, exists, err := fragFromSchemasTable(ctx, tbl, fragType, name, schemaName)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		return missingErr
 	}
+
 	deleter := tbl.Deleter(ctx)
 	err = deleter.Delete(ctx, row)
 	if err != nil {
