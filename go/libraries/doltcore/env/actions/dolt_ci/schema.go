@@ -201,7 +201,7 @@ func createWorkflowsTableQuery() string {
 }
 
 func createWorkflowEventsTableQuery() string {
-	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` int not null, `%s` varchar(2048) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, doltdb.WorkflowEventsEventTypeColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` int not null, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, doltdb.WorkflowEventsEventTypeColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
 }
 
 func createWorkflowEventTriggersTableQuery() string {
@@ -217,7 +217,7 @@ func createWorkflowEventTriggerActivitiesTableQuery() string {
 }
 
 func createWorkflowJobsTableQuery() string {
-	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` datetime(6) not null, `%s` datetime(6) not null, `%s` varchar(2048) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsCreatedAtColName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` datetime(6) not null, `%s` datetime(6) not null, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsCreatedAtColName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
 }
 
 func createWorkflowStepsTableQuery() string {
