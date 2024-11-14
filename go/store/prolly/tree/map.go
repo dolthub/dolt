@@ -37,6 +37,16 @@ type StaticMap[K, V ~[]byte, O Ordering[K]] struct {
 	Order     O
 }
 
+type MapInterface[K, V ~[]byte, O Ordering[K]] interface {
+	Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error)
+	GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error)
+	Has(ctx context.Context, query K) (ok bool, err error)
+	HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error)
+	GetRoot() Node
+	GetNodeStore() NodeStore
+	IterKeyRange(ctx context.Context, start, stop K) (*OrderedTreeIter[K, V], error)
+}
+
 // DiffOrderedTrees invokes `cb` for each difference between `from` and `to. If `considerAllRowsModified`
 // is true, then a key that exists in both trees will be considered a modification even if the bytes are the same.
 // This is used when `from` and `to` have different schemas.
@@ -193,6 +203,14 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 	return err
 }
 
+func (t StaticMap[K, V, O]) GetRoot() Node {
+	return t.Root
+}
+
+func (t StaticMap[K, V, O]) GetNodeStore() NodeStore {
+	return t.NodeStore
+}
+
 func (t StaticMap[K, V, O]) Count() (int, error) {
 	return t.Root.TreeCount()
 }
@@ -205,8 +223,8 @@ func (t StaticMap[K, V, O]) HashOf() hash.Hash {
 	return t.Root.HashOf()
 }
 
-func (t StaticMap[K, V, O]) Mutate() MutableMap[K, V, O] {
-	return MutableMap[K, V, O]{
+func (t StaticMap[K, V, O]) Mutate() MutableMap[K, V, O, StaticMap[K, V, O]] {
+	return MutableMap[K, V, O, StaticMap[K, V, O]]{
 		Edits: skip.NewSkipList(func(left, right []byte) int {
 			return t.Order.Compare(left, right)
 		}),

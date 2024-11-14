@@ -21,22 +21,22 @@ import (
 )
 
 // MutableMap is a mutable prolly Static with ordered elements.
-type MutableMap[K, V ~[]byte, O Ordering[K]] struct {
+type MutableMap[K, V ~[]byte, O Ordering[K], M MapInterface[K, V, O]] struct {
 	Edits  *skip.List
-	Static StaticMap[K, V, O]
+	Static M
 }
 
-func (m MutableMap[K, V, O]) Put(_ context.Context, key K, value V) error {
+func (m MutableMap[K, V, O, M]) Put(_ context.Context, key K, value V) error {
 	m.Edits.Put(key, value)
 	return nil
 }
 
-func (m MutableMap[K, V, O]) Delete(_ context.Context, key K) error {
+func (m MutableMap[K, V, O, M]) Delete(_ context.Context, key K) error {
 	m.Edits.Put(key, nil)
 	return nil
 }
 
-func (m MutableMap[K, V, O]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]) (err error) {
+func (m MutableMap[K, V, O, M]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]) (err error) {
 	value, ok := m.Edits.Get(key)
 	if ok {
 		if value == nil {
@@ -48,7 +48,7 @@ func (m MutableMap[K, V, O]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]
 	return m.Static.Get(ctx, key, cb)
 }
 
-func (m MutableMap[K, V, O]) GetPrefix(ctx context.Context, key K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
+func (m MutableMap[K, V, O, M]) GetPrefix(ctx context.Context, key K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
 	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
 		if k != nil { // seek until |k| >= |key|
 			advance = prefixOrder.Compare(k, key) < 0
@@ -65,7 +65,7 @@ func (m MutableMap[K, V, O]) GetPrefix(ctx context.Context, key K, prefixOrder O
 	return m.Static.GetPrefix(ctx, key, prefixOrder, cb)
 }
 
-func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err error) {
+func (m MutableMap[K, V, O, M]) Has(ctx context.Context, key K) (present bool, err error) {
 	value, ok := m.Edits.Get(key)
 	if ok {
 		present = value != nil
@@ -74,7 +74,7 @@ func (m MutableMap[K, V, O]) Has(ctx context.Context, key K) (present bool, err 
 	return m.Static.Has(ctx, key)
 }
 
-func (m MutableMap[K, V, O]) HasPrefix(ctx context.Context, key K, prefixOrder O) (present bool, err error) {
+func (m MutableMap[K, V, O, M]) HasPrefix(ctx context.Context, key K, prefixOrder O) (present bool, err error) {
 	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
 		if k != nil { // seek until |k| >= |key|
 			advance = prefixOrder.Compare(k, key) < 0
@@ -89,14 +89,14 @@ func (m MutableMap[K, V, O]) HasPrefix(ctx context.Context, key K, prefixOrder O
 	return m.Static.HasPrefix(ctx, key, prefixOrder)
 }
 
-func (m MutableMap[K, V, O]) Copy() MutableMap[K, V, O] {
-	return MutableMap[K, V, O]{
+func (m MutableMap[K, V, O, M]) Copy() MutableMap[K, V, O, M] {
+	return MutableMap[K, V, O, M]{
 		Edits:  m.Edits.Copy(),
 		Static: m.Static,
 	}
 }
 
-func (m MutableMap[K, V, O]) Mutations() MutationIter {
+func (m MutableMap[K, V, O, M]) Mutations() MutationIter {
 	return orderedListIter[K, V]{iter: m.Edits.IterAtStart()}
 }
 

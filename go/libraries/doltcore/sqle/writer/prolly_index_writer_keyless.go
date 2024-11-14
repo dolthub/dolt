@@ -41,7 +41,7 @@ func (k prollyKeylessWriter) Name() string {
 	return k.name
 }
 
-func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.Map, error) {
+func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return k.mut.Map(ctx)
 }
 
@@ -202,7 +202,7 @@ func (writer prollyKeylessSecondaryWriter) Name() string {
 }
 
 // Map implements the interface indexWriter.
-func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.Map, error) {
+func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return writer.mut.Map(ctx)
 }
 
