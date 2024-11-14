@@ -27,26 +27,16 @@ type ProximityFlusher struct{}
 
 var _ MutableMapFlusher[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProximityFlusher{}
 
-func (f ProximityFlusher) ApplyMutations(
-	ctx context.Context,
-	ns tree.NodeStore,
-	root tree.Node,
-	order val.TupleDesc,
-	edits tree.MutationIter,
-) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	serializer := message.NewVectorIndexSerializer(ns.Pool())
-	return f.ApplyMutationsWithSerializer(ctx, ns, root, order, serializer, edits)
-}
-
 func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	ctx context.Context,
-	ns tree.NodeStore,
-	root tree.Node,
-	order val.TupleDesc,
 	serializer message.Serializer,
-	edits tree.MutationIter,
+	mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]],
 ) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
 	panic("not implemented")
+}
+
+func (f ProximityFlusher) GetDefaultSerializer(ctx context.Context, mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
+	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool())
 }
 
 // newMutableMap returns a new MutableMap.
