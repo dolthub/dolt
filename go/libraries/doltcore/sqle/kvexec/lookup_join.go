@@ -31,18 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func rowIterTableLookupJoin(
-	srcIter prolly.MapIter,
-	dstIter index.SecondaryLookupIterGen,
-	mapping *lookupMapping,
-	rowJoiner *prollyToSqlJoiner,
-	srcFilter, dstFilter, joinFilter sql.Expression,
-	isLeftJoin bool,
-	excludeNulls bool,
-) (sql.RowIter, error) {
-	return newLookupKvIter(srcIter, dstIter, mapping, rowJoiner, srcFilter, dstFilter, joinFilter, isLeftJoin, excludeNulls)
-}
-
 type lookupJoinKvIter struct {
 	srcIter prolly.MapIter
 	srcKey  val.Tuple

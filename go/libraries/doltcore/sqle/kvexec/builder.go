@@ -52,9 +52,19 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 							split := len(srcTags)
 							projections := append(srcTags, dstTags...)
 							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
-							return rowIterTableLookupJoin(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
+							return newLookupKvIter(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 						}
 					}
+				}
+			}
+		}
+		if n.Op.IsMerge() && !n.Op.IsPartial() {
+			if leftMap, leftIter, _, leftSchema, leftTags, leftFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && leftSchema != nil {
+				if _, rightIter, _, rightSchema, rightTags, rightFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && rightSchema != nil {
+					split := len(leftTags)
+					projections := append(leftTags, rightTags...)
+					rowJoiner := newRowJoiner([]schema.Schema{leftSchema, rightSchema}, []int{split}, projections, leftMap.NodeStore())
+					return newMergeKvIter(leftIter, rightIter, leftMap, rowJoiner, leftFilter, rightFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 				}
 			}
 		}
