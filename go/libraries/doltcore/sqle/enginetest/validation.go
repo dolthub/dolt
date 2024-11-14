@@ -67,8 +67,8 @@ var validationStages = []validator{
 // validateChunkReferences checks for dangling chunks.
 func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 	validateIndex := func(ctx context.Context, idx durable.Index) error {
-		pm := durable.ProllyMapFromIndex(idx)
-		return pm.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+		m := durable.MapFromIndex(idx)
+		return m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
 			if nd.Size() <= 0 {
 				return fmt.Errorf("encountered nil tree.Node")
 			}
@@ -113,7 +113,7 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 		if err != nil {
 			return false, err
 		}
-		primary := durable.ProllyMapFromIndex(rows)
+		primary := durable.MapFromIndex(rows)
 
 		for _, def := range sch.Indexes().AllIndexes() {
 			set, err := t.GetIndexSet(ctx)
@@ -124,7 +124,7 @@ func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
 			if err != nil {
 				return true, err
 			}
-			secondary := durable.ProllyMapFromIndex(idx)
+			secondary := durable.MapFromIndex(idx)
 
 			err = validateIndexConsistency(ctx, sch, def, primary, secondary)
 			if err != nil {
@@ -140,7 +140,7 @@ func validateIndexConsistency(
 	ctx context.Context,
 	sch schema.Schema,
 	def schema.Index,
-	primary, secondary prolly.Map,
+	primary, secondary prolly.MapInterface,
 ) error {
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
@@ -151,7 +151,7 @@ func validateIndexConsistency(
 
 // printIndexContents prints the contents of |prollyMap| to stdout. Intended for use debugging
 // index consistency issues.
-func printIndexContents(ctx context.Context, prollyMap prolly.Map) {
+func printIndexContents(ctx context.Context, prollyMap prolly.MapInterface) {
 	fmt.Printf("Secondary index contents:\n")
 	kd := prollyMap.KeyDesc()
 	iterAll, _ := prollyMap.IterAll(ctx)
@@ -164,7 +164,7 @@ func printIndexContents(ctx context.Context, prollyMap prolly.Map) {
 	}
 }
 
-func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.MapInterface) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
 		return nil
@@ -239,7 +239,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 	}
 }
 
-func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.MapInterface) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
 		return nil

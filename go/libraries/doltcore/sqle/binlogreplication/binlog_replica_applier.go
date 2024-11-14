@@ -901,7 +901,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, fmt.Errorf("unable to access running SQL server")
 	}
 
-	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.Parser)
+	binder := planbuilder.New(ctx, server.Engine.Analyzer.Catalog, server.Engine.EventScheduler, server.Engine.Parser)
 	node, _, _, qFlags, err := binder.Parse("SELECT "+strValue, nil, false)
 	if err != nil {
 		return nil, err

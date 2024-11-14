@@ -49,7 +49,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 		panic("TODO")
 
 	case types.Format_DOLT:
-		b := shim.ValueFromArtifactMap(idx.(prollyArtifactIndex).index)
+		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:

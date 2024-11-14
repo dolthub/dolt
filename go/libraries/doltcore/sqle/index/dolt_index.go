@@ -991,6 +991,11 @@ func (di *doltIndex) IsFullText() bool {
 	return di.fulltext
 }
 
+// IsVector implements sql.Index
+func (di *doltIndex) IsVector() bool {
+	return false
+}
+
 // IsPrimaryKey implements DoltIndex.
 func (di *doltIndex) IsPrimaryKey() bool {
 	return di.isPk
@@ -1090,7 +1095,7 @@ var sharePool = pool.NewBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	if types.IsFormat_DOLT(idx.Format()) {
-		kd, _ := durable.ProllyMapFromIndex(idx).Descriptors()
+		kd, _ := durable.MapFromIndex(idx).Descriptors()
 		return val.NewTupleBuilder(kd)
 	}
 	return nil

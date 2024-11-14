@@ -134,7 +134,7 @@ func (c AddressMap) Editor() AddressMapEditor {
 }
 
 type AddressMapEditor struct {
-	addresses tree.MutableMap[stringSlice, address, lexicographic]
+	addresses tree.MutableMap[stringSlice, address, lexicographic, tree.StaticMap[stringSlice, address, lexicographic]]
 }
 
 func (wr AddressMapEditor) Add(ctx context.Context, name string, addr hash.Hash) error {

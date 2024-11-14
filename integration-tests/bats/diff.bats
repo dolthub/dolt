@@ -1943,6 +1943,42 @@ SQL
     [[ "$output" =~ "| > | 1  | 2023-01-01 00:00:00 |" ]] || false
 }
 
+# https://github.com/dolthub/dolt/issues/8551
+@test "diff: schema change increase decimal precision" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (d decimal(10, 2));
+insert into t1 values (123.45);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column d decimal(10, 4);
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| - | 123.4500 |" ]] || false
+    [[ "$output" =~ "| + | 123.4500 |" ]] || false
+}
+
+# https://github.com/dolthub/dolt/issues/8551
+@test "diff: schema change decrease decimal precision" {
+    dolt reset --hard
+
+    dolt sql <<SQL
+create table t1 (d decimal(10, 4));
+insert into t1 values (123.4567);
+call dolt_commit('-Am', 'commit');
+
+alter table t1 modify column d decimal(10, 2);
+SQL
+
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| - | 123.46 |" ]] || false
+    [[ "$output" =~ "| + | 123.46 |" ]] || false
+}
+
 @test "diff: diff --reverse" {
   run dolt diff -R
   [ $status -eq 0 ]
@@ -1965,4 +2001,126 @@ SQL
   [ $status -eq 0 ]
   [[ "$output" =~ "t1" ]] || false
   [[ "$output" =~ "t2" ]] || false
+}
+
+
+@test "diff: enum data change" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, size ENUM('x-small', 'small', 'medium', 'large', 'x-large'));
+insert into test values (1,'x-small');
+insert into test values (2,'small');
+insert into test values (3,'medium');
+SQL
+    dolt add .
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+insert into test values (4,'large');
+delete from test where pk = 1;
+update test set size = 'x-large' where pk = 2;
+SQL
+
+    run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
++---+----+---------+
+|   | pk | size    |
++---+----+---------+
+| - | 1  | x-small |
+| < | 2  | small   |
+| > | 2  | x-large |
+| + | 4  | large   |
++---+----+---------+
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}
+
+@test "diff: enum and schema changes" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, size ENUM('x-small', 'small', 'medium', 'large', 'x-large'));
+insert into test values (1,'x-small');
+insert into test values (2,'small');
+insert into test values (3,'medium');
+SQL
+    dolt add .
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+alter table test add column c1 int;
+insert into test values (4,'large',1);
+delete from test where pk = 1;
+update test set size = 'x-large' where pk = 2;
+SQL
+
+    run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `size` enum('x-small','small','medium','large','x-large'),
++  `c1` int,
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+---------+------+
+|   | pk | size    | c1   |
++---+----+---------+------+
+| - | 1  | x-small | NULL |
+| < | 2  | small   | NULL |
+| > | 2  | x-large | NULL |
+| + | 4  | large   | 1    |
++---+----+---------+------+
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --schema
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `size` enum('x-small','small','medium','large','x-large'),
++  `c1` int,
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no data changes output
+    [ "${#lines[@]}" -eq 9 ]
+
+    run dolt diff --data
+    EXPECTED=$(cat <<'EOF'
++---+----+---------+------+
+|   | pk | size    | c1   |
++---+----+---------+------+
+| - | 1  | x-small | NULL |
+| < | 2  | small   | NULL |
+| > | 2  | x-large | NULL |
+| + | 4  | large   | 1    |
++---+----+---------+------+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no schema changes output
+    [ "${#lines[@]}" -eq 11 ]
 }

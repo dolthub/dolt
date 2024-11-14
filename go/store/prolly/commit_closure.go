@@ -154,7 +154,7 @@ func (c CommitClosure) AsHashSet(ctx context.Context) (hash.HashSet, error) {
 }
 
 type CommitClosureEditor struct {
-	closure tree.MutableMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]
+	closure tree.MutableMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering, tree.StaticMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]]
 }
 
 type CommitClosureKey []byte

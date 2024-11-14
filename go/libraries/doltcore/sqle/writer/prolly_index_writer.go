@@ -68,7 +68,7 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 
 type indexWriter interface {
 	Name() string
-	Map(ctx context.Context) (prolly.Map, error)
+	Map(ctx context.Context) (prolly.MapInterface, error)
 	ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error
 	Insert(ctx context.Context, sqlRow sql.Row) error
 	Delete(ctx context.Context, sqlRow sql.Row) error
@@ -101,7 +101,7 @@ func (m prollyIndexWriter) Name() string {
 	return ""
 }
 
-func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
+func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return m.mut.Map(ctx)
 }
 
@@ -247,7 +247,7 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 
 type prollySecondaryIndexWriter struct {
 	name          string
-	mut           *prolly.MutableMap
+	mut           prolly.MutableMapInterface
 	unique        bool
 	prefixLengths []uint16
 
@@ -273,8 +273,8 @@ func (m prollySecondaryIndexWriter) Name() string {
 	return m.name
 }
 
-func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
-	return m.mut.Map(ctx)
+func (m prollySecondaryIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
+	return m.mut.MapInterface(ctx)
 }
 
 func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {

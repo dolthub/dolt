@@ -813,6 +813,32 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name:        "TRANSACTION ISOLATION READ-COMMITTED does not break AUTOCOMMIT=OFF",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set session transaction isolation level read committed",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ set autocommit = off",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ select @@transaction_isolation, @@autocommit",
+				Expected: []sql.Row{{"READ-COMMITTED", 0}},
+			},
+			{
+				Query:            "/* client a */ savepoint abc",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ release savepoint abc",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{

@@ -199,7 +199,8 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, oldSqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	sqlCtx := doltdb.ContextWithDoltCICreateBypassKey(oldSqlCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -1401,7 +1402,12 @@ func diffRows(
 		toSch = pkSch.Schema
 	}
 
-	unionSch := unionSchemas(fromSch, toSch)
+	var unionSch sql.Schema
+	if fromSch.Equals(toSch) {
+		unionSch = fromSch
+	} else {
+		unionSch = unionSchemas(fromSch, toSch)
+	}
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	rowWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
@@ -1552,6 +1558,7 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 // the following rules for the time being:
 //   - Going from any integer to a float, always take the float.
 //   - Going from any integer to a decimal, always take the decimal.
+//   - Going from any decimal to a decimal (with different precision/scale), always take the new decimal.
 //   - Going from a low precision float to a high precision float, we'll always take the high precision float.
 //   - Going from a low precision integer to a high precision integer, we'll always take the high precision integer.
 //     Currently, we only support this if the signage is the same.
@@ -1561,7 +1568,7 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 //
 // Note this is only for printing the diff. This is not robust for other purposes.
 func chooseMostFlexibleType(origA, origB sql.Type) sql.Type {
-	if origA == origB {
+	if origA.Equals(origB) {
 		return origA
 	}
 
@@ -1595,6 +1602,10 @@ func chooseMostFlexibleType(origA, origB sql.Type) sql.Type {
 		}
 
 		// TODO: moving from unsigned to signed or vice versa.
+	}
+
+	if bt == sqltypes.Decimal && at == sqltypes.Decimal {
+		return origB
 	}
 
 	if bt == sqltypes.Timestamp && (at == sqltypes.Date || at == sqltypes.Time || at == sqltypes.Datetime) {

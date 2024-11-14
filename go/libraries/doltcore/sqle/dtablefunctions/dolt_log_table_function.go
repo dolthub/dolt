@@ -36,6 +36,7 @@ const logTableDefaultRowCount = 10
 
 var _ sql.TableFunction = (*LogTableFunction)(nil)
 var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
 	ctx *sql.Context
@@ -187,8 +188,8 @@ func (ltf *LogTableFunction) WithChildren(children ...sql.Node) (sql.Node, error
 	return ltf, nil
 }
 
-// CheckPrivileges implements the interface sql.Node.
-func (ltf *LogTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	tblNames, err := ltf.database.GetTableNames(ctx)
 	if err != nil {
 		return false

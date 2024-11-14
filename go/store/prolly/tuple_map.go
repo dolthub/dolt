@@ -213,6 +213,11 @@ func (m Map) Mutate() *MutableMap {
 	return newMutableMap(m)
 }
 
+// MutateInterface makes a MutableMap from a Map.
+func (m Map) MutateInterface() MutableMapInterface {
+	return newMutableMap(m)
+}
+
 // Rewriter returns a mutator that intends to rewrite this map with the key and value descriptors provided.
 func (m Map) Rewriter(kd, vd val.TupleDesc) *MutableMap {
 	return newMutableMapWithDescriptors(m, kd, vd)

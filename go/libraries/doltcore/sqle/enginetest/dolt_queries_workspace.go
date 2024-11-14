@@ -41,6 +41,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				// Test case-insensitive table name
+				Query: "select * from dolt_workspace_TBL",
+				Expected: []sql.Row{
+					{0, true, "modified", 42, 51, 42, 42},
+				},
+			},
+			{
 				Query: "update tbl set val= 108 where pk = 42;",
 			},
 			{

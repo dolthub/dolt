@@ -95,7 +95,7 @@ func parseCreateTable(_ *sql.Context, tableName string, sch schema.Schema) (*pla
 	parseCtx := sql.NewEmptyContext()
 	parseCtx.SetCurrentDatabase("mydb")
 
-	b := planbuilder.New(parseCtx, catalog, sql.NewMysqlParser())
+	b := planbuilder.New(parseCtx, catalog, nil, nil)
 	pseudoAnalyzedQuery, _, _, _, err := b.Parse(query, nil, false)
 	if err != nil {
 		return nil, err

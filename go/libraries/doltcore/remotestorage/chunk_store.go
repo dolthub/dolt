@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -49,7 +50,25 @@ var ErrCacheCapacityExceeded = errors.New("too much data: the cache capacity has
 
 var ErrUploadFailed = errors.New("upload failed")
 
-var globalHttpFetcher HTTPFetcher = &http.Client{}
+var defaultDialer = &net.Dialer{
+	Timeout:   30 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
+var defaultTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           defaultDialer.DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          1024,
+	MaxIdleConnsPerHost:   256,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
+var globalHttpFetcher HTTPFetcher = &http.Client{
+	Transport: defaultTransport,
+}
 
 var _ chunks.TableFileStore = (*DoltChunkStore)(nil)
 var _ nbs.NBSCompressedChunkStore = (*DoltChunkStore)(nil)

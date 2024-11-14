@@ -850,11 +850,11 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns, false)
+	m, err := shim.MapInterfaceFromValue(types.SerialMessage(rowbytes), sch, t.ns, false)
 	if err != nil {
 		return nil, err
 	}
-	return IndexFromProllyMap(m), nil
+	return IndexFromMapInterface(m), nil
 }
 
 func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
@@ -863,7 +863,7 @@ func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd va
 	if err != nil {
 		return nil, err
 	}
-	return IndexFromProllyMap(m), nil
+	return IndexFromMapInterface(m), nil
 }
 
 func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {

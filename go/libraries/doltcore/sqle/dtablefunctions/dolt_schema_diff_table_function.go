@@ -34,6 +34,7 @@ const schemaDiffDefaultRowCount = 100
 
 var _ sql.TableFunction = (*SchemaDiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*SchemaDiffTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*SchemaDiffTableFunction)(nil)
 
 type SchemaDiffTableFunction struct {
 	ctx *sql.Context
@@ -168,12 +169,12 @@ func (ds *SchemaDiffTableFunction) WithChildren(children ...sql.Node) (sql.Node,
 	return ds, nil
 }
 
-// CheckPrivileges implements the interface sql.Node.
-func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (ds *SchemaDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	if ds.tableNameExpr != nil {
 		_, _, _, tableName, err := ds.evaluateArguments()
 		if err != nil {
-			return false
+			return ExpressionIsDeferred(ds.tableNameExpr)
 		}
 
 		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
@@ -409,3 +410,15 @@ func (s *schemaDiffTableFunctionRowIter) Close(context *sql.Context) error {
 }
 
 var _ sql.RowIter = (*schemaDiffTableFunctionRowIter)(nil)
+
+// ExpressionIsDeferred checks for whether the given expression is a deferred binding variable. For prepared statements,
+// the normal workflow causes issues with privilege checking since it occurs during AST construction rather than during
+// analysis, so this will catch those instances.
+func ExpressionIsDeferred(expr sql.Expression) bool {
+	if bv, ok := expr.(*expression.BindVar); ok {
+		if deferredType, ok := bv.Type().(sql.DeferredType); ok && deferredType.IsDeferred() {
+			return true
+		}
+	}
+	return false
+}

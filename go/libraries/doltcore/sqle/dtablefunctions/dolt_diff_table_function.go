@@ -42,6 +42,7 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
 	ctx            *sql.Context
@@ -354,11 +355,11 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	return dtf, nil
 }
 
-// CheckPrivileges implements the sql.Node interface
-func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (dtf *DiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	_, _, _, tableName, err := dtf.evaluateArguments()
 	if err != nil {
-		return false
+		return ExpressionIsDeferred(dtf.tableNameExpr)
 	}
 
 	subject := sql.PrivilegeCheckSubject{Database: dtf.database.Name(), Table: tableName}

@@ -330,20 +330,38 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		tableName := tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := dtables.NewDiffTable(ctx, db.Name(), tableName, db.ddb, root, head)
+		baseTableName := tblName[len(doltdb.DoltDiffTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, err := dtables.NewDiffTable(ctx, db.Name(), tname, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
-		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
 		ws, err := ds.WorkingSet(ctx, db.RevisionQualifiedName())
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root, ws.StagedRoot())
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, ws.StagedRoot())
 		if err != nil {
 			return nil, false, err
 		}
@@ -377,22 +395,40 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
-		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix, asOf)
+		baseTableName := tblName[len(doltdb.DoltConfTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, tname.Name, asOf)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
 			return nil, false, nil
 		}
-		dt, err := dtables.NewConflictsTable(ctx, suffix, srcTable, root, dtables.RootSetter(db))
+		dt, err := dtables.NewConflictsTable(ctx, tname, srcTable, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
 		return dt, true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConstViolTablePrefix):
-		suffix := tblName[len(doltdb.DoltConstViolTablePrefix):]
-		dt, err := dtables.NewConstraintViolationsTable(ctx, suffix, root, dtables.RootSetter(db))
+		baseTableName := tblName[len(doltdb.DoltConstViolTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			tname, _, _, err = resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		dt, err := dtables.NewConstraintViolationsTable(ctx, tname, root, dtables.RootSetter(db))
 		if err != nil {
 			return nil, false, err
 		}
@@ -408,9 +444,21 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		roots, _ := sess.GetRoots(ctx, db.RevisionQualifiedName())
 		head := roots.Head
 
-		userTable := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltWorkspaceTablePrefix):]
+		tname := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+		if resolve.UseSearchPath && db.schemaName == "" {
+			var err error
+			baseName, _, exists, err := resolve.Table(ctx, root, baseTableName)
+			if err != nil {
+				return nil, false, err
+			}
+			// Only set tname if table exists so that emptyWorkspaceTable is used if the table does not exist
+			if exists {
+				tname = baseName
+			}
+		}
 
-		dt, err := dtables.NewWorkspaceTable(ctx, tblName, userTable, head, ws)
+		dt, err := dtables.NewWorkspaceTable(ctx, tblName, tname, head, ws)
 		if err != nil {
 			return nil, false, err
 		}
@@ -633,15 +681,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		if backingTable == nil {
-			dt = NewEmptySchemaTable()
-		} else {
-			writeTable := backingTable.(*WritableDoltTable)
-			dt, err = NewSchemaTable(writeTable)
-			if err != nil {
-				return nil, false, err
-			}
-		}
+		dt = NewSchemaTable(backingTable)
 	}
 
 	if found {
@@ -790,7 +830,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, err
 	}
 
-	return filterDoltInternalTables(tblNames, db.schemaName), nil
+	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
 }
 
 // getTable returns the user table with the given baseName from the root given
@@ -970,6 +1010,8 @@ func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb
 	var table sql.Table
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
+	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
+		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
@@ -1000,7 +1042,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 
 	// TODO: Figure out way to remove filterDoltInternalTables
-	return filterDoltInternalTables(tblNames, db.schemaName), nil
+	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
 }
 
 func (db Database) SchemaName() string {
@@ -1049,10 +1091,15 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 	return result, nil
 }
 
-func filterDoltInternalTables(tblNames []string, schemaName string) []string {
+func filterDoltInternalTables(ctx *sql.Context, tblNames []string, schemaName string) []string {
 	result := []string{}
+
 	for _, tbl := range tblNames {
-		if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
+		if doltdb.IsDoltCITable(tbl) {
+			if doltdb.DoltCICanBypass(ctx) {
+				result = append(result, tbl)
+			}
+		} else if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
 			result = append(result, tbl)
 		}
 	}
@@ -1238,6 +1285,12 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.DoltCICanBypass(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
+	}
+
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(tableName)
 	}
@@ -1257,6 +1310,12 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
+	}
+
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.DoltCICanBypass(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
@@ -1444,6 +1503,12 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrReservedTableName.New(tableName)
 	}
 
+	if doltdb.HasDoltCIPrefix(tableName) {
+		if !doltdb.DoltCICanBypass(ctx) {
+			return ErrReservedTableName.New(tableName)
+		}
+	}
+
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(tableName)
 	}
@@ -1588,6 +1653,12 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrReservedTableName.New(newName)
 	}
 
+	if doltdb.HasDoltCIPrefix(newName) {
+		if !doltdb.DoltCICanBypass(ctx) {
+			return ErrReservedTableName.New(newName)
+		}
+	}
+
 	if strings.HasPrefix(newName, diff.DBPrefix) {
 		return ErrReservedDiffTableName.New(newName)
 	}
@@ -1627,17 +1698,22 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
 		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
 
-		blameViewTextDef, err := dtables.NewBlameView(ctx, tableName, root)
+		blameViewTextDef, err := dtables.NewBlameView(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName}, root)
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
 		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	schTblHash, ok, err := root.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName, Schema: db.schemaName})
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
+	if !ok {
+		return sql.ViewDefinition{}, false, nil
+	}
+
+	key := doltdb.DataCacheKey{Hash: schTblHash}
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := ds.LookupDbState(ctx, db.RevisionQualifiedName())
@@ -1938,7 +2014,7 @@ func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	b := planbuilder.New(ctx, db.getCatalog(ctx), sql.NewMysqlParser())
+	b := planbuilder.New(ctx, db.getCatalog(ctx), db.getEventScheduler(ctx), nil)
 	b.SetParserOptions(sql.NewSqlModeFromString(frag.sqlMode).ParserOptions())
 	parsed, _, _, _, err := b.Parse(updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), nil, false)
 	if err != nil {
@@ -1968,6 +2044,12 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
+}
+
+// getEventScheduler retrieves the EventScheduler for this database
+func (db Database) getEventScheduler(ctx *sql.Context) sql.EventScheduler {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	return sqle.NewDefault(doltSession.Provider()).EventScheduler
 }
 
 // SaveEvent implements sql.EventDatabase.

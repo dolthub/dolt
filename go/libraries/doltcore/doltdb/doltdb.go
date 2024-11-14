@@ -89,12 +89,18 @@ type DoltDB struct {
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
-func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
+func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns}
+	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
+}
+
+// GetDatabaseName returns the name of the database.
+// Note: This can return an empty string if the database name is not populated.
+func (ddb *DoltDB) GetDatabaseName() string {
+	return ddb.databaseName
 }
 
 // HackDatasDatabaseFromDoltDB unwraps a DoltDB to a datas.Database.
@@ -141,6 +147,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	if err != nil {
 		return nil, err
 	}
+
 	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
 }
 

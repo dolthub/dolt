@@ -438,7 +438,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		}
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
 		sqlEngine := engine.GetUnderlyingEngine()
-		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.Parser)
+		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
 		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
 		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), nil, false)
 		if err != nil {

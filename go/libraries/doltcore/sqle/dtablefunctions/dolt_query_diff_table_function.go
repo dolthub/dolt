@@ -31,6 +31,7 @@ const queryDiffDefaultRowCount = 100
 var _ sql.TableFunction = (*QueryDiffTableFunction)(nil)
 var _ sql.CatalogTableFunction = (*QueryDiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*QueryDiffTableFunction)(nil)
+var _ sql.AuthorizationCheckerNode = (*QueryDiffTableFunction)(nil)
 
 type QueryDiffTableFunction struct {
 	ctx      *sql.Context
@@ -317,8 +318,8 @@ func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, erro
 	return tf, nil
 }
 
-// CheckPrivileges implements the sql.Node interface
-func (tf *QueryDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+// CheckAuth implements the interface sql.AuthorizationCheckerNode.
+func (tf *QueryDiffTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	subject := sql.PrivilegeCheckSubject{Database: tf.database.Name()}
 	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }

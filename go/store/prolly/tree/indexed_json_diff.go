@@ -44,32 +44,60 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 	differ.fromStop = differ.fromStop.parent
 	differ.toStop = differ.toStop.parent
 
-	if differ.from == nil || differ.to == nil {
-		// This can happen when either document fits in a single chunk.
-		// We don't use the chunk differ in this case, and instead we create the cursors without it.
+	var currentFromCursor, currentToCursor *JsonCursor
+	if differ.from == nil {
+		// The "from" document fits inside a single chunk.
+		// We can't create the "from" cursor from the differ, so we create it here instead.
 		diffKey := []byte{byte(startOfValue)}
-		currentFromCursor, err := newJsonCursorAtStartOfChunk(ctx, from.m.NodeStore, from.m.Root, diffKey)
+		currentFromCursor, err = newJsonCursorAtStartOfChunk(ctx, from.m.NodeStore, from.m.Root, diffKey)
 		if err != nil {
 			return nil, err
 		}
-		currentToCursor, err := newJsonCursorAtStartOfChunk(ctx, to.m.NodeStore, to.m.Root, diffKey)
+		// Advance the cursor past the "beginning of document" location, so that it aligns with the "to" cursor no matter what.
+		err = advanceCursor(ctx, &currentFromCursor)
 		if err != nil {
 			return nil, err
 		}
-		return &IndexedJsonDiffer{
-			differ:            differ,
-			from:              from,
-			to:                to,
-			currentFromCursor: currentFromCursor,
-			currentToCursor:   currentToCursor,
-		}, nil
+	}
+
+	if differ.to == nil {
+		// The "to" document fits inside a single chunk.
+		// We can't create the "from" cursor from the differ, so we create it here instead.
+		diffKey := []byte{byte(startOfValue)}
+		currentToCursor, err = newJsonCursorAtStartOfChunk(ctx, to.m.NodeStore, to.m.Root, diffKey)
+		if err != nil {
+			return nil, err
+		}
+		// Advance the cursor past the "beginning of document" location, so that it aligns with the "from" cursor no matter what.
+		err = advanceCursor(ctx, &currentToCursor)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &IndexedJsonDiffer{
-		differ: differ,
-		from:   from,
-		to:     to,
+		differ:            differ,
+		from:              from,
+		to:                to,
+		currentFromCursor: currentFromCursor,
+		currentToCursor:   currentToCursor,
 	}, nil
+}
+
+func advanceCursor(ctx context.Context, jCur **JsonCursor) (err error) {
+	if (*jCur).jsonScanner.atEndOfChunk() {
+		err = (*jCur).cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+		*jCur = nil
+	} else {
+		err = (*jCur).jsonScanner.AdvanceToNextLocation()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Next computes the next diff between the two JSON documents.
@@ -77,28 +105,13 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 // to walk corresponding chunks.
 func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 	// helper function to advance a JsonCursor and set it to nil if it reaches the end of a chunk
-	advanceCursor := func(jCur **JsonCursor) (err error) {
-		if (*jCur).jsonScanner.atEndOfChunk() {
-			err = (*jCur).cur.advance(ctx)
-			if err != nil {
-				return err
-			}
-			*jCur = nil
-		} else {
-			err = (*jCur).jsonScanner.AdvanceToNextLocation()
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
 
 	newAddedDiff := func(key []byte) (JsonDiff, error) {
 		addedValue, err := jd.currentToCursor.NextValue(ctx)
 		if err != nil {
 			return JsonDiff{}, err
 		}
-		err = advanceCursor(&jd.currentToCursor)
+		err = advanceCursor(ctx, &jd.currentToCursor)
 		if err != nil {
 			return JsonDiff{}, err
 		}
@@ -114,7 +127,7 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 		if err != nil {
 			return JsonDiff{}, err
 		}
-		err = advanceCursor(&jd.currentFromCursor)
+		err = advanceCursor(ctx, &jd.currentFromCursor)
 		if err != nil {
 			return JsonDiff{}, err
 		}
@@ -150,29 +163,35 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 				return JsonDiff{}, err
 			}
 		} else if jd.currentFromCursor == nil {
-			// We exhausted the current `from` chunk but not the `to` chunk. Since the chunk boundaries don't align on
+			// We exhausted the current `from` chunk but not the current `to` chunk. Since the chunk boundaries don't align on
 			// the same key, we need to continue into the next chunk.
+
+			// Alternatively, the "to" cursor was created during construction because the "to" document fit in a single chunk,
+			// and the "from" cursor hasn't been created yet.
 
 			jd.currentFromCursor, err = newJsonCursorFromCursor(ctx, jd.differ.from)
 			if err != nil {
 				return JsonDiff{}, err
 			}
 
-			err = advanceCursor(&jd.currentFromCursor)
+			err = advanceCursor(ctx, &jd.currentFromCursor)
 			if err != nil {
 				return JsonDiff{}, err
 			}
 			continue
 		} else if jd.currentToCursor == nil {
-			// We exhausted the current `to` chunk but not the `from` chunk. Since the chunk boundaries don't align on
+			// We exhausted the current `to` chunk but not the current `from` chunk. Since the chunk boundaries don't align on
 			// the same key, we need to continue into the next chunk.
+
+			// Alternatively, the "from" cursor was created during construction because the "from" document fit in a single chunk,
+			// and the "to" cursor hasn't been created yet.
 
 			jd.currentToCursor, err = newJsonCursorFromCursor(ctx, jd.differ.to)
 			if err != nil {
 				return JsonDiff{}, err
 			}
 
-			err = advanceCursor(&jd.currentToCursor)
+			err = advanceCursor(ctx, &jd.currentToCursor)
 			if err != nil {
 				return JsonDiff{}, err
 			}
@@ -209,11 +228,11 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			if compareJsonLocations(fromCurrentLocation, toCurrentLocation) != 0 {
 				return JsonDiff{}, jsonParseError
 			}
-			err = advanceCursor(&jd.currentFromCursor)
+			err = advanceCursor(ctx, &jd.currentFromCursor)
 			if err != nil {
 				return JsonDiff{}, err
 			}
-			err = advanceCursor(&jd.currentToCursor)
+			err = advanceCursor(ctx, &jd.currentToCursor)
 			if err != nil {
 				return JsonDiff{}, err
 			}
@@ -226,15 +245,29 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			case 0:
 				key := fromCurrentLocation.Clone().key
 
+				fromNextCharacter, err := jd.currentFromCursor.nextCharacter(ctx)
+				if err == io.EOF {
+					return JsonDiff{}, jsonParseError
+				}
+				if err != nil {
+					return JsonDiff{}, err
+				}
+				toNextCharacter, err := jd.currentToCursor.nextCharacter(ctx)
+				if err == io.EOF {
+					return JsonDiff{}, jsonParseError
+				}
+				if err != nil {
+					return JsonDiff{}, err
+				}
 				// Both sides have the same key. If they're both an object or both an array, continue.
 				// Otherwise, compare them and possibly return a modification.
-				if (fromScanner.current() == '{' && toScanner.current() == '{') ||
-					(fromScanner.current() == '[' && toScanner.current() == '[') {
-					err = advanceCursor(&jd.currentFromCursor)
+				if (fromNextCharacter == '{' && toNextCharacter == '{') ||
+					(fromNextCharacter == '[' && toNextCharacter == '[') {
+					err = advanceCursor(ctx, &jd.currentFromCursor)
 					if err != nil {
 						return JsonDiff{}, err
 					}
-					err = advanceCursor(&jd.currentToCursor)
+					err = advanceCursor(ctx, &jd.currentToCursor)
 					if err != nil {
 						return JsonDiff{}, err
 					}
