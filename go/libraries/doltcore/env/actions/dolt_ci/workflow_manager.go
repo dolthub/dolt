@@ -1955,18 +1955,21 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 						return nil, err
 					}
 
-					expectedColumnsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedColumnCountComparisonType, expectedResult.ExpectedColumnCount)
-					if err != nil {
-						return nil, err
+					if expectedResult.ExpectedColumnCountComparisonType != WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
+						expectedColumnsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedColumnCountComparisonType, expectedResult.ExpectedColumnCount)
+						if err != nil {
+							return nil, err
+						}
+						step.ExpectedColumns = newScalarDoubleQuotedYamlNode(expectedColumnsStr)
 					}
 
-					expectedRowsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedRowCountComparisonType, expectedResult.ExpectedRowCount)
-					if err != nil {
-						return nil, err
+					if expectedResult.ExpectedRowCountComparisonType != WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
+						expectedRowsStr, err := d.toSavedQueryExpectedResultString(expectedResult.ExpectedRowCountComparisonType, expectedResult.ExpectedRowCount)
+						if err != nil {
+							return nil, err
+						}
+						step.ExpectedRows = newScalarDoubleQuotedYamlNode(expectedRowsStr)
 					}
-
-					step.ExpectedColumns = newScalarDoubleQuotedYamlNode(expectedColumnsStr)
-					step.ExpectedRows = newScalarDoubleQuotedYamlNode(expectedRowsStr)
 				}
 
 				steps = append(steps, step)

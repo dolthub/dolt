@@ -191,9 +191,12 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.AddressMapFileID:
-		keys, values, _, cnt, err := message.UnpackFields(serial.Message(sm))
+		fileId, keys, values, _, cnt, err := message.UnpackFields(serial.Message(sm))
 		if err != nil {
 			return fmt.Sprintf("error in HumanReadString(): %s", err)
+		}
+		if fileId != serial.AddressMapFileID {
+			panic(fmt.Sprintf("unexpected file ID, expected %s, got %s", serial.AddressMapFileID, fileId))
 		}
 		var b strings.Builder
 		b.Write([]byte("AddressMap {\n"))
@@ -388,10 +391,14 @@ func printIndex(level int, ret *strings.Builder, index *serial.Index) {
 }
 
 func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Message) error {
-	_, values, treeLevel, count, err := message.UnpackFields(msg)
+	fileId, _, values, treeLevel, count, err := message.UnpackFields(msg)
 	if err != nil {
 		return err
 	}
+	if fileId != serial.BlobFileID {
+		return fmt.Errorf("unexpected file ID, expected %s, got %s", serial.BlobFileID, fileId)
+	}
+
 	isLeaf := treeLevel == 0
 
 	if isLeaf {
@@ -413,7 +420,10 @@ func OutputBlobNodeBytes(w *strings.Builder, indentationLevel int, msg serial.Me
 }
 
 func OutputProllyNodeBytes(w io.Writer, msg serial.Message) error {
-	keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	fileId, keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	if fileId != serial.ProllyTreeNodeFileID {
+		return fmt.Errorf("unexpected file ID, expected %s, got %s", serial.ProllyTreeNodeFileID, fileId)
+	}
 	if err != nil {
 		return err
 	}

@@ -32,7 +32,7 @@ type AddressMap struct {
 func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
 	serializer := message.NewAddressMapSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
-	n, err := tree.NodeFromBytes(msg)
+	n, _, err := tree.NodeFromBytes(msg)
 	if err != nil {
 		return AddressMap{}, err
 	}
@@ -134,7 +134,7 @@ func (c AddressMap) Editor() AddressMapEditor {
 }
 
 type AddressMapEditor struct {
-	addresses tree.MutableMap[stringSlice, address, lexicographic]
+	addresses tree.MutableMap[stringSlice, address, lexicographic, tree.StaticMap[stringSlice, address, lexicographic]]
 }
 
 func (wr AddressMapEditor) Add(ctx context.Context, name string, addr hash.Hash) error {

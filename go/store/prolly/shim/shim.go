@@ -22,20 +22,16 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NodeFromValue(v types.Value) (tree.Node, error) {
+func NodeFromValue(v types.Value) (node tree.Node, fileId string, err error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 
-func ValueFromMap(m prolly.Map) types.Value {
-	return tree.ValueFromNode(m.Node())
-}
-
-func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
+func ValueFromMap(m prolly.MapInterface) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+	root, _, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -47,8 +43,21 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
-func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.Map, error) {
-	root, err := NodeFromValue(v)
+func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
+	root, _, err := NodeFromValue(v)
+	if err != nil {
+		return nil, err
+	}
+	kd := sch.GetKeyDescriptor()
+	if isKeylessSecondary {
+		kd = prolly.AddHashToSchema(kd)
+	}
+	vd := sch.GetValueDescriptor()
+	return prolly.NewMap(root, ns, kd, vd), nil
+}
+
+func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.MapInterface, error) {
+	root, _, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err
 	}

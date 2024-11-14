@@ -16,6 +16,9 @@ package durable
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -46,7 +49,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 		panic("TODO")
 
 	case types.Format_DOLT:
-		b := shim.ValueFromArtifactMap(idx.(prollyArtifactIndex).index)
+		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -98,9 +101,12 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		panic("TODO")
 
 	case types.Format_DOLT:
-		root, err := shim.NodeFromValue(v)
+		root, fileId, err := shim.NodeFromValue(v)
 		if err != nil {
 			return nil, err
+		}
+		if fileId != serial.MergeArtifactsFileID {
+			return nil, fmt.Errorf("unexpected file ID for artifact node, expected %s, found %s", serial.MergeArtifactsFileID, fileId)
 		}
 		kd := tableSch.GetKeyDescriptor()
 		m := prolly.NewArtifactMap(root, ns, kd)

@@ -19,7 +19,10 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+
+	"github.com/dolthub/dolt/go/serial"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -54,7 +57,10 @@ func (o commitClosureKeyOrdering) Compare(left, right CommitClosureKey) int {
 func NewEmptyCommitClosure(ns tree.NodeStore) (CommitClosure, error) {
 	serializer := message.NewCommitClosureSerializer(ns.Pool())
 	msg := serializer.Serialize(nil, nil, nil, 0)
-	node, err := tree.NodeFromBytes(msg)
+	node, fileId, err := tree.NodeFromBytes(msg)
+	if fileId != serial.CommitClosureFileID {
+		return CommitClosure{}, fmt.Errorf("unexpected file ID for commit closure, expected %s, found %s", serial.CommitClosureFileID, fileId)
+	}
 	if err != nil {
 		return CommitClosure{}, err
 	}
@@ -148,7 +154,7 @@ func (c CommitClosure) AsHashSet(ctx context.Context) (hash.HashSet, error) {
 }
 
 type CommitClosureEditor struct {
-	closure tree.MutableMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]
+	closure tree.MutableMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering, tree.StaticMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]]
 }
 
 type CommitClosureKey []byte

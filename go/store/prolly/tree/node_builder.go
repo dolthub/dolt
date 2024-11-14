@@ -102,7 +102,8 @@ func (nb *nodeBuilder[S]) build() (node Node, err error) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
 	nb.recycleBuffers()
 	nb.size = 0
-	return NodeFromBytes(msg)
+	node, _, err = NodeFromBytes(msg)
+	return
 }
 
 func (nb *nodeBuilder[S]) recycleBuffers() {

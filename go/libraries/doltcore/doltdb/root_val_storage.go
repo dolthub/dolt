@@ -311,9 +311,12 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 
 func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore) (prolly.AddressMap, error) {
 	tbytes := r.srv.TablesBytes()
-	node, err := shim.NodeFromValue(types.SerialMessage(tbytes))
+	node, fileId, err := shim.NodeFromValue(types.SerialMessage(tbytes))
 	if err != nil {
 		return prolly.AddressMap{}, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return prolly.AddressMap{}, fmt.Errorf("unexpected file ID for address mao, expected %s, found %s", serial.AddressMapFileID, fileId)
 	}
 	return prolly.NewAddressMap(node, ns)
 }

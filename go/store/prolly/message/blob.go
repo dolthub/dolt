@@ -155,3 +155,20 @@ func estimateBlobSize(values [][]byte, subtrees []uint64) (bufSz int) {
 	bufSz += 200 // overhead
 	return
 }
+
+func getBlobKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+	keys, err = getBlobKeys(msg)
+	if err != nil {
+		return
+	}
+	values, err = getBlobValues(msg)
+	if err != nil {
+		return
+	}
+	level, err = getBlobTreeLevel(msg)
+	if err != nil {
+		return
+	}
+	count, err = getBlobCount(msg)
+	return
+}

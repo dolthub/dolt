@@ -850,11 +850,11 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := shim.MapFromValue(types.SerialMessage(rowbytes), sch, t.ns, false)
+	m, err := shim.MapInterfaceFromValue(types.SerialMessage(rowbytes), sch, t.ns, false)
 	if err != nil {
 		return nil, err
 	}
-	return IndexFromProllyMap(m), nil
+	return IndexFromMapInterface(m), nil
 }
 
 func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
@@ -863,7 +863,7 @@ func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd va
 	if err != nil {
 		return nil, err
 	}
-	return IndexFromProllyMap(m), nil
+	return IndexFromMapInterface(m), nil
 }
 
 func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {
@@ -887,9 +887,12 @@ func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, erro
 
 func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node, err := tree.NodeFromBytes(ambytes)
+	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
 		return nil, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return nil, fmt.Errorf("unexpected file ID for secondary index map, expected %s, got %s", serial.AddressMapFileID, fileId)
 	}
 	ns := t.ns
 	am, err := prolly.NewAddressMap(node, ns)
@@ -1132,9 +1135,12 @@ func (t doltDevTable) clone() *serial.Table {
 
 func (t doltDevTable) fields() (serialTableFields, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node, err := tree.NodeFromBytes(ambytes)
+	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
 		return serialTableFields{}, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return serialTableFields{}, fmt.Errorf("unexpected file ID for secondary index map, expected %s, got %s", serial.AddressMapFileID, fileId)
 	}
 	ns := t.ns
 
