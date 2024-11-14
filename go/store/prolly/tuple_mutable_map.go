@@ -169,11 +169,12 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
 		cp.Edits.Revert()
 		stash = &cp
 	}
-	sm, err := mut.Map(ctx)
+	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
+	treeMap, err := mut.flusher.ApplyMutationsWithSerializer(ctx, serializer, mut)
 	if err != nil {
 		return err
 	}
-	mut.tuples.Static = sm
+	mut.tuples.Static = treeMap
 	mut.tuples.Edits.Truncate() // reuse skip list
 	mut.stash = stash
 	return nil
