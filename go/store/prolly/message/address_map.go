@@ -179,3 +179,20 @@ func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz,
 	totalSz += serial.MessagePrefixSz
 	return
 }
+
+func getAddressMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+	keys, err = getAddressMapKeys(msg)
+	if err != nil {
+		return
+	}
+	values, err = getAddressMapValues(msg)
+	if err != nil {
+		return
+	}
+	level, err = getAddressMapTreeLevel(msg)
+	if err != nil {
+		return
+	}
+	count, err = getAddressMapCount(msg)
+	return
+}

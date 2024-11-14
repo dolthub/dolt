@@ -887,9 +887,12 @@ func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, erro
 
 func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node, err := tree.NodeFromBytes(ambytes)
+	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
 		return nil, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return nil, fmt.Errorf("unexpected file ID for secondary index map, expected %s, got %s", serial.AddressMapFileID, fileId)
 	}
 	ns := t.ns
 	am, err := prolly.NewAddressMap(node, ns)
@@ -1132,9 +1135,12 @@ func (t doltDevTable) clone() *serial.Table {
 
 func (t doltDevTable) fields() (serialTableFields, error) {
 	ambytes := t.msg.SecondaryIndexesBytes()
-	node, err := tree.NodeFromBytes(ambytes)
+	node, fileId, err := tree.NodeFromBytes(ambytes)
 	if err != nil {
 		return serialTableFields{}, err
+	}
+	if fileId != serial.AddressMapFileID {
+		return serialTableFields{}, fmt.Errorf("unexpected file ID for secondary index map, expected %s, got %s", serial.AddressMapFileID, fileId)
 	}
 	ns := t.ns
 

@@ -166,7 +166,7 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 func (j *JsonChunker) createNewLeafChunk(ctx context.Context, key, value []byte) error {
 	blobSerializer := message.NewBlobSerializer(j.ns.Pool())
 	msg := blobSerializer.Serialize(nil, [][]byte{value}, []uint64{1}, 0)
-	node, err := NodeFromBytes(msg)
+	node, _, err := NodeFromBytes(msg)
 	if err != nil {
 		return err
 	}

@@ -163,9 +163,12 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 					return false, err
 				}
 				ambytes := msg.AddressMapBytes()
-				node, err := tree.NodeFromBytes(ambytes)
+				node, fileId, err := tree.NodeFromBytes(ambytes)
 				if err != nil {
 					return false, err
+				}
+				if fileId != serial.AddressMapFileID {
+					return false, fmt.Errorf("unexpected file ID for address map, expected %s, found %s", serial.AddressMapFileID, fileId)
 				}
 				err = tree.OutputAddressMapNode(cli.OutStream, node)
 				if err != nil {

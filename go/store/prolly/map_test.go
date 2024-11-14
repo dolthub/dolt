@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -268,8 +269,9 @@ func TestVisitMapLevelOrder(t *testing.T) {
 func TestNewEmptyNode(t *testing.T) {
 	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(nil, nil, nil, 0)
-	empty, err := tree.NodeFromBytes(msg)
+	empty, fileId, err := tree.NodeFromBytes(msg)
 	require.NoError(t, err)
+	assert.Equal(t, fileId, serial.ProllyTreeNodeFileID)
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	tc, err := empty.TreeCount()
