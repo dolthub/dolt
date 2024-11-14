@@ -15,11 +15,13 @@
 package kvexec
 
 import (
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"io"
+
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func newMergeKvIter(
