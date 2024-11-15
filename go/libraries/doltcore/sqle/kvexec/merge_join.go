@@ -15,6 +15,7 @@
 package kvexec
 
 import (
+	"fmt"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -58,7 +59,7 @@ func newMergeKvIter(
 	}
 
 	if lIdx == rIdx {
-		return nil, nil
+		return nil, fmt.Errorf("unsupported merge comparison")
 	}
 
 	return &mergeJoinKvIter{
