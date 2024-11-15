@@ -357,11 +357,16 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		ws, err := ds.WorkingSet(ctx, db.RevisionQualifiedName())
-		if err != nil {
+		// Grab the staged root, if we have a valid working set, so we can show the staged changes
+		// in the system table, too. If we're in a detached head mode, just reuse the working root.
+		stagedRoot, err := workingSetStagedRoot(ctx, db.RevisionQualifiedName())
+		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+			stagedRoot = root
+		} else if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, ws.StagedRoot())
+
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), tname, db.ddb, root, stagedRoot)
 		if err != nil {
 			return nil, false, err
 		}
@@ -700,6 +705,18 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// If the table wasn't found in the specified data root, check if there is an overridden
 	// schema commit that contains it and return an empty table if so.
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
+}
+
+// workingSetStagedRoot returns the staged root for the current session in the database
+// named |dbName|. If a working set is not available (e.g. if a commit or tag is checked
+// out), this function returns an ErrOperationNotSupportedInDetachedHead error.
+func workingSetStagedRoot(ctx *sql.Context, dbName string) (doltdb.RootValue, error) {
+	ds := dsess.DSessFromSess(ctx.Session)
+	ws, err := ds.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	return ws.StagedRoot(), nil
 }
 
 // resolveAsOf resolves given expression to a commit, if one exists.
