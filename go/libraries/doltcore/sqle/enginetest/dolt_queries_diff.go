@@ -3639,6 +3639,105 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "tag collision",
+		SetUpScript: []string{
+			"CALL dolt_checkout('-b', 'other')",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075_01` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `INDICADOR_NM` varchar(255),\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `INDICADOR_NM` varchar(255),\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CALL dolt_commit('-A', '-m', 'create tables on other');",
+
+			"CALL dolt_checkout('main')",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `FRECUENCIA_PAGO` varchar(255),\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060_01` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `FRECUENCIA_PAGO` varchar(255),\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"call dolt_commit('-A', '-m', 'create tables on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'other') ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060`;"},
+					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060_01`;"},
+					{"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075` (\n" +
+						"  `ID` varchar(8) NOT NULL,\n" +
+						"  `PRODUCTO` varchar(255),\n" +
+						"  `TARIFA` int,\n" +
+						"  `VERSION_INICIO` int,\n" +
+						"  `VERSION_FIN` int,\n" +
+						"  `COBERTURA` varchar(255),\n" +
+						"  `INDICADOR_NM` varchar(255),\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+						"  `COEFICIENTE` double,\n" +
+						"  `DWB_IDENTITY` varchar(64),\n" +
+						"  PRIMARY KEY (`ID`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075_01` (\n" +
+						"  `ID` varchar(8) NOT NULL,\n" +
+						"  `PRODUCTO` varchar(255),\n" +
+						"  `TARIFA` int,\n" +
+						"  `VERSION_INICIO` int,\n" +
+						"  `VERSION_FIN` int,\n" +
+						"  `COBERTURA` varchar(255),\n" +
+						"  `INDICADOR_NM` varchar(255),\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+						"  `COEFICIENTE` double,\n" +
+						"  `DWB_IDENTITY` varchar(64),\n" +
+						"  PRIMARY KEY (`ID`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
