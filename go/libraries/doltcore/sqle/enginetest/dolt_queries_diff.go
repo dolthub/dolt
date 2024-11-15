@@ -4984,6 +4984,35 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// When in a detached head mode, dolt_commit_diff should still work, even though it doesn't have a staged root
+		Name: "detached head",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"CALL dolt_commit('-Am', 'create table t');",
+			"SET @commit1 = hashof('HEAD');",
+			"INSERT INTO t VALUES (1, 'one');",
+			"CALL dolt_commit('-Am', 'insert 1');",
+			"SET @commit2 = hashof('HEAD');",
+			"CALL dolt_tag('v1', @commit2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use mydb/v1;",
+				Expected: []sql.Row{},
+			},
+			{
+				// With no working set, this query should still compute the diff between two commits
+				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit=@commit2;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// With no working set, STAGED should reference the current root of the checked out tag
+				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit='STAGED';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
 
 	{
 		// When a column is dropped and recreated with a different type, we expect only the new column
