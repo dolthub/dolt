@@ -65,7 +65,7 @@ func (b *doltgresBenchmarkerImpl) cleanupServerDir(dir string) error {
 }
 
 func (b *doltgresBenchmarkerImpl) createTestingDb(ctx context.Context) error {
-	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), doltgresUser, doltgresPassword)
+	psqlconn := fmt.Sprintf(doltgresDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), doltgresUser, doltgresPassword)
 
 	// open database
 	db, err := sql.Open(postgresDriver, psqlconn)

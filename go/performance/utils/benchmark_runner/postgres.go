@@ -56,7 +56,7 @@ func (b *postgresBenchmarkerImpl) initDataDir(ctx context.Context) (string, erro
 }
 
 func (b *postgresBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) {
-	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), postgresUsername, "")
+	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), postgresUsername, "", dbName)
 
 	var db *sql.DB
 	db, err = sql.Open(postgresDriver, psqlconn)

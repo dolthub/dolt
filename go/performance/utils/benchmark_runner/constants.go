@@ -127,7 +127,8 @@ const (
 	doltgresPassword       = "password"
 	doltDataDir            = ".dolt"
 	createDatabaseTemplate = "create database %s;"
-	psqlDsnTemplate        = "host=%s port=%d user=%s password=%s sslmode=disable"
+	psqlDsnTemplate        = "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable"
+	doltgresDsnTemplate    = "host=%s port=%d user=%s password=%s sslmode=disable"
 	doltgresVersionCommand = "-version"
 
 	expectedServerKilledErrorMessage     = "signal: killed"
