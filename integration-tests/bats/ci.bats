@@ -16,6 +16,11 @@ skip_remote_engine() {
     fi
 }
 
+get_commit_hash() {
+  local logline=$(dolt log -n "$1")
+  echo ${logline:12:32}
+}
+
 @test "ci: init should create dolt ci workflow tables" {
     skip_remote_engine
 
@@ -93,14 +98,30 @@ skip_remote_engine() {
 
 @test "ci: workflow tables do not appear in show tables output" {
     skip_remote_engine
+    dolt ci init
+    run dolt sql -q "show tables;"
+    [ "$status" -eq 0 ]
+    [[ ${output} != *"dolt_ci"* ]] || false
 }
 
 @test "ci: workflow tables do not appear in dolt ls" {
     skip_remote_engine
+    dolt ci init
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ${output} != *"dolt_ci"* ]] || false
 }
 
 @test "ci: workflow tables do appear in diffs" {
     skip_remote_engine
+    first=$(get_commit_hash 1)
+
+    dolt ci init
+    last=$(get_commit_hash 1)
+    dolt diff "$first" "$last"
+    run dolt diff "$first" "$last"
+    [ "$status" -eq 0 ]
+    [[ ${output} == *"dolt_ci"* ]] || false
 }
 
 @test "ci: init command should only commit changes relevant to the ci tables" {
