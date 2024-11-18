@@ -332,3 +332,45 @@ EOF
     [[ ${output} == *"jobs:"* ]] || false
     [[ ${output} == *"steps:"* ]] || false
 }
+
+@test "ci: remove deletes a workflow" {
+    skip_remote_engine
+    cat > workflow_1.yaml <<EOF
+name: workflow_1
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    cat > workflow_2.yaml <<EOF
+name: workflow_2
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    dolt ci import ./workflow_1.yaml
+    dolt ci import ./workflow_2.yaml
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "workflow_1" ]] || false
+    [[ "$output" =~ "workflow_2" ]] || false
+    run dolt ci remove "workflow_1"
+    [ "$status" -eq 0 ]
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "workflow_2" ]] || false
+}
