@@ -164,11 +164,6 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		}
 	}
 
-	//err = server.Stop()
-	//if err != nil {
-	//	return
-	//}
-
 	if len(testsFailed) > 0 {
 		fmt.Printf("Failed test files that were skipped: %s\n", strings.Join(testsFailed, ", "))
 	}
