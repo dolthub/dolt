@@ -282,10 +282,53 @@ EOF
     [[ "$output" =~ "Dolt CI Workflow 'my first DoltHub workflow' up to date." ]] || false
 }
 
-@test "ci: export exports a workflow to a yaml file" {
-    skip_remote_engine
-}
-
 @test "ci: ls lists existing workflows" {
     skip_remote_engine
+    cat > workflow.yaml <<EOF
+name: my_workflow
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "my_workflow" ]] || false
+}
+
+@test "ci: export exports a workflow to a yaml file" {
+    skip_remote_engine
+    cat > workflow.yaml <<EOF
+name: my_workflow
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci export "my_workflow"
+    [ "$status" -eq 0 ]
+    cat my_workflow.yaml
+    run cat my_workflow.yaml
+    [ "$status" -eq 0 ]
+    [[ ${output} == *"name"* ]] || false
+    [[ ${output} == *"push:"* ]] || false
+    [[ ${output} == *"branches:"* ]] || false
+    [[ ${output} == *"jobs:"* ]] || false
+    [[ ${output} == *"steps:"* ]] || false
 }
