@@ -152,14 +152,134 @@ get_commit_hash() {
 
 @test "ci: import command will import a valid workflow.yaml file" {
     skip_remote_engine
+    cat > workflow.yaml <<EOF
+name: my_workflow
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "my_workflow" ]] || false
 }
 
 @test "ci: import command will error on an invalid workflow.yaml file" {
     skip_remote_engine
+    cat > workflow.yaml <<EOF
+name: my_workflow
+on:
+  push:
+    branches:
+      - master
+jobs:
+name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    run dolt ci import ./workflow.yaml
+    [ "$status" -eq 1 ]
 }
 
 @test "ci: import command will update existing workflow" {
     skip_remote_engine
+    cat > workflow_1.yaml <<EOF
+name: workflow_1
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+EOF
+    dolt ci init
+    dolt ci import ./workflow_1.yaml
+    original=$(get_commit_hash 1)
+    cat > workflow_1_updated.yaml <<EOF
+name: workflow_1
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables (new)
+    steps:
+      - name: assert expected tables exist (new)
+        saved_query_name: show tables
+        expected_rows: "!= 2"
+EOF
+    dolt ci import ./workflow_1_updated.yaml
+    updated=$(get_commit_hash 1)
+    run dolt diff "$original" "$updated"
+    [ "$status" -eq 0 ]
+    [[ ${output} == *"(new)"* ]] || false
+    [[ ${output} == *"dolt_ci_workflow_steps"* ]] || false
+    [[ ${output} == *"expected_column_row_comparison_type"* ]] || false
+    [[ ${output} == *"dolt_ci_workflow_saved_query_step_expected_row_column_results"* ]] || false
+}
+
+@test "ci: import command will not update existing workflow if there are not changes detected" {
+    cat > workflow.yaml <<EOF
+name: my first DoltHub workflow
+on:
+  push:
+    branches:
+      - master
+jobs:
+  - name: validate tables
+    steps:
+      - name: assert expected tables exist
+        saved_query_name: show tables
+        expected_rows: "== 2"
+      - name: assert table option_chain exists
+        saved_query_name: option_chain exists
+      - name: assert table volatility_history
+        saved_query_name: volatility_history exists
+  - name: validate schema
+    steps:
+      - name: assert 13 option_chain columns exist
+        saved_query_name: check option_chain column length
+        expected_columns: "<= 13"
+      - name: assert call_put column exist
+        saved_query_name: check option_chain.call_put exists
+        expected_columns: "== 1"
+      - name: assert 16 volatility_history columns exist
+        saved_query_name: check volatility_history column length
+        expected_columns: ">= 16"
+      - name: assert act_symbol column exist
+        saved_query_name: check volatility_history.act_symbol exists
+        expected_columns: "== 1"
+  - name: check data
+    steps:
+      - name: assert option_chain table has data
+        saved_query_name: check option_chain data
+        expected_rows: "> 0"
+      - name: assert volatility_history table has data
+        saved_query_name: check volatility_history data
+        expected_rows: "> 0"
+EOF
+
+    skip_remote_engine
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci import ./workflow.yaml
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Dolt CI Workflow 'my first DoltHub workflow' up to date." ]] || false
 }
 
 @test "ci: export exports a workflow to a yaml file" {
