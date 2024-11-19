@@ -70,13 +70,6 @@ func newMergeKvIter(
 	//	return nil, fmt.Errorf("unsupported merge comparison")
 	//}
 
-	if leftFilter != nil {
-		joinFilters = append(joinFilters, leftFilter)
-	}
-	if rightFilter != nil {
-		joinFilters = append(joinFilters, rightFilter)
-	}
-
 	return &mergeJoinKvIter{
 		leftIter:     leftIter,
 		rightIter:    rightIter,
@@ -85,6 +78,8 @@ func newMergeKvIter(
 		leftNorm:     leftNorm,
 		rightNorm:    rightNorm,
 		joinFilters:  joinFilters,
+		leftFilter:   leftFilter,
+		rightFilter:  rightFilter,
 		isLeftJoin:   isLeftJoin,
 		excludeNulls: excludeNulls,
 	}, nil
@@ -117,11 +112,13 @@ type mergeJoinKvIter struct {
 	// todo: we want to build KV-side static expression implementations
 	// so that we can execute filters more efficiently
 	joinFilters []sql.Expression
+	leftFilter  sql.Expression
+	rightFilter sql.Expression
 
 	// LEFT_JOIN impl details
 	excludeNulls bool
 	isLeftJoin   bool
-	returnedARow bool
+	matchedLeft  bool
 }
 
 var _ sql.RowIter = (*mergeJoinKvIter)(nil)
@@ -151,9 +148,22 @@ incr:
 	// increment state
 	switch l.cmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
 	case -1:
+		var oldLeftKey, oldLeftVal val.Tuple
+		{
+			// left join
+			if !l.matchedLeft && l.isLeftJoin {
+				oldLeftKey, oldLeftVal = l.leftKey, l.leftVal
+			}
+			l.matchedLeft = false
+		}
+
 		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
 		if err != nil {
 			return nil, err
+		}
+
+		if oldLeftKey != nil {
+			return l.buildCandidate(ctx, oldLeftKey, oldLeftVal, nil, nil)
 		}
 	case 0:
 		goto matchBuf
@@ -191,75 +201,131 @@ matchBuf:
 match:
 	// match state
 	// lookaheadBuf and rightKey
-	var candidate sql.Row
-	var rightKeyNil bool
 	if l.matchPos < len(l.lookaheadBuf) {
-		candidate, err = l.buildCandidate(ctx, l.leftKey, l.leftVal, l.lookaheadBuf[l.matchPos], l.lookaheadBuf[l.matchPos+1])
-		rightKeyNil = l.lookaheadBuf[l.matchPos] == nil
-		l.matchPos += 2
-	} else if l.matchPos == len(l.lookaheadBuf) {
-		candidate, err = l.buildCandidate(ctx, l.leftKey, l.leftVal, l.rightKey, l.rightVal)
-		rightKeyNil = l.rightKey == nil
-		l.matchPos++
-	} else {
-		// reset
-		l.matchPos = 0
-		// compare the current to the next left key
-		nextLeftKey, nextLeftVal, err := l.leftIter.Next(ctx)
+		candidate, ok, err := l.tryReturn(ctx, l.leftKey, l.leftVal, l.lookaheadBuf[l.matchPos], l.lookaheadBuf[l.matchPos+1])
 		if err != nil {
 			return nil, err
 		}
-		cmp := l.cmp(nextLeftKey, nextLeftVal, l.leftKey, l.leftVal)
-		l.leftKey, l.leftVal = nextLeftKey, nextLeftVal
-		if cmp == 0 {
-			// simple case -- the left keys are equivalent, maintain
-			// the right-side lookahead buffer
+		l.matchPos += 2
+		if !ok {
 			goto match
 		}
-		// if the left key is new invalidate lookahead buffer and
-		// advance the right side
-		l.lookaheadBuf = l.lookaheadBuf[:0]
-		if l.nextRightKey != nil {
-			l.rightKey, l.rightVal = l.nextRightKey, l.nextRightVal
-			l.nextRightKey = nil
-		} else {
-			l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
+		return candidate, nil
+	} else if l.matchPos == len(l.lookaheadBuf) {
+		candidate, ok, err := l.tryReturn(ctx, l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		if err != nil {
+			return nil, err
+		}
+		l.matchPos++
+		if !ok {
+			goto match
+		}
+		return candidate, nil
+	} else {
+		// reset
+		l.matchPos = 0
+
+		// compare the current to the next left key
+		tmpKey, tmpVal := l.leftKey, l.leftVal
+		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		cmp := l.cmp(tmpKey, tmpVal, l.leftKey, l.leftVal)
+
+		if cmp != 0 {
+			// if the left key is new, invalidate lookahead buffer and
+			// advance the right side
+			l.lookaheadBuf = l.lookaheadBuf[:0]
+			if l.nextRightKey != nil {
+				l.rightKey, l.rightVal = l.nextRightKey, l.nextRightVal
+				l.nextRightKey = nil
+			} else {
+				l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		if l.isLeftJoin && !l.matchedLeft {
+			// consider left join after appropriate state transitions
+			l.matchedLeft = false
+			ret, ok, err := l.tryReturn(ctx, tmpKey, tmpVal, nil, nil)
 			if err != nil {
 				return nil, err
 			}
+			if ok {
+				return ret, nil
+			}
+		}
+		l.matchedLeft = false
+
+		if cmp == 0 {
+			// the left keys are equivalent, the right-side lookahead
+			// buffer is still valid for the new left key. the only reason
+			// we do not do this check earlier is for left-joins.
+			goto match
 		}
 		goto incr
-
 	}
+}
+
+func (l *mergeJoinKvIter) tryReturn(ctx *sql.Context, leftKey, leftVal, rightKey, rightVal val.Tuple) (sql.Row, bool, error) {
+	candidate, err := l.buildCandidate(ctx, leftKey, leftVal, rightKey, rightVal)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+
+	rightKeyNil := l.rightKey == nil
+
+	if l.leftFilter != nil {
+		res, err := sql.EvaluateCondition(ctx, l.leftFilter, candidate[:l.joiner.kvSplits[0]])
+		if err != nil {
+			return nil, false, err
+		}
+		if !sql.IsTrue(res) {
+			return nil, false, nil
+		}
+	}
+
+	if l.rightFilter != nil {
+		res, err := sql.EvaluateCondition(ctx, l.rightFilter, candidate[l.joiner.kvSplits[0]:])
+		if err != nil {
+			return nil, false, err
+		}
+		if !sql.IsTrue(res) {
+			return nil, false, nil
+		}
 	}
 
 	// check filters
 	for _, f := range l.joinFilters {
 		res, err := sql.EvaluateCondition(ctx, f, candidate)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if res == nil && l.excludeNulls {
 			// override default left join behavior
-			goto match
+			return nil, false, nil
 		} else if !sql.IsTrue(res) && !rightKeyNil {
-			goto match
+			return nil, false, nil
 		}
 	}
-	return candidate, nil
+
+	l.matchedLeft = true
+	return candidate, true, nil
 }
 
 func (l *mergeJoinKvIter) buildCandidate(ctx *sql.Context, leftKey, leftVal, rightKey, rightVal val.Tuple) (sql.Row, error) {
 	var err error
-	if l.leftNorm != nil {
+	if l.leftNorm != nil && leftKey != nil {
 		leftKey, leftVal, err = l.leftNorm(leftKey)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if l.rightNorm != nil {
+	if l.rightNorm != nil && rightKey != nil {
 		rightKey, rightVal, err = l.rightNorm(rightKey)
 		if err != nil {
 			return nil, err
