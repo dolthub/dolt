@@ -29,7 +29,7 @@ import (
 func newMergeKvIter(
 	leftIter, rightIter prolly.MapIter,
 	joiner *prollyToSqlJoiner,
-	comparer func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int,
+	lrComparer, llComparer func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int,
 	leftNorm, rightNorm coveringNormalizer,
 	leftFilter, rightFilter sql.Expression,
 	joinFilters []sql.Expression,
@@ -74,7 +74,8 @@ func newMergeKvIter(
 		leftIter:     leftIter,
 		rightIter:    rightIter,
 		joiner:       joiner,
-		cmp:          comparer,
+		lrCmp:        lrComparer,
+		llCmp:        llComparer,
 		leftNorm:     leftNorm,
 		rightNorm:    rightNorm,
 		joinFilters:  joinFilters,
@@ -94,8 +95,8 @@ type mergeJoinKvIter struct {
 	rightKey  val.Tuple
 	rightVal  val.Tuple
 
-	// todo convert comparer to be []byte-amenable callback
-	cmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
 
 	leftNorm  coveringNormalizer
 	rightNorm coveringNormalizer
@@ -146,7 +147,7 @@ func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 incr:
 	// increment state
-	switch l.cmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
+	switch l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
 	case -1:
 		var oldLeftKey, oldLeftVal val.Tuple
 		{
@@ -193,7 +194,7 @@ matchBuf:
 		}
 		return nil, err
 	}
-	if l.cmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal) == 0 {
+	if l.lrCmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal) == 0 {
 		l.lookaheadBuf = append(l.lookaheadBuf, l.nextRightKey, l.nextRightVal)
 		goto matchBuf
 	}
@@ -231,7 +232,7 @@ match:
 		if err != nil {
 			return nil, err
 		}
-		cmp := l.cmp(tmpKey, tmpVal, l.leftKey, l.leftVal)
+		cmp := l.llCmp(tmpKey, tmpVal, l.leftKey, l.leftVal)
 
 		if cmp != 0 {
 			// if the left key is new, invalidate lookahead buffer and
@@ -341,7 +342,7 @@ func mergeComparer(
 	leftSch, rightSch schema.Schema,
 	projections []uint64,
 	lKeyDesc, lValDesc, rKeyDesc, rValDesc val.TupleDesc,
-) (ret func(leftKey, leftVal, rightKey, rightVal val.Tuple) int, ok bool) {
+) (lrCmp, llCmp func(leftKey, leftVal, rightKey, rightVal val.Tuple) int, ok bool) {
 	// first filter expression needs to be evaluated
 	// can accept a subset of types -- (cmp GF GF)
 	// need to map expression id to key or value position
@@ -352,10 +353,10 @@ func mergeComparer(
 			var err error
 			cmp, err = equality.ToComparer()
 			if err != nil {
-				return nil, false
+				return nil, nil, false
 			}
 		} else {
-			return nil, false
+			return nil, nil, false
 		}
 	}
 
@@ -369,7 +370,7 @@ func mergeComparer(
 	}
 
 	if lIdx == rIdx {
-		return nil, false
+		return nil, nil, false
 	}
 
 	// |projections| and idx are in terms of output projections,
@@ -380,41 +381,62 @@ func mergeComparer(
 	rKeyIdx, rKeyOk := rightSch.GetPKCols().StoredIndexByTag(projections[rIdx])
 	rValIdx, rValOk := rightSch.GetNonPKCols().StoredIndexByTag(projections[rIdx])
 
+	// first field in keyless value is cardinality
+	if schema.IsKeyless(leftSch) {
+		lValIdx++
+	}
+
+	if schema.IsKeyless(rightSch) {
+		rValIdx++
+	}
+
 	var lTyp val.Type
 	var rTyp val.Type
-	if lKeyOk && rKeyOk {
+	if lKeyOk {
 		lTyp = lKeyDesc.Types[lKeyIdx]
-		rTyp = rKeyDesc.Types[rKeyIdx]
-		ret = func(leftKey, _, rightKey, _ val.Tuple) int {
-			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
+		llCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
+			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(lKeyIdx), lTyp)
 		}
-	} else if lKeyOk && rValOk {
-		lTyp = lKeyDesc.Types[lKeyIdx]
-		rTyp = rValDesc.Types[rValIdx]
-		ret = func(leftKey, _, _, rightVal val.Tuple) int {
-			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
+		if rKeyOk {
+			rTyp = rKeyDesc.Types[rKeyIdx]
+			lrCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
+				return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
+			}
+		} else if rValOk {
+			rTyp = rValDesc.Types[rValIdx]
+			lrCmp = func(leftKey, _, _, rightVal val.Tuple) int {
+				return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
+			}
+		} else {
+			return nil, nil, false
 		}
-	} else if lValOk && rKeyOk {
+	} else if lValOk {
 		lTyp = lValDesc.Types[lValIdx]
-		rTyp = rKeyDesc.Types[rKeyIdx]
-		ret = func(_, leftVal, rightKey, _ val.Tuple) int {
-			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
+		llCmp = func(_, leftVal, _, rightVal val.Tuple) int {
+			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(lValIdx), lTyp)
 		}
-	} else if lValOk && rValOk {
-		lTyp = lValDesc.Types[lValIdx]
-		rTyp = rValDesc.Types[rValIdx]
-		ret = func(_, leftVal, _, rightVal val.Tuple) int {
-			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
+		if rKeyOk {
+			rTyp = rKeyDesc.Types[rKeyIdx]
+			lrCmp = func(_, leftVal, rightKey, _ val.Tuple) int {
+				return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
+			}
+		} else if rValOk {
+			rTyp = rValDesc.Types[rValIdx]
+			lrCmp = func(_, leftVal, _, rightVal val.Tuple) int {
+				return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
+			}
+		} else {
+			return nil, nil, false
 		}
 	} else {
-		return nil, false
+		return nil, nil, false
 	}
 
 	if lTyp.Enc != rTyp.Enc {
-		return nil, false
+		return nil, nil, false
 	}
 
-	return ret, true
+	return lrCmp, llCmp, true
 }
 
 func schemaIsCovering(sch schema.Schema, projections []uint64) bool {

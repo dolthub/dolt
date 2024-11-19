@@ -75,11 +75,11 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 					// - usually key tuple, but for keyless tables it's val tuple.
 					// - use primary table projections as reference for comparison
 					//   filter indexes.
-					if cmp, ok := mergeComparer(filters[0], lSecSch, rSecSch, projections, leftMap.KeyDesc(), leftMap.ValDesc(), rightMap.KeyDesc(), rightMap.ValDesc()); ok {
+					if lrCmp, llCmp, ok := mergeComparer(filters[0], lSecSch, rSecSch, projections, leftMap.KeyDesc(), leftMap.ValDesc(), rightMap.KeyDesc(), rightMap.ValDesc()); ok {
 						split := len(leftTags)
 						var rowJoiner *prollyToSqlJoiner
 						rowJoiner = newRowJoiner([]schema.Schema{lPriSch, rPriSch}, []int{split}, projections, leftMap.NodeStore())
-						if iter, err := newMergeKvIter(leftIter, rightIter, rowJoiner, cmp, leftNorm, rightNorm, leftFilter, rightFilter, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
+						if iter, err := newMergeKvIter(leftIter, rightIter, rowJoiner, lrCmp, llCmp, leftNorm, rightNorm, leftFilter, rightFilter, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							return iter, nil
 						}
 					}
@@ -433,7 +433,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 
 	// covering normalizer to primary key/val
 
-	var m prolly.Map
+	var secMap prolly.Map
 	var table *doltdb.Table
 	var tags []uint64
 	var iter prolly.MapIter
@@ -441,7 +441,6 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 	var priSch schema.Schema
 	var idxSch schema.Schema
 	var idx index.DoltIndex
-	var err error
 
 	switch n := n.(type) {
 	case *plan.TableAlias:
@@ -483,7 +482,11 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
 		}
 
-		m, err = index.MapForTableIndex(ctx, doltTable, idx)
+		secIdx, err := index.GetDurableIndex(ctx, doltTable, idx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+		secMap = durable.ProllyMapFromIndex(secIdx)
 		table, err = doltTable.DoltTable(ctx)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
@@ -491,7 +494,6 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 		tags = doltTable.ProjectedTags()
 		idxSch = idx.IndexSchema()
 		priSch = idx.Schema()
-		covering = idx.ID() == "primary" || schemaIsCovering(idx.IndexSchema(), tags)
 		l, err := n.GetLookup(ctx, nil)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
@@ -502,14 +504,28 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
-		iter, err = index.NewSequenceRangeIter(ctx, index.NewSecondaryIterGen(m), prollyRanges, l.IsReverse)
+		var secIterGen index.IndexRangeIterable
+		if schema.IsKeyless(idx.Schema()) {
+			idxSch = idx.Schema()
+			priIndex, err := table.GetRowData(ctx)
+			if err != nil {
+				return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+			}
+			secMap = durable.ProllyMapFromIndex(priIndex)
+			secIterGen = index.NewKeylessIndexImplBuilder(priIndex, secIdx, idx)
+		} else {
+			secIterGen = index.NewSecondaryIterGen(secMap)
+		}
+
+		iter, err = index.NewSequenceRangeIter(ctx, secIterGen, prollyRanges, l.IsReverse)
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
+		covering = idx.ID() == "primary" || schemaIsCovering(idxSch, tags)
 		if covering {
 			// projections satisfied by idxSch
-			return m, iter, idxSch, idxSch, tags, nil, nil, nil
+			return secMap, iter, idxSch, idxSch, tags, nil, nil, nil
 		}
 
 		priIndex, err := table.GetRowData(ctx)
@@ -525,9 +541,9 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 		var covNorm coveringNormalizer = func(key val.Tuple) (val.Tuple, val.Tuple, error) {
 			for to := range pkMap {
 				from := pkMap.MapOrdinal(to)
-				pkBld.PutRaw(to, m.KeyDesc().GetField(from, key))
+				pkBld.PutRaw(to, secMap.KeyDesc().GetField(from, key))
 			}
-			pk := pkBld.Build(m.Pool())
+			pk := pkBld.Build(secMap.Pool())
 			var v val.Tuple
 			err = priMap.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
 				v = value
@@ -538,7 +554,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 			}
 			return pk, v, nil
 		}
-		return m, iter, priSch, idxSch, tags, nil, covNorm, nil
+		return secMap, iter, priSch, idxSch, tags, nil, covNorm, nil
 	default:
 		return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("unsupported kvmerge child node")
 	}

@@ -235,15 +235,15 @@ func (rp rangePartition) Key() []byte {
 	return rp.key
 }
 
-func MapForTableIndex(ctx *sql.Context,
+func GetDurableIndex(ctx *sql.Context,
 	tab DoltTableable,
-	idx DoltIndex) (prolly.Map, error) {
+	idx DoltIndex) (durable.Index, error) {
 	di := idx.(*doltIndex)
 	s, err := di.getDurableState(ctx, tab)
 	if err != nil {
-		return prolly.Map{}, err
+		return nil, err
 	}
-	return durable.ProllyMapFromIndex(s.Secondary), nil
+	return s.Secondary, nil
 }
 
 // IndexScanBuilder generates secondary lookups for partitions and
@@ -655,6 +655,13 @@ func (ib *nonCoveringIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nu
 		return &nonCovStrictSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt)}
 	} else {
 		return &nonCovLaxSecondaryLookupGen{pri: ib.pri, sec: ib.sec, pkMap: ib.pkMap, pkBld: ib.pkBld, sch: ib.idx.tableSch, prefixDesc: ib.secKd.PrefixDesc(cnt), nullSafe: nullSafe}
+	}
+}
+
+func NewKeylessIndexImplBuilder(pri, sec durable.Index, idx DoltIndex) *keylessIndexImplBuilder {
+	return &keylessIndexImplBuilder{
+		baseIndexImplBuilder: &baseIndexImplBuilder{idx: idx.(*doltIndex)},
+		s:                    &durableIndexState{Primary: pri, Secondary: sec},
 	}
 }
 
