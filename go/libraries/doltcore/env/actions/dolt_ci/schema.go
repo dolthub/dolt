@@ -41,6 +41,8 @@ var ExpectedDoltCITablesOrdered = []doltdb.TableName{
 
 type queryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
 
+// HasDoltCITables reports whether a database has all expected dolt_ci tables which store continuous integration config.
+// If the database has only some of the expected tables, an error is returned.
 func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -134,13 +136,14 @@ func commitCIInit(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterE
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully initialized Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
+// DestroyDoltCITables drops all dolt_ci tables and creates a new Dolt commit.
 func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
 
 	// disable foreign key checks
-	err := SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
+	err := sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
 	if err != nil {
 		return err
 	}
@@ -151,14 +154,14 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	}
 
 	for _, tableName := range existing {
-		err = SqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
+		err = sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
 		if err != nil {
 			return err
 		}
 	}
 
 	// enable foreign keys again
-	err = SqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
+	err = sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
 	if err != nil {
 		return err
 	}
@@ -166,6 +169,7 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 	return commitCIDestroy(ctx, queryFunc, commiterName, commiterEmail)
 }
 
+// CreateDoltCITables creates all dolt_ci tables and creates a new Dolt commit.
 func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
@@ -187,7 +191,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
 
 	for _, query := range orderedCreateTableQueries {
-		err := SqlWriteQuery(newCtx, queryFunc, query)
+		err := sqlWriteQuery(newCtx, queryFunc, query)
 		if err != nil {
 			return err
 		}

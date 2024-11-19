@@ -26,14 +26,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
-type ColumnValue struct {
+type columnValue struct {
 	ColumnName string
 	Value      string
 }
 
 const utf8RuneError = string(utf8.RuneError)
 
-type ColumnValues []*ColumnValue
+type columnValues []*columnValue
 
 func toUtf8StringValue(col *sql.Column, val interface{}) (string, error) {
 	if val == nil {
@@ -61,7 +61,7 @@ func toUtf8StringValue(col *sql.Column, val interface{}) (string, error) {
 	}
 }
 
-func NewColumnValue(col *sql.Column, val interface{}) (*ColumnValue, error) {
+func newColumnValue(col *sql.Column, val interface{}) (*columnValue, error) {
 	utf8Value, err := toUtf8StringValue(col, val)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func NewColumnValue(col *sql.Column, val interface{}) (*ColumnValue, error) {
 		return nil, nil
 	}
 
-	return &ColumnValue{
+	return &columnValue{
 		ColumnName: col.Name,
 		Value:      utf8Value,
 	}, nil

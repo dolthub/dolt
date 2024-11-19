@@ -40,9 +40,13 @@ var ErrWorkflowNotFound = errors.New("workflow not found")
 var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
 type WorkflowManager interface {
+	// RemoveWorkflow deletes a workflow from the database and creates a Dolt commit
 	RemoveWorkflow(ctx *sql.Context, db sqle.Database, workflowName string) error
+	// ListWorkflows lists all workflows in the database.
 	ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error)
+	// GetWorkflowConfig returns the WorkflowConfig for a workflow by name.
 	GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error)
+	// StoreAndCommit creates or updates a workflow and creates a Dolt commit
 	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
 }
 
@@ -238,7 +242,7 @@ func (d *doltWorkflowManager) deleteFromSavedQueryStepExpectedRowColumnResultsTa
 	return fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, savedQueryStepID)
 }
 
-func (d *doltWorkflowManager) newWorkflow(cvs ColumnValues) (*Workflow, error) {
+func (d *doltWorkflowManager) newWorkflow(cvs columnValues) (*Workflow, error) {
 	wf := &Workflow{}
 
 	for _, cv := range cvs {
@@ -266,7 +270,7 @@ func (d *doltWorkflowManager) newWorkflow(cvs ColumnValues) (*Workflow, error) {
 	return wf, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowEvent(cvs ColumnValues) (*WorkflowEvent, error) {
+func (d *doltWorkflowManager) newWorkflowEvent(cvs columnValues) (*WorkflowEvent, error) {
 	we := &WorkflowEvent{}
 
 	for _, cv := range cvs {
@@ -295,7 +299,7 @@ func (d *doltWorkflowManager) newWorkflowEvent(cvs ColumnValues) (*WorkflowEvent
 	return we, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowJob(cvs ColumnValues) (*WorkflowJob, error) {
+func (d *doltWorkflowManager) newWorkflowJob(cvs columnValues) (*WorkflowJob, error) {
 	wj := &WorkflowJob{}
 
 	for _, cv := range cvs {
@@ -328,7 +332,7 @@ func (d *doltWorkflowManager) newWorkflowJob(cvs ColumnValues) (*WorkflowJob, er
 	return wj, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowSavedQueryStepExpectedRowColumnResult(cvs ColumnValues) (*WorkflowSavedQueryExpectedRowColumnResult, error) {
+func (d *doltWorkflowManager) newWorkflowSavedQueryStepExpectedRowColumnResult(cvs columnValues) (*WorkflowSavedQueryExpectedRowColumnResult, error) {
 	r := &WorkflowSavedQueryExpectedRowColumnResult{}
 
 	for _, cv := range cvs {
@@ -391,7 +395,7 @@ func (d *doltWorkflowManager) newWorkflowSavedQueryStepExpectedRowColumnResult(c
 	return r, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowSavedQueryStep(cvs ColumnValues) (*WorkflowSavedQueryStep, error) {
+func (d *doltWorkflowManager) newWorkflowSavedQueryStep(cvs columnValues) (*WorkflowSavedQueryStep, error) {
 	sq := &WorkflowSavedQueryStep{}
 
 	for _, cv := range cvs {
@@ -424,7 +428,7 @@ func (d *doltWorkflowManager) newWorkflowSavedQueryStep(cvs ColumnValues) (*Work
 	return sq, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowStep(cvs ColumnValues) (*WorkflowStep, error) {
+func (d *doltWorkflowManager) newWorkflowStep(cvs columnValues) (*WorkflowStep, error) {
 	ws := &WorkflowStep{}
 
 	for _, cv := range cvs {
@@ -476,7 +480,7 @@ func (d *doltWorkflowManager) newWorkflowStep(cvs ColumnValues) (*WorkflowStep, 
 	return ws, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowEventTrigger(cvs ColumnValues) (*WorkflowEventTrigger, error) {
+func (d *doltWorkflowManager) newWorkflowEventTrigger(cvs columnValues) (*WorkflowEventTrigger, error) {
 	et := &WorkflowEventTrigger{}
 
 	for _, cv := range cvs {
@@ -505,7 +509,7 @@ func (d *doltWorkflowManager) newWorkflowEventTrigger(cvs ColumnValues) (*Workfl
 	return et, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowEventTriggerBranch(cvs ColumnValues) (*WorkflowEventTriggerBranch, error) {
+func (d *doltWorkflowManager) newWorkflowEventTriggerBranch(cvs columnValues) (*WorkflowEventTriggerBranch, error) {
 	tb := &WorkflowEventTriggerBranch{}
 
 	for _, cv := range cvs {
@@ -526,7 +530,7 @@ func (d *doltWorkflowManager) newWorkflowEventTriggerBranch(cvs ColumnValues) (*
 	return tb, nil
 }
 
-func (d *doltWorkflowManager) newWorkflowEventTriggerActivity(cvs ColumnValues) (*WorkflowEventTriggerActivity, error) {
+func (d *doltWorkflowManager) newWorkflowEventTriggerActivity(cvs columnValues) (*WorkflowEventTriggerActivity, error) {
 	ta := &WorkflowEventTriggerActivity{}
 
 	for _, cv := range cvs {
@@ -612,10 +616,10 @@ func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, workflowNam
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
-	return SqlWriteQuery(ctx, d.queryFunc, query)
+	return sqlWriteQuery(ctx, d.queryFunc, query)
 }
 
-func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb func(ctx *sql.Context, cvs ColumnValues) error) error {
+func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb func(ctx *sql.Context, cvs columnValues) error) error {
 	sch, rowIter, _, err := d.queryFunc(ctx, query)
 	if err != nil {
 		return err
@@ -629,12 +633,12 @@ func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb fu
 	size := len(sch)
 	for _, row := range rows {
 
-		cvs := make(ColumnValues, size)
+		cvs := make(columnValues, size)
 
 		for i := range size {
 			col := sch[i]
 			val := row[i]
-			cv, err := NewColumnValue(col, val)
+			cv, err := newColumnValue(col, val)
 			if err != nil {
 				return err
 			}
@@ -738,7 +742,7 @@ func (d *doltWorkflowManager) listWorkflowEventTriggerBranchesByEventTriggerId(c
 func (d *doltWorkflowManager) retrieveWorkflowSavedQueryExpectedRowColumnResults(ctx *sql.Context, query string) ([]*WorkflowSavedQueryExpectedRowColumnResult, error) {
 	workflowSavedQueryExpectedResults := make([]*WorkflowSavedQueryExpectedRowColumnResult, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		er, rerr := d.newWorkflowSavedQueryStepExpectedRowColumnResult(cvs)
 		if rerr != nil {
 			return rerr
@@ -759,7 +763,7 @@ func (d *doltWorkflowManager) retrieveWorkflowSavedQueryExpectedRowColumnResults
 func (d *doltWorkflowManager) retrieveWorkflowSavedQuerySteps(ctx *sql.Context, query string) ([]*WorkflowSavedQueryStep, error) {
 	workflowSavedQuerySteps := make([]*WorkflowSavedQueryStep, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		sq, rerr := d.newWorkflowSavedQueryStep(cvs)
 		if rerr != nil {
 			return rerr
@@ -780,7 +784,7 @@ func (d *doltWorkflowManager) retrieveWorkflowSavedQuerySteps(ctx *sql.Context, 
 func (d *doltWorkflowManager) retrieveWorkflowSteps(ctx *sql.Context, query string) ([]*WorkflowStep, error) {
 	workflowSteps := make([]*WorkflowStep, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		s, rerr := d.newWorkflowStep(cvs)
 		if rerr != nil {
 			return rerr
@@ -801,7 +805,7 @@ func (d *doltWorkflowManager) retrieveWorkflowSteps(ctx *sql.Context, query stri
 func (d *doltWorkflowManager) retrieveWorkflowJobs(ctx *sql.Context, query string) ([]*WorkflowJob, error) {
 	workflowJobs := make([]*WorkflowJob, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		j, rerr := d.newWorkflowJob(cvs)
 		if rerr != nil {
 			return rerr
@@ -821,7 +825,7 @@ func (d *doltWorkflowManager) retrieveWorkflowJobs(ctx *sql.Context, query strin
 func (d *doltWorkflowManager) retrieveWorkflowEventTriggerActivities(ctx *sql.Context, query string) ([]*WorkflowEventTriggerActivity, error) {
 	workflowEventTriggerActivities := make([]*WorkflowEventTriggerActivity, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		a, rerr := d.newWorkflowEventTriggerActivity(cvs)
 		if rerr != nil {
 			return rerr
@@ -841,7 +845,7 @@ func (d *doltWorkflowManager) retrieveWorkflowEventTriggerActivities(ctx *sql.Co
 func (d *doltWorkflowManager) retrieveWorkflowEventTriggerBranches(ctx *sql.Context, query string) ([]*WorkflowEventTriggerBranch, error) {
 	workflowEventTriggerBranches := make([]*WorkflowEventTriggerBranch, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		b, rerr := d.newWorkflowEventTriggerBranch(cvs)
 		if rerr != nil {
 			return rerr
@@ -862,7 +866,7 @@ func (d *doltWorkflowManager) retrieveWorkflowEventTriggerBranches(ctx *sql.Cont
 func (d *doltWorkflowManager) retrieveWorkflowEventTriggers(ctx *sql.Context, query string) ([]*WorkflowEventTrigger, error) {
 	workflowEventTriggers := make([]*WorkflowEventTrigger, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		wet, rerr := d.newWorkflowEventTrigger(cvs)
 		if rerr != nil {
 			return rerr
@@ -882,7 +886,7 @@ func (d *doltWorkflowManager) retrieveWorkflowEventTriggers(ctx *sql.Context, qu
 func (d *doltWorkflowManager) retrieveWorkflowEvents(ctx *sql.Context, query string) ([]*WorkflowEvent, error) {
 	workflowEvents := make([]*WorkflowEvent, 0)
 
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		we, rerr := d.newWorkflowEvent(cvs)
 		if rerr != nil {
 			return rerr
@@ -902,7 +906,7 @@ func (d *doltWorkflowManager) retrieveWorkflowEvents(ctx *sql.Context, query str
 
 func (d *doltWorkflowManager) retrieveWorkflows(ctx *sql.Context, query string) ([]*Workflow, error) {
 	workflows := make([]*Workflow, 0)
-	cb := func(cbCtx *sql.Context, cvs ColumnValues) error {
+	cb := func(cbCtx *sql.Context, cvs columnValues) error {
 		wf, rerr := d.newWorkflow(cvs)
 		if rerr != nil {
 			return rerr
@@ -2051,15 +2055,6 @@ func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database,
 	}
 
 	return d.commitWorkflow(ctx, config.Name.Value)
-}
-
-func SqlWriteQuery(ctx *sql.Context, qf queryFunc, query string) error {
-	_, rowIter, _, err := qf(ctx, query)
-	if err != nil {
-		return err
-	}
-	_, err = sql.RowIterToRows(ctx, rowIter)
-	return err
 }
 
 func newScalarDoubleQuotedYamlNode(value string) yaml.Node {
