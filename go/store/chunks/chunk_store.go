@@ -180,6 +180,12 @@ type GCFinalizer interface {
 	SwapChunksInStore(ctx context.Context) error
 }
 
+type GCMode int
+const (
+	GCMode_Default GCMode = iota
+	GCMode_Full
+)
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -213,7 +219,7 @@ type ChunkStoreGarbageCollector interface {
 	// This behavior is a little different for ValueStore.GC()'s
 	// interactions with generational stores. See ValueStore and
 	// NomsBlockStore/GenerationalNBS for details.
-	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) (GCFinalizer, error)
+	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore, mode GCMode) (GCFinalizer, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

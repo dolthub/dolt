@@ -91,12 +91,12 @@ func (s *TestStoreView) EndGC() {
 	collector.EndGC()
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) (GCFinalizer, error) {
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore, mode GCMode) (GCFinalizer, error) {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok || dest != s {
 		return nil, ErrUnsupportedOperation
 	}
-	return collector.MarkAndSweepChunks(ctx, hashes, collector)
+	return collector.MarkAndSweepChunks(ctx, hashes, collector, mode)
 }
 
 func (s *TestStoreView) Count() (uint32, error) {

@@ -353,8 +353,6 @@ skip_if_chunk_journal() {
 }
 
 @test "garbage_collection: online gc" {
-    skip "dolt_gc is currently disabled"
-
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES (1),(2),(3),(4),(5);
@@ -381,8 +379,6 @@ SQL
 }
 
 @test "garbage_collection: online shallow gc" {
-    skip "dolt_gc is currently disabled"
-
     skip_if_chunk_journal
     create_many_commits
 
@@ -465,9 +461,6 @@ SQL
     [ $(($BEFORE - $AFTER)) -lt 16 ]
 
     # Check that a full GC does delete this data.
-    # NOTE: We create and drop the tmp table here to get around Dolt's "GC is
-    # a no-op if there have been no writes since the last GC" check.
-    dolt sql -q 'create table tmp (id int); drop table tmp;'
     dolt gc --full
     AFTER=$(du -c .dolt/noms/ | grep total | sed 's/[^0-9]*//g')
     [ $(($BEFORE - $AFTER)) -gt 8192 ] # Reclaim at least 4MBs, in 512-byte blocks.
@@ -475,4 +468,115 @@ SQL
     # Sanity check that the stuff on to_keep is still accessible.
     dolt checkout to_keep
     dolt sql -q 'select length(val) from vals;'
+}
+
+@test "garbage_collection: dolt gc after dolt gc is a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    rm -rf .dolt/stats
+    ls -laR > ../../before_gc
+    dolt gc
+    manifest_first_gc=$(cat .dolt/noms/manifest)
+    rm -rf .dolt/stats
+    ls -laR > ../../after_first_gc
+    cp ./.dolt/noms/manifest ../../manifest_after_first_gc
+    dolt gc
+    manifest_second_gc=$(cat .dolt/noms/manifest)
+    rm -rf .dolt/stats
+    ls -laR > ../../after_second_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../before_gc ../../after_first_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../before_gc ../../after_first_gc || true
+        false
+    fi
+    # This should exit non-0 because the gc should NOT have changed things.
+    if ! cmp ../../after_first_gc ../../after_second_gc || ! cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
+        echo "expected dolt gc after a dolt gc to not change things, but it did."
+        diff ../../after_first_gc ../../after_second_gc || true
+        false
+    fi
+}
+
+@test "garbage_collection: dolt gc --full after dolt gc --full is a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    rm -rf .dolt/stats
+    ls -laR > ../../before_gc
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR > ../../after_first_gc
+    cp ./.dolt/noms/manifest ../../manifest_after_first_gc
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR > ../../after_second_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../before_gc ../../after_first_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../before_gc ../../after_first_gc || true
+        false
+    fi
+    # This should exit non-0 because the gc should NOT have changed things.
+    if ! cmp ../../after_first_gc ../../after_second_gc || ! cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
+        echo "expected dolt gc --full after a dolt gc --full to not change things, but it did."
+        diff ../../after_first_gc ../../after_second_gc || true
+        false
+    fi
+}
+
+@test "garbage_collection: dolt gc after dolt gc --full is a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    rm -rf .dolt/stats
+    ls -laR > ../../before_gc
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR > ../../after_first_gc
+    cp ./.dolt/noms/manifest ../../manifest_after_first_gc
+    dolt gc
+    rm -rf .dolt/stats
+    ls -laR > ../../after_second_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../before_gc ../../after_first_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../before_gc ../../after_first_gc || true
+        false
+    fi
+    # This should exit non-0 because the gc should NOT have changed things.
+    if ! cmp ../../after_first_gc ../../after_second_gc || ! cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
+        echo "expected dolt gc after a dolt gc --full to not change things, but it did."
+        diff ../../after_first_gc ../../after_second_gc || true
+        false
+    fi
+}
+
+@test "garbage_collection: dolt gc --full after dolt gc is NOT a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    rm -rf .dolt/stats
+    ls -laR > ../../files_before_gc
+    dolt gc
+    rm -rf .dolt/stats
+    ls -laR > ../../files_after_first_gc
+    cp ./.dolt/noms/manifest ../../manifest_after_first_gc
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR > ../../files_after_second_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../files_before_gc ../../files_after_first_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../files_before_gc ../../files_after_first_gc || true
+        false
+    fi
+    # This should exit non-0 because the gc should NOT have changed things.
+    if cmp ../../files_after_first_gc ../../files_after_second_gc && cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
+        echo "expected dolt gc --full after a dolt gc to change things, but it didn't."
+        diff ../../files_after_first_gc ../../files_after_second_gc || true
+        diff ./dolt/noms/manifest ../../manifest_after_first_gc || true
+        false
+    fi
 }
