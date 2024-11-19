@@ -97,9 +97,6 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 				if harness.SkipQueryTest(assertion.Query) {
 					t.Skipf("Skipping query %s", assertion.Query)
 				}
-				if assertion.Skip {
-					t.Skipf("Skipping query %s", assertion.Query)
-				}
 
 				user := assertion.User
 				host := assertion.Host
