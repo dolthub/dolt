@@ -15,61 +15,76 @@
 package kvexec
 
 import (
-	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
+	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"io"
+
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func newMergeKvIter(
 	leftIter, rightIter prolly.MapIter,
-	leftMap prolly.Map,
 	joiner *prollyToSqlJoiner,
-	leftFilter, rightFilter, joinFilter sql.Expression,
+	comparer func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int,
+	leftNorm, rightNorm coveringNormalizer,
+	leftFilter, rightFilter sql.Expression,
+	joinFilters []sql.Expression,
 	isLeftJoin bool,
 	excludeNulls bool,
 ) (*mergeJoinKvIter, error) {
-	filters := expression.SplitConjunction(joinFilter)
-	cmp, ok := filters[0].(expression.Comparer)
-	if !ok {
-		if equality, ok := filters[0].(expression.Equality); ok {
-			var err error
-			cmp, err = equality.ToComparer()
-			if err != nil {
-				return nil, nil
-			}
-		} else {
-			return nil, nil
-		}
-	}
+	//
+	//cmp, ok := filters[0].(expression.Comparer)
+	//if !ok {
+	//	if equality, ok := filters[0].(expression.Equality); ok {
+	//		var err error
+	//		cmp, err = equality.ToComparer()
+	//		if err != nil {
+	//			return nil, nil
+	//		}
+	//	} else {
+	//		return nil, nil
+	//	}
+	//}
+	//
+	//if len(filters) == 0 {
+	//	return nil, sql.ErrNoJoinFilters.New()
+	//}
+	//
+	//var lIdx, rIdx int
+	//if l, ok := cmp.Left().(*expression.GetField); ok {
+	//	if r, ok := cmp.Right().(*expression.GetField); ok {
+	//		// get indices of get fields
+	//		lIdx = l.Index()
+	//		rIdx = r.Index()
+	//	}
+	//}
+	//
+	//if lIdx == rIdx {
+	//	return nil, fmt.Errorf("unsupported merge comparison")
+	//}
+	//if lIdx != 0 || rIdx != joiner.kvSplits[0] {
+	//	return nil, fmt.Errorf("unsupported merge comparison")
+	//}
 
-	if len(filters) == 0 {
-		return nil, sql.ErrNoJoinFilters.New()
+	if leftFilter != nil {
+		joinFilters = append(joinFilters, leftFilter)
 	}
-
-	var lIdx, rIdx int
-	if l, ok := cmp.Left().(*expression.GetField); ok {
-		if r, ok := cmp.Right().(*expression.GetField); ok {
-			// get indices of get fields
-			lIdx = l.Index()
-			rIdx = r.Index()
-		}
-	}
-
-	if lIdx == rIdx {
-		return nil, fmt.Errorf("unsupported merge comparison")
+	if rightFilter != nil {
+		joinFilters = append(joinFilters, rightFilter)
 	}
 
 	return &mergeJoinKvIter{
 		leftIter:     leftIter,
 		rightIter:    rightIter,
 		joiner:       joiner,
-		cmpDesc:      leftMap.KeyDesc().PrefixDesc(1),
-		leftFilter:   leftFilter,
-		rightFilter:  rightFilter,
-		joinFilters:  filters[1:],
+		cmp:          comparer,
+		leftNorm:     leftNorm,
+		rightNorm:    rightNorm,
+		joinFilters:  joinFilters,
 		isLeftJoin:   isLeftJoin,
 		excludeNulls: excludeNulls,
 	}, nil
@@ -85,10 +100,13 @@ type mergeJoinKvIter struct {
 	rightVal  val.Tuple
 
 	// todo convert comparer to be []byte-amenable callback
-	cmpDesc val.TupleDesc
+	cmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
 
-	nextKey val.Tuple
-	nextVal val.Tuple
+	leftNorm  coveringNormalizer
+	rightNorm coveringNormalizer
+
+	nextRightKey val.Tuple
+	nextRightVal val.Tuple
 
 	lookaheadBuf [][]byte
 	matchPos     int
@@ -98,8 +116,6 @@ type mergeJoinKvIter struct {
 
 	// todo: we want to build KV-side static expression implementations
 	// so that we can execute filters more efficiently
-	leftFilter  sql.Expression
-	rightFilter sql.Expression
 	joinFilters []sql.Expression
 
 	// LEFT_JOIN impl details
@@ -127,13 +143,13 @@ func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	if len(l.lookaheadBuf) > 0 {
+	if len(l.lookaheadBuf) > 0 || l.matchPos > 0 {
 		goto match
 	}
 
 incr:
 	// increment state
-	switch l.cmpDesc.Compare(l.leftKey, l.rightKey) {
+	switch l.cmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
 	case -1:
 		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
 		if err != nil {
@@ -142,9 +158,9 @@ incr:
 	case 0:
 		goto matchBuf
 	case +1:
-		if l.nextKey != nil {
-			l.rightKey, l.rightVal = l.nextKey, l.nextVal
-			l.nextKey = nil
+		if l.nextRightKey != nil {
+			l.rightKey, l.rightVal = l.nextRightKey, l.nextRightVal
+			l.nextRightKey = nil
 		} else {
 			l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
 			if err != nil {
@@ -159,13 +175,16 @@ incr:
 
 matchBuf:
 	// fill lookahead buffer with keys from right side
-	l.nextKey, l.nextVal, err = l.rightIter.Next(ctx)
+	l.nextRightKey, l.nextRightVal, err = l.rightIter.Next(ctx)
 	if err != nil {
-		// TODO: EOF here?
+		if errors.Is(err, io.EOF) {
+			// this is OK, but need to skip nil key comparison
+			goto match
+		}
 		return nil, err
 	}
-	if l.cmpDesc.Compare(l.leftKey, l.nextKey) == 0 {
-		l.lookaheadBuf = append(l.lookaheadBuf, l.nextKey, l.nextVal)
+	if l.cmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal) == 0 {
+		l.lookaheadBuf = append(l.lookaheadBuf, l.nextRightKey, l.nextRightVal)
 		goto matchBuf
 	}
 
@@ -175,24 +194,42 @@ match:
 	var candidate sql.Row
 	var rightKeyNil bool
 	if l.matchPos < len(l.lookaheadBuf) {
-		candidate, err = l.joiner.buildRow(ctx, l.leftKey, l.leftVal, l.lookaheadBuf[l.matchPos], l.lookaheadBuf[l.matchPos+1])
+		candidate, err = l.buildCandidate(ctx, l.leftKey, l.leftVal, l.lookaheadBuf[l.matchPos], l.lookaheadBuf[l.matchPos+1])
 		rightKeyNil = l.lookaheadBuf[l.matchPos] == nil
 		l.matchPos += 2
 	} else if l.matchPos == len(l.lookaheadBuf) {
-		candidate, err = l.joiner.buildRow(ctx, l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		candidate, err = l.buildCandidate(ctx, l.leftKey, l.leftVal, l.rightKey, l.rightVal)
 		rightKeyNil = l.rightKey == nil
 		l.matchPos++
 	} else {
 		// reset
-		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
+		l.matchPos = 0
+		// compare the current to the next left key
+		nextLeftKey, nextLeftVal, err := l.leftIter.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if l.cmpDesc.Compare(l.leftKey, l.rightKey) != 0 {
-			l.lookaheadBuf = l.lookaheadBuf[:0]
-			l.matchPos = 0
-			goto incr
+		cmp := l.cmp(nextLeftKey, nextLeftVal, l.leftKey, l.leftVal)
+		l.leftKey, l.leftVal = nextLeftKey, nextLeftVal
+		if cmp == 0 {
+			// simple case -- the left keys are equivalent, maintain
+			// the right-side lookahead buffer
+			goto match
 		}
+		// if the left key is new invalidate lookahead buffer and
+		// advance the right side
+		l.lookaheadBuf = l.lookaheadBuf[:0]
+		if l.nextRightKey != nil {
+			l.rightKey, l.rightVal = l.nextRightKey, l.nextRightVal
+			l.nextRightKey = nil
+		} else {
+			l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		goto incr
+
 	}
 	if err != nil {
 		return nil, err
@@ -212,4 +249,117 @@ match:
 		}
 	}
 	return candidate, nil
+}
+
+func (l *mergeJoinKvIter) buildCandidate(ctx *sql.Context, leftKey, leftVal, rightKey, rightVal val.Tuple) (sql.Row, error) {
+	var err error
+	if l.leftNorm != nil {
+		leftKey, leftVal, err = l.leftNorm(leftKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if l.rightNorm != nil {
+		rightKey, rightVal, err = l.rightNorm(rightKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return l.joiner.buildRow(ctx, leftKey, leftVal, rightKey, rightVal)
+}
+
+var defCmp = val.DefaultTupleComparator{}
+
+func mergeComparer(
+	filter sql.Expression,
+	leftSch, rightSch schema.Schema,
+	projections []uint64,
+	lKeyDesc, lValDesc, rKeyDesc, rValDesc val.TupleDesc,
+) (ret func(leftKey, leftVal, rightKey, rightVal val.Tuple) int, ok bool) {
+	// first filter expression needs to be evaluated
+	// can accept a subset of types -- (cmp GF GF)
+	// need to map expression id to key or value position
+
+	cmp, ok := filter.(expression.Comparer)
+	if !ok {
+		if equality, ok := filter.(expression.Equality); ok {
+			var err error
+			cmp, err = equality.ToComparer()
+			if err != nil {
+				return nil, false
+			}
+		} else {
+			return nil, false
+		}
+	}
+
+	var lIdx, rIdx int
+	if l, ok := cmp.Left().(*expression.GetField); ok {
+		if r, ok := cmp.Right().(*expression.GetField); ok {
+			// get indices of get fields
+			lIdx = l.Index()
+			rIdx = r.Index()
+		}
+	}
+
+	if lIdx == rIdx {
+		return nil, false
+	}
+
+	// |projections| and idx are in terms of output projections,
+	// but we need tuple and position in terms of secondary index.
+	// Use tags for the mapping.
+	lKeyIdx, lKeyOk := leftSch.GetPKCols().StoredIndexByTag(projections[lIdx])
+	lValIdx, lValOk := leftSch.GetNonPKCols().StoredIndexByTag(projections[lIdx])
+	rKeyIdx, rKeyOk := rightSch.GetPKCols().StoredIndexByTag(projections[rIdx])
+	rValIdx, rValOk := rightSch.GetNonPKCols().StoredIndexByTag(projections[rIdx])
+
+	var lTyp val.Type
+	var rTyp val.Type
+	if lKeyOk && rKeyOk {
+		lTyp = lKeyDesc.Types[lKeyIdx]
+		rTyp = rKeyDesc.Types[rKeyIdx]
+		ret = func(leftKey, _, rightKey, _ val.Tuple) int {
+			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
+		}
+	} else if lKeyOk && rValOk {
+		lTyp = lKeyDesc.Types[lKeyIdx]
+		rTyp = rValDesc.Types[rValIdx]
+		ret = func(leftKey, _, _, rightVal val.Tuple) int {
+			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
+		}
+	} else if lValOk && rKeyOk {
+		lTyp = lValDesc.Types[lValIdx]
+		rTyp = rKeyDesc.Types[rKeyIdx]
+		ret = func(_, leftVal, rightKey, _ val.Tuple) int {
+			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
+		}
+	} else if lValOk && rValOk {
+		lTyp = lValDesc.Types[lValIdx]
+		rTyp = rValDesc.Types[rValIdx]
+		ret = func(_, leftVal, _, rightVal val.Tuple) int {
+			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
+		}
+	} else {
+		return nil, false
+	}
+
+	if lTyp.Enc != rTyp.Enc {
+		return nil, false
+	}
+
+	return ret, true
+}
+
+func schemaIsCovering(sch schema.Schema, projections []uint64) bool {
+	cols := sch.GetAllCols()
+	if len(projections) > cols.Size() {
+		return false
+	}
+	for _, colTag := range projections {
+		if _, ok := cols.TagToIdx[colTag]; !ok {
+			return false
+		}
+	}
+	return true
 }

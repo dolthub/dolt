@@ -16,7 +16,7 @@ package kvexec
 
 import (
 	"context"
-
+	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
@@ -37,12 +37,20 @@ type Builder struct{}
 var _ sql.NodeExecBuilder = (*Builder)(nil)
 
 func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
+
+	// TODO: join optimization limits should be relaxed:
+	//  - expression types supported
+	//  - filter hoist levels
+	//  - parent row index shifts
+	//  - fusing kvexec operators
+	//  - compatible |val| encodings that we don't coerce
+
 	switch n := n.(type) {
 	case *plan.JoinNode:
 		if n.Op.IsLookup() && !n.Op.IsPartial() {
 			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
-				if _, _, dstIter, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
-					if srcMap, srcIter, _, srcSchema, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
+				if _, _, _, dstIter, _, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
+					if srcMap, _, srcIter, _, srcSchema, _, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), srcMap.NodeStore()); keyLookupMapper.valid() {
 							// conditions:
 							// (1) lookup or left lookup join
@@ -58,20 +66,30 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 				}
 			}
 		}
-		if n.Op.IsMerge() && !n.Op.IsPartial() {
-			if leftMap, leftIter, _, leftSchema, leftTags, leftFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && leftSchema != nil {
-				if _, rightIter, _, rightSchema, rightTags, rightFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && rightSchema != nil {
-					split := len(leftTags)
+		if n.Op.IsMerge() && !n.Op.IsPartial() && len(r) == 0 {
+			if leftMap, leftIter, lPriSch, lSecSch, leftTags, leftFilter, leftNorm, err := getMergeKv(ctx, n.Left()); err == nil {
+				if rightMap, rightIter, rPriSch, rSecSch, rightTags, rightFilter, rightNorm, err := getMergeKv(ctx, n.Right()); err == nil {
+					filters := expression.SplitConjunction(n.Filter)
 					projections := append(leftTags, rightTags...)
-					rowJoiner := newRowJoiner([]schema.Schema{leftSchema, rightSchema}, []int{split}, projections, leftMap.NodeStore())
-					return newMergeKvIter(leftIter, rightIter, leftMap, rowJoiner, leftFilter, rightFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
+					// - secondary indexes are source of comparison columns.
+					// - usually key tuple, but for keyless tables it's val tuple.
+					// - use primary table projections as reference for comparison
+					//   filter indexes.
+					if cmp, ok := mergeComparer(filters[0], lSecSch, rSecSch, projections, leftMap.KeyDesc(), leftMap.ValDesc(), rightMap.KeyDesc(), rightMap.ValDesc()); ok {
+						split := len(leftTags)
+						var rowJoiner *prollyToSqlJoiner
+						rowJoiner = newRowJoiner([]schema.Schema{lPriSch, rPriSch}, []int{split}, projections, leftMap.NodeStore())
+						if iter, err := newMergeKvIter(leftIter, rightIter, rowJoiner, cmp, leftNorm, rightNorm, leftFilter, rightFilter, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
+							return iter, nil
+						}
+					}
 				}
 			}
 		}
 	case *plan.GroupBy:
 		if len(n.GroupByExprs) == 0 && len(n.SelectedExprs) == 1 {
 			if cnt, ok := n.SelectedExprs[0].(*aggregation.Count); ok {
-				if _, srcIter, _, srcSchema, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
+				if _, _, srcIter, _, srcSchema, _, _, srcFilter, err := getSourceKv(ctx, n.Child, true); err == nil && srcSchema != nil && srcFilter == nil {
 					iter, ok, err := newCountAggregationKvIter(srcIter, srcSchema, cnt.Child)
 					if ok && err == nil {
 						// (1) no grouping expressions (returns one row)
@@ -273,23 +291,24 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 // getSourceKv extracts prolly table and index specific structures needed
 // to implement a lookup join. We return either |srcIter| or |dstIter|
 // depending on whether |isSrc| is true.
-func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, []uint64, sql.Expression, error) {
+func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.Map, prolly.MapIter, index.SecondaryLookupIterGen, schema.Schema, schema.Schema, []uint64, sql.Expression, error) {
 	var table *doltdb.Table
 	var tags []uint64
 	var err error
-	var indexMap prolly.Map
+	var priMap prolly.Map
+	var secMap prolly.Map
 	var srcIter prolly.MapIter
 	var dstIter index.SecondaryLookupIterGen
-	var sch schema.Schema
+	var priSch schema.Schema
 	switch n := n.(type) {
 	case *plan.TableAlias:
 		return getSourceKv(ctx, n.Child, isSrc)
 	case *plan.Filter:
-		m, mIter, destIter, s, t, _, err := getSourceKv(ctx, n.Child, isSrc)
+		m, secM, mIter, destIter, s, _, t, _, err := getSourceKv(ctx, n.Child, isSrc)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
-		return m, mIter, destIter, s, t, n.Expression, nil
+		return m, secM, mIter, destIter, s, nil, t, n.Expression, nil
 	case *plan.IndexedTableAccess:
 		var lb index.IndexScanBuilder
 		switch dt := n.UnderlyingTable().(type) {
@@ -297,50 +316,50 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable.DoltTable(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 		case *sqle.IndexedDoltTable:
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable.DoltTable(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 			lb, err = dt.LookupBuilder(ctx)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
 		}
 
 		rowData, err := table.GetRowData(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
-		indexMap = durable.ProllyMapFromIndex(rowData)
+		priMap = durable.ProllyMapFromIndex(rowData)
 
-		sch = lb.OutputSchema()
+		priSch = lb.OutputSchema()
 
 		if isSrc {
 			l, err := n.GetLookup(ctx, nil)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 
 			prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 
 			srcIter, err = index.NewSequenceRangeIter(ctx, lb, prollyRanges, l.IsReverse)
 			if err != nil {
-				return prolly.Map{}, nil, nil, nil, nil, nil, err
+				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 		} else {
 			dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
@@ -358,45 +377,169 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 			tags = dt.ProjectedTags()
 			table, err = dt.DoltTable(ctx)
 		default:
-			return prolly.Map{}, nil, nil, nil, nil, nil, nil
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
 		}
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
-		sch, err = table.GetSchema(ctx)
+		priSch, err = table.GetSchema(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
 		priIndex, err := table.GetRowData(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
-		indexMap = durable.ProllyMapFromIndex(priIndex)
+		priMap = durable.ProllyMapFromIndex(priIndex)
+		secMap = priMap
 
-		srcIter, err = indexMap.IterAll(ctx)
+		srcIter, err = priMap.IterAll(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
-		if schema.IsKeyless(sch) {
+		if schema.IsKeyless(priSch) {
 			srcIter = index.NewKeylessCardedMapIter(srcIter)
 		}
 
 	default:
-		return prolly.Map{}, nil, nil, nil, nil, nil, nil
+		return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
 	}
 	if err != nil {
-		return prolly.Map{}, nil, nil, nil, nil, nil, err
+		return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 	}
 
-	if sch == nil && table != nil {
-		sch, err = table.GetSchema(ctx)
+	if priSch == nil && table != nil {
+		priSch, err = table.GetSchema(ctx)
 		if err != nil {
-			return prolly.Map{}, nil, nil, nil, nil, nil, err
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 	}
 
-	return indexMap, srcIter, dstIter, sch, tags, nil, nil
+	return priMap, secMap, srcIter, dstIter, priSch, nil, tags, nil, nil
+}
+
+type coveringNormalizer func(val.Tuple) (val.Tuple, val.Tuple, error)
+
+func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schema.Schema, schema.Schema, []uint64, sql.Expression, coveringNormalizer, error) {
+	// merge kv is different from lookup KV:
+	// - embed the non-coverign lookup at the iter layer
+	// - the map and schema will depend on covering
+
+	// one schema for merge comparison
+	// other schema for row joiner
+
+	// covering normalizer to primary key/val
+
+	var m prolly.Map
+	var table *doltdb.Table
+	var tags []uint64
+	var iter prolly.MapIter
+	var covering bool
+	var priSch schema.Schema
+	var idxSch schema.Schema
+	var idx index.DoltIndex
+	var err error
+
+	switch n := n.(type) {
+	case *plan.TableAlias:
+		return getMergeKv(ctx, n.Child)
+	case *plan.Filter:
+		m, mIter, destIter, s, t, _, norm, err := getMergeKv(ctx, n.Child)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+		return m, mIter, destIter, s, t, n.Expression, norm, nil
+	case *plan.Project:
+		m, mIter, destIter, s, t, expr, norm, err := getMergeKv(ctx, n.Child)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+		var newTags []uint64
+		for _, e := range n.Projections {
+			switch e := e.(type) {
+			case *expression.GetField:
+				newTags = append(newTags, t[e.Index()])
+			default:
+				return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("unsupported kvmerge projection")
+			}
+		}
+		return m, mIter, destIter, s, t, expr, norm, nil
+	case *plan.IndexedTableAccess:
+		var doltTable *sqle.DoltTable
+		switch dt := n.UnderlyingTable().(type) {
+		case *sqle.WritableIndexedDoltTable:
+			idx = dt.Index()
+			doltTable = dt.DoltTable
+		case *sqle.IndexedDoltTable:
+			idx = dt.Index()
+			doltTable = dt.DoltTable
+
+		//case *dtables.DiffTable:
+		// TODO: add interface to include system tables
+		default:
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
+		}
+
+		m, err = index.MapForTableIndex(ctx, doltTable, idx)
+		table, err = doltTable.DoltTable(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+		tags = doltTable.ProjectedTags()
+		idxSch = idx.IndexSchema()
+		priSch = idx.Schema()
+		covering = idx.ID() == "primary" || schemaIsCovering(idx.IndexSchema(), tags)
+		l, err := n.GetLookup(ctx, nil)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+
+		prollyRanges, err := index.ProllyRangesForIndex(ctx, l.Index, l.Ranges)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+
+		iter, err = index.NewSequenceRangeIter(ctx, index.NewSecondaryIterGen(m), prollyRanges, l.IsReverse)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+
+		if covering {
+			// projections satisfied by idxSch
+			return m, iter, idxSch, idxSch, tags, nil, nil, nil
+		}
+
+		priIndex, err := table.GetRowData(ctx)
+		if err != nil {
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
+
+		priMap := durable.ProllyMapFromIndex(priIndex)
+		pkMap := index.OrdinalMappingFromIndex(idx)
+		priKd, _ := priMap.Descriptors()
+		pkBld := val.NewTupleBuilder(priKd)
+
+		var covNorm coveringNormalizer = func(key val.Tuple) (val.Tuple, val.Tuple, error) {
+			for to := range pkMap {
+				from := pkMap.MapOrdinal(to)
+				pkBld.PutRaw(to, m.KeyDesc().GetField(from, key))
+			}
+			pk := pkBld.Build(m.Pool())
+			var v val.Tuple
+			err = priMap.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
+				v = value
+				return nil
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			return pk, v, nil
+		}
+		return m, iter, priSch, idxSch, tags, nil, covNorm, nil
+	default:
+		return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("unsupported kvmerge child node")
+	}
 }
