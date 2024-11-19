@@ -16,12 +16,12 @@ package kvexec
 
 import (
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
