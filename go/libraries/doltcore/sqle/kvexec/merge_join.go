@@ -137,11 +137,27 @@ incr:
 
 		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
 		if err != nil {
+			if errors.Is(err, io.EOF) && oldLeftKey != nil {
+				l.exhaustLeft = true
+				candidate, ok, err := l.tryReturn(ctx, oldLeftKey, oldLeftVal, nil, nil)
+				if err != nil {
+					return nil, err
+				}
+				if ok {
+					return candidate, nil
+				}
+			}
 			return nil, err
 		}
 
 		if oldLeftKey != nil {
-			return l.buildCandidate(ctx, oldLeftKey, oldLeftVal, nil, nil)
+			candidate, ok, err := l.tryReturn(ctx, oldLeftKey, oldLeftVal, nil, nil)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				return candidate, nil
+			}
 		}
 	case 0:
 		goto matchBuf
@@ -193,6 +209,7 @@ match:
 			return nil, err
 		}
 		l.matchPos += 2
+		l.matchedLeft = ok
 		if !ok {
 			goto match
 		}
@@ -202,6 +219,7 @@ match:
 		if err != nil {
 			return nil, err
 		}
+		l.matchedLeft = ok
 		l.matchPos++
 		if !ok {
 			goto match
@@ -268,6 +286,9 @@ match:
 
 exhaustLeft:
 	l.exhaustLeft = true
+	if l.leftKey == nil {
+		return nil, io.EOF
+	}
 	if l.matchedLeft {
 		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
 		if err != nil {
@@ -291,7 +312,7 @@ func (l *mergeJoinKvIter) tryReturn(ctx *sql.Context, leftKey, leftVal, rightKey
 		return nil, false, err
 	}
 
-	rightKeyNil := l.rightKey == nil
+	rightKeyNil := rightKey == nil
 
 	if l.leftFilter != nil {
 		res, err := sql.EvaluateCondition(ctx, l.leftFilter, candidate[:l.joiner.kvSplits[0]])
@@ -327,7 +348,6 @@ func (l *mergeJoinKvIter) tryReturn(ctx *sql.Context, leftKey, leftVal, rightKey
 		}
 	}
 
-	l.matchedLeft = true
 	return candidate, true, nil
 }
 
