@@ -391,8 +391,8 @@ func rootsEqual(root1, root2 doltdb.RootValue) (bool, error) {
 
 // stageCherryPickedTables stages the tables from |mergeStats| that don't have any merge artifacts – i.e.
 // tables that don't have any data or schema conflicts and don't have any constraint violations.
-func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.MergeStats) (err error) {
-	tablesToAdd := make([]string, 0, len(mergeStats))
+func stageCherryPickedTables(ctx *sql.Context, mergeStats map[doltdb.TableName]*merge.MergeStats) (err error) {
+	tablesToAdd := make([]doltdb.TableName, 0, len(mergeStats))
 	for tableName, mergeStats := range mergeStats {
 		if mergeStats.HasArtifacts() {
 			continue
@@ -400,7 +400,7 @@ func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.Merg
 
 		// Find any tables being deleted and make sure we stage those tables first
 		if mergeStats.Operation == merge.TableRemoved {
-			tablesToAdd = append([]string{tableName}, tablesToAdd...)
+			tablesToAdd = append([]doltdb.TableName{tableName}, tablesToAdd...)
 		} else {
 			tablesToAdd = append(tablesToAdd, tableName)
 		}
@@ -413,8 +413,7 @@ func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.Merg
 		return fmt.Errorf("unable to get roots for database '%s' from session", dbName)
 	}
 
-	// TODO: schema name
-	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(tablesToAdd, doltdb.DefaultSchemaName), true)
+	roots, err = actions.StageTables(ctx, roots, tablesToAdd, true)
 	if err != nil {
 		return err
 	}

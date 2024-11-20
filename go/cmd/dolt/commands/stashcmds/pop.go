@@ -169,7 +169,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 		return false, err
 	}
 
-	var tablesWithConflict []string
+	var tablesWithConflict []doltdb.TableName
 	for tbl, stats := range result.Stats {
 		if stats.HasConflicts() {
 			tablesWithConflict = append(tablesWithConflict, tbl)
@@ -177,7 +177,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 	}
 
 	if len(tablesWithConflict) > 0 {
-		tblNames := strings.Join(tablesWithConflict, "', '")
+		tblNames := strings.Join(doltdb.FlattenTableNames(tablesWithConflict), "', '")
 		cli.Printf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
 			"\t{'%s'}\n"+
 			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)

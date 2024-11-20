@@ -55,28 +55,34 @@ var RebaseActionEnumType = types.MustCreateEnumType([]string{
 	rebase.RebaseActionSquash,
 	rebase.RebaseActionFixup}, sql.Collation_Default)
 
-var DoltRebaseSystemTableSchema = []*sql.Column{
-	{
-		Name:       "rebase_order",
-		Type:       types.MustCreateDecimalType(6, 2),
-		Nullable:   false,
-		PrimaryKey: true,
-	},
-	{
-		Name:     "action",
-		Type:     RebaseActionEnumType,
-		Nullable: false,
-	},
-	{
-		Name:     "commit_hash",
-		Type:     types.Text,
-		Nullable: false,
-	},
-	{
-		Name:     "commit_message",
-		Type:     types.Text,
-		Nullable: false,
-	},
+// GetDoltRebaseSystemTableSchema returns the schema for the dolt_rebase system table.
+// This is used by Doltgres to update the dolt_rebase schema using Doltgres types.
+var GetDoltRebaseSystemTableSchema = getDoltRebaseSystemTableSchema
+
+func getDoltRebaseSystemTableSchema() sql.Schema {
+	return []*sql.Column{
+		{
+			Name:       "rebase_order",
+			Type:       types.MustCreateDecimalType(6, 2),
+			Nullable:   false,
+			PrimaryKey: true,
+		},
+		{
+			Name:     "action",
+			Type:     RebaseActionEnumType,
+			Nullable: false,
+		},
+		{
+			Name:     "commit_hash",
+			Type:     types.Text,
+			Nullable: false,
+		},
+		{
+			Name:     "commit_message",
+			Type:     types.Text,
+			Nullable: false,
+		},
+	}
 }
 
 // ErrRebaseUncommittedChanges is used when a rebase is started, but there are uncommitted (and not
