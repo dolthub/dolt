@@ -139,6 +139,7 @@ type prollyToSqlJoiner struct {
 	kvSplits    []int
 	desc        []kvDesc
 	ordMappings []int
+	outCnt      int
 }
 
 type kvDesc struct {
@@ -170,6 +171,7 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 	keyCols := sch.GetPKCols()
 	valCols := sch.GetNonPKCols()
 	splitIdx := 0
+	virtualCnt := 0
 	for i := 0; i <= len(projections); i++ {
 		// We will fill the map from table sources incrementally. Each source will have
 		// a keyMapping, valueMapping, and ordinal mappings related to converting from
@@ -181,20 +183,20 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 		if i == splits[splitIdx] {
 			var mappingStartIdx int
 			if splitIdx > 0 {
-				mappingStartIdx = splits[splitIdx-1]
+				mappingStartIdx = splits[splitIdx-1] - virtualCnt
 			}
 			tupleDesc = append(tupleDesc, kvDesc{
 				keyDesc:     sch.GetKeyDescriptor(),
 				valDesc:     sch.GetValueDescriptor(),
-				keyMappings: allMap[mappingStartIdx:nextKeyIdx],  // prev kv partition -> last key of this partition
-				valMappings: allMap[nextKeyIdx:splits[splitIdx]], // first val of partition -> next kv partition
+				keyMappings: allMap[mappingStartIdx:nextKeyIdx],               // prev kv partition -> last key of this partition
+				valMappings: allMap[nextKeyIdx : splits[splitIdx]-virtualCnt], // first val of partition -> next kv partition
 			})
 			if i == len(projections) {
 				break
 			}
-			nextKeyIdx = splits[splitIdx]
+			nextKeyIdx = splits[splitIdx] - virtualCnt
 			splitIdx++
-			nextValIdx = splits[splitIdx] - 1
+			nextValIdx = splits[splitIdx] - 1 - virtualCnt
 			sch = schemas[splitIdx]
 
 			keylessOff = 0
@@ -213,14 +215,22 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 			allMap[nextValIdx] = idx + keylessOff
 			allMap[numPhysicalColumns+nextValIdx] = i
 			nextValIdx--
+		} else {
+			virtualCnt++
 		}
 	}
 
+	kvSplits := make([]int, len(splits))
+	for i := range splits {
+		kvSplits[i] = splits[i] - virtualCnt
+	}
+
 	return &prollyToSqlJoiner{
-		kvSplits:    splits,
+		kvSplits:    kvSplits,
 		desc:        tupleDesc,
 		ordMappings: allMap[numPhysicalColumns:],
 		ns:          ns,
+		outCnt:      len(projections),
 	}
 }
 
@@ -228,7 +238,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	row := make(sql.Row, len(m.ordMappings))
+	row := make(sql.Row, m.outCnt)
 	split := 0
 	var err error
 	var tup val.Tuple
@@ -277,7 +287,7 @@ func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []ui
 	sch := schemas[0]
 	splitIdx := 0
 	for i := 0; i < len(projections); i++ {
-		if i == splits[splitIdx] {
+		if splitIdx < len(splits) && i == splits[splitIdx] {
 			splitIdx++
 			sch = schemas[splitIdx]
 		}
@@ -311,6 +321,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 		return m, secM, mIter, destIter, s, nil, t, n.Expression, nil
 	case *plan.IndexedTableAccess:
+		if _, ok := plan.FindVirtualColumnTable(n.Table); ok {
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
+		}
+
 		var lb index.IndexScanBuilder
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
@@ -425,15 +439,6 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 type coveringNormalizer func(val.Tuple) (val.Tuple, val.Tuple, error)
 
 func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schema.Schema, schema.Schema, []uint64, sql.Expression, coveringNormalizer, error) {
-	// merge kv is different from lookup KV:
-	// - embed the non-coverign lookup at the iter layer
-	// - the map and schema will depend on covering
-
-	// one schema for merge comparison
-	// other schema for row joiner
-
-	// covering normalizer to primary key/val
-
 	var secMap prolly.Map
 	var table *doltdb.Table
 	var tags []uint64
@@ -468,6 +473,12 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 		}
 		return m, mIter, destIter, s, t, expr, norm, nil
 	case *plan.IndexedTableAccess:
+		if _, ok := plan.FindVirtualColumnTable(n.Table); ok {
+			// TODO pass projection through to iterator to materialize
+			//  virtual cols
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("virtual tables unsupported in kvexec")
+		}
+
 		var doltTable *sqle.DoltTable
 		switch dt := n.UnderlyingTable().(type) {
 		case *sqle.WritableIndexedDoltTable:
