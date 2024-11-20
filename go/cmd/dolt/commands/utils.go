@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -265,7 +266,7 @@ func newLateBindingEngine(
 		sqlCtx.SetCurrentDatabase(database)
 
 		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
-		salt, err := rawDb.Salt()
+		salt, err := mysql.NewSalt()
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -500,7 +501,7 @@ func buildAuthResponse(salt []byte, password string) []byte {
 }
 
 func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password string) error {
-	salt, err := rawDb.Salt()
+	salt, err := mysql.NewSalt()
 	if err != nil {
 		return err
 	}
