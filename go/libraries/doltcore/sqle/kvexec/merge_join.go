@@ -36,40 +36,6 @@ func newMergeKvIter(
 	isLeftJoin bool,
 	excludeNulls bool,
 ) (*mergeJoinKvIter, error) {
-	//
-	//cmp, ok := filters[0].(expression.Comparer)
-	//if !ok {
-	//	if equality, ok := filters[0].(expression.Equality); ok {
-	//		var err error
-	//		cmp, err = equality.ToComparer()
-	//		if err != nil {
-	//			return nil, nil
-	//		}
-	//	} else {
-	//		return nil, nil
-	//	}
-	//}
-	//
-	//if len(filters) == 0 {
-	//	return nil, sql.ErrNoJoinFilters.New()
-	//}
-	//
-	//var lIdx, rIdx int
-	//if l, ok := cmp.Left().(*expression.GetField); ok {
-	//	if r, ok := cmp.Right().(*expression.GetField); ok {
-	//		// get indices of get fields
-	//		lIdx = l.Index()
-	//		rIdx = r.Index()
-	//	}
-	//}
-	//
-	//if lIdx == rIdx {
-	//	return nil, fmt.Errorf("unsupported merge comparison")
-	//}
-	//if lIdx != 0 || rIdx != joiner.kvSplits[0] {
-	//	return nil, fmt.Errorf("unsupported merge comparison")
-	//}
-
 	return &mergeJoinKvIter{
 		leftIter:     leftIter,
 		rightIter:    rightIter,
@@ -120,6 +86,7 @@ type mergeJoinKvIter struct {
 	excludeNulls bool
 	isLeftJoin   bool
 	matchedLeft  bool
+	exhaustLeft  bool
 }
 
 var _ sql.RowIter = (*mergeJoinKvIter)(nil)
@@ -137,8 +104,15 @@ func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 		l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
 		if err != nil {
+			if errors.Is(err, io.EOF) && l.isLeftJoin {
+				goto exhaustLeft
+			}
 			return nil, err
 		}
+	}
+
+	if l.exhaustLeft {
+		goto exhaustLeft
 	}
 
 	if len(l.lookaheadBuf) > 0 || l.matchPos > 0 {
@@ -175,6 +149,9 @@ incr:
 		} else {
 			l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
 			if err != nil {
+				if errors.Is(err, io.EOF) && l.isLeftJoin {
+					goto exhaustLeft
+				}
 				return nil, err
 			}
 		}
@@ -244,14 +221,17 @@ match:
 			} else {
 				l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
 				if err != nil {
-					return nil, err
+					if errors.Is(err, io.EOF) && l.isLeftJoin {
+						l.exhaustLeft = true
+					} else {
+						return nil, err
+					}
 				}
 			}
 		}
 
 		if l.isLeftJoin && !l.matchedLeft {
 			// consider left join after appropriate state transitions
-			l.matchedLeft = false
 			ret, ok, err := l.tryReturn(ctx, tmpKey, tmpVal, nil, nil)
 			if err != nil {
 				return nil, err
@@ -268,8 +248,29 @@ match:
 			// we do not do this check earlier is for left-joins.
 			goto match
 		}
+		if l.exhaustLeft {
+			goto exhaustLeft
+		}
 		goto incr
 	}
+
+exhaustLeft:
+	l.exhaustLeft = true
+	if l.matchedLeft {
+		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	l.matchedLeft = true // simplifies loop
+	ret, ok, err := l.tryReturn(ctx, l.leftKey, l.leftVal, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return ret, nil
+	}
+	goto exhaustLeft
 }
 
 func (l *mergeJoinKvIter) tryReturn(ctx *sql.Context, leftKey, leftVal, rightKey, rightVal val.Tuple) (sql.Row, bool, error) {
@@ -290,7 +291,7 @@ func (l *mergeJoinKvIter) tryReturn(ctx *sql.Context, leftKey, leftVal, rightKey
 		}
 	}
 
-	if l.rightFilter != nil {
+	if l.rightFilter != nil && !rightKeyNil {
 		res, err := sql.EvaluateCondition(ctx, l.rightFilter, candidate[l.joiner.kvSplits[0]:])
 		if err != nil {
 			return nil, false, err
