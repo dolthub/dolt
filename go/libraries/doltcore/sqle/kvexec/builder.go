@@ -45,6 +45,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	//  - parent row index shifts
 	//  - fusing kvexec operators
 	//  - compatible |val| encodings that we don't coerce
+	//  - filter/project ordering clash
 
 	switch n := n.(type) {
 	case *plan.JoinNode:
@@ -462,6 +463,11 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 		if err != nil {
 			return prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
+		if expr != nil {
+			// TODO: cannot pre-project before the filter here, need to
+			// properly order the nodes
+			return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("kvmerge projection/filter clash")
+		}
 		var newTags []uint64
 		for _, e := range n.Projections {
 			switch e := e.(type) {
@@ -471,7 +477,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (prolly.Map, prolly.MapIter, schem
 				return prolly.Map{}, nil, nil, nil, nil, nil, nil, fmt.Errorf("unsupported kvmerge projection")
 			}
 		}
-		return m, mIter, destIter, s, t, expr, norm, nil
+		return m, mIter, destIter, s, newTags, expr, norm, nil
 	case *plan.IndexedTableAccess:
 		if _, ok := plan.FindVirtualColumnTable(n.Table); ok {
 			// TODO pass projection through to iterator to materialize
