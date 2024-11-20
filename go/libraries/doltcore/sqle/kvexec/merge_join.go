@@ -64,6 +64,11 @@ type mergeJoinKvIter struct {
 	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
 	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
 
+	// Non-covering secondary index reads are faster separated
+	// from the initial mapIter, because we avoid unnecessary
+	// primary reads. Note: keyless indexes are less amenable to
+	// this optimization because their cardinality is stored in the
+	// primary index.
 	leftNorm  coveringNormalizer
 	rightNorm coveringNormalizer
 
@@ -98,12 +103,7 @@ func (l *mergeJoinKvIter) Close(_ *sql.Context) error {
 func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	var err error
 	if l.leftKey == nil {
-		l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-		l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
-		if err != nil {
+		if err := l.initialize(ctx); err != nil {
 			if errors.Is(err, io.EOF) && l.isLeftJoin {
 				goto exhaustLeft
 			}
@@ -120,12 +120,15 @@ func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 incr:
-	// increment state
+	// compare the left/right keys.
+	// if equal continue to match buffer stage
+	// if unequal increment one side
 	switch l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
 	case -1:
+		// left side has to consider left join non-matches
 		var oldLeftKey, oldLeftVal val.Tuple
 		{
-			// left join
+			// left join state
 			if !l.matchedLeft && l.isLeftJoin {
 				oldLeftKey, oldLeftVal = l.leftKey, l.leftVal
 			}
@@ -143,6 +146,7 @@ incr:
 	case 0:
 		goto matchBuf
 	case +1:
+		// right side considers lookahead used for match buffer
 		if l.nextRightKey != nil {
 			l.rightKey, l.rightVal = l.nextRightKey, l.nextRightVal
 			l.nextRightKey = nil
@@ -162,7 +166,9 @@ incr:
 	goto incr
 
 matchBuf:
-	// fill lookahead buffer with keys from right side
+	// Fill lookahead buffer with all right side keys that match current
+	// left key. |l.nextRightKey| can be a lookahead key or nil at the
+	// end of this stage.
 	l.nextRightKey, l.nextRightVal, err = l.rightIter.Next(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -177,8 +183,10 @@ matchBuf:
 	}
 
 match:
-	// match state
-	// lookaheadBuf and rightKey
+	// We start this stage with at least one match. We consider the
+	// lookahead buffer matches before |l.rightKey| because we can
+	// track state with a single |l.matchPos| variable. Matching merge
+	// condition does not guarantee the rest of the filters will match.
 	if l.matchPos < len(l.lookaheadBuf) {
 		candidate, ok, err := l.tryReturn(ctx, l.leftKey, l.leftVal, l.lookaheadBuf[l.matchPos], l.lookaheadBuf[l.matchPos+1])
 		if err != nil {
@@ -200,7 +208,9 @@ match:
 		}
 		return candidate, nil
 	} else {
-		// reset
+		// We exhausted matches for the current |l.leftKey|.
+		// See whether we should flush or reuse the right buffer
+		// with the next left key.
 		l.matchPos = 0
 
 		// compare the current to the next left key
@@ -222,6 +232,8 @@ match:
 				l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
 				if err != nil {
 					if errors.Is(err, io.EOF) && l.isLeftJoin {
+						// need to check |tmpKey| for left-join before
+						// jumping to exhaustLeft
 						l.exhaustLeft = true
 					} else {
 						return nil, err
@@ -243,9 +255,9 @@ match:
 		l.matchedLeft = false
 
 		if cmp == 0 {
-			// the left keys are equivalent, the right-side lookahead
-			// buffer is still valid for the new left key. the only reason
-			// we do not do this check earlier is for left-joins.
+			// The left keys are equivalent, the right-side lookahead
+			// buffer is still valid for the new left key. The only reason
+			// we didn't short-circuit this check earlier is for left-joins.
 			goto match
 		}
 		if l.exhaustLeft {
@@ -334,6 +346,19 @@ func (l *mergeJoinKvIter) buildCandidate(ctx *sql.Context, leftKey, leftVal, rig
 		}
 	}
 	return l.joiner.buildRow(ctx, leftKey, leftVal, rightKey, rightVal)
+}
+
+func (l *mergeJoinKvIter) initialize(ctx *sql.Context) error {
+	var err error
+	l.leftKey, l.leftVal, err = l.leftIter.Next(ctx)
+	if err != nil {
+		return err
+	}
+	l.rightKey, l.rightVal, err = l.rightIter.Next(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 var defCmp = val.DefaultTupleComparator{}
