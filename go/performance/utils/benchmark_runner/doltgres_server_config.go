@@ -103,6 +103,7 @@ func (sc *doltgresServerConfigImpl) GetTestingParams(testConfig TestConfig) Test
 	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresDbFlag, dbName))
 	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresHostFlag, sc.Host))
 	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresUserFlag, doltgresUser))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresPasswordFlag, doltgresPassword))
 	if sc.Port != 0 {
 		params.Append(fmt.Sprintf("%s=%d", sysbenchPostgresPortFlag, sc.Port))
 	}

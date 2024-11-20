@@ -35,7 +35,7 @@ RUN git clone https://github.com/dolthub/sysbench-lua-scripts.git
 RUN git clone https://github.com/Percona-Lab/sysbench-tpcc.git
 
 # install doltgres
-ENV DOLTGRESQL_VERSION=${DOLTGRESQL_VERSION:-v0.13.0}
+ENV DOLTGRESQL_VERSION=${DOLTGRESQL_VERSION:-v0.14.1}
 RUN git clone https://github.com/dolthub/doltgresql.git
 RUN cd doltgresql/utils/doltgres_builder/cmd && go run . "$DOLTGRESQL_VERSION"
 ENV PATH="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION:${PATH}"

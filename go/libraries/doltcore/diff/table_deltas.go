@@ -320,9 +320,21 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 }
 
 func schemasOverlap(from, to schema.Schema) bool {
-	f := set.NewUint64Set(from.GetAllCols().Tags)
-	t := set.NewUint64Set(to.GetAllCols().Tags)
-	return f.Intersection(t).Size() > 0
+	fromCols := from.GetAllCols()
+	toCols := to.GetAllCols()
+	fromColSet := set.NewUint64Set(fromCols.Tags)
+	toColSet := set.NewUint64Set(toCols.Tags)
+
+	overlappingTags := fromColSet.Intersection(toColSet)
+	numOverlaps := overlappingTags.Size()
+	for _, tag := range overlappingTags.AsSlice() {
+		fromCol, _ := fromCols.GetByTag(tag)
+		toCol, _ := toCols.GetByTag(tag)
+		if fromCol.Name != toCol.Name {
+			numOverlaps--
+		}
+	}
+	return numOverlaps > 0
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.

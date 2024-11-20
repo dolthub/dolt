@@ -3639,6 +3639,105 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "tag collision",
+		SetUpScript: []string{
+			"CALL dolt_checkout('-b', 'other')",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075_01` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `INDICADOR_NM` varchar(255),\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `INDICADOR_NM` varchar(255),\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+				"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CALL dolt_commit('-A', '-m', 'create tables on other');",
+
+			"CALL dolt_checkout('main')",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `FRECUENCIA_PAGO` varchar(255),\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060_01` (\n" +
+				"  `ID` varchar(8) NOT NULL,\n" +
+				"  `PRODUCTO` varchar(255),\n" +
+				"  `TARIFA` int,\n" +
+				"  `VERSION_INICIO` int,\n" +
+				"  `VERSION_FIN` int,\n" +
+				"  `COBERTURA` varchar(255),\n" +
+				"  `FRECUENCIA_PAGO` varchar(255),\n" +
+				"  `COEFICIENTE` double,\n" +
+				"  `DWB_IDENTITY` varchar(64),\n" +
+				"  PRIMARY KEY (`ID`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"call dolt_commit('-A', '-m', 'create tables on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'other') ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060`;"},
+					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060_01`;"},
+					{"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075` (\n" +
+						"  `ID` varchar(8) NOT NULL,\n" +
+						"  `PRODUCTO` varchar(255),\n" +
+						"  `TARIFA` int,\n" +
+						"  `VERSION_INICIO` int,\n" +
+						"  `VERSION_FIN` int,\n" +
+						"  `COBERTURA` varchar(255),\n" +
+						"  `INDICADOR_NM` varchar(255),\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+						"  `COEFICIENTE` double,\n" +
+						"  `DWB_IDENTITY` varchar(64),\n" +
+						"  PRIMARY KEY (`ID`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075_01` (\n" +
+						"  `ID` varchar(8) NOT NULL,\n" +
+						"  `PRODUCTO` varchar(255),\n" +
+						"  `TARIFA` int,\n" +
+						"  `VERSION_INICIO` int,\n" +
+						"  `VERSION_FIN` int,\n" +
+						"  `COBERTURA` varchar(255),\n" +
+						"  `INDICADOR_NM` varchar(255),\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MIN` int,\n" +
+						"  `ANOS_COMPANIA_PROCEDENCIA_MAX` int,\n" +
+						"  `COEFICIENTE` double,\n" +
+						"  `DWB_IDENTITY` varchar(64),\n" +
+						"  PRIMARY KEY (`ID`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
@@ -4981,6 +5080,35 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{nil, nil, nil, 4, 5, 6, "removed"},
 				},
+			},
+		},
+	},
+	{
+		// When in a detached head mode, dolt_commit_diff should still work, even though it doesn't have a staged root
+		Name: "detached head",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"CALL dolt_commit('-Am', 'create table t');",
+			"SET @commit1 = hashof('HEAD');",
+			"INSERT INTO t VALUES (1, 'one');",
+			"CALL dolt_commit('-Am', 'insert 1');",
+			"SET @commit2 = hashof('HEAD');",
+			"CALL dolt_tag('v1', @commit2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "use mydb/v1;",
+				Expected: []sql.Row{},
+			},
+			{
+				// With no working set, this query should still compute the diff between two commits
+				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit=@commit2;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// With no working set, STAGED should reference the current root of the checked out tag
+				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit='STAGED';",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},

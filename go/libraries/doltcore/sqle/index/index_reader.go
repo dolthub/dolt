@@ -57,7 +57,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		if err != nil {
 			return nil, err
 		}
-		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState)
+		return RowIterForProllyRange(ctx, idx, prollyRanges[0], pkSch, columns, durableState, lookup.IsReverse)
 	} else {
 		nomsRanges, err := idx.nomsRanges(ctx, mysqlRanges...)
 		if err != nil {
@@ -67,7 +67,7 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState) (sql.RowIter, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, projections []uint64, durableState *durableIndexState, reverse bool) (sql.RowIter, error) {
 	if projections == nil {
 		projections = idx.Schema().GetAllCols().Tags
 	}
@@ -75,7 +75,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 	if sql.IsKeyless(pkSch.Schema) {
 		// in order to resolve row cardinality, keyless indexes must always perform
 		// an indirect lookup through the clustered index.
-		return newProllyKeylessIndexIter(ctx, idx, r, nil, pkSch, projections, durableState.Primary, durableState.Secondary)
+		return newProllyKeylessIndexIter(ctx, idx, r, nil, pkSch, projections, durableState.Primary, durableState.Secondary, reverse)
 	}
 
 	covers := idx.coversColumns(durableState, projections)
@@ -734,15 +734,17 @@ func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	var prollyRange prolly.Range
 	var doltgresRange *DoltgresRange
+	var reverse bool
 	switch p := part.(type) {
 	case rangePartition:
 		prollyRange = p.prollyRange
+		reverse = p.isReverse
 	case pointPartition:
 		prollyRange = p.r
 	case DoltgresPartition:
 		doltgresRange = &p.rang
 	}
-	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, doltgresRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary)
+	return newProllyKeylessIndexIter(ctx, ib.idx, prollyRange, doltgresRange, ib.sch, ib.projections, ib.s.Primary, ib.s.Secondary, reverse)
 }
 
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {

@@ -292,20 +292,16 @@ type prollyKeylessIndexIter struct {
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
 
-func newProllyKeylessIndexIter(
-	ctx *sql.Context,
-	idx DoltIndex,
-	rng prolly.Range,
-	doltgresRange *DoltgresRange,
-	pkSch sql.PrimaryKeySchema,
-	projections []uint64,
-	rows, dsecondary durable.Index,
-) (prollyKeylessIndexIter, error) {
+func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)
 	var indexIter prolly.MapIter
 	var err error
 	if doltgresRange == nil {
-		indexIter, err = secondary.IterRange(ctx, rng)
+		if reverse {
+			indexIter, err = secondary.IterRangeReverse(ctx, rng)
+		} else {
+			indexIter, err = secondary.IterRange(ctx, rng)
+		}
 		if err != nil {
 			return prollyKeylessIndexIter{}, err
 		}
