@@ -636,15 +636,23 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	case doltdb.IgnoreTableName:
+		if resolve.UseSearchPath && db.schemaName == "" {
+			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+			if err != nil {
+				return nil, false, err
+			}
+			db.schemaName = schemaName
+		}
+
 		backingTable, _, err := db.getTable(ctx, root, doltdb.IgnoreTableName)
 		if err != nil {
 			return nil, false, err
 		}
 		if backingTable == nil {
-			dt, found = dtables.NewEmptyIgnoreTable(ctx), true
+			dt, found = dtables.NewEmptyIgnoreTable(ctx, db.schemaName), true
 		} else {
 			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
+			dt, found = dtables.NewIgnoreTable(ctx, versionableTable, db.schemaName), true
 		}
 	case doltdb.GetDocTableName(), doltdb.DocTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)

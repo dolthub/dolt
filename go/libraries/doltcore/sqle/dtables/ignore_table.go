@@ -37,6 +37,7 @@ var _ sql.IndexAddressableTable = (*IgnoreTable)(nil)
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
 	backingTable VersionableTable
+	schemaName   string
 }
 
 func (i *IgnoreTable) Name() string {
@@ -86,13 +87,13 @@ func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partitio
 }
 
 // NewIgnoreTable creates an IgnoreTable
-func NewIgnoreTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
-	return &IgnoreTable{backingTable: backingTable}
+func NewIgnoreTable(_ *sql.Context, backingTable VersionableTable, schemaName string) sql.Table {
+	return &IgnoreTable{backingTable: backingTable, schemaName: schemaName}
 }
 
 // NewEmptyIgnoreTable creates an IgnoreTable
-func NewEmptyIgnoreTable(_ *sql.Context) sql.Table {
-	return &IgnoreTable{}
+func NewEmptyIgnoreTable(_ *sql.Context, schemaName string) sql.Table {
+	return &IgnoreTable{schemaName: schemaName}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
@@ -211,9 +212,8 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	tname := doltdb.TableName{Name: doltdb.IgnoreTableName}
+	tname := doltdb.TableName{Name: doltdb.IgnoreTableName, Schema: iw.it.schemaName}
 	found, err := roots.Working.HasTable(ctx, tname)
-
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return

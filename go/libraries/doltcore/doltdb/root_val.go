@@ -835,6 +835,21 @@ func UnqualifiedTableNamesAsString(names []TableName) string {
 	return sb.String()
 }
 
+// GetUniqueSchemaNamesFromTableNames returns a list of unique schema names from a list of table names
+func GetUniqueSchemaNamesFromTableNames(names []TableName) []string {
+	schemaMap := make(map[string]struct{})
+	var schemas []string
+
+	for _, t := range names {
+		if _, exists := schemaMap[t.Schema]; !exists {
+			schemaMap[t.Schema] = struct{}{}
+			schemas = append(schemas, t.Schema)
+		}
+	}
+
+	return schemas
+}
+
 // DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
 // primary (unnamed) table store in a root.
 var DefaultSchemaName = ""
@@ -1205,11 +1220,13 @@ func schemaNames(ctx context.Context, root RootValue) ([]string, error) {
 
 // FilterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
 func FilterIgnoredTables(ctx context.Context, tables []TableName, roots Roots) (ignoredTables IgnoredTables, err error) {
-	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
+	schemas := GetUniqueSchemaNamesFromTableNames(tables)
+	ignorePatternMap, err := GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return ignoredTables, err
 	}
 	for _, tableName := range tables {
+		ignorePatterns := ignorePatternMap[tableName.Schema]
 		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
 		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
 			ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
