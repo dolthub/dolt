@@ -244,10 +244,17 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName Ta
 	return IgnorePatternConflict, DoltIgnoreConflictError{Table: tableName, TruePatterns: conflictingTrueMatches, FalsePatterns: conflictingFalseMatches}
 }
 
+func isDoltRebaseTable(tableName TableName) bool {
+	if strings.EqualFold(tableName.Name, RebaseTableName) {
+		return true
+	}
+	return tableName.Schema == DoltNamespace && tableName.Name == GetRebaseTableName()
+}
+
 func (ip *IgnorePatterns) IsTableNameIgnored(tableName TableName) (IgnoreResult, error) {
 	// The dolt_rebase table is automatically ignored by Dolt – it shouldn't ever
 	// be checked in to a Dolt database.
-	if strings.EqualFold(tableName.Name, RebaseTableName) {
+	if isDoltRebaseTable(tableName) {
 		return Ignore, nil
 	}
 

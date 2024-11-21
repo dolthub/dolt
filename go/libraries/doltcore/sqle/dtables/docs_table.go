@@ -190,7 +190,7 @@ func (iw *docsWriter) Delete(ctx *sql.Context, r sql.Row) error {
 
 func getDoltDocsTableName() doltdb.TableName {
 	if resolve.UseSearchPath {
-		return doltdb.TableName{Schema: "dolt", Name: doltdb.GetDocTableName()}
+		return doltdb.TableName{Schema: doltdb.DoltNamespace, Name: doltdb.GetDocTableName()}
 	}
 	return doltdb.TableName{Name: doltdb.GetDocTableName()}
 }

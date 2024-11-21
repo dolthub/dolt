@@ -713,7 +713,7 @@ func printStagedDiffs(wr io.Writer, stagedRows []sql.Row, printHelp bool) int {
 
 		lines := make([]string, 0, len(stagedRows))
 		for _, row := range stagedRows {
-			if !doltdb.IsReadOnlySystemTable(row[0].(string)) {
+			if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: row[0].(string)}) {
 				switch row[1].(string) {
 				case "new table":
 					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], row[0].(string)))

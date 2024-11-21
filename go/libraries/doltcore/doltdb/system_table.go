@@ -102,21 +102,26 @@ func IsFullTextTable(name string) bool {
 		strings.HasSuffix(name, "_fts_row_count"))
 }
 
-// IsDoltCITable returns whether the table name given is a dolt-ci table
+// IsDoltCITable returns whether the table name given is a dolt-ci table.
 func IsDoltCITable(name string) bool {
 	return HasDoltCIPrefix(name) && set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
 }
 
+// IsSystemTable returns whether the table name given is a Dolt system table.
+func IsSystemTable(name TableName) bool {
+	return HasDoltPrefix(name.Name) || strings.EqualFold(name.Schema, DoltNamespace)
+}
+
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
-func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name) && !IsFullTextTable(name)
+func IsReadOnlySystemTable(name TableName) bool {
+	return IsSystemTable(name) && !set.NewStrSet(getWriteableSystemTables()).Contains(name.Name) && !IsFullTextTable(name.Name)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
 // by the user.
-func IsNonAlterableSystemTable(name string) bool {
-	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name)) || strings.EqualFold(name, SchemasTableName)
+func IsNonAlterableSystemTable(name TableName) bool {
+	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name.Name)) || strings.EqualFold(name.Name, SchemasTableName)
 }
 
 // GetNonSystemTableNames gets non-system table names
@@ -186,10 +191,10 @@ var getWriteableSystemTables = func() []string {
 		SchemasTableName,
 		ProceduresTableName,
 		IgnoreTableName,
-		RebaseTableName,
+		GetRebaseTableName(),
 
-		// todo: find way to make these writable by the dolt process
-		// todo: but not by user
+		// TODO: find way to make these writable by the dolt process
+		// TODO: but not by user
 		WorkflowsTableName,
 		WorkflowEventsTableName,
 		WorkflowEventTriggersTableName,
@@ -344,6 +349,11 @@ var GetLogTableName = func() string {
 // GetMergeStatusTableName returns the merge status system table name
 var GetMergeStatusTableName = func() string {
 	return MergeStatusTableName
+}
+
+// GetRebaseTableName returns the rebase system table name
+var GetRebaseTableName = func() string {
+	return RebaseTableName
 }
 
 // GetRemoteBranchesTableName returns the all-branches system table name
