@@ -385,9 +385,8 @@ var defCmp = val.DefaultTupleComparator{}
 
 func mergeComparer(
 	filter sql.Expression,
-	leftSch, rightSch schema.Schema,
+	lState, rState mergeState,
 	projections []uint64,
-	lKeyDesc, lValDesc, rKeyDesc, rValDesc val.TupleDesc,
 ) (lrCmp, llCmp func(leftKey, leftVal, rightKey, rightVal val.Tuple) int, ok bool) {
 	// first filter expression needs to be evaluated
 	// can accept a subset of types -- (cmp GF GF)
@@ -422,34 +421,34 @@ func mergeComparer(
 	// |projections| and idx are in terms of output projections,
 	// but we need tuple and position in terms of secondary index.
 	// Use tags for the mapping.
-	lKeyIdx, lKeyOk := leftSch.GetPKCols().StoredIndexByTag(projections[lIdx])
-	lValIdx, lValOk := leftSch.GetNonPKCols().StoredIndexByTag(projections[lIdx])
-	rKeyIdx, rKeyOk := rightSch.GetPKCols().StoredIndexByTag(projections[rIdx])
-	rValIdx, rValOk := rightSch.GetNonPKCols().StoredIndexByTag(projections[rIdx])
+	lKeyIdx, lKeyOk := lState.idxSch.GetPKCols().StoredIndexByTag(projections[lIdx])
+	lValIdx, lValOk := lState.idxSch.GetNonPKCols().StoredIndexByTag(projections[lIdx])
+	rKeyIdx, rKeyOk := rState.idxSch.GetPKCols().StoredIndexByTag(projections[rIdx])
+	rValIdx, rValOk := rState.idxSch.GetNonPKCols().StoredIndexByTag(projections[rIdx])
 
 	// first field in keyless value is cardinality
-	if schema.IsKeyless(leftSch) {
+	if schema.IsKeyless(lState.idxSch) {
 		lValIdx++
 	}
 
-	if schema.IsKeyless(rightSch) {
+	if schema.IsKeyless(rState.idxSch) {
 		rValIdx++
 	}
 
 	var lTyp val.Type
 	var rTyp val.Type
 	if lKeyOk {
-		lTyp = lKeyDesc.Types[lKeyIdx]
+		lTyp = lState.idxMap.KeyDesc().Types[lKeyIdx]
 		llCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
 			return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(lKeyIdx), lTyp)
 		}
 		if rKeyOk {
-			rTyp = rKeyDesc.Types[rKeyIdx]
+			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
 			lrCmp = func(leftKey, _, rightKey, _ val.Tuple) int {
 				return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightKey.GetField(rKeyIdx), lTyp)
 			}
 		} else if rValOk {
-			rTyp = rValDesc.Types[rValIdx]
+			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
 			lrCmp = func(leftKey, _, _, rightVal val.Tuple) int {
 				return defCmp.CompareValues(0, leftKey.GetField(lKeyIdx), rightVal.GetField(rValIdx), lTyp)
 			}
@@ -457,17 +456,17 @@ func mergeComparer(
 			return nil, nil, false
 		}
 	} else if lValOk {
-		lTyp = lValDesc.Types[lValIdx]
+		lTyp = lState.idxMap.ValDesc().Types[lValIdx]
 		llCmp = func(_, leftVal, _, rightVal val.Tuple) int {
 			return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(lValIdx), lTyp)
 		}
 		if rKeyOk {
-			rTyp = rKeyDesc.Types[rKeyIdx]
+			rTyp = rState.idxMap.KeyDesc().Types[rKeyIdx]
 			lrCmp = func(_, leftVal, rightKey, _ val.Tuple) int {
 				return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightKey.GetField(rKeyIdx), lTyp)
 			}
 		} else if rValOk {
-			rTyp = rValDesc.Types[rValIdx]
+			rTyp = rState.idxMap.ValDesc().Types[rValIdx]
 			lrCmp = func(_, leftVal, _, rightVal val.Tuple) int {
 				return defCmp.CompareValues(0, leftVal.GetField(lValIdx), rightVal.GetField(rValIdx), lTyp)
 			}
