@@ -54,6 +54,20 @@ const (
 
 type IgnorePatterns []IgnorePattern
 
+// ConvertTupleToIgnoreBoolean is a function that converts a Tuple to a boolean for the ignore field. This is used to handle the Doltgres extended boolean type.
+var ConvertTupleToIgnoreBoolean = convertTupleToIgnoreBoolean
+
+func convertTupleToIgnoreBoolean(valueDesc val.TupleDesc, valueTuple val.Tuple) (bool, error) {
+	if !valueDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.Int8Enc, Nullable: false})) {
+		return false, fmt.Errorf("dolt_ignore had unexpected value type, this should never happen")
+	}
+	ignore, ok := valueDesc.GetBool(0, valueTuple)
+	if !ok {
+		return false, fmt.Errorf("could not read boolean")
+	}
+	return ignore, nil
+}
+
 func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, error) {
 	var ignorePatterns []IgnorePattern
 	workingSet := roots.Working
@@ -82,9 +96,6 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 	if !keyDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.StringEnc})) {
 		return nil, fmt.Errorf("dolt_ignore had unexpected key type, this should never happen")
 	}
-	if !valueDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.Int8Enc, Nullable: true})) {
-		return nil, fmt.Errorf("dolt_ignore had unexpected value type, this should never happen")
-	}
 
 	ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
 	if err != nil {
@@ -103,7 +114,11 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 		if !ok {
 			return nil, fmt.Errorf("could not read pattern")
 		}
-		ignore, ok := valueDesc.GetBool(0, valueTuple)
+		ignore, err := ConvertTupleToIgnoreBoolean(valueDesc, valueTuple)
+		if err != nil {
+			return nil, err
+		}
+
 		ignorePatterns = append(ignorePatterns, NewIgnorePattern(pattern, ignore))
 	}
 	return ignorePatterns, nil
@@ -125,8 +140,6 @@ func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []TableName) 
 		}
 		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
 			// no-op
-		} else if err != nil {
-			return nil, err
 		} else if ignored == DontIgnore {
 			// no-op
 		} else if ignored == Ignore {
