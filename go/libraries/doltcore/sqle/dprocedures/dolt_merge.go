@@ -396,7 +396,7 @@ func executeNoFFMerge(
 	if err != nil {
 		return nil, nil, err
 	}
-	result := &merge.Result{Root: mergeRoot, Stats: make(map[string]*merge.MergeStats)}
+	result := &merge.Result{Root: mergeRoot, Stats: make(map[doltdb.TableName]*merge.MergeStats)}
 
 	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, spec.Force, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {

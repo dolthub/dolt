@@ -84,7 +84,7 @@ func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts edi
 type Result struct {
 	Root            doltdb.RootValue
 	SchemaConflicts []SchemaConflict
-	Stats           map[string]*MergeStats
+	Stats           map[doltdb.TableName]*MergeStats
 }
 
 func (r Result) HasSchemaConflicts() bool {
@@ -231,7 +231,7 @@ func MergeRoots(
 		return nil, err
 	}
 
-	tblToStats := make(map[string]*MergeStats)
+	tblToStats := make(map[doltdb.TableName]*MergeStats)
 
 	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
 	// renaming a table will return delete/modify conflict error consistently.
@@ -257,7 +257,7 @@ func MergeRoots(
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
 		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
-			tblToStats[tblName.Name] = &MergeStats{
+			tblToStats[tblName] = &MergeStats{
 				Operation:       TableModified,
 				SchemaConflicts: 1,
 			}
@@ -292,7 +292,7 @@ func MergeRoots(
 		}
 
 		if mergedTable.table != nil {
-			tblToStats[tblName.Name] = stats
+			tblToStats[tblName] = stats
 
 			// edge case: if we're merging a table with a schema name to a root that doesn't have that schema,
 			// we implicitly create that schema on the destination root in addition to updating the list of schemas
@@ -320,7 +320,7 @@ func MergeRoots(
 
 		if mergedRootHasTable {
 			// Merge root deleted this table
-			tblToStats[tblName.Name] = &MergeStats{Operation: TableRemoved}
+			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 
 			// TODO: drop schemas as necessary
 			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
@@ -367,7 +367,7 @@ func MergeRoots(
 	var tableSet *doltdb.TableNameSet = nil
 	if mergeOpts.RecordViolationsForTables != nil {
 		tableSet = doltdb.NewCaseInsensitiveTableNameSet(nil)
-		for tableName, _ := range mergeOpts.RecordViolationsForTables {
+		for tableName := range mergeOpts.RecordViolationsForTables {
 			tableSet.Add(tableName)
 		}
 	}
@@ -456,7 +456,7 @@ func mergeCVsWithStash(ctx context.Context, root doltdb.RootValue, stash *violat
 }
 
 // checks if a conflict occurred during the merge
-func checkForConflicts(tblToStats map[string]*MergeStats) bool {
+func checkForConflicts(tblToStats map[doltdb.TableName]*MergeStats) bool {
 	for _, stat := range tblToStats {
 		if stat.HasConflicts() {
 			return true
@@ -466,9 +466,9 @@ func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 }
 
 // populates tblToStats with violation statistics
-func getConstraintViolationStats(ctx context.Context, root doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+func getConstraintViolationStats(ctx context.Context, root doltdb.RootValue, tblToStats map[doltdb.TableName]*MergeStats) error {
 	for tblName, stats := range tblToStats {
-		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
+		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
@@ -523,7 +523,7 @@ func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit
 	mergedHeadDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
 
 	stompedTables := make([]doltdb.TableName, 0, len(headWorkingDiffs))
-	for tName, _ := range headWorkingDiffs {
+	for tName := range headWorkingDiffs {
 		if _, ok := mergedHeadDiffs[tName]; ok {
 			// even if the working changes match the merge changes, don't allow (matches git behavior).
 			stompedTables = append(stompedTables, tName)

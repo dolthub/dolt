@@ -21,12 +21,10 @@ import (
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = (*IgnoreTable)(nil)
@@ -49,12 +47,20 @@ func (i *IgnoreTable) String() string {
 	return doltdb.IgnoreTableName
 }
 
-// Schema is a sql.Table interface function that gets the sql.Schema of the dolt_ignore system table.
-func (i *IgnoreTable) Schema() sql.Schema {
+func doltIgnoreSchema() sql.Schema {
 	return []*sql.Column{
 		{Name: "pattern", Type: sqlTypes.Text, Source: doltdb.IgnoreTableName, PrimaryKey: true},
 		{Name: "ignored", Type: sqlTypes.Boolean, Source: doltdb.IgnoreTableName, PrimaryKey: false, Nullable: false},
 	}
+}
+
+// GetDoltIgnoreSchema returns the schema of the dolt_ignore system table. This is used
+// by Doltgres to update the dolt_ignore schema using Doltgres types.
+var GetDoltIgnoreSchema = doltIgnoreSchema
+
+// Schema is a sql.Table interface function that gets the sql.Schema of the dolt_ignore system table.
+func (i *IgnoreTable) Schema() sql.Schema {
+	return GetDoltIgnoreSchema()
 }
 
 func (i *IgnoreTable) Collation() sql.CollationID {
@@ -205,7 +211,8 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 
 	iw.prevHash = &prevHash
 
-	found, err := roots.Working.HasTable(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName})
+	tname := doltdb.TableName{Name: doltdb.IgnoreTableName}
+	found, err := roots.Working.HasTable(ctx, tname)
 
 	if err != nil {
 		iw.errDuringStatementBegin = err
@@ -213,41 +220,15 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if !found {
-		// TODO: This is effectively a duplicate of the schema declaration above in a different format.
-		// We should find a way to not repeat ourselves.
-		colCollection := schema.NewColCollection(
-			schema.Column{
-				Name:          "pattern",
-				Tag:           schema.DoltIgnorePatternTag,
-				Kind:          types.StringKind,
-				IsPartOfPK:    true,
-				TypeInfo:      typeinfo.FromKind(types.StringKind),
-				Default:       "",
-				AutoIncrement: false,
-				Comment:       "",
-				Constraints:   nil,
-			},
-			schema.Column{
-				Name:          "ignored",
-				Tag:           schema.DoltIgnoreIgnoredTag,
-				Kind:          types.BoolKind,
-				IsPartOfPK:    false,
-				TypeInfo:      typeinfo.FromKind(types.BoolKind),
-				Default:       "",
-				AutoIncrement: false,
-				Comment:       "",
-				Constraints:   nil,
-			},
-		)
-
-		newSchema, err := schema.NewSchema(colCollection, nil, schema.Collation_Default, nil, nil)
+		sch := sql.NewPrimaryKeySchema(iw.it.Schema())
+		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tname, sch, roots.Head, sql.Collation_Default)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return
 		}
 
 		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, doltdb.TableName{Name: doltdb.IgnoreTableName}, newSchema)
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tname, doltSch)
 
 		if err != nil {
 			iw.errDuringStatementBegin = err
@@ -274,7 +255,7 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, doltdb.TableName{Name: doltdb.IgnoreTableName}, dbName, dSess.SetWorkingRoot, false)
+		tableWriter, err := ws.GetTableWriter(ctx, tname, dbName, dSess.SetWorkingRoot, false)
 		if err != nil {
 			iw.errDuringStatementBegin = err
 			return

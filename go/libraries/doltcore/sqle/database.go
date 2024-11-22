@@ -2331,6 +2331,29 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 	return db.SetRoot(ctx, newRoot)
 }
 
+// ConvertRowToRebasePlanStep converts a sql.Row to RebasePlanStep. This is used by Doltgres to convert
+// from a sql.Row considering the correct types.
+var ConvertRowToRebasePlanStep = convertRowToRebasePlanStep
+
+func convertRowToRebasePlanStep(row sql.Row) (rebase.RebasePlanStep, error) {
+	i, ok := row[1].(uint16)
+	if !ok {
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+	}
+
+	rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
+	if !ok {
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+	}
+
+	return rebase.RebasePlanStep{
+		RebaseOrder: row[0].(decimal.Decimal),
+		Action:      rebaseAction,
+		CommitHash:  row[2].(string),
+		CommitMsg:   row[3].(string),
+	}, nil
+}
+
 // LoadRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
 	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
@@ -2341,8 +2364,9 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 		return nil, fmt.Errorf("unable to find dolt_rebase table")
 	}
 	resolvedTable := plan.NewResolvedTable(table, db, nil)
+	rebaseSchema := dprocedures.GetDoltRebaseSystemTableSchema()
 	sort := plan.NewSort([]sql.SortField{{
-		Column: expression.NewGetField(0, types.MustCreateDecimalType(6, 2), "rebase_order", false),
+		Column: expression.NewGetField(0, rebaseSchema[0].Type, "rebase_order", false),
 		Order:  sql.Ascending,
 	}}, resolvedTable)
 	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
@@ -2359,29 +2383,37 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 			return nil, err
 		}
 
-		i, ok := row[1].(uint16)
-		if !ok {
-			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
-		}
-		rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
-		if !ok {
-			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		newRebasePlan, err := ConvertRowToRebasePlanStep(row)
+		if err != nil {
+			return nil, err
 		}
 
-		rebasePlan.Steps = append(rebasePlan.Steps, rebase.RebasePlanStep{
-			RebaseOrder: row[0].(decimal.Decimal),
-			Action:      rebaseAction,
-			CommitHash:  row[2].(string),
-			CommitMsg:   row[3].(string),
-		})
+		rebasePlan.Steps = append(rebasePlan.Steps, newRebasePlan)
 	}
 
 	return &rebasePlan, nil
 }
 
+// ConvertRebasePlanStepToRow converts a RebasePlanStep to sql.Row. This is used by Doltgres to convert
+// to a sql.Row with the correct types.
+var ConvertRebasePlanStepToRow = convertRebasePlanStepToRow
+
+func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, error) {
+	actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
+	if actionEnumValue == -1 {
+		return nil, fmt.Errorf("invalid rebase action: %s", planMember.Action)
+	}
+	return sql.Row{
+		planMember.RebaseOrder,
+		uint16(actionEnumValue),
+		planMember.CommitHash,
+		planMember.CommitMsg,
+	}, nil
+}
+
 // SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
-	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema)
+	pkSchema := sql.NewPrimaryKeySchema(dprocedures.GetDoltRebaseSystemTableSchema())
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
 	err := db.createSqlTable(ctx, doltdb.RebaseTableName, "", pkSchema, sql.Collation_Default, "")
 	if err != nil {
@@ -2403,16 +2435,12 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 
 	inserter := writeableDoltTable.Inserter(ctx)
 	for _, planMember := range plan.Steps {
-		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
-		if actionEnumValue == -1 {
-			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
+		row, err := ConvertRebasePlanStepToRow(planMember)
+		if err != nil {
+			return err
 		}
-		err = inserter.Insert(ctx, sql.Row{
-			planMember.RebaseOrder,
-			uint16(actionEnumValue),
-			planMember.CommitHash,
-			planMember.CommitMsg,
-		})
+
+		err = inserter.Insert(ctx, row)
 		if err != nil {
 			return err
 		}
