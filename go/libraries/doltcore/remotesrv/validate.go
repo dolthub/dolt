@@ -27,7 +27,7 @@ func validateRepoRequest(req repoRequest) error {
 		return fmt.Errorf("expected repo_path or repo_id, got neither")
 	} else if req.GetRepoPath() == "" {
 		id := req.GetRepoId()
-		if id.Org == "" || id.RepoName == "" {
+		if id == nil || id.Org == "" || id.RepoName == "" {
 			return fmt.Errorf("expected repo_id.org and repo_id.repo_name, missing at least one")
 		}
 	}
