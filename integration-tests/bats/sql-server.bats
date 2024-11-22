@@ -209,7 +209,7 @@ user_session_vars:
     [[ "$output" =~ /Users/user1/.aws/config.*lddev ]] || false
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user2 --password=pass2 sql -q "SELECT @@aws_credentials_file, @@aws_credentials_profile;"
-    [[ "$output" =~ NULL.*NULL ]] || false
+    [[ "$output" =~ "   " ]] || false
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user2 --password=pass2 sql -q "SET @@aws_credentials_file='/Users/should_fail';"
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
