@@ -161,7 +161,7 @@ EOF
 
     run dolt --user=dolt --password=wrongpassword sql -q "select 1"
     [ "$status" -eq 1 ]
-    run grep 'Error authenticating user using MySQL native password' log.txt
+    run grep 'Error authenticating user' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 }
