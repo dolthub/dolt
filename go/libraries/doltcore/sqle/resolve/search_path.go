@@ -81,7 +81,7 @@ func FirstExistingSchemaOnSearchPath(ctx *sql.Context, root doltdb.RootValue) (s
 
 // IsDoltgresSystemTable returns whether a table is a doltgres system table or not
 func IsDoltgresSystemTable(ctx *sql.Context, tableName doltdb.TableName, root doltdb.RootValue) (bool, error) {
-	if tableName.Schema == "dolt" || doltdb.HasDoltPrefix(tableName.Name) {
+	if doltdb.IsSystemTable(tableName) {
 		return true, nil
 	}
 	if !UseSearchPath || tableName.Schema != "" {
@@ -93,7 +93,7 @@ func IsDoltgresSystemTable(ctx *sql.Context, tableName doltdb.TableName, root do
 		return false, nil
 	}
 	for _, schemaName := range schemasToSearch {
-		if schemaName == "dolt" {
+		if schemaName == doltdb.DoltNamespace {
 			return true, nil
 		}
 
