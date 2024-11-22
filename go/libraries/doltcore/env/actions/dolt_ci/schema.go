@@ -25,17 +25,26 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+// WrappedTableName is a struct that wraps a doltdb.TableName
+// and specifies whether the tables should still be created.
+// Deprecated tables will have Deprecated: false
+type WrappedTableName struct {
+	TableName  doltdb.TableName
+	Deprecated bool
+}
+
 // ExpectedDoltCITablesOrdered contains the tables names for the dolt ci workflow tables, in parent to child table order.
 // This is exported for use in DoltHub/DoltLab.
-var ExpectedDoltCITablesOrdered = []doltdb.TableName{
-	{Name: doltdb.WorkflowsTableName},
-	{Name: doltdb.WorkflowEventsTableName},
-	{Name: doltdb.WorkflowEventTriggersTableName},
-	{Name: doltdb.WorkflowEventTriggerBranchesTableName},
-	{Name: doltdb.WorkflowJobsTableName},
-	{Name: doltdb.WorkflowStepsTableName},
-	{Name: doltdb.WorkflowSavedQueryStepsTableName},
-	{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
+var ExpectedDoltCITablesOrdered = []WrappedTableName{
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggerBranchesTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName}, Deprecated: true},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowJobsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName}},
 }
 
 type queryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
@@ -52,10 +61,17 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 
 	root := ws.WorkingRoot()
 
+	activeOnly := make([]doltdb.TableName, 0)
+	for _, wrapt := range ExpectedDoltCITablesOrdered {
+		if !wrapt.Deprecated {
+			activeOnly = append(activeOnly, wrapt.TableName)
+		}
+	}
+
 	exists := 0
 	var hasSome bool
 	var hasAll bool
-	for _, tableName := range ExpectedDoltCITablesOrdered {
+	for _, tableName := range activeOnly {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
@@ -65,8 +81,8 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 		}
 	}
 
-	hasSome = exists > 0 && exists < len(ExpectedDoltCITablesOrdered)
-	hasAll = exists == len(ExpectedDoltCITablesOrdered)
+	hasSome = exists > 0 && exists < len(activeOnly)
+	hasAll = exists == len(activeOnly)
 	if !hasSome && !hasAll {
 		return false, nil
 	}
@@ -87,13 +103,13 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 
 	root := ws.WorkingRoot()
 
-	for _, tableName := range ExpectedDoltCITablesOrdered {
-		found, err := root.HasTable(ctx, tableName)
+	for _, wrapt := range ExpectedDoltCITablesOrdered {
+		found, err := root.HasTable(ctx, wrapt.TableName)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			existing = append(existing, tableName)
+			existing = append(existing, wrapt.TableName)
 		}
 	}
 
@@ -113,8 +129,8 @@ func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commit
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+		wrapt := ExpectedDoltCITablesOrdered[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
 		if err != nil {
 			return err
 		}
@@ -126,10 +142,12 @@ func commitCIInit(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterE
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
-		if err != nil {
-			return err
+		wrapt := ExpectedDoltCITablesOrdered[i]
+		if !wrapt.Deprecated {
+			err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully initialized Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))

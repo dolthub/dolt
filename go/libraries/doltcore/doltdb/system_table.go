@@ -473,6 +473,9 @@ const (
 	// WorkflowEventTriggerBranchesTableName is the name of the workflow event trigger branches table name
 	WorkflowEventTriggerBranchesTableName = "dolt_ci_workflow_event_trigger_branches"
 
+	// WorkflowEventTriggerActivitiesTableName is then name of a now removed dolt_ci table
+	WorkflowEventTriggerActivitiesTableName = "dolt_ci_workflow_event_trigger_activities"
+
 	// WorkflowEventTriggerBranchesIdPkColName is the name of the id column on the workflow event trigger branches table.
 	WorkflowEventTriggerBranchesIdPkColName = "id"
 

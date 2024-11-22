@@ -545,10 +545,12 @@ func (d *doltWorkflowManager) validateWorkflowTables(ctx *sql.Context) error {
 		}
 	}
 
-	for _, t := range ExpectedDoltCITablesOrdered {
-		_, ok := tableMap[t.Name]
-		if !ok {
-			return errors.New(fmt.Sprintf("expected workflow table not found: %s", t))
+	for _, wrapt := range ExpectedDoltCITablesOrdered {
+		if !wrapt.Deprecated {
+			_, ok := tableMap[wrapt.TableName.Name]
+			if !ok {
+				return errors.New(fmt.Sprintf("expected workflow table not found: %s", wrapt.TableName.Name))
+			}
 		}
 	}
 
@@ -559,10 +561,12 @@ func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, workflowName stri
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
-		if err != nil {
-			return err
+		wrapt := ExpectedDoltCITablesOrdered[i]
+		if !wrapt.Deprecated {
+			err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully stored workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
@@ -572,10 +576,12 @@ func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, workflowNam
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
-		if err != nil {
-			return err
+		wrapt := ExpectedDoltCITablesOrdered[i]
+		if !wrapt.Deprecated {
+			err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully removed workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
