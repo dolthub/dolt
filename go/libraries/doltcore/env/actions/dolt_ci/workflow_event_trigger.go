@@ -16,16 +16,21 @@ package dolt_ci
 
 import (
 	"errors"
+	"strings"
 )
 
 var ErrUnknownWorkflowEventTriggerType = errors.New("unknown workflow event trigger type")
+var ErrUnknownWorkflowEventTriggerActivityType = errors.New("unknown workflow event trigger activity type")
 
 type WorkflowEventTriggerType int
 
 const (
 	WorkflowEventTriggerTypeUnspecified WorkflowEventTriggerType = iota
 	WorkflowEventTriggerTypeBranches
-	WorkflowEventTriggerTypeActivities
+	WorkflowEventTriggerTypeActivityOpened
+	WorkflowEventTriggerTypeActivityClosed
+	WorkflowEventTriggerTypeActivityReopened
+	WorkflowEventTriggerTypeActivitySynchronized
 	WorkflowEventTriggerTypeWorkflowDispatch
 )
 
@@ -41,10 +46,46 @@ func toWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
 	switch t {
 	case int(WorkflowEventTriggerTypeBranches):
 		return WorkflowEventTriggerTypeBranches, nil
-	case int(WorkflowEventTriggerTypeActivities):
-		return WorkflowEventTriggerTypeActivities, nil
+	case int(WorkflowEventTriggerTypeActivityOpened):
+		return WorkflowEventTriggerTypeActivityOpened, nil
+	case int(WorkflowEventTriggerTypeActivityClosed):
+		return WorkflowEventTriggerTypeActivityClosed, nil
+	case int(WorkflowEventTriggerTypeActivityReopened):
+		return WorkflowEventTriggerTypeActivityReopened, nil
+	case int(WorkflowEventTriggerTypeActivitySynchronized):
+		return WorkflowEventTriggerTypeActivitySynchronized, nil
 	case int(WorkflowEventTriggerTypeWorkflowDispatch):
 		return WorkflowEventTriggerTypeWorkflowDispatch, nil
+	default:
+		return WorkflowEventTriggerTypeUnspecified, ErrUnknownWorkflowEventTriggerType
+	}
+}
+
+func WorkflowEventTriggerActivityTypeToString(t WorkflowEventTriggerType) (string, error) {
+	switch t {
+	case WorkflowEventTriggerTypeActivityOpened:
+		return "opened", nil
+	case WorkflowEventTriggerTypeActivityClosed:
+		return "closed", nil
+	case WorkflowEventTriggerTypeActivityReopened:
+		return "reopened", nil
+	case WorkflowEventTriggerTypeActivitySynchronized:
+		return "synchronized", nil
+	default:
+		return "", ErrUnknownWorkflowEventTriggerType
+	}
+}
+
+func ToWorkflowEventTriggerActivityType(str string) (WorkflowEventTriggerType, error) {
+	switch strings.ToLower(str) {
+	case "opened":
+		return WorkflowEventTriggerTypeActivityOpened, nil
+	case "closed":
+		return WorkflowEventTriggerTypeActivityClosed, nil
+	case "reopened":
+		return WorkflowEventTriggerTypeActivityReopened, nil
+	case "synchronized":
+		return WorkflowEventTriggerTypeActivitySynchronized, nil
 	default:
 		return WorkflowEventTriggerTypeUnspecified, ErrUnknownWorkflowEventTriggerType
 	}

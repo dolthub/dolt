@@ -32,7 +32,6 @@ var ExpectedDoltCITablesOrdered = []doltdb.TableName{
 	{Name: doltdb.WorkflowEventsTableName},
 	{Name: doltdb.WorkflowEventTriggersTableName},
 	{Name: doltdb.WorkflowEventTriggerBranchesTableName},
-	{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
 	{Name: doltdb.WorkflowJobsTableName},
 	{Name: doltdb.WorkflowStepsTableName},
 	{Name: doltdb.WorkflowSavedQueryStepsTableName},
@@ -180,7 +179,6 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		createWorkflowEventsTableQuery(),
 		createWorkflowEventTriggersTableQuery(),
 		createWorkflowEventTriggerBranchesTableQuery(),
-		createWorkflowEventTriggerActivitiesTableQuery(),
 		createWorkflowJobsTableQuery(),
 		createWorkflowStepsTableQuery(),
 		createWorkflowSavedQueryStepsTableQuery(),
@@ -214,10 +212,6 @@ func createWorkflowEventTriggersTableQuery() string {
 
 func createWorkflowEventTriggerBranchesTableQuery() string {
 	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName, doltdb.WorkflowEventTriggerBranchesBranchColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
-}
-
-func createWorkflowEventTriggerActivitiesTableQuery() string {
-	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerActivitiesTableName, doltdb.WorkflowEventTriggerActivitiesIdPkColName, doltdb.WorkflowEventTriggerActivitiesActivityColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
 }
 
 func createWorkflowJobsTableQuery() string {

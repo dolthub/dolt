@@ -199,7 +199,6 @@ var getWriteableSystemTables = func() []string {
 		WorkflowEventsTableName,
 		WorkflowEventTriggersTableName,
 		WorkflowEventTriggerBranchesTableName,
-		WorkflowEventTriggerActivitiesTableName,
 		WorkflowJobsTableName,
 		WorkflowStepsTableName,
 		WorkflowSavedQueryStepsTableName,
@@ -482,18 +481,6 @@ const (
 
 	// WorkflowEventTriggerBranchesBranch is the name of the branch column on the workflow event trigger branches table.
 	WorkflowEventTriggerBranchesBranchColName = "branch"
-
-	// WorkflowEventTriggerActivitiesTableName is the name of the workflow event trigger activities table name
-	WorkflowEventTriggerActivitiesTableName = "dolt_ci_workflow_event_trigger_activities"
-
-	// WorkflowEventTriggerActivitiesIdPkColName is the name of the id column on the workflow event trigger activities table.
-	WorkflowEventTriggerActivitiesIdPkColName = "id"
-
-	// WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName is the name of the workflow event triggers id foreign key column on the workflow event trigger activities table
-	WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName = "workflow_event_triggers_id_fk"
-
-	// WorkflowEventTriggerActivitiesActivity is the name of the activity column on the workflow event trigger activities table.
-	WorkflowEventTriggerActivitiesActivityColName = "activity"
 
 	// WorkflowJobsTableName is the name of the workflow jobs table name
 	WorkflowJobsTableName = "dolt_ci_workflow_jobs"
