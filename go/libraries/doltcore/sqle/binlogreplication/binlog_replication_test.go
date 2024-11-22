@@ -243,7 +243,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 	// Before starting replication, the system account does not exist
 	err = db.Ping()
 	require.Error(t, err)
-	require.ErrorContains(t, err, "User not found")
+	require.ErrorContains(t, err, "No authentication")
 
 	// After starting replication, the system account is locked
 	startReplicationAndCreateTestDb(t, mySqlPort)
