@@ -625,6 +625,21 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 	return from, to, nil
 }
 
+// GetUniqueSchemaNamesFromTableNames returns a list of unique schema names from a list of table names
+func GetUniqueSchemaNamesFromTableDeltas(deltas []TableDelta) []string {
+	schemaMap := make(map[string]struct{})
+	var schemas []string
+
+	for _, td := range deltas {
+		if _, exists := schemaMap[td.ToName.Schema]; !exists {
+			schemaMap[td.ToName.Schema] = struct{}{}
+			schemas = append(schemas, td.ToName.Schema)
+		}
+	}
+
+	return schemas
+}
+
 // WorkingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
 // Otherwise, if there are any non-ignored changes, returns false.
 // Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
@@ -638,7 +653,8 @@ func WorkingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots
 		return false, nil
 	}
 
-	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	schemas := GetUniqueSchemaNamesFromTableDeltas(unstaged)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return false, err
 	}
@@ -647,6 +663,8 @@ func WorkingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots
 		if !(tableDelta.IsAdd()) {
 			return false, nil
 		}
+
+		ignorePatterns := ignorePatternMap[tableDelta.ToName.Schema]
 		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
 		if err != nil {
 			return false, err
