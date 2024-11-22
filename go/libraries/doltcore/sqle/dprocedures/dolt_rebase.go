@@ -513,12 +513,15 @@ func filterIgnoredTables(ctx *sql.Context, unstagedTableDeltas []diff.TableDelta
 	}
 
 	filteredTableDeltas := make([]diff.TableDelta, 0, len(unstagedTableDeltas))
-	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+
+	schemas := diff.GetUniqueSchemaNamesFromTableDeltas(unstagedTableDeltas)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tableDelta := range unstagedTableDeltas {
+		ignorePatterns := ignorePatternMap[tableDelta.ToName.Schema]
 		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
 		if err != nil {
 			return nil, err
