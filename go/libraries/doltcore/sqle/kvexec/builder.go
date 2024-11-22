@@ -17,6 +17,7 @@ package kvexec
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -83,7 +84,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 						split := len(leftState.tags)
 						var rowJoiner *prollyToSqlJoiner
 						rowJoiner = newRowJoiner([]schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
-						if iter, err := newMergeKvIter(leftState.iter, rightState.iter, rowJoiner, lrCmp, llCmp, leftState.norm, rightState.norm, leftState.filter, rightState.filter, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
+						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							return iter, nil
 						}
 					}
@@ -360,6 +361,9 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if err != nil {
 			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
+		if rowData.Format() != types.Format_DOLT {
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
+		}
 		priMap = durable.ProllyMapFromIndex(rowData)
 
 		priSch = lb.OutputSchema()
@@ -439,27 +443,33 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 	return priMap, secMap, srcIter, dstIter, priSch, nil, tags, nil, nil
 }
 
+// coveringNormalizer inputs a secondary index key tuple and outputs a
+// primary index key/value tuple.
 type coveringNormalizer func(val.Tuple) (val.Tuple, val.Tuple, error)
 
 type mergeState struct {
+	// secondary index being read
 	idxMap prolly.Map
-	iter   prolly.MapIter
+	// merge iterator
+	iter prolly.MapIter
+	// schemas for primary and secondary index.
+	// if the index is covering these are the same
 	priSch schema.Schema
 	idxSch schema.Schema
-	tags   []uint64
+	// output projection ordering
+	tags []uint64
+	// filter for just this relation
 	filter sql.Expression
-	norm   coveringNormalizer
+	// norm is not nil when a non-covering index
+	// needs a callback into the primary index.
+	norm coveringNormalizer
 }
 
 func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 	ms := mergeState{}
-	//var secMap prolly.Map
+
 	var table *doltdb.Table
-	//var tags []uint64
-	//var iter prolly.MapIter
 	var covering bool
-	//var priSch schema.Schema
-	//var idxSch schema.Schema
 	var idx index.DoltIndex
 
 	switch n := n.(type) {
@@ -512,6 +522,10 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
+			return ms, nil
+		}
+
+		if idx.Format() != types.Format_DOLT {
 			return ms, nil
 		}
 
