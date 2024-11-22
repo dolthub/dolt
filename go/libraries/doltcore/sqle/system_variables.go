@@ -124,7 +124,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic:           true,
 		SetVarHintApplies: false,
 		Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
-		Default:           nil,
+		Default:           "",
 	},
 	&sql.MysqlSystemVariable{
 		Name:              dsess.TransactionsDisabledSysVar,
@@ -164,7 +164,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic:           false,
 		SetVarHintApplies: false,
 		Type:              types.NewSystemStringType(dsess.AwsCredsFile),
-		Default:           nil,
+		Default:           "",
 	},
 	&sql.MysqlSystemVariable{
 		Name:              dsess.AwsCredsProfile,
@@ -172,7 +172,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic:           false,
 		SetVarHintApplies: false,
 		Type:              types.NewSystemStringType(dsess.AwsCredsProfile),
-		Default:           nil,
+		Default:           "",
 	},
 	&sql.MysqlSystemVariable{
 		Name:              dsess.AwsCredsRegion,
@@ -180,7 +180,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic:           false,
 		SetVarHintApplies: false,
 		Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
-		Default:           nil,
+		Default:           "",
 	},
 	&sql.MysqlSystemVariable{
 		Name:              dsess.ShowBranchDatabases,
@@ -351,7 +351,7 @@ func AddDoltSystemVariables() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
-			Default:           nil,
+			Default:           "",
 		},
 		&sql.MysqlSystemVariable{
 			Name:              dsess.TransactionsDisabledSysVar,
@@ -391,7 +391,7 @@ func AddDoltSystemVariables() {
 			Dynamic:           false,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemStringType(dsess.AwsCredsFile),
-			Default:           nil,
+			Default:           "",
 		},
 		&sql.MysqlSystemVariable{
 			Name:              dsess.AwsCredsProfile,
@@ -399,7 +399,7 @@ func AddDoltSystemVariables() {
 			Dynamic:           false,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemStringType(dsess.AwsCredsProfile),
-			Default:           nil,
+			Default:           "",
 		},
 		&sql.MysqlSystemVariable{
 			Name:              dsess.AwsCredsRegion,
@@ -407,7 +407,7 @@ func AddDoltSystemVariables() {
 			Dynamic:           false,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemStringType(dsess.AwsCredsRegion),
-			Default:           nil,
+			Default:           "",
 		},
 		&sql.MysqlSystemVariable{
 			Name:              dsess.ShowBranchDatabases,
