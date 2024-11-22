@@ -675,6 +675,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	case doltdb.StatisticsTableName:
+		if resolve.UseSearchPath && db.schemaName == "" {
+			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+			if err != nil {
+				return nil, false, err
+			}
+			db.schemaName = schemaName
+		}
+
 		var tables []string
 		var err error
 		branch, ok := asOf.(string)
@@ -686,7 +694,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), branch, tables), true
+		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.schemaName, branch, tables), true
 	case doltdb.ProceduresTableName:
 		found = true
 		backingTable, _, err := db.getTable(ctx, root, doltdb.ProceduresTableName)

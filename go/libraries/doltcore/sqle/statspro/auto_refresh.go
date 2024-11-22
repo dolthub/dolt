@@ -163,13 +163,18 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			return err
 		}
 
+		var schemaName string
+		if schTab, ok := sqlTable.(sql.DatabaseSchemaTable); ok {
+			schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
+		}
+
 		if oldSchHash := statDb.GetSchemaHash(branch, table); oldSchHash.IsEmpty() {
 			statDb.SetSchemaHash(branch, table, schHash)
 		} else if oldSchHash != schHash {
 			ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
 			statDb.SetSchemaHash(branch, table, schHash)
 
-			stats, err := p.GetTableDoltStats(ctx, branch, dbName, table)
+			stats, err := p.GetTableDoltStats(ctx, branch, schemaName, dbName, table)
 			if err != nil {
 				return err
 			}
@@ -191,7 +196,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		// collect indexes and ranges to be updated
 		var idxMetas []indexMeta
 		for _, index := range indexes {
-			qual := sql.NewStatQualifier(dbName, table, strings.ToLower(index.ID()))
+			qual := sql.NewStatQualifier(dbName, schemaName, table, strings.ToLower(index.ID()))
 			qualExists[qual] = true
 			curStat, ok := statDb.GetStat(branch, qual)
 			if !ok {

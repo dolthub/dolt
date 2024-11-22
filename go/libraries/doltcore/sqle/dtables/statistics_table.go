@@ -27,6 +27,7 @@ import (
 // StatisticsTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type StatisticsTable struct {
 	dbName     string
+	schemaName string
 	branch     string
 	tableNames []string
 }
@@ -35,8 +36,8 @@ var _ sql.Table = (*StatisticsTable)(nil)
 var _ sql.StatisticsTable = (*StatisticsTable)(nil)
 
 // NewStatisticsTable creates a StatisticsTable
-func NewStatisticsTable(_ *sql.Context, dbName, branch string, tableNames []string) sql.Table {
-	return &StatisticsTable{dbName: dbName, branch: branch, tableNames: tableNames}
+func NewStatisticsTable(_ *sql.Context, dbName, schemaName, branch string, tableNames []string) sql.Table {
+	return &StatisticsTable{dbName: dbName, schemaName: schemaName, branch: branch, tableNames: tableNames}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -67,7 +68,7 @@ func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 type BranchStatsProvider interface {
-	GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error)
+	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]sql.Statistic, error)
 }
 
 // RowCount implements sql.StatisticsTable
@@ -76,7 +77,7 @@ func (st *StatisticsTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	var cnt int
 	for _, table := range st.tableNames {
 		// only Dolt-specific provider has branch support
-		dbStats, err := dSess.StatsProvider().(BranchStatsProvider).GetTableDoltStats(ctx, st.branch, st.dbName, table)
+		dbStats, err := dSess.StatsProvider().(BranchStatsProvider).GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
 
 		}
@@ -121,7 +122,7 @@ func (st *StatisticsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql
 	statsPro := dSess.StatsProvider().(BranchStatsProvider)
 	var dStats []sql.Statistic
 	for _, table := range st.tableNames {
-		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, table)
+		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
 			return nil, err
 		}
