@@ -178,9 +178,6 @@ compare:
 				}
 			}
 		}
-		if l.leftKey == nil || l.rightKey == nil {
-			return nil, io.EOF
-		}
 	}
 
 match:
@@ -342,25 +339,6 @@ func (l *mergeJoinKvIter) exhaustLeftReturn(ctx *sql.Context) (sql.Row, error) {
 	}
 }
 
-/*
-matchBuf:
-	// Fill lookahead buffer with all right side keys that match current
-	// left key. |l.nextRightKey| can be a lookahead key or nil at the
-	// end of this stage.
-	l.nextRightKey, l.nextRightVal, err = l.rightIter.Next(ctx)
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			// this is OK, but need to skip nil key comparison
-			goto match
-		}
-		return nil, err
-	}
-	if l.lrCmp(l.leftKey, l.leftVal, l.nextRightKey, l.nextRightVal) == 0 {
-		l.lookaheadBuf = append(l.lookaheadBuf, l.nextRightKey, l.nextRightVal)
-		goto matchBuf
-	}
-*/
-
 // Fill lookahead buffer with all right side keys that match current
 // left key. |l.nextRightKey| can be a lookahead key or nil at the
 // end of this stage.
@@ -516,6 +494,9 @@ func mergeComparer(
 	return lrCmp, llCmp, true
 }
 
+// schemaIsCovering returns true if all projection tags are found in the
+// source schema. If any tag is not found in the schema, the primary index
+// has to be access to complete the |projections| list.
 func schemaIsCovering(sch schema.Schema, projections []uint64) bool {
 	cols := sch.GetAllCols()
 	if len(projections) > cols.Size() {

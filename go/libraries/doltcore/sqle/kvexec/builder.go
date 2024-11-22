@@ -447,21 +447,23 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 // primary index key/value tuple.
 type coveringNormalizer func(val.Tuple) (val.Tuple, val.Tuple, error)
 
+// mergeState aggregates the information needed to build one side of a
+// merge join iterator.
 type mergeState struct {
-	// secondary index being read
+	// idxMap is the secondary index being read
 	idxMap prolly.Map
-	// merge iterator
+	// iter is the index merge iterator
 	iter prolly.MapIter
 	// schemas for primary and secondary index.
 	// if the index is covering these are the same
 	priSch schema.Schema
 	idxSch schema.Schema
-	// output projection ordering
+	// tags are the output projection/ordering
 	tags []uint64
-	// filter for just this relation
+	// filter is a relation-specific filter (usually nil)
 	filter sql.Expression
 	// norm is not nil when a non-covering index
-	// needs a callback into the primary index.
+	// needs a callback into the primary index
 	norm coveringNormalizer
 }
 
