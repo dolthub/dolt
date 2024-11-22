@@ -40,7 +40,7 @@ func NewUserSpaceDatabase(root doltdb.RootValue, editOpts editor.Options) *UserS
 }
 
 func (db *UserSpaceDatabase) Name() string {
-	return "dolt"
+	return doltdb.DoltNamespace
 }
 
 func (db *UserSpaceDatabase) Schema() string {
@@ -48,10 +48,11 @@ func (db *UserSpaceDatabase) Schema() string {
 }
 
 func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	tname := doltdb.TableName{Name: tableName}
+	if doltdb.IsReadOnlySystemTable(tname) {
 		return nil, false, nil
 	}
-	table, tableName, ok, err := doltdb.GetTableInsensitive(ctx, db.RootValue, doltdb.TableName{Name: tableName})
+	table, tableName, ok, err := doltdb.GetTableInsensitive(ctx, db.RootValue, tname)
 	if err != nil {
 		return nil, false, err
 	}
@@ -76,7 +77,7 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 	resultingTblNames := []string{}
 	for _, tbl := range tableNames {
-		if !doltdb.IsReadOnlySystemTable(tbl) {
+		if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tbl}) {
 			resultingTblNames = append(resultingTblNames, tbl)
 		}
 	}

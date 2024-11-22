@@ -536,7 +536,7 @@ and have %v and %v different commits each, respectively.
 		cli.Println(stagedHeader)
 		cli.Println(stagedHeaderHelp)
 		for tableName, status := range data.stagedTables {
-			if !doltdb.IsReadOnlySystemTable(tableName) {
+			if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tableName}) {
 				text := fmt.Sprintf(statusFmt, status+":", tableName)
 				greenText := color.GreenString(text)
 				cli.Println(greenText)

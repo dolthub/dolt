@@ -289,7 +289,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
 		// currently, system tables do not need to be "locked to root"
 		//  see comment below in getTableInsensitive
 		return table, ok, nil
@@ -661,7 +661,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			if resolve.UseSearchPath && lwrName == doltdb.DocTableName {
-				db.schemaName = "dolt"
+				db.schemaName = doltdb.DoltNamespace
 			}
 			backingTable, _, err := db.getTable(ctx, root, doltdb.GetDocTableName())
 			if err != nil {
@@ -699,6 +699,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	if found {
 		return dt, found, nil
+	}
+
+	// Converts dolt_rebase to dolt.rebase for doltgres compatibility
+	if resolve.UseSearchPath && lwrName == doltdb.RebaseTableName {
+		db.schemaName = doltdb.DoltNamespace
+		tblName = doltdb.GetRebaseTableName()
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
@@ -1032,12 +1038,14 @@ func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb
 	if err != nil {
 		return nil, err
 	}
+
+	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
 	var table sql.Table
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if doltdb.IsReadOnlySystemTable(tname) {
 		table = readonlyTable
 	} else if doltdb.IsDoltCITable(tableName) && !doltdb.IsFullTextTable(tableName) {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
-	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	} else if doltdb.IsSystemTable(tname) && !doltdb.IsFullTextTable(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
@@ -1124,7 +1132,7 @@ func filterDoltInternalTables(ctx *sql.Context, tblNames []string, schemaName st
 			if doltdb.DoltCICanBypass(ctx) {
 				result = append(result, tbl)
 			}
-		} else if !doltdb.HasDoltPrefix(tbl) && schemaName != "dolt" {
+		} else if !doltdb.IsSystemTable(doltdb.TableName{Name: tbl, Schema: schemaName}) {
 			result = append(result, tbl)
 		}
 	}
@@ -1189,7 +1197,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if doltdb.IsNonAlterableSystemTable(tableName) {
+	if doltdb.IsNonAlterableSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
@@ -1306,7 +1314,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 
-	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -1333,7 +1341,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 		return err
 	}
 
-	if doltdb.HasDoltPrefix(tableName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -1524,7 +1532,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 
 // CreateTemporaryTable creates a table that only exists the length of a session.
 func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSch sql.PrimaryKeySchema, collation sql.CollationID) error {
-	if doltdb.HasDoltPrefix(tableName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -1670,11 +1678,11 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsNonAlterableSystemTable(oldName) {
+	if doltdb.IsNonAlterableSystemTable(doltdb.TableName{Name: oldName, Schema: db.schemaName}) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 
-	if doltdb.HasDoltPrefix(newName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: newName, Schema: db.schemaName}) {
 		return ErrReservedTableName.New(newName)
 	}
 
@@ -2364,7 +2372,10 @@ func convertRowToRebasePlanStep(row sql.Row) (rebase.RebasePlanStep, error) {
 
 // LoadRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
-	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if resolve.UseSearchPath {
+		db.schemaName = doltdb.DoltNamespace
+	}
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.GetRebaseTableName())
 	if err != nil {
 		return nil, err
 	}
@@ -2421,19 +2432,23 @@ func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, erro
 
 // SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
+	if resolve.UseSearchPath {
+		db.schemaName = doltdb.DoltNamespace
+	}
+
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.GetDoltRebaseSystemTableSchema())
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltdb.RebaseTableName, "", pkSchema, sql.Collation_Default, "")
+	err := db.createSqlTable(ctx, doltdb.GetRebaseTableName(), db.schemaName, pkSchema, sql.Collation_Default, "")
 	if err != nil {
 		return err
 	}
 
-	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.GetRebaseTableName())
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("unable to find %s table", doltdb.RebaseTableName)
+		return fmt.Errorf("unable to find %s table", doltdb.GetRebaseTableName())
 	}
 
 	writeableDoltTable, ok := table.(*WritableDoltTable)
