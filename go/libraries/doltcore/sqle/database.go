@@ -693,6 +693,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		return dt, found, nil
 	}
 
+	// Converts dolt_rebase to dolt.rebase for doltgres compatibility
 	if resolve.UseSearchPath && lwrName == doltdb.RebaseTableName {
 		db.schemaName = doltdb.DoltNamespace
 		tblName = doltdb.GetRebaseTableName()
