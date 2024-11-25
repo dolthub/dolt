@@ -287,7 +287,7 @@ func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, to
 
 func (ti onHeapTableIndex) entrySuffixMatches(idx uint32, h *hash.Hash) (bool, error) {
 	ord := ti.ordinalAt(idx)
-	o := ord * hash.SuffixLen
+	o := uint64(ord) * hash.SuffixLen
 	b := ti.suffixes[o : o+hash.SuffixLen]
 	return bytes.Equal(h[hash.PrefixLen:], b), nil
 }
@@ -298,7 +298,7 @@ func (ti onHeapTableIndex) indexEntry(idx uint32, a *hash.Hash) (entry indexEntr
 	if a != nil {
 		binary.BigEndian.PutUint64(a[:], prefix)
 
-		o := int64(hash.SuffixLen * ord)
+		o := hash.SuffixLen * uint64(ord)
 		b := ti.suffixes[o : o+hash.SuffixLen]
 		copy(a[hash.PrefixLen:], b)
 	}
@@ -432,8 +432,9 @@ func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 
 	// Get prefix, ordinal, and suffix
 	prefix := tuple[:hash.PrefixLen]
-	ord := binary.BigEndian.Uint32(tuple[hash.PrefixLen:]) * hash.SuffixLen
-	suffix := ti.suffixes[ord : ord+hash.SuffixLen] // suffix is 12 bytes
+	ord := binary.BigEndian.Uint32(tuple[hash.PrefixLen:])
+	suffixOffset := uint64(ord) * hash.SuffixLen
+	suffix := ti.suffixes[suffixOffset : suffixOffset+hash.SuffixLen]
 
 	// Combine prefix and suffix to get hash
 	buf := [hash.ByteLen]byte{}
