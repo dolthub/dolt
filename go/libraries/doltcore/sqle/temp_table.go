@@ -109,7 +109,7 @@ func NewTempTable(
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
 
-	idx, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	idx, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return nil, err
 	}

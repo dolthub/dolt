@@ -390,7 +390,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) err
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
 
-	idx, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	idx, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return err
 	}
