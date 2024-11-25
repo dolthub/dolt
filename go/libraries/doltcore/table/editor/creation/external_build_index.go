@@ -130,7 +130,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 	defer it.Close()
 
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema(), schema.IsKeyless(sch))
+	empty, err := durable.NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, idx)
 	secondary := durable.ProllyMapFromIndex(empty)
 
 	tupIter := &tupleIterWithCb{iter: it, prefixDesc: prefixDesc, uniqCb: uniqCb}
