@@ -269,7 +269,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	if err != nil {
 		return nil, err
 	}
-	rows, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch, false)
+	rows, err := durable.NewEmptyPrimaryIndex(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}

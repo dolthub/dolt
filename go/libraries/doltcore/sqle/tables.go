@@ -937,7 +937,7 @@ func emptyFulltextTable(
 		return nil, nil, err
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema, false)
+	empty, err := durable.NewEmptyPrimaryIndex(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1041,7 +1041,7 @@ func (t *WritableDoltTable) truncate(
 	}
 
 	for _, idx := range sch.Indexes().AllIndexes() {
-		empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx.Schema(), false)
+		empty, err := durable.NewEmptyIndexFromSchemaIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx)
 		if err != nil {
 			return nil, err
 		}
@@ -1065,7 +1065,7 @@ func (t *WritableDoltTable) truncate(
 		}
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch, false)
+	empty, err := durable.NewEmptyPrimaryIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
 	if err != nil {
 		return nil, err
 	}
