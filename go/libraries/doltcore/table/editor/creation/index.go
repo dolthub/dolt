@@ -214,7 +214,7 @@ func BuildUniqueProllyIndex(
 	primary prolly.Map,
 	cb DupEntryCb,
 ) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema(), schema.IsKeyless(sch))
+	empty, err := durable.NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, idx)
 	if err != nil {
 		return nil, err
 	}

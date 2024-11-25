@@ -330,7 +330,7 @@ func putEmptyTableWithSchema(ctx context.Context, tblName string, root doltdb.Ro
 		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}
 
-	empty, err := durable.NewEmptyIndex(ctx, root.VRW(), root.NodeStore(), sch, false)
+	empty, err := durable.NewEmptyPrimaryIndex(ctx, root.VRW(), root.NodeStore(), sch)
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}

@@ -330,7 +330,7 @@ func purgeFulltextTableData(ctx *sql.Context, root doltdb.RootValue, tableNames 
 		if err != nil {
 			return nil, err
 		}
-		rows, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, false)
+		rows, err := durable.NewEmptyPrimaryIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch)
 		if err != nil {
 			return nil, err
 		}
