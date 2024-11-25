@@ -33,9 +33,21 @@ type WrappedTableName struct {
 	Deprecated bool
 }
 
+type WrappedTableNameSlice []WrappedTableName
+
+func (w WrappedTableNameSlice) ActiveTableNames() []doltdb.TableName {
+	tableNames := make([]doltdb.TableName, 0)
+	for _, wrapt := range w {
+		if !wrapt.Deprecated {
+			tableNames = append(tableNames, wrapt.TableName)
+		}
+	}
+	return tableNames
+}
+
 // ExpectedDoltCITablesOrdered contains the tables names for the dolt ci workflow tables, in parent to child table order.
 // This is exported for use in DoltHub/DoltLab.
-var ExpectedDoltCITablesOrdered = []WrappedTableName{
+var ExpectedDoltCITablesOrdered = WrappedTableNameSlice{
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}},
@@ -125,12 +137,12 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 	return err
 }
 
-func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
+func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		wrapt := ExpectedDoltCITablesOrdered[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
 		if err != nil {
 			return err
 		}
@@ -138,16 +150,14 @@ func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commit
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
-func commitCIInit(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
+func commitCIInit(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		wrapt := ExpectedDoltCITablesOrdered[i]
-		if !wrapt.Deprecated {
-			err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
-			if err != nil {
-				return err
-			}
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		if err != nil {
+			return err
 		}
 	}
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully initialized Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
@@ -183,7 +193,7 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 		return err
 	}
 
-	return commitCIDestroy(ctx, queryFunc, commiterName, commiterEmail)
+	return commitCIDestroy(ctx, queryFunc, existing, commiterName, commiterEmail)
 }
 
 // CreateDoltCITables creates all dolt_ci tables and creates a new Dolt commit.
@@ -213,7 +223,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		}
 	}
 
-	return commitCIInit(newCtx, queryFunc, commiterName, commiterEmail)
+	return commitCIInit(newCtx, queryFunc, ExpectedDoltCITablesOrdered.ActiveTableNames(), commiterName, commiterEmail)
 }
 
 func createWorkflowsTableQuery() string {
