@@ -72,13 +72,7 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	}
 
 	root := ws.WorkingRoot()
-
-	activeOnly := make([]doltdb.TableName, 0)
-	for _, wrapt := range ExpectedDoltCITablesOrdered {
-		if !wrapt.Deprecated {
-			activeOnly = append(activeOnly, wrapt.TableName)
-		}
-	}
+	activeOnly := ExpectedDoltCITablesOrdered.ActiveTableNames()
 
 	exists := 0
 	var hasSome bool

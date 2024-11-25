@@ -545,43 +545,38 @@ func (d *doltWorkflowManager) validateWorkflowTables(ctx *sql.Context) error {
 		}
 	}
 
-	for _, wrapt := range ExpectedDoltCITablesOrdered {
-		if !wrapt.Deprecated {
-			_, ok := tableMap[wrapt.TableName.Name]
-			if !ok {
-				return errors.New(fmt.Sprintf("expected workflow table not found: %s", wrapt.TableName.Name))
-			}
+	activeOnly := ExpectedDoltCITablesOrdered.ActiveTableNames()
+	for _, tn := range activeOnly {
+		_, ok := tableMap[tn.Name]
+		if !ok {
+			return errors.New(fmt.Sprintf("expected workflow table not found: %s", tn.Name))
 		}
 	}
 
 	return nil
 }
 
-func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, workflowName string) error {
+func (d *doltWorkflowManager) commitWorkflow(ctx *sql.Context, tableNames []doltdb.TableName, workflowName string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		wrapt := ExpectedDoltCITablesOrdered[i]
-		if !wrapt.Deprecated {
-			err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
-			if err != nil {
-				return err
-			}
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		if err != nil {
+			return err
 		}
 	}
 	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully stored workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
 }
 
-func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, workflowName string) error {
+func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, tableNames []doltdb.TableName, workflowName string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		wrapt := ExpectedDoltCITablesOrdered[i]
-		if !wrapt.Deprecated {
-			err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", wrapt.TableName.Name))
-			if err != nil {
-				return err
-			}
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		if err != nil {
+			return err
 		}
 	}
 	return d.sqlWriteQuery(ctx, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully removed workflow: %s', '--author', '%s <%s>');", workflowName, d.commiterName, d.commiterEmail))
@@ -1982,7 +1977,7 @@ func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, db sqle.Database,
 	if err != nil {
 		return err
 	}
-	return d.commitRemoveWorkflow(ctx, workflowName)
+	return d.commitRemoveWorkflow(ctx, ExpectedDoltCITablesOrdered.ActiveTableNames(), workflowName)
 }
 
 func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error {
@@ -1995,7 +1990,7 @@ func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database,
 		return err
 	}
 
-	return d.commitWorkflow(ctx, config.Name.Value)
+	return d.commitWorkflow(ctx, ExpectedDoltCITablesOrdered.ActiveTableNames(), config.Name.Value)
 }
 
 func newScalarDoubleQuotedYamlNode(value string) yaml.Node {
