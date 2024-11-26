@@ -315,6 +315,14 @@ func TestResetReplica(t *testing.T) {
 	require.Equal(t, "No", status["Replica_IO_Running"])
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
+	// Now try querying the status using the older, deprecated 'show slave status' statement
+	// and spot check that the data is the same, but the column names have changed
+	status = querySlaveStatus(t)
+	require.Equal(t, "", status["Master_Host"])
+	require.Equal(t, "", status["Master_User"])
+	require.Equal(t, "No", status["Slave_IO_Running"])
+	require.Equal(t, "No", status["Slave_SQL_Running"])
+
 	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
@@ -1221,6 +1229,19 @@ func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][
 // database. If any errors are encountered, this function will fail the current test.
 func queryReplicaStatus(t *testing.T) map[string]any {
 	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(t, err)
+	status := convertMapScanResultToStrings(readNextRow(t, rows))
+	require.NoError(t, rows.Close())
+	return status
+}
+
+// querySlaveStatus returns the results of `SHOW SLAVE STATUS` as a map, for the replica
+// database. If any errors are encountered, this function will fail the current test.
+// The queryReplicaStatus() function should generally be favored over this function for
+// getting the status of a replica. This function exists only to help test that the
+// deprecated 'show slave status' statement works.
+func querySlaveStatus(t *testing.T) map[string]any {
+	rows, err := replicaDatabase.Queryx("SHOW SLAVE STATUS;")
 	require.NoError(t, err)
 	status := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.NoError(t, rows.Close())
