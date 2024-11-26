@@ -148,7 +148,11 @@ func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		if isKeylessSecondary {
 			kd = prolly.AddHashToSchema(kd)
 		}
-		return NewEmptyProllyIndex(ctx, ns, kd, vd)
+		if isVector {
+			return NewEmptyProximityIndex(ctx, ns, kd, vd)
+		} else {
+			return NewEmptyProllyIndex(ctx, ns, kd, vd)
+		}
 
 	default:
 		return nil, errNbfUnknown
@@ -161,6 +165,18 @@ func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.Tupl
 		return nil, err
 	}
 	return IndexFromProllyMap(m), nil
+}
+
+func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+	proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, vector.DistanceL2Squared{}, kd, vd, 10)
+	if err != nil {
+		return nil, err
+	}
+	m, err := proximityMapBuilder.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProximityMap(m), nil
 }
 
 type nomsIndex struct {
