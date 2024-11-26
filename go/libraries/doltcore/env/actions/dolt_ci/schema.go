@@ -27,7 +27,7 @@ import (
 
 // WrappedTableName is a struct that wraps a doltdb.TableName
 // and specifies whether the tables should still be created.
-// Deprecated tables will have Deprecated: false
+// Deprecated tables will have Deprecated: true
 type WrappedTableName struct {
 	TableName  doltdb.TableName
 	Deprecated bool
