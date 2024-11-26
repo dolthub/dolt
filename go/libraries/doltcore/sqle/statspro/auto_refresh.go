@@ -174,7 +174,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
 			statDb.SetSchemaHash(branch, table, schHash)
 
-			stats, err := p.GetTableDoltStats(ctx, branch, schemaName, dbName, table)
+			stats, err := p.GetTableDoltStats(ctx, branch, dbName, schemaName, table)
 			if err != nil {
 				return err
 			}
