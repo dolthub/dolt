@@ -31,7 +31,6 @@ const (
 	WorkflowEventTriggerTypeActivityClosed
 	WorkflowEventTriggerTypeActivityReopened
 	WorkflowEventTriggerTypeActivitySynchronized
-	WorkflowEventTriggerTypeWorkflowDispatch
 )
 
 type WorkflowEventTriggerId string
@@ -54,8 +53,6 @@ func toWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
 		return WorkflowEventTriggerTypeActivityReopened, nil
 	case int(WorkflowEventTriggerTypeActivitySynchronized):
 		return WorkflowEventTriggerTypeActivitySynchronized, nil
-	case int(WorkflowEventTriggerTypeWorkflowDispatch):
-		return WorkflowEventTriggerTypeWorkflowDispatch, nil
 	default:
 		return WorkflowEventTriggerTypeUnspecified, ErrUnknownWorkflowEventTriggerType
 	}

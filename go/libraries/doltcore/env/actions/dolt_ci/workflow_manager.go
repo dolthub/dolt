@@ -1645,9 +1645,8 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 	}
 
 	// handle on workflow dispatch
-	var workflowDispatchEventID WorkflowEventId
 	if config.On.WorkflowDispatch != nil {
-		workflowDispatchEventID, err = d.writeWorkflowEventRow(ctx, workflowName, WorkflowEventTypeWorkflowDispatch)
+		_, err = d.writeWorkflowEventRow(ctx, workflowName, WorkflowEventTypeWorkflowDispatch)
 		if err != nil {
 			return err
 		}
@@ -1691,16 +1690,6 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 						return err
 					}
 				}
-			}
-		}
-	}
-
-	// handle workflow dispatch
-	if workflowDispatchEventID != "" {
-		if config.On.WorkflowDispatch != nil {
-			_, err = d.writeWorkflowEventTriggerRow(ctx, workflowDispatchEventID, WorkflowEventTriggerTypeWorkflowDispatch)
-			if err != nil {
-				return err
 			}
 		}
 	}
@@ -1825,8 +1814,7 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 			case WorkflowEventTriggerTypeActivityOpened,
 				WorkflowEventTriggerTypeActivityClosed,
 				WorkflowEventTriggerTypeActivityReopened,
-				WorkflowEventTriggerTypeActivitySynchronized,
-				WorkflowEventTriggerTypeWorkflowDispatch:
+				WorkflowEventTriggerTypeActivitySynchronized:
 				activity, err := WorkflowEventTriggerActivityTypeToString(trigger.EventTriggerType)
 				if err != nil {
 					return nil, err
