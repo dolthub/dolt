@@ -211,6 +211,25 @@ func (b *proximityMapBuilder) Insert(ctx context.Context, key, value []byte) err
 	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
 }
 
+// InsertAtLevel inserts into a proximity map when the level for a key is already known
+// This is called when an existing tree is being modified, and can skip the level calculation.
+// TODO: While testing, this method asserts that the supplied level is correct.
+// Before submitting, remove the level calculation for added performance.
+func (b *proximityMapBuilder) InsertAtLevel(ctx context.Context, key, value []byte, level int) error {
+	keyLevel := tree.DeterministicHashLevel(b.logChunkSize, key)
+	if keyLevel > b.maxLevel {
+		b.maxLevel = keyLevel
+	}
+	if uint8(level) != keyLevel {
+		panic("wrong level")
+	}
+
+	levelMapKeyBuilder := val.NewTupleBuilder(levelMapKeyDesc)
+	levelMapKeyBuilder.PutUint8(0, 255-uint8(level))
+	levelMapKeyBuilder.PutByteString(1, key)
+	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
+}
+
 func (b *proximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][]byte, subtrees []uint64, level int) (ProximityMap, error) {
 	rootMsg := b.vectorIndexSerializer.Serialize(keys, values, subtrees, level)
 	rootNode, _, err := tree.NodeFromBytes(rootMsg)
