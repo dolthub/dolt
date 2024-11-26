@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"strings"
 
@@ -125,16 +124,16 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 }
 
 func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
-	return newEmptyIndex(ctx, vrw, ns, sch, false, false)
+	return newEmptyIndex(ctx, vrw, ns, sch, false)
 }
 
 func NewEmptyIndexFromSchemaIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index) (Index, error) {
 	sch := idx.Schema()
-	return newEmptyIndex(ctx, vrw, ns, sch, idx.IsVector(), schema.IsKeyless(sch))
+	return newEmptyIndex(ctx, vrw, ns, sch, schema.IsKeyless(sch))
 }
 
 // newEmptyIndex returns an index with no rows.
-func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
+func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isKeylessSecondary bool) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
