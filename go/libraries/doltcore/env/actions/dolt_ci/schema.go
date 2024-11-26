@@ -25,18 +25,38 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+// WrappedTableName is a struct that wraps a doltdb.TableName
+// and specifies whether the tables should still be created.
+// Deprecated tables will have Deprecated: true
+type WrappedTableName struct {
+	TableName  doltdb.TableName
+	Deprecated bool
+}
+
+type WrappedTableNameSlice []WrappedTableName
+
+func (w WrappedTableNameSlice) ActiveTableNames() []doltdb.TableName {
+	tableNames := make([]doltdb.TableName, 0)
+	for _, wrapt := range w {
+		if !wrapt.Deprecated {
+			tableNames = append(tableNames, wrapt.TableName)
+		}
+	}
+	return tableNames
+}
+
 // ExpectedDoltCITablesOrdered contains the tables names for the dolt ci workflow tables, in parent to child table order.
 // This is exported for use in DoltHub/DoltLab.
-var ExpectedDoltCITablesOrdered = []doltdb.TableName{
-	{Name: doltdb.WorkflowsTableName},
-	{Name: doltdb.WorkflowEventsTableName},
-	{Name: doltdb.WorkflowEventTriggersTableName},
-	{Name: doltdb.WorkflowEventTriggerBranchesTableName},
-	{Name: doltdb.WorkflowEventTriggerActivitiesTableName},
-	{Name: doltdb.WorkflowJobsTableName},
-	{Name: doltdb.WorkflowStepsTableName},
-	{Name: doltdb.WorkflowSavedQueryStepsTableName},
-	{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName},
+var ExpectedDoltCITablesOrdered = WrappedTableNameSlice{
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggersTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggerBranchesTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowEventTriggerActivitiesTableName}, Deprecated: true},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowJobsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName}},
 }
 
 type queryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
@@ -52,11 +72,12 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	}
 
 	root := ws.WorkingRoot()
+	activeOnly := ExpectedDoltCITablesOrdered.ActiveTableNames()
 
 	exists := 0
 	var hasSome bool
 	var hasAll bool
-	for _, tableName := range ExpectedDoltCITablesOrdered {
+	for _, tableName := range activeOnly {
 		found, err := root.HasTable(ctx, tableName)
 		if err != nil {
 			return false, err
@@ -66,8 +87,8 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 		}
 	}
 
-	hasSome = exists > 0 && exists < len(ExpectedDoltCITablesOrdered)
-	hasAll = exists == len(ExpectedDoltCITablesOrdered)
+	hasSome = exists > 0 && exists < len(activeOnly)
+	hasAll = exists == len(activeOnly)
 	if !hasSome && !hasAll {
 		return false, nil
 	}
@@ -88,13 +109,13 @@ func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
 
 	root := ws.WorkingRoot()
 
-	for _, tableName := range ExpectedDoltCITablesOrdered {
-		found, err := root.HasTable(ctx, tableName)
+	for _, wrapt := range ExpectedDoltCITablesOrdered {
+		found, err := root.HasTable(ctx, wrapt.TableName)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			existing = append(existing, tableName)
+			existing = append(existing, wrapt.TableName)
 		}
 	}
 
@@ -110,12 +131,12 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 	return err
 }
 
-func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
+func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
 		if err != nil {
 			return err
 		}
@@ -123,12 +144,12 @@ func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, commiterName, commit
 	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
 }
 
-func commitCIInit(ctx *sql.Context, queryFunc queryFunc, commiterName, commiterEmail string) error {
+func commitCIInit(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
-	for i := len(ExpectedDoltCITablesOrdered) - 1; i >= 0; i-- {
-		tableName := ExpectedDoltCITablesOrdered[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tableName))
+	for i := len(tableNames) - 1; i >= 0; i-- {
+		tn := tableNames[i]
+		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
 		if err != nil {
 			return err
 		}
@@ -166,7 +187,7 @@ func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc
 		return err
 	}
 
-	return commitCIDestroy(ctx, queryFunc, commiterName, commiterEmail)
+	return commitCIDestroy(ctx, queryFunc, existing, commiterName, commiterEmail)
 }
 
 // CreateDoltCITables creates all dolt_ci tables and creates a new Dolt commit.
@@ -180,7 +201,6 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		createWorkflowEventsTableQuery(),
 		createWorkflowEventTriggersTableQuery(),
 		createWorkflowEventTriggerBranchesTableQuery(),
-		createWorkflowEventTriggerActivitiesTableQuery(),
 		createWorkflowJobsTableQuery(),
 		createWorkflowStepsTableQuery(),
 		createWorkflowSavedQueryStepsTableQuery(),
@@ -197,7 +217,7 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		}
 	}
 
-	return commitCIInit(newCtx, queryFunc, commiterName, commiterEmail)
+	return commitCIInit(newCtx, queryFunc, ExpectedDoltCITablesOrdered.ActiveTableNames(), commiterName, commiterEmail)
 }
 
 func createWorkflowsTableQuery() string {
@@ -214,10 +234,6 @@ func createWorkflowEventTriggersTableQuery() string {
 
 func createWorkflowEventTriggerBranchesTableQuery() string {
 	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName, doltdb.WorkflowEventTriggerBranchesBranchColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
-}
-
-func createWorkflowEventTriggerActivitiesTableQuery() string {
-	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(1024) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowEventTriggerActivitiesTableName, doltdb.WorkflowEventTriggerActivitiesIdPkColName, doltdb.WorkflowEventTriggerActivitiesActivityColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerActivitiesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
 }
 
 func createWorkflowJobsTableQuery() string {

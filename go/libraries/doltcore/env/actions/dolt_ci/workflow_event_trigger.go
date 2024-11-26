@@ -16,17 +16,21 @@ package dolt_ci
 
 import (
 	"errors"
+	"strings"
 )
 
 var ErrUnknownWorkflowEventTriggerType = errors.New("unknown workflow event trigger type")
+var ErrUnknownWorkflowEventTriggerActivityType = errors.New("unknown workflow event trigger activity type")
 
 type WorkflowEventTriggerType int
 
 const (
 	WorkflowEventTriggerTypeUnspecified WorkflowEventTriggerType = iota
 	WorkflowEventTriggerTypeBranches
-	WorkflowEventTriggerTypeActivities
-	WorkflowEventTriggerTypeWorkflowDispatch
+	WorkflowEventTriggerTypeActivityOpened
+	WorkflowEventTriggerTypeActivityClosed
+	WorkflowEventTriggerTypeActivityReopened
+	WorkflowEventTriggerTypeActivitySynchronized
 )
 
 type WorkflowEventTriggerId string
@@ -37,14 +41,51 @@ type WorkflowEventTrigger struct {
 	EventTriggerType  WorkflowEventTriggerType `db:"event_trigger_type"`
 }
 
-func toWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
+// ToWorkflowEventTriggerType is used to change an in to a valid WorkflowEventTriggerType
+func ToWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
 	switch t {
 	case int(WorkflowEventTriggerTypeBranches):
 		return WorkflowEventTriggerTypeBranches, nil
-	case int(WorkflowEventTriggerTypeActivities):
-		return WorkflowEventTriggerTypeActivities, nil
-	case int(WorkflowEventTriggerTypeWorkflowDispatch):
-		return WorkflowEventTriggerTypeWorkflowDispatch, nil
+	case int(WorkflowEventTriggerTypeActivityOpened):
+		return WorkflowEventTriggerTypeActivityOpened, nil
+	case int(WorkflowEventTriggerTypeActivityClosed):
+		return WorkflowEventTriggerTypeActivityClosed, nil
+	case int(WorkflowEventTriggerTypeActivityReopened):
+		return WorkflowEventTriggerTypeActivityReopened, nil
+	case int(WorkflowEventTriggerTypeActivitySynchronized):
+		return WorkflowEventTriggerTypeActivitySynchronized, nil
+	default:
+		return WorkflowEventTriggerTypeUnspecified, ErrUnknownWorkflowEventTriggerType
+	}
+}
+
+// WorkflowEventTriggerActivityTypeToString is used to change a valid WorkflowEventTriggerType to a string
+func WorkflowEventTriggerActivityTypeToString(t WorkflowEventTriggerType) (string, error) {
+	switch t {
+	case WorkflowEventTriggerTypeActivityOpened:
+		return "opened", nil
+	case WorkflowEventTriggerTypeActivityClosed:
+		return "closed", nil
+	case WorkflowEventTriggerTypeActivityReopened:
+		return "reopened", nil
+	case WorkflowEventTriggerTypeActivitySynchronized:
+		return "synchronized", nil
+	default:
+		return "", ErrUnknownWorkflowEventTriggerType
+	}
+}
+
+// ToWorkflowEventTriggerActivityType is used to change a string to a valid WorkflowEventTriggerType
+func ToWorkflowEventTriggerActivityType(str string) (WorkflowEventTriggerType, error) {
+	switch strings.ToLower(str) {
+	case "opened":
+		return WorkflowEventTriggerTypeActivityOpened, nil
+	case "closed":
+		return WorkflowEventTriggerTypeActivityClosed, nil
+	case "reopened":
+		return WorkflowEventTriggerTypeActivityReopened, nil
+	case "synchronized":
+		return WorkflowEventTriggerTypeActivitySynchronized, nil
 	default:
 		return WorkflowEventTriggerTypeUnspecified, ErrUnknownWorkflowEventTriggerType
 	}

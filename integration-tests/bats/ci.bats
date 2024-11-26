@@ -34,7 +34,6 @@ get_commit_hash() {
     dolt sql -q "select * from dolt_ci_workflow_events;"
     dolt sql -q "select * from dolt_ci_workflow_event_triggers;"
     dolt sql -q "select * from dolt_ci_workflow_event_trigger_branches;"
-    dolt sql -q "select * from dolt_ci_workflow_event_trigger_activities;"
     dolt sql -q "select * from dolt_ci_workflow_jobs;"
     dolt sql -q "select * from dolt_ci_workflow_steps;"
     dolt sql -q "select * from dolt_ci_workflow_saved_query_steps;"

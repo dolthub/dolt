@@ -36,7 +36,8 @@ type WorkflowSavedQueryStep struct {
 	SavedQueryExpectedResultsType WorkflowSavedQueryExpectedResultsType `db:"saved_query_expected_results_type"`
 }
 
-func toWorkflowSavedQueryExpectedResultsType(t int) (WorkflowSavedQueryExpectedResultsType, error) {
+// ToWorkflowSavedQueryExpectedResultsType is used to convert an int to a valid WorkflowSavedQueryExpectedResultsType
+func ToWorkflowSavedQueryExpectedResultsType(t int) (WorkflowSavedQueryExpectedResultsType, error) {
 	switch t {
 	case int(WorkflowSavedQueryExpectedResultsTypeRowColumnCount):
 		return WorkflowSavedQueryExpectedResultsTypeRowColumnCount, nil

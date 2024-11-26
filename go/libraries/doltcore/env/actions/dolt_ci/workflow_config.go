@@ -117,6 +117,10 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 
 		activities := make(map[string]bool)
 		for _, activity := range workflow.On.PullRequest.Activities {
+			_, err := ToWorkflowEventTriggerActivityType(activity.Value)
+			if err != nil {
+				return fmt.Errorf("invalid config: unknown activity type: %s", activity.Value)
+			}
 			_, ok := activities[activity.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on pull request activities duplicated: %s", activity.Value)
