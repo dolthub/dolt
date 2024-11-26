@@ -123,10 +123,12 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 }
 
+// NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
 func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
 	return newEmptyIndex(ctx, vrw, ns, sch, false)
 }
 
+// NewEmptyIndexFromSchemaIndex creates a new empty Index described by a schema.Index.
 func NewEmptyIndexFromSchemaIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index) (Index, error) {
 	sch := idx.Schema()
 	return newEmptyIndex(ctx, vrw, ns, sch, schema.IsKeyless(sch))
