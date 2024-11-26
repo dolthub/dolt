@@ -37,7 +37,8 @@ type WorkflowEvent struct {
 	EventType      WorkflowEventType `db:"event_type"`
 }
 
-func toWorkflowEventType(t int) (WorkflowEventType, error) {
+// ToWorkflowEventType is used to convert an int to a valid WorkflowEventType
+func ToWorkflowEventType(t int) (WorkflowEventType, error) {
 	switch t {
 	case int(WorkflowEventTypePush):
 		return WorkflowEventTypePush, nil
@@ -47,5 +48,20 @@ func toWorkflowEventType(t int) (WorkflowEventType, error) {
 		return WorkflowEventTypeWorkflowDispatch, nil
 	default:
 		return WorkflowEventTypeUnspecified, ErrUnknownWorkflowEventType
+	}
+}
+
+// WorkflowEventTypeToString is used to change a valid WorkflowEventType to a string.
+// This is used by DoltHub/DoltLab.
+func WorkflowEventTypeToString(t WorkflowEventType) (string, error) {
+	switch t {
+	case WorkflowEventTypePush:
+		return "push", nil
+	case WorkflowEventTypePullRequest:
+		return "pull request", nil
+	case WorkflowEventTypeWorkflowDispatch:
+		return "workflow dispatch", nil
+	default:
+		return "", ErrUnknownWorkflowEventType
 	}
 }

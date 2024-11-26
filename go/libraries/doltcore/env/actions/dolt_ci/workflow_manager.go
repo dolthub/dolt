@@ -270,7 +270,7 @@ func (d *doltWorkflowManager) newWorkflowEvent(cvs columnValues) (*WorkflowEvent
 			if err != nil {
 				return nil, err
 			}
-			t, err := toWorkflowEventType(i)
+			t, err := ToWorkflowEventType(i)
 			if err != nil {
 				return nil, err
 			}
@@ -483,7 +483,7 @@ func (d *doltWorkflowManager) newWorkflowEventTrigger(cvs columnValues) (*Workfl
 			if err != nil {
 				return nil, err
 			}
-			t, err := toWorkflowEventTriggerType(i)
+			t, err := ToWorkflowEventTriggerType(i)
 			if err != nil {
 				return nil, err
 			}

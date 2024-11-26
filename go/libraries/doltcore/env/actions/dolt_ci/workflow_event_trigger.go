@@ -41,7 +41,8 @@ type WorkflowEventTrigger struct {
 	EventTriggerType  WorkflowEventTriggerType `db:"event_trigger_type"`
 }
 
-func toWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
+// ToWorkflowEventTriggerType is used to change an in to a valid WorkflowEventTriggerType
+func ToWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
 	switch t {
 	case int(WorkflowEventTriggerTypeBranches):
 		return WorkflowEventTriggerTypeBranches, nil
@@ -58,6 +59,7 @@ func toWorkflowEventTriggerType(t int) (WorkflowEventTriggerType, error) {
 	}
 }
 
+// WorkflowEventTriggerActivityTypeToString is used to change a valid WorkflowEventTriggerType to a string
 func WorkflowEventTriggerActivityTypeToString(t WorkflowEventTriggerType) (string, error) {
 	switch t {
 	case WorkflowEventTriggerTypeActivityOpened:
@@ -73,6 +75,7 @@ func WorkflowEventTriggerActivityTypeToString(t WorkflowEventTriggerType) (strin
 	}
 }
 
+// ToWorkflowEventTriggerActivityType is used to change a string to a valid WorkflowEventTriggerType
 func ToWorkflowEventTriggerActivityType(str string) (WorkflowEventTriggerType, error) {
 	switch strings.ToLower(str) {
 	case "opened":
