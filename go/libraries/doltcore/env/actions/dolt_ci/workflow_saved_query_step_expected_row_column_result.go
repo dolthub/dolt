@@ -46,7 +46,8 @@ type WorkflowSavedQueryExpectedRowColumnResult struct {
 	UpdateAt                          time.Time                                         `db:"updated_at"`
 }
 
-func toWorkflowSavedQueryExpectedRowColumnComparisonResultType(t int) (WorkflowSavedQueryExpectedRowColumnComparisonType, error) {
+// ToWorkflowSavedQueryExpectedRowColumnComparisonResultType is used to convert an int to a valid WorkflowSavedQueryExpectedRowColumnCo
+func ToWorkflowSavedQueryExpectedRowColumnComparisonResultType(t int) (WorkflowSavedQueryExpectedRowColumnComparisonType, error) {
 	switch t {
 	case int(WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals):
 		return WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals, nil

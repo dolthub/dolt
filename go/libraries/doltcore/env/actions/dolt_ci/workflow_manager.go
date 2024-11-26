@@ -335,7 +335,7 @@ func (d *doltWorkflowManager) newWorkflowSavedQueryStepExpectedRowColumnResult(c
 			if err != nil {
 				return nil, err
 			}
-			t, err := toWorkflowSavedQueryExpectedRowColumnComparisonResultType(i)
+			t, err := ToWorkflowSavedQueryExpectedRowColumnComparisonResultType(i)
 			if err != nil {
 				return nil, err
 			}
@@ -345,7 +345,7 @@ func (d *doltWorkflowManager) newWorkflowSavedQueryStepExpectedRowColumnResult(c
 			if err != nil {
 				return nil, err
 			}
-			t, err := toWorkflowSavedQueryExpectedRowColumnComparisonResultType(i)
+			t, err := ToWorkflowSavedQueryExpectedRowColumnComparisonResultType(i)
 			if err != nil {
 				return nil, err
 			}
@@ -401,7 +401,7 @@ func (d *doltWorkflowManager) newWorkflowSavedQueryStep(cvs columnValues) (*Work
 				return nil, err
 			}
 
-			t, err := toWorkflowSavedQueryExpectedResultsType(i)
+			t, err := ToWorkflowSavedQueryExpectedResultsType(i)
 			if err != nil {
 				return nil, err
 			}
