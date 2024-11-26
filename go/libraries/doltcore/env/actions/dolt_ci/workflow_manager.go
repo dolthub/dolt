@@ -441,7 +441,7 @@ func (d *doltWorkflowManager) newWorkflowStep(cvs columnValues) (*WorkflowStep, 
 				return nil, err
 			}
 
-			t, err := toWorkflowStepType(i)
+			t, err := ToWorkflowStepType(i)
 			if err != nil {
 				return nil, err
 			}

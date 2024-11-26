@@ -40,7 +40,8 @@ type WorkflowStep struct {
 	UpdatedAt       time.Time        `db:"updated_at"`
 }
 
-func toWorkflowStepType(t int) (WorkflowStepType, error) {
+// ToWorkflowStepType converst an int to a valid WorkflowStepType
+func ToWorkflowStepType(t int) (WorkflowStepType, error) {
 	switch t {
 	case int(WorkflowStepTypeSavedQuery):
 		return WorkflowStepTypeSavedQuery, nil
