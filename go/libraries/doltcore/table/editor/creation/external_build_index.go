@@ -61,8 +61,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	if idx.IsVector() {
 		// Secondary indexes are always covering and have no non-key columns
 		valDesc := val.NewTupleDescriptor()
-		// TODO: Don't hardcode a chunk size.
-		proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
+		proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +129,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 	defer it.Close()
 
-	empty, err := durable.NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, idx)
+	empty, err := durable.NewEmptyIndexFromTableSchema(ctx, vrw, ns, idx, sch)
 	secondary := durable.ProllyMapFromIndex(empty)
 
 	tupIter := &tupleIterWithCb{iter: it, prefixDesc: prefixDesc, uniqCb: uniqCb}
