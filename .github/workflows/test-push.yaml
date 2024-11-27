@@ -20,3 +20,5 @@ jobs:
     steps:
       - name: Run Hello World
         run: echo "hello world"
+      - name: Run Hello World Again
+        run: echo "hello world"
