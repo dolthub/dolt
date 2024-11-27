@@ -1,0 +1,22 @@
+name: Test Push
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test GitHub Actions
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ ubuntu-22.04 ]
+    env:
+      use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    steps:
+      - name: Run Hello World
+        run: echo "hello world"
