@@ -1,0 +1,20 @@
+name: Test PR 2
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test GitHub Actions on PR
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ ubuntu-22.04 ]
+    steps:
+      - name: Run Hello World from BRANCH 2
+        run: echo "hello world"
