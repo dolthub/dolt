@@ -181,6 +181,7 @@ type GCFinalizer interface {
 }
 
 type GCMode int
+
 const (
 	GCMode_Default GCMode = iota
 	GCMode_Full
