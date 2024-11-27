@@ -596,7 +596,7 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 			return "", err
 		}
 
-		createTable := rows[0][1].(string)
+		createTable := rows[0].GetValue(1).(string)
 		sb.WriteString(createTable)
 		sb.WriteString("\n\n")
 	}

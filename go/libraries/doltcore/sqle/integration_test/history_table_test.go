@@ -54,7 +54,7 @@ type historyTableTest struct {
 	name  string
 	setup []testCommand
 	query string
-	rows  []sql.Row
+	rows  []sql.UntypedSqlRow
 }
 
 type testCommand struct {
@@ -91,7 +91,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "select pk, c0 from dolt_history_test",
 			query: "select pk, c0 from dolt_history_test",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(10)},
 				{int32(1), int32(1)},
 				{int32(2), int32(12)},
@@ -107,7 +107,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "select commit_hash from dolt_history_test",
 			query: "select commit_hash from dolt_history_test",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{HEAD},
 				{HEAD},
 				{HEAD},
@@ -123,7 +123,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "filter for a specific commit hash",
 			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test where commit_hash = '%s';", HEAD_1),
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(0), HEAD_1},
 				{int32(1), int32(1), HEAD_1},
 				{int32(2), int32(2), HEAD_1},
@@ -133,7 +133,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "filter out a specific commit hash",
 			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test where commit_hash != '%s';", HEAD_1),
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(10), HEAD},
 				{int32(1), int32(1), HEAD},
 				{int32(2), int32(12), HEAD},
@@ -146,7 +146,7 @@ func historyTableTests() []historyTableTest {
 			name: "compound or filter on commit hash",
 			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash = '%s' or commit_hash = '%s';", HEAD_1, HEAD_2),
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(0), HEAD_1},
 				{int32(1), int32(1), HEAD_1},
 				{int32(2), int32(2), HEAD_1},
@@ -159,7 +159,7 @@ func historyTableTests() []historyTableTest {
 			name: "commit hash in value set",
 			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash in ('%s', '%s');", HEAD_1, HEAD_2),
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(0), HEAD_1},
 				{int32(1), int32(1), HEAD_1},
 				{int32(2), int32(2), HEAD_1},
@@ -172,7 +172,7 @@ func historyTableTests() []historyTableTest {
 			name: "commit hash not in value set",
 			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash not in ('%s','%s');", HEAD_1, HEAD_2),
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(10), HEAD},
 				{int32(1), int32(1), HEAD},
 				{int32(2), int32(12), HEAD},
@@ -182,7 +182,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "commit is not null",
 			query: "select pk, c0, commit_hash from dolt_history_test where commit_hash is not null;",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(0), int32(10), HEAD},
 				{int32(1), int32(1), HEAD},
 				{int32(2), int32(12), HEAD},
@@ -198,7 +198,7 @@ func historyTableTests() []historyTableTest {
 		{
 			name:  "commit is null",
 			query: "select * from dolt_history_test where commit_hash is null;",
-			rows:  []sql.Row{},
+			rows:  []sql.UntypedSqlRow{},
 		},
 	}
 }
@@ -228,11 +228,11 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	rows, err := sqle.ExecuteSelect(dEnv, root, q)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(rows))
-	HEAD = rows[0][0].(string)
-	HEAD_1 = rows[1][0].(string)
-	HEAD_2 = rows[2][0].(string)
-	HEAD_3 = rows[3][0].(string)
-	INIT = rows[4][0].(string)
+	HEAD = rows[0].GetValue(0).(string)
+	HEAD_1 = rows[1].GetValue(0).(string)
+	HEAD_2 = rows[2].GetValue(0).(string)
+	HEAD_3 = rows[3].GetValue(0).(string)
+	INIT = rows[4].GetValue(0).(string)
 
 	return dEnv
 }

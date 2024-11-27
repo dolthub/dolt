@@ -50,7 +50,7 @@ func TestProceduresMigration(t *testing.T) {
 
 		// Assert that the data was migrated correctly
 		rows := readAllRows(ctx, t, tbl)
-		expectedRows := []sql.Row{
+		expectedRows := []sql.UntypedSqlRow{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 		}
@@ -73,7 +73,7 @@ func TestProceduresMigration(t *testing.T) {
 		require.NotNil(t, wrapper.backingTable)
 
 		rows := readAllRows(ctx, t, wrapper.backingTable)
-		expectedRows := []sql.Row{
+		expectedRows := []sql.UntypedSqlRow{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 		}
@@ -102,7 +102,7 @@ func TestProceduresMigration(t *testing.T) {
 		require.NotNil(t, wrapper.backingTable)
 
 		rows := readAllRows(ctx, t, wrapper.backingTable)
-		expectedRows := []sql.Row{
+		expectedRows := []sql.UntypedSqlRow{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 			{"proc3", "create procedure proc3() SELECT 47 as pk from dual;", timestamp, timestamp, "NO_ENGINE_SUBSTITUTION"},
@@ -138,8 +138,8 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 
 	// Insert some test data for procedures
 	inserter := wrapper.backingTable.Inserter(ctx)
-	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
-	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
+	require.NoError(t, inserter.Insert(ctx, sql.UntypedSqlRow{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
+	require.NoError(t, inserter.Insert(ctx, sql.UntypedSqlRow{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Close(ctx))
 
 	return ctx, &db

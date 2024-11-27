@@ -78,9 +78,9 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 	tests := []struct {
 		name          string
 		sqlStatement  string
-		expectedOne   []sql.Row
-		expectedTwo   []sql.Row
-		expectedThree []sql.Row
+		expectedOne   []sql.UntypedSqlRow
+		expectedTwo   []sql.UntypedSqlRow
+		expectedThree []sql.UntypedSqlRow
 	}{
 		{
 			"cascade updates",
@@ -89,9 +89,9 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
 			UPDATE one SET v1 = v1 + v2;
 			UPDATE two SET v2 = v1 - 2;`,
-			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {3, 9, 6}, {4, 9, 5}},
-			[]sql.Row{{2, 5, 3}, {3, 7, 5}, {4, 9, 7}, {5, 9, 7}},
-			[]sql.Row{{3, 5, 3}, {4, 7, 5}, {5, 9, 7}, {6, 9, 7}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {2, 7, 5}, {3, 9, 6}, {4, 9, 5}},
+			[]sql.UntypedSqlRow{{2, 5, 3}, {3, 7, 5}, {4, 9, 7}, {5, 9, 7}},
+			[]sql.UntypedSqlRow{{3, 5, 3}, {4, 7, 5}, {5, 9, 7}, {6, 9, 7}},
 		},
 		{
 			"cascade updates and deletes",
@@ -101,17 +101,17 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 			UPDATE one SET v1 = v1 + v2;
 			DELETE FROM one WHERE pk = 3;
 			UPDATE two SET v2 = v1 - 2;`,
-			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
-			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
-			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
+			[]sql.UntypedSqlRow{{2, 5, 3}, {3, 7, 5}},
+			[]sql.UntypedSqlRow{{3, 5, 3}, {4, 7, 5}},
 		},
 		{
 			"cascade insertions",
 			`INSERT INTO three VALUES (1, NULL, NULL), (2, NULL, 2), (3, 3, NULL);
 			INSERT INTO two VALUES (1, NULL, 1);`,
-			[]sql.Row{},
-			[]sql.Row{{1, nil, 1}},
-			[]sql.Row{{1, nil, nil}, {2, nil, 2}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{{1, nil, 1}},
+			[]sql.UntypedSqlRow{{1, nil, nil}, {2, nil, 2}, {3, 3, nil}},
 		},
 		{
 			"cascade updates and deletes after table and column renames",
@@ -124,18 +124,18 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 			DELETE FROM new WHERE pk = 3;
 			UPDATE two SET v2 = v1 - 2;
 			RENAME TABLE new TO one;`,
-			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
-			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
-			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
+			[]sql.UntypedSqlRow{{2, 5, 3}, {3, 7, 5}},
+			[]sql.UntypedSqlRow{{3, 5, 3}, {4, 7, 5}},
 		},
 		{
 			"cascade inserts and deletes",
 			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			DELETE FROM one;`,
-			[]sql.Row{},
-			[]sql.Row{},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
 		},
 		{
 			"cascade inserts and deletes (ep. 2)",
@@ -144,9 +144,9 @@ func TestTableEditorForeignKeyCascade(t *testing.T) {
 			INSERT INTO three VALUES (1, NULL, 1), (2, NULL, 2);
 			DELETE FROM one;
 			DELETE FROM two WHERE pk = 2`,
-			[]sql.Row{},
-			[]sql.Row{{1, nil, 1}},
-			[]sql.Row{{1, nil, 1}, {2, nil, 2}},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{{1, nil, 1}},
+			[]sql.UntypedSqlRow{{1, nil, 1}, {2, nil, 2}},
 		},
 	}
 
@@ -178,8 +178,8 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 func TestTableEditorForeignKeySetNull(t *testing.T) {
 	tests := []struct {
 		sqlStatement string
-		expectedOne  []sql.Row
-		expectedTwo  []sql.Row
+		expectedOne  []sql.UntypedSqlRow
+		expectedTwo  []sql.UntypedSqlRow
 	}{
 		{
 			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
@@ -188,15 +188,15 @@ func TestTableEditorForeignKeySetNull(t *testing.T) {
 			INSERT INTO one VALUES (4, 4, 4);
 			INSERT INTO two VALUES (4, 4, 4);
 			UPDATE one SET v2 = v1 * v2;`,
-			[]sql.Row{{1, 1, 1}, {2, 4, 8}, {3, 9, 27}, {4, 4, 16}},
-			[]sql.Row{{1, 1, 1}, {2, nil, 2}, {3, nil, 3}, {4, 4, 4}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 4, 8}, {3, 9, 27}, {4, 4, 16}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, nil, 2}, {3, nil, 3}, {4, 4, 4}},
 		},
 		{
 			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (4, 4, 4), (5, 5, 5);
 			DELETE FROM one WHERE pk BETWEEN 3 AND 4;`,
-			[]sql.Row{{1, 1, 1}, {2, 2, 2}, {5, 5, 5}},
-			[]sql.Row{{1, 1, 1}, {2, 2, 2}, {4, nil, 4}, {5, 5, 5}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 2}, {5, 5, 5}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 2}, {4, nil, 4}, {5, 5, 5}},
 		},
 	}
 
@@ -387,52 +387,52 @@ func TestTableEditorSelfReferentialForeignKeyRestrict(t *testing.T) {
 
 	sequentialTests := []struct {
 		statement   string
-		currentTbl  []sql.Row
+		currentTbl  []sql.UntypedSqlRow
 		expectedErr bool
 	}{
 		{
 			"ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1);",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
 			"INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 1 WHERE id = 1;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 4 WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
 			false,
 		},
 		{
 			"DELETE FROM parent WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}},
 			false,
 		},
 		{
 			"DELETE FROM parent WHERE v1 = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"REPLACE INTO parent VALUES (1, 1, 1);",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 3, v2 = 3 WHERE id = 2;",
-			[]sql.Row{{1, 1, 1}, {2, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 3, 3}},
 			false,
 		},
 	}
@@ -458,82 +458,82 @@ func TestTableEditorSelfReferentialForeignKeyCascade(t *testing.T) {
 
 	sequentialTests := []struct {
 		statement   string
-		currentTbl  []sql.Row
+		currentTbl  []sql.UntypedSqlRow
 		expectedErr bool
 	}{
 		{
 			"ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE CASCADE ON DELETE CASCADE;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
 			"INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 1 WHERE id = 1;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 4 WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
 			false,
 		},
 		{
 			"DELETE FROM parent WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);",
-			[]sql.Row{{1, 1, 1}, {2, 2, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 2}},
 			false,
 		},
 		{ // Repeated UPDATE ensures that it still fails even with changed data
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 2 WHERE id = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"REPLACE INTO parent VALUES (1,1,2), (2,2,1);",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v2 = 2 WHERE id = 1;",
-			[]sql.Row{{1, 1, 2}, {2, 2, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 2}, {2, 2, 2}},
 			false,
 		},
 		{
 			"UPDATE parent SET v2 = 1 WHERE id = 2;",
-			[]sql.Row{{1, 1, 2}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 2}, {2, 2, 1}},
 			false,
 		},
 		{ // Repeated UPDATE ensures that it still fails even with changed data
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 2 WHERE id = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"DELETE FROM parent WHERE v1 = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 	}
@@ -559,82 +559,82 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 
 	sequentialTests := []struct {
 		statement   string
-		currentTbl  []sql.Row
+		currentTbl  []sql.UntypedSqlRow
 		expectedErr bool
 	}{
 		{
 			"ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE SET NULL ON DELETE SET NULL;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
 			"INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 1 WHERE id = 1;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 3, nil}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 4 WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}, {3, 4, nil}},
 			false,
 		},
 		{
 			"DELETE FROM parent WHERE id = 3;",
-			[]sql.Row{{1, 1, 1}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 1}},
 			false,
 		},
 		{
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);",
-			[]sql.Row{{1, 1, 1}, {2, 2, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 2}},
 			false,
 		},
 		{ // Repeated UPDATE ensures that it still fails even with changed data
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 2 WHERE id = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"REPLACE INTO parent VALUES (1,1,2), (2,2,1);",
-			[]sql.Row{{1, 1, nil}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, nil}, {2, 2, 1}},
 			false,
 		},
 		{
 			"UPDATE parent SET v2 = 2 WHERE id = 1;",
-			[]sql.Row{{1, 1, 2}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 2}, {2, 2, 1}},
 			false,
 		},
 		{
 			"UPDATE parent SET v2 = 1 WHERE id = 2;",
-			[]sql.Row{{1, 1, 2}, {2, 2, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 2}, {2, 2, 1}},
 			false,
 		},
 		{ // Repeated UPDATE ensures that it still fails even with changed data
 			"UPDATE parent SET v1 = 2;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"UPDATE parent SET v1 = 2 WHERE id = 1;",
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
 			"DELETE FROM parent WHERE v1 = 1;",
-			[]sql.Row{{2, 2, nil}},
+			[]sql.UntypedSqlRow{{2, 2, nil}},
 			false,
 		},
 	}
@@ -651,7 +651,7 @@ func TestTableEditorSelfReferentialForeignKeySetNull(t *testing.T) {
 	}
 }
 
-func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.Row, tableName string) {
+func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.UntypedSqlRow, tableName string) {
 	tbl, ok, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -662,7 +662,7 @@ func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.R
 	rows, err := tbl.GetRowData(context.Background())
 	require.NoError(t, err)
 
-	var sqlRows []sql.Row
+	var sqlRows []sql.UntypedSqlRow
 	if len(expected) > 0 {
 		sqlRows, err = SqlRowsFromDurableIndex(rows, sch)
 		require.NoError(t, err)
@@ -692,9 +692,9 @@ func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.R
 			}
 		}
 
-		expectedIndexRows := make([]sql.Row, len(expected))
+		expectedIndexRows := make([]sql.UntypedSqlRow, len(expected))
 		for rowIndex, expectedRow := range expected {
-			expectedIndex := make(sql.Row, len(index.AllTags()))
+			expectedIndex := make(sql.UntypedSqlRow, len(index.AllTags()))
 			for colIndex, val := range expectedRow {
 				colPlacement := colPlacements[colIndex]
 				if colPlacement != -1 {
@@ -720,7 +720,7 @@ func assertTableEditorRows(t *testing.T, root doltdb.RootValue, expected []sql.R
 	}
 }
 
-func sortInt64Rows(rows []sql.Row) []sql.Row {
+func sortInt64Rows(rows []sql.UntypedSqlRow) []sql.UntypedSqlRow {
 	sort.Slice(rows, func(l, r int) bool {
 		a, b := rows[l], rows[r]
 		for i := range a {
@@ -789,9 +789,9 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 	tests := []struct {
 		name          string
 		sqlStatement  string
-		expectedOne   []sql.Row
-		expectedTwo   []sql.Row
-		expectedThree []sql.Row
+		expectedOne   []sql.UntypedSqlRow
+		expectedTwo   []sql.UntypedSqlRow
+		expectedThree []sql.UntypedSqlRow
 	}{
 		{
 			"cascade updates",
@@ -800,9 +800,9 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
 			UPDATE one SET v1 = v1 + v2;
 			UPDATE two SET v2 = v1 - 2;`,
-			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}, {3, 9, 6}},
-			[]sql.Row{{3, 7, 5}, {2, 5, 3}, {5, 9, 7}, {4, 9, 7}},
-			[]sql.Row{{5, 9, 7}, {6, 9, 7}, {4, 7, 5}, {3, 5, 3}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}, {3, 9, 6}},
+			[]sql.UntypedSqlRow{{3, 7, 5}, {2, 5, 3}, {5, 9, 7}, {4, 9, 7}},
+			[]sql.UntypedSqlRow{{5, 9, 7}, {6, 9, 7}, {4, 7, 5}, {3, 5, 3}},
 		},
 		{
 			"cascade updates and deletes",
@@ -812,17 +812,17 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 			UPDATE one SET v1 = v1 + v2;
 			DELETE FROM one WHERE pk = 3;
 			UPDATE two SET v2 = v1 - 2;`,
-			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
-			[]sql.Row{{3, 7, 5}, {2, 5, 3}},
-			[]sql.Row{{4, 7, 5}, {3, 5, 3}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
+			[]sql.UntypedSqlRow{{3, 7, 5}, {2, 5, 3}},
+			[]sql.UntypedSqlRow{{4, 7, 5}, {3, 5, 3}},
 		},
 		{
 			"cascade insertions",
 			`INSERT INTO three VALUES (1, NULL, NULL), (2, NULL, 2), (3, 3, NULL);
 			INSERT INTO two VALUES (1, NULL, 1);`,
-			[]sql.Row{},
-			[]sql.Row{{1, nil, 1}},
-			[]sql.Row{{3, 3, nil}, {2, nil, 2}, {1, nil, nil}},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{{1, nil, 1}},
+			[]sql.UntypedSqlRow{{3, 3, nil}, {2, nil, 2}, {1, nil, nil}},
 		},
 		{
 			"cascade updates and deletes after table and column renames",
@@ -835,18 +835,18 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 			DELETE FROM new WHERE pk = 3;
 			UPDATE two SET v2 = v1 - 2;
 			RENAME TABLE new TO one;`,
-			[]sql.Row{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
-			[]sql.Row{{3, 7, 5}, {2, 5, 3}},
-			[]sql.Row{{4, 7, 5}, {3, 5, 3}},
+			[]sql.UntypedSqlRow{{1, 5, 4}, {4, 9, 5}, {2, 7, 5}},
+			[]sql.UntypedSqlRow{{3, 7, 5}, {2, 5, 3}},
+			[]sql.UntypedSqlRow{{4, 7, 5}, {3, 5, 3}},
 		},
 		{
 			"cascade inserts and deletes",
 			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			DELETE FROM one;`,
-			[]sql.Row{},
-			[]sql.Row{},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
 		},
 		{
 			"cascade inserts and deletes (ep. 2)",
@@ -855,9 +855,9 @@ func TestTableEditorKeylessFKCascade(t *testing.T) {
 			INSERT INTO three VALUES (1, NULL, 1), (2, NULL, 2);
 			DELETE FROM one;
 			DELETE FROM two WHERE pk = 2`,
-			[]sql.Row{},
-			[]sql.Row{{1, nil, 1}},
-			[]sql.Row{{2, nil, 2}, {1, nil, 1}},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{{1, nil, 1}},
+			[]sql.UntypedSqlRow{{2, nil, 2}, {1, nil, 1}},
 		},
 	}
 

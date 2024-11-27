@@ -134,7 +134,7 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		val := row[allCols.TagToIdx[tag]]
+		val := row.GetValue(allCols.TagToIdx[tag])
 		if val == nil {
 			return false, nil
 		}
@@ -194,7 +194,7 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 	colValMap := make(map[string]interface{}, len(j.sqlSch))
 	for i, col := range j.sqlSch {
-		val := row[i]
+		val := row.GetValue(i)
 		if val == nil {
 			continue
 		}

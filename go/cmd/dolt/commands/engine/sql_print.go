@@ -206,7 +206,7 @@ func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
 		return err
 	}
 
-	if okResult, ok := row[0].(types.OkResult); ok {
+	if okResult, ok := row.GetValue(0).(types.OkResult); ok {
 		rowNoun := "row"
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
@@ -277,7 +277,7 @@ func (v *verticalRowWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return err
 	}
 
-	for i := range r {
+	for i := 0; i < r.Len(); i++ {
 		for numSpaces := 0; numSpaces < v.offsets[i]; numSpaces++ {
 			_, err = v.wr.Write(space)
 			if err != nil {
@@ -287,10 +287,10 @@ func (v *verticalRowWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 
 		var str string
 
-		if r[i] == nil {
+		if r.GetValue(i) == nil {
 			str = "NULL"
 		} else {
-			str, err = sqlutil.SqlColToStr(v.sch[i].Type, r[i])
+			str, err = sqlutil.SqlColToStr(v.sch[i].Type, r.GetValue(i))
 			if err != nil {
 				return err
 			}

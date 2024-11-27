@@ -152,7 +152,7 @@ func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
 	sqlRow := xlsxr.rows[xlsxr.ind]
 
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		taggedVals[tag], err = col.TypeInfo.ConvertValueToNomsValue(ctx, xlsxr.vrw, sqlRow[allCols.TagToIdx[tag]])
+		taggedVals[tag], err = col.TypeInfo.ConvertValueToNomsValue(ctx, xlsxr.vrw, sqlRow.GetValue(allCols.TagToIdx[tag]))
 		return false, err
 	})
 

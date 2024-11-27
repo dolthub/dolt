@@ -427,7 +427,7 @@ func (d *diffSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 }
 
 func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
-	return sql.Row{
+	return sql.UntypedSqlRow{
 		ds.FromTableName.String(), // from_table_name
 		ds.ToTableName.String(),   // to_table_name
 		ds.DiffType,               // diff_type

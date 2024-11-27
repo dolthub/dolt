@@ -58,7 +58,7 @@ func TestEndToEnd(t *testing.T) {
 
 	type test struct {
 		name           string
-		rows           []sql.Row
+		rows           []sql.UntypedSqlRow
 		sch            schema.Schema
 		expectedOutput string
 	}
@@ -66,7 +66,7 @@ func TestEndToEnd(t *testing.T) {
 	tests := []test{
 		{
 			name: "two rows",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{"00000000-0000-0000-0000-000000000000", "some guy", 100, 0, "normie"},
 				{"00000000-0000-0000-0000-000000000000", "guy personson", 0, 1, "officially a person"},
 			},

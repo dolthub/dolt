@@ -165,7 +165,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 				ts = *timestamp
 			}
 
-			rows = append(rows, sql.Row{
+			rows = append(rows, sql.UntypedSqlRow{
 				id,                     // ref
 				ts,                     // ref_timestamp
 				addr.String(),          // commit_hash

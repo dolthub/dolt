@@ -298,15 +298,15 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 	}
 
 	row := rows[0]
-	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
+	ms.isMerging, err = commands.GetTinyIntColAsBool(row.GetValue(0))
 	if err != nil {
 		return ms, fmt.Errorf("error: failed to parse is_merging: %w", err)
 	}
 	if ms.isMerging {
-		ms.source = row[1].(string)
-		ms.sourceCommit = row[2].(string)
-		ms.target = row[3].(string)
-		unmergedTables := row[4].(string)
+		ms.source = row.GetValue(1).(string)
+		ms.sourceCommit = row.GetValue(2).(string)
+		ms.target = row.GetValue(3).(string)
+		unmergedTables := row.GetValue(4).(string)
 		ms.unmergedTables = strings.Split(unmergedTables, ", ")
 	}
 

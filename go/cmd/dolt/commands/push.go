@@ -189,8 +189,8 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 // printPushResult prints the appropriate message for the given push output.
 // This function is called only when error is nil.
 func printPushResult(rows []sql.Row) {
-	if len(rows[0]) > 1 {
-		cli.Println(rows[0][1].(string))
+	if rows[0].Len() > 1 {
+		cli.Println(rows[0].GetValue(1).(string))
 	}
 }
 

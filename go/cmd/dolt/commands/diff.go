@@ -376,8 +376,8 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 
 	tableNames := make(map[string]bool)
 	for _, row := range rows {
-		tableName := row[0].(string)
-		tableType := row[1].(string)
+		tableName := row.GetValue(0).(string)
+		tableType := row.GetValue(1).(string)
 		isTable := tableType == "BASE TABLE"
 		if isTable {
 			tableNames[tableName] = true
@@ -528,7 +528,7 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 	if len(rows) != 1 {
 		return "", errors.New("unexpected number of rows returned from dolt_merge_base")
 	}
-	ancestor := rows[0][0].(string)
+	ancestor := rows[0].GetValue(0).(string)
 	return ancestor, nil
 }
 
@@ -601,7 +601,7 @@ func printDiffSummary(ctx context.Context, diffSummaries []diff.TableDeltaSummar
 		if diffSummary.DiffType == "renamed" {
 			tableName = fmt.Sprintf("%s -> %s", diffSummary.FromTableName.Name, diffSummary.ToTableName.Name)
 		}
-		err := wr.WriteSqlRow(ctx, sql.Row{tableName, diffSummary.DiffType, diffSummary.DataChange, diffSummary.SchemaChange})
+		err := wr.WriteSqlRow(ctx, sql.UntypedSqlRow{tableName, diffSummary.DiffType, diffSummary.DataChange, diffSummary.SchemaChange})
 		if err != nil {
 			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
 		}
@@ -657,10 +657,10 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 
 	var summaries []diff.TableDeltaSummary
 	for _, row := range schemaDiffRows {
-		fromTable := row[0].(string)
-		toTable := row[1].(string)
-		fromCreateStmt := row[2].(string)
-		toCreateStmt := row[3].(string)
+		fromTable := row.GetValue(0).(string)
+		toTable := row.GetValue(1).(string)
+		fromCreateStmt := row.GetValue(2).(string)
+		toCreateStmt := row.GetValue(3).(string)
 		var diffType = ""
 		var tableName = ""
 		switch {
@@ -695,7 +695,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		}
 		alterStmts := []string{}
 		for _, row := range patchRows {
-			alterStmts = append(alterStmts, row[1].(string))
+			alterStmts = append(alterStmts, row.GetValue(1).(string))
 		}
 
 		summary := diff.TableDeltaSummary{
@@ -725,16 +725,16 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 
 	for _, row := range dataDiffRows {
 		summary := diff.TableDeltaSummary{}
-		summary.FromTableName.Name = row[0].(string)
-		summary.ToTableName.Name = row[1].(string)
-		summary.DiffType = row[2].(string)
-		summary.DataChange, err = GetTinyIntColAsBool(row[3])
+		summary.FromTableName.Name = row.GetValue(0).(string)
+		summary.ToTableName.Name = row.GetValue(1).(string)
+		summary.DiffType = row.GetValue(2).(string)
+		summary.DataChange, err = GetTinyIntColAsBool(row.GetValue(3))
 		if err != nil {
-			return nil, fmt.Errorf("error: unable to parse data change value '%s': %w", row[3], err)
+			return nil, fmt.Errorf("error: unable to parse data change value '%s': %w", row.GetValue(3), err)
 		}
-		summary.SchemaChange, err = GetTinyIntColAsBool(row[4])
+		summary.SchemaChange, err = GetTinyIntColAsBool(row.GetValue(4))
 		if err != nil {
-			return nil, fmt.Errorf("error: unable to parse schema change value '%s': %w", row[4], err)
+			return nil, fmt.Errorf("error: unable to parse schema change value '%s': %w", row.GetValue(4), err)
 		}
 
 		switch summary.DiffType {
@@ -883,7 +883,7 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	if len(rows) != 1 {
 		return sch, createStmt, fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
 	}
-	createStmt = rows[0][1].(string)
+	createStmt = rows[0].GetValue(1).(string)
 
 	// append ; at the end, if one isn't there yet
 	if createStmt[len(createStmt)-1] != ';' {
@@ -927,7 +927,7 @@ func getDatabaseSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableNam
 	if len(rows) != 1 {
 		return "", fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
 	}
-	createStmt := rows[0][1].(string)
+	createStmt := rows[0].GetValue(1).(string)
 
 	// append ; at the end, if one isn't there yet
 	if createStmt[len(createStmt)-1] != ';' {
@@ -1022,53 +1022,53 @@ func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fr
 
 	allStats := []diffStatistics{}
 	for _, row := range rows {
-		rowsUnmodified, err := coallesceNilToUint64(row[1])
+		rowsUnmodified, err := coallesceNilToUint64(row.GetValue(1))
 		if err != nil {
 			return nil, err
 		}
-		rowsAdded, err := coallesceNilToUint64(row[2])
+		rowsAdded, err := coallesceNilToUint64(row.GetValue(2))
 		if err != nil {
 			return nil, err
 		}
-		rowsDeleted, err := coallesceNilToUint64(row[3])
+		rowsDeleted, err := coallesceNilToUint64(row.GetValue(3))
 		if err != nil {
 			return nil, err
 		}
-		rowsModified, err := coallesceNilToUint64(row[4])
+		rowsModified, err := coallesceNilToUint64(row.GetValue(4))
 		if err != nil {
 			return nil, err
 		}
-		cellsAdded, err := coallesceNilToUint64(row[5])
+		cellsAdded, err := coallesceNilToUint64(row.GetValue(5))
 		if err != nil {
 			return nil, err
 		}
-		cellsDeleted, err := coallesceNilToUint64(row[6])
+		cellsDeleted, err := coallesceNilToUint64(row.GetValue(6))
 		if err != nil {
 			return nil, err
 		}
-		cellsModified, err := coallesceNilToUint64(row[7])
+		cellsModified, err := coallesceNilToUint64(row.GetValue(7))
 		if err != nil {
 			return nil, err
 		}
-		oldRowCount, err := coallesceNilToUint64(row[8])
+		oldRowCount, err := coallesceNilToUint64(row.GetValue(8))
 		if err != nil {
 			return nil, err
 		}
-		newRowCount, err := coallesceNilToUint64(row[9])
+		newRowCount, err := coallesceNilToUint64(row.GetValue(9))
 		if err != nil {
 			return nil, err
 		}
-		oldCellCount, err := coallesceNilToUint64(row[10])
+		oldCellCount, err := coallesceNilToUint64(row.GetValue(10))
 		if err != nil {
 			return nil, err
 		}
-		newCellCount, err := coallesceNilToUint64(row[11])
+		newCellCount, err := coallesceNilToUint64(row.GetValue(11))
 		if err != nil {
 			return nil, err
 		}
 
 		stats := diffStatistics{
-			TableName:      row[0].(string),
+			TableName:      row.GetValue(0).(string),
 			RowsUnmodified: rowsUnmodified,
 			RowsAdded:      rowsAdded,
 			RowsDeleted:    rowsDeleted,
@@ -1224,30 +1224,30 @@ func diffDoltSchemasTable(
 		}
 
 		var fragmentName string
-		if row[0] != nil {
-			fragmentName = row[0].(string)
+		if row.GetValue(0) != nil {
+			fragmentName = row.GetValue(0).(string)
 		} else {
-			fragmentName = row[1].(string)
+			fragmentName = row.GetValue(1).(string)
 		}
 
 		var fragmentType string
-		if row[2] != nil {
-			fragmentType = row[2].(string)
+		if row.GetValue(2) != nil {
+			fragmentType = row.GetValue(2).(string)
 		} else {
-			fragmentType = row[3].(string)
+			fragmentType = row.GetValue(3).(string)
 		}
 
 		var oldFragment string
 		var newFragment string
-		if row[4] != nil {
-			oldFragment = row[4].(string)
+		if row.GetValue(4) != nil {
+			oldFragment = row.GetValue(4).(string)
 			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
 				oldFragment += ";"
 			}
 		}
-		if row[5] != nil {
-			newFragment = row[5].(string)
+		if row.GetValue(5) != nil {
+			newFragment = row.GetValue(5).(string)
 			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
 				newFragment += ";"
@@ -1674,14 +1674,14 @@ func writeDiffResults(
 			var filteredOldRow, filteredNewRow diff.RowDiff
 			for i, changeType := range newRow.ColDiffs {
 				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
-					if i < len(oldRow.Row) {
-						filteredOldRow.Row = append(filteredOldRow.Row, oldRow.Row[i])
+					if i < oldRow.Row.Len() {
+						filteredOldRow.Row = filteredOldRow.Row.Append(oldRow.Row.Subslice(i, i+1))
 						filteredOldRow.ColDiffs = append(filteredOldRow.ColDiffs, oldRow.ColDiffs[i])
 						filteredOldRow.RowDiff = oldRow.RowDiff
 					}
 
-					if i < len(newRow.Row) {
-						filteredNewRow.Row = append(filteredNewRow.Row, newRow.Row[i])
+					if i < newRow.Row.Len() {
+						filteredNewRow.Row = filteredNewRow.Row.Append(newRow.Row.Subslice(i, i+1))
 						filteredNewRow.ColDiffs = append(filteredNewRow.ColDiffs, newRow.ColDiffs[i])
 						filteredNewRow.RowDiff = newRow.RowDiff
 					}

@@ -239,7 +239,7 @@ func (csvr *CSVReader) ReadSqlRow(crx context.Context) (sql.Row, error) {
 }
 
 func rowValsToSQLRows(rowVals []*string) sql.Row {
-	var sqlRow sql.Row
+	var sqlRow sql.UntypedSqlRow
 	for _, rowVal := range rowVals {
 		if rowVal == nil {
 			sqlRow = append(sqlRow, nil)

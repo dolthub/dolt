@@ -124,9 +124,9 @@ func (w *FixedWidthTableWriter) WriteSqlRow(ctx context.Context, r sql.Row) erro
 
 // WriteColoredSqlRow writes the given SQL row to the buffer. If colors are nil, then uses the default color.
 func (w *FixedWidthTableWriter) WriteColoredSqlRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
-	strRow := make([]string, len(r))
-	for i := range r {
-		str, err := w.stringValue(i, r[i])
+	strRow := make([]string, r.Len())
+	for i, v := range r.Values() {
+		str, err := w.stringValue(i, v)
 		if err != nil {
 			return err
 		}
@@ -263,15 +263,15 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 
 func (w *FixedWidthTableWriter) rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
 	tRow := tableRow{
-		columns: make([]string, len(row)),
+		columns: make([]string, row.Len()),
 		colors:  colors,
-		widths:  make([]FixedWidthString, len(row)),
+		widths:  make([]FixedWidthString, row.Len()),
 		height:  1,
 	}
 
 	var err error
-	for i := range row {
-		tRow.columns[i], err = w.stringValue(i, row[i])
+	for i, v := range row.Values() {
+		tRow.columns[i], err = w.stringValue(i, v)
 		if err != nil {
 			return tableRow{}, err
 		}

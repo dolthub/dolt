@@ -40,12 +40,12 @@ type DbRevisionTest struct {
 
 type testAssert struct {
 	query string
-	rows  []sql.Row
+	rows  []sql.UntypedSqlRow
 }
 
 type dynamicAssert struct {
 	query func() string
-	rows  []sql.Row
+	rows  []sql.UntypedSqlRow
 }
 
 func TestDbRevision(t *testing.T) {
@@ -70,14 +70,14 @@ func TestDbRevision(t *testing.T) {
 			asserts: []testAssert{
 				{
 					query: "show databases",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{"dolt"},
 						{"information_schema"},
 					},
 				},
 				{
 					query: "select * from myTable",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 						{int32(9), int32(9)},
 					},
@@ -95,21 +95,21 @@ func TestDbRevision(t *testing.T) {
 			asserts: []testAssert{
 				{
 					query: "select * from dolt.myTable",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 						{int32(19), int32(19)},
 					},
 				},
 				{
 					query: "select * from `dolt/other`.myTable",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 						{int32(19), int32(19)},
 					},
 				},
 				{
 					query: "select * from `dolt/main`.myTable",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 						{int32(9), int32(9)},
 					},
@@ -121,7 +121,7 @@ func TestDbRevision(t *testing.T) {
 					query: func() string {
 						return fmt.Sprintf("select * from `dolt/%s`.myTable", cm3.String())
 					},
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 						{int32(19), int32(19)},
 					},
@@ -131,7 +131,7 @@ func TestDbRevision(t *testing.T) {
 					query: func() string {
 						return fmt.Sprintf("select * from `dolt/%s`.myTable", cm2.String())
 					},
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(1), int32(1)},
 					},
 				},
@@ -191,9 +191,9 @@ func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue
 	rows, err := sqle.ExecuteSelect(dEnv, root, q)
 	require.NoError(t, err)
 	assert.Len(t, rows, 4)
-	cm3 = hash.Parse(rows[0][0].(string))
-	cm2 = hash.Parse(rows[1][0].(string))
-	cm1 = hash.Parse(rows[2][0].(string))
+	cm3 = hash.Parse(rows[0].GetValue(0).(string))
+	cm2 = hash.Parse(rows[1].GetValue(0).(string))
+	cm1 = hash.Parse(rows[2].GetValue(0).(string))
 	return
 }
 

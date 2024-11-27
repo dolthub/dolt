@@ -153,7 +153,7 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 		return "", err
 	}
 
-	doc = row[0].(string)
+	doc = row.GetValue(0).(string)
 
 	_, eof := iter.Next(sctx)
 	if eof != io.EOF && eof != nil {

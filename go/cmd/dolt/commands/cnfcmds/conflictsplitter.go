@@ -109,20 +109,20 @@ type conflictRow struct {
 }
 
 func (cs conflictSplitter) splitConflictRow(row sql.Row) ([]conflictRow, error) {
-	baseRow, ourRow, theirRow := make(sql.Row, len(cs.targetSch)), make(sql.Row, len(cs.targetSch)), make(sql.Row, len(cs.targetSch))
+	baseRow, ourRow, theirRow := make(sql.UntypedSqlRow, len(cs.targetSch)), make(sql.UntypedSqlRow, len(cs.targetSch)), make(sql.UntypedSqlRow, len(cs.targetSch))
 
-	ourDiffType := changeTypeFromString(row[cs.ourDiffTypeIdx].(string))
-	theirDiffType := changeTypeFromString(row[cs.theirDiffTypeIdx].(string))
+	ourDiffType := changeTypeFromString(row.GetValue(cs.ourDiffTypeIdx).(string))
+	theirDiffType := changeTypeFromString(row.GetValue(cs.theirDiffTypeIdx).(string))
 
 	for from, to := range cs.baseToTarget {
-		baseRow[to] = row[from]
+		baseRow.SetValue(to, row.GetValue(from))
 	}
 
 	if ourDiffType == diff.Removed {
 		ourRow = baseRow
 	} else {
 		for from, to := range cs.ourToTarget {
-			ourRow[to] = row[from]
+			ourRow.SetValue(to, row.GetValue(from))
 		}
 	}
 
@@ -130,7 +130,7 @@ func (cs conflictSplitter) splitConflictRow(row sql.Row) ([]conflictRow, error) 
 		theirRow = baseRow
 	} else {
 		for from, to := range cs.theirToTarget {
-			theirRow[to] = row[from]
+			theirRow.SetValue(to, row.GetValue(from))
 		}
 	}
 

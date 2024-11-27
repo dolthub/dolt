@@ -1326,8 +1326,8 @@ func TestMergeableIndexes(t *testing.T) {
 
 			if assert.Equal(t, len(test.pks), len(res)) {
 				for i, pk := range test.pks {
-					if assert.Equal(t, 1, len(res[i])) {
-						assert.Equal(t, pk, res[i][0])
+					if assert.Equal(t, 1, res[i].Len()) {
+						assert.Equal(t, pk, res[i].GetValue(0))
 					}
 				}
 			}
@@ -1532,8 +1532,8 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			require.NoError(t, err)
 			if assert.Equal(t, len(test.pks), len(res)) {
 				for i, pk := range test.pks {
-					if assert.Equal(t, 1, len(res[i])) {
-						assert.Equal(t, pk, res[i][0])
+					if assert.Equal(t, 1, res[i].Len()) {
+						assert.Equal(t, pk, res[i].GetValue(0))
 					}
 				}
 			}

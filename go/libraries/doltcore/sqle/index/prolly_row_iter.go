@@ -173,7 +173,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := make(sql.Row, it.rowLen)
+	row := make(sql.UntypedSqlRow, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
 		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
@@ -231,14 +231,15 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	}
 
 	it.card = val.ReadKeylessCardinality(value)
-	it.curr = make(sql.Row, it.rowLen)
+	it.curr = make(sql.UntypedSqlRow, it.rowLen)
 
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[i]
-		it.curr[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
+		v, err := tree.GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return err
 		}
+		it.curr.SetValue(outputIdx, v)
 	}
 	return nil
 }

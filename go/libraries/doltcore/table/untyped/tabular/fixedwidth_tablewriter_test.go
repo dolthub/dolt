@@ -66,7 +66,7 @@ func TestFixedWidthWriter(t *testing.T) {
 
 	rows := make([]sql.Row, len(ages))
 	for i := range ages {
-		rows[i] = sql.Row{names[i], ages[i], titles[i]}
+		rows[i] = sql.UntypedSqlRow{names[i], ages[i], titles[i]}
 	}
 
 	t.Run("Column names bigger than row data", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestFixedWidthWriter(t *testing.T) {
 			if title != nil {
 				title = strings.Replace(title.(string), " ", "\n", -1)
 			}
-			err := tableWr.WriteSqlRow(context.Background(), sql.Row{name, ages[i], title})
+			err := tableWr.WriteSqlRow(context.Background(), sql.UntypedSqlRow{name, ages[i], title})
 			assert.NoError(t, err)
 		}
 

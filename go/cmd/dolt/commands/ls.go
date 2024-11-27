@@ -114,7 +114,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	var userTables []string
 	var systemTables []string
 	for _, row := range rows {
-		tableName := row[0].(string)
+		tableName := row.GetValue(0).(string)
 		if doltdb.HasDoltPrefix(tableName) || doltdb.HasDoltCIPrefix(tableName) {
 			systemTables = append(systemTables, tableName)
 		} else {
@@ -172,7 +172,7 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 		if err != nil {
 			return err
 		}
-		label = row[0][0].(string)
+		label = row[0].GetValue(0).(string)
 	}
 
 	if len(tableNames) == 0 {
@@ -202,13 +202,13 @@ func printTableVerbose(table string, queryist cli.Queryist, sqlCtx *sql.Context)
 		return err
 	}
 
-	if cnt, ok := row[0][0].(int64); ok {
+	if cnt, ok := row[0].GetValue(0).(int64); ok {
 		cli.Println(fmt.Sprintf("\t%-20s     %d rows", table, cnt))
-	} else if cnt, ok := row[0][0].(string); ok {
+	} else if cnt, ok := row[0].GetValue(0).(string); ok {
 		// remote execution returns result as a string
 		cli.Println(fmt.Sprintf("\t%-20s     %s rows", table, cnt))
 	} else {
-		return fmt.Errorf("unexpected type for count: %T", row[0][0])
+		return fmt.Errorf("unexpected type for count: %T", row[0].GetValue(0))
 	}
 
 	return nil

@@ -216,17 +216,17 @@ func getTagInfos(queryist cli.Queryist, sqlCtx *sql.Context) ([]tagInfo, error) 
 
 	tags := []tagInfo{}
 	for _, row := range rows {
-		timestamp, err := getTimestampColAsUint64(row[4])
+		timestamp, err := getTimestampColAsUint64(row.GetValue(4))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse tag timestamp: %w", err)
 		}
 		tag := tagInfo{
-			Name:      row[0].(string),
-			Hash:      row[1].(string),
-			Tagger:    row[2].(string),
-			Email:     row[3].(string),
+			Name:      row.GetValue(0).(string),
+			Hash:      row.GetValue(1).(string),
+			Tagger:    row.GetValue(2).(string),
+			Email:     row.GetValue(3).(string),
 			Timestamp: timestamp,
-			Message:   row[5].(string),
+			Message:   row.GetValue(5).(string),
 		}
 		tags = append(tags, tag)
 	}

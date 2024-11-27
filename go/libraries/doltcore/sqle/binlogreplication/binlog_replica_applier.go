@@ -802,7 +802,7 @@ func parseRow(ctx *sql.Context, tableMap *mysql.TableMap, schema sql.Schema, col
 		column := schema[i]
 
 		if columnsPresentBitmap.Bit(i) == false {
-			parsedRow = append(parsedRow, nil)
+			parsedRow = parsedRow.Append(sql.NewUntypedRow(nil))
 			continue
 		}
 
@@ -826,7 +826,7 @@ func parseRow(ctx *sql.Context, tableMap *mysql.TableMap, schema sql.Schema, col
 		if err != nil {
 			return nil, err
 		}
-		parsedRow = append(parsedRow, convertedValue)
+		parsedRow = parsedRow.Append(sql.NewUntypedRow(convertedValue))
 	}
 
 	return parsedRow, nil
@@ -921,7 +921,7 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		return nil, err
 	}
 
-	return row[0], nil
+	return row.GetValue(0), nil
 }
 
 func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {

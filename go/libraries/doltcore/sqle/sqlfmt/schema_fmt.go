@@ -29,8 +29,8 @@ import (
 
 // GenerateDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
 func GenerateDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
-	if len(row) != len(colDiffTypes) {
-		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	if row.Len() != len(colDiffTypes) {
+		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", row.Len(), len(colDiffTypes))
 	}
 
 	switch rowDiffType {
@@ -221,7 +221,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableIndexDefinition(index schema.Index) string {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), false, index.Name(),
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.Name(),
 		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 

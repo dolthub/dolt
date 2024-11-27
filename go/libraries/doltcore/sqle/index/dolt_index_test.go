@@ -51,14 +51,14 @@ const (
 type doltIndexTestCase struct {
 	indexName    string
 	keys         []interface{}
-	expectedRows []sql.Row
+	expectedRows []sql.UntypedSqlRow
 }
 
 type doltIndexBetweenTestCase struct {
 	indexName          string
 	greaterThanOrEqual []interface{}
 	lessThanOrEqual    []interface{}
-	expectedRows       []sql.Row
+	expectedRows       []sql.UntypedSqlRow
 }
 
 var typesTests = []struct {
@@ -174,11 +174,11 @@ var typesTests = []struct {
 }
 
 var (
-	typesTableRow1 = sql.Row{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), types.Timespan(-183000000), "a", int16(1980)}
-	typesTableRow2 = sql.Row{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), types.Timespan(-61000000), "b", int16(1990)}
-	typesTableRow3 = sql.Row{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), types.Timespan(0), "c", int16(2000)}
-	typesTableRow4 = sql.Row{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), types.Timespan(61000000), "d", int16(2010)}
-	typesTableRow5 = sql.Row{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), types.Timespan(183000000), "e", int16(2020)}
+	typesTableRow1 = sql.UntypedSqlRow{int32(-3), uint64(1), mustTime("2020-05-14 12:00:00"), mustDecimal("-3.30000"), uint16(2), -3.3, uint64(1), types.Timespan(-183000000), "a", int16(1980)}
+	typesTableRow2 = sql.UntypedSqlRow{int32(-1), uint64(2), mustTime("2020-05-14 12:00:01"), mustDecimal("-1.10000"), uint16(3), -1.1, uint64(3), types.Timespan(-61000000), "b", int16(1990)}
+	typesTableRow3 = sql.UntypedSqlRow{int32(0), uint64(3), mustTime("2020-05-14 12:00:02"), mustDecimal("0.00000"), uint16(4), 0.0, uint64(4), types.Timespan(0), "c", int16(2000)}
+	typesTableRow4 = sql.UntypedSqlRow{int32(1), uint64(4), mustTime("2020-05-14 12:00:03"), mustDecimal("1.10000"), uint16(5), 1.1, uint64(5), types.Timespan(61000000), "d", int16(2010)}
+	typesTableRow5 = sql.UntypedSqlRow{int32(3), uint64(5), mustTime("2020-05-14 12:00:04"), mustDecimal("3.30000"), uint16(6), 3.3, uint64(6), types.Timespan(183000000), "e", int16(2020)}
 )
 
 func TestDoltIndexEqual(t *testing.T) {
@@ -188,12 +188,12 @@ func TestDoltIndexEqual(t *testing.T) {
 		{
 			"onepk:primaryKey",
 			[]interface{}{1},
-			[]sql.Row{{1, 1, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 1}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}},
 		},
 		{
 			"onepk:primaryKey",
@@ -208,17 +208,17 @@ func TestDoltIndexEqual(t *testing.T) {
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
-			[]sql.Row{{1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
@@ -228,27 +228,27 @@ func TestDoltIndexEqual(t *testing.T) {
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 1},
-			[]sql.Row{{2, 1, 4, 4}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 4},
-			[]sql.Row{{2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
-			[]sql.Row{{1, 2, 3, 4}},
+			[]sql.UntypedSqlRow{{1, 2, 3, 4}},
 		},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
-		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {2, 2, 4, 3}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
-		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		//	[]sql.UntypedSqlRow{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		//},
 	}
 
@@ -260,31 +260,31 @@ func TestDoltIndexEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.firstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fourthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow4,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 			},
 		}, doltIndexTestCase{
@@ -310,17 +310,17 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 	tests := []struct {
 		indexName    string
 		keys         []interface{}
-		expectedRows []sql.Row
+		expectedRows []sql.UntypedSqlRow
 	}{
 		{
 			"onepk:primaryKey",
 			[]interface{}{1},
-			[]sql.Row{{2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
-			[]sql.Row{{4, 4, 3}},
+			[]sql.UntypedSqlRow{{4, 4, 3}},
 		},
 		{
 			"onepk:primaryKey",
@@ -330,12 +330,12 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
-			[]sql.Row{{3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{3},
-			[]sql.Row{{4, 4, 3}},
+			[]sql.UntypedSqlRow{{4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
@@ -345,7 +345,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
-			[]sql.Row{{2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 2, 4, 3}},
 		},
 		{
 			"twopk:primaryKey",
@@ -355,12 +355,12 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{2, 3},
-			[]sql.Row{{2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 3},
-			[]sql.Row{{2, 1, 4, 4}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}},
 		},
 		{
 			"twopk:idx_v2v1",
@@ -375,7 +375,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
-		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		//	[]sql.UntypedSqlRow{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
@@ -388,7 +388,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		tests = append(tests, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.belowfirstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 				typesTableRow2,
 				typesTableRow3,
@@ -398,7 +398,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.firstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 				typesTableRow3,
 				typesTableRow4,
@@ -407,7 +407,7 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 				typesTableRow4,
 				typesTableRow5,
@@ -415,14 +415,14 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow4,
 				typesTableRow5,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fourthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 			},
 		}, doltIndexTestCase{
@@ -452,67 +452,67 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 	tests := []struct {
 		indexName    string
 		keys         []interface{}
-		expectedRows []sql.Row
+		expectedRows []sql.UntypedSqlRow
 	}{
 		{
 			"onepk:primaryKey",
 			[]interface{}{1},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{4},
-			[]sql.Row{{4, 4, 3}},
+			[]sql.UntypedSqlRow{{4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{4},
-			[]sql.Row{{4, 4, 3}},
+			[]sql.UntypedSqlRow{{4, 4, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 1},
-			[]sql.Row{{2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 4},
-			[]sql.Row{{2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
-			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+			[]sql.UntypedSqlRow{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
-		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
-		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		//	[]sql.UntypedSqlRow{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		//},
 	}
 
@@ -520,7 +520,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		tests = append(tests, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.belowfirstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 				typesTableRow2,
 				typesTableRow3,
@@ -530,7 +530,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.firstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 				typesTableRow2,
 				typesTableRow3,
@@ -540,7 +540,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 				typesTableRow3,
 				typesTableRow4,
@@ -549,7 +549,7 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 				typesTableRow4,
 				typesTableRow5,
@@ -557,14 +557,14 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fourthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow4,
 				typesTableRow5,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 			},
 		}, doltIndexTestCase{
@@ -590,7 +590,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 	tests := []struct {
 		indexName    string
 		keys         []interface{}
-		expectedRows []sql.Row
+		expectedRows []sql.UntypedSqlRow
 	}{
 		{
 			"onepk:primaryKey",
@@ -600,12 +600,12 @@ func TestDoltIndexLessThan(t *testing.T) {
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
-			[]sql.Row{{2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{4},
-			[]sql.Row{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:idx_v1",
@@ -615,12 +615,12 @@ func TestDoltIndexLessThan(t *testing.T) {
 		{
 			"onepk:idx_v1",
 			[]interface{}{3},
-			[]sql.Row{{2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{4},
-			[]sql.Row{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"twopk:primaryKey",
@@ -635,12 +635,12 @@ func TestDoltIndexLessThan(t *testing.T) {
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 2},
-			[]sql.Row{{1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 3},
-			[]sql.Row{{1, 2, 3, 4}, {1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 2, 3, 4}, {1, 1, 3, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
@@ -655,7 +655,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 4},
-			[]sql.Row{{1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}},
 		},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
@@ -665,7 +665,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
-		//	[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
+		//	[]sql.UntypedSqlRow{{2, 2, 4, 3}, {1, 1, 3, 3}},
 		//},
 	}
 
@@ -681,20 +681,20 @@ func TestDoltIndexLessThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 				typesTableRow1,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fourthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 				typesTableRow2,
 				typesTableRow1,
@@ -702,7 +702,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow4,
 				typesTableRow3,
 				typesTableRow2,
@@ -711,7 +711,7 @@ func TestDoltIndexLessThan(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.abovefifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 				typesTableRow4,
 				typesTableRow3,
@@ -737,77 +737,77 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 	tests := []struct {
 		indexName    string
 		keys         []interface{}
-		expectedRows []sql.Row
+		expectedRows []sql.UntypedSqlRow
 	}{
 		{
 			"onepk:primaryKey",
 			[]interface{}{1},
-			[]sql.Row{{1, 1, 1}},
+			[]sql.UntypedSqlRow{{1, 1, 1}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{4},
-			[]sql.Row{{4, 4, 3}, {3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{4, 4, 3}, {3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
-			[]sql.Row{{2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{4},
-			[]sql.Row{{4, 4, 3}, {3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
+			[]sql.UntypedSqlRow{{4, 4, 3}, {3, 3, 3}, {2, 1, 2}, {1, 1, 1}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
-			[]sql.Row{{1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 1},
-			[]sql.Row{{2, 1, 4, 4}, {1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}, {1, 1, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{2, 2},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 4},
-			[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{2, 2, 4, 3}, {1, 1, 3, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 4},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
-		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {2, 2, 4, 3}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
-		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		//},
 	}
 
@@ -819,20 +819,20 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.firstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 				typesTableRow1,
 			},
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 				typesTableRow2,
 				typesTableRow1,
@@ -840,7 +840,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fourthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow4,
 				typesTableRow3,
 				typesTableRow2,
@@ -849,7 +849,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.fifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 				typesTableRow4,
 				typesTableRow3,
@@ -859,7 +859,7 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 		}, doltIndexTestCase{
 			typesTest.indexName,
 			typesTest.abovefifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 				typesTableRow4,
 				typesTableRow3,
@@ -887,103 +887,103 @@ func TestDoltIndexBetween(t *testing.T) {
 			"onepk:primaryKey",
 			[]interface{}{1},
 			[]interface{}{2},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{3},
 			[]interface{}{3},
-			[]sql.Row{{3, 3, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{4},
 			[]interface{}{6},
-			[]sql.Row{{4, 4, 3}},
+			[]sql.UntypedSqlRow{{4, 4, 3}},
 		},
 		{
 			"onepk:primaryKey",
 			[]interface{}{0},
 			[]interface{}{10},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
 			[]interface{}{2},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{2},
 			[]interface{}{4},
-			[]sql.Row{{3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"onepk:idx_v1",
 			[]interface{}{1},
 			[]interface{}{4},
-			[]sql.Row{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 2}, {3, 3, 3}, {4, 4, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
 			[]interface{}{1, 1},
-			[]sql.Row{{1, 1, 3, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
 			[]interface{}{2, 1},
-			[]sql.Row{{1, 1, 3, 3}, {2, 1, 4, 4}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {2, 1, 4, 4}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
 			[]interface{}{2, 2},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:primaryKey",
 			[]interface{}{1, 1},
 			[]interface{}{2, 5},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 3},
 			[]interface{}{3, 4},
-			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 4},
 			[]interface{}{4, 4},
-			[]sql.Row{{2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{3, 3},
 			[]interface{}{4, 4},
-			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+			[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]interface{}{3},
-		//	[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {2, 2, 4, 3}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{4},
 		//	[]interface{}{4},
-		//	[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		//	[]sql.UntypedSqlRow{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		//},
 		//{
 		//	"twopk:idx_v2v1_PARTIAL_1",
 		//	[]interface{}{3},
 		//	[]interface{}{4},
-		//	[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		//	[]sql.UntypedSqlRow{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		//},
 	}
 
@@ -997,14 +997,14 @@ func TestDoltIndexBetween(t *testing.T) {
 			typesTest.indexName,
 			typesTest.belowfirstValue,
 			typesTest.firstValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 			},
 		}, doltIndexBetweenTestCase{
 			typesTest.indexName,
 			typesTest.belowfirstValue,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 				typesTableRow2,
 			},
@@ -1012,7 +1012,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			typesTest.indexName,
 			typesTest.belowfirstValue,
 			typesTest.thirdValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow1,
 				typesTableRow2,
 				typesTableRow3,
@@ -1021,14 +1021,14 @@ func TestDoltIndexBetween(t *testing.T) {
 			typesTest.indexName,
 			typesTest.secondValue,
 			typesTest.secondValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow2,
 			},
 		}, doltIndexBetweenTestCase{
 			typesTest.indexName,
 			typesTest.thirdValue,
 			typesTest.fifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow3,
 				typesTableRow4,
 				typesTableRow5,
@@ -1037,7 +1037,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			typesTest.indexName,
 			typesTest.fifthValue,
 			typesTest.abovefifthValue,
-			[]sql.Row{
+			[]sql.UntypedSqlRow{
 				typesTableRow5,
 			},
 		}, doltIndexBetweenTestCase{
@@ -1082,7 +1082,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			}
 			require.Equal(t, io.EOF, err)
 
-			requireUnorderedRowsEqual(t, pkSch.Schema, expectedRows, readRows)
+			requireUnorderedRowsEqual(t, pkSch.Schema, expectedRows, sql.RowsToUntyped(readRows))
 		})
 	}
 }
@@ -1100,7 +1100,7 @@ func (t NoCacheTableable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, b
 }
 
 type rowSlice struct {
-	rows    []sql.Row
+	rows    []sql.UntypedSqlRow
 	sortErr error
 }
 
@@ -1279,7 +1279,7 @@ func (r *rowSlice) Swap(i, j int) {
 	r.rows[i], r.rows[j] = r.rows[j], r.rows[i]
 }
 
-func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Row) {
+func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.UntypedSqlRow) {
 	slice1 := &rowSlice{rows: rows1}
 	sort.Stable(slice1)
 	require.NoError(t, slice1.sortErr)
@@ -1291,7 +1291,7 @@ func requireUnorderedRowsEqual(t *testing.T, s sql.Schema, rows1, rows2 []sql.Ro
 	assert.True(t, slice1.equals(slice2, s))
 }
 
-func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
+func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys []interface{}, expectedRows []sql.UntypedSqlRow, idx index.DoltIndex, cmp indexComp) {
 	ctx = sql.NewEmptyContext()
 	exprs := idx.Expressions()
 	builder := sql.NewMySQLIndexBuilder(idx)
@@ -1333,7 +1333,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys [
 	}
 	require.Equal(t, io.EOF, err)
 
-	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), readRows)
+	requireUnorderedRowsEqual(t, pkSch.Schema, convertSqlRowToInt64(expectedRows), sql.RowsToUntyped(readRows))
 }
 
 func doltIndexSetup(t *testing.T) (doltdb.RootValue, map[string]index.DoltIndex) {
@@ -1428,13 +1428,13 @@ func mustDecimal(s string) decimal.Decimal {
 	return d
 }
 
-func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
+func convertSqlRowToInt64(sqlRows []sql.UntypedSqlRow) []sql.UntypedSqlRow {
 	if sqlRows == nil {
 		return nil
 	}
-	newSqlRows := make([]sql.Row, len(sqlRows))
+	newSqlRows := make([]sql.UntypedSqlRow, len(sqlRows))
 	for i, sqlRow := range sqlRows {
-		newSqlRow := make(sql.Row, len(sqlRow))
+		newSqlRow := make(sql.UntypedSqlRow, len(sqlRow))
 		for j := range sqlRow {
 			switch v := sqlRow[j].(type) {
 			case int:

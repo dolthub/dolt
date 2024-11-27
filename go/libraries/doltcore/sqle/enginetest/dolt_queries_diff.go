@@ -36,16 +36,16 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test case-insensitive table name
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_T;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
@@ -68,11 +68,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 0, 1, 2, 3, "modified"},
 				},
 			},
@@ -94,11 +94,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 1, 2, 3, "removed"},
 				},
 			},
@@ -127,11 +127,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 200, nil, nil, "added"},
 					{300, 400, nil, nil, "added"},
 				},
@@ -155,18 +155,18 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2 FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 3, nil, nil},
 					{4, 6, nil, nil},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2 FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 3, 1, 3},
 					{4, 6, 4, 6},
 				},
@@ -195,25 +195,25 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, nil, nil, "added"},
 					{3, 4, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, 2, "modified"},
 					{3, nil, 3, 4, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -241,25 +241,25 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, nil, nil, "added"},
 					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, 2, "modified"},
 					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 					// TODO: It's more correct to also return the following rows.
 					//{1, 3, 1, nil, "modified"},
@@ -332,25 +332,25 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "2", nil, nil, "added"},
 					{3, "4", nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, "2", "modified"},
 					{3, nil, 3, "4", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, "101", nil, nil, "added"},
 				},
 			},
@@ -377,25 +377,25 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil, "added"},
 					{3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, nil, "modified"},
 					{3, nil, 3, nil, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -424,7 +424,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select to_pk, to_col1, to_col2, to_commit, from_pk, from_col1, from_col2, from_commit, diff_type from dolt_diff_t order by diff_type ASC;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, doltCommit, nil, nil, nil, doltCommit, "added"},
 					{1, "1234567890", 13, doltCommit, 1, nil, nil, doltCommit, "modified"},
 				},
@@ -432,7 +432,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Warning", 1292, "Truncated tinyint value: 420"},
 					{"Warning", 1292, "Truncated tinyint value: 420"},
 					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
@@ -467,30 +467,30 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, 4, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, 2, "modified"},
 					{3, nil, 3, 4, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit4 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -528,11 +528,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t where to_commit=@Commit4;",
-				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{7, 8, nil, nil, "added"}},
 			},
 		},
 	},
@@ -548,7 +548,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, char_length(to_commit), from_pk, char_length(from_commit), diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{1, 32, nil, 32, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, 32, nil, 32, "added"}},
 			},
 		},
 	},
@@ -570,17 +570,17 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk = 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk > 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, 5, 6, nil, nil, nil, "added"},
 					{7, 0, 9, 7, 8, 9, "modified"},
 					{7, 8, 9, nil, nil, nil, "added"},
@@ -606,23 +606,23 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 and to_pk2 = 2 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 > 1 and to_pk2 < 10 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, 5, 6, nil, nil, nil, "added"},
 					{7, 8, 0, 7, 8, 9, "modified"},
 					{7, 8, 9, nil, nil, nil, "added"},
@@ -648,11 +648,11 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT from_pk2, to_pk2, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{nil, 1, "added"}},
+				Expected: []sql.UntypedSqlRow{{nil, 1, "added"}},
 			},
 			{
 				Query:    "SELECT from_pk2a, from_pk2b, to_pk2a, to_pk2b, diff_type from dolt_diff_t2;",
-				Expected: []sql.Row{{nil, nil, 2, 2, "added"}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 2, 2, "added"}},
 			},
 		},
 	},
@@ -672,7 +672,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_col1, from_pk, from_col1, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{1, nil, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, nil, nil, nil, "added"}},
 			},
 		},
 	},
@@ -687,7 +687,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select table_name from dolt_diff where commit_hash = @commit1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1"},
 					{"t2"},
 				},
@@ -714,7 +714,7 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{"2", "2", nil, nil, "added"}},
 			},
 		},
 	},
@@ -857,15 +857,15 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, "one", "two", nil, nil, nil, "added"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_diff(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", "dos", 1, "one", "two", "modified"},
 					{2, "two", "three", nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
@@ -873,7 +873,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", 1, "uno", "dos", "modified"},
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
@@ -882,11 +882,11 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// Table t2 had no changes between Commit3 and Commit4, so results should be empty
 				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit3, @Commit4, 'T2');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", "dos", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
@@ -895,7 +895,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// Reverse the to/from commits to see the diff from the other direction
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff(@Commit4, @Commit1, 'T');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 1, "uno", "dos", "removed"},
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
@@ -906,7 +906,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type
 from dolt_diff(@Commit1, @Commit2, 't')
 inner join t on to_pk = t.pk;`,
-				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, "one", "two", nil, nil, nil, "added"}},
 			},
 			{
 				Query: `
@@ -919,7 +919,7 @@ from dolt_diff(@Commit1, @Commit2, 't') inner join dolt_diff(@Commit1, @Commit3,
 SELECT a.to_pk, a.from_c1, a.to_c1, b.from_c1, b.to_c1, a.diff_type, b.diff_type
 from dolt_diff(@Commit1, @Commit2, 't') a inner join dolt_diff(@Commit1, @Commit3, 't') b
 on a.to_pk = b.to_pk;`,
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, "one", nil, "one", "added", "added"},
 				},
 			},
@@ -943,7 +943,7 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff(@Commit1, 'WORKING', 't') order by coalesce(from_pk, to_pk)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
 					{nil, nil, nil, 3, "five", "six", "added"},
@@ -951,7 +951,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED', 'WORKING', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
 					{nil, nil, nil, 3, "five", "six", "added"},
@@ -959,7 +959,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED..WORKING', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
 					{nil, nil, nil, 3, "five", "six", "added"},
@@ -967,7 +967,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "100", 1, "one", "two", "modified"},
 					{nil, nil, nil, 2, "three", "four", "added"},
 					{3, "five", "six", nil, nil, nil, "removed"},
@@ -975,15 +975,15 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'WORKING', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING..WORKING', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('STAGED', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_add('.')",
@@ -991,11 +991,11 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('WORKING', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('HEAD', 'STAGED', 't') order by coalesce(from_pk, to_pk);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
 					{nil, nil, nil, 3, "five", "six", "added"},
@@ -1036,42 +1036,42 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main', 'branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", 2, "two", "three", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main..branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", 2, "two", "three", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1', 'main', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", nil, nil, "added"},
 					{2, "two", "three", 2, "two", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1..main', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", nil, nil, "added"},
 					{2, "two", "three", 2, "two", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~', 'branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~..branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
 				},
@@ -1080,27 +1080,27 @@ on a.to_pk = b.to_pk;`,
 			// Three dot
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main...branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('branch1...main', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, "two", "three", nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main~...branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 					{2, "two", nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('main...branch1~', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, "one", "two", "removed"},
 				},
 			},
@@ -1131,14 +1131,14 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "two", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", 1, "one", "two", "modified"},
 					{2, "two", 2, "two", "three", "modified"},
 				},
@@ -1149,7 +1149,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "foo", 1, "one", "modified"},
 					// This row doesn't show up as changed because adding a column doesn't touch the row data.
 					//{2, "two", nil, 2, "two", "modified"},
@@ -1162,7 +1162,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "foo", nil, nil, nil, "added"},
 					{2, "two", nil, nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
@@ -1199,7 +1199,7 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", -1, nil, nil, nil, "added"},
 					{2, "two", -2, nil, nil, nil, "added"},
 				},
@@ -1210,11 +1210,11 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c3, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, "three", -3, nil, nil, nil, "added"},
 					{1, "one", 1, 1, "one", -1, "modified"},
 				},
@@ -1229,13 +1229,13 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c3, diff_type from dolt_diff(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, "four", -4, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", 1, nil, nil, nil, "added"},
 					{2, "two", -2, nil, nil, nil, "added"},
 					{3, "three", -3, nil, nil, nil, "added"},
@@ -1273,34 +1273,34 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", "asdf", nil, nil, nil, "added"},
 					{2, "two", "2", nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "one", 1, "one", "asdf", "modified"},
 					{2, "two", 2, "two", "2", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type from dolt_diff(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, "three", nil, nil, "added"},
 					{1, "fdsa", 1, "one", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, "four", -4, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "fdsa", nil, nil, nil, nil, "added"},
 					{2, "two", nil, nil, nil, nil, "added"},
 					{3, "three", nil, nil, nil, nil, "added"},
@@ -1318,15 +1318,15 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
-				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, "HEAD", "WORKING", "added"}},
 			},
 			{
 				Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD', 'WORKING', 't1')",
-				Expected: []sql.Row{{1, nil, "HEAD", "WORKING", "added"}},
+				Expected: []sql.UntypedSqlRow{{1, nil, "HEAD", "WORKING", "added"}},
 			},
 			{
 				Query:    "select from_a, from_b, to_a, from_commit, to_commit, diff_type from dolt_diff('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{1, 2, nil, "WORKING", "HEAD", "removed"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, nil, "WORKING", "HEAD", "removed"}},
 			},
 		},
 	},
@@ -1343,11 +1343,11 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, "HEAD~", "HEAD", "removed"}},
 			},
 			{
 				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, "HEAD~", "HEAD", "removed"}},
 			},
 		},
 	},
@@ -1366,16 +1366,16 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.UntypedSqlRow{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.UntypedSqlRow{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 			{
 				// Maybe confusing? We match the old table name as well
 				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+				Expected: []sql.UntypedSqlRow{{3, 4, "HEAD~", "HEAD", "added"}},
 			},
 		},
 	},
@@ -1399,19 +1399,19 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+				Expected: []sql.UntypedSqlRow{{1, 100, 1, 1, "modified"}},
 			},
 			{
 				Query:    "select to_pk2, to_col1, from_pk, from_col1, diff_type from dolt_diff('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{1, 100, 1, 1, "modified"}},
+				Expected: []sql.UntypedSqlRow{{1, 100, 1, 1, "modified"}},
 			},
 			{
 				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~', 'HEAD', 't2');",
-				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 100, 1, 1, 1, "modified"}},
 			},
 			{
 				Query:    "select to_pk2a, to_pk2b, to_col1, from_pk1a, from_pk1b, from_col1, diff_type from dolt_diff('HEAD~..HEAD', 't2');",
-				Expected: []sql.Row{{1, 1, 100, 1, 1, 1, "modified"}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 100, 1, 1, 1, "modified"}},
 			},
 		},
 	},
@@ -1428,7 +1428,7 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT type, name FROM dolt_schemas;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"event", "msg_event"},
 					{"event", "my_commit"},
 				},
@@ -1447,11 +1447,11 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query:    "SELECT from_type, from_name, to_name, diff_type FROM DOLT_DIFF('HEAD', 'WORKING', 'dolt_schemas')",
-				Expected: []sql.Row{{"event", "msg_event", "msg_event", "modified"}},
+				Expected: []sql.UntypedSqlRow{{"event", "msg_event", "msg_event", "modified"}},
 			},
 			{
 				Query: "SELECT type, name FROM dolt_schemas;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"event", "msg_event"},
 					{"event", "my_commit"},
 				},
@@ -1470,7 +1470,7 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from v;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, "HEAD~1", 1, "HEAD", "removed"},
 					{nil, "HEAD~1", 2, "HEAD", "removed"},
 					{nil, "HEAD~1", 3, "HEAD", "removed"},
@@ -1478,7 +1478,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "insert into t values (4), (5), (6);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{gmstypes.NewOkResult(3)},
 				},
 			},
@@ -1488,7 +1488,7 @@ on a.to_pk = b.to_pk;`,
 			},
 			{
 				Query: "select * from v;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, "HEAD~1", 4, "HEAD", "removed"},
 					{nil, "HEAD~1", 5, "HEAD", "removed"},
 					{nil, "HEAD~1", 6, "HEAD", "removed"},
@@ -1615,29 +1615,29 @@ var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is added, no data diff, result is empty
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", 0, 2, 0, 1, 6, 0, 2, 1, 3, 3, 9}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 2, 0, 1, 6, 0, 2, 1, 3, 3, 9}},
 			},
 			{
 				// change from and to commits
 				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", 0, 0, 3, 0, 0, 9, 0, 3, 0, 9, 0}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 3, 0, 0, 9, 0, 3, 0, 9, 0}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"t", 0, 3, 0, 0, 9, 0, 0, 0, 3, 0, 9}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 3, 0, 0, 9, 0, 0, 0, 3, 0, 9}},
 			},
 			{
 				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
@@ -1648,7 +1648,7 @@ var DiffStatTableFunctionScriptTests = []queries.ScriptTest{
 SELECT *
 from dolt_diff_stat(@Commit3, @Commit4, 't') 
 inner join t as of @Commit3 on rows_unmodified = t.pk;`,
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1685,33 +1685,33 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			{
 				// table is added, no data diff, result is empty
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", nil, 1, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{"t", nil, 1, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				// TODO : (correct result is commented out)
 				//      update row for keyless table deletes the row and insert the new row
 				// 		this causes row added = 3 and row deleted = 1
 				Query: "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
-				//Expected:         []sql.Row{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
-				Expected: []sql.Row{{"t", nil, 3, 1, nil, nil, nil, nil, nil, nil, nil, nil}},
+				//Expected:         []sql.UntypedSqlRow{{"t", nil, 2, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{"t", nil, 3, 1, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_stat(@Commit4, @Commit3, 't');",
-				//Expected:         []sql.Row{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
-				Expected: []sql.Row{{"t", nil, 1, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
+				//Expected:         []sql.UntypedSqlRow{{"t", nil, 0, 2, nil, nil, nil, nil, nil, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{"t", nil, 1, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", nil, 0, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{"t", nil, 0, 3, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"t", nil, 3, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{"t", nil, 3, 0, nil, nil, nil, nil, nil, nil, nil, nil}},
 			},
 			{
 				Query:       "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
@@ -1757,27 +1757,27 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit0, @Commit1);",
-				Expected: []sql.Row{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2);",
-				Expected: []sql.Row{{"t2", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
+				Expected: []sql.UntypedSqlRow{{"t2", 0, 1, 0, 0, 3, 0, 0, 0, 1, 0, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3);",
-				Expected: []sql.Row{{"t", 0, 3, 0, 1, 9, 0, 2, 1, 4, 3, 12}, {"t2", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 3, 0, 1, 9, 0, 2, 1, 4, 3, 12}, {"t2", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4);",
-				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit2);",
-				Expected: []sql.Row{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}, {"t2", 0, 0, 1, 1, 0, 3, 1, 2, 1, 6, 3}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 2, 1, 0, 6, 2, 3, 1, 9, 3}, {"t2", 0, 0, 1, 1, 0, 3, 1, 2, 1, 6, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit3, 'WORKING');",
-				Expected: []sql.Row{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 3, 0, 1, 0, 0, 3, 0, 4, 3, 12, 9}, {"t2", 1, 0, 0, 1, 0, 0, 1, 2, 2, 6, 6}},
 			},
 		},
 	},
@@ -1799,31 +1799,31 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, 'WORKING', 't')",
-				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('STAGED', 'WORKING', 't')",
-				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('STAGED..WORKING', 't')",
-				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('WORKING', 'WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('WORKING..WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('STAGED', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_add('.')",
@@ -1831,11 +1831,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('HEAD', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 1, 3, 3, 1, 2, 2, 6, 6}},
 			},
 		},
 	},
@@ -1877,74 +1877,74 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat('main', 'branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('main..branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_stat('main', 'branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
 					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_stat('main..branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", 0, 0, 1, 1, 0, 4, 0, 2, 1, 6, 2},
 					{"newtable", 0, 0, 2, 0, 0, 2, 0, 2, 0, 2, 0},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('branch1', 'main', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('branch1..main', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 0, 1, 4, 0, 1, 1, 2, 2, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('main~2', 'branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('main~2..branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 
 			// Three dot
 			{
 				Query:    "SELECT * from dolt_diff_stat('main...branch1', 't');",
-				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('main...branch1');",
-				Expected: []sql.Row{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 1, 0, 2, 3, 0, 1, 1, 3, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('branch1...main', 't');",
-				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_stat('branch1...main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6},
 					{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('branch1...main^');",
-				Expected: []sql.Row{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 1, 1, 0, 0, 3, 0, 0, 1, 2, 3, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('branch1...main', 'newtable');",
-				Expected: []sql.Row{{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2}},
+				Expected: []sql.UntypedSqlRow{{"newtable", 0, 2, 0, 0, 2, 0, 0, 0, 2, 0, 2}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('main...main', 'newtable');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1977,23 +1977,23 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 0, 0, 2, 0, 2, 0, 2, 2, 6, 4}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 2, 1, 0, 0, 2, 0, 0, 2, 3, 4, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit3, 't');",
-				Expected: []sql.Row{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 1, 0, 2, 2, 2, 0, 2, 3, 6, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", 2, 1, 0, 1, 6, 0, 1, 3, 4, 6, 12}},
+				Expected: []sql.UntypedSqlRow{{"t", 2, 1, 0, 1, 6, 0, 1, 3, 4, 6, 12}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 2, 0, 2, 6, 0, 2, 2, 4, 6, 12}},
 			},
 		},
 	},
@@ -2026,23 +2026,23 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", 0, 2, 0, 0, 6, 0, 0, 0, 2, 0, 6}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 2, 0, 0, 6, 0, 0, 0, 2, 0, 6}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", 1, 1, 0, 1, 3, 0, 1, 2, 3, 6, 9}},
+				Expected: []sql.UntypedSqlRow{{"t", 1, 1, 0, 1, 3, 0, 1, 2, 3, 6, 9}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", 3, 1, 0, 0, 3, 0, 0, 3, 4, 9, 12}},
+				Expected: []sql.UntypedSqlRow{{"t", 3, 1, 0, 0, 3, 0, 0, 3, 4, 9, 12}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", 0, 4, 0, 0, 12, 0, 0, 0, 4, 0, 12}},
+				Expected: []sql.UntypedSqlRow{{"t", 0, 4, 0, 0, 12, 0, 0, 0, 4, 0, 12}},
 			},
 		},
 	},
@@ -2054,11 +2054,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_stat('HEAD', 'WORKING')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_diff_stat('WORKING', 'HEAD')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "insert into t1 values (1,2)",
@@ -2066,11 +2066,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 			},
 			{
 				Query:    "select * from dolt_diff_stat('HEAD', 'WORKING', 't1')",
-				Expected: []sql.Row{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
+				Expected: []sql.UntypedSqlRow{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
 			},
 			{
 				Query:    "select * from dolt_diff_stat('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
+				Expected: []sql.UntypedSqlRow{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 		},
 	},
@@ -2087,11 +2087,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
+				Expected: []sql.UntypedSqlRow{{"t1", 0, 0, 1, 0, 0, 2, 0, 1, 0, 2, 0}},
 			},
 			{
 				Query:    "select * from dolt_diff_stat('HEAD', 'HEAD~', 't1')",
-				Expected: []sql.Row{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
+				Expected: []sql.UntypedSqlRow{{"t1", 0, 1, 0, 0, 2, 0, 0, 0, 1, 0, 2}},
 			},
 		},
 	},
@@ -2110,21 +2110,21 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.UntypedSqlRow{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
 				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.UntypedSqlRow{{"t2", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_stat('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.UntypedSqlRow{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_stat('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
+				Expected: []sql.UntypedSqlRow{{"t1", 1, 1, 0, 0, 2, 0, 0, 1, 2, 2, 4}},
 			},
 		},
 	},
@@ -2146,11 +2146,11 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_stat('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", 1, 0, 0, 0, 2, 0, 0, 1, 1, 1, 3}},
+				Expected: []sql.UntypedSqlRow{{"t", 1, 0, 0, 0, 2, 0, 0, 1, 1, 1, 3}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_stat('HEAD~', 'HEAD');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2189,7 +2189,7 @@ inner join t as of @Commit3 on rows_unmodified = t.pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * from dolt_diff_stat('HEAD~', 'HEAD')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 					{"t2", 1, 3, 0, 0, 3, 0, 0, 1, 4, 1, 4},
 				},
@@ -2305,38 +2305,38 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table does not exist, empty result
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 'doesnotexist');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// table is added, no data changes
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"", "t", "added", false, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t", "added", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				// change from and to commits
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "", "dropped", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "", "dropped", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"", "t", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2373,32 +2373,32 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is added, no data diff, result is empty
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"", "t", "added", false, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t", "added", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				// table is dropped
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "", "dropped", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "", "dropped", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{{"", "t", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2440,29 +2440,29 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit0, @Commit1);",
-				Expected: []sql.Row{{"", "t", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
-				Expected: []sql.Row{{"", "t2", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t2", "added", true, true}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit2, @Commit3);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, false},
 					{"t2", "t2", "modified", true, false},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit3, @Commit4);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, false},
 					{"t2", "t2", "modified", true, false},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit0, @Commit4);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"", "t", "added", true, true},
 					{"", "t2", "added", true, true},
 				},
@@ -2470,14 +2470,14 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit4, @Commit2);",
 
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, false},
 					{"t2", "t2", "modified", true, false},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary(@Commit3, 'WORKING');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, false},
 					{"t2", "t2", "modified", true, false},
 					{"", "keyless", "added", false, true}},
@@ -2502,31 +2502,31 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING', 't')",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('STAGED', 'WORKING', 't')",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('STAGED..WORKING', 't')",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING..WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('STAGED', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_add('.')",
@@ -2534,11 +2534,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD', 'STAGED', 't')",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
@@ -2580,74 +2580,74 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('main', 'branch1', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main..branch1', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('main', 'branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, true},
 					{"newtable", "", "dropped", true, true},
 				},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('main..branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, true},
 					{"newtable", "", "dropped", true, true},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1', 'main', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1..main', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main~2', 'branch1', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main~2..branch1', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 
 			// Three dot
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...branch1', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...branch1');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main', 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query: "SELECT * from dolt_diff_summary('branch1...main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "t", "modified", true, false},
 					{"", "newtable", "added", true, true},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main^');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('branch1...main', 'newtable');",
-				Expected: []sql.Row{{"", "newtable", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "newtable", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('main...main', 'newtable');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2684,27 +2684,27 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", false, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
@@ -2741,23 +2741,23 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", false, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit5, 't');",
-				Expected: []sql.Row{{"t", "t", "modified", true, false}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", true, false}},
 			},
 		},
 	},
@@ -2770,11 +2770,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING')",
-				Expected: []sql.Row{{"", "t1", "added", false, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t1", "added", false, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD')",
-				Expected: []sql.Row{{"t1", "", "dropped", false, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "", "dropped", false, true}},
 			},
 			{
 				Query:            "insert into t1 values (1,2)",
@@ -2782,11 +2782,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'WORKING', 't1')",
-				Expected: []sql.Row{{"", "t1", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t1", "added", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('WORKING', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "", "dropped", true, true}},
 			},
 		},
 	},
@@ -2804,11 +2804,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "", "dropped", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "", "dropped", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD', 'HEAD~', 't1')",
-				Expected: []sql.Row{{"", "t1", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "t1", "added", true, true}},
 			},
 		},
 	},
@@ -2828,29 +2828,29 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 			{
 				// Old table name can be matched as well
 				Query:    "select * from dolt_diff_summary('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{{"t1", "t2", "renamed", true, true}},
+				Expected: []sql.UntypedSqlRow{{"t1", "t2", "renamed", true, true}},
 			},
 		},
 	},
@@ -2873,15 +2873,15 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, @Commit2);",
-				Expected: []sql.Row{{"", "test2", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "test2", "added", true, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{"test2", "test2", "modified", false, true}},
+				Expected: []sql.UntypedSqlRow{{"test2", "test2", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary(@Commit1, 'WORKING');",
-				Expected: []sql.Row{{"", "test2", "added", true, true}},
+				Expected: []sql.UntypedSqlRow{{"", "test2", "added", true, true}},
 			},
 		},
 	},
@@ -2903,11 +2903,11 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~2', 'HEAD');",
-				Expected: []sql.Row{{"t", "t", "modified", false, true}},
+				Expected: []sql.UntypedSqlRow{{"t", "t", "modified", false, true}},
 			},
 			{
 				Query:    "SELECT * from dolt_diff_summary('HEAD~', 'HEAD');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2946,7 +2946,7 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t2", "t2", "modified", true, false},
 				},
 				ExpectedWarning:       dtables.PrimaryKeyChangeWarningCode,
@@ -3073,19 +3073,19 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is added, no data diff, result is empty
 				Query:    "SELECT * from dolt_patch(@Commit1, @Commit2, 't') WHERE diff_type = 'data';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, statement from dolt_patch(@Commit1, @Commit2, 't') WHERE diff_type = 'schema';",
-				Expected: []sql.Row{{1, "t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+				Expected: []sql.UntypedSqlRow{{1, "t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit2, @Commit3, 't');",
-				Expected: []sql.Row{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"}},
+				Expected: []sql.UntypedSqlRow{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"}},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit3, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "data", "UPDATE `t` SET `c1`='uno',`c2`='dos' WHERE `pk`=1;"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (3,'three','four');"},
@@ -3094,7 +3094,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// change from and to commits
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit4, @Commit3, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "data", "UPDATE `t` SET `c1`='one',`c2`='two' WHERE `pk`=1;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=2;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=3;"},
@@ -3103,11 +3103,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// table is dropped
 				Query:    "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit4, @Commit5, 't');",
-				Expected: []sql.Row{{1, "t", "schema", "DROP TABLE `t`;"}},
+				Expected: []sql.UntypedSqlRow{{1, "t", "schema", "DROP TABLE `t`;"}},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit1, @Commit4, 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'uno','dos');"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"},
@@ -3134,7 +3134,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select statement from dolt_patch('HEAD~', 'HEAD', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x012345,NULL);"},
 					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x054321,0x6566675f213400000000000000000000);"},
 					{"UPDATE `t` SET `c1`=0xeeee0000000000000000000000000000 WHERE `pk`=0x42;"},
@@ -3180,21 +3180,21 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit0, @Commit1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit1, @Commit2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t2", "schema", "CREATE TABLE `t2` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "t2", "data", "INSERT INTO `t2` (`pk`,`c1`,`c2`) VALUES (100,'hundred','hundert');"},
 				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit2, @Commit3);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "data", "UPDATE `t` SET `c1`='uno',`c2`='dos' WHERE `pk`=1;"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (3,'three','four');"},
@@ -3204,14 +3204,14 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit3, @Commit4);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "data", "DELETE FROM `t` WHERE `pk`=3;"},
 					{2, "t2", "data", "UPDATE `t2` SET `c2`='zero' WHERE `pk`=100;"},
 				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit4, @Commit2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "data", "UPDATE `t` SET `c1`='one',`c2`='two' WHERE `pk`=1;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=2;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=4;"},
@@ -3221,7 +3221,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement from dolt_patch(@Commit3, 'WORKING');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "keyless", "schema", "CREATE TABLE `keyless` (\n  `id` int\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=3;"},
 					{3, "t2", "data", "UPDATE `t2` SET `c2`='zero' WHERE `pk`=100;"},
@@ -3243,7 +3243,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING', 't')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
@@ -3257,7 +3257,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('STAGED', 'WORKING', 't')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
@@ -3271,7 +3271,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('STAGED..WORKING', 't')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
@@ -3285,7 +3285,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM dolt_patch('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
 					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
 					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
@@ -3299,15 +3299,15 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('WORKING', 'WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('WORKING..WORKING', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('STAGED', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_add('.')",
@@ -3315,11 +3315,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('WORKING', 'STAGED', 't')",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'STAGED', 't')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
@@ -3367,21 +3367,21 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
@@ -3389,7 +3389,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
@@ -3397,7 +3397,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1', 'main', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
@@ -3405,7 +3405,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1..main', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
 					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
@@ -3413,7 +3413,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2', 'branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
@@ -3421,7 +3421,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2..branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
@@ -3430,7 +3430,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			// Three dot
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
@@ -3438,7 +3438,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
@@ -3446,11 +3446,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main', 't');",
-				Expected: []sql.Row{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"}},
+				Expected: []sql.UntypedSqlRow{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"}},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "newtable", "schema", "CREATE TABLE `newtable` (\n  `pk` int NOT NULL,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "newtable", "data", "INSERT INTO `newtable` (`pk`) VALUES (1);"},
 					{3, "newtable", "data", "INSERT INTO `newtable` (`pk`) VALUES (2);"},
@@ -3459,11 +3459,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main^');",
-				Expected: []sql.Row{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"}},
+				Expected: []sql.UntypedSqlRow{{1, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (2,'two','three');"}},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main', 'newtable');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "newtable", "schema", "CREATE TABLE `newtable` (\n  `pk` int NOT NULL,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "newtable", "data", "INSERT INTO `newtable` (`pk`) VALUES (1);"},
 					{3, "newtable", "data", "INSERT INTO `newtable` (`pk`) VALUES (2);"},
@@ -3471,7 +3471,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...main', 'newtable');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -3490,14 +3490,14 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'HEAD', 't2')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
 					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
 			},
 			{
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~..HEAD', 't2')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
 					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
@@ -3505,7 +3505,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// Old table name can be matched as well
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'HEAD', 't1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
 					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
@@ -3513,7 +3513,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				// Old table name can be matched as well
 				Query: "select statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~..HEAD', 't1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "t2", "schema", "RENAME TABLE `t1` TO `t2`;"},
 					{2, "t2", "data", "INSERT INTO `t2` (`a`,`b`) VALUES (3,4);"},
 				},
@@ -3535,7 +3535,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD~', 'WORKING')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "child", "schema", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1` int,\n  PRIMARY KEY (`id`),\n  KEY `fk_named` (`v1`),\n  CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{2, "parent", "schema", "CREATE TABLE `parent` (\n  `id` int NOT NULL,\n  `id_ext` int NOT NULL,\n  `v1` int,\n  `v2` text COMMENT 'tag:1',\n  PRIMARY KEY (`id`,`id_ext`),\n  KEY `v1` (`v1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{3, "parent", "data", "INSERT INTO `parent` (`id`,`id_ext`,`v1`,`v2`) VALUES (0,1,2,NULL);"},
@@ -3543,7 +3543,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT statement_order, to_commit_hash, table_name, diff_type, statement FROM dolt_patch('HEAD', 'STAGED')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "STAGED", "child", "schema", "ALTER TABLE `child` ADD INDEX `fk_named`(`v1`);"},
 					{2, "STAGED", "child", "schema", "ALTER TABLE `child` ADD CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`);"},
 					{3, "STAGED", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
@@ -3553,7 +3553,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Warning", 1235, "Primary key sets differ between revisions for table 'parent', skipping data diff"},
 				},
 			},
@@ -3567,7 +3567,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING')",
-				Expected: []sql.Row{{1, "foo", "schema", "CREATE TABLE `foo` (\n  `pk` int NOT NULL,\n  `c1` int,\n  PRIMARY KEY (`pk`),\n  CONSTRAINT `foo_chk_eq3jn5ra` CHECK ((c1 > 3))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+				Expected: []sql.UntypedSqlRow{{1, "foo", "schema", "CREATE TABLE `foo` (\n  `pk` int NOT NULL,\n  `c1` int,\n  PRIMARY KEY (`pk`),\n  CONSTRAINT `foo_chk_eq3jn5ra` CHECK ((c1 > 3))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
 			},
 		},
 	},
@@ -3589,14 +3589,14 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_patch(@commit1, @commit0);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb4_0900_bin';"},
 					{2, doltCommit, doltCommit, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 				},
 			},
 			{
 				Query: "select * from dolt_patch(@commit1, @commit2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb3_general_ci';"},
 					{2, doltCommit, doltCommit, "t", "data", "INSERT INTO `t` (`pk`) VALUES (2);"},
 				},
@@ -3622,7 +3622,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement FROM dolt_patch('main', 'other', 't') ORDER BY statement_order",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"ALTER TABLE `t` MODIFY COLUMN `a` varchar(100) COMMENT 'foo';"},
 					{"ALTER TABLE `t` DROP `b`;"},
 					{"ALTER TABLE `t` RENAME COLUMN `c` TO `z`;"},
@@ -3703,7 +3703,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT statement FROM dolt_patch('main', 'other') ORDER BY statement_order",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060`;"},
 					{"DROP TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_060_01`;"},
 					{"CREATE TABLE `MOTOR_TARIFA_COEFICIENTE_RIESGO_144_075` (\n" +
@@ -3767,44 +3767,44 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF;",
-				Expected: []sql.Row{{7}},
+				Expected: []sql.UntypedSqlRow{{7}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF WHERE commit_hash = @Commit1;",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "SELECT * FROM DOLT_DIFF WHERE commit_hash = @Commit1 AND committer <> 'root';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT commit_hash, committer FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND committer = 'root' AND commit_hash NOT IN ('WORKING','STAGED');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'WORKING'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "newRenamedEmptyTable"},
 					{"WORKING", "regularTable"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash = 'STAGED'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "addedTable"},
 					{"STAGED", "droppedTable"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 AND commit_hash NOT IN ('STAGED') ORDER BY table_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "newRenamedEmptyTable"},
 					{"WORKING", "regularTable"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash, table_name FROM DOLT_DIFF WHERE commit_hash <> @Commit1 OR committer <> 'root' ORDER BY table_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "addedTable"},
 					{"STAGED", "droppedTable"},
 					{"WORKING", "newRenamedEmptyTable"},
@@ -3813,7 +3813,7 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "addedTable", nil, nil, nil, nil, false, true},
 					{"STAGED", "droppedTable", nil, nil, nil, nil, true, true},
 					{"WORKING", "newRenamedEmptyTable", nil, nil, nil, nil, false, true},
@@ -3850,19 +3850,19 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash = @Commit1",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z", true, true}},
+				Expected: []sql.UntypedSqlRow{{"z", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y", false, true}, {"z", false, true}},
+				Expected: []sql.UntypedSqlRow{{"y", false, true}, {"z", false, true}},
 			},
 		},
 	},
@@ -3896,23 +3896,23 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z", true, true}},
+				Expected: []sql.UntypedSqlRow{{"z", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"x1", true, true}},
+				Expected: []sql.UntypedSqlRow{{"x1", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit4)",
-				Expected: []sql.Row{{"x2", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x2", true, false}},
 			},
 		},
 	},
@@ -3937,19 +3937,19 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"x", true, true}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"y", true, false}},
 			},
 		},
 	},
@@ -3971,19 +3971,19 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y", false, true}},
+				Expected: []sql.UntypedSqlRow{{"y", false, true}},
 			},
 		},
 	},
@@ -4013,19 +4013,19 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z", true, true}},
+				Expected: []sql.UntypedSqlRow{{"z", true, true}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y", false, true}, {"z", false, true}},
+				Expected: []sql.UntypedSqlRow{{"y", false, true}, {"z", false, true}},
 			},
 		},
 	},
@@ -4055,19 +4055,19 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
+				Expected: []sql.UntypedSqlRow{{"x", true, true}, {"y", true, false}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z", true, true}},
+				Expected: []sql.UntypedSqlRow{{"z", true, true}},
 			},
 			{
 				Query: "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3) order by table_name",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"x", true, true},
 					{"y", true, false},
 				},
@@ -4098,7 +4098,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'modifiedTable';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"modifiedTable", "a", "added"},
 					{"modifiedTable", "b", "added"},
 					{"modifiedTable", "b", "modified"},
@@ -4106,7 +4106,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'droppedTable';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"droppedTable", "a", "added"},
 					{"droppedTable", "b", "added"},
 					{"droppedTable", "a", "removed"},
@@ -4115,14 +4115,14 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'renamedTable' OR table_name = 'newRenamedTable';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"renamedTable", "a", "added"},
 					{"renamedTable", "b", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'addedTable';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"addedTable", "a", "added"},
 					{"addedTable", "b", "added"},
 				},
@@ -4147,7 +4147,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'modifiedTable' ORDER BY commit_hash, table_name, column_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "modifiedTable", "a", "added"},
 					{"STAGED", "modifiedTable", "b", "added"},
 					{"WORKING", "modifiedTable", "b", "modified"},
@@ -4155,7 +4155,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'droppedTable' ORDER BY commit_hash, table_name, column_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "droppedTable", "a", "added"},
 					{"STAGED", "droppedTable", "b", "added"},
 					{"WORKING", "droppedTable", "a", "removed"},
@@ -4164,14 +4164,14 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'renamedTable' OR table_name = 'newRenamedTable' ORDER BY commit_hash, table_name, column_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "renamedTable", "a", "added"},
 					{"STAGED", "renamedTable", "b", "added"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash, table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'addedTable' ORDER BY commit_hash, table_name, column_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "addedTable", "a", "added"},
 					{"WORKING", "addedTable", "b", "added"},
 				},
@@ -4195,11 +4195,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
-				Expected: []sql.Row{{"t", "d", "added"}},
+				Expected: []sql.UntypedSqlRow{{"t", "d", "added"}},
 			},
 		},
 	},
@@ -4215,11 +4215,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
-				Expected: []sql.Row{{"t", "d", "added"}},
+				Expected: []sql.UntypedSqlRow{{"t", "d", "added"}},
 			},
 		},
 	},
@@ -4240,11 +4240,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
-				Expected: []sql.Row{{"t", "c", "modified"}},
+				Expected: []sql.UntypedSqlRow{{"t", "c", "modified"}},
 			},
 		},
 	},
@@ -4260,11 +4260,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
-				Expected: []sql.Row{{"t", "c", "modified"}},
+				Expected: []sql.UntypedSqlRow{{"t", "c", "modified"}},
 			},
 		},
 	},
@@ -4285,11 +4285,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = @Commit1;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = @Commit2;",
-				Expected: []sql.Row{{"t", "c", "removed"}},
+				Expected: []sql.UntypedSqlRow{{"t", "c", "removed"}},
 			},
 		},
 	},
@@ -4305,11 +4305,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_column_diff where commit_hash = 'STAGED';",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select table_name, column_name, diff_type from dolt_column_diff where commit_hash = 'WORKING';",
-				Expected: []sql.Row{{"t", "c", "removed"}},
+				Expected: []sql.UntypedSqlRow{{"t", "c", "removed"}},
 			},
 		},
 	},
@@ -4334,24 +4334,24 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "c", "removed"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "added"},
 				},
@@ -4372,18 +4372,18 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "modified"},
 				},
@@ -4411,11 +4411,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 					{"t", "c2", "added"},
@@ -4423,13 +4423,13 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "c1", "removed"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
 				},
@@ -4450,11 +4450,11 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 					{"t", "c2", "added"},
@@ -4462,7 +4462,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "removed"},
 					{"t", "c1", "modified"},
@@ -4491,24 +4491,24 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "c", "removed"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "added"},
 				},
@@ -4529,18 +4529,18 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "removed"},
 					{"t", "c", "added"},
@@ -4569,24 +4569,24 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "c", "removed"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "added"},
 				},
@@ -4607,18 +4607,18 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c", "removed"},
 					{"t", "c", "added"},
@@ -4652,31 +4652,31 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{7}},
+				Expected: []sql.UntypedSqlRow{{7}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c2", "modified"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "c2", "removed"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit4;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c2", "added"},
 				},
@@ -4700,18 +4700,18 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "removed"},
 					{"t", "c2", "added"},
@@ -4744,32 +4744,32 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{8}},
+				Expected: []sql.UntypedSqlRow{{8}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash=@Commit4;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
 				},
@@ -4790,18 +4790,18 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_COLUMN_DIFF;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "added"},
 					{"t", "c1", "added"},
 				},
 			},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE commit_hash='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "pk", "modified"},
 					{"t", "c1", "modified"},
 				},
@@ -4823,7 +4823,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select column_name, diff_type from dolt_column_diff;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"j", "modified"},
 					{"pk", "added"},
 					{"j", "added"},
@@ -4887,7 +4887,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
@@ -4895,32 +4895,32 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				// Test case-insensitive table name
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_T WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 0, 1, 2, 3, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_T WHERE TO_COMMIT=@Commit4 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, -2, 1, 2, 3, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit4 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 1, 2, -2, "removed"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
@@ -4944,14 +4944,14 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2 FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 3, nil, nil},
 					{4, 6, nil, nil},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2 FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 3, 1, 3},
 					{4, 6, 4, 6},
 				},
@@ -4981,21 +4981,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, nil, nil, "added"},
 					{3, 4, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 2, "modified"},
 					{3, 3, 4, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -5024,21 +5024,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, nil, nil, "added"},
 					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, 2, "modified"},
 					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					// TODO: Missing rows here see TestDiffSystemTable tests
 					{100, 101, nil, nil, "added"},
 				},
@@ -5058,26 +5058,26 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT=@Commit0;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT=@Commit0;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT='STAGED';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT='WORKING';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 4, 5, 6, "removed"},
 				},
 			},
@@ -5098,17 +5098,17 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "use mydb/v1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// With no working set, this query should still compute the diff between two commits
 				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit=@commit2;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// With no working set, STAGED should reference the current root of the checked out tag
 				Query:    "SELECT COUNT(*) AS table_diff_num FROM dolt_commit_diff_t WHERE from_commit=@commit1 AND to_commit='STAGED';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -5137,21 +5137,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "2", nil, nil, "added"},
 					{3, "4", nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, "2", "modified"},
 					{3, nil, 3, "4", "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, "101", nil, nil, "added"},
 				},
 			},
@@ -5179,21 +5179,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil, "added"},
 					{3, nil, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, nil, "modified"},
 					{3, nil, 3, nil, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -5238,7 +5238,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
-				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{7, 8, nil, nil, "added"}},
 			},
 		},
 	},
@@ -5271,22 +5271,22 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				ExpectedWarning:                 1105,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
-				Expected:                        []sql.Row{},
+				Expected:                        []sql.UntypedSqlRow{},
 			},
 			{
 				Query:                           "select * from dolt_commit_diff_t where from_commit=@Commit3 and to_commit=@Commit3;",
 				ExpectedWarning:                 1105,
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
-				Expected:                        []sql.Row{},
+				Expected:                        []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
-				Expected: []sql.Row{{1, 2, nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, nil, nil, "added"}},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit1 and to_commit=@Commit4;",
-				Expected: []sql.Row{{nil, nil, 3, 4, "removed"}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 3, 4, "removed"}},
 			},
 		},
 	},
@@ -5374,62 +5374,62 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			// Empty diffs due to same refs
 			{
 				Query:    "select * from dolt_schema_diff('HEAD', 'HEAD');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff(@Commit1, @Commit1);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('branch1', 'branch1');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('tag1', 'tag1');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// Empty diffs due to fake table
 			{
 				Query:    "select * from dolt_schema_diff(@Commit1, @Commit2, 'fake-table');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('tag1', 'tag2', 'fake-table');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('branch1', 'branch2', 'fake-table');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// Empty diffs due to no changes between different commits
 			{
 				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3);",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3, 'inventory');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('tag2', 'tag3');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('tag2', 'tag3', 'inventory');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('branch2', 'branch3');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_schema_diff('branch2', 'branch3', 'inventory');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// Compare diffs where between from and to where: tables are added, tables are dropped, tables are renamed
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
@@ -5437,7 +5437,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
@@ -5446,56 +5446,56 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			// Compare diffs with explicit table names
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'employees');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'employees');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'trips');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'trips');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'vacations');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'vacations');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 			},
 			// Compare two different commits, get expected results
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5506,7 +5506,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit2, 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5517,7 +5517,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch1', 'branch2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5528,7 +5528,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch1..branch2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5539,7 +5539,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch1...branch2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5550,7 +5550,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch1', 'branch2', 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5561,7 +5561,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag1', 'tag2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5572,7 +5572,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag1..tag2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5583,7 +5583,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag1...tag2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5594,7 +5594,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag1', 'tag2', 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5606,7 +5606,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			// Swap the order of the refs, get opposite diff
 			{
 				Query: "select * from dolt_schema_diff(@Commit2, @Commit1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5617,7 +5617,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff(@Commit2, @Commit1, 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5628,7 +5628,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch2', 'branch1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5639,7 +5639,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('branch2', 'branch1', 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5650,7 +5650,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag2', 'tag1');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5661,7 +5661,7 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_schema_diff('tag2', 'tag1', 'inventory');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"inventory",
 						"inventory",
@@ -5705,23 +5705,23 @@ var SchemaDiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "execute sch_diff using @Commit0, @Commit1, @t1_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "execute diff_stat using @Commit1, @Commit2, @t1_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "execute diff_sum using @Commit1, @Commit2, @t1_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			//{
 			//	Query:    "execute table_diff using @Commit2, @Commit2, @t1_name",
-			//	Expected: []sql.Row{},
+			//	Expected: []sql.UntypedSqlRow{},
 			//},
 			{
 				Query:    "execute patch using @Commit0, @Commit1, @t1_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -5744,53 +5744,53 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 
 			{
 				Query: "alter database mydb collate utf8mb4_spanish_ci",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{gmstypes.NewOkResult(1)},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, "modified"},
 				},
 			},
 			{
 				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "__DATABASE__mydb", false, true},
 				},
 			},
 
 			{
 				Query: "call dolt_add('.')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", true, "modified"},
 				},
 			},
 			{
 				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
 				},
@@ -5802,17 +5802,17 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"db collation changed"},
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
@@ -5826,53 +5826,53 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 
 			{
 				Query: "alter database mydb collate utf8mb4_spanish_ci",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{gmstypes.NewOkResult(1)},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, "modified"},
 				},
 			},
 			{
 				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "__DATABASE__mydb", false, true},
 				},
 			},
 
 			{
 				Query: "call dolt_add('__DATABASE__mydb')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", true, "modified"},
 				},
 			},
 			{
 				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"STAGED", "__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
 				},
@@ -5884,17 +5884,17 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"db collation changed"},
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
@@ -5908,34 +5908,34 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 
 			{
 				Query: "alter database mydb collate utf8mb4_spanish_ci",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{gmstypes.NewOkResult(1)},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, "modified"},
 				},
 			},
 			{
 				Query: "select commit_hash, table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"WORKING", "__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
 				},
@@ -5947,17 +5947,17 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select table_name, data_change, schema_change from dolt_diff",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, true},
 				},
 			},
 			{
 				Query: "select message from dolt_log",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"db collation changed"},
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
@@ -5973,19 +5973,19 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"__DATABASE__mydb", false, "modified"},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -5999,7 +5999,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create database mydb;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci */"},
 				},
 			},
@@ -6009,7 +6009,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create database mydb;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */"},
 				},
 			},
@@ -6026,7 +6026,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create database mydb;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */"},
 				},
 			},
@@ -6036,7 +6036,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create database mydb;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "CREATE DATABASE `mydb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_spanish_ci */"},
 				},
 			},
@@ -6069,7 +6069,7 @@ type systabScript struct {
 
 type systabQuery struct {
 	query string
-	exp   []sql.Row
+	exp   []sql.UntypedSqlRow
 	skip  bool
 }
 
@@ -6105,43 +6105,43 @@ var SystemTableIndexTests = []systabScript{
 		queries: []systabQuery{
 			{
 				query: "select from_x, to_x from dolt_diff_xy where to_commit = @commit;",
-				exp:   []sql.Row{{20, 20}, {21, 21}, {22, 22}, {23, 23}, {24, 24}, {nil, 40}, {nil, 41}, {nil, 42}, {nil, 43}, {nil, 44}},
+				exp:   []sql.UntypedSqlRow{{20, 20}, {21, 21}, {22, 22}, {23, 23}, {24, 24}, {nil, 40}, {nil, 41}, {nil, 42}, {nil, 43}, {nil, 44}},
 			},
 			{
 				query: "select from_x, to_x from dolt_diff_xy where from_commit = @commit;",
-				exp:   []sql.Row{{40, 40}, {41, 41}, {42, 42}, {43, 43}, {44, 44}, {nil, 60}, {nil, 61}, {nil, 62}, {nil, 63}, {nil, 64}},
+				exp:   []sql.UntypedSqlRow{{40, 40}, {41, 41}, {42, 42}, {43, 43}, {44, 44}, {nil, 60}, {nil, 61}, {nil, 62}, {nil, 63}, {nil, 64}},
 			},
 			{
 				query: "select count(*) from dolt_diff where commit_hash = @commit;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_history_xy where commit_hash = @commit;",
-				exp:   []sql.Row{{15}},
+				exp:   []sql.UntypedSqlRow{{15}},
 			},
 			{
 				query: "select count(*) from dolt_log where commit_hash = @commit;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_commits where commit_hash = @commit;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_commit_ancestors where commit_hash = @commit;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = to_commit",
-				exp:   []sql.Row{{45}},
+				exp:   []sql.UntypedSqlRow{{45}},
 			},
 			{
 				query: "select count(*) from dolt_diff_xy join dolt_log on commit_hash = from_commit",
-				exp:   []sql.Row{{45}},
+				exp:   []sql.UntypedSqlRow{{45}},
 			},
 			{
 				query: "select count(*) from dolt_blame_xy",
-				exp:   []sql.Row{{25}},
+				exp:   []sql.UntypedSqlRow{{25}},
 			},
 			{
 				query: `SELECT count(*)
@@ -6149,7 +6149,7 @@ var SystemTableIndexTests = []systabScript{
            JOIN dolt_commit_ancestors as an
            ON cm.commit_hash = an.parent_hash
            ORDER BY cm.date, cm.message asc`,
-				exp: []sql.Row{{5}},
+				exp: []sql.UntypedSqlRow{{5}},
 			},
 		},
 	},
@@ -6167,7 +6167,7 @@ from dolt_tags t
 left join dolt_commit_diff_xy cd
     on cd.to_commit = t.tag_name and
        cd.from_commit = concat(t.tag_name, '^')`,
-				exp: []sql.Row{{"t1"}},
+				exp: []sql.UntypedSqlRow{{"t1"}},
 			},
 		},
 	},
@@ -6187,88 +6187,88 @@ left join dolt_commit_diff_xy cd
 		queries: []systabQuery{
 			{
 				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'WORKING';",
-				exp:   []sql.Row{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
+				exp:   []sql.UntypedSqlRow{{80, 80}, {81, 81}, {82, 82}, {83, 83}, {84, 84}},
 			},
 			{
 				query: "select * from dolt_diff_xy where from_commit = @feat_head1;",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select * from dolt_diff_xy where from_commit = 'WORKING';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select count(*) from dolt_diff where commit_hash = 'WORKING';",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_history_xy where commit_hash = 'WORKING';",
-				exp:   []sql.Row{{0}},
+				exp:   []sql.UntypedSqlRow{{0}},
 			},
 			{
 				query: "select count(*) from dolt_commit_ancestors where commit_hash = 'WORKING';",
-				exp:   []sql.Row{{0}},
+				exp:   []sql.UntypedSqlRow{{0}},
 			},
 			{
 				query: "select sum(to_x) from dolt_diff_xy where to_commit in (@commit, 'WORKING');",
-				exp:   []sql.Row{{530.0}},
+				exp:   []sql.UntypedSqlRow{{530.0}},
 			},
 			{
 				// TODO from_commit optimization
 				query: "select sum(to_x) from dolt_diff_xy where from_commit in (@commit, 'WORKING');",
-				exp:   []sql.Row{{320.0}},
+				exp:   []sql.UntypedSqlRow{{320.0}},
 			},
 			{
 				query: "select count(*) from dolt_diff where commit_hash in (@commit, 'WORKING');",
-				exp:   []sql.Row{{2}},
+				exp:   []sql.UntypedSqlRow{{2}},
 			},
 			{
 				query: "select sum(x) from dolt_history_xy where commit_hash in (@commit, 'WORKING');",
-				exp:   []sql.Row{{120.0}},
+				exp:   []sql.UntypedSqlRow{{120.0}},
 			},
 			{
 				// init commit has nil ancestor
 				query: "select count(*) from dolt_commit_ancestors where commit_hash in (@commit, @root_commit);",
-				exp:   []sql.Row{{2}},
+				exp:   []sql.UntypedSqlRow{{2}},
 			},
 			{
 				query: "select count(*) from dolt_log where commit_hash in (@commit, @root_commit);",
-				exp:   []sql.Row{{2}},
+				exp:   []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// log table cannot access commits is feature branch
 				query: "select count(*) from dolt_log where commit_hash = @feat_head;",
-				exp:   []sql.Row{{0}},
+				exp:   []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// commit table can access all commits
 				query: "select count(*) from dolt_commits where commit_hash = @feat_head;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 			{
 				query: "select count(*) from dolt_commits where commit_hash in (@commit, @root_commit);",
-				exp:   []sql.Row{{2}},
+				exp:   []sql.UntypedSqlRow{{2}},
 			},
 			// unknown
 			{
 				query: "select from_x, to_x from dolt_diff_xy where to_commit = 'unknown';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select * from dolt_diff_xy where from_commit = 'unknown';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select * from dolt_diff where commit_hash = 'unknown';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select * from dolt_history_xy where commit_hash = 'unknown';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 			{
 				query: "select * from dolt_commit_ancestors where commit_hash = 'unknown';",
-				exp:   []sql.Row{},
+				exp:   []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -6280,7 +6280,7 @@ left join dolt_commit_diff_xy cd
 		queries: []systabQuery{
 			{
 				query: "select count(*) from dolt_log as dc join dolt_commit_ancestors as dca on dc.commit_hash = dca.commit_hash;",
-				exp:   []sql.Row{{1}},
+				exp:   []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -6309,7 +6309,7 @@ left join dolt_commit_diff_xy cd
 		queries: []systabQuery{
 			{
 				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
-				exp:   []sql.Row{{4}},
+				exp:   []sql.UntypedSqlRow{{4}},
 			},
 		},
 	},
@@ -6355,7 +6355,7 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 2, 2, 10, "modified"},
 					{3, 3, nil, nil, "deleted"},
 					{nil, nil, 4, 4, "added"},
@@ -6363,7 +6363,7 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_query_diff('select * from t as of head', 'select * from t as of other');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 10, 2, 2, "modified"},
 					{nil, nil, 3, 3, "added"},
 					{4, 4, nil, nil, "deleted"},
@@ -6371,20 +6371,20 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_query_diff('select * from t as of other where i = 2', 'select * from t as of head where i = 2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 2, 2, 10, "modified"},
 				},
 			},
 			{
 				Query: "select * from dolt_query_diff('select * from t as of other where i < 2', 'select * from t as of head where i > 2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, nil, nil, "deleted"},
 					{nil, nil, 4, 4, "added"},
 				},
 			},
 			{
 				Query: "select * from dolt_query_diff('select * from t', 'select * from tt');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, nil, nil, "deleted"},
 					{2, 10, nil, nil, "deleted"},
 					{4, 4, nil, nil, "deleted"},

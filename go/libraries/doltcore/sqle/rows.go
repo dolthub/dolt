@@ -48,8 +48,8 @@ func (k *keylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 
-		k.lastCard = r[k.cardIdx].(uint64)
-		k.lastRead = r[:k.nonCardCols]
+		k.lastCard = r.GetValue(k.cardIdx).(uint64)
+		k.lastRead = r.Subslice(0,k.nonCardCols)
 	}
 
 	k.lastCard--

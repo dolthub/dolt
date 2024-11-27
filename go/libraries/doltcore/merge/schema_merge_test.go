@@ -58,9 +58,9 @@ type schemaMergeTest struct {
 
 type dataTest struct {
 	name                 string
-	ancestor             []sql.Row
-	left, right          []sql.Row
-	merged               []sql.Row
+	ancestor             []sql.UntypedSqlRow
+	left, right          []sql.UntypedSqlRow
+	merged               []sql.UntypedSqlRow
 	constraintViolations []constraintViolation
 	dataConflict         bool
 	skip                 bool
@@ -69,7 +69,7 @@ type dataTest struct {
 
 type table struct {
 	ns   namedSchema
-	rows []sql.Row
+	rows []sql.UntypedSqlRow
 }
 
 type namedSchema struct {
@@ -290,10 +290,10 @@ var columnAddDropTests = []schemaMergeTest{
 			},
 			{
 				name:     "one side drops column, other deletes row",
-				ancestor: []sql.Row{row(1, 2, 3), row(4, 5, 6)},
-				left:     []sql.Row{row(1, 2), row(4, 5)},
-				right:    []sql.Row{row(1, 2, 3)},
-				merged:   []sql.Row{row(1, 2)},
+				ancestor: []sql.UntypedSqlRow{row(1, 2, 3), row(4, 5, 6)},
+				left:     []sql.UntypedSqlRow{row(1, 2), row(4, 5)},
+				right:    []sql.UntypedSqlRow{row(1, 2, 3)},
+				merged:   []sql.UntypedSqlRow{row(1, 2)},
 			},
 		},
 	},
@@ -573,26 +573,26 @@ var collationTests = []schemaMergeTest{
 			},
 			{
 				name:     "right side insert",
-				ancestor: []sql.Row{{1, "hello"}},
-				left:     []sql.Row{{1, "hello"}},
-				right:    []sql.Row{{1, "hello"}, {2, "world"}},
-				merged:   []sql.Row{{1, "hello"}, {2, "world"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				merged:   []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
 			},
 			{
 				name:     "right side delete",
-				ancestor: []sql.Row{{1, "hello"}, {2, "world"}},
-				left:     []sql.Row{{1, "hello"}, {2, "world"}},
-				right:    []sql.Row{{1, "hello"}},
-				merged:   []sql.Row{{1, "hello"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}},
+				merged:   []sql.UntypedSqlRow{{1, "hello"}},
 			},
 			{
 				name:     "right side insert causes unique violation",
-				ancestor: []sql.Row{{1, "hello"}},
-				left:     []sql.Row{{1, "hello"}},
-				right:    []sql.Row{{1, "hello"}, {2, "HELLO"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}, {2, "HELLO"}},
 				constraintViolations: []constraintViolation{
-					{merge.CvType_UniqueIndex, sql.Row{int32(1)}, sql.Row{"hello"}},
-					{merge.CvType_UniqueIndex, sql.Row{int32(2)}, sql.Row{"HELLO"}},
+					{merge.CvType_UniqueIndex, sql.UntypedSqlRow{int32(1)}, sql.UntypedSqlRow{"hello"}},
+					{merge.CvType_UniqueIndex, sql.UntypedSqlRow{int32(2)}, sql.UntypedSqlRow{"HELLO"}},
 				},
 			},
 		},
@@ -613,26 +613,26 @@ var collationTests = []schemaMergeTest{
 			},
 			{
 				name:     "right side insert",
-				ancestor: []sql.Row{{1, "hello"}},
-				left:     []sql.Row{{1, "hello"}},
-				right:    []sql.Row{{1, "hello"}, {2, "world"}},
-				merged:   []sql.Row{{1, "hello"}, {2, "world"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				merged:   []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
 			},
 			{
 				name:     "right side delete",
-				ancestor: []sql.Row{{1, "hello"}, {2, "world"}},
-				left:     []sql.Row{{1, "hello"}, {2, "world"}},
-				right:    []sql.Row{{1, "hello"}},
-				merged:   []sql.Row{{1, "hello"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}, {2, "world"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}},
+				merged:   []sql.UntypedSqlRow{{1, "hello"}},
 			},
 			{
 				name:     "right side insert causes unique violation",
-				ancestor: []sql.Row{{1, "hello"}},
-				left:     []sql.Row{{1, "hello"}},
-				right:    []sql.Row{{1, "hello"}, {2, "HELLO"}},
+				ancestor: []sql.UntypedSqlRow{{1, "hello"}},
+				left:     []sql.UntypedSqlRow{{1, "hello"}},
+				right:    []sql.UntypedSqlRow{{1, "hello"}, {2, "HELLO"}},
 				constraintViolations: []constraintViolation{
-					{merge.CvType_UniqueIndex, sql.Row{int32(1)}, sql.Row{"hello"}},
-					{merge.CvType_UniqueIndex, sql.Row{int32(2)}, sql.Row{"HELLO"}},
+					{merge.CvType_UniqueIndex, sql.UntypedSqlRow{int32(1)}, sql.UntypedSqlRow{"hello"}},
+					{merge.CvType_UniqueIndex, sql.UntypedSqlRow{int32(2)}, sql.UntypedSqlRow{"HELLO"}},
 				},
 			},
 		},
@@ -1822,7 +1822,7 @@ func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest, fli
 	}
 }
 
-func tbl(ns namedSchema, rows ...sql.Row) *table {
+func tbl(ns namedSchema, rows ...sql.UntypedSqlRow) *table {
 	return &table{ns: ns, rows: rows}
 }
 
@@ -1843,12 +1843,12 @@ func sch(definition string) namedSchema {
 	return namedSchema{name: name, sch: s, create: definition}
 }
 
-func row(values ...any) sql.Row {
-	return sql.NewRow(values...)
+func row(values ...any) sql.UntypedSqlRow {
+	return sql.NewUntypedRow(values...).(sql.UntypedSqlRow)
 }
 
-func singleRow(values ...any) []sql.Row {
-	return []sql.Row{row(values...)}
+func singleRow(values ...any) []sql.UntypedSqlRow {
+	return []sql.UntypedSqlRow{row(values...)}
 }
 func makeEmptyRoot(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options) doltdb.RootValue {
 	ctx := context.Background()

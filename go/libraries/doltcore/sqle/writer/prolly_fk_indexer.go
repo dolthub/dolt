@@ -159,7 +159,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, nil
 		}
 
-		nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
+		nextRow := make(sql.UntypedSqlRow, len(iter.primary.keyMap)+len(iter.primary.valMap))
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
 			if nextRow[to], err = tree.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
@@ -203,7 +203,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	iter.primary.keyBld.PutHash128(0, hashId)
 	primaryKey := iter.primary.keyBld.Build(sharePool)
 
-	nextRow := make(sql.Row, len(iter.primary.valMap))
+	nextRow := make(sql.UntypedSqlRow, len(iter.primary.valMap))
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)

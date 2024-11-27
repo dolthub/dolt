@@ -43,7 +43,7 @@ type MergeScriptTest struct {
 	// For tests that make a single assertion, Query can be set for the single assertion
 	Query string
 	// For tests that make a single assertion, Expected can be set for the single assertion
-	Expected []sql.Row
+	Expected []sql.UntypedSqlRow
 	// For tests that make a single assertion, ExpectedErr can be set for the expected error
 	ExpectedErr *errors.Kind
 	// SkipPrepared is true when we skip a test for prepared statements only
@@ -85,23 +85,23 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM aTable;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * FROM aTable;",
-				Expected: []sql.Row{{1, 2}, {1, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {1, 3}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_constraint_violations;",
-				Expected: []sql.Row{{"aTable", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"aTable", uint64(2)}},
 			},
 			{
 				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{doltCommit, "unique index", "5A1ED8633E1842FCA8EE529E4F1C5944", 1, 2, `{"Name": "aColumn_UNIQUE", "Columns": ["aColumn"]}`},
 					{doltCommit, "unique index", "A922BFBF4E5489501A3808BC5CD702C0", 1, 3, `{"Name": "aColumn_UNIQUE", "Columns": ["aColumn"]}`},
 				},
@@ -109,22 +109,22 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// Fix the data
 				Query:    "UPDATE aTable SET aColumn = 2 WHERE bColumn = 2;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				// clear out the violations
 				Query:    "DELETE FROM dolt_constraint_violations_aTable;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// Commit the merge after resolving the constraint violations
 				Query:    "call dolt_commit('-am', 'merging in main and resolving unique constraint violations');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				// Merging again is a no-op
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
 			},
 		},
 	},
@@ -159,51 +159,51 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM aTable ORDER BY aColumn;",
-				Expected: []sql.Row{{1, 1}, {2, -1}, {2, -1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, -1}, {2, -1}},
 			},
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * FROM aTable ORDER BY aColumn;",
-				Expected: []sql.Row{{1, 1}, {2, -1}, {2, -1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, -1}, {2, -1}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_constraint_violations;",
-				Expected: []sql.Row{{"aTable", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"aTable", uint64(1)}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"aTable", false, "constraint violation"},
 				},
 			},
 			{
 				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{doltCommit, "foreign key", "13F8480978D0556FA9AE6DF5745A7ACA", 2, -1, `{"Index": "bColumn", "Table": "aTable", "Columns": ["bColumn"], "OnDelete": "RESTRICT", "OnUpdate": "RESTRICT", "ForeignKey": "atable_ibfk_1", "ReferencedIndex": "", "ReferencedTable": "parent", "ReferencedColumns": ["pk"]}`},
 				},
 			},
 			{
 				// Fix the data
 				Query:    "UPDATE aTable SET bColumn = 2 WHERE bColumn = -1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: uint64(2), Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: uint64(2), Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				// clear out the violations
 				Query:    "DELETE FROM dolt_constraint_violations_aTable;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// Commit the merge after resolving the constraint violations
 				Query:    "call dolt_commit('-am', 'merging in main and resolving unique constraint violations');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				// Merging again is a no-op
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
 			},
 		},
 	},
@@ -228,19 +228,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations_tableA;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from tableA;",
-				Expected: []sql.Row{{"A", "1"}, {"C", "C"}, {"Z", "100"}},
+				Expected: []sql.UntypedSqlRow{{"A", "1"}, {"C", "C"}, {"Z", "100"}},
 			},
 		},
 	},
@@ -263,23 +263,23 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -303,19 +303,19 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from test order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2}, {3}, {1000},
 				},
 			},
@@ -362,27 +362,27 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// No-FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+				Expected: []sql.UntypedSqlRow{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+				Expected: []sql.UntypedSqlRow{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -405,27 +405,27 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// No-FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+				Expected: []sql.UntypedSqlRow{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+				Expected: []sql.UntypedSqlRow{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
 				Query: "select * from test order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2}, {3}, {1000},
 				},
 			},
@@ -450,23 +450,23 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--commit')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			{
 				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a merge"}},
+				Expected: []sql.UntypedSqlRow{{"this is a merge"}},
 			},
 		},
 	},
@@ -489,32 +489,32 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
-				Expected: []sql.Row{{"", 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+				Expected: []sql.UntypedSqlRow{{true, "feature-branch", "refs/heads/main", ""}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"test", true, "modified"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				// careful to filter out the initial commit, which will be later than the ones above
 				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"add some more values"}},
+				Expected: []sql.UntypedSqlRow{{"add some more values"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
-				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main')",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 		},
 	},
@@ -537,43 +537,43 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+				Expected: []sql.UntypedSqlRow{{true, "feature-branch", "refs/heads/main", "test"}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.UntypedSqlRow{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"update a value"}},
+				Expected: []sql.UntypedSqlRow{{"update a value"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "DELETE FROM dolt_conflicts_test",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"test", false, "modified"}},
 			},
 			{
 				Query:    "SELECT * from test ORDER BY pk",
-				Expected: []sql.Row{{0, 1001}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 1001}, {1, 1}},
 			},
 		},
 	},
@@ -601,52 +601,52 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+				Expected: []sql.UntypedSqlRow{{true, "feature-branch", "refs/heads/main", "test"}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "schema conflict"}},
+				Expected: []sql.UntypedSqlRow{{"test", false, "schema conflict"}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Skip:     true,
 				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"update val col"}},
+				Expected: []sql.UntypedSqlRow{{"update val col"}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Skip:     true,
 				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+				Expected: []sql.UntypedSqlRow{{true, "feature-branch", "refs/heads/main", ""}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "merged"}},
+				Expected: []sql.UntypedSqlRow{{"test", true, "merged"}},
 			},
 			{
 				Skip:             true,
@@ -656,12 +656,12 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Skip:     true,
 				Query:    "SHOW CREATE TABLE test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `val` smallint,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `val` smallint,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -684,15 +684,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+				Expected: []sql.UntypedSqlRow{{true, "feature-branch", "refs/heads/main", "test"}},
 			},
 			{
 				Query:    "SELECT * FROM DOLT_STATUS",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.UntypedSqlRow{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				// errors because creating a new branch implicitly commits the current transaction
@@ -718,19 +718,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_status",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {1000}},
 			},
 		},
 	},
@@ -751,19 +751,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
-				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main')",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {1000}},
 			},
 		},
 	},
@@ -784,23 +784,23 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -822,31 +822,31 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"new-branch"}},
+				Expected: []sql.UntypedSqlRow{{"new-branch"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {4}, {1000}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {4}, {1000}},
 			},
 			{
 				Query:            "use `mydb/main`",
@@ -854,11 +854,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {1000}},
 			},
 		},
 	},
@@ -879,27 +879,27 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// No-FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+				Expected: []sql.UntypedSqlRow{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+				Expected: []sql.UntypedSqlRow{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -925,19 +925,19 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
+				Expected: []sql.UntypedSqlRow{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
 				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a merge"}},
+				Expected: []sql.UntypedSqlRow{{"this is a merge"}},
 			},
 		},
 	},
@@ -964,23 +964,23 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
+				Expected: []sql.UntypedSqlRow{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
 				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"this is a merge"}},
+				Expected: []sql.UntypedSqlRow{{"this is a merge"}},
 			},
 			{
 				Query: "select * from test order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2}, {3}, {5}, {6}, {7}, {1000},
 				},
 			},
@@ -990,7 +990,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from test order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2}, {3}, {1000},
 				},
 			},
@@ -1014,23 +1014,23 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge', '--no-commit')",
-				Expected: []sql.Row{{"", 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
-				Expected: []sql.Row{{"add some more values"}},
+				Expected: []sql.UntypedSqlRow{{"add some more values"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -1044,11 +1044,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('HEAD~1')",
-				Expected: []sql.Row{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('HEAD')",
-				Expected: []sql.Row{{"", 0, 0, "Everything up-to-date"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "Everything up-to-date"}},
 			},
 		},
 	},
@@ -1071,40 +1071,40 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// Test case-insensitive table name
 				Query:    "SELECT count(*) from dolt_conflicts_TeST",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "merge aborted"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * FROM test",
-				Expected: []sql.Row{{0, 1001}},
+				Expected: []sql.UntypedSqlRow{{0, 1001}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_status",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SET dolt_allow_commit_conflicts = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch')",
@@ -1112,7 +1112,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1135,39 +1135,39 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.UntypedSqlRow{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "merge aborted"}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "SELECT * FROM test ORDER BY pk",
-				Expected: []sql.Row{{0, 1001}},
+				Expected: []sql.UntypedSqlRow{{0, 1001}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -1194,7 +1194,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1220,7 +1220,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{false, nil, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{false, nil, nil, nil}},
 			},
 		},
 	},
@@ -1244,11 +1244,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('b1')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1274,20 +1274,20 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('branch1');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 1, 1}},
 			},
 			{
 				// Test case-insensitive table name
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_CHILD;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 1, 1}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", false, "constraint violation"},
 				},
 			},
@@ -1317,27 +1317,27 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations_parent",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations_child",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{{10, 1}, {30, 2}},
+				Expected: []sql.UntypedSqlRow{{10, 1}, {30, 2}},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 		},
 	},
@@ -1361,23 +1361,23 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
-				Expected: []sql.Row{{true, "right", "refs/heads/main", "t"}},
+				Expected: []sql.UntypedSqlRow{{true, "right", "refs/heads/main", "t"}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", false, "constraint violation"},
 				},
 			},
@@ -1403,19 +1403,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 3}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 3}, {3, 3}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 2, 3}, {"unique index", 3, 3}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", false, "constraint violation"},
 				},
 			},
@@ -1441,19 +1441,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 3}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 3}, {3, 3}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 2, 3}, {"unique index", 3, 3}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", false, "constraint violation"},
 				},
 			},
@@ -1479,19 +1479,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1, 1}, {2, 1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1}, {2, 1, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1, col2 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 1, 1, 1}, {"unique index", 2, 1, 1}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 1, 1, 1}, {"unique index", 2, 1, 1}},
 			},
 			{
 				Query: "select * from dolt_status;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", false, "constraint violation"},
 				},
 			},
@@ -1523,11 +1523,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -1573,11 +1573,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 		},
 	},
@@ -1600,15 +1600,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{nil, nil, 1, 1, 1, -1}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 1, 1, 1, -1}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 		},
 	},
@@ -1635,11 +1635,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select count(*) from dolt_schemas where type = 'trigger';",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 		},
 	},
@@ -1658,15 +1658,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('test');",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 5}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 3, InsertID: 5}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -1695,15 +1695,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('test');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 6}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{3, 3},
 					{4, 4},
@@ -1730,15 +1730,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('test');",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 6}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 6}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -1766,15 +1766,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('test');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{3, 3},
 					{4, 4},
@@ -1805,11 +1805,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
-				Expected: []sql.Row{{2, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{2, nil, nil}},
 			},
 		},
 	},
@@ -1831,11 +1831,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select * from t",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -1861,15 +1861,15 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query:    "select * from t",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "insert into t values (-1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 		},
 	},
@@ -1890,11 +1890,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select * from t",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -1920,11 +1920,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select * from test",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1952,11 +1952,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select a, b, c from dolt_constraint_violations_test;",
-				Expected: []sql.Row{{1, nil, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil, nil}},
 			},
 		},
 	},
@@ -1978,15 +1978,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select y from xyz where y >= 0",
-				Expected: []sql.Row{{0}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {2}},
 			},
 			{
 				Query:    "select z from xyz where y >= 0",
-				Expected: []sql.Row{{0}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {2}},
 			},
 		},
 	},
@@ -2008,15 +2008,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select y from xyz where y >= 0",
-				Expected: []sql.Row{{0}, {1}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {1}, {2}},
 			},
 			{
 				Query:    "select z from xyz where y >= 0",
-				Expected: []sql.Row{{0}, {1}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {1}, {2}},
 			},
 		},
 	},
@@ -2040,15 +2040,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select y from xyz where y >= 0 order by 1",
-				Expected: []sql.Row{{0}, {2}, {3}, {4}},
+				Expected: []sql.UntypedSqlRow{{0}, {2}, {3}, {4}},
 			},
 			{
 				Query:    "select z from xyz where y >= 0 order by 1",
-				Expected: []sql.Row{{0}, {3}, {4}, {5}},
+				Expected: []sql.UntypedSqlRow{{0}, {3}, {4}, {5}},
 			},
 		},
 	},
@@ -2070,15 +2070,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select y from xyz where y >= 0 order by 1",
-				Expected: []sql.Row{{0}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {2}},
 			},
 			{
 				Query:    "select z from xyz where y >= 0 order by 1",
-				Expected: []sql.Row{{0}, {2}},
+				Expected: []sql.UntypedSqlRow{{0}, {2}},
 			},
 		},
 	},
@@ -2101,11 +2101,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
-				Expected: []sql.Row{{2, "modified", nil, "removed"}},
+				Expected: []sql.UntypedSqlRow{{2, "modified", nil, "removed"}},
 			},
 		},
 	},
@@ -2128,11 +2128,11 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('feature');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select our_y, our_diff_type, their_y, their_diff_type from dolt_conflicts_xyz",
-				Expected: []sql.Row{{2, "modified", 3, "modified"}},
+				Expected: []sql.UntypedSqlRow{{2, "modified", 3, "modified"}},
 			},
 		},
 	},
@@ -2165,22 +2165,22 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, nil, 1, 100},
 					{nil, nil, nil, nil, 2, 200},
 				},
@@ -2193,22 +2193,22 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, nil, 1, 100},
 					{nil, nil, nil, nil, 2, 200},
 				},
@@ -2221,19 +2221,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{types.NewOkResult(4)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 		},
 	},
@@ -2243,19 +2243,19 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "truncate t;",
-				Expected: []sql.Row{{types.NewOkResult(4)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(4)}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 		},
 	},
@@ -2283,17 +2283,17 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", uint64(1)},
 				},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations_parent",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT y, x from dolt_constraint_violations_child",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2},
 				},
 			},
@@ -2318,15 +2318,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations_t",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "SELECT * from t",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "1", "2", "key-a", "other", "main"},
 				},
 			},
@@ -2350,15 +2350,15 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('other')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations",
-				Expected: []sql.Row{{"test", uint(1)}},
+				Expected: []sql.UntypedSqlRow{{"test", uint(1)}},
 			},
 			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_test",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"not null", 2, merge.NullViolationMeta{Columns: []string{"c0"}}},
 				},
 			},
@@ -2389,7 +2389,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"abc"},
 					{"def"},
 					{"ghi"},
@@ -2422,29 +2422,29 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// We can merge from main -> branch1, even though the column tags are not identical
 				Query:    "call dolt_merge('main')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}, {3, "three"}},
 			},
 			{
 				// Reset branch1 to the pre-merge commit, so we can test merging branch1 -> main
 				Query:    "CALL dolt_reset('--hard', @PreMergeBranch1Commit);",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				// We can merge from branch1 -> main, even though the column tags are not identical
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}, {3, "three"}},
 			},
 		},
 	},
@@ -2464,7 +2464,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 		},
 	},
@@ -2484,7 +2484,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 		},
 	},
@@ -2504,7 +2504,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 		},
 	},
@@ -2524,7 +2524,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 		},
 	},
@@ -2550,15 +2550,15 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, col1, col2 from dolt_constraint_violations_t ORDER BY col1 ASC;",
-				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "SELECT * from t ORDER BY col1 ASC;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 		},
 	},
@@ -2583,19 +2583,19 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -2618,11 +2618,11 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT base_col1, base_col2, our_col1, our_col2, their_col1, their_col2 from dolt_conflicts_t;",
-				Expected: []sql.Row{{nil, nil, 1, 1, 1, 1}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 1, 1, 1, 1}},
 			},
 		},
 	},
@@ -2649,11 +2649,11 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{3, 3, nil}, {3, 3, 1}},
+				Expected: []sql.UntypedSqlRow{{3, 3, nil}, {3, 3, 1}},
 			},
 		},
 	},
@@ -2688,12 +2688,12 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
 					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 2, "modified", 1, 3, "modified"},
 					{2, 2, nil, nil, "removed", 2, 0, "modified"},
 					{3, 3, 3, 0, "modified", nil, nil, "removed"},
@@ -2732,11 +2732,11 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query: "SELECT base_col1, our_col1, their_col1, our_diff_type, their_diff_type, base_cardinality, our_cardinality, their_cardinality from dolt_conflicts_t ORDER BY COALESCE(base_col1, our_col1, their_col1) ASC;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, "removed", "modified", uint64(1), uint64(0), uint64(2)},
 					{2, 2, nil, "modified", "removed", uint64(1), uint64(2), uint64(0)},
 					{3, 3, 3, "modified", "modified", uint64(1), uint64(2), uint64(2)},
@@ -2796,24 +2796,24 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 				},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t where dolt_conflict_id = @hash2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			// Make sure that we can update using it
 			{
 				Query:    "update dolt_conflicts_t SET our_col1 = their_col1 where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, 100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
@@ -2821,11 +2821,11 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// And delete
 			{
 				Query:    "delete from dolt_conflicts_t where dolt_conflict_id = @hash1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
@@ -2853,7 +2853,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select @hash1 != @hash2 AND @hash2 != @hash3;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 		},
 	},
@@ -2863,43 +2863,43 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = 1000 where our_pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, 1000, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1000},
 					{2, -200},
 				},
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col1 = their_col1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, 100, 1, 100},
 					{nil, nil, 2, 200, 2, 200},
 				},
 			},
 			{
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 100},
 					{2, 200},
 				},
@@ -2926,25 +2926,25 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 1, 1, -100, 1, 1, 100},
 					{nil, nil, nil, 1, 2, -200, 1, 2, 200},
 				},
 			},
 			{
 				Query:    "Update dolt_conflicts_t set our_col1 = 1000;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk1, base_pk2, base_col1, our_pk1, our_pk2, our_col1, their_pk1, their_pk2, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, nil, 1, 1, 1000, 1, 1, 100},
 					{nil, nil, nil, 1, 2, 1000, 1, 2, 200},
 				},
 			},
 			{
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1000},
 					{2, 1, 1000},
 				},
@@ -2971,7 +2971,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, uint64(0), "apple", 1, uint64(2), "apple", 1, uint64(1)},
 				},
 			},
@@ -2980,19 +2980,19 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// was run against the conflicts table, only one row is updated.
 			{
 				Query: "update dolt_conflicts_t set our_name = 'orange' where our_name = 'apple'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Updated: 1, Matched: 1}}},
 				},
 			},
 			{
 				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, uint64(0), "apple", 1, uint64(1), "apple", 1, uint64(1)},
 				},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{"apple", 1}, {"orange", 1}},
+				Expected: []sql.UntypedSqlRow{{"apple", 1}, {"orange", 1}},
 			},
 			// Updating cardinality should be no-op.
 			{
@@ -3000,13 +3000,13 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select base_name, base_price, base_cardinality, our_name, our_price, our_cardinality, their_name, their_price, their_cardinality from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, uint64(0), "apple", 1, uint64(1), "apple", 1, uint64(1)},
 				},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{"apple", 1}, {"orange", 1}},
+				Expected: []sql.UntypedSqlRow{{"apple", 1}, {"orange", 1}},
 			},
 		},
 	},
@@ -3039,7 +3039,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, 1, -100, 1, 100},
 					{2, nil, 2, -200, nil, nil},
 					{3, nil, nil, nil, 3, 300},
@@ -3048,11 +3048,11 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "delete from t;",
-				Expected: []sql.Row{{types.NewOkResult(3)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(3)}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil, 1, 100},
 					{2, nil, nil, nil, nil, nil},
 					{3, nil, nil, nil, 3, 300},
@@ -3061,7 +3061,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// The new rows PKs must be fully specified
 			{
@@ -3071,11 +3071,11 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 			// Take theirs
 			{
 				Query:    "update dolt_conflicts_t set our_pk = their_pk, our_col1 = their_col1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 3, Info: plan.UpdateInfo{Matched: 4, Updated: 3}}}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 100}, {3, 300}, {4, 400}},
+				Expected: []sql.UntypedSqlRow{{1, 100}, {3, 300}, {4, 400}},
 			},
 		},
 	},
@@ -3085,22 +3085,22 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table dolt_conflicts_t;",
-				Expected: []sql.Row{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(1023),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(1023),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(1023),\n  `dolt_conflict_id` varchar(1023)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(1023),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(1023),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(1023),\n  `dolt_conflict_id` varchar(1023)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, our_col2, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, nil, 1, 100},
 					{nil, nil, 2, -200, nil, 2, 200},
 				},
 			},
 			{
 				Query:    "update dolt_conflicts_t set our_col2 = their_col1",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select pk, col1, col2 from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, -100, 100},
 					{2, -200, 200},
 				},
@@ -3113,29 +3113,29 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, -100}, {2, -200}},
+				Expected: []sql.UntypedSqlRow{{1, -100}, {2, -200}},
 			},
 			{
 				Query:    "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 1, -100, 1, 100},
 					{nil, nil, 2, -200, 2, 200},
 				},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, -100}, {2, -200}},
+				Expected: []sql.UntypedSqlRow{{1, -100}, {2, -200}},
 			},
 		},
 	},
@@ -3188,45 +3188,45 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{1, 1, 1, 100, 1, -100}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1, 100, 1, -100}},
 			},
 			{
 				Query:    "SELECT pk, col1 from t;",
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('conflicts2');",
-				Expected: []sql.Row{{0, "Switched to branch 'conflicts2'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'conflicts2'"}},
 			},
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{2, 2, 2, 100, 2, -100}},
+				Expected: []sql.UntypedSqlRow{{2, 2, 2, 100, 2, -100}},
 			},
 			{
 				Query:    "SELECT pk, col1 from t;",
-				Expected: []sql.Row{{2, 100}},
+				Expected: []sql.UntypedSqlRow{{2, 100}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('conflicts1');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 100, 1, -100},
 					{2, 2, 2, 100, 2, -100},
 				},
 			},
 			{
 				Query: "SELECT pk, col1 from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 100},
 					{2, 100},
 				},
 			},
 			{
 				Query: "UPDATE t SET col1 = 300;",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: 2,
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -3236,7 +3236,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 300, 1, -100},
 					{2, 2, 2, 300, 2, -100},
 				},
@@ -3279,11 +3279,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{1, 1, 1, 100, 1, -100}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1, 100, 1, -100}},
 			},
 			{
 				Query:    "SELECT pk, col1, col2 from t;",
-				Expected: []sql.Row{{1, 100, 1000}},
+				Expected: []sql.UntypedSqlRow{{1, 100, 1000}},
 			},
 		},
 	},
@@ -3335,72 +3335,72 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 1, 1}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('viol2');",
-				Expected: []sql.Row{{0, "Switched to branch 'viol2'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'viol2'"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 2, 2}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('viol1');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			// the commit hashes for the above two violations change in this merge
 			{
 				Query:    "SELECT violation_type, fk, pk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+				Expected: []sql.UntypedSqlRow{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit active merge');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "SET FOREIGN_KEY_CHECKS=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "UPDATE child set fk = 4;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'update children to new value');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other3');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query: "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"foreign key", 1, 1},
 					{"foreign key", 1, 4},
 					{"foreign key", 2, 2},
@@ -3437,55 +3437,55 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('left2');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('right');",
-				Expected: []sql.Row{{0, "Switched to branch 'right'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'right'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('right2');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{3, 1}, {4, 1}},
+				Expected: []sql.UntypedSqlRow{{3, 1}, {4, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"unique index", 3, 1}, {"unique index", 4, 1}},
+				Expected: []sql.UntypedSqlRow{{"unique index", 3, 1}, {"unique index", 4, 1}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 1}, {4, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}, {3, 1}, {4, 1}},
 			},
 			{
 				Query: "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1},
 					{"unique index", 2, 1},
 					{"unique index", 3, 1},
@@ -3514,11 +3514,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -3542,11 +3542,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 2, 3}, {2, 2, 3}},
 			},
 		},
 	},
@@ -3570,11 +3570,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select w, x, y, z from dolt_constraint_violations_wxyz;",
-				Expected: []sql.Row{{1, 2, 3, 4}, {5, 2, 6, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 2, 3, 4}, {5, 2, 6, 4}},
 			},
 		},
 	},
@@ -3598,15 +3598,15 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "select count(*) from dolt_constraint_violations;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 2, nil}, {2, 2, nil}},
+				Expected: []sql.UntypedSqlRow{{1, 2, nil}, {2, 2, nil}},
 			},
 		},
 	},
@@ -3630,11 +3630,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select col1, col2 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{"A", "first"}, {"A", "second"}},
+				Expected: []sql.UntypedSqlRow{{"A", "first"}, {"A", "second"}},
 			},
 		},
 	},
@@ -3677,11 +3677,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -3708,7 +3708,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1}},
 			},
 		},
 	},
@@ -3731,15 +3731,15 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(4)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(4)}},
 			},
 			{
 				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "val1", "val1", "val1"},
 					{2, "val1", "val1", "val1"},
 					{3, "val1", "val1", "val2"},
@@ -3768,15 +3768,15 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('right');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "val1", "val1", "val2"},
 					{3, "val1", "val1", "val2"},
 				},
@@ -3804,15 +3804,15 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_MERGE('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select id, col1, col2, col3 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "val1", "val1", "val2"},
 					{3, "val1", "val1", "val2"},
 				},
@@ -3842,11 +3842,11 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_schema_conflicts",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -3866,11 +3866,11 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('other')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query: "select * from dolt_schema_conflicts",
-				Expected: []sql.Row{{
+				Expected: []sql.UntypedSqlRow{{
 					"t",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c0` datetime(6),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
@@ -3880,7 +3880,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", false, "schema conflict"},
 				},
 			},
@@ -3910,43 +3910,43 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				// transaction commit constraint violations that occur as a
 				// result of a merge.
 				Query:    "set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-am', 'delete parent 1');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (1, 1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch1');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 1}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "CALL DOLT_COMMIT('-am', 'commit constraint violations');",
@@ -3954,47 +3954,47 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit constraint violations');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 2;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch2');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch2'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch2'"}},
 			},
 			{
 				Query:    "INSERT INTO OTHER VALUES (1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-am', 'non-fk insert');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch2');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 1}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "CALL DOLT_COMMIT('-am', 'commit non-conflicting merge');",
@@ -4002,31 +4002,31 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit non-conflicting merge');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch3');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch3'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch3'"}},
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (2, 2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch3');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 1}, {uint16(1), 2, 2}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 1}, {uint16(1), 2, 2}},
 			},
 		},
 	},
@@ -4055,32 +4055,32 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
-				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 2, 1, 3, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 2}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:          "CALL DOLT_MERGE('other2');",
@@ -4088,19 +4088,19 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
-				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 2, 1, 3, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 2}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 2}},
 			},
 		},
 	},
@@ -4129,52 +4129,52 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
-				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 2, 1, 3, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 2}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other2');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "SELECT * from parent;",
-				Expected: []sql.Row{{1, 2}, {3, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {3, 1}},
 			},
 			{
 				Query:    "SELECT * from child;",
-				Expected: []sql.Row{{1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}},
 			},
 			{
 				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
-				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 2, 1, 3, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint16(1), 1, 2}},
+				Expected: []sql.UntypedSqlRow{{uint16(1), 1, 2}},
 			},
 		},
 	},
@@ -4203,11 +4203,11 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from t",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query: "show create table t",
-				Expected: []sql.Row{{"t",
+				Expected: []sql.UntypedSqlRow{{"t",
 					"CREATE TABLE `t` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `col1` int,\n" +
@@ -4263,11 +4263,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 2},
 					{2, 2, 2, 4},
 					{3, 3, 3, 6},
@@ -4275,15 +4275,15 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "call dolt_merge('branch2')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 2},
 					{2, 2, 2, 4},
 					{3, 3, 3, 6},
@@ -4292,7 +4292,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 		},
 	},
@@ -4315,33 +4315,33 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 4, 1, 5},
 					{2, 2, 2, 4},
 				},
 			},
 			{
 				Query:    "select id from t1 where v3 = 5",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "call dolt_merge('branch2')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 4, 5, 9},
 					{2, 2, 2, 4},
 				},
 			},
 			{
 				Query:    "select id from t1 where v3 = 9",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -4364,11 +4364,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, 1, 2},
 					{2, 2, 2, 4},
 					{3, 3, 3, 6},
@@ -4377,11 +4377,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 		},
 	},
@@ -4403,11 +4403,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, 5},
 					{4, 5, 6, 11},
 					{7, 8, 9, 17},
@@ -4415,15 +4415,15 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 17",
-				Expected: []sql.Row{{7}},
+				Expected: []sql.UntypedSqlRow{{7}},
 			},
 			{
 				Query:    "call dolt_merge('branch2')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, 5},
 					{4, 5, 6, 11},
 					{7, 8, 9, 17},
@@ -4432,7 +4432,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 23",
-				Expected: []sql.Row{{10}},
+				Expected: []sql.UntypedSqlRow{{10}},
 			},
 		},
 	},
@@ -4455,11 +4455,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, 5},
 					{4, 5, 6, 11},
 					{7, 8, 9, 17},
@@ -4468,11 +4468,11 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select id from t1 where v3 = 17",
-				Expected: []sql.Row{{7}},
+				Expected: []sql.UntypedSqlRow{{7}},
 			},
 			{
 				Query:    "select id from t1 where v3 = 23",
-				Expected: []sql.Row{{10}},
+				Expected: []sql.UntypedSqlRow{{10}},
 			},
 		},
 	},

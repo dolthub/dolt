@@ -23,8 +23,8 @@ import (
 var BigBlobQueries = []queries.WriteQueryTest{
 	{
 		WriteQuery:          "INSERT INTO blobt VALUES(4, LOAD_FILE('testdata/test1.png'))",
-		ExpectedWriteResult: []sql.Row{{types.NewOkResult(1)}},
+		ExpectedWriteResult: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 		SelectQuery:         "select sha1(b) from blobt where i = 4",
-		ExpectedSelect:      []sql.Row{{"012bcb75a319f2913614a5170fc046fb6c49ee86"}},
+		ExpectedSelect:      []sql.UntypedSqlRow{{"012bcb75a319f2913614a5170fc046fb6c49ee86"}},
 	},
 }

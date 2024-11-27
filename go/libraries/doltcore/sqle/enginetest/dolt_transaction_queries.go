@@ -30,11 +30,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ select @@autocommit;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client b */ select @@autocommit;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:       "/* client a */ select * from t;",
@@ -46,11 +46,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ create table t(pk int primary key);",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from t;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -63,7 +63,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:       "/* client b */ insert into t values (2, 2)",
@@ -80,35 +80,35 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 		},
 	},
@@ -121,23 +121,23 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (2, 3)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -145,15 +145,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{ // client b gets a rollback after failed commit, so gets a new tx
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:          "/* client b */ insert into t values (2, 3)",
@@ -170,7 +170,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -180,7 +180,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(0),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -190,11 +190,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 2}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 2}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {2, 2}},
 			},
 		},
 	},
@@ -207,15 +207,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -225,7 +225,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -235,19 +235,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 2}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 2}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {2, 2}},
 			},
 		},
 	},
@@ -260,15 +260,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 3",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -278,7 +278,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -288,7 +288,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -296,19 +296,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {2, 3}},
 			},
 			{ // client b got rolled back when its commit failed, so it sees the same values as client a
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {2, 3}},
 			},
 			{
 				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {2, 3}},
 			},
 		},
 	},
@@ -321,15 +321,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where x = 1",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -339,7 +339,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set y = 4 where x = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -349,19 +349,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {2, 4}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {2, 4}},
 			},
 		},
 	},
@@ -374,15 +374,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -392,7 +392,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update t set z = 3",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(2),
 					Info: plan.UpdateInfo{
 						Matched: 2,
@@ -402,19 +402,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 2, 3}, {2, 2, 3}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 2, 3}, {2, 2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 2, 3}, {2, 2, 3}},
 			},
 		},
 	},
@@ -427,19 +427,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 		},
 	},
@@ -452,35 +452,35 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 		},
 	},
@@ -493,35 +493,35 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 3",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 		},
 	},
@@ -534,15 +534,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -552,11 +552,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 2",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -564,15 +564,15 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 3}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 3}},
 			},
 		},
 	},
@@ -585,39 +585,39 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ delete from t where y = 1",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ delete from t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (1,1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -630,19 +630,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client c */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update t set y = 3 where y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -652,11 +652,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from t where y = 1",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client c */ update t set z = 4 where y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -666,39 +666,39 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{2, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 3, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{2, 3, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 3, 2}},
 			},
 			{
 				Query:    "/* client c */ select * from t order by x",
-				Expected: []sql.Row{{1, 1, 1}, {2, 2, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1}, {2, 2, 4}},
 			},
 			{
 				Query:    "/* client c */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{2, 3, 4}},
+				Expected: []sql.UntypedSqlRow{{2, 3, 4}},
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{2, 3, 4}},
+				Expected: []sql.UntypedSqlRow{{2, 3, 4}},
 			},
 			{
 				Query:    "/* client c */ select * from t order by x",
-				Expected: []sql.Row{{2, 3, 4}},
+				Expected: []sql.UntypedSqlRow{{2, 3, 4}},
 			},
 		},
 	},
@@ -711,11 +711,11 @@ var DoltTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client a */ update test set y = 3 where y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -725,7 +725,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ update test set y = 5 where y = 2",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: uint64(1),
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -735,19 +735,19 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from test order by x",
-				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by x",
-				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
 			},
 			{
 				Query:       "/* client b */ insert into test values (4,3,2)",
@@ -770,46 +770,46 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				// Create a table for the FK to reference
 				Query:    "/* client a */ CREATE TABLE ref (id varchar(100) PRIMARY KEY, status int);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// Create a table with an FK
 				Query:    "/* client a */ CREATE TABLE t (id int, ref_id varchar(100), FOREIGN KEY (ref_id) REFERENCES ref(id));",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// Turn @@foreign_key_checks back on in client a
 				Query:    "/* client a */ SET @@foreign_key_checks=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// Reference the table with an unresolved FK, so that it gets loaded and resolved
 				Query:    "/* client a */ UPDATE t SET ref_id = 42 where ref_id > 100000;",
-				Expected: []sql.Row{{types.OkResult{Info: plan.UpdateInfo{}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{Info: plan.UpdateInfo{}}}},
 			},
 			{
 				// Make any change in client b's session
 				Query:    "/* client b */ create table foo (i int);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				// Client a still has an unresolved FK at this point
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// Assert that client a can see the schema with the foreign key constraints still present
 				Query:    "/* client a */ show create table t;",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				// Assert that client b can see the schema with the foreign key constraints still present
 				Query:    "/* client b */ show create table t;",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `id` int,\n  `ref_id` varchar(100),\n  KEY `ref_id` (`ref_id`),\n  CONSTRAINT `t_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `ref` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -827,7 +827,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select @@transaction_isolation, @@autocommit",
-				Expected: []sql.Row{{"READ-COMMITTED", 0}},
+				Expected: []sql.UntypedSqlRow{{"READ-COMMITTED", 0}},
 			},
 			{
 				Query:            "/* client a */ savepoint abc",
@@ -835,7 +835,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ release savepoint abc",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -853,31 +853,31 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -885,11 +885,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}},
 			},
 		},
 	},
@@ -904,31 +904,31 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -936,11 +936,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}},
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -955,31 +955,31 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -987,11 +987,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}},
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1006,23 +1006,23 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1034,7 +1034,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1042,25 +1042,25 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 2}},
 			},
 			{ // no error because of our session settings
 				// TODO: we should also be able to commit this if the other client made a compatible change
 				//  (has the same merge conflicts we do), but that's an error right now
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1070,19 +1070,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1097,23 +1097,23 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1125,7 +1125,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1133,23 +1133,23 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 2}},
 			},
 			{ // no error because of our session settings
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -1159,19 +1159,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1186,23 +1186,23 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
@@ -1214,7 +1214,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
@@ -1222,19 +1222,19 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 2}},
 			},
 			{
 				Query:    "/* client b */ insert into test values (2, 2)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:          "/* client b */ commit",
@@ -1242,7 +1242,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{ // our transaction got rolled back, so we lose the above insert
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 0}, {1, 2}},
 			},
 		},
 	},
@@ -1268,37 +1268,37 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{nil, nil, 1, 200, 1, 100}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 1, 200, 1, 100}},
 			},
 			{
 				Query:    "/* client b */ SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
-				Expected: []sql.Row{{nil, nil, 1, 200, 1, 100}},
+				Expected: []sql.UntypedSqlRow{{nil, nil, 1, 200, 1, 100}},
 			},
 			// nominal inserts that will not result in a conflict or constraint violation
 			// They are needed to trigger a three-way transaction merge
 			{
 				Query:    "/* client a */ INSERT into t VALUES (2, 2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SET dolt_allow_commit_conflicts = on;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -1307,7 +1307,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -1327,31 +1327,31 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ START TRANSACTION",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:       "/* client b */ COMMIT;",
@@ -1359,15 +1359,15 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ SELECT * from t;",
-				Expected: []sql.Row{{1, -100}},
+				Expected: []sql.UntypedSqlRow{{1, -100}},
 			},
 			{
 				Query:    "/* client b */ SELECT * from keyless;",
-				Expected: []sql.Row{{1}, {1}},
+				Expected: []sql.UntypedSqlRow{{1}, {1}},
 			},
 			{
 				Query:    "/* client b */ SELECT * from t where col1 = -100;",
-				Expected: []sql.Row{{1, -100}},
+				Expected: []sql.UntypedSqlRow{{1, -100}},
 			},
 		},
 	},
@@ -1382,31 +1382,31 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ START TRANSACTION",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ UPDATE t SET col1 = -100 where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client b */ UPDATE t SET col1 = 100 where pk = 1;",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "/* client a */ INSERT into KEYLESS VALUES (1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT into KEYLESS VALUES (1), (1);",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:       "/* client a */ COMMIT;",
@@ -1414,15 +1414,15 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ SELECT * from t;",
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 			{
 				Query:    "/* client b */ SELECT * from keyless;",
-				Expected: []sql.Row{{1}, {1}, {1}},
+				Expected: []sql.UntypedSqlRow{{1}, {1}, {1}},
 			},
 			{
 				Query:    "/* client b */ SELECT * from t where col1 = 100;",
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 		},
 	},
@@ -1447,59 +1447,59 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, "merge aborted"}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",
@@ -1507,15 +1507,15 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{ // client rolled back on merge with conflicts
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1553,19 +1553,19 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select count(*) from dolt_status", // clean working set
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_status", // clean working set
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 		},
 	},
@@ -1604,31 +1604,31 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// dirty working set: client a's changes were not committed to head
 				Query:    "/* client a */ select * from dolt_status",
-				Expected: []sql.Row{{"users", false, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"users", false, "modified"}},
 			},
 			{
 				// dirty working set: client a's changes were not committed to head, but are visible to client b
 				Query:    "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{{"users", false, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"users", false, "modified"}},
 			},
 			{
 				Query:    "/* client a */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				// changes from client a are in the working set, but not in HEAD
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 				},
 			},
 			{
 				Query: "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 				},
 			},
@@ -1676,30 +1676,30 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				// dirty working set: modifications are staged
 				Query: "/* client a */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"users", true, "modified"},
 				},
 			},
 			{
 				// dirty working set: modifications are staged
 				Query: "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"users", true, "modified"},
 				},
 			},
 			{
 				// staged changes include changes from both A and B
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 					{2, 2, "jim", "jim2"},
 				},
@@ -1707,7 +1707,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// staged changes include changes from both A and B
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 					{2, 2, "jim", "jim2"},
 				},
@@ -1764,16 +1764,16 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim3"}, {2, "jim3"}},
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim3"}, {2, "jim3"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim3"}, {2, "jim3"}},
 			},
 			{
 				// dirty working set: modifications are staged and unstaged
 				Query: "/* client a */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"users", true, "modified"},
 					{"users", false, "modified"},
 				},
@@ -1781,7 +1781,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// dirty working set: modifications are staged and unstaged
 				Query: "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"users", true, "modified"},
 					{"users", false, "modified"},
 				},
@@ -1789,7 +1789,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// staged changes include changes from both A and B at staged revision of data
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 					{2, 2, "jim", "jim2"},
 				},
@@ -1797,7 +1797,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// staged changes include changes from both A and B at staged revision of data
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim2"},
 					{2, 2, "jim", "jim2"},
 				},
@@ -1805,7 +1805,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// working changes include changes from both A and B at working revision of data
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim3"},
 					{2, 2, "jim", "jim3"},
 				},
@@ -1813,21 +1813,21 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// working changes include changes from both A and B at working revision of data
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim", "tim3"},
 					{2, 2, "jim", "jim3"},
 				},
 			},
 			{
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim2", "tim3"},
 					{2, 2, "jim2", "jim3"},
 				},
 			},
 			{
 				Query: "/* client a */ select from_id, to_id, from_name, to_name from dolt_diff('STAGED', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1, "tim2", "tim3"},
 					{2, 2, "jim2", "jim3"},
 				},
@@ -1872,7 +1872,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim"}, {2, "jim2"}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-m', 'jim2 commit')",
@@ -1880,24 +1880,24 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from users order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				Query:    "/* client b */ select * from users as of 'HEAD' order by id",
-				Expected: []sql.Row{{1, "tim2"}, {2, "jim2"}},
+				Expected: []sql.UntypedSqlRow{{1, "tim2"}, {2, "jim2"}},
 			},
 			{
 				Query:    "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'STAGED', 'users') order by from_id, to_id",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// staged changes include changes from both A and B at staged revision of data
 				Query:    "/* client b */ select from_id, to_id, from_name, to_name from dolt_diff('HEAD', 'WORKING', 'users') order by from_id, to_id",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1912,11 +1912,11 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ call dolt_add('t1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:            "/* client a */ call dolt_commit('-m', 'initial commit of t1')",
@@ -1924,51 +1924,51 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into t1 values (3, 3)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t1 values (4, 4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into t2 values (3, 3)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t2 values (4, 4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ call dolt_add('t1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ call dolt_add('t1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ insert into t1 values (5, 5)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into t1 values (6, 6)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client c */ insert into t2 values (6, 6)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:            "/* client a */ call dolt_commit('-m', 'add 3 to t1')",
@@ -1976,15 +1976,15 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t2 order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {6, 6}},
 			},
 			{
 				Query:    "/* client a */ select * from t1 order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {5, 5}},
 			},
 			{
 				Query:    "/* client a */ select * from t1 as of 'HEAD' order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:            "/* client b */ call dolt_commit('-m', 'add 4 to t1')",
@@ -1992,20 +1992,20 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from t2 order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {6, 6}},
 			},
 			{
 				Query:    "/* client b */ select * from t1 order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}},
 			},
 			{
 				Query:    "/* client b */ select * from t1 as of 'HEAD' order by id asc",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				// working set has t2 new, t1 modified, nothing staged
 				Query: "/* client a */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t2", false, "new table"},
 					{"t1", false, "modified"},
 				},
@@ -2013,7 +2013,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// working set has t2 new, t1 modified, nothing staged
 				Query: "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t2", false, "new table"},
 					{"t1", false, "modified"},
 				},
@@ -2021,14 +2021,14 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// client a has a stale view of t1 from before the commit, so it's missing the row with 4 in its session's working set
 				Query: "/* client a */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, 5, nil, 5},
 					{4, nil, 4, nil},
 				},
 			},
 			{
 				Query: "/* client b */ select from_id, to_id, from_val, to_val from dolt_diff('HEAD', 'WORKING', 't1') order by from_id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, 5, nil, 5},
 					{nil, 6, nil, 6},
 				},
@@ -2048,31 +2048,31 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ DELETE FROM parent where pk = 1;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -2123,7 +2123,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ SELECT * from DOLT_CONSTRAINT_VIOLATIONS;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_MERGE('--abort');",
@@ -2145,19 +2145,19 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -2175,27 +2175,27 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO parent VALUES (30, 3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "/* client b */ COMMIT;",
@@ -2219,39 +2219,39 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 	//		Assertions: []queries.ScriptTestAssertion{
 	//			{
 	//				Query:    "/* client a */ SELECT count(*) FROM t;",
-	//				Expected: []sql.Row{{250}},
+	//				Expected: []sql.UntypedSqlRow{{250}},
 	//			},
 	//			{
 	//				Query:    "/* client a */ START TRANSACTION",
-	//				Expected: []sql.Row{},
+	//				Expected: []sql.UntypedSqlRow{},
 	//			},
 	//			{
 	//				Query:    "/* client b */ START TRANSACTION",
-	//				Expected: []sql.Row{},
+	//				Expected: []sql.UntypedSqlRow{},
 	//			},
 	//			{
 	//				Query:    "/* client a */ CALL DOLT_GC();",
-	//				Expected: []sql.Row{{1}},
+	//				Expected: []sql.UntypedSqlRow{{1}},
 	//			},
 	//			{
 	//				Query:    "/* client b */ INSERT into t VALUES (300);",
-	//				Expected: []sql.Row{{types.NewOkResult(1)}},
+	//				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 	//			},
 	//			{
 	//				Query:    "/* client a */ COMMIT;",
-	//				Expected: []sql.Row{},
+	//				Expected: []sql.UntypedSqlRow{},
 	//			},
 	//			{
 	//				Query:    "/* client b */ COMMIT;",
-	//				Expected: []sql.Row{},
+	//				Expected: []sql.UntypedSqlRow{},
 	//			},
 	//			{
 	//				Query:    "/* client a */ SELECT count(*) FROM t;",
-	//				Expected: []sql.Row{{251}},
+	//				Expected: []sql.UntypedSqlRow{{251}},
 	//			},
 	//			{
 	//				Query:    "/* client b */ SELECT count(*) FROM t;",
-	//				Expected: []sql.Row{{251}},
+	//				Expected: []sql.UntypedSqlRow{{251}},
 	//			},
 	//		},
 	//	},
@@ -2291,15 +2291,15 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ select * from t1 as of 'b1' order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:            "/* client a */ start transaction",
@@ -2307,17 +2307,17 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// This query specifies the branch HEAD commit, which hasn't changed
 				Query:    "/* client a */ select * from t1 as of 'b1' order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// This query specifies the working set of that branch, which has changed
 				Query:    "/* client a */ select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 		},
 	},
@@ -2354,15 +2354,15 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ select * from t1 as of 'b1' order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:            "/* client a */ start transaction",
@@ -2370,15 +2370,15 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ select * from t1 as of 'b1' order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 			{
 				Query:    "/* client a */ select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 		},
 	},
@@ -2407,7 +2407,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"b2"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}, {"main"}},
 			},
 			{
 				Query:            "/* client b */ commit",
@@ -2415,7 +2415,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"b1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"b1"}, {"main"}},
 			},
 			{
 				Query:            "/* client a */ start transaction",
@@ -2423,7 +2423,7 @@ var BranchIsolationTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"b2"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}, {"main"}},
 			},
 		},
 	},
@@ -2442,33 +2442,33 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `mydb/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into `mydb/b1`.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_checkout('b1')",
@@ -2476,7 +2476,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
@@ -2494,13 +2494,13 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `mydb/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_checkout('b1')",
@@ -2508,7 +2508,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -2525,23 +2525,23 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `mydb/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into `mydb/b1`.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
@@ -2551,29 +2551,29 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/main`.t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "use mydb/b1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from `mydb/b1`.t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
 			{
 				Query:    "select * from `mydb/main`.t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
@@ -2591,13 +2591,13 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `mydb/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "call dolt_commit('-am', 'changes on b1')",
@@ -2605,7 +2605,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "use mydb/b1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_commit('-am', 'other changes on b1')",
@@ -2613,11 +2613,11 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select message from dolt_log order by date desc limit 1",
-				Expected: []sql.Row{{"other changes on b1"}},
+				Expected: []sql.UntypedSqlRow{{"other changes on b1"}},
 			},
 		},
 	},
@@ -2638,21 +2638,21 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "use mydb/b1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},
@@ -2670,19 +2670,19 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `mydb/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into `mydb/b1`.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_checkout('b1')",
@@ -2690,11 +2690,11 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"b1"}},
+				Expected: []sql.UntypedSqlRow{{"b1"}},
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
@@ -2704,39 +2704,39 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "use `mydb/b1`",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"b1"}},
+				Expected: []sql.UntypedSqlRow{{"b1"}},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 			{
 				Query:    "use mydb",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_checkout('b1')",
@@ -2744,7 +2744,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from t1 order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1}, {2},
 				},
 			},
@@ -2765,35 +2765,35 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into db1.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into db1.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from db1.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from db1.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 		},
 	},
@@ -2816,7 +2816,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "insert into `db1/b1`.t1 values (1)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:          "call dolt_commit('-am', 'changes on b1')",
@@ -2824,7 +2824,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "use db1/b1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:            "call dolt_commit('-am', 'other changes on b1')",
@@ -2832,11 +2832,11 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select message from dolt_log order by date desc limit 1",
-				Expected: []sql.Row{{"other changes on b1"}},
+				Expected: []sql.UntypedSqlRow{{"other changes on b1"}},
 			},
 		},
 	},
@@ -2858,43 +2858,43 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `db1/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into `db1/b1`.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from db1.t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from `db1/b1`.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 			{
 				Query:    "commit",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from db1.t1 order by a",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from `db1/b1`.t1 order by a",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 		},
 	},
@@ -2943,7 +2943,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into `db1/b1`.t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
@@ -2965,13 +2965,13 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into `mydb/b1`.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
@@ -2993,7 +2993,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
@@ -3003,7 +3003,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 			},
 			{
 				Query: "insert into t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
@@ -3026,13 +3026,13 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t1 values (1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
 			{
 				Query: "insert into db2.t1 values (2)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1}},
 				},
 			},
@@ -3058,171 +3058,171 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (3, 3)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (4, 4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db1.t values (5, 5)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db2.t values (6, 6)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ savepoint spa1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ savepoint spb1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (5, 5)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (6, 6)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db1.t values (7, 7)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db2.t values (8, 8)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ savepoint spa2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ savepoint spb2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (7, 7)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (8, 8)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db1.t values (9, 9)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ insert into db2.t values (10, 10)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}, {9, 9}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {5, 5}, {7, 7}, {9, 9}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}, {10, 10}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {6, 6}, {8, 8}, {10, 10}},
 			},
 			{
 				Query:    "/* client a */ rollback to SPA2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ rollback to spB2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {5, 5}, {7, 7}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {6, 6}, {8, 8}},
 			},
 			{
 				Query:    "/* client a */ rollback to sPa2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ rollback to Spb2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {5, 5}, {7, 7}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {6, 6}, {8, 8}},
 			},
 			{
 				Query:    "/* client a */ rollback to spA1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ rollback to SPb1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {5, 5}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {6, 6}},
 			},
 			{
 				Query:       "/* client a */ rollback to spa2",
@@ -3234,51 +3234,51 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ rollback to Spa1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ rollback to spB1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {5, 5}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {6, 6}},
 			},
 			{
 				Query:    "/* client a */ rollback",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "/* client b */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "/* client b */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:       "/* client a */ rollback to spa1",
@@ -3303,83 +3303,83 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (3, 3)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (4, 4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ savepoint spa1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (5, 5)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (6, 6)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ savepoint spa2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (7, 7)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (8, 8)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ savepoint SPA1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ insert into db1.t values (9, 9)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ insert into db2.t values (10, 10)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}, {9, 9}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}, {7, 7}, {9, 9}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}, {10, 10}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}, {8, 8}, {10, 10}},
 			},
 			{
 				Query:    "/* client a */ rollback to Spa1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
 			},
 			{
 				Query:    "/* client a */ rollback to spa2",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select * from db1.t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}, {5, 5}},
 			},
 			{
 				Query:    "/* client a */ select * from db2.t order by x",
-				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+				Expected: []sql.UntypedSqlRow{{2, 2}, {4, 4}, {6, 6}},
 			},
 			{
 				Query:       "/* client a */ rollback to spa1",

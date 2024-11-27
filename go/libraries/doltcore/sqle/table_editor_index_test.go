@@ -75,16 +75,16 @@ CREATE UNIQUE INDEX idx_v1v2 ON twouni(v1, v2);
 func TestTableEditorIndexResults(t *testing.T) {
 	tests := []struct {
 		sqlStatement    string
-		expectedIdxv1   []sql.Row
-		expectedIdxv2v1 []sql.Row
+		expectedIdxv1   []sql.UntypedSqlRow
+		expectedIdxv2v1 []sql.UntypedSqlRow
 	}{
 		{
 			`
 INSERT INTO onepk VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9);
 INSERT INTO onepk VALUES (3, 2, 1), (6, 5, 4), (9, 8, 7);
 `,
-			[]sql.Row{{2, 1}, {2, 3}, {5, 4}, {5, 6}, {8, 7}, {8, 9}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{2, 1}, {2, 3}, {5, 4}, {5, 6}, {8, 7}, {8, 9}},
+			[]sql.UntypedSqlRow{},
 		},
 		{
 			`
@@ -92,8 +92,8 @@ INSERT INTO onepk VALUES (1, 11, 111), (2, 22, 222), (3, 33, 333);
 UPDATE onepk SET v1 = v1 - 1 WHERE pk1 > 1;
 REPLACE INTO onepk VALUES (3, 55, 555), (4, 44, 444);
 `,
-			[]sql.Row{{11, 1}, {21, 2}, {44, 4}, {55, 3}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{11, 1}, {21, 2}, {44, 4}, {55, 3}},
+			[]sql.UntypedSqlRow{},
 		},
 		{
 			`
@@ -102,8 +102,8 @@ INSERT INTO twopk VALUES (4, 44, 444, 4444);
 REPLACE INTO twopk VALUES (4, 44, 111, 4444), (5, 55, 222, 5555), (6, 66, 333, 6666);
 DELETE FROM onepk WHERE v2 = 222;
 `,
-			[]sql.Row{{11, 1}, {33, 3}},
-			[]sql.Row{{4444, 111, 4, 44}, {5555, 222, 5, 55}, {6666, 333, 6, 66}},
+			[]sql.UntypedSqlRow{{11, 1}, {33, 3}},
+			[]sql.UntypedSqlRow{{4444, 111, 4, 44}, {5555, 222, 5, 55}, {6666, 333, 6, 66}},
 		},
 		{
 			`
@@ -112,8 +112,8 @@ DELETE FROM onepk WHERE pk1 % 2 = 1;
 REPLACE INTO onepk VALUES (3, 6, 2), (-1, 4, -3);
 UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 `,
-			[]sql.Row{{2, 4}, {4, 3}, {6, 9}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{2, 4}, {4, 3}, {6, 9}},
+			[]sql.UntypedSqlRow{},
 		},
 	}
 
@@ -186,8 +186,8 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 func TestTableEditorUniqueIndexResults(t *testing.T) {
 	tests := []struct {
 		sqlStatement    string
-		expectedIdxv1   []sql.Row
-		expectedIdxv1v2 []sql.Row
+		expectedIdxv1   []sql.UntypedSqlRow
+		expectedIdxv1v2 []sql.UntypedSqlRow
 		expectedErr     bool
 	}{
 		{
@@ -195,8 +195,8 @@ func TestTableEditorUniqueIndexResults(t *testing.T) {
 INSERT INTO oneuni VALUES (1, 3, 2), (4, 6, 5), (7, 9, 8);
 INSERT INTO oneuni VALUES (3, 1, 2), (6, 4, 5), (9, 7, 8);
 `,
-			[]sql.Row{{1, 3}, {3, 1}, {4, 6}, {6, 4}, {7, 9}, {9, 7}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{1, 3}, {3, 1}, {4, 6}, {6, 4}, {7, 9}, {9, 7}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
@@ -205,8 +205,8 @@ INSERT INTO oneuni VALUES (1, 11, 111), (2, 22, 222), (3, 33, 333);
 UPDATE oneuni SET v1 = v1 - 1 WHERE pk1 > 1;
 REPLACE INTO oneuni VALUES (3, 55, 555), (4, 44, 444);
 `,
-			[]sql.Row{{11, 1}, {21, 2}, {44, 4}, {55, 3}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{11, 1}, {21, 2}, {44, 4}, {55, 3}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
@@ -217,8 +217,8 @@ INSERT INTO twouni VALUES (4, 44, 444, 4444);
 REPLACE INTO twouni VALUES (4, 44, 111, 4444), (5, 55, 222, 5555), (6, 66, 333, 6666);
 DELETE FROM oneuni WHERE v1 = 22;
 `,
-			[]sql.Row{{11, 1}, {33, 3}},
-			[]sql.Row{{111, 4444, 4, 44}, {222, 5555, 5, 55}, {333, 6666, 6, 66}},
+			[]sql.UntypedSqlRow{{11, 1}, {33, 3}},
+			[]sql.UntypedSqlRow{{111, 4444, 4, 44}, {222, 5555, 5, 55}, {333, 6666, 6, 66}},
 			false,
 		},
 		{
@@ -228,8 +228,8 @@ DELETE FROM oneuni WHERE pk1 % 2 = 1;
 REPLACE INTO oneuni VALUES (3, 6, 2), (-1, 4, -3);
 UPDATE oneuni SET pk1 = v1 + v2;
 `,
-			[]sql.Row{{2, 4}, {4, 1}, {6, 8}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{2, 4}, {4, 1}, {6, 8}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
@@ -238,8 +238,8 @@ INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 DELETE FROM oneuni WHERE v1 < 3;
 REPLACE INTO oneuni VALUES (4, 2, 2), (5, 3, 3), (3, 1, 1);
 `,
-			[]sql.Row{{1, 3}, {2, 4}, {3, 5}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{1, 3}, {2, 4}, {3, 5}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
@@ -248,8 +248,8 @@ INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 DELETE FROM oneuni WHERE v1 < 3;
 REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 `,
-			[]sql.Row{{1, 3}, {2, 5}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{1, 3}, {2, 5}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
@@ -257,16 +257,16 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 INSERT INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 REPLACE INTO oneuni VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
 `,
-			[]sql.Row{{1, 1}, {2, 3}},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{{1, 1}, {2, 3}},
+			[]sql.UntypedSqlRow{},
 			false,
 		},
 		{
 			`
 INSERT INTO oneuni VALUES (1, 1, 1), (2, 1, 2), (3, 3, 3);
 `,
-			[]sql.Row{},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 		{
@@ -274,8 +274,8 @@ INSERT INTO oneuni VALUES (1, 1, 1), (2, 1, 2), (3, 3, 3);
 INSERT INTO oneuni VALUES (1, 2, 3), (2, 1, 4);
 UPDATE oneuni SET v1 = v1 + pk1;
 `,
-			[]sql.Row{},
-			[]sql.Row{},
+			[]sql.UntypedSqlRow{},
+			[]sql.UntypedSqlRow{},
 			true,
 		},
 	}
@@ -353,15 +353,15 @@ UPDATE oneuni SET v1 = v1 + pk1;
 	}
 }
 
-func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
+func convertSqlRowToInt64(sqlRows []sql.UntypedSqlRow) []sql.UntypedSqlRow {
 	if sqlRows == nil {
 		return nil
 	}
-	newSqlRows := make([]sql.Row, len(sqlRows))
+	newSqlRows := make([]sql.UntypedSqlRow, len(sqlRows))
 	for i, sqlRow := range sqlRows {
-		newSqlRow := make(sql.Row, len(sqlRow))
+		newSqlRow := make(sql.UntypedSqlRow, len(sqlRow))
 		for j := range sqlRow {
-			switch v := sqlRow[j].(type) {
+			switch v := sqlRow.GetValue(j).(type) {
 			case int:
 				newSqlRow[j] = int64(v)
 			case int8:

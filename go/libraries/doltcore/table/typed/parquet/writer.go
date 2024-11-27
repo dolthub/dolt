@@ -86,7 +86,7 @@ func NewParquetRowWriterForFile(outSch schema.Schema, destName string) (*Parquet
 func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 	colValStrs := make([]*string, len(pwr.sch))
 
-	for i, val := range r {
+	for i, val := range r.Values() {
 		colT := pwr.sch[i]
 		if val == nil {
 			colValStrs[i] = nil

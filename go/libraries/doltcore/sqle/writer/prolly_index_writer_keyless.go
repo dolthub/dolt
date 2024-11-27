@@ -137,7 +137,7 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 
 	for to := range k.valMap {
 		from := k.valMap.MapOrdinal(to)
-		if err = tree.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow[from]); err != nil {
+		if err = tree.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow.GetValue(from)); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -154,7 +154,7 @@ func (k prollyKeylessWriter) errForSecondaryUniqueKeyError(ctx context.Context, 
 // UniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(k.valMap))
+	existing := make(sql.UntypedSqlRow, len(k.valMap))
 
 	_ = k.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		vd := k.valBld.Desc
@@ -238,7 +238,7 @@ func (writer prollyKeylessSecondaryWriter) trimKeyPart(to int, keyPart interface
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		keyPart := writer.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -312,7 +312,7 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		keyPart := writer.trimKeyPart(to, sqlRow[from])
+		keyPart := writer.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}

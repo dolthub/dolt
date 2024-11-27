@@ -48,15 +48,15 @@ end
 			},
 			{
 				Query:    "select * from t",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}},
 			},
 			{
 				Query:    "select count(*) from dolt_log;",
-				Expected: []sql.Row{{13}}, // init, setup for test harness, initial commit in setup script, 10 commits in procedure
+				Expected: []sql.UntypedSqlRow{{13}}, // init, setup for test harness, initial commit in setup script, 10 commits in procedure
 			},
 			{
 				Query:    "select * from t as of `HEAD~5`",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			},
 		},
 	},
@@ -86,11 +86,11 @@ end
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
 	},
@@ -120,11 +120,11 @@ end
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
 	},
@@ -165,11 +165,11 @@ end
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
 	},
@@ -211,11 +211,11 @@ end
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
 	},
@@ -254,13 +254,13 @@ end
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t values (1, 1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{gmstypes.OkResult{RowsAffected: 1, InsertID: 4}},
 				},
 			},
 			{
 				Query: "select name from dolt_branches order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"branch1"},
 					{"branch2"},
 					{"branch3"},
@@ -272,7 +272,7 @@ end
 				// For some reason, calling stored procedures disables inserts
 				Skip:  true,
 				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -304,22 +304,22 @@ end
 			{
 				Query:    "select active_branch()",
 				Skip:     true,
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
 				Skip:     true,
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
 				Skip:     true,
-				Expected: []sql.Row{{"branch1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "select * from `mydb/branch1`.t order by 1",
 				Skip:     true,
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 		},
 	},
@@ -347,22 +347,22 @@ end
 			{
 				Query:    "select active_branch()",
 				Skip:     true,
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
 				Skip:     true,
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
 				Skip:     true,
-				Expected: []sql.Row{{"branch1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "select * from `mydb/branch1`.t order by 1",
 				Skip:     true,
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 		},
 	},
@@ -393,19 +393,19 @@ end
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t order by 1",
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.UntypedSqlRow{{1, 100}},
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Expected: []sql.Row{{"branch1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "select * from `mydb/branch1`.t order by 1",
-				Expected: []sql.Row{{1, 100}, {2, 200}},
+				Expected: []sql.UntypedSqlRow{{1, 100}, {2, 200}},
 			},
 		},
 	},

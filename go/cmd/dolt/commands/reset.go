@@ -198,7 +198,7 @@ type StatRow struct {
 func buildStatRows(rows []sql.Row) []StatRow {
 	statRows := make([]StatRow, 0, len(rows))
 	for _, row := range rows {
-		statRows = append(statRows, StatRow{row[0].(string), row[1].(string)})
+		statRows = append(statRows, StatRow{row.GetValue(0).(string), row.GetValue(1).(string)})
 	}
 	return statRows
 }

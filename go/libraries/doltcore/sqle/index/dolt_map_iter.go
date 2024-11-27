@@ -148,7 +148,7 @@ func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.
 		}
 	}
 
-	return cols, nil
+	return sql.NewUntypedRow(cols...), nil
 }
 
 func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int, maxTag uint64, tup types.Tuple, tupItr *types.TupleIterator) error {

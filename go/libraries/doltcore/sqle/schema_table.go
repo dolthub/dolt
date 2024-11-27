@@ -303,15 +303,15 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 			return nil, err
 		}
 
-		newRow := make(sql.Row, SchemaTableSchema().GetAllCols().Size())
-		newRow[0] = sqlRow[typeIdx]
-		newRow[1] = sqlRow[nameIdx]
-		newRow[2] = sqlRow[fragmentIdx]
+		newRow := make(sql.UntypedSqlRow, SchemaTableSchema().GetAllCols().Size())
+		newRow[0] = sqlRow.GetValue(typeIdx)
+		newRow[1] = sqlRow.GetValue(nameIdx)
+		newRow[2] = sqlRow.GetValue(fragmentIdx)
 		if extraIdx >= 0 {
-			newRow[3] = sqlRow[extraIdx]
+			newRow[3] = sqlRow.GetValue(extraIdx)
 		}
 		if sqlModeIdx >= 0 {
-			newRow[4] = sqlRow[sqlModeIdx]
+			newRow[4] = sqlRow.GetValue(sqlModeIdx)
 		}
 
 		newRows = append(newRows, newRow)
@@ -394,7 +394,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 
 		// These columns are case insensitive, make sure to do a case-insensitive comparison
-		if strings.EqualFold(sqlRow[typeIdx].(string), fragType) && strings.EqualFold(sqlRow[nameIdx].(string), name) {
+		if strings.EqualFold(sqlRow.GetValue(typeIdx).(string), fragType) && strings.EqualFold(sqlRow.GetValue(nameIdx).(string), name) {
 			return sqlRow, true, nil
 		}
 	}
@@ -442,13 +442,13 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
-		if sqlRow[typeIdx] != fragType {
+		if sqlRow.GetValue(typeIdx) != fragType {
 			continue
 		}
 
 		sqlModeString := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := sqlRow[sqlModeIdx].(string); ok {
+			if s, ok := sqlRow.GetValue(sqlModeIdx).(string); ok {
 				sqlModeString = s
 			}
 		} else {
@@ -460,10 +460,10 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		}
 
 		// For older tables, use 1 as the trigger creation time
-		if extraIdx < 0 || sqlRow[extraIdx] == nil {
+		if extraIdx < 0 || sqlRow.GetValue(extraIdx) == nil {
 			frags = append(frags, schemaFragment{
-				name:     sqlRow[nameIdx].(string),
-				fragment: sqlRow[fragmentIdx].(string),
+				name:     sqlRow.GetValue(nameIdx).(string),
+				fragment: sqlRow.GetValue(fragmentIdx).(string),
 				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
 				sqlMode:  sqlModeString,
 			})
@@ -471,14 +471,14 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		}
 
 		// Extract Created Time from JSON column
-		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(sql.JSONWrapper))
+		createdTime, err := getCreatedTime(ctx, sqlRow.GetValue(extraIdx).(sql.JSONWrapper))
 		if err != nil {
 			return nil, err
 		}
 
 		frags = append(frags, schemaFragment{
-			name:     sqlRow[nameIdx].(string),
-			fragment: sqlRow[fragmentIdx].(string),
+			name:     sqlRow.GetValue(nameIdx).(string),
+			fragment: sqlRow.GetValue(fragmentIdx).(string),
 			created:  time.Unix(createdTime, 0).UTC(),
 			sqlMode:  sqlModeString,
 		})

@@ -54,8 +54,8 @@ type Person struct {
 	Title string `parquet:"name=title, type=BYTE_ARRAY, convertedtype=UTF8, repetitiontype=OPTIONAL"`
 }
 
-func getSampleRows() []sql.Row {
-	return []sql.Row{
+func getSampleRows() []sql.UntypedSqlRow {
+	return []sql.UntypedSqlRow{
 		{"Bill Billerson", 32, "Senior Dufus"},
 		{"Rob Robertson", 25, "Dufus"},
 		{"John Johnson", 21, ""},
@@ -63,7 +63,7 @@ func getSampleRows() []sql.Row {
 	}
 }
 
-func writeToParquet(pWr *ParquetRowWriter, rows []sql.Row, t *testing.T) {
+func writeToParquet(pWr *ParquetRowWriter, rows []sql.UntypedSqlRow, t *testing.T) {
 	func() {
 		defer func() {
 			err := pWr.Close(context.Background())

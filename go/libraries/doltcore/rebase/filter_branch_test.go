@@ -52,7 +52,7 @@ type args []string
 type testAssertion struct {
 	setup []testCommand
 	query string
-	rows  []sql.Row
+	rows  []sql.UntypedSqlRow
 }
 
 var setupCommon = []testCommand{
@@ -78,7 +78,7 @@ func filterBranchTests() []filterBranchTest {
 			asserts: []testAssertion{
 				{
 					query: "select * from test",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
 						{int32(2), int32(2)},
@@ -100,7 +100,7 @@ func filterBranchTests() []filterBranchTest {
 			asserts: []testAssertion{
 				{
 					query: "SELECT * FROM test",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
 						{int32(2), int32(2)},
@@ -128,7 +128,7 @@ func filterBranchTests() []filterBranchTest {
 			asserts: []testAssertion{
 				{
 					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk, c0",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
@@ -139,7 +139,7 @@ func filterBranchTests() []filterBranchTest {
 				},
 				{
 					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
@@ -153,7 +153,7 @@ func filterBranchTests() []filterBranchTest {
 						{cmd.CheckoutCmd{}, args{"other"}},
 					},
 					query: "SELECT * FROM test;",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
 						{int32(2), int32(2)},
@@ -162,7 +162,7 @@ func filterBranchTests() []filterBranchTest {
 				},
 				{
 					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk,c0",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
 						{int32(1), int32(1)},
@@ -190,7 +190,7 @@ func filterBranchTests() []filterBranchTest {
 				},
 				{
 					query: "SELECT count(*) FROM test AS OF 'HEAD~1';",
-					rows: []sql.Row{
+					rows: []sql.UntypedSqlRow{
 						{int64(2)},
 					},
 				},

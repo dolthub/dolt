@@ -192,7 +192,7 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 	}
 
 	return func(ctx *sql.Context, row sql.Row) (sql.Row, error) {
-		r := make(sql.Row, len(projectedColNames))
+		r := make(sql.UntypedSqlRow, len(projectedColNames))
 		for i, tag := range projectedTags {
 			// First try to find the column in the src schema with the matching tag
 			// then fallback to a name match, since type changes will change the tag
@@ -203,7 +203,7 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 
 			if found {
 				srcIndex := srcSchema.GetAllCols().IndexOf(srcColumn.Name)
-				temp := row[srcIndex]
+				temp := row.GetValue(srcIndex)
 
 				conversionType := srcIndexToTargetType[srcIndex]
 
@@ -212,7 +212,7 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 					return nil, err
 				}
 
-				r[i] = convertedValue
+				r.SetValue(i, convertedValue)
 			}
 		}
 		return r, nil

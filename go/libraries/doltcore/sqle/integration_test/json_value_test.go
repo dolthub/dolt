@@ -41,7 +41,7 @@ type jsonValueTest struct {
 	name  string
 	setup []testCommand
 	query string
-	rows  []sql.Row
+	rows  []sql.UntypedSqlRow
 }
 
 func TestJsonValues(t *testing.T) {
@@ -59,7 +59,7 @@ func TestJsonValues(t *testing.T) {
 			name:  "create JSON table",
 			setup: []testCommand{},
 			query: "select * from js",
-			rows:  []sql.Row{},
+			rows:  []sql.UntypedSqlRow{},
 		},
 		{
 			name: "insert into a JSON table",
@@ -67,7 +67,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
 			},
 			query: "select * from js",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(1), json.MustNomsJSON(`{"a":1}`)},
 				{int32(2), json.MustNomsJSON(`{"b":2}`)},
 			},
@@ -79,7 +79,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"c":3}' where pk = 2;`}},
 			},
 			query: "select * from js",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(1), json.MustNomsJSON(`{"a":1}`)},
 				{int32(2), json.MustNomsJSON(`{"c":3}`)},
 			},
@@ -91,7 +91,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `delete from js where pk = 2;`}},
 			},
 			query: "select * from js",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(1), json.MustNomsJSON(`{"a":1}`)},
 			},
 		},
@@ -110,7 +110,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "select * from js",
-			rows: []sql.Row{
+			rows: []sql.UntypedSqlRow{
 				{int32(1), json.MustNomsJSON(`{"a":11}`)},
 				{int32(2), json.MustNomsJSON(`{"b":22}`)},
 			},
@@ -144,9 +144,9 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 	require.Equal(t, len(test.rows), len(actRows))
 	for i := range test.rows {
-		assert.Equal(t, len(test.rows[i]), len(actRows[i]))
+		assert.Equal(t, len(test.rows[i]), actRows[i].Len())
 		for j := range test.rows[i] {
-			exp, act := test.rows[i][j], actRows[i][j]
+			exp, act := test.rows[i][j], actRows[i].GetValue(j)
 
 			// special logic for comparing JSONValues
 			if js, ok := exp.(json.NomsJSON); ok {
@@ -214,14 +214,14 @@ func TestLargeJsonObjects(t *testing.T) {
 		// for each row/object:
 		// - create an expected output rows
 		// - add an insert tuple to the setup query
-		expected := make([]sql.Row, numRows)
+		expected := make([]sql.UntypedSqlRow, numRows)
 
 		query := strings.Builder{}
 		query.WriteString("insert into js values (")
 		seenOne := false
 
 		for i, val := range vals {
-			expected[i] = sql.NewRow(int32(i), json.MustNomsJSON(val))
+			expected[i] = sql.NewUntypedRow(int32(i), json.MustNomsJSON(val)).(sql.UntypedSqlRow)
 
 			if seenOne {
 				query.WriteString("'),(")

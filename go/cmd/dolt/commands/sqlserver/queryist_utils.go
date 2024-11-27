@@ -146,7 +146,7 @@ func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlRow := make(sql.Row, len(s.vRow))
+	sqlRow := make(sql.UntypedSqlRow, len(s.vRow))
 	for i, val := range s.vRow {
 		if val != nil {
 			sqlRow[i] = *val

@@ -523,7 +523,7 @@ func TestUpdate(t *testing.T) {
 					rows, err := sqle.ExecuteSelect(dEnv, root, q)
 					assert.NoError(t, err)
 					assert.True(t, len(rows) > 0)
-					assert.Equal(t, uint32(test.expectedAges[i]), rows[0][2])
+					assert.Equal(t, uint32(test.expectedAges[i]), rows[0].GetValue(2))
 				}
 			}
 		})

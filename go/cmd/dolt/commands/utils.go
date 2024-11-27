@@ -420,12 +420,12 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 		return "", fmt.Errorf("unexpectedly received multiple rows in '%s': %s", query, rows)
 	}
 	row := rows[0]
-	if len(row) != 1 {
+	if row.Len() != 1 {
 		return "", fmt.Errorf("unexpectedly received multiple columns in '%s': %s", query, row)
 	}
-	branchName, ok := row[0].(string)
+	branchName, ok := row.GetValue(0).(string)
 	if !ok {
-		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row[0])
+		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row.GetValue(0))
 	}
 	return branchName, nil
 }
@@ -530,8 +530,8 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 	}
 
 	for _, row := range statusRows {
-		tableName := row[0].(string)
-		staged := row[1]
+		tableName := row.GetValue(0).(string)
+		staged := row.GetValue(1)
 		var isStaged bool
 		isStaged, err = GetTinyIntColAsBool(staged)
 		if err != nil {
@@ -692,22 +692,22 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	row := rows[0]
-	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
+	commitHash := row.GetValue(0).(string)
+	name := row.GetValue(1).(string)
+	email := row.GetValue(2).(string)
+	timestamp, err := getTimestampColAsUint64(row.GetValue(3))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
+		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row.GetValue(3), err)
 	}
-	message := row[4].(string)
-	parent := row[5].(string)
+	message := row.GetValue(4).(string)
+	parent := row.GetValue(5).(string)
 	height := uint64(len(rows))
 
 	isHead := commitHash == hashOfHead
 
 	var signature string
-	if len(row) > 7 {
-		signature = row[7].(string)
+	if row.Len() > 7 {
+		signature = row.GetValue(7).(string)
 	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
@@ -765,7 +765,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 
 	branches := []string{}
 	for _, row := range rows {
-		name := row[0].(string)
+		name := row.GetValue(0).(string)
 		branches = append(branches, name)
 	}
 	return branches, nil
@@ -783,7 +783,7 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 
 	tags := []string{}
 	for _, row := range rows {
-		name := row[0].(string)
+		name := row.GetValue(0).(string)
 		tags = append(tags, name)
 	}
 	return tags, nil
@@ -794,10 +794,10 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 // procedures which do this return the FF flag in different columns of their results.
 func getFastforward(row sql.Row, index int) bool {
 	fastForward := false
-	if row != nil && len(row) > index {
-		if ff, ok := row[index].(int64); ok {
+	if row != nil && row.Len() > index {
+		if ff, ok := row.GetValue(index).(int64); ok {
 			fastForward = ff == 1
-		} else if ff, ok := row[index].(string); ok {
+		} else if ff, ok := row.GetValue(index).(string); ok {
 			// remote execution returns row as a string
 			fastForward = ff == "1"
 		}
@@ -817,7 +817,7 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	if len(rows) == 0 {
 		return "", fmt.Errorf("no commits found for ref %s", ref)
 	}
-	return rows[0][0].(string), nil
+	return rows[0].GetValue(0).(string), nil
 }
 
 // ParseArgsOrPrintHelp is used by most commands to parse arguments and print help if necessary. It's a wrapper around

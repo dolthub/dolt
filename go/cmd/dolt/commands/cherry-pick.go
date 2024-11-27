@@ -175,16 +175,16 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	succeeded := false
 	commitHash := ""
 	for _, row := range rows {
-		commitHash = row[0].(string)
-		dataConflicts, err := getInt64ColAsInt64(row[1])
+		commitHash = row.GetValue(0).(string)
+		dataConflicts, err := getInt64ColAsInt64(row.GetValue(1))
 		if err != nil {
 			return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
 		}
-		schemaConflicts, err := getInt64ColAsInt64(row[2])
+		schemaConflicts, err := getInt64ColAsInt64(row.GetValue(2))
 		if err != nil {
 			return fmt.Errorf("Unable to parse schema_conflicts column: %w", err)
 		}
-		constraintViolations, err := getInt64ColAsInt64(row[3])
+		constraintViolations, err := getInt64ColAsInt64(row.GetValue(3))
 		if err != nil {
 			return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
 		}

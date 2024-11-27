@@ -599,12 +599,10 @@ func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb fu
 
 	size := len(sch)
 	for _, row := range rows {
-
 		cvs := make(columnValues, size)
-
-		for i := range size {
+		for i := range sch {
 			col := sch[i]
-			val := row[i]
+			val := row.GetValue(i)
 			cv, err := newColumnValue(col, val)
 			if err != nil {
 				return err

@@ -43,7 +43,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -62,7 +62,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -71,7 +71,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into child values (1, 1, 1)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:       "insert into `mydb/b1`.child values (1, 1, 1)",
@@ -93,7 +93,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -112,7 +112,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SHOW CREATE TABLE child;",
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -121,7 +121,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into child values (1, 1, 1)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 		},
 	},
@@ -138,7 +138,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			{
 				Query: "SHOW CREATE TABLE `mydb/b1`.child;",
 				Skip:  true,
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -155,7 +155,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			{
 				Query: "SHOW CREATE TABLE child;",
 				Skip:  true,
-				Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n" +
+				Expected: []sql.UntypedSqlRow{{"child", "CREATE TABLE `child` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  `v2` int,\n" +
@@ -165,7 +165,7 @@ var ForeignKeyBranchTests = []queries.ScriptTest{
 			{
 				Query:    "insert into child values (1, 1, 1)",
 				Skip:     true,
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 		},
 	},
@@ -189,7 +189,7 @@ var ViewBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from v1",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 			{
 				Query:            "use mydb/main",
@@ -201,7 +201,7 @@ var ViewBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/b1`.v1",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 		},
 	},
@@ -221,7 +221,7 @@ var ViewBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from v1",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
@@ -235,7 +235,7 @@ var ViewBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/b1`.v1",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
 			},
 		},
@@ -261,7 +261,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 			{
 				Query:            "use mydb/main",
@@ -273,7 +273,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/b1`.t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 		},
 	},
@@ -294,7 +294,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 			{
 				Query:            "use mydb/main",
@@ -306,7 +306,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/b1`.t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 		},
 	},
@@ -329,7 +329,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 			{
 				Query:            "use mydb/main",
@@ -341,7 +341,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/b1`.t2",
-				Expected: []sql.Row{{4, 4}},
+				Expected: []sql.UntypedSqlRow{{4, 4}},
 			},
 		},
 	},
@@ -356,15 +356,15 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table `mydb/b1`.t1 add column c int",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				Query:    "select * from `mydb/b1`.t1",
-				Expected: []sql.Row{{1, 1, nil}, {2, 2, nil}, {3, 3, nil}},
+				Expected: []sql.UntypedSqlRow{{1, 1, nil}, {2, 2, nil}, {3, 3, nil}},
 			},
 			{
 				Query:    "select * from t1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -379,15 +379,15 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table `mydb/b1`.t1 drop column b",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				Query:    "select * from `mydb/b1`.t1",
-				Expected: []sql.Row{{1}, {2}, {3}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}},
 			},
 			{
 				Query:    "select * from t1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -402,15 +402,15 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table `mydb/b1`.t1 modify column b varchar(1) first",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				Query:    "select * from `mydb/b1`.t1",
-				Expected: []sql.Row{{"1", 1}, {"2", 2}, {"3", 3}},
+				Expected: []sql.UntypedSqlRow{{"1", 1}, {"2", 2}, {"3", 3}},
 			},
 			{
 				Query:    "select * from t1",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	},
@@ -425,11 +425,11 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "create index idx on `mydb/b1`.t1 (b)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				Query: "show create table `mydb/b1`.t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`),\n" +
@@ -438,7 +438,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`)\n" +
@@ -446,11 +446,11 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "alter table `mydb/b1`.t1 drop index idx",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0}}},
 			},
 			{
 				Query: "show create table `mydb/b1`.t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`)\n" +
@@ -469,11 +469,11 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table `mydb/b1`.t1 add constraint chk1 check (b < 4)",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query: "show create table `mydb/b1`.t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`),\n" +
@@ -486,7 +486,7 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`)\n" +
@@ -494,15 +494,15 @@ var DdlBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t1 values (4, 4)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "alter table `mydb/b1`.t1 drop constraint chk1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "show create table `mydb/b1`.t1",
-				Expected: []sql.Row{{"t1", "CREATE TABLE `t1` (\n" +
+				Expected: []sql.UntypedSqlRow{{"t1", "CREATE TABLE `t1` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int,\n" +
 					"  PRIMARY KEY (`a`)\n" +

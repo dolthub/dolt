@@ -129,7 +129,7 @@ func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {
 	allCols := r.sch.GetAllCols()
 
-	ret := make(sql.Row, allCols.Size())
+	ret := make(sql.UntypedSqlRow, allCols.Size())
 	for k, v := range rowMap {
 		col, ok := allCols.GetByName(k)
 		if !ok {

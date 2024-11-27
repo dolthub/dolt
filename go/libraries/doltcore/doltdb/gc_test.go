@@ -61,7 +61,7 @@ type gcTest struct {
 	name       string
 	stages     []stage
 	query      string
-	expected   []sql.Row
+	expected   []sql.UntypedSqlRow
 	postGCFunc func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{})
 }
 
@@ -100,7 +100,7 @@ var gcTests = []gcTest{
 			},
 		},
 		query:    "select * from test;",
-		expected: []sql.Row{{int32(4)}, {int32(5)}, {int32(6)}},
+		expected: []sql.UntypedSqlRow{{int32(4)}, {int32(5)}, {int32(6)}},
 		postGCFunc: func(ctx context.Context, t *testing.T, ddb *doltdb.DoltDB, prevRes interface{}) {
 			h := prevRes.(hash.Hash)
 			cs, err := doltdb.NewCommitSpec(h.String())

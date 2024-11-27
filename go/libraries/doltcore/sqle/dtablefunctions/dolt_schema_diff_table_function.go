@@ -334,7 +334,7 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			continue
 		}
 
-		row := sql.Row{
+		row := sql.UntypedSqlRow{
 			fromName.String(), // from_table_name
 			toName.String(),   // to_table_name
 			fromCreate,        // from_create_statement

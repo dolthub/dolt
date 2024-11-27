@@ -289,7 +289,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			if s, ok := row.GetValue(sqlModeIdx).(string); ok {
 				sqlMode = s
 			}
 		}
@@ -304,7 +304,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 			return err
 		}
 
-		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[stmtColIdx]))
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row.GetValue(stmtColIdx)))
 		if err != nil {
 			return err
 		}
@@ -359,13 +359,13 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 			return err
 		}
 
-		if row[typeColIdx] != "trigger" {
+		if row.GetValue(typeColIdx) != "trigger" {
 			continue
 		}
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			if s, ok := row.GetValue(sqlModeIdx).(string); ok {
 				sqlMode = s
 			}
 		}
@@ -375,7 +375,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 			return err
 		}
 
-		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row.GetValue(fragColIdx)))
 		if err != nil {
 			return err
 		}
@@ -426,13 +426,13 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 			return err
 		}
 
-		if row[typeColIdx] != "view" {
+		if row.GetValue(typeColIdx) != "view" {
 			continue
 		}
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			if s, ok := row.GetValue(sqlModeIdx).(string); ok {
 				sqlMode = s
 			}
 		}
@@ -440,7 +440,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		sqlEngine := engine.GetUnderlyingEngine()
 		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
 		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
-		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), nil, false)
+		cv, _, _, _, err := binder.Parse(row.GetValue(fragColIdx).(string), nil, false)
 		if err != nil {
 			return err
 		}
@@ -451,12 +451,12 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 
 		_, ok := cv.(*plan.CreateView)
 		if ok {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row.GetValue(fragColIdx)))
 			if err != nil {
 				return err
 			}
 		} else {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
+			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row.GetValue(nameColIdx), row.GetValue(fragColIdx)))
 			if err != nil {
 				return err
 			}

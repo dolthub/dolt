@@ -33,7 +33,7 @@ func doltCountCommits(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sql.RowsToRowIter(sql.Row{ahead, behind}), nil
+	return sql.RowsToRowIter(sql.UntypedSqlRow{ahead, behind}), nil
 }
 
 func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64, err error) {

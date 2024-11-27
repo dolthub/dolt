@@ -173,7 +173,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 	var dbs []string
 	for i := range res {
-		dbs = append(dbs, res[i][0].(string))
+		dbs = append(dbs, res[i].GetValue(0).(string))
 	}
 
 	var resetCmds []setup.SetupScript
@@ -188,7 +188,7 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			fmt.Sprintf("select distinct table_name from information_schema.columns where extra = 'auto_increment' and table_schema = '%s';", db))
 
 		for _, tableNameRow := range aiTables {
-			tableName := tableNameRow[0].(string)
+			tableName := tableNameRow.GetValue(0).(string)
 
 			// special handling for auto_increment_tbl, which is expected to start with particular values
 			if strings.EqualFold(tableName, "auto_increment_tbl") {

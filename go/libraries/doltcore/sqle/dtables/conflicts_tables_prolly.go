@@ -205,8 +205,8 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row, itr.n)
-	r[0] = c.h.String()
+	r := make(sql.UntypedSqlRow, itr.n)
+	r.SetValue(0, c.h.String())
 
 	if !itr.keyless {
 		for i := 0; i < itr.kd.Count(); i++ {
@@ -215,13 +215,13 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, err
 			}
 			if c.bV != nil {
-				r[itr.b+i] = f
+				r.SetValue(itr.b+i, f)
 			}
 			if c.oV != nil {
-				r[itr.o+i] = f
+				r.SetValue(itr.o+i, f)
 			}
 			if c.tV != nil {
-				r[itr.t+i] = f
+				r.SetValue(itr.t+i, f)
 			}
 		}
 
@@ -247,7 +247,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			if err != nil {
 				return err
 			}
-			r[itr.b+itr.kd.Count()+i] = f
+			r.SetValue(itr.b+itr.kd.Count()+i, f)
 		}
 	}
 
@@ -257,10 +257,10 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			if err != nil {
 				return err
 			}
-			r[itr.o+itr.kd.Count()+i] = f
+			r.SetValue(itr.o+itr.kd.Count()+i, f)
 		}
 	}
-	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
+	r.SetValue(itr.o+itr.kd.Count()+itr.oursVD.Count(), getDiffType(c.bV, c.oV))
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
@@ -268,11 +268,11 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			if err != nil {
 				return err
 			}
-			r[itr.t+itr.kd.Count()+i] = f
+			r.SetValue(itr.t+itr.kd.Count()+i, f)
 		}
 	}
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
+	r.SetValue(itr.t+itr.kd.Count()+itr.theirsVD.Count(), getDiffType(c.bV, c.tV))
+	r.SetValue(itr.t+itr.kd.Count()+itr.theirsVD.Count()+1, c.id)
 
 	return nil
 }
@@ -291,63 +291,67 @@ func getDiffType(base val.Tuple, other val.Tuple) string {
 func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) (err error) {
 	ns := itr.baseRows.NodeStore()
 
+	var v interface{}
 	if c.bV != nil {
 		// Cardinality
-		r[itr.n-3], err = tree.GetField(ctx, itr.baseVD, 0, c.bV, ns)
+		v, err = tree.GetField(ctx, itr.baseVD, 0, c.bV, ns)
 		if err != nil {
 			return err
 		}
+		r.SetValue(itr.n-3, v)
 
 		for i := 0; i < itr.baseVD.Count()-1; i++ {
 			f, err := tree.GetField(ctx, itr.baseVD, i+1, c.bV, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.b+i] = f
+			r.SetValue(itr.b+i, f)
 		}
 	} else {
-		r[itr.n-3] = uint64(0)
+		r.SetValue(itr.n-3, uint64(0))
 	}
 
 	if c.oV != nil {
-		r[itr.n-2], err = tree.GetField(ctx, itr.oursVD, 0, c.oV, ns)
+		v, err = tree.GetField(ctx, itr.oursVD, 0, c.oV, ns)
 		if err != nil {
 			return err
 		}
+		r.SetValue(itr.n-2, v)
 
 		for i := 0; i < itr.oursVD.Count()-1; i++ {
 			f, err := tree.GetField(ctx, itr.oursVD, i+1, c.oV, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.o+i] = f
+			r.SetValue(itr.o+i, f)
 		}
 	} else {
-		r[itr.n-2] = uint64(0)
+		r.SetValue(itr.n-2, uint64(0))
 	}
 
-	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
+	r.SetValue(itr.o+itr.oursVD.Count()-1, getDiffType(c.bV, c.oV))
 
 	if c.tV != nil {
-		r[itr.n-1], err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
+		v, err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
 		if err != nil {
 			return err
 		}
+		r.SetValue(itr.n-1, v)
 
 		for i := 0; i < itr.theirsVD.Count()-1; i++ {
 			f, err := tree.GetField(ctx, itr.theirsVD, i+1, c.tV, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.t+i] = f
+			r.SetValue(itr.t+i, f)
 		}
 	} else {
-		r[itr.n-1] = uint64(0)
+		r.SetValue(itr.n-1, uint64(0))
 	}
 
 	o := itr.t + itr.theirsVD.Count() - 1
-	r[o] = getDiffType(c.bV, c.tV)
-	r[itr.n-4] = c.id
+	r.SetValue(o, getDiffType(c.bV, c.tV))
+	r.SetValue(itr.n-4, c.id)
 
 	return nil
 }
@@ -482,13 +486,13 @@ func (cu *prollyConflictOurTableUpdater) Update(ctx *sql.Context, oldRow sql.Row
 
 	// Apply updates to columns prefixed with our_
 	// Updates to other columns are no-ops.
-	ourOldRow := make(sql.Row, len(cu.versionMappings.ourMapping))
-	ourNewRow := make(sql.Row, len(cu.versionMappings.ourMapping))
+	ourOldRow := make(sql.UntypedSqlRow, len(cu.versionMappings.ourMapping))
+	ourNewRow := make(sql.UntypedSqlRow, len(cu.versionMappings.ourMapping))
 	for i, j := range cu.versionMappings.ourMapping {
-		ourOldRow[i] = oldRow[j]
+		ourOldRow[i] = oldRow.GetValue(j)
 	}
 	for i, j := range cu.versionMappings.ourMapping {
-		ourNewRow[i] = newRow[j]
+		ourNewRow[i] = newRow.GetValue(j)
 	}
 
 	return cu.srcUpdater.Update(ctx, ourOldRow, ourNewRow)
@@ -566,7 +570,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 	}
 
 	// then the hash follows. It is the first column of the row and the second to last in the key
-	h := hash.Parse(r[0].(string))
+	h := hash.Parse(r.GetValue(0).(string))
 	cd.kB.PutCommitAddr(cd.kd.Count()-2, h)
 
 	// Finally the artifact type which is always a conflict
@@ -584,11 +588,11 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) error {
 	// get keys from either base, ours, or theirs
 	o := func() int {
-		if o := 1; r[o] != nil {
+		if o := 1; r.GetValue(o) != nil {
 			return o
-		} else if o = 1 + cd.kd.Count() - 2 + cd.vd.Count(); r[o] != nil {
+		} else if o = 1 + cd.kd.Count() - 2 + cd.vd.Count(); r.GetValue(o) != nil {
 			return o
-		} else if o = 1 + (cd.kd.Count()-2+cd.vd.Count())*2 + 1; r[o] != nil {
+		} else if o = 1 + (cd.kd.Count()-2+cd.vd.Count())*2 + 1; r.GetValue(o) != nil {
 			return o
 		} else {
 			panic("neither base, ours, or theirs had a key")
@@ -596,7 +600,7 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 	}()
 
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r[o+i])
+		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r.GetValue(o+i))
 
 		if err != nil {
 			return err
@@ -608,17 +612,17 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 
 func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) error {
 	var rowVals sql.Row
-	if r[cd.ourDiffTypeIdx] == merge.ConflictDiffTypeAdded {
+	if r.GetValue(cd.ourDiffTypeIdx) == merge.ConflictDiffTypeAdded {
 		// use our cols
-		rowVals = r[1+cd.baseColSize : 1+cd.baseColSize+cd.ourColSize]
+		rowVals = r.Subslice(1+cd.baseColSize, 1+cd.baseColSize+cd.ourColSize)
 	} else {
 		// use base cols
-		rowVals = r[1 : 1+cd.baseColSize]
+		rowVals = r.Subslice(1, 1+cd.baseColSize)
 	}
 
 	// init cardinality to 0
 	cd.vB.PutUint64(0, 0)
-	for i, v := range rowVals {
+	for i, v := range rowVals.Values() {
 		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.vB, i+1, v)
 		if err != nil {
 			return err

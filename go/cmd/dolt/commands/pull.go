@@ -289,14 +289,14 @@ func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, q
 			return "", "", err
 		}
 		for _, row := range rows {
-			ref := row[0].(string)
+			ref := row.GetValue(0).(string)
 			if ref == "remotes/"+remote+"/main" {
 				branch = "main"
 				break
 			}
 		}
 		if branch == "" {
-			ref := rows[0][0].(string)
+			ref := rows[0].GetValue(0).(string)
 			branch = strings.TrimPrefix(ref, "remotes/"+remote+"/")
 		}
 	} else {
@@ -325,12 +325,12 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 		return "", env.ErrNoRemote
 	}
 	if len(rows) == 1 {
-		return rows[0][0].(string), nil
+		return rows[0].GetValue(0).(string), nil
 	}
 	for _, row := range rows {
-		if row[0].(string) == "origin" {
+		if row.GetValue(0).(string) == "origin" {
 			return "origin", nil
 		}
 	}
-	return rows[0][0].(string), nil
+	return rows[0].GetValue(0).(string), nil
 }

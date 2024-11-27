@@ -86,7 +86,7 @@ func testGoodJSON(t *testing.T, getReader func(types.ValueReadWriter, schema.Sch
 		rows = append(rows, r)
 	}
 
-	expectedRows := []sql.Row{
+	expectedRows := []sql.UntypedSqlRow{
 		{0, "tim", "sehn"},
 		{1, "brian", "hendriks"},
 	}

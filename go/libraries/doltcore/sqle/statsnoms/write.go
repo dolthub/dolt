@@ -141,9 +141,9 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 			}
 			valueBuilder.PutString(10+i, string(mcvRow))
 		}
-		var mcvCntsRow sql.Row
+		var mcvCntsRow sql.Row = new(sql.UntypedSqlRow)
 		for _, v := range h.McvCounts() {
-			mcvCntsRow = append(mcvCntsRow, int(v))
+			mcvCntsRow = mcvCntsRow.Append(sql.NewUntypedRow(int(v)))
 		}
 		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, mcvsTypes))
 
@@ -156,7 +156,7 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 }
 
 func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleBuilder) ([]byte, error) {
-	for i, v := range r {
+	for i, v := range r.Values() {
 		if v == nil {
 			continue
 		}
@@ -169,13 +169,15 @@ func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleB
 
 func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBuilder) (sql.Row, error) {
 	tup := []byte(s)
-	r := make(sql.Row, tb.Desc.Count())
+	r := make(sql.UntypedSqlRow, tb.Desc.Count())
 	var err error
+	var v interface{}
 	for i, _ := range r {
-		r[i], err = tree.GetField(ctx, tb.Desc, i, tup, ns)
+		v, err = tree.GetField(ctx, tb.Desc, i, tup, ns)
 		if err != nil {
 			return nil, err
 		}
+		r.SetValue(i, v)
 	}
 	return r, nil
 }

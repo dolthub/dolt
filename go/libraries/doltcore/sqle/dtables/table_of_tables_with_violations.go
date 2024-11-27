@@ -93,7 +93,7 @@ func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part s
 	if err != nil {
 		return nil, err
 	}
-	rows = append(rows, sql.Row{tblName.Name, n})
+	rows = append(rows, sql.UntypedSqlRow{tblName.Name, n})
 	return sql.RowsToRowIter(rows...), nil
 }
 

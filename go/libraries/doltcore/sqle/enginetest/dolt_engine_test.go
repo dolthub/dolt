@@ -81,7 +81,7 @@ func TestSingleQuery(t *testing.T) {
 	var test queries.QueryTest
 	test = queries.QueryTest{
 		Query: `show create table mytable`,
-		Expected: []sql.Row{
+		Expected: []sql.UntypedSqlRow{
 			{"mytable",
 				"CREATE TABLE `mytable` (\n" +
 					"  `i` bigint NOT NULL,\n" +
@@ -158,11 +158,11 @@ func TestSingleMergeScript(t *testing.T) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "call dolt_merge('right');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0}},
 				},
 				{
 					Query: "select pk, col1, col2 from t;",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{1, 101, nil},
 						{2, 102, nil},
 						{3, 103, "3hello"},
@@ -192,11 +192,11 @@ func TestSingleMergeScript(t *testing.T) {
 		// 	Assertions: []queries.ScriptTestAssertion{
 		// 		{
 		// 			Query:    "call dolt_merge('right');",
-		// 			Expected: []sql.Row{{doltCommit, 0, 0}},
+		// 			Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0}},
 		// 		},
 		// 		{
 		// 			Query: "select pk, col1, col2 from t;",
-		// 			Expected: []sql.Row{
+		// 			Expected: []sql.UntypedSqlRow{
 		// 				{1, 101, "1hello"},
 		// 				{2, 102, "2hello"},
 		// 				{3, 103, "3hello"},
@@ -224,11 +224,11 @@ func TestSingleMergeScript(t *testing.T) {
 		// 	Assertions: []queries.ScriptTestAssertion{
 		// 		{
 		// 			Query:    "call dolt_merge('right');",
-		// 			Expected: []sql.Row{{doltCommit, 0, 0}},
+		// 			Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0}},
 		// 		},
 		// 		{
 		// 			Query:    "select * from t;",
-		// 			Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+		// 			Expected: []sql.UntypedSqlRow{{1, "hello"}, {2, "hi"}, {3, "hello"}},
 		// 		},
 		// 	},
 		// },
@@ -251,15 +251,15 @@ func TestSingleMergeScript(t *testing.T) {
 		// 	Assertions: []queries.ScriptTestAssertion{
 		// 		{
 		// 			Query:    "call dolt_merge('right');",
-		// 			Expected: []sql.Row{{"", 0, 1}},
+		// 			Expected: []sql.UntypedSqlRow{{"", 0, 1}},
 		// 		},
 		// 		{
 		// 			Query:    "select * from dolt_constraint_violations;",
-		// 			Expected: []sql.Row{{"t", uint64(1)}},
+		// 			Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 		// 		},
 		// 		{
 		// 			Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
-		// 			Expected: []sql.Row{{uint64(3), 2, "hello", true}},
+		// 			Expected: []sql.UntypedSqlRow{{uint64(3), 2, "hello", true}},
 		// 		},
 		// 	},
 		// },
@@ -305,7 +305,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 	var test queries.QueryTest
 	test = queries.QueryTest{
 		Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
-		Expected: []sql.Row{
+		Expected: []sql.UntypedSqlRow{
 			{"Exchange"},
 			{" └─ Project(dolt_history_t1.pk, dolt_history_t1.c)"},
 			{"     └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
@@ -338,20 +338,20 @@ func TestSingleScriptPrepared(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1) order by 1",
-				Expected: []sql.Row{
-					sql.Row{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
-					sql.Row{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+				Expected: []sql.UntypedSqlRow{
+					{0, 1, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
+					{2, 3, "itt2nrlkbl7jis4gt9aov2l32ctt08th", "billy bob", time.Date(1970, time.January, 1, 19, 0, 0, 0, time.Local)},
 				},
 			},
 			{
 				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2},
 				},
 			},
 			{
 				Query: "select count(*) from dolt_history_xy where commit_hash = 'itt2nrlkbl7jis4gt9aov2l32ctt08th'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2},
 				},
 			},
@@ -1357,7 +1357,7 @@ func TestSingleTransactionScript(t *testing.T) {
 				},
 				{
 					Query:    "/* client a */ insert into t1 values (1, 1)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Expected: []sql.UntypedSqlRow{{gmstypes.NewOkResult(1)}},
 				},
 				{
 					Query:       "/* client a */ insert into t1 values (1, 2)",
@@ -1365,15 +1365,15 @@ func TestSingleTransactionScript(t *testing.T) {
 				},
 				{
 					Query:    "/* client a */ insert into t1 values (2, 2)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Expected: []sql.UntypedSqlRow{{gmstypes.NewOkResult(1)}},
 				},
 				{
 					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
+					Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
 					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}},
+					Expected: []sql.UntypedSqlRow{{0, 0}},
 				},
 				{
 					Query:            "/* client a */ commit",
@@ -1385,11 +1385,11 @@ func TestSingleTransactionScript(t *testing.T) {
 				},
 				{
 					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
+					Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
 					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
+					Expected: []sql.UntypedSqlRow{{0, 0}, {1, 1}, {2, 2}},
 				},
 			},
 		}
@@ -1892,7 +1892,7 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 	}
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestPreparedQuery(t, h, "SELECT dolt_storage_format()", []sql.Row{{expectedFormatString}}, nil)
+	enginetest.TestPreparedQuery(t, h, "SELECT dolt_storage_format()", []sql.UntypedSqlRow{{expectedFormatString}}, nil)
 }
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {

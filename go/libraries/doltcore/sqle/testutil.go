@@ -187,11 +187,12 @@ func ExecuteSelect(dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sq
 // Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
 // final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
 // schema given must match.
-func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
-	sqlRows := make([]sql.Row, len(rs))
+func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.UntypedSqlRow {
+	sqlRows := make([]sql.UntypedSqlRow, len(rs))
 	compressedSch := CompressSchema(sch)
 	for i := range rs {
-		sqlRows[i], _ = sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+		r, _ := sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+		sqlRows[i] = r.Values()
 	}
 	return sqlRows
 }
@@ -499,9 +500,9 @@ func CreateTestDatabase() (*env.DoltEnv, error) {
 	return dEnv, nil
 }
 
-func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {
+func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.UntypedSqlRow, error) {
 	ctx := context.Background()
-	var sqlRows []sql.Row
+	var sqlRows []sql.UntypedSqlRow
 	if types.Format_Default == types.Format_DOLT {
 		rowData := durable.ProllyMapFromIndex(idx)
 		kd, vd := rowData.Descriptors()
@@ -521,7 +522,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 			if err != nil {
 				return nil, err
 			}
-			sqlRows = append(sqlRows, sqlRow)
+			sqlRows = append(sqlRows, sqlRow.Values())
 		}
 
 	} else {
@@ -536,7 +537,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 			if err != nil {
 				return err
 			}
-			sqlRows = append(sqlRows, sqlRow)
+			sqlRows = append(sqlRows, sqlRow.Values())
 			return nil
 		})
 	}
@@ -546,16 +547,18 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (sql.Row, error) {
 	var err error
 	ctx := context.Background()
-	r := make(sql.Row, sch.GetAllCols().Size())
+	r := make(sql.UntypedSqlRow, sch.GetAllCols().Size())
 	keyless := schema.IsKeyless(sch)
 
 	for i, col := range sch.GetAllCols().GetColumns() {
 		pos, ok := sch.GetPKCols().TagToIdx[col.Tag]
 		if ok {
-			r[i], err = tree.GetField(ctx, kd, pos, k, nil)
+			var val interface{}
+			val, err = tree.GetField(ctx, kd, pos, k, nil)
 			if err != nil {
 				return nil, err
 			}
+			r.SetValue(i, val)
 		}
 
 		pos, ok = sch.GetNonPKCols().TagToIdx[col.Tag]
@@ -563,10 +566,12 @@ func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (
 			pos += 1 // compensate for cardinality field
 		}
 		if ok {
-			r[i], err = tree.GetField(ctx, vd, pos, v, nil)
+			var val interface{}
+			val, err = tree.GetField(ctx, vd, pos, v, nil)
 			if err != nil {
 				return nil, err
 			}
+			r.SetValue(i, val)
 		}
 	}
 	return r, nil

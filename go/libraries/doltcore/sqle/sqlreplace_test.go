@@ -43,7 +43,7 @@ type ReplaceTest struct {
 	// The schema of the result of the query, nil if an error is expected
 	ExpectedSchema schema.Schema
 	// The rows this query should return, nil if an error is expected
-	ExpectedRows []sql.Row
+	ExpectedRows []sql.UntypedSqlRow
 	// An expected error string
 	ExpectedErr string
 	// Setup logic to run before executing this test, after initial tables have been created and populated
@@ -256,7 +256,7 @@ var systemTableReplaceTests = []ReplaceTest{
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		ReplaceQuery:   "replace into dolt_docs (doc_name, doc_text) values ('LICENSE.md', 'Some text')",
 		SelectQuery:    "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		ExpectedRows:   []sql.UntypedSqlRow{{"LICENSE.md", "Some text"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{

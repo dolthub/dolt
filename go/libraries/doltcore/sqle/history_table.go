@@ -272,7 +272,7 @@ func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.Co
 		}
 
 		sc := sql.NewContext(ctx)
-		r := sql.Row{h.String(), meta.Name, meta.Time()}
+		r := sql.UntypedSqlRow{h.String(), meta.Name, meta.Time()}
 
 		for _, filter := range filters {
 			res, err := filter.Eval(sc, r)
@@ -608,18 +608,18 @@ func (ht *HistoryTable) rowConverter(ctx *sql.Context, srcSchema, targetSchema s
 	}
 
 	return func(row sql.Row) sql.Row {
-		r := make(sql.Row, len(projections))
+		r := make(sql.UntypedSqlRow, len(projections))
 		for i, t := range projections {
 			switch t {
 			case schema.HistoryCommitterTag:
-				r[i] = meta.Name
+				r.SetValue(i, meta.Name)
 			case schema.HistoryCommitDateTag:
-				r[i] = meta.Time()
+				r.SetValue(i, meta.Time())
 			case schema.HistoryCommitHashTag:
-				r[i] = h.String()
+				r.SetValue(i, h.String())
 			default:
 				if j, ok := srcToTarget[i]; ok {
-					r[j] = row[i]
+					r.SetValue(j, row.GetValue(i))
 				}
 			}
 		}

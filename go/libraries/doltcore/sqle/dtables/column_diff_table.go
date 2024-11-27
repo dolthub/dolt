@@ -565,7 +565,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 			fromIdx := diffTableCols.TagToIdx[fromColTag]
 
 			toCol := delta.ToSch.GetAllCols().GetByIndex(toIdx)
-			cmp, err := toCol.TypeInfo.ToSqlType().Compare(r[toIdx], r[fromIdx])
+			cmp, err := toCol.TypeInfo.ToSqlType().Compare(r.GetValue(toIdx), r.GetValue(fromIdx))
 			if err != nil {
 				return nil, nil, err
 			}

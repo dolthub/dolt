@@ -154,9 +154,9 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 
 		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.tableSchema.Schema) {
-			oldRow := row[:len(row)/2]
-			newRow := row[len(row)/2:]
+		if row.Len() != len(s.tableSchema.Schema) {
+			oldRow := row.Subslice(0, row.Len()/2)
+			newRow := row.Subslice(row.Len()/2, row.Len())
 
 			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
 				if ok {
