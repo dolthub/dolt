@@ -39,7 +39,8 @@ import (
 
 func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
-	iter, err := NewStatsIter(ctx, m)
+	schemaName := db.SchemaName()
+	iter, err := NewStatsIter(ctx, schemaName, m)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			typs[i] = strings.TrimSpace(t)
 		}
 
-		qual := sql.NewStatQualifier(dbName, tableName, indexName)
+		qual := sql.NewStatQualifier(dbName, schemaName, tableName, indexName)
 		if currentStat.Statistic.Qual.String() != qual.String() {
 			if !currentStat.Statistic.Qual.Empty() {
 				currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))

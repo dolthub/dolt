@@ -675,7 +675,26 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 	case doltdb.StatisticsTableName:
-		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
+		if resolve.UseSearchPath && db.schemaName == "" {
+			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
+			if err != nil {
+				return nil, false, err
+			}
+			db.schemaName = schemaName
+		}
+
+		var tables []string
+		var err error
+		branch, ok := asOf.(string)
+		if ok && branch != "" {
+			tables, err = db.GetTableNamesAsOf(ctx, branch)
+		} else {
+			tables, err = db.GetTableNames(ctx)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.schemaName, branch, tables), true
 	case doltdb.ProceduresTableName:
 		found = true
 		backingTable, _, err := db.getTable(ctx, root, doltdb.ProceduresTableName)
@@ -856,7 +875,14 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, nil
 	}
 
-	tblNames, err := db.getAllTableNames(ctx, root, false)
+	showSystemTablesVar, err := ctx.GetSessionVariable(ctx, dsess.ShowSystemTables)
+	if err != nil {
+		return nil, err
+	}
+
+	showSystemTables := showSystemTablesVar.(int8) == 1
+
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables)
 	if err != nil {
 		return nil, err
 	}

@@ -32,7 +32,7 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
-func NewStatsIter(ctx *sql.Context, m prolly.Map) (*statsIter, error) {
+func NewStatsIter(ctx *sql.Context, schemaName string, m prolly.Map) (*statsIter, error) {
 	iter, err := m.IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -43,11 +43,12 @@ func NewStatsIter(ctx *sql.Context, m prolly.Map) (*statsIter, error) {
 	ns := m.NodeStore()
 
 	return &statsIter{
-		iter:  iter,
-		kb:    keyBuilder,
-		vb:    valueBuilder,
-		ns:    ns,
-		planb: planbuilder.New(ctx, nil, nil, nil),
+		iter:       iter,
+		kb:         keyBuilder,
+		vb:         valueBuilder,
+		ns:         ns,
+		schemaName: schemaName,
+		planb:      planbuilder.New(ctx, nil, nil, nil),
 	}, nil
 }
 
@@ -61,6 +62,7 @@ type statsIter struct {
 	ns           tree.NodeStore
 	planb        *planbuilder.Builder
 	currentQual  string
+	schemaName   string
 	currentTypes []sql.Type
 }
 
@@ -118,7 +120,7 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		typs[i] = strings.TrimSpace(t)
 	}
 
-	qual := sql.NewStatQualifier(dbName, tableName, indexName)
+	qual := sql.NewStatQualifier(dbName, s.schemaName, tableName, indexName)
 	if curQual := qual.String(); !strings.EqualFold(curQual, s.currentQual) {
 		s.currentQual = curQual
 		s.currentTypes, err = parseTypeStrings(typs)

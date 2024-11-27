@@ -15,8 +15,6 @@
 package dtables
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
@@ -28,21 +26,18 @@ import (
 
 // StatisticsTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type StatisticsTable struct {
-	dbName string
-	branch string
-	ddb    *doltdb.DoltDB
+	dbName     string
+	schemaName string
+	branch     string
+	tableNames []string
 }
 
 var _ sql.Table = (*StatisticsTable)(nil)
 var _ sql.StatisticsTable = (*StatisticsTable)(nil)
 
 // NewStatisticsTable creates a StatisticsTable
-func NewStatisticsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, asOf interface{}) sql.Table {
-	ret := &StatisticsTable{dbName: dbName, ddb: ddb}
-	if branch, ok := asOf.(string); ok {
-		ret.branch = branch
-	}
-	return ret
+func NewStatisticsTable(_ *sql.Context, dbName, schemaName, branch string, tableNames []string) sql.Table {
+	return &StatisticsTable{dbName: dbName, schemaName: schemaName, branch: branch, tableNames: tableNames}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -73,28 +68,16 @@ func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 type BranchStatsProvider interface {
-	GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error)
+	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]sql.Statistic, error)
 }
 
 // RowCount implements sql.StatisticsTable
 func (st *StatisticsTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	prov := dSess.Provider()
-
-	sqlDb, err := prov.Database(ctx, st.dbName)
-	if err != nil {
-		return 0, false, err
-	}
-
-	tables, err := sqlDb.GetTableNames(ctx)
-	if err != nil {
-		return 0, false, err
-	}
-
 	var cnt int
-	for _, table := range tables {
+	for _, table := range st.tableNames {
 		// only Dolt-specific provider has branch support
-		dbStats, err := dSess.StatsProvider().(BranchStatsProvider).GetTableDoltStats(ctx, st.branch, st.dbName, table)
+		dbStats, err := dSess.StatsProvider().(BranchStatsProvider).GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
 
 		}
@@ -136,28 +119,10 @@ func (st *StatisticsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (st *StatisticsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	prov := dSess.Provider()
-
-	var sqlDb sql.Database
-	var err error
-	if st.branch != "" {
-		sqlDb, err = prov.Database(ctx, fmt.Sprintf("%s/%s", st.dbName, st.branch))
-	} else {
-		sqlDb, err = prov.Database(ctx, st.dbName)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	tables, err := sqlDb.GetTableNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	statsPro := dSess.StatsProvider().(BranchStatsProvider)
 	var dStats []sql.Statistic
-	for _, table := range tables {
-		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, table)
+	for _, table := range st.tableNames {
+		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
 			return nil, err
 		}

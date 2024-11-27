@@ -100,6 +100,10 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 
 	tableName := strings.ToLower(table.Name())
 	dbName := strings.ToLower(db)
+	var schemaName string
+	if schTab, ok := table.(sql.DatabaseSchemaTable); ok {
+		schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
+	}
 
 	iat, ok := table.(sql.IndexAddressableTable)
 	if !ok {
@@ -146,7 +150,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
 		statDb.SetSchemaHash(branch, tableName, schHash)
 
-		stats, err := p.GetTableDoltStats(ctx, branch, dbName, tableName)
+		stats, err := p.GetTableDoltStats(ctx, branch, dbName, schemaName, tableName)
 		if err != nil {
 			return err
 		}
@@ -163,7 +167,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 			cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 		}
 
-		qual := sql.NewStatQualifier(db, table.Name(), strings.ToLower(idx.ID()))
+		qual := sql.NewStatQualifier(db, schemaName, table.Name(), strings.ToLower(idx.ID()))
 		curStat, ok := statDb.GetStat(branch, qual)
 		if !ok {
 			curStat = NewDoltStats()

@@ -169,11 +169,15 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db string, table sql.Table) (
 		return nil, nil
 	}
 
-	// TODO: schema name
-	return p.GetTableDoltStats(ctx, branch, db, table.Name())
+	var schemaName string
+	if schTab, ok := table.(sql.DatabaseSchemaTable); ok {
+		schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
+	}
+
+	return p.GetTableDoltStats(ctx, branch, db, schemaName, table.Name())
 }
 
-func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error) {
+func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]sql.Statistic, error) {
 	statDb, ok := p.getStatDb(db)
 	if !ok || statDb == nil {
 		return nil, nil
@@ -190,7 +194,7 @@ func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string)
 
 	var ret []sql.Statistic
 	for _, qual := range statDb.ListStatQuals(branch) {
-		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
+		if strings.EqualFold(db, qual.Database) && strings.EqualFold(schema, qual.Sch) && strings.EqualFold(table, qual.Tab) {
 			stat, _ := statDb.GetStat(branch, qual)
 			ret = append(ret, stat)
 		}
@@ -333,8 +337,12 @@ func (p *Provider) RowCount(ctx *sql.Context, db string, table sql.Table) (uint6
 		return 0, err
 	}
 
-	// TODO: schema name
-	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table.Name(), "primary"))
+	var schemaName string
+	if schTab, ok := table.(sql.DatabaseSchemaTable); ok {
+		schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
+	}
+
+	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, schemaName, table.Name(), "primary"))
 	if !ok {
 		return 0, nil
 	}
@@ -354,8 +362,12 @@ func (p *Provider) DataLength(ctx *sql.Context, db string, table sql.Table) (uin
 		return 0, err
 	}
 
-	// TODO: schema name
-	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, table.Name(), "primary"))
+	var schemaName string
+	if schTab, ok := table.(sql.DatabaseSchemaTable); ok {
+		schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
+	}
+
+	priStats, ok := statDb.GetStat(branch, sql.NewStatQualifier(db, schemaName, table.Name(), "primary"))
 	if !ok {
 		return 0, nil
 	}
@@ -404,7 +416,7 @@ func (p *Provider) Prune(ctx *sql.Context) error {
 					}
 					defer p.UnlockTable(branch, dbName, t)
 
-					tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, t)
+					tableStats, err := p.GetTableDoltStats(ctx, branch, dbName, sqlDb.SchemaName(), t)
 					if err != nil {
 						return err
 					}
