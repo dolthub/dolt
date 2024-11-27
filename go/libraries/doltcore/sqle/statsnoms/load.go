@@ -54,19 +54,19 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		}
 
 		// deserialize K, V
-		dbName := row[schema.StatsDbTag].(string)
-		tableName := row[schema.StatsTableTag].(string)
-		indexName := row[schema.StatsIndexTag].(string)
-		_ = row[schema.StatsVersionTag]
-		commit := hash.Parse(row[schema.StatsCommitHashTag].(string))
-		rowCount := row[schema.StatsRowCountTag].(uint64)
-		distinctCount := row[schema.StatsDistinctCountTag].(uint64)
-		nullCount := row[schema.StatsNullCountTag].(uint64)
-		columns := strings.Split(row[schema.StatsColumnsTag].(string), ",")
-		typesStr := row[schema.StatsTypesTag].(string)
-		boundRowStr := row[schema.StatsUpperBoundTag].(string)
-		upperBoundCnt := row[schema.StatsUpperBoundCntTag].(uint64)
-		createdAt := row[schema.StatsCreatedAtTag].(time.Time)
+		dbName := row.GetValue(int(schema.StatsDbTag)).(string)
+		tableName := row.GetValue(int(schema.StatsTableTag)).(string)
+		indexName := row.GetValue(int(schema.StatsIndexTag)).(string)
+		_ = row.GetValue(int(schema.StatsVersionTag))
+		commit := hash.Parse(row.GetValue(int(schema.StatsCommitHashTag)).(string))
+		rowCount := row.GetValue(int(schema.StatsRowCountTag)).(uint64)
+		distinctCount := row.GetValue(int(schema.StatsDistinctCountTag)).(uint64)
+		nullCount := row.GetValue(int(schema.StatsNullCountTag)).(uint64)
+		columns := strings.Split(row.GetValue(int(schema.StatsColumnsTag)).(string), ",")
+		typesStr := row.GetValue(int(schema.StatsTypesTag)).(string)
+		boundRowStr := row.GetValue(int(schema.StatsUpperBoundTag)).(string)
+		upperBoundCnt := row.GetValue(int(schema.StatsUpperBoundCntTag)).(uint64)
+		createdAt := row.GetValue(int(schema.StatsCreatedAtTag)).(time.Time)
 
 		typs := strings.Split(typesStr, "\n")
 		for i, t := range typs {
@@ -101,7 +101,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 
 		numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
 
-		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
+		mcvCountsStr := strings.Split(row.GetValue(int(schema.StatsMcvCountsTag)).(string), ",")
 		mcvCnts := make([]uint64, numMcvs)
 		for i, v := range mcvCountsStr {
 			if v == "" {
@@ -115,7 +115,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		}
 
 		mcvs := make([]sql.Row, numMcvs)
-		for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
+		for i, v := range row.Subslice(int(schema.StatsMcv1Tag), int(schema.StatsMcvCountsTag)).Values() {
 			if v != nil && v != "" {
 				row, err := DecodeRow(ctx, m.NodeStore(), v.(string), currentStat.Tb)
 				if err != nil {
@@ -153,10 +153,10 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 				RowCnt:      uint64(rowCount),
 				DistinctCnt: uint64(distinctCount),
 				NullCnt:     uint64(nullCount),
-				McvVals:     mcvs,
+				McvVals:     sql.RowsToUntyped(mcvs),
 				McvsCnt:     mcvCnts,
 				BoundCnt:    upperBoundCnt,
-				BoundVal:    boundRow,
+				BoundVal:    boundRow.Values(),
 			},
 		}
 
@@ -237,7 +237,7 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 	}
 
 	firstKey := keyBuilder.Build(buffPool)
-	firstRow := make(sql.Row, keyBuilder.Desc.Count())
+	firstRow := make(sql.UntypedSqlRow, keyBuilder.Desc.Count())
 	for i := 0; i < keyBuilder.Desc.Count(); i++ {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {

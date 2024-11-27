@@ -160,15 +160,15 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 	// old and new are the same. Just use one.
 	new = nil
 
-	toRow := old[3 : 3+schemaLen]
-	fromRow := old[3+schemaLen:]
+	toRow := old.Subslice(3, 3+schemaLen)
+	fromRow := old.Subslice(3+schemaLen, old.Len())
 	if !isStaged {
 		toRow, fromRow = fromRow, toRow
 	}
 
 	// It's a delete if all the values in toRow are nil.
 	isDelete := true
-	for _, val := range toRow {
+	for _, val := range toRow.Values() {
 		if val != nil {
 			isDelete = false
 			break
@@ -204,26 +204,26 @@ func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
-	isStaged := isTrue(row[stagedColumnIdx])
+	isStaged := isTrue(row.GetValue(stagedColumnIdx))
 	if isStaged {
 		return fmt.Errorf("cannot delete staged rows from workspace")
 	}
 
 	schemaLen := wtd.schemaLen
 
-	toRow := row[3 : 3+schemaLen]
-	fromRow := row[3+schemaLen:]
+	toRow := row.Subslice(3, 3+schemaLen)
+	fromRow := row.Subslice(3+schemaLen, row.Len())
 
 	// If to Row has any non-nil values, then we need to do an update. Otherwise, insert.
 	wasDelete := true
-	for _, val := range toRow {
+	for _, val := range toRow.Values() {
 		if val != nil {
 			wasDelete = false
 			break
 		}
 	}
 	wasInsert := true
-	for _, val := range fromRow {
+	for _, val := range fromRow.Values() {
 		if val != nil {
 			wasInsert = false
 			break
@@ -288,21 +288,21 @@ func isTrue(value interface{}) bool {
 // column to TRUE or FALSE is the only update allowed, and any other update will result in 'valid' being false. If
 // valid is true, then 'staged' will be the value in the "staged" column of the new row.
 func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
-	if len(old) != len(new) {
+	if old.Len() != new.Len() {
 		return false, false
 	}
 
 	isStaged := false
 
 	// Verify there are no changes in the columns other than the "staged" column.
-	for i := range new {
+	for i := 0; i < new.Len(); i++ {
 		if i == stagedColumnIdx {
-			isStaged = isTrue(new[stagedColumnIdx])
+			isStaged = isTrue(new.GetValue(stagedColumnIdx))
 			// skip the "staged" column.
 			continue
 		}
 
-		if old[i] != new[i] {
+		if old.GetValue(i) != new.GetValue(i) {
 			return false, false
 		}
 	}
@@ -631,7 +631,7 @@ func getWorkspaceTableRow(
 	toConverter ProllyRowConverter,
 	fromConverter ProllyRowConverter,
 	dif tree.Diff,
-) (row sql.Row, err error) {
+) (sql.Row, error) {
 	tLen := schemaSize(toSch)
 	fLen := schemaSize(fromSch)
 
@@ -641,8 +641,9 @@ func getWorkspaceTableRow(
 		tLen = fLen
 	}
 
-	row = make(sql.Row, 3+tLen+fLen)
+	row := make(sql.UntypedSqlRow, 3+tLen+fLen)
 
+	var err error
 	row[0] = rowId
 	row[1] = staged
 	row[2] = diffTypeString(dif)

@@ -39,7 +39,7 @@ func DoltPreparedScripts(t *testing.T, harness enginetest.Harness) {
 			Bindings: map[string]sqlparser.Expr{
 				"v1": sqlparser.NewStrVal([]byte("dolt_history_mytable")),
 			},
-			Expected: []sql.Row{{"dolt_history_mytable"}},
+			Expected: []sql.UntypedSqlRow{{"dolt_history_mytable"}},
 		},
 	}
 

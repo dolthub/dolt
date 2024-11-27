@@ -480,7 +480,7 @@ func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.Commi
 			return false, err
 		}
 		for _, filter := range filters {
-			res, err := filter.Eval(sc, sql.Row{h.String(), meta.Name, meta.Time()})
+			res, err := filter.Eval(sc, sql.UntypedSqlRow{h.String(), meta.Name, meta.Time()})
 			if err != nil {
 				return false, err
 			}

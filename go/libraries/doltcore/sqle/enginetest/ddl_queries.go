@@ -71,7 +71,7 @@ var SimpsonsSetup = []string{
 `,
 }
 
-var AllInitialSimpsonsCharacters = []sql.Row{
+var AllInitialSimpsonsCharacters = []sql.UntypedSqlRow{
 	{0, "Homer", "Simpson", 1, 40, 8.5, nil, nil},
 	{1, "Marge", "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
 	{2, "Bart", "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -91,7 +91,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
 					"  `first_name` varchar(163) NOT NULL,\n" +
@@ -105,7 +105,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
 					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{2, "Simpson", "Bart", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -126,7 +126,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `first_name` varchar(163) NOT NULL,\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -140,7 +140,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
 					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{"Bart", 2, "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -161,7 +161,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `first_name` varchar(163),\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -189,7 +189,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
 					"  `christian_name` varchar(163) NOT NULL,\n" +
@@ -203,7 +203,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
 					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{2, "Simpson", "Bart", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -224,7 +224,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `christian_name` varchar(163) NOT NULL,\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -238,7 +238,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by id",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
 					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{"Bart", 2, "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -259,7 +259,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{sql.UntypedSqlRow{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `first_name` varchar(163),\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -306,7 +306,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk1` varchar(100) NOT NULL,\n  `pkTwo` varchar(20) NOT NULL,\n  PRIMARY KEY (`pk1`,`pkTwo`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `pk1` varchar(100) NOT NULL,\n  `pkTwo` varchar(20) NOT NULL,\n  PRIMARY KEY (`pk1`,`pkTwo`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -326,7 +326,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `pk` bigint NOT NULL,\n" +
 					"  `v1` int,\n" +
 					"  PRIMARY KEY (`pk`),\n" +
@@ -335,11 +335,11 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{{0, 3}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 3}, {1, 2}},
 			},
 			{
 				Query:    "select * from test where v1 = 3",
-				Expected: []sql.Row{{0, 3}},
+				Expected: []sql.UntypedSqlRow{{0, 3}},
 			},
 		},
 	},
@@ -356,7 +356,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `pk` bigint NOT NULL,\n" +
 					"  `v1` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
@@ -365,11 +365,11 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{{0, "3"}, {1, "2"}},
+				Expected: []sql.UntypedSqlRow{{0, "3"}, {1, "2"}},
 			},
 			{
 				Query:    "select * from test where v1 = '3'",
-				Expected: []sql.Row{{0, "3"}},
+				Expected: []sql.UntypedSqlRow{{0, "3"}},
 			},
 		},
 	},
@@ -386,7 +386,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `pk` bigint NOT NULL,\n" +
 					"  `v1` bigint,\n" +
 					"  PRIMARY KEY (`pk`),\n" +
@@ -395,11 +395,11 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{{0, 3}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 3}, {1, 2}},
 			},
 			{
 				Query:    "select * from test where v1 = 3",
-				Expected: []sql.Row{{0, 3}},
+				Expected: []sql.UntypedSqlRow{{0, 3}},
 			},
 		},
 	},
@@ -416,7 +416,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `pk` varchar(20) NOT NULL,\n" +
 					"  `v1` bigint,\n" +
 					"  PRIMARY KEY (`pk`),\n" +
@@ -425,11 +425,11 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{{"0", 3}, {"1", 2}},
+				Expected: []sql.UntypedSqlRow{{"0", 3}, {"1", 2}},
 			},
 			{
 				Query:    "select * from test where v1 = 3",
-				Expected: []sql.Row{{"0", 3}},
+				Expected: []sql.UntypedSqlRow{{"0", 3}},
 			},
 		},
 	},
@@ -445,7 +445,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `pk` datetime(6) NOT NULL,\n" +
 					"  `v1` bit(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
@@ -454,7 +454,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -535,7 +535,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `first_name` varchar(100) NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -548,7 +548,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "Homer", "Simpson", 1, 40, nil, nil},
 					{1, "Marge", "Simpson", 1, 38, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{2, "Bart", "Simpson", 0, 10, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -569,7 +569,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{{"people", "CREATE TABLE `people` (\n" +
 					"  `id` int NOT NULL,\n" +
 					"  `first_name` varchar(100) NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
@@ -582,7 +582,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "Homer", "Simpson", 1, 40, nil, nil},
 					{1, "Marge", "Simpson", 1, 38, "00000000-0000-0000-0000-000000000001", uint(111)},
 					{2, "Bart", "Simpson", 0, 10, "00000000-0000-0000-0000-000000000002", uint(222)},
@@ -603,7 +603,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table people",
-				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+				Expected: []sql.UntypedSqlRow{{"people", "CREATE TABLE `people` (\n" +
 					"  `first_name` varchar(100) NOT NULL,\n" +
 					"  `last_name` varchar(100) NOT NULL,\n" +
 					"  `is_married` tinyint,\n" +
@@ -615,7 +615,7 @@ var DropColumnScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from people order by first_name",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Barney", "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
 					{"Bart", "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
 					{"Homer", "Simpson", 1, 40, 8.5, nil, nil},
@@ -642,7 +642,7 @@ var BrokenDDLScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table test",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n" +
 					"  `p2` int,\n" +
 					"  `c1` int,\n" +
 					"  `c2` int,\n" +
@@ -651,11 +651,11 @@ var BrokenDDLScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from test order by pk",
-				Expected: []sql.Row{{0, 3}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{0, 3}, {1, 2}},
 			},
 			{
 				Query:    "select * from test where v1 = 3",
-				Expected: []sql.Row{{0, 3}},
+				Expected: []sql.UntypedSqlRow{{0, 3}},
 			},
 		},
 	},
@@ -700,7 +700,7 @@ var BrokenDDLScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff(@Commit1, @Commit2, 't');",
-				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{1, "hi", nil, nil, "added"}},
 			},
 		},
 	},
@@ -747,7 +747,7 @@ var AddDropPrimaryKeysScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table parent drop primary key",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
 			},
 		},
 	},
@@ -762,7 +762,7 @@ var AddDropPrimaryKeysScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table unrelated drop primary key",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0x0, InsertID: 0x0}}},
 			},
 		},
 	},

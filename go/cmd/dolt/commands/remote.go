@@ -262,17 +262,17 @@ func getRemotesSQL(sqlCtx *sql.Context, queryist cli.Queryist) ([]remote, error)
 
 	remotes := make([]remote, 0, len(rows))
 	for _, r := range rows {
-		name, ok := r[0].(string)
+		name, ok := r.GetValue(0).(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid remote name")
 		}
 
-		url, ok := r[1].(string)
+		url, ok := r.GetValue(1).(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid remote url")
 		}
 
-		params, err := getJsonAsString(sqlCtx, r[2])
+		params, err := getJsonAsString(sqlCtx, r.GetValue(2))
 		if err != nil {
 			return nil, fmt.Errorf("invalid params")
 		}

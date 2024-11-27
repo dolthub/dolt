@@ -167,11 +167,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usage)
 	}
 
-	if len(rows[0]) < 2 {
+	if rows[0].Len() < 2 {
 		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usage)
 	}
 
-	message, ok := rows[0][1].(string)
+	message, ok := rows[0].GetValue(1).(string)
 	if !ok {
 		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usage)
 	}

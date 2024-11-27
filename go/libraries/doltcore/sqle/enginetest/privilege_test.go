@@ -163,13 +163,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;/*2*/",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				User:        "tester",
@@ -181,7 +181,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{ // Ensure we've reverted to initial state (all SELECTs after REVOKEs are doing this)
 				User:        "tester",
@@ -199,13 +199,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM mydb.test;/*4*/",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				User:        "tester",
@@ -217,7 +217,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -235,13 +235,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;/*6*/",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				User:        "tester",
@@ -253,7 +253,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.test FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -271,7 +271,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test2 TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -289,7 +289,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.test2 FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -307,13 +307,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT test_role TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;/*10*/",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				User:        "tester",
@@ -344,13 +344,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT INSERT ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "INSERT INTO test VALUES (4);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				User:        "tester",
@@ -362,19 +362,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {3}, {4}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {4}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {3}, {4}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {4}},
 			},
 		},
 	},
@@ -399,7 +399,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT UPDATE ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -411,7 +411,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "UPDATE test set pk = 4 where pk = 3;",
-				Expected: []sql.Row{{types.OkResult{
+				Expected: []sql.UntypedSqlRow{{types.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
 						Matched: 1,
@@ -429,7 +429,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {4}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {4}},
 			},
 		},
 	},
@@ -454,7 +454,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT DELETE ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -466,7 +466,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "DELETE from test where pk = 3;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				User:        "tester",
@@ -478,7 +478,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 		},
 	},
@@ -502,19 +502,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT CREATE ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "CREATE TABLE t2 (a int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "show tables;",
-				Expected: []sql.Row{{"mytable"}, {"myview"}, {"test"}, {"t2"}},
+				Expected: []sql.UntypedSqlRow{{"mytable"}, {"myview"}, {"test"}, {"t2"}},
 			},
 		},
 	},
@@ -539,19 +539,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT DROP ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "DROP TABLE TEST",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "show tables;",
-				Expected: []sql.Row{{"mytable"}, {"myview"}},
+				Expected: []sql.UntypedSqlRow{{"mytable"}, {"myview"}},
 			},
 		},
 	},
@@ -576,19 +576,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT ALTER ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "ALTER TABLE test add column a int;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "desc test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"pk", "bigint", "NO", "PRI", nil, ""},
 					{"a", "int", "YES", "", nil, ""},
 				},
@@ -616,7 +616,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT select ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -628,19 +628,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT index ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "create index t1 on test(a) ;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "desc test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"pk", "bigint", "NO", "PRI", nil, ""},
 					{"a", "int", "YES", "MUL", nil, ""},
 				},
@@ -649,7 +649,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE index ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -661,19 +661,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT index ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "drop index t1 on test;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "desc test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"pk", "bigint", "NO", "PRI", nil, ""},
 					{"a", "int", "YES", "", nil, ""},
 				},
@@ -701,7 +701,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT select ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -713,19 +713,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "show create table test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"test", "CREATE TABLE `test` (\n" +
 						"  `pk` bigint NOT NULL,\n" +
 						"  `a` int,\n" +
@@ -738,7 +738,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE alter ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -750,19 +750,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test drop check chk1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "show create table test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"test", "CREATE TABLE `test` (\n" +
 						"  `pk` bigint NOT NULL,\n" +
 						"  `a` int,\n" +
@@ -774,13 +774,13 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE alter ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -792,19 +792,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT alter ON mydb.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test drop constraint chk1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:  "tester",
 				Host:  "localhost",
 				Query: "show create table test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"test", "CREATE TABLE `test` (\n" +
 						"  `pk` bigint NOT NULL,\n" +
 						"  `a` int,\n" +
@@ -830,19 +830,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {3}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT User, Host, Select_priv FROM mysql.user WHERE User = 'tester';",
-				Expected: []sql.Row{{"tester", "localhost", "N"}},
+				Expected: []sql.UntypedSqlRow{{"tester", "localhost", "N"}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.* FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -854,7 +854,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT User, Host, Select_priv FROM mysql.user WHERE User = 'tester';",
-				Expected: []sql.Row{{"tester", "localhost", "N"}},
+				Expected: []sql.UntypedSqlRow{{"tester", "localhost", "N"}},
 			},
 		},
 	},
@@ -882,31 +882,31 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM mysql.role_edges;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT test_role TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM mysql.role_edges;",
-				Expected: []sql.Row{{"%", "test_role", "localhost", "tester", "N"}},
+				Expected: []sql.UntypedSqlRow{{"%", "test_role", "localhost", "tester", "N"}},
 			},
 			{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {3}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT User, Host, Select_priv FROM mysql.user WHERE User = 'tester';",
-				Expected: []sql.Row{{"tester", "localhost", "N"}},
+				Expected: []sql.UntypedSqlRow{{"tester", "localhost", "N"}},
 			},
 		},
 	},
@@ -929,19 +929,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{1}, {2}, {3}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM mysql.role_edges;",
-				Expected: []sql.Row{{"%", "test_role", "localhost", "tester", "N"}},
+				Expected: []sql.UntypedSqlRow{{"%", "test_role", "localhost", "tester", "N"}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE test_role FROM tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				User:        "tester",
@@ -953,19 +953,19 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM mysql.role_edges;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM mysql.user WHERE User = 'test_role';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM mysql.user WHERE User = 'tester';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},

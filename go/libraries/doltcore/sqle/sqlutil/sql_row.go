@@ -34,7 +34,7 @@ func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 		return nil, nil
 	}
 
-	colVals := make(sql.Row, sch.GetAllCols().Size())
+	colVals := make(sql.UntypedSqlRow, sch.GetAllCols().Size())
 	i := 0
 
 	_, err := doltRow.IterSchema(sch, func(tag uint64, val types.Value) (stop bool, err error) {
@@ -73,7 +73,7 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	pkVals := vals[numNonPKVals:]
 
 	for i, c := range doltSchema.GetAllCols().GetColumns() {
-		val := r[i]
+		val := r.GetValue(i)
 		if val == nil {
 			continue
 		}
@@ -139,13 +139,13 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	pkVals := make([]types.Value, numPKCols*2)
 	tagToVal := make(map[uint64]types.Value, numCols)
 
-	if len(r) < numCols {
-		numCols = len(r)
+	if r.Len() < numCols {
+		numCols = r.Len()
 	}
 
 	for i := 0; i < numCols; i++ {
 		schCol := allCols.GetByIndex(i)
-		val := r[i]
+		val := r.GetValue(i)
 		if val == nil {
 			continue
 		}
@@ -163,7 +163,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	pkOrds := doltSchema.GetPkOrdinals()
 	for i, pkCol := range pkCols.GetColumns() {
 		ord := pkOrds[i]
-		val := r[ord]
+		val := r.GetValue(ord)
 		if val == nil {
 			return types.Tuple{}, nil, errors.New("not all pk columns have a value")
 		}
@@ -184,7 +184,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	allCols := doltSchema.GetAllCols()
-	for i, val := range r {
+	for i, val := range r.Values() {
 		tag := allCols.Tags[i]
 		schCol := allCols.TagToCol[tag]
 		if val != nil {
@@ -202,7 +202,7 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	j := 0
 	vals := make([]types.Value, sch.GetAllCols().Size()*2)
 
-	for idx, val := range sqlRow {
+	for idx, val := range sqlRow.Values() {
 		if val != nil {
 			col := sch.GetAllCols().GetByIndex(idx)
 			nv, err := col.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)

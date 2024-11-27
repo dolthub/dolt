@@ -44,7 +44,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv_cnt JSON path '$.mcv_counts')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.JSONDocument{Val: []interface{}{
 						float64(4),
 					}}},
@@ -52,7 +52,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 			},
 			{
 				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs[*]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.JSONDocument{Val: []interface{}{
 						[]interface{}{float64(0), "a"},
 					}}},
@@ -60,7 +60,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 			},
 			{
 				Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(x bigint path '$.upper_bound[0]', z text path '$.upper_bound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, "a"},
 				},
 			},
@@ -78,23 +78,23 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
-				Expected: []sql.Row{{32}},
+				Expected: []sql.UntypedSqlRow{{32}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(0)}},
+				Expected: []sql.UntypedSqlRow{{float64(0)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{int64(1)}},
+				Expected: []sql.UntypedSqlRow{{int64(1)}},
 			},
 		},
 	},
@@ -109,30 +109,30 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// bucket boundary duplication
 				Query:    "SELECT json_value(histogram, \"$.statistic.distinct_count\", 'signed') from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{202}},
+				Expected: []sql.UntypedSqlRow{{202}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(400)}},
+				Expected: []sql.UntypedSqlRow{{float64(400)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(200)}},
+				Expected: []sql.UntypedSqlRow{{float64(200)}},
 			},
 			{
 				// chunk border double count
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(202)}},
+				Expected: []sql.UntypedSqlRow{{float64(202)}},
 			},
 			{
 				// max bound count is an all nulls chunk
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{int64(183)}},
+				Expected: []sql.UntypedSqlRow{{int64(183)}},
 			},
 		},
 	},
@@ -148,25 +148,25 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{152}},
+				Expected: []sql.UntypedSqlRow{{152}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(10000)}},
+				Expected: []sql.UntypedSqlRow{{float64(10000)}},
 			},
 			{
 				// border NULL double count
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(20036)}},
+				Expected: []sql.UntypedSqlRow{{float64(20036)}},
 			},
 			{
 				// max bound count is nulls chunk
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{int64(440)}},
+				Expected: []sql.UntypedSqlRow{{int64(440)}},
 			},
 		},
 	},
@@ -182,24 +182,24 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x,z'",
-				Expected: []sql.Row{{155}},
+				Expected: []sql.UntypedSqlRow{{155}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
-				Expected: []sql.Row{{float64(10000)}},
+				Expected: []sql.UntypedSqlRow{{float64(10000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
-				Expected: []sql.Row{{int64(1)}},
+				Expected: []sql.UntypedSqlRow{{int64(1)}},
 			},
 		},
 	},
@@ -212,14 +212,14 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    " SELECT column_name from information_schema.column_statistics",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "analyze table xy",
 			},
 			{
 				Query:    " SELECT column_name from information_schema.column_statistics",
-				Expected: []sql.Row{{"x"}, {"z"}, {"x,z"}},
+				Expected: []sql.UntypedSqlRow{{"x"}, {"z"}, {"x,z"}},
 			},
 		},
 	},
@@ -235,24 +235,24 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
-				Expected: []sql.Row{{26}},
+				Expected: []sql.UntypedSqlRow{{26}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(0)}},
+				Expected: []sql.UntypedSqlRow{{float64(0)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{int64(1)}},
+				Expected: []sql.UntypedSqlRow{{int64(1)}},
 			},
 		},
 	},
@@ -268,28 +268,28 @@ var DoltHistogramTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    " SELECT column_name from information_schema.column_statistics",
-				Expected: []sql.Row{{"z,x"}},
+				Expected: []sql.UntypedSqlRow{{"z,x"}},
 			},
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z,x'",
-				Expected: []sql.Row{{42}},
+				Expected: []sql.UntypedSqlRow{{42}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
-				Expected: []sql.Row{{float64(0)}},
+				Expected: []sql.UntypedSqlRow{{float64(0)}},
 			},
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
-				Expected: []sql.Row{{float64(30000)}},
+				Expected: []sql.UntypedSqlRow{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
 				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
-				Expected: []sql.Row{{int64(1)}},
+				Expected: []sql.UntypedSqlRow{{int64(1)}},
 			},
 		},
 	},
@@ -306,25 +306,25 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "xy", "primary", "x", "bigint"},
 					{"mydb", "xy", "y", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
 				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
-				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+				Expected: []sql.UntypedSqlRow{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
 			},
 			{
 				Query: fmt.Sprintf("select %s, %s from dolt_statistics", schema.StatsUpperBoundColName, schema.StatsUpperBoundCntColName),
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"5", uint64(1)},
 					{"2,a", uint64(1)},
 				},
 			},
 			{
 				Query: fmt.Sprintf("select %s, %s, %s, %s, %s from dolt_statistics", schema.StatsMcv1ColName, schema.StatsMcv2ColName, schema.StatsMcv3ColName, schema.StatsMcv4ColName, schema.StatsMcvCountsColName),
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"", "", "", "", ""},
 					{"0,a", "", "", "", "4"},
 				},
@@ -341,7 +341,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -355,7 +355,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},
@@ -369,7 +369,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "xy", "primary", "x", "bigint"},
 					{"mydb", "xy", "y", "y,x", "varchar(10),bigint"},
 				},
@@ -386,7 +386,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "xy", "y", "y", "varbinary(10)"},
 					{"mydb", "xy", "primary", "x", "bigint"},
 					{"mydb", "xy", "z", "z", "binary(14)"},
@@ -394,7 +394,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 		},
 	},
@@ -408,14 +408,14 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select database_name, table_name, index_name, columns, types from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "xy", "primary", "x", "bigint"},
 					{"mydb", "xy", "y", "y", "timestamp"},
 				},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},
@@ -432,18 +432,18 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select database_name, table_name, index_name, columns, types  from dolt_statistics where table_name = 'xy'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "xy", "primary", "x", "bigint"},
 					{"mydb", "xy", "y", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
 				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
-				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+				Expected: []sql.UntypedSqlRow{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
 			},
 			{
 				Query: "select `table_name`, `index_name` from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"ab", "primary"},
 					{"ab", "b"},
 					{"xy", "primary"},
@@ -452,14 +452,14 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select database_name, table_name, index_name, columns, types  from dolt_statistics where table_name = 'ab'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "ab", "primary", "a", "bigint"},
 					{"mydb", "ab", "b", "b,c", "int,int"},
 				},
 			},
 			{
 				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'ab'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
-				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+				Expected: []sql.UntypedSqlRow{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
 			},
 		},
 	},
@@ -476,7 +476,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{uint64(8), uint64(8), uint64(0)},
 					{uint64(8), uint64(3), uint64(0)},
 				},
@@ -493,7 +493,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{6}, {7}},
+				Expected: []sql.UntypedSqlRow{{6}, {7}},
 			},
 			{
 				Query: "delete from xy where x > 500",
@@ -503,7 +503,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{{4}, {4}},
+				Expected: []sql.UntypedSqlRow{{4}, {4}},
 			},
 		},
 	},
@@ -519,7 +519,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{6}, {7}},
+				Expected: []sql.UntypedSqlRow{{6}, {7}},
 			},
 			{
 				Query: "delete from xy where x > 500",
@@ -532,7 +532,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{{4}, {4}},
+				Expected: []sql.UntypedSqlRow{{4}, {4}},
 			},
 		},
 	},
@@ -549,7 +549,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query: "alter table xy modify column x varchar(16);",
@@ -565,7 +565,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -581,7 +581,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query: "alter table xy drop primary key",
@@ -597,7 +597,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -628,14 +628,14 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"xy", "primary", uint64(6)},
 					{"xy", "y", uint64(6)},
 				},
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"ab", "primary", uint64(6)},
 					{"ab", "b", uint64(6)},
 					{"xy", "primary", uint64(6)},
@@ -644,7 +644,7 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"xy", "primary", uint64(6)},
 					{"xy", "y", uint64(6)},
 				},
@@ -663,7 +663,7 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"ab", "primary", uint64(6)},
 					{"ab", "b", uint64(6)},
 					{"xy", "primary", uint64(7)},
@@ -672,7 +672,7 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"xy", "primary", uint64(6)},
 					{"xy", "y", uint64(6)},
 				},
@@ -691,12 +691,12 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// we dropped 'feat', not 'main'
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"xy", "primary", uint64(6)},
 					{"xy", "y", uint64(6)},
 				},
@@ -713,7 +713,7 @@ var StatBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "analyze table xy",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"xy", "analyze", "status", "OK"},
 				},
 			},
@@ -734,14 +734,14 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from information_schema.column_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query: "call dolt_stats_drop()",
 			},
 			{
 				Query:    "select count(*) from information_schema.column_statistics",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -756,15 +756,15 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_threshold = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_interval = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// don't panic
@@ -781,7 +781,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},
@@ -794,31 +794,31 @@ var StatProcTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"no active stats thread"}},
+				Expected: []sql.UntypedSqlRow{{"no active stats thread"}},
 			},
 			// set refresh interval arbitrarily high to avoid updating when we restart
 			{
 				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 100000;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "set @@PERSIST.dolt_stats_auto_refresh_threshold = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query: "call dolt_stats_restart()",
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"restarted thread: mydb"}},
+				Expected: []sql.UntypedSqlRow{{"restarted thread: mydb"}},
 			},
 			{
 				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			// new restart picks up 0-interval, will start refreshing immediately
 			{
@@ -829,11 +829,11 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"refreshed mydb"}},
+				Expected: []sql.UntypedSqlRow{{"refreshed mydb"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			// kill refresh thread
 			{
@@ -841,7 +841,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"cancelled thread: mydb"}},
+				Expected: []sql.UntypedSqlRow{{"cancelled thread: mydb"}},
 			},
 			// insert without refresh thread will not update stats
 			{
@@ -852,20 +852,20 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"cancelled thread: mydb"}},
+				Expected: []sql.UntypedSqlRow{{"cancelled thread: mydb"}},
 			},
 			// manual analyze will update stats
 			{
 				Query:    "analyze table xy",
-				Expected: []sql.Row{{"xy", "analyze", "status", "OK"}},
+				Expected: []sql.UntypedSqlRow{{"xy", "analyze", "status", "OK"}},
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"refreshed mydb"}},
+				Expected: []sql.UntypedSqlRow{{"refreshed mydb"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			// kill refresh thread and delete stats ref
 			{
@@ -873,11 +873,11 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"dropped"}},
+				Expected: []sql.UntypedSqlRow{{"dropped"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -892,14 +892,14 @@ var StatProcTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{1}, {1}},
+				Expected: []sql.UntypedSqlRow{{1}, {1}},
 			},
 			{
 				Query: "call dolt_stats_purge()",
 			},
 			{
 				Query:    "select count(*) from dolt_statistics;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -914,14 +914,14 @@ var StatProcTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
-				Expected: []sql.Row{{1}, {1}},
+				Expected: []sql.UntypedSqlRow{{1}, {1}},
 			},
 			{
 				Query: "call dolt_stats_prune()",
 			},
 			{
 				Query:    "select count(*) from dolt_statistics;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},

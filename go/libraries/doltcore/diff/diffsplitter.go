@@ -147,12 +147,12 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 
-	diffType := row[len(row)-1]
-	row = row[:len(row)-1]
+	diffType := row.GetValue(row.Len() - 1)
+	row = row.Subslice(0, row.Len()-1)
 
 	switch diffType.(string) {
 	case removedStr:
-		from.Row = make(sql.Row, len(ds.targetSch))
+		from.Row = make(sql.UntypedSqlRow, len(ds.targetSch))
 		from.RowDiff = Removed
 		for i := 0; i < ds.splitIdx; i++ {
 			j := ds.queryToTarget[i]
@@ -160,25 +160,25 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 			if j < 0 {
 				continue
 			}
-			from.Row[j] = row[i]
+			from.Row.SetValue(j, row.GetValue(i))
 			from.ColDiffs[j] = Removed
 		}
 
 	case addedStr:
-		to.Row = make(sql.Row, len(ds.targetSch))
+		to.Row = make(sql.UntypedSqlRow, len(ds.targetSch))
 		to.RowDiff = Added
-		for i := ds.splitIdx; i < len(row); i++ {
+		for i := ds.splitIdx; i < row.Len(); i++ {
 			j := ds.queryToTarget[i]
 			// skip any columns that aren't mapped
 			if j < 0 {
 				continue
 			}
-			to.Row[j] = row[i]
+			to.Row.SetValue(j, row.GetValue(i))
 			to.ColDiffs[j] = Added
 		}
 
 	case modifiedStr:
-		from.Row = make(sql.Row, len(ds.targetSch))
+		from.Row = make(sql.UntypedSqlRow, len(ds.targetSch))
 		from.RowDiff = ModifiedOld
 		for i := 0; i < ds.splitIdx; i++ {
 			j := ds.queryToTarget[i]
@@ -186,18 +186,18 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 			if j < 0 {
 				continue
 			}
-			from.Row[j] = row[i]
+			from.Row.SetValue(j, row.GetValue(i))
 		}
-		to.Row = make(sql.Row, len(ds.targetSch))
+		to.Row = make(sql.UntypedSqlRow, len(ds.targetSch))
 		to.RowDiff = ModifiedNew
-		for i := ds.splitIdx; i < len(row); i++ {
+		for i := ds.splitIdx; i < row.Len(); i++ {
 			j := ds.queryToTarget[i]
-			to.Row[j] = row[i]
+			to.Row.SetValue(j, row.GetValue(i))
 		}
 		// now do field-wise comparison
 		var cmp int
 		for i, col := range ds.targetSch {
-			cmp, err = col.Type.Compare(from.Row[i], to.Row[i])
+			cmp, err = col.Type.Compare(from.Row.GetValue(i), to.Row.GetValue(i))
 			if err != nil {
 				return RowDiff{}, RowDiff{}, err
 			} else if cmp != 0 {

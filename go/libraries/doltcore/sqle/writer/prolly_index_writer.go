@@ -108,7 +108,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error)
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow.GetValue(from)); err != nil {
 			return nil, err
 		}
 	}
@@ -139,7 +139,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow.GetValue(from)); err != nil {
 			return err
 		}
 	}
@@ -188,7 +188,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
+		if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow.GetValue(from)); err != nil {
 			return err
 		}
 	}
@@ -221,7 +221,7 @@ func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, er
 // uniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	existing := make(sql.UntypedSqlRow, len(m.keyMap)+len(m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
@@ -298,7 +298,7 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -318,13 +318,13 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	ns := m.mut.NodeStore()
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
+		if sqlRow.GetValue(from) == nil {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}

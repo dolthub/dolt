@@ -142,7 +142,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 				cli.Println(err.Error())
 				return 1, false
 			}
-			amendStr = row[0].(string)
+			amendStr = row.GetValue(0).(string)
 		}
 		msg, err = getCommitMessageFromEditor(sqlCtx, queryist, "", amendStr, false, cliCtx)
 		if err != nil {
@@ -463,7 +463,7 @@ func PrintDiffsNotStaged(
 	}
 	var conflictTables []string
 	for i, _ := range conflictRows {
-		conflictTables = append(conflictTables, conflictRows[i][0].(string))
+		conflictTables = append(conflictTables, conflictRows[i].GetValue(0).(string))
 	}
 	inCnfSet := set.NewStrSet(conflictTables)
 
@@ -478,7 +478,7 @@ func PrintDiffsNotStaged(
 	}
 	var schemaConflictTables []string
 	for i, _ := range schemaConflictRows {
-		schemaConflictTables = append(schemaConflictTables, schemaConflictRows[i][0].(string))
+		schemaConflictTables = append(schemaConflictTables, schemaConflictRows[i].GetValue(0).(string))
 	}
 	inCnfSet.Add(schemaConflictTables...)
 
@@ -493,7 +493,7 @@ func PrintDiffsNotStaged(
 	}
 	var constraintViolationTables []string
 	for i, _ := range constraintViolationRows {
-		constraintViolationTables = append(constraintViolationTables, constraintViolationRows[i][0].(string))
+		constraintViolationTables = append(constraintViolationTables, constraintViolationRows[i].GetValue(0).(string))
 	}
 	violationSet := set.NewStrSet(constraintViolationTables)
 
@@ -532,9 +532,9 @@ func PrintDiffsNotStaged(
 	added := 0
 	removeModified := 0
 	for _, row := range notStagedRows {
-		if row[1] == "new table" {
+		if row.GetValue(1) == "new table" {
 			added++
-		} else if row[1] == "renamed" {
+		} else if row.GetValue(1) == "renamed" {
 			added++
 			removeModified++
 		} else {
@@ -633,17 +633,17 @@ func PrintDiffsNotStaged(
 func getModifiedAndRemovedNotStaged(notStagedRows []sql.Row, inCnfSet, violationSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, len(notStagedRows))
 	for _, row := range notStagedRows {
-		if row[1] == "added" || inCnfSet.Contains(row[0].(string)) || violationSet.Contains(row[0].(string)) {
+		if row.GetValue(1) == "added" || inCnfSet.Contains(row.GetValue(0).(string)) || violationSet.Contains(row.GetValue(0).(string)) {
 			continue
 		}
-		if row[1] == "deleted" {
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row[0].(string)))
-		} else if row[1] == "renamed" {
+		if row.GetValue(1) == "deleted" {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row.GetValue(0).(string)))
+		} else if row.GetValue(1) == "renamed" {
 			// per Git, unstaged renames are shown as drop + add
-			names := strings.Split(row[0].(string), " -> ")
+			names := strings.Split(row.GetValue(0).(string), " -> ")
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], names[0]))
 		} else {
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row[0].(string)))
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row.GetValue(0).(string)))
 		}
 	}
 	return lines
@@ -652,8 +652,8 @@ func getModifiedAndRemovedNotStaged(notStagedRows []sql.Row, inCnfSet, violation
 func getAddedNotStagedTables(notStagedRows []sql.Row) (tables []doltdb.TableName) {
 	tables = make([]doltdb.TableName, 0, len(notStagedRows))
 	for _, row := range notStagedRows {
-		if row[1] == "added" || row[1] == "renamed" {
-			names := strings.Split(row[0].(string), " -> ")
+		if row.GetValue(1) == "added" || row.GetValue(1) == "renamed" {
+			names := strings.Split(row.GetValue(0).(string), " -> ")
 			// TODO: schema name
 			tables = append(tables, doltdb.TableName{Name: names[0]})
 		}
@@ -713,17 +713,17 @@ func printStagedDiffs(wr io.Writer, stagedRows []sql.Row, printHelp bool) int {
 
 		lines := make([]string, 0, len(stagedRows))
 		for _, row := range stagedRows {
-			if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: row[0].(string)}) {
-				switch row[1].(string) {
+			if !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: row.GetValue(0).(string)}) {
+				switch row.GetValue(1).(string) {
 				case "new table":
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], row[0].(string)))
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], row.GetValue(0).(string)))
 				case "deleted":
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row[0].(string)))
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row.GetValue(0).(string)))
 				case "renamed":
-					names := strings.Split(row[0].(string), " -> ")
+					names := strings.Split(row.GetValue(0).(string), " -> ")
 					lines = append(lines, fmt.Sprintf(statusRenameFmt, tblDiffTypeToLabel[diff.RenamedTable], names[0], names[1]))
 				default:
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row[0].(string)))
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row.GetValue(0).(string)))
 				}
 			}
 		}

@@ -49,7 +49,7 @@ func TestMerge(t *testing.T) {
 		setup []testCommand
 
 		query    string
-		expected []sql.Row
+		expected []sql.UntypedSqlRow
 	}{
 		{
 			name:  "smoke test",
@@ -65,7 +65,7 @@ func TestMerge(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM test",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{int32(1), int32(1)},
 				{int32(2), int32(2)},
 			},
@@ -83,7 +83,7 @@ func TestMerge(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM test",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{int32(1), int32(1)},
 				{int32(2), int32(2)},
 				{int32(11), int32(11)},
@@ -107,7 +107,7 @@ func TestMerge(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM quiz ORDER BY pk",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{"a"},
 				{"b"},
 				{"c"},
@@ -159,7 +159,7 @@ func TestMergeConflicts(t *testing.T) {
 		setup []testCommand
 
 		query    string
-		expected []sql.Row
+		expected []sql.UntypedSqlRow
 	}{
 		{
 			name: "conflict on merge",
@@ -173,7 +173,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM dolt_conflicts",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{"test", uint64(2)},
 			},
 		},
@@ -191,7 +191,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cnfcmds.ResolveCmd{}, args{"--ours", "test"}},
 			},
 			query: "SELECT * FROM test",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{int32(1), int32(11)},
 				{int32(2), int32(22)},
 			},
@@ -212,7 +212,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cmd.MergeCmd{}, args{"other"}},
 			},
 			query: "SELECT * FROM dolt_conflicts",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{"quiz", uint64(2)},
 			},
 		},
@@ -233,7 +233,7 @@ func TestMergeConflicts(t *testing.T) {
 				{cnfcmds.ResolveCmd{}, args{"--theirs", "quiz"}},
 			},
 			query: "SELECT * FROM quiz",
-			expected: []sql.Row{
+			expected: []sql.UntypedSqlRow{
 				{int32(1), int32(1)},
 				{int32(2), int32(2)},
 			},

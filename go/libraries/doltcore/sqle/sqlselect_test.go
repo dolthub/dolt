@@ -55,7 +55,7 @@ type SelectTest struct {
 	// the schema is difficult to specify with dolt schemas.
 	ExpectedSqlSchema sql.Schema
 	// The rows this query should return, nil if an error is expected
-	ExpectedRows []sql.Row
+	ExpectedRows []sql.UntypedSqlRow
 	// An expected error string
 	ExpectedErr string
 	// Setup logic to run before executing this test, after initial tables have been created and populated
@@ -463,7 +463,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:         "and expression in select",
 			Query:        "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
-			ExpectedRows: []sql.Row{{true}, {false}},
+			ExpectedRows: []sql.UntypedSqlRow{{true}, {false}},
 			ExpectedSqlSchema: sql.Schema{
 				&sql.Column{Name: "is_married and age >= 40", Type: gmstypes.Boolean},
 			},
@@ -471,7 +471,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:  "or expression in select",
 			Query: "select first_name, age <= 10 or age >= 40 as not_marge from people where last_name = 'Simpson' order by id desc",
-			ExpectedRows: []sql.Row{
+			ExpectedRows: []sql.UntypedSqlRow{
 				{"Lisa", true},
 				{"Bart", true},
 				{"Marge", false},
@@ -600,7 +600,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:  "column selected more than once",
 			Query: "select first_name, first_name from people where age >= 40 order by id",
-			ExpectedRows: []sql.Row{
+			ExpectedRows: []sql.UntypedSqlRow{
 				{"Homer", "Homer"},
 				{"Moe", "Moe"},
 				{"Barney", "Barney"},
@@ -720,7 +720,7 @@ func BasicSelectTests() []SelectTest {
 					Type: gmstypes.Int8,
 				},
 			},
-			ExpectedRows: []sql.Row{{int8(1)}},
+			ExpectedRows: []sql.UntypedSqlRow{{int8(1)}},
 		},
 		{
 			Name:        "unknown column in where",
@@ -746,7 +746,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:  "select * from log system table",
 			Query: "select * from dolt_log",
-			ExpectedRows: []sql.Row{
+			ExpectedRows: []sql.UntypedSqlRow{
 				{
 					headCommitHash,
 					"billy bob",
@@ -766,7 +766,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:         "select * from conflicts system table",
 			Query:        "select * from dolt_conflicts",
-			ExpectedRows: []sql.Row{},
+			ExpectedRows: []sql.UntypedSqlRow{},
 			ExpectedSqlSchema: sql.Schema{
 				&sql.Column{Name: "table", Type: gmstypes.Text},
 				&sql.Column{Name: "num_conflicts", Type: gmstypes.Uint64},
@@ -775,7 +775,7 @@ func BasicSelectTests() []SelectTest {
 		{
 			Name:  "select * from branches system table",
 			Query: "select * from dolt_branches",
-			ExpectedRows: []sql.Row{
+			ExpectedRows: []sql.UntypedSqlRow{
 				{
 					env.DefaultInitBranch,
 					headCommitHash,
@@ -987,7 +987,7 @@ var AsOfTests = []SelectTest{
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		Query:          "select * from dolt_docs as of 'main'",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
+		ExpectedRows:   []sql.UntypedSqlRow{{"LICENSE.md", "A license"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 }
@@ -1292,7 +1292,7 @@ var systemTableSelectTests = []SelectTest{
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		Query:          "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
+		ExpectedRows:   []sql.UntypedSqlRow{{"LICENSE.md", "A license"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{
@@ -1310,7 +1310,7 @@ var systemTableSelectTests = []SelectTest{
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, SchemaTableSchema(),
 			`CREATE VIEW name as select 2+2 from dual`),
 		Query:          "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "CREATE VIEW name as select 2+2 from dual", ignoreVal, "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"}},
+		ExpectedRows:   []sql.UntypedSqlRow{{"view", "name", "CREATE VIEW name as select 2+2 from dual", ignoreVal, "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"}},
 		ExpectedSchema: CompressSchema(SchemaTableSchema()),
 	},
 }

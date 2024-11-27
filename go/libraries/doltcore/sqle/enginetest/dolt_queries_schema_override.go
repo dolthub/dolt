@@ -44,18 +44,18 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schemas
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query: "describe t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"pk", "int", "NO", "PRI", nil, ""},
 					{"c2", "varchar(255)", "YES", "", nil, ""},
 				},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, nil}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -70,11 +70,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit from main for our response schema (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, nil}, {2, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -89,7 +89,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Test retrieving a subset of the schema
 				Query:    "select pk from t;",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -100,7 +100,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Test retrieving the full schema, plus an extra literal column
 				Query:    "select pk, 42, c1 from t;",
-				Expected: []sql.Row{{1, 42, nil}, {2, 42, nil}},
+				Expected: []sql.UntypedSqlRow{{1, 42, nil}, {2, 42, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -119,11 +119,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// turn off the schema override
 				Query:    "SET @@dolt_override_schema=NULL;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, nil}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -159,11 +159,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schema (pk, c1, c2, c3)
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one", nil, nil}, {2, "two", "zwei", nil}, {3, "three", "drei", "tres"}},
+				Expected: []sql.UntypedSqlRow{{1, "one", nil, nil}, {2, "two", "zwei", nil}, {3, "three", "drei", "tres"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -183,11 +183,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the previous commit from main for our response schema (pk, c1, c2)
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one", nil}, {2, "two", "zwei"}, {3, "three", "drei"}},
+				Expected: []sql.UntypedSqlRow{{1, "one", nil}, {2, "two", "zwei"}, {3, "three", "drei"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -204,11 +204,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit from main for our response schemas (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}, {3, "three"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -241,11 +241,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use @commit2 response schema (pk, c1, c2, c3, c4, c6, c7)
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one", nil, 3.0, "four", "six", uint32(7)}},
+				Expected: []sql.UntypedSqlRow{{1, "one", nil, 3.0, "four", "six", uint32(7)}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -274,11 +274,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use @commit2 response schema (pk, c1, c2, c3, c4, c5, c6, c7)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one", nil, 3.0, "four", nil, "six", uint32(7)}},
+				Expected: []sql.UntypedSqlRow{{1, "one", nil, 3.0, "four", nil, "six", uint32(7)}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -326,11 +326,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schema (pk, c2)
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -343,11 +343,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -383,7 +383,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Set an invalid commit that can't be resolved
 				Query:    "SET @@dolt_override_schema=doesNotExist;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "select * from t;",
@@ -397,7 +397,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Set an invalid ancestor spec
 				Query:    "SET @@dolt_override_schema='HEA~D~^~~~';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "select * from t;",
@@ -426,11 +426,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit for our response schema (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -461,11 +461,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit for our response schema (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one", nil}, {2, "two", nil}},
+				Expected: []sql.UntypedSqlRow{{1, "one", nil}, {2, "two", nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -500,11 +500,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schemas
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -517,11 +517,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -551,11 +551,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schemas (int, varchar(100))
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "twotwotwotwotwotwo"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "twotwotwotwotwotwo"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -569,11 +569,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// go back to the first commit, where the schema had a more narrow type (int, varchar(5))
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}, {2, "twotw"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "twotw"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -607,11 +607,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schemas (int, int)
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, nil}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {2, 2}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -625,7 +625,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// go back to the first commit, where the schema have an incompatible type (int, point)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "select * from t;",
@@ -647,11 +647,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from addedTable;",
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:          "SELECT * from addedTable;",
@@ -678,11 +678,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT * from deletedTable;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -705,11 +705,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT * from deletedTable AS OF @commit2;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -732,35 +732,35 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Going back to @commit1 with AS OF should use the available index
 				Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
-				Expected:        []sql.Row{{"one"}},
+				Expected:        []sql.UntypedSqlRow{{"one"}},
 				ExpectedIndexes: []string{"c1_idx"},
 			},
 			{
 				// The tip of HEAD does not have an index
 				Query:           "SELECT c1 from t where c1 > 'o';",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{},
 			},
 			{
 				// Set the overridden schema to the point where an index existed
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// Using the overridden index, we should still get the latest data, but without using the index
 				Query:           "SELECT c1 from t where c1 > 'o';",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{},
 			},
 			{
 				// Set the overridden schema to the point where an index existed
 				Query:    "SET @@dolt_override_schema=@commit2;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// Going back to @commit1 for data, but using @commit2 for schema
 				Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
-				Expected:        []sql.Row{{"one"}},
+				Expected:        []sql.UntypedSqlRow{{"one"}},
 				ExpectedIndexes: []string{},
 			},
 		},
@@ -788,11 +788,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schemas
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t as of @commit1;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -807,11 +807,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the previous commit from main for our response schemas
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from t as of @commit2;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -825,7 +825,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t as of @commit3;",
-				Expected: []sql.Row{{1, nil}, {2, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {2, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -865,11 +865,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/branch3`.t as of @commit1;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -884,11 +884,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit from main for our response schemas (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/branch3`.t as of @commit2;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -902,7 +902,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/branch2`.t;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -940,11 +940,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/commit3`.t as of @commit1;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -959,11 +959,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit from main for our response schemas (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/commit3`.t as of @commit2;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -977,7 +977,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/commit2`.t;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1012,11 +1012,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
 				Query:    "SET @@dolt_override_schema=@commit3;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t as of @commit1;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1031,11 +1031,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit from main for our response schemas (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t as of @commit2;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1049,7 +1049,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/main~`.t;",
-				Expected: []sql.Row{{1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1085,11 +1085,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the tip of main for our response schema (pk, c2)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT * from t1 JOIN t2 on t1.pk = t2.c1;",
-				Expected: []sql.Row{{1, "one", 100, 1, "blue"}},
+				Expected: []sql.UntypedSqlRow{{1, "one", 100, 1, "blue"}},
 				ExpectedColumns: sql.Schema{
 					{
 						Name: "pk",
@@ -1130,11 +1130,11 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Before @@dolt_override_schema is applied, we can executed DDL and update/insert statements
 				Query:    "create table t2 (pk int primary key, c1 JSON);",
-				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{gmstypes.NewOkResult(0)}},
 			},
 			{
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// After @@dolt_override_schema is applied, DDL statements error out
@@ -1149,12 +1149,12 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// Turn off the schema override
 				Query:    "SET @@dolt_override_schema=NULL;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// Insert statements work again after turning off the schema override
 				Query:    "insert into t1 values (3, NULL);",
-				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{gmstypes.NewOkResult(1)}},
 			},
 		},
 	},
@@ -1181,12 +1181,12 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				// use the first commit for our schema override (pk, c1)
 				Query:    "SET @@dolt_override_schema=@commit1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				// sanity check that the schema override is working, before testing the system tables
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil},
 					{2, nil},
 				},
@@ -1203,7 +1203,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, commit, committer, message from dolt_blame_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, doltCommit, "root", "dropping column c1 on main"},
 					{2, doltCommit, "root", "adding column c2 on main"},
 				},
@@ -1228,7 +1228,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select from_pk, from_c2, to_pk, to_c2, from_commit, to_commit, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil, nil, 2, "two", doltCommit, doltCommit, "added"},
 					{1, nil, 1, nil, doltCommit, doltCommit, "modified"},
 					{nil, nil, 1, nil, doltCommit, doltCommit, "added"},
@@ -1266,7 +1266,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select to_pk, to_c2, to_commit, from_pk, from_c2, from_commit, diff_type from dolt_commit_diff_t where from_commit=@commit1 and to_commit=@commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, doltCommit, 1, nil, doltCommit, "modified"},
 					{2, "two", doltCommit, nil, nil, doltCommit, "added"},
 				},
@@ -1303,7 +1303,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c2, commit_hash, committer from dolt_history_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, doltCommit, "root"},
 					{2, "two", doltCommit, "root"},
 					{1, nil, doltCommit, "root"},
@@ -1332,7 +1332,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				// sanity check that the schema override is still working, after testing the system tables
 				// (system tables don't honor schema overrides, so we make sure they don't disable them either)
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil},
 					{2, nil},
 				},

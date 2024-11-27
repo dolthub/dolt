@@ -222,13 +222,13 @@ func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *Writab
 			return nil, err
 		}
 
-		newRow := make(sql.Row, ProceduresTableSchema().GetAllCols().Size())
-		newRow[0] = sqlRow[nameIdx]
-		newRow[1] = sqlRow[createStatementIdx]
-		newRow[2] = sqlRow[createdAtIdx]
-		newRow[3] = sqlRow[modifiedAtIdx]
+		newRow := make(sql.UntypedSqlRow, ProceduresTableSchema().GetAllCols().Size())
+		newRow[0] = sqlRow.GetValue(nameIdx)
+		newRow[1] = sqlRow.GetValue(createStatementIdx)
+		newRow[2] = sqlRow.GetValue(createdAtIdx)
+		newRow[3] = sqlRow.GetValue(modifiedAtIdx)
 		if sqlModeIdx >= 0 {
-			newRow[4] = sqlRow[sqlModeIdx]
+			newRow[4] = sqlRow.GetValue(sqlModeIdx)
 		}
 		newRows = append(newRows, newRow)
 	}
@@ -354,19 +354,19 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		var d sql.StoredProcedureDetails
 		var ok bool
 
-		if d.Name, ok = sqlRow[0].(string); !ok {
+		if d.Name, ok = sqlRow.GetValue(0).(string); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableNameCol, sqlRow)
 		}
-		if d.CreateStatement, ok = sqlRow[1].(string); !ok {
+		if d.CreateStatement, ok = sqlRow.GetValue(1).(string); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableCreateStmtCol, sqlRow)
 		}
-		if d.CreatedAt, ok = sqlRow[2].(time.Time); !ok {
+		if d.CreatedAt, ok = sqlRow.GetValue(2).(time.Time); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableCreatedAtCol, sqlRow)
 		}
-		if d.ModifiedAt, ok = sqlRow[3].(time.Time); !ok {
+		if d.ModifiedAt, ok = sqlRow.GetValue(3).(time.Time); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableModifiedAtCol, sqlRow)
 		}
-		if s, ok := sqlRow[4].(string); ok {
+		if s, ok := sqlRow.GetValue(4).(string); ok {
 			d.SqlMode = s
 		} else {
 			defaultSqlMode, err := loadDefaultSqlMode()
@@ -401,7 +401,7 @@ func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredPro
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{
+	return inserter.Insert(ctx, sql.UntypedSqlRow{
 		strings.ToLower(spd.Name),
 		spd.CreateStatement,
 		spd.CreatedAt.UTC(),
@@ -435,7 +435,7 @@ func DoltProceduresDropProcedure(ctx *sql.Context, db Database, name string) (re
 			retErr = err
 		}
 	}()
-	return deleter.Delete(ctx, sql.Row{name})
+	return deleter.Delete(ctx, sql.UntypedSqlRow{name})
 }
 
 // DoltProceduresGetDetails returns the stored procedure with the given name from `dolt_procedures` if it exists.
@@ -473,14 +473,14 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 
 	sqlRow, err := rowIter.Next(ctx)
 	if err == nil {
-		if len(sqlRow) != 5 {
+		if sqlRow.Len() != 5 {
 			return sql.StoredProcedureDetails{}, false, fmt.Errorf("unexpected row in dolt_procedures:\n%v", sqlRow)
 		}
 		return sql.StoredProcedureDetails{
-			Name:            sqlRow[0].(string),
-			CreateStatement: sqlRow[1].(string),
-			CreatedAt:       sqlRow[2].(time.Time),
-			ModifiedAt:      sqlRow[3].(time.Time),
+			Name:            sqlRow.GetValue(0).(string),
+			CreateStatement: sqlRow.GetValue(1).(string),
+			CreatedAt:       sqlRow.GetValue(2).(time.Time),
+			ModifiedAt:      sqlRow.GetValue(3).(time.Time),
 		}, true, nil
 	} else if err == io.EOF {
 		return sql.StoredProcedureDetails{}, false, nil

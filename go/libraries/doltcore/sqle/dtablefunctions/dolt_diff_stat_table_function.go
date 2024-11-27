@@ -527,7 +527,7 @@ func (d *diffStatTableFunctionRowIter) Close(context *sql.Context) error {
 func getRowFromDiffStat(tblName doltdb.TableName, dsp diff.DiffStatProgress, newColLen, oldColLen int, keyless bool) sql.Row {
 	// if table is keyless table, match current CLI command result
 	if keyless {
-		return sql.Row{
+		return sql.UntypedSqlRow{
 			tblName.String(),   // table_name
 			nil,                // rows_unmodified
 			int64(dsp.Adds),    // rows_added
@@ -546,7 +546,7 @@ func getRowFromDiffStat(tblName doltdb.TableName, dsp diff.DiffStatProgress, new
 	numCellInserts, numCellDeletes := GetCellsAddedAndDeleted(dsp, newColLen)
 	rowsUnmodified := dsp.OldRowSize - dsp.Changes - dsp.Removes
 
-	return sql.Row{
+	return sql.UntypedSqlRow{
 		tblName.String(),       // table_name
 		int64(rowsUnmodified),  // rows_unmodified
 		int64(dsp.Adds),        // rows_added

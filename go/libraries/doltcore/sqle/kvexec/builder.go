@@ -51,10 +51,10 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	switch n := n.(type) {
 	case *plan.JoinNode:
 		switch {
-		case n.Op.IsPartial() || len(r) != 0:
+		case n.Op.IsPartial() || r.Len() != 0:
 			return nil, nil
 		case n.Op.IsLookup():
-			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
+			if ita, ok := getIta(n.Right()); ok && simpleLookupExpressions(ita.Expressions()) {
 				if _, _, _, dstIter, _, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, _, srcIter, _, srcSchema, _, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
 						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), srcMap.NodeStore()); keyLookupMapper.valid() {
@@ -242,10 +242,11 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	row := make(sql.Row, m.outCnt)
+	row := make(sql.UntypedSqlRow, m.outCnt)
 	split := 0
 	var err error
 	var tup val.Tuple
+	var v interface{}
 	for i, desc := range m.desc {
 		tup = tuples[2*i]
 		if tup == nil {
@@ -258,18 +259,20 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 		}
 		for j, idx := range desc.keyMappings {
 			outputIdx := m.ordMappings[split+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
+			v, err = tree.GetField(ctx, desc.keyDesc, idx, tup, m.ns)
 			if err != nil {
 				return nil, err
 			}
+			row.SetValue(outputIdx, v)
 		}
 		tup = tuples[2*i+1]
 		for j, idx := range desc.valMappings {
 			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
-			row[outputIdx], err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
+			v, err = tree.GetField(ctx, desc.valDesc, idx, tup, m.ns)
 			if err != nil {
 				return nil, err
 			}
+			row.SetValue(outputIdx, v)
 		}
 	}
 	return row, nil

@@ -141,13 +141,13 @@ func printReflog(rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int
 	res, err := GetRowsForSql(queryist, sqlCtx, "SELECT hashof('HEAD')")
 	if err == nil {
 		// still print the reflog even if we can't get the hash
-		headHash = res[0][0].(string)
+		headHash = res[0].GetValue(0).(string)
 	}
 
 	for _, row := range rows {
-		ref := row[0].(string)
-		commitHash := row[1].(string)
-		commitMessage := row[2].(string)
+		ref := row.GetValue(0).(string)
+		commitHash := row.GetValue(1).(string)
+		commitMessage := row.GetValue(2).(string)
 		reflogInfo = append(reflogInfo, ReflogInfo{ref, commitHash, commitMessage})
 	}
 

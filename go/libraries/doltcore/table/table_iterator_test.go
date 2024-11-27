@@ -106,7 +106,7 @@ func tuplesToRows(t *testing.T, kvs [][2]val.Tuple) (rows []sql.Row) {
 		require.NoError(t, err)
 		v2, err := tree.GetField(context.Background(), kd, 0, kv[1], nil)
 		require.NoError(t, err)
-		rows[i] = sql.Row{v1, v2}
+		rows[i] = sql.UntypedSqlRow{v1, v2}
 	}
 
 	return

@@ -2239,7 +2239,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 
 	sqlMode := sql.LoadSqlMode(ctx)
 
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.String()})
+	return inserter.Insert(ctx, sql.UntypedSqlRow{fragType, name, definition, extraJSON, sqlMode.String()})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
@@ -2378,21 +2378,21 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 var ConvertRowToRebasePlanStep = convertRowToRebasePlanStep
 
 func convertRowToRebasePlanStep(row sql.Row) (rebase.RebasePlanStep, error) {
-	i, ok := row[1].(uint16)
+	i, ok := row.GetValue(1).(uint16)
 	if !ok {
-		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row.GetValue(1), row.GetValue(1))
 	}
 
 	rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
 	if !ok {
-		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row.GetValue(1), row.GetValue(1))
 	}
 
 	return rebase.RebasePlanStep{
-		RebaseOrder: row[0].(decimal.Decimal),
+		RebaseOrder: row.GetValue(0).(decimal.Decimal),
 		Action:      rebaseAction,
-		CommitHash:  row[2].(string),
-		CommitMsg:   row[3].(string),
+		CommitHash:  row.GetValue(2).(string),
+		CommitMsg:   row.GetValue(3).(string),
 	}, nil
 }
 
@@ -2448,7 +2448,7 @@ func convertRebasePlanStepToRow(planMember rebase.RebasePlanStep) (sql.Row, erro
 	if actionEnumValue == -1 {
 		return nil, fmt.Errorf("invalid rebase action: %s", planMember.Action)
 	}
-	return sql.Row{
+	return sql.UntypedSqlRow{
 		planMember.RebaseOrder,
 		uint16(actionEnumValue),
 		planMember.CommitHash,
@@ -2488,7 +2488,6 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 		if err != nil {
 			return err
 		}
-
 		err = inserter.Insert(ctx, row)
 		if err != nil {
 			return err

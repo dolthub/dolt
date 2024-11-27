@@ -31,12 +31,14 @@ func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, v
 		return
 	}
 
-	key = make(sql.Row, kd.Count())
+	key = make(sql.UntypedSqlRow, kd.Count())
+	var v interface{}
 	for i := 0; i < kd.Count(); i++ {
-		key[i], err = tree.GetField(ctx, kd, i, art.SourceKey, ns)
+		v, err = tree.GetField(ctx, kd, i, art.SourceKey, ns)
 		if err != nil {
 			return
 		}
+		key.SetValue(i, v)
 	}
 
 	var meta prolly.ConstraintViolationMeta
@@ -45,12 +47,13 @@ func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, v
 		return
 	}
 
-	value = make(sql.Row, vd.Count())
+	value = make(sql.UntypedSqlRow, vd.Count())
 	for i := 0; i < vd.Count(); i++ {
-		value[i], err = tree.GetField(ctx, vd, i, meta.Value, ns)
+		v, err = tree.GetField(ctx, vd, i, meta.Value, ns)
 		if err != nil {
 			return
 		}
+		value.SetValue(i, v)
 	}
 
 	return MapCVType(art.ArtType), key, value, nil

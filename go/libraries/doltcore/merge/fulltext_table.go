@@ -156,7 +156,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 	for ; err == nil; sqlRow, err = rowIter.Next(ctx) {
 		for to := range keyMap {
 			from := keyMap.MapOrdinal(to)
-			if err = tree.PutField(ctx, mut.NodeStore(), keyBld, to, sqlRow[from]); err != nil {
+			if err = tree.PutField(ctx, mut.NodeStore(), keyBld, to, sqlRow.GetValue(from)); err != nil {
 				return nil, err
 			}
 		}
@@ -164,7 +164,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 
 		for to := range valMap {
 			from := valMap.MapOrdinal(to)
-			if err = tree.PutField(ctx, mut.NodeStore(), valBld, to, sqlRow[from]); err != nil {
+			if err = tree.PutField(ctx, mut.NodeStore(), valBld, to, sqlRow.GetValue(from)); err != nil {
 				return nil, err
 			}
 		}

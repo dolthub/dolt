@@ -58,9 +58,9 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	require.Equal(t, 3, len(wrapper.backingTable.Schema()))
 
 	inserter := wrapper.backingTable.Inserter(ctx)
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
+	err = inserter.Insert(ctx, sql.UntypedSqlRow{"view", "view1", "SELECT v1 FROM test;"})
 	require.NoError(t, err)
-	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
+	err = inserter.Insert(ctx, sql.UntypedSqlRow{"view", "view2", "SELECT v2 FROM test;"})
 	require.NoError(t, err)
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	}
 
 	require.NoError(t, iter.Close(ctx))
-	expectedRows := []sql.Row{
+	expectedRows := []sql.UntypedSqlRow{
 		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
 		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
 	}

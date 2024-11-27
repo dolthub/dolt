@@ -51,7 +51,7 @@ type setupHook func(context.Context, *env.DoltEnv) (*env.DoltEnv, error)
 
 type assertion struct {
 	query    string
-	expected []sql.Row
+	expected []sql.UntypedSqlRow
 }
 
 func TestMigration(t *testing.T) {
@@ -71,15 +71,15 @@ func TestMigration(t *testing.T) {
 			asserts: []assertion{
 				{
 					query:    "SELECT * FROM test",
-					expected: []sql.Row{{int32(1)}, {int32(2)}, {int32(3)}},
+					expected: []sql.UntypedSqlRow{{int32(1)}, {int32(2)}, {int32(3)}},
 				},
 				{
 					query:    "SELECT count(*) FROM dolt_log",
-					expected: []sql.Row{{int64(2)}},
+					expected: []sql.UntypedSqlRow{{int64(2)}},
 				},
 				{
 					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
-					expected: []sql.Row{{int64(2)}},
+					expected: []sql.UntypedSqlRow{{int64(2)}},
 				},
 			},
 		},
@@ -101,11 +101,11 @@ func TestMigration(t *testing.T) {
 			asserts: []assertion{
 				{
 					query:    "SELECT * FROM test",
-					expected: []sql.Row{{"a", int32(2), []byte("a")}},
+					expected: []sql.UntypedSqlRow{{"a", int32(2), []byte("a")}},
 				},
 				{
 					query: "DESCRIBE test",
-					expected: []sql.Row{
+					expected: []sql.UntypedSqlRow{
 						{"pk", "varchar(16383)", "NO", "PRI", "NULL", ""},
 						{"c0", "int", "YES", "", "NULL", ""},
 						{"c1", "varbinary(16383)", "YES", "MUL", "NULL", ""},
@@ -127,19 +127,19 @@ func TestMigration(t *testing.T) {
 			asserts: []assertion{
 				{
 					query:    "SELECT count(*) FROM dolt_log",
-					expected: []sql.Row{{int64(4)}},
+					expected: []sql.UntypedSqlRow{{int64(4)}},
 				},
 				{
 					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping",
-					expected: []sql.Row{{int64(4)}},
+					expected: []sql.UntypedSqlRow{{int64(4)}},
 				},
 				{
 					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash IN (SELECT commit_hash FROM dolt_log)",
-					expected: []sql.Row{{int64(4)}},
+					expected: []sql.UntypedSqlRow{{int64(4)}},
 				},
 				{
 					query:    "SELECT count(*) FROM `dolt/dolt_migrated_commits`.dolt_commit_mapping WHERE new_commit_hash NOT IN (SELECT commit_hash FROM dolt_log)",
-					expected: []sql.Row{{int64(0)}},
+					expected: []sql.UntypedSqlRow{{int64(0)}},
 				},
 			},
 		},

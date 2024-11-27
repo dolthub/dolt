@@ -117,17 +117,17 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	status, err := getInt64ColAsInt64(rows[0][0])
+	status, err := getInt64ColAsInt64(rows[0].GetValue(0))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if status == 1 {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0].GetValue(1).(string))), usage)
 	}
 
 	// If the rebase was successful, or if it was aborted, print out the message and
 	// ensure the branch being rebased is checked out in the CLI
-	message := rows[0][1].(string)
+	message := rows[0].GetValue(1).(string)
 	if strings.Contains(message, dprocedures.SuccessfulRebaseMessage) ||
 		strings.Contains(message, dprocedures.RebaseAbortedMessage) {
 		cli.Println(message)
@@ -150,12 +150,12 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		status, err := getInt64ColAsInt64(rows[0][0])
+		status, err := getInt64ColAsInt64(rows[0].GetValue(0))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		if status == 1 {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0].GetValue(1).(string))), usage)
 		}
 
 		cli.Println(dprocedures.RebaseAbortedMessage)
@@ -185,7 +185,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	status, err = getInt64ColAsInt64(rows[0][0])
+	status, err = getInt64ColAsInt64(rows[0].GetValue(0))
 	if err != nil {
 		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
 		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
@@ -198,10 +198,10 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0].GetValue(1).(string))), usage)
 	}
 
-	cli.Println(rows[0][1].(string))
+	cli.Println(rows[0].GetValue(1).(string))
 	return 0
 }
 
@@ -251,12 +251,12 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 
 	// rebase plan
 	for _, row := range rows {
-		action, found := getRebaseAction(row[0])
+		action, found := getRebaseAction(row.GetValue(0))
 		if !found {
 			return "", errors.New("invalid rebase action")
 		}
-		commitHash := row[1].(string)
-		commitMessage := row[2].(string)
+		commitHash := row.GetValue(1).(string)
+		commitMessage := row.GetValue(2).(string)
 		buffer.WriteString(fmt.Sprintf("%s %s %s\n", action, commitHash, commitMessage))
 	}
 	buffer.WriteString("\n")

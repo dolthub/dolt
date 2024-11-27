@@ -50,10 +50,10 @@ func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string)
 	if err != nil {
 		return "", err
 	}
-	if len(rows) != 1 || len(rows[0]) != 2 {
+	if len(rows) != 1 || rows[0].Len() != 2 {
 		return "", fmt.Errorf("unexpected result from SHOW CREATE TABLE")
 	}
-	stmt, ok := rows[0][1].(string)
+	stmt, ok := rows[0].GetValue(1).(string)
 	if !ok {
 		return "", fmt.Errorf("expected string statement from SHOW CREATE TABLE")
 	}

@@ -104,19 +104,19 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -130,11 +130,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(1)}, {"child4", uint64(1)}},
 			},
 		},
 	},
@@ -148,11 +148,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(1)}},
 			},
 		},
 	},
@@ -166,11 +166,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3', 'child4');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(1)}, {"child4", uint64(1)}},
 			},
 		},
 	},
@@ -184,11 +184,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(2)}, {"child4", uint64(2)}},
 			},
 		},
 	},
@@ -202,11 +202,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(2)}},
 			},
 		},
 	},
@@ -220,11 +220,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3', 'child4');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"child3", uint64(2)}, {"child4", uint64(2)}},
 			},
 		},
 	},
@@ -234,11 +234,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--output-only', 'child3', 'child4');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -248,11 +248,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', '--output-only', 'child3', 'child4');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -269,11 +269,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -291,11 +291,11 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call DOLT_VERIFY_CONSTRAINTS('--all');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"child", uint64(1)}},
 			},
 		},
 	},
@@ -311,7 +311,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:            "set foreign_key_checks = 0;",
@@ -319,7 +319,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into child values (3, 30, 30);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:            "set foreign_key_checks = 1;",
@@ -327,7 +327,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -340,39 +340,39 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
@@ -385,48 +385,48 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// no violations in the working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// one unique violation in all the data
 				Query:    "call dolt_verify_constraints('--all');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
@@ -440,39 +440,39 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints('t');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
@@ -486,36 +486,36 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints('otherTable');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Nothing in dolt_constraint_violations because we only verified otherTable
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -525,45 +525,45 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(2)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"unique index", 1, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 					{"unique index", 2, 1, `{"Name": "col1", "Columns": ["col1"]}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				// no violations in the working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// one unique violation in all the data
 				Query:    "call dolt_verify_constraints('--all', '--output-only');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// no output recorded because of --output-only
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -576,38 +576,38 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 42, 42}},
+				Expected: []sql.UntypedSqlRow{{1, 42, 42}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
@@ -619,47 +619,47 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 42, 42}},
+				Expected: []sql.UntypedSqlRow{{1, 42, 42}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// no violations in the working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// one unique violation in all the data
 				Query:    "call dolt_verify_constraints('--all');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
@@ -672,38 +672,38 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 42, 42}},
+				Expected: []sql.UntypedSqlRow{{1, 42, 42}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints('t');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
@@ -716,35 +716,35 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				// merge with --squash so that our working set has the constraint violations
 				Query:    "call dolt_merge('main', '--squash');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 42, 42}},
+				Expected: []sql.UntypedSqlRow{{1, 42, 42}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// verify constraints in working set
 				Query:    "call dolt_verify_constraints('otherTable');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Nothing in dolt_constraint_violations because we only verify otherTable
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -754,44 +754,44 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 42, 42}},
+				Expected: []sql.UntypedSqlRow{{1, 42, 42}},
 			},
 			{
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
 				},
 			},
 			{
 				Query:    "delete from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				// no violations in the working set
 				Query:    "call dolt_verify_constraints();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// one unique violation in all the data
 				Query:    "call dolt_verify_constraints('--all', '--output-only');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// no output recorded because of --output-only
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},

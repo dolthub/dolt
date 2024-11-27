@@ -29,7 +29,7 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW DATABASES",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"information_schema"},
 					{"mydb"},
 					{"mysql"},
@@ -54,7 +54,7 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM test.foo",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},
@@ -76,7 +76,7 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create database test",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"test", "CREATE DATABASE `test` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */"},
 				},
 			},
@@ -107,7 +107,7 @@ var DoltCreateDatabaseScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT * FROM test.foo",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},

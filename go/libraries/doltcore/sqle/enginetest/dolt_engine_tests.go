@@ -136,7 +136,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 	require.NoError(t, err)
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
-	assert.Equal(t, rows, []sql.Row{{lockMode}})
+	assert.Equal(t, sql.RowsToUntyped(rows), []sql.UntypedSqlRow{{lockMode}})
 
 	// Ordinarily QueryEngine.query manages transactions.
 	// Since we can't use that for this test, we manually start a new transaction.
@@ -195,7 +195,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
-		assert.Equal(t, rows, []sql.Row{{int64(64)}})
+		assert.Equal(t, sql.RowsToUntyped(rows), []sql.UntypedSqlRow{{int64(64)}})
 	}
 
 	// Verify that the insert operations are actually interleaved by inspecting the order that values were added to `timestamps`
@@ -204,7 +204,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
-		assert.Equal(t, rows, []sql.Row{{true}})
+		assert.Equal(t, sql.RowsToUntyped(rows), []sql.UntypedSqlRow{{true}})
 	}
 
 	{
@@ -212,7 +212,7 @@ func testAutoIncrementTrackerWithLockMode(t *testing.T, harness DoltEnginetestHa
 		require.NoError(t, err)
 		rows, err := sql.RowIterToRows(ctx, iter)
 		require.NoError(t, err)
-		assert.Equal(t, rows, []sql.Row{{true}})
+		assert.Equal(t, sql.RowsToUntyped(rows), []sql.UntypedSqlRow{{true}})
 	}
 }
 
@@ -390,7 +390,7 @@ func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "DROP DATABASE TeSt2DB",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					Expected: []sql.UntypedSqlRow{{gmstypes.OkResult{RowsAffected: 1}}},
 				},
 				{
 					Query:       "USE test2db",
@@ -398,11 +398,11 @@ func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 				},
 				{
 					Query:    "USE TEST1DB",
-					Expected: []sql.Row{},
+					Expected: []sql.UntypedSqlRow{},
 				},
 				{
 					Query:    "DROP DATABASE IF EXISTS test1DB",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					Expected: []sql.UntypedSqlRow{{gmstypes.OkResult{RowsAffected: 1}}},
 				},
 				{
 					Query:       "USE Test1db",
@@ -701,36 +701,36 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(rows))
-	commithash := rows[0][0].(string)
+	commithash := rows[0].GetValue(0).(string)
 
 	scriptTest := queries.ScriptTest{
 		Name: "database revision specs: commit-qualified revision spec",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "use mydb/" + commithash,
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select active_branch();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{nil},
 				},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/" + commithash}},
+				Expected: []sql.UntypedSqlRow{{"mydb/" + commithash}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "call dolt_reset();",
@@ -738,27 +738,27 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "use mydb;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 		},
 	}
@@ -1638,7 +1638,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{"test", "CREATE TABLE `test` (\n" +
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
@@ -1688,7 +1688,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{"test", "CREATE TABLE `test` (\n" +
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
@@ -1700,7 +1700,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 				},
 				{
 					Query: "select * from test order by id",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{1, 1},
 						{2, 2},
 					},
@@ -1765,7 +1765,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{"test", "CREATE TABLE `test` (\n" +
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
@@ -1775,7 +1775,7 @@ func RunAddDropPrimaryKeysTests(t *testing.T, harness DoltEnginetestHarness) {
 				},
 				{
 					Query: "select * from test order by id",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{1, 1},
 						{2, 2},
 					},
@@ -1827,7 +1827,7 @@ func RunDoltStorageFormatTests(t *testing.T, h DoltEnginetestHarness) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select dolt_storage_format()",
-				Expected: []sql.Row{{expectedFormatString}},
+				Expected: []sql.UntypedSqlRow{{expectedFormatString}},
 			},
 		},
 	}
