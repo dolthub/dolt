@@ -200,5 +200,5 @@ func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue
 func makeTestAssertion(t *testing.T, a testAssert, dEnv *env.DoltEnv, root doltdb.RootValue) {
 	actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
 	require.NoError(t, err)
-	assert.Equal(t, a.rows, actRows)
+	assert.Equal(t, a.rows, sql.RowsToUntyped(actRows))
 }

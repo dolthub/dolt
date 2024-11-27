@@ -148,7 +148,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	// assert all out rows are present after gc
 	actual, err := sqle.ExecuteSelect(dEnv, working, test.query)
 	require.NoError(t, err)
-	assert.Equal(t, test.expected, actual)
+	assert.Equal(t, test.expected, sql.RowsToUntyped(actual))
 }
 
 // In September 2023, we found a failure to handle the `hasCache` in
