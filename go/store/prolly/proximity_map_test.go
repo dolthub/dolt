@@ -105,10 +105,7 @@ func TestSingleEntryProximityMap(t *testing.T) {
 	ns := tree.NewTestNodeStore()
 	m, keys, values := createProximityMap(t, ctx, ns, []interface{}{"[1.0]"}, []int64{1}, 10)
 	matches := 0
-	vectorHash, _ := m.keyDesc.GetJSONAddr(0, keys[0])
-	vectorDoc, err := tree.NewJSONDoc(vectorHash, ns).ToIndexedJSONDocument(ctx)
-	require.NoError(t, err)
-	err = m.Get(ctx, vectorDoc, func(foundKey val.Tuple, foundValue val.Tuple) error {
+	err := m.Get(ctx, keys[0], func(foundKey val.Tuple, foundValue val.Tuple) error {
 		require.Equal(t, val.Tuple(keys[0]), foundKey)
 		require.Equal(t, val.Tuple(values[0]), foundValue)
 		matches++
@@ -124,9 +121,7 @@ func TestDoubleEntryProximityMapGetExact(t *testing.T) {
 	m, keys, values := createProximityMap(t, ctx, ns, []interface{}{"[0.0, 6.0]", "[3.0, 4.0]"}, []int64{1, 2}, 10)
 	matches := 0
 	for i, key := range keys {
-		vectorHash, _ := m.keyDesc.GetJSONAddr(0, key)
-		vectorDoc, err := tree.NewJSONDoc(vectorHash, ns).ToIndexedJSONDocument(ctx)
-		err = m.Get(ctx, vectorDoc, func(foundKey val.Tuple, foundValue val.Tuple) error {
+		err := m.Get(ctx, key, func(foundKey val.Tuple, foundValue val.Tuple) error {
 			require.Equal(t, val.Tuple(key), foundKey)
 			require.Equal(t, val.Tuple(values[i]), foundValue)
 			matches++
@@ -212,10 +207,7 @@ func TestMultilevelProximityMap(t *testing.T) {
 	m, keys, values := createProximityMap(t, ctx, ns, keyStrings, valueStrings, 1)
 	matches := 0
 	for i, key := range keys {
-		vectorHash, _ := m.keyDesc.GetJSONAddr(0, key)
-		vectorDoc, err := tree.NewJSONDoc(vectorHash, ns).ToIndexedJSONDocument(ctx)
-		require.NoError(t, err)
-		err = m.Get(ctx, vectorDoc, func(foundKey val.Tuple, foundValue val.Tuple) error {
+		err := m.Get(ctx, key, func(foundKey val.Tuple, foundValue val.Tuple) error {
 			require.Equal(t, val.Tuple(key), foundKey)
 			require.Equal(t, val.Tuple(values[i]), foundValue)
 			matches++
