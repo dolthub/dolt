@@ -17,6 +17,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -35,7 +36,7 @@ import (
 // connected to a remote server.
 type LateBindQueryist func(ctx context.Context) (Queryist, *sql.Context, func(), error)
 
-// CliContexct is used to pass top level command information down to subcommands.
+// CliContext is used to pass top level command information down to subcommands.
 type CliContext interface {
 	// GlobalArgs returns the arguments passed before the subcommand.
 	GlobalArgs() *argparser.ArgParseResults
@@ -49,21 +50,16 @@ func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, l
 		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, and latebind must be non nil."))
 	}
 
-	return LateBindCliContext{globalArgs: args, config: config, activeContext: &QueryistContext{}, bind: latebind}, nil
-}
-
-type QueryistContext struct {
-	sqlCtx *sql.Context
-	qryist *Queryist
+	return LateBindCliContext{globalArgs: args, config: config, activeQueryist: nil, bind: latebind}, nil
 }
 
 // LateBindCliContext is a struct that implements CliContext. Its primary purpose is to wrap the global arguments and
 // provide an implementation of the QueryEngine function. This instance is stateful to ensure that the Queryist is only
 // created once.
 type LateBindCliContext struct {
-	globalArgs    *argparser.ArgParseResults
-	config        *env.DoltCliConfig
-	activeContext *QueryistContext
+	globalArgs     *argparser.ArgParseResults
+	config         *env.DoltCliConfig
+	activeQueryist *Queryist
 
 	bind LateBindQueryist
 }
@@ -77,8 +73,13 @@ func (lbc LateBindCliContext) GlobalArgs() *argparser.ArgParseResults {
 // LateBindQueryist is made, and caches the result. Note that if this is called twice, the closer function returns will
 // be nil, callers should check if is nil.
 func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error) {
-	if lbc.activeContext != nil && lbc.activeContext.qryist != nil && lbc.activeContext.sqlCtx != nil {
-		return *lbc.activeContext.qryist, lbc.activeContext.sqlCtx, nil, nil
+	if lbc.activeQueryist != nil {
+		sqlCtx, ok := ctx.(*sql.Context)
+		if !ok {
+			return nil, nil, nil, errors.New(fmt.Sprintf("type coercion failed. Require *sql.Context, got: %T", ctx))
+		}
+
+		return *lbc.activeQueryist, sqlCtx, nil, nil
 	}
 
 	qryist, sqlCtx, closer, err := lbc.bind(ctx)
@@ -86,8 +87,7 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.C
 		return nil, nil, nil, err
 	}
 
-	lbc.activeContext.qryist = &qryist
-	lbc.activeContext.sqlCtx = sqlCtx
+	lbc.activeQueryist = &qryist
 
 	return qryist, sqlCtx, closer, nil
 }
