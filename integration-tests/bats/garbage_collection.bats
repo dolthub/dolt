@@ -565,17 +565,15 @@ SQL
     cp ./.dolt/noms/manifest ../../manifest_after_first_gc
     dolt gc --full
     rm -rf .dolt/stats
-    ls -laR > ../../files_after_second_gc
     # This should exit 0 because the gc should have changed things.
     if cmp ../../files_before_gc ../../files_after_first_gc; then
         echo "expected dolt gc to change things, but it didn't."
         diff ../../files_before_gc ../../files_after_first_gc || true
         false
     fi
-    # This should exit non-0 because the gc should NOT have changed things.
-    if cmp ../../files_after_first_gc ../../files_after_second_gc && cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
-        echo "expected dolt gc --full after a dolt gc to change things, but it didn't."
-        diff ../../files_after_first_gc ../../files_after_second_gc || true
+    # This should exit 0 because the gc should have changed things.
+    if cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
+        echo "expected dolt gc --full after a dolt gc to change the manifest, updating the gcgen at least, but it didn't."
         diff ./dolt/noms/manifest ../../manifest_after_first_gc || true
         false
     fi
