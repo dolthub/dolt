@@ -130,7 +130,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		newContents := manifestContents{
 			nbfVers:  upstream.nbfVers,
 			root:     upstream.root,
-			lock:     generateLockHash(upstream.root, specs, appendixSpecs),
+			lock:     generateLockHash(upstream.root, specs, appendixSpecs, nil),
 			gcGen:    upstream.gcGen,
 			specs:    specs,
 			appendix: appendixSpecs,

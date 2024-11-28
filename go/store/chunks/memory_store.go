@@ -360,7 +360,7 @@ func (mgcf msvGcFinalizer) SwapChunksInStore(ctx context.Context) error {
 	return nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore) (GCFinalizer, error) {
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore, mode GCMode) (GCFinalizer, error) {
 	if dest != ms {
 		panic("unsupported")
 	}
