@@ -192,20 +192,24 @@ func newProllyCoveringIndexIter(
 	}
 	keyDesc, valDesc := secondary.Descriptors()
 
-	var keyMap, valMap, ordMap val.OrdinalMapping
-	if idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
-	} else {
-		keyMap, ordMap = coveringIndexMapping(idx, projections)
+	//var keyMap, valMap, ordMap val.OrdinalMapping
+	//if idx.IsPrimaryKey() {
+	//	keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
+	//} else {
+	//	keyMap, ordMap = coveringIndexMapping(idx, projections)
+	//}
+	ordMap, err := ProjectionMappingsForIndex2(idx.Schema(), projections)
+	if err != nil {
+		return prollyCoveringIndexIter{}, err
 	}
 
 	return prollyCoveringIndexIter{
-		idx:         idx,
-		indexIter:   indexIter,
-		keyDesc:     keyDesc,
-		valDesc:     valDesc,
-		keyMap:      keyMap,
-		valMap:      valMap,
+		idx:       idx,
+		indexIter: indexIter,
+		keyDesc:   keyDesc,
+		valDesc:   valDesc,
+		//keyMap:      keyMap,
+		//valMap:      valMap,
 		ordMap:      ordMap,
 		sqlSch:      pkSch.Schema,
 		projections: projections,
@@ -220,12 +224,13 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.UntypedSqlRow, len(p.projections))
-	if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
-		return nil, err
-	}
+	return NewProllyRow(k, v, p.keyDesc, p.valDesc, p.ordMap), nil
 
-	return r, nil
+	//r := make(sql.UntypedSqlRow, len(p.projections))
+	//if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
+	//	return nil, err
+	//}
+	//return r, nil
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {

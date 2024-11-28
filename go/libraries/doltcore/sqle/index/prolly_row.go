@@ -1,0 +1,113 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package index
+
+import (
+	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+)
+
+func NewProllyRow(key, val val.Tuple, kd, vd val.TupleDesc, ords []int) *ProllyRow {
+	// TODO pool and reuse
+	return &ProllyRow{key: key, value: val, kd: kd, vd: vd, ords: ords}
+}
+
+// two options
+// store in row order -- save space, conversion already performed
+// or store tuples and be able to reconstruct row order -- save time, might not need to materialize
+type ProllyRow struct {
+	key, value val.Tuple
+	kd, vd     val.TupleDesc
+	ords       []int // placement access
+}
+
+var _ sql.Row = (*ProllyRow)(nil)
+var _ sql.BytesRow = (*ProllyRow)(nil)
+
+func (r ProllyRow) GetBytes(i int, typ sql.Type) ([]byte, error) {
+	if i > len(r.ords) {
+		return nil, fmt.Errorf("invalid index for value: %d:%T", i, typ)
+	}
+
+	pos := r.ords[i]
+
+	// TODO: type normalization
+	// if descriptor and input type are a mismatch need conversion
+
+	// TODO: virtual columns
+	// position might be filled by expression
+
+	// TODO: recycle these objects?
+
+	if pos < r.kd.Count() {
+		ret := r.kd.GetField(pos, r.key)
+		return ret, nil
+	}
+
+	pos -= r.kd.Count()
+	ret := r.vd.GetField(pos, r.value)
+	return ret, nil
+}
+
+func (r ProllyRow) GetValue(i int) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) SetValue(i int, v interface{}) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) SetBytes(i int, v []byte) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) GetType(i int) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Values() []interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Copy() sql.Row {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Len() int {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Subslice(i, j int) sql.Row {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Append(row sql.Row) sql.Row {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r ProllyRow) Equals(row sql.Row, schema sql.Schema) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
