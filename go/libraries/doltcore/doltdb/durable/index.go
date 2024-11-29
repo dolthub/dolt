@@ -123,8 +123,19 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 }
 
-// NewEmptyIndex returns an index with no rows.
-func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isKeylessSecondary bool) (Index, error) {
+// NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
+func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
+	return newEmptyIndex(ctx, vrw, ns, sch, false)
+}
+
+// NewEmptyIndexFromSchemaIndex creates a new empty Index described by a schema.Index.
+func NewEmptyIndexFromSchemaIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index) (Index, error) {
+	sch := idx.Schema()
+	return newEmptyIndex(ctx, vrw, ns, sch, schema.IsKeyless(sch))
+}
+
+// newEmptyIndex returns an index with no rows.
+func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isKeylessSecondary bool) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
@@ -138,15 +149,19 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		if isKeylessSecondary {
 			kd = prolly.AddHashToSchema(kd)
 		}
-		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromProllyMap(m), nil
+		return NewEmptyProllyIndex(ctx, ns, kd, vd)
 
 	default:
 		return nil, errNbfUnknown
 	}
+}
+
+func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProllyMap(m), nil
 }
 
 type nomsIndex struct {
@@ -393,7 +408,7 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema(), false)
+		empty, err := NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, index)
 		if err != nil {
 			return nil, err
 		}
