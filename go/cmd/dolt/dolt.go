@@ -479,10 +479,10 @@ func runMain() int {
 	}
 	cfg, err := parseGlobalArgsAndSubCommandName(globalConfig, fs, args)
 	if err != nil {
-		return 0  // NM4
+		return 0 // NM4
 	}
 
-  // NM4 - first real dEnv??
+	// NM4 - first real dEnv??
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()
@@ -525,7 +525,6 @@ func runMain() int {
 			return false
 		})
 	}
-
 
 	defer emitUsageEvents(metricsEmitter, cfg.subCommand)
 
@@ -862,26 +861,23 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 
 // NM4 - naming is hard.
 type TheConfig struct {
-	apr         *argparser.ArgParseResults
+	apr           *argparser.ArgParseResults
 	remainingArgs []string
-	dataDirFS   filesys.Filesys
-	dataDir     string
-	cwdFS       filesys.Filesys
-	subCommand  string
+	dataDirFS     filesys.Filesys
+	dataDir       string
+	cwdFS         filesys.Filesys
+	subCommand    string
 }
-
-
 
 // parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
 func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs filesys.Filesys, args []string) (cfg *TheConfig, err error) {
-
 	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 		cli.Println(globalSpecialMsg)
 		usage()
-		return nil, errors.New("FIXME") //return 0  NM4 - need to signal that termination is needed.
+		return nil, errors.New("FIXME") //return 0  NM4 - need to signal that termination is needed with 0 exit status.
 	} else if err != nil {
 		e := errors.New(fmt.Sprintf("Failure to parse global arguments: %v", err))
 		return nil, e
@@ -893,6 +889,9 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 	// specified one.
 	cwdFS := fs
 	dataDir, err := resolveDataDir(apr, subCommand, fs)
+	if err != nil {
+		return nil, err
+	}
 
 	dataDirFS, err := fs.WithWorkingDir(dataDir)
 	if err != nil {
@@ -915,75 +914,44 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 			return nil, err
 		}
 	}
+
 	profiles, err := commands.DecodeProfile(encodedProfiles)
 	if err != nil {
 		return nil, err
 	}
-
-
-
-
-
-	apr.ContainsArg(commands.ProfileFlag)
-
-
-
-	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
-
-
-
 
 	if !hasProfile && supportsGlobalArgs(subCommand) {
 		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
 		if defaultProfile.Exists() {
-			apr.(commands.ProfileFlag, commands.DefaultProfileName)
-			args = append([]string{"--profile", commands.DefaultProfileName}, args...)
-			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
-			if err != nil {
-				return nil, nil, "", err
-			}
-			profileName, _ = apr.GetValue(commands.ProfileFlag)
-			useDefaultProfile = true
-		}
-	}
+			/*
+				/// NM4 - don't do this.
+				args = append([]string{"--profile", commands.DefaultProfileName}, args...)
+				apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+				if err != nil {
+					return nil, nil, "", err
+				}
+				profileName, _ = apr.GetValue(commands.ProfileFlag)
+				useDefaultProfile = true
 
-
-	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
-	if err != nil {
-		if err == config.ErrConfigParamNotFound {
-			if hasProfile {
-				return nil, fmt.Errorf("no profiles found")
-			} else {
-				return apr, nil
-			}
-		} else {
-			return nil, err
+			*/
+			panic("TODO: implement this")
 		}
-	}
-	profiles, err := commands.DecodeProfile(encodedProfiles)
-	if err != nil {
-		return nil, err
 	}
 
 	if hasProfile || useDefaultProfile {
-		profileArgs, err := getProfile(apr, profileName, profiles)
+		apr, err = injectProfileArgs(apr, profileName, profiles)
 		if err != nil {
-			return nil,err
-		}
-		args = append(profileArgs, args...)
-		apr, remainingArgs, err = globalArgParser.ParseGlobalArgs(args)
-		if err != nil {
-			return nil,  err
+			return nil, err
 		}
 	}
 
 	cfg = &TheConfig{
-		apr:         apr,
+		apr:           apr,
 		remainingArgs: remainingArgs,
-		dataDirFS:   dataDirFS,
-		dataDir:     dataDir,
-		cwdFS:       cwdFS,
-		subCommand:  subCommand,
+		dataDirFS:     dataDirFS,
+		dataDir:       dataDir,
+		cwdFS:         cwdFS,
+		subCommand:    subCommand,
 	}
 
 	return cfg, nil
@@ -991,7 +959,7 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 
 // getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
 // for that profile in a []string. If the profile is not found, an error is returned.
-func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (result []string, err error) {
+func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profiles string) (aprUpdated *argparser.ArgParseResults, err error) {
 	prof := gjson.Get(profiles, profileName)
 	if prof.Exists() {
 		hasPassword := false
@@ -1004,20 +972,20 @@ func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (r
 					hasPassword = value.Bool()
 				} else if flag == cli.NoTLSFlag {
 					if value.Bool() {
-						result = append(result, "--"+flag)
-						continue
+						// NM4 - I don't think this is right. Test it, or make another accessor.
+						aprUpdated = apr.InsertArgument(flag, "true")
 					}
 				} else {
 					if value.Str != "" {
-						result = append(result, "--"+flag, value.Str)
+						aprUpdated = apr.InsertArgument(flag, value.Str)
 					}
 				}
 			}
 		}
 		if !apr.Contains(cli.PasswordFlag) && hasPassword {
-			result = append(result, "--"+cli.PasswordFlag, password)
+			aprUpdated = apr.InsertArgument(cli.PasswordFlag, password)
 		}
-		return result, nil
+		return aprUpdated, nil
 	} else {
 		return nil, fmt.Errorf("profile %s not found", profileName)
 	}
