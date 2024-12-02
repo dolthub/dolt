@@ -119,7 +119,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	//if err != nil {
 	//	return nil, err
 	//}
-	return NewProllyRow(pk, value, p.keyDesc, p.valDesc, p.ordMap), nil
+	return NewProllyRow(pk, value, p.keyDesc, p.valDesc, p.ordMap, p.primary.NodeStore()), nil
 	//return r, nil
 }
 
@@ -238,7 +238,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return NewProllyRow(k, v, p.keyDesc, p.valDesc, p.ordMap), nil
+	return NewProllyRow(k, v, p.keyDesc, p.valDesc, p.ordMap, p.ns), nil
 
 	//r := make(sql.UntypedSqlRow, len(p.projections))
 	//if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {

@@ -189,7 +189,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	// TODO
 
-	return NewProllyRow(key, value, it.keyDesc, it.valDesc, it.ordProj), nil
+	return NewProllyRow(key, value, it.keyDesc, it.valDesc, it.ordProj, it.ns), nil
 	//row := make(sql.UntypedSqlRow, it.rowLen)
 	//for i, idx := range it.keyProj {
 	//	outputIdx := it.ordProj[i]
