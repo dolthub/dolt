@@ -197,6 +197,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO
 
 	row := make(sql.UntypedSqlRow, it.rowLen)
 	for i, idx := range it.keyProj {

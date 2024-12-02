@@ -355,15 +355,22 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd)
 	pkMap := OrdinalMappingFromIndex(b.idx)
-	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
+	//keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
+	ordMap, err := ProjectionMappingsForIndex2(b.idx.Schema(), b.projections)
+	if err != nil {
+		return &nonCoveringIndexImplBuilder{}, err
+	}
+
 	return &nonCoveringIndexImplBuilder{
 		baseIndexImplBuilder: b,
 		pri:                  primary,
 		pkBld:                tbBld,
 		pkMap:                pkMap,
-		keyMap:               keyProj,
-		valMap:               valProj,
-		ordMap:               ordProj,
+		//keyMap:               keyProj,
+		//valMap:               valProj,
+		keyDesc: primary.KeyDesc(),
+		valDesc: primary.ValDesc(),
+		ordMap:  ordMap,
 	}, nil
 }
 
@@ -569,7 +576,9 @@ type nonCoveringIndexImplBuilder struct {
 	pri   prolly.Map
 	pkBld *val.TupleBuilder
 
-	pkMap, keyMap, valMap, ordMap val.OrdinalMapping
+	pkMap            val.OrdinalMapping
+	ordMap           val.OrdinalMapping
+	keyDesc, valDesc val.TupleDesc
 }
 
 type nonCoveringMapIter struct {
@@ -637,13 +646,13 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 		return nil, err
 	}
 	return prollyIndexIter{
-		idx:         ib.idx,
-		indexIter:   rangeIter,
-		primary:     ib.pri,
-		pkBld:       ib.pkBld,
-		pkMap:       ib.pkMap,
-		keyMap:      ib.keyMap,
-		valMap:      ib.valMap,
+		idx:       ib.idx,
+		indexIter: rangeIter,
+		primary:   ib.pri,
+		pkBld:     ib.pkBld,
+		pkMap:     ib.pkMap,
+		//keyMap:      ib.keyMap,
+		//valMap:      ib.valMap,
 		ordMap:      ib.ordMap,
 		sqlSch:      ib.sch.Schema,
 		projections: ib.projections,
