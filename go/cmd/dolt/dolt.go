@@ -479,10 +479,10 @@ func runMain() int {
 	}
 	cfg, err := parseGlobalArgsAndSubCommandName(globalConfig, fs, args)
 	if err != nil {
-		return 0
+		return 0  // NM4
 	}
 
-
+  // NM4 - first real dEnv??
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()
