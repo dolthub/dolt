@@ -232,7 +232,7 @@ Starting server with Config HP="localhost:3306"|T="28800000"|R="false"|L="info"
 
 Your terminal will just hang there. This means the server is running. Any errors will be printed in this terminal. Just leave it there and open a new terminal.
 
-## Connect with any MySQL client
+## Connect with a MySQL client (up to version 8.4)
 
 In the new terminal, we will now connect to the running database server using a client. Dolt also ships with a MySQL compatible client. 
 
@@ -252,7 +252,9 @@ In the other terminal where you ran `dolt sql-server`, you'll see the following 
 
 You are connected!
 
-While we're here let's grab a copy of MySQL so we can connect with that client. Head over to the [MySQL Getting Started](https://dev.mysql.com/doc/mysql-getting-started/en/) documentation and install MySQL on your machine. I used [Homebrew](https://brew.sh/) to install MySQL on my Mac.
+While we're here let's grab a copy of MySQL so we can connect with that client. Head over to the [MySQL Getting Started](https://dev.mysql.com/doc/mysql-getting-started/en/) documentation and install MySQL on your machine. I used [Homebrew](https://brew.sh/) to install MySQL on my Mac: `brew install mysql@8.4`. Alternatively, you can install only the client component by running `brew install mysql-client@8.4`.
+
+NOTE: Make sure you install a MySQL 8.4 release. MySQL 8.4 is the current Long Term Support (LTS) release, meaning this is the stable and supported version of MySQL. MySQL 9.0 is also available, but is an "innovation" release, meaning it has more recent changes and features, but may not be as stable as the LTS release. The 9.0 release changes authentication support and isn't able to connect to a Dolt SQL server by default. You can install MySQL 8.4 with Homebrew by running `brew install mysql@8.4`. We are currently [working on support for the 9.0 auth changes](https://github.com/dolthub/dolt/issues/8496) and expect to support MySQL 9.0 clients without `mysql_native_password` support before the end of 2024.  
 
 MySQL comes with a MySQL server called `mysqld` and a MySQL client called `mysql`. You're only interested in the client. After following the instructions from MySQL's documentation, make sure you have a copy of the `mysql` client on your path:
 
