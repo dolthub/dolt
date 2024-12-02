@@ -32,14 +32,21 @@ type ProllyRow struct {
 	key, value val.Tuple
 	kd, vd     val.TupleDesc
 	ords       []int // placement access
+	mat        sql.UntypedSqlRow
+	decoded    sql.FastIntSet
+	dirty      sql.FastIntSet
 }
 
 var _ sql.Row = (*ProllyRow)(nil)
 var _ sql.BytesRow = (*ProllyRow)(nil)
 
-func (r ProllyRow) GetBytes(i int, typ sql.Type) ([]byte, error) {
+func (r *ProllyRow) GetBytes(i int, typ sql.Type) ([]byte, error) {
 	if i > len(r.ords) {
 		return nil, fmt.Errorf("invalid index for value: %d:%T", i, typ)
+	}
+	if r.dirty.Contains(i + 1) {
+		// todo convert from SQL to bytes
+		return nil, fmt.Errorf("todo add dirty field val->bytes 	conversion")
 	}
 
 	pos := r.ords[i]
@@ -62,52 +69,75 @@ func (r ProllyRow) GetBytes(i int, typ sql.Type) ([]byte, error) {
 	return ret, nil
 }
 
-func (r ProllyRow) GetValue(i int) interface{} {
+func (r *ProllyRow) decode(i int) {
+	if r.mat == nil {
+		r.mat = make(sql.UntypedSqlRow, r.Len())
+	}
+	var val interface{}
+	pos := r.ords[i]
+	if pos < r.kd.Count() {
+		val = r.kd.GetField(pos, r.key)
+	} else {
+		val = r.vd.GetField(pos-r.kd.Count(), r.value)
+	}
+	r.mat[i] = val
+	r.decoded.Add(i + 1)
+}
+
+func (r *ProllyRow) GetValue(i int) interface{} {
+	if !r.decoded.Contains(i + 1) {
+		r.decode(i)
+	}
+	return r.mat[i]
+}
+
+func (r *ProllyRow) SetValue(i int, v interface{}) {
+	if r.mat == nil {
+		r.mat = make(sql.UntypedSqlRow, r.Len())
+	}
+	r.mat[i] = v
+	r.dirty.Add(i + 1)
+}
+
+func (r *ProllyRow) SetBytes(i int, v []byte) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r ProllyRow) SetValue(i int, v interface{}) {
+func (r *ProllyRow) GetType(i int) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r ProllyRow) SetBytes(i int, v []byte) {
+func (r *ProllyRow) Values() []interface{} {
+	for i := range r.ords {
+		if !r.decoded.Contains(i + 1) {
+			r.decode(i)
+		}
+	}
+	return r.mat
+}
+
+func (r *ProllyRow) Copy() sql.Row {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r ProllyRow) GetType(i int) {
+func (r *ProllyRow) Len() int {
+	return len(r.ords)
+}
+
+func (r *ProllyRow) Subslice(i, j int) sql.Row {
+	_ = r.Values()
+	return r.mat[i:j]
+}
+
+func (r *ProllyRow) Append(row sql.Row) sql.Row {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r ProllyRow) Values() []interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r ProllyRow) Copy() sql.Row {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r ProllyRow) Len() int {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r ProllyRow) Subslice(i, j int) sql.Row {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r ProllyRow) Append(row sql.Row) sql.Row {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (r ProllyRow) Equals(row sql.Row, schema sql.Schema) (bool, error) {
+func (r *ProllyRow) Equals(row sql.Row, schema sql.Schema) (bool, error) {
 	//TODO implement me
 	panic("implement me")
 }
