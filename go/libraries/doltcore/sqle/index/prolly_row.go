@@ -138,7 +138,7 @@ func (r *ProllyRow) Subslice(i, j int) sql.Row {
 }
 
 func (r *ProllyRow) Append(row sql.Row) sql.Row {
-	return sql.NewUntypedRow(append(r.Values(), row.Values()...))
+	return sql.NewUntypedRow(append(r.Values(), row.Values()...)...)
 }
 
 func (r *ProllyRow) Equals(row sql.Row, schema sql.Schema) (bool, error) {

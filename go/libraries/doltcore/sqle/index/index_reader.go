@@ -314,30 +314,27 @@ func NewIndexReaderBuilder(
 			s:                    s,
 		}, nil
 	case idx.coversColumns(s, projections):
-		return newCoveringLookupBuilder(base), nil
+		return newCoveringLookupBuilder(base)
 	case idx.ID() == "PRIMARY":
 		// If we are using the primary index, always use a covering lookup builder. In some cases, coversColumns
 		// can return false, for example if a column was modified in an older version and has a different tag than
 		// the current schema. In those cases, the primary index is still the best we have, so go ahead and use it.
-		return newCoveringLookupBuilder(base), nil
+		return newCoveringLookupBuilder(base)
 	default:
 		return newNonCoveringLookupBuilder(s, base)
 	}
 }
 
-func newCoveringLookupBuilder(b *baseIndexImplBuilder) *coveringIndexImplBuilder {
-	var keyMap, valMap, ordMap val.OrdinalMapping
-	if b.idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(b.idx, b.projections)
-	} else {
-		keyMap, ordMap = coveringIndexMapping(b.idx, b.projections)
+func newCoveringLookupBuilder(b *baseIndexImplBuilder) (*coveringIndexImplBuilder, error) {
+	ordMap, err := ProjectionMappingsForIndex2(b.idx.IndexSchema(), b.projections)
+	if err != nil {
+		return &coveringIndexImplBuilder{}, err
 	}
+
 	return &coveringIndexImplBuilder{
 		baseIndexImplBuilder: b,
-		keyMap:               keyMap,
-		valMap:               valMap,
 		ordMap:               ordMap,
-	}
+	}, nil
 }
 
 // newNonCoveringLookupBuilder returns a IndexScanBuilder that uses the specified index state and
@@ -355,7 +352,6 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd)
 	pkMap := OrdinalMappingFromIndex(b.idx)
-	//keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
 	ordMap, err := ProjectionMappingsForIndex2(b.idx.Schema(), b.projections)
 	if err != nil {
 		return &nonCoveringIndexImplBuilder{}, err
@@ -366,11 +362,9 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 		pri:                  primary,
 		pkBld:                tbBld,
 		pkMap:                pkMap,
-		//keyMap:               keyProj,
-		//valMap:               valProj,
-		keyDesc: primary.KeyDesc(),
-		valDesc: primary.ValDesc(),
-		ordMap:  ordMap,
+		keyDesc:              primary.KeyDesc(),
+		valDesc:              primary.ValDesc(),
+		ordMap:               ordMap,
 	}, nil
 }
 
@@ -646,13 +640,13 @@ func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, par
 		return nil, err
 	}
 	return prollyIndexIter{
-		idx:       ib.idx,
-		indexIter: rangeIter,
-		primary:   ib.pri,
-		pkBld:     ib.pkBld,
-		pkMap:     ib.pkMap,
-		//keyMap:      ib.keyMap,
-		//valMap:      ib.valMap,
+		idx:         ib.idx,
+		indexIter:   rangeIter,
+		primary:     ib.pri,
+		pkBld:       ib.pkBld,
+		pkMap:       ib.pkMap,
+		keyDesc:     ib.keyDesc,
+		valDesc:     ib.valDesc,
 		ordMap:      ib.ordMap,
 		sqlSch:      ib.sch.Schema,
 		projections: ib.projections,
