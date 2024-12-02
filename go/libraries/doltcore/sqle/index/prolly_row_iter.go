@@ -40,7 +40,7 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) sql.RowIter {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
@@ -51,41 +51,31 @@ func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapI
 	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns)
 }
 
-func NewProllyRowIterForSchema(
-	sch schema.Schema,
-	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
-	projections []uint64,
-	ns tree.NodeStore,
-) sql.RowIter {
+func NewProllyRowIterForSchema(sch schema.Schema, iter prolly.MapIter, kd val.TupleDesc, vd val.TupleDesc, projections []uint64, ns tree.NodeStore) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
-		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
+		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns), nil
 	}
 
 	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns)
 }
 
-func NewKeyedProllyRowIter(
-	sch schema.Schema,
-	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
-	projections []uint64,
-	ns tree.NodeStore,
-) sql.RowIter {
-	keyProj, valProj, ordProj := projectionMappings(sch, projections)
+func NewKeyedProllyRowIter(sch schema.Schema, iter prolly.MapIter, kd val.TupleDesc, vd val.TupleDesc, projections []uint64, ns tree.NodeStore) (sql.RowIter, error) {
+	//keyProj, valProj, ordProj := projectionMappings(sch, projections)
 
+	ordMap, err := ProjectionMappingsForIndex2(sch, projections)
+	if err != nil {
+		return prollyRowIter{}, err
+	}
 	return prollyRowIter{
 		iter:    iter,
 		keyDesc: kd,
 		valDesc: vd,
-		keyProj: keyProj,
-		valProj: valProj,
-		ordProj: ordProj,
+		//keyProj: keyProj,
+		//valProj: valProj,
+		ordProj: ordMap,
 		rowLen:  len(projections),
 		ns:      ns,
-	}
+	}, nil
 }
 
 func NewKeylessProllyRowIter(
@@ -199,22 +189,23 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	// TODO
 
-	row := make(sql.UntypedSqlRow, it.rowLen)
-	for i, idx := range it.keyProj {
-		outputIdx := it.ordProj[i]
-		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for i, idx := range it.valProj {
-		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return row, nil
+	return NewProllyRow(key, value, it.keyDesc, it.valDesc, it.ordProj), nil
+	//row := make(sql.UntypedSqlRow, it.rowLen)
+	//for i, idx := range it.keyProj {
+	//	outputIdx := it.ordProj[i]
+	//	row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//for i, idx := range it.valProj {
+	//	outputIdx := it.ordProj[len(it.keyProj)+i]
+	//	row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//return row, nil
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {

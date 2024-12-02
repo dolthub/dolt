@@ -49,7 +49,7 @@ func (k *keylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		k.lastCard = r.GetValue(k.cardIdx).(uint64)
-		k.lastRead = r.Subslice(0,k.nonCardCols)
+		k.lastRead = r.Subslice(0, k.nonCardCols)
 	}
 
 	k.lastCard--
@@ -197,7 +197,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, projections), nil
+	return index.NewProllyRowIterForMap(sch, rows, iter, projections)
 }
 
 // SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -255,7 +255,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		if err != nil {
 			return nil, nil, err
 		}
-		rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
+		rowIter, err := index.NewProllyRowIterForMap(sch, idx, iter, nil)
 		if err != nil {
 			return nil, nil, err
 		}
