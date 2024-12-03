@@ -762,6 +762,7 @@ type DiffPartitions struct {
 	selectFunc      partitionSelectFunc
 	toSch           schema.Schema
 	fromSch         schema.Schema
+	nextEOF         bool
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
@@ -821,6 +822,10 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 }
 
 func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
+	if dps.nextEOF {
+		return nil, io.EOF
+	}
+
 	for {
 		cmHash, optCmt, err := dps.cmItr.Next(ctx)
 		if err != nil {
@@ -859,7 +864,8 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 
 			if !canDiff {
 				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
-				return nil, io.EOF
+
+				dps.nextEOF = true
 			}
 
 			return *next, nil
