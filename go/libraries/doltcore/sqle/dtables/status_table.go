@@ -61,12 +61,20 @@ func (st StatusTable) String() string {
 	return st.tableName
 }
 
-func (st StatusTable) Schema() sql.Schema {
+func getDoltStatusSchema(tableName string) sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: st.tableName, PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
+		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: tableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
 	}
+}
+
+// GetDoltStatusSchema returns the schema of the dolt_status system table. This is used
+// by Doltgres to update the dolt_status schema using Doltgres types.
+var GetDoltStatusSchema = getDoltStatusSchema
+
+func (st StatusTable) Schema() sql.Schema {
+	return GetDoltStatusSchema(st.tableName)
 }
 
 func (st StatusTable) Collation() sql.CollationID {
