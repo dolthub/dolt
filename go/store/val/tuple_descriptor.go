@@ -16,7 +16,7 @@ package val
 
 import (
 	"encoding/hex"
-	"f
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
