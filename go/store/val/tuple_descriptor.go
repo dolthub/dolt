@@ -16,7 +16,7 @@ package val
 
 import (
 	"encoding/hex"
-	"fmt"
+	"f
 	"os"
 	"strconv"
 	"strings"
@@ -635,6 +635,8 @@ func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 	case Hash128Enc:
 		return hex.EncodeToString(value)
 	case BytesAddrEnc:
+		return hex.EncodeToString(value)
+	case StringAddrEnc:
 		return hex.EncodeToString(value)
 	case CommitAddrEnc:
 		return hex.EncodeToString(value)
