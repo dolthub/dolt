@@ -157,17 +157,15 @@ func ConfigureServices(
 	InitDataDir := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
+				absDataDir, err := dEnv.FS.Abs("")
 				if err != nil {
 					return err
 				}
-				// If datadir has changed, then reload the DoltEnv to ensure its local
-				// configuration store gets configured correctly
-				dEnv.FS = fs
-				dEnv = env.Load(ctx, dEnv.GetUserHomeDir, fs, doltdb.LocalDirDoltDB, dEnv.Version)
+				if serverConfig.DataDir() != absDataDir {
+					return errors.New("runtime error: server configured datadir mismatch")
+				}
 
-				// If the datadir has changed, then we need to load any persisted global variables
-				// from the new datadir's local configuration store
+				// Load any persisted global variables from the new datadir's local configuration store
 				err = dsess.InitPersistedSystemVars(dEnv)
 				if err != nil {
 					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
