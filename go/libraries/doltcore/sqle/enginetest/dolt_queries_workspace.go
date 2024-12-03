@@ -21,6 +21,26 @@ import (
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
 	{
+		Name: "dolt_workspace_* empty table",
+		SetUpScript: []string{
+			"create table tbl (pk int primary key, val int);",
+			"call dolt_commit('-Am', 'creating table t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "describe dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
+					{"staged", "tinyint(1)", "NO", "", nil, ""},
+				},
+			},
+		},
+	},
+	{
 		Name: "dolt_workspace_* multiple edits of a single row",
 		SetUpScript: []string{
 			"create table tbl (pk int primary key, val int);",
@@ -38,6 +58,18 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_workspace_tbl",
 				Expected: []sql.Row{
 					{0, true, "modified", 42, 51, 42, 42},
+				},
+			},
+			{
+				Query: "describe dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
+					{"staged", "tinyint(1)", "NO", "", nil, ""},
+					{"diff_type", "varchar(1023)", "NO", "", nil, ""},
+					{"to_pk", "int", "YES", "", nil, ""},
+					{"to_val", "int", "YES", "", nil, ""},
+					{"from_pk", "int", "YES", "", nil, ""},
+					{"from_val", "int", "YES", "", nil, ""},
 				},
 			},
 			{
