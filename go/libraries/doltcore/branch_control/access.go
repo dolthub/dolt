@@ -78,6 +78,7 @@ func (tbl *Access) Match(database string, branch string, user string, host strin
 	for _, result := range results {
 		if result.Length > length {
 			perms = result.Permissions
+			length = result.Length
 		} else if result.Length == length {
 			perms |= result.Permissions
 		}
@@ -257,4 +258,17 @@ OuterLoop:
 		return iter.access.rows[idx], true
 	}
 	return AccessRow{}, false
+}
+
+// Consolidate reduces the permission set down to the most representative permission. For example, having both admin and
+// write permissions are equivalent to only having the admin permission. Additionally, having no permissions is
+// equivalent to only having the read permission.
+func (perm Permissions) Consolidate() Permissions {
+	if perm&Permissions_Admin == Permissions_Admin {
+		return Permissions_Admin
+	} else if perm&Permissions_Write == Permissions_Write {
+		return Permissions_Write
+	} else {
+		return Permissions_Read
+	}
 }
