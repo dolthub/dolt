@@ -641,11 +641,11 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, fs filesys.
 		if ok, dir := fs.Exists(dataDir); !ok || !dir {
 			return "", errors.New(fmt.Sprintf("Provided data directory does not exist: %s", dataDir))
 		}
+		globalDir = dataDir
 	}
 
-	// What do we return as default? CWD I guess?
 	if subCmd == "sql-server" {
-		panic("Why you like servers so much?")
+		// Load the server config??
 	}
 
 	return globalDir, nil
