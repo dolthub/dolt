@@ -1,3 +1,4 @@
+load helper/windows-compat
 SERVER_REQS_INSTALLED="FALSE"
 SERVER_PID=""
 DEFAULT_DB=""
@@ -38,9 +39,17 @@ start_sql_server() {
     PORT=$( definePORT )
     if [[ $logFile ]]
     then
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
+        if [ "$IS_WINDOWS" == true ]; then
+          dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" > $logFile 2>&1 &
+        else
+          dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" > $logFile 2>&1 &
+        fi
     else
-        dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
+        if [ "$IS_WINDOWS" == true ]; then
+          dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" &
+        else
+          dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
+        fi
     fi
     echo db:$DEFAULT_DB logFile:$logFile PORT:$PORT CWD:$PWD
     SERVER_PID=$!
@@ -53,7 +62,11 @@ start_sql_server() {
 start_sql_server_with_args() {
     DEFAULT_DB=""
     PORT=$( definePORT )
-    dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
+    if [ "$IS_WINDOWS" == true ]; then
+      dolt sql-server "$@" --port=$PORT &
+    else
+      dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
+    fi
     SERVER_PID=$!
     wait_for_connection $PORT 8500
 }
@@ -76,7 +89,11 @@ behavior:
   autocommit: false
 " > .cliconfig.yaml
     cat "$2" >> .cliconfig.yaml
-    dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
+    if [ "$IS_WINDOWS" == true ]; then
+      dolt sql-server --config .cliconfig.yaml &
+    else
+      dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
+    fi
     SERVER_PID=$!
     wait_for_connection $PORT 8500
 }
@@ -98,7 +115,11 @@ listener:
 behavior:
   autocommit: false
 " > .cliconfig.yaml
-    dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
+    if [ "$IS_WINDOWS" == true ]; then
+      dolt sql-server --config .cliconfig.yaml &
+    else
+      dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
+    fi
     SERVER_PID=$!
     wait_for_connection $PORT 8500
 }
@@ -106,7 +127,11 @@ behavior:
 start_multi_db_server() {
     DEFAULT_DB="$1"
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ --socket "dolt.$PORT.sock" &
+    if [ "$IS_WINDOWS" == true ]; then
+      dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ &
+    else
+      dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ --socket "dolt.$PORT.sock" &
+    fi
     SERVER_PID=$!
     wait_for_connection $PORT 8500
 }
