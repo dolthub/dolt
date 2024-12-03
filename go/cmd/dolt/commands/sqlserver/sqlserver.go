@@ -108,6 +108,12 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a write operation
 
+{{.EmphasisLeft}}listener.require_secure_transport{{.EmphasisRight}}: Boolean flag to turn on TLS/SSL transport
+
+{{.EmphasisLeft}}listener.tls_cert{{.EmphasisRight}}: The path to the TLS certicifcate used for secure transport
+
+{{.EmphasisLeft}}listener.tls_key{{.EmphasisRight}}: The path to the TLS key used for secure transport
+
 {{.EmphasisLeft}}remotesapi.port{{.EmphasisRight}}: A port to listen for remote API operations on. If set to a positive integer, this server will accept connections from clients to clone, pull, etc. databases being served.
 
 {{.EmphasisLeft}}remotesapi.read_only{{.EmphasisRight}}: Boolean flag which disables the ability to perform pushes against the server.
