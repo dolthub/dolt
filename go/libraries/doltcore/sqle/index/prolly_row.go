@@ -100,6 +100,7 @@ func (r *ProllyRow) SetValue(i int, v interface{}) {
 	}
 	r.mat[i] = v
 	r.dirty.Add(i + 1)
+	r.decoded.Add(i + 1)
 }
 
 func (r *ProllyRow) SetBytes(i int, v []byte) {
@@ -114,7 +115,7 @@ func (r *ProllyRow) GetType(i int) {
 
 func (r *ProllyRow) Values() []interface{} {
 	for i := range r.ords {
-		if !r.decoded.Contains(i + 1) {
+		if !r.decoded.Contains(i+1) && !r.dirty.Contains(i+1) {
 			r.decode(context.Background(), i)
 		}
 	}
