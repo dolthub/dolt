@@ -306,7 +306,7 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, nil), nil
+	return index.NewProllyRowIterForMap(sch, rows, iter, nil)
 }
 
 // purgeFulltextTableData purges all Full-Text tables with the names given. Ignores any tables that are not Full-Text.

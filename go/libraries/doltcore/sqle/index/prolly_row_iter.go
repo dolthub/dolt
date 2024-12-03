@@ -15,6 +15,7 @@
 package index
 
 import (
+	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -39,7 +40,7 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) sql.RowIter {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
@@ -50,41 +51,31 @@ func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapI
 	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns)
 }
 
-func NewProllyRowIterForSchema(
-	sch schema.Schema,
-	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
-	projections []uint64,
-	ns tree.NodeStore,
-) sql.RowIter {
+func NewProllyRowIterForSchema(sch schema.Schema, iter prolly.MapIter, kd val.TupleDesc, vd val.TupleDesc, projections []uint64, ns tree.NodeStore) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
-		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
+		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns), nil
 	}
 
 	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns)
 }
 
-func NewKeyedProllyRowIter(
-	sch schema.Schema,
-	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
-	projections []uint64,
-	ns tree.NodeStore,
-) sql.RowIter {
-	keyProj, valProj, ordProj := projectionMappings(sch, projections)
+func NewKeyedProllyRowIter(sch schema.Schema, iter prolly.MapIter, kd val.TupleDesc, vd val.TupleDesc, projections []uint64, ns tree.NodeStore) (sql.RowIter, error) {
+	//keyProj, valProj, ordProj := projectionMappings(sch, projections)
 
+	ordMap, err := ProjectionMappingsForIndex2(sch, projections)
+	if err != nil {
+		return prollyRowIter{}, err
+	}
 	return prollyRowIter{
 		iter:    iter,
 		keyDesc: kd,
 		valDesc: vd,
-		keyProj: keyProj,
-		valProj: valProj,
-		ordProj: ordProj,
+		//keyProj: keyProj,
+		//valProj: valProj,
+		ordProj: ordMap,
 		rowLen:  len(projections),
 		ns:      ns,
-	}
+	}, nil
 }
 
 func NewKeylessProllyRowIter(
@@ -167,28 +158,54 @@ func ProjectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	return keyMap, valMap, ordMap
 }
 
+func ProjectionMappingsForIndex2(sch schema.Schema, projections []uint64) (val.OrdinalMapping, error) {
+	pks := sch.GetPKCols()
+	nonPks := sch.GetNonPKCols()
+	ords := make(val.OrdinalMapping, len(projections))
+	for i, tag := range projections {
+		if idx, ok := pks.StoredIndexByTag(tag); ok {
+			if pks.GetByStoredIndex(idx).Virtual {
+				ords[i] = -1
+			} else {
+				ords[i] = idx
+			}
+		} else if idx, ok := nonPks.StoredIndexByTag(tag); ok {
+			if nonPks.GetByStoredIndex(idx).Virtual {
+				ords[i] = -1
+			} else {
+				ords[i] = pks.Size() + idx
+			}
+		} else {
+			return nil, fmt.Errorf("tag not found in schema: %d", tag)
+		}
+	}
+	return ords, nil
+}
+
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// TODO
 
-	row := make(sql.UntypedSqlRow, it.rowLen)
-	for i, idx := range it.keyProj {
-		outputIdx := it.ordProj[i]
-		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	for i, idx := range it.valProj {
-		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return row, nil
+	return NewProllyRow(key, value, it.keyDesc, it.valDesc, it.ordProj, it.ns), nil
+	//row := make(sql.UntypedSqlRow, it.rowLen)
+	//for i, idx := range it.keyProj {
+	//	outputIdx := it.ordProj[i]
+	//	row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//for i, idx := range it.valProj {
+	//	outputIdx := it.ordProj[len(it.keyProj)+i]
+	//	row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//}
+	//return row, nil
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {
