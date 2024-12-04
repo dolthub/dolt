@@ -708,7 +708,16 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 		return false, err
 	}
 
-	return schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch), nil
+	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
+	if easyDiff {
+		return true, nil
+	}
+
+	_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
+	if err == nil {
+		return true, nil
+	}
+	return false, nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
@@ -762,7 +771,6 @@ type DiffPartitions struct {
 	selectFunc      partitionSelectFunc
 	toSch           schema.Schema
 	fromSch         schema.Schema
-	nextEOF         bool
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
@@ -822,10 +830,6 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 }
 
 func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
-	if dps.nextEOF {
-		return nil, io.EOF
-	}
-
 	for {
 		cmHash, optCmt, err := dps.cmItr.Next(ctx)
 		if err != nil {
@@ -864,8 +868,7 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 
 			if !canDiff {
 				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
-
-				dps.nextEOF = true
+				return nil, io.EOF
 			}
 
 			return *next, nil
