@@ -127,7 +127,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{2}},
 			},
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
@@ -550,11 +550,16 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_i,to_j,from_i,from_j,diff_type  FROM dolt_diff_tbl;",
 				// Output in the situation is admittedly wonky. Updating the PK leaves in a place where we can't really render
-				// the diff, but we want to show something. In the past we just returned an empty set in this case. The
+				// the diff, but we want to show something. In this case, the 'pk' column tag changes, so in the last two rows
+				// of the output you see we add "nil,23" and remove "nil,23" when in fact those columns were "42" with a different
+				// tag.
+				//
+				// In the past we just returned an empty set in this case. The
 				// warning is kind of essential to understand what is happening.
 				Expected: []sql.Row{
 					{42, 23, nil, nil, "added"},
 					{nil, nil, nil, 23, "removed"},
+					{nil, 23, nil, nil, "added"},
 				},
 				ExpectedWarning:                 1105,
 				ExpectedWarningMessageSubstring: "due to primary key set change",
@@ -738,8 +743,11 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+				Query: "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{
+					{"2", "2", nil, nil, "added"},
+					{"1", "1", nil, nil, "added"},
+				},
 			},
 		},
 	},
