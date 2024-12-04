@@ -150,5 +150,32 @@ teardown() {
      run dolt sql -r csv -q "select * from dolt_status ORDER BY status"
      [ "$status" -eq 0 ]
      [[ "$output" =~ 'dolt_docs,false,conflict' ]] || false
-     [[ "$output" =~ 'dolt_docs,false,modified' ]] || false
+}
+
+@test "sql-status: tables with no observable changes don't show in status but can be staged" {
+dolt sql <<SQL
+create table t1 (id int primary key);
+insert into t1 values (1);
+SQL
+    dolt add -A && dolt commit -m "create table t1"
+    dolt sql <<SQL
+create table temp__t1 (id int primary key);
+insert into temp__t1 values (1);
+drop table t1;
+rename table temp__t1 to t1;
+SQL
+    dolt sql -q "select * from dolt_status;"
+    run dolt sql -q "select * from dolt_status;"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    run dolt diff t1
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    dolt add t1
+
+    run dolt sql -r csv -q "select * from dolt_status;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1,true,modified" ]] || false
 }

@@ -88,6 +88,7 @@ func (tbl *Namespace) CanCreate(database string, branch string, user string, hos
 		matchedValue := tbl.Values[matched]
 		// If we've found a longer match, then we reset the slice. We append to it in the following if statement.
 		if len(matchedValue.Branch) > longest {
+			longest = len(matchedValue.Branch)
 			filteredIndexes = filteredIndexes[:0]
 		}
 		if len(matchedValue.Branch) >= longest {
