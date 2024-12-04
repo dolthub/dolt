@@ -175,7 +175,6 @@ SQL
 
     dolt add t1
 
-    dolt sql -r csv -q "select * from dolt_status;"
     run dolt sql -r csv -q "select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1,true,modified" ]] || false
