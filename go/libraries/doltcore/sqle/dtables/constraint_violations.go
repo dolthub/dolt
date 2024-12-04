@@ -42,7 +42,7 @@ func newNomsCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.Root
 	if err != nil {
 		return nil, err
 	}
-	cvSch, err := tbl.GetConstraintViolationsSchema(ctx)
+	cvSch, err := getConstraintViolationsSchema(ctx, tbl, tblName, root)
 	if err != nil {
 		return nil, err
 	}
