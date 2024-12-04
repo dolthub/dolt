@@ -124,6 +124,20 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return nil, err
 	}
 
+	// Some tables may differ only in column tags and/or recorded conflicts.
+	// We try to make such changes invisible to users and shouldn't display them for unstaged tables.
+	changedUnstagedTables := make([]diff.TableDelta, 0, len(unstagedTables))
+	for _, unstagedTableDiff := range unstagedTables {
+		changed, err := unstagedTableDiff.HasChangesIgnoringColumnTags(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			changedUnstagedTables = append(changedUnstagedTables, unstagedTableDiff)
+		}
+	}
+	unstagedTables = changedUnstagedTables
+
 	stagedSchemas, unstagedSchemas, err := diff.GetStagedUnstagedDatabaseSchemaDeltas(ctx, roots)
 	if err != nil {
 		return nil, err
