@@ -1730,7 +1730,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	if err != nil {
 		return err
 	}
-	
+
 	if !exists {
 		return sql.ErrTableNotFound.New(oldName)
 	}
