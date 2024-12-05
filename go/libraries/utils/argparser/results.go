@@ -144,6 +144,18 @@ func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
 	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
 }
 
+// InsertArgument inserts a new argument into the results. A new ArgParseResults object is returned with the new
+// argument added. // NM4 - error when is exists??
+func (res *ArgParseResults) InsertArgument(name, val string) *ArgParseResults {
+	newNamedArgs := make(map[string]string, len(res.options)+1)
+	for flag, origVal := range res.options {
+		newNamedArgs[flag] = origVal
+	}
+	newNamedArgs[name] = val
+
+	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
+}
+
 func (res *ArgParseResults) MustGetValue(name string) string {
 	val, ok := res.options[name]
 
