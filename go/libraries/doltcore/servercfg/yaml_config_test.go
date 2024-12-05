@@ -15,6 +15,7 @@
 package servercfg
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -414,4 +415,35 @@ listener:
 	require.NoError(t, err)
 	err = ValidateConfig(cfg)
 	assert.Error(t, err)
+}
+
+// Tests if a circular reference exists in YAMLConfig.
+//
+// This test can be safely removed if:
+//   - YAMLConfig.VerboseString is updated to properly handle circular references.
+//   - yaml.Marshal is checked to make sure it properly handles circular references.
+func TestNoCircularReferenceInYAMLConfig(t *testing.T) {
+	assert.False(t, hasCircularReference(reflect.TypeOf(YAMLConfig{}), map[reflect.Type]bool{}))
+}
+
+// Only checks for struct circular references, not slice, map, etc.
+func hasCircularReference(t reflect.Type, visited map[reflect.Type]bool) bool {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	if visited[t] {
+		return true
+	}
+	visited[t] = true
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if hasCircularReference(field.Type, visited) {
+			return true
+		}
+	}
+	visited[t] = false
+	return false
 }

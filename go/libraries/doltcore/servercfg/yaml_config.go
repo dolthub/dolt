@@ -17,6 +17,7 @@ package servercfg
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -249,7 +250,73 @@ func clusterConfigAsYAMLConfig(config ClusterConfig) *ClusterYAMLConfig {
 
 // String returns the YAML representation of the config
 func (cfg YAMLConfig) String() string {
-	data, err := yaml.Marshal(cfg)
+	return formattedYAMLMarshal(cfg)
+}
+
+// Same as String, but includes nil values for empty fields rather than omitting them.
+func (cfg YAMLConfig) VerboseString() string {
+	return formattedYAMLMarshal(removeOmitemptyTags(cfg))
+}
+
+// Assumes 'in' has no circular references.
+func removeOmitemptyTags(in any) any {
+	val := reflect.ValueOf(in)
+	typ := reflect.TypeOf(in)
+
+	newType := removeOmitemptyTagsType(typ)
+	newVal := deepConvert(val, newType)
+
+	return newVal.Interface()
+}
+
+func removeOmitemptyTagsType(typ reflect.Type) reflect.Type {
+	switch typ.Kind() {
+	case reflect.Pointer:
+		return reflect.PointerTo(removeOmitemptyTagsType(typ.Elem()))
+	case reflect.Struct:
+		fields := []reflect.StructField{}
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if field.IsExported() {
+				field.Tag = reflect.StructTag(strings.Replace(string(field.Tag), ",omitempty", "", -1))
+				field.Type = removeOmitemptyTagsType(field.Type)
+				fields = append(fields, field)
+			}
+		}
+
+		return reflect.StructOf(fields)
+	default:
+		return typ
+	}
+}
+
+func deepConvert(val reflect.Value, typ reflect.Type) reflect.Value {
+	switch val.Kind() {
+	case reflect.Pointer:
+		if val.IsNil() {
+			return reflect.Zero(typ)
+		}
+		elemType := typ.Elem()
+		convertedPtr := reflect.New(elemType)
+		convertedPtr.Elem().Set(deepConvert(val.Elem(), elemType))
+
+		return convertedPtr
+	case reflect.Struct:
+		convertedStruct := reflect.New(typ).Elem()
+		for i := 0; i < convertedStruct.NumField(); i++ {
+			fieldName := typ.Field(i).Name
+			field := convertedStruct.Field(i)
+			field.Set(deepConvert(val.FieldByName(fieldName), field.Type()))
+		}
+
+		return convertedStruct
+	default:
+		return val.Convert(typ)
+	}
+}
+
+func formattedYAMLMarshal(toMarshal any) string {
+	data, err := yaml.Marshal(toMarshal)
 
 	if err != nil {
 		return "Failed to marshal as yaml: " + err.Error()

@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -245,6 +246,11 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
+	if err != nil {
+		return err
+	}
+
 	err = servercfg.ApplySystemVariables(serverConfig, sql.SystemVariables)
 	if err != nil {
 		return err
@@ -431,4 +437,52 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	}
 
 	return nil
+}
+
+func generateYamlConfigIfNone(
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	serverConfig servercfg.ServerConfig) error {
+	const yamlConfigName = "config.yaml"
+
+	specifiesConfigFile, err := argsSpecifyServerConfigFile(ap, help, args)
+	if err != nil {
+		return err
+	}
+
+	if specifiesConfigFile {
+		return nil
+	}
+
+	path := filepath.Join(serverConfig.DataDir(), yamlConfigName)
+	exists, isDir := dEnv.FS.Exists(path)
+	if exists {
+		if isDir {
+			cli.PrintErrf("Couldn't generate YAML config at %s: directory with same name already exists", path)
+		}
+
+		return nil
+	}
+
+	yamlConfig := servercfg.ServerConfigAsYAMLConfig(serverConfig)
+	err = dEnv.FS.WriteFile(path, []byte(yamlConfig.VerboseString()), os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func argsSpecifyServerConfigFile(ap *argparser.ArgParser, help cli.UsagePrinter, args []string) (bool, error) {
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
+		return false, err
+	}
+
+	_, hasConfigFlag := apr.GetValue(configFileFlag)
+
+	return hasConfigFlag, nil
 }
