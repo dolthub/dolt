@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, vd val.TupleDesc, ns tree.NodeStore) (violationType uint64, key sql.Row, value sql.Row, err error) {
+func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, vd val.TupleDesc, ns tree.NodeStore) (violationType any, key sql.Row, value sql.Row, err error) {
 	art, err := itr.Next(ctx)
 	if err != nil {
 		return
@@ -56,7 +56,13 @@ func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, v
 	return MapCVType(art.ArtType), key, value, nil
 }
 
-func MapCVType(artifactType prolly.ArtifactType) (outType uint64) {
+// MapCVType maps an ArtifactType to value for a sql.Row in the dolt_constraint_violations_* table.
+// This is used by Doltgres to convert the ArtifactType to the correct type.
+var MapCVType = func(artifactType prolly.ArtifactType) any {
+	return mapCVType(artifactType)
+}
+
+func mapCVType(artifactType prolly.ArtifactType) (outType uint64) {
 	switch artifactType {
 	case prolly.ArtifactTypeForeignKeyViol:
 		outType = uint64(CvType_ForeignKey)
@@ -72,7 +78,16 @@ func MapCVType(artifactType prolly.ArtifactType) (outType uint64) {
 	return
 }
 
-func UnmapCVType(in CvType) (out prolly.ArtifactType) {
+// UnmapCVType unmaps a sql.Row value from the dolt_constraint_violations_* table to an ArtifactType.
+// This is used by Doltgres to convert a value of a different type to an ArtifactType.
+var UnmapCVType = func(in any) (out prolly.ArtifactType) {
+	if cv, ok := in.(uint64); ok {
+		return unmapCVType(CvType(cv))
+	}
+	panic("invalid type")
+}
+
+func unmapCVType(in CvType) (out prolly.ArtifactType) {
 	switch in {
 	case CvType_ForeignKey:
 		out = prolly.ArtifactTypeForeignKeyViol

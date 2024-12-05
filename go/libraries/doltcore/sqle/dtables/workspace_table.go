@@ -409,6 +409,9 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 
 	sch := sql.NewPrimaryKeySchema(GetDoltWorkspaceBaseSqlSchema())
 	baseDoltSch, err := sqlutil.ToDoltSchema(ctx, head, tableName, sch, head, sql.Collation_Default)
+	if err != nil {
+		return nil, err
+	}
 
 	totalSch, err := workspaceSchema(fromSch, toSch, baseDoltSch)
 	if err != nil {
