@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -47,7 +48,7 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 		dotDoltCreated = true
 	}
 
-	doltTmpDir := filepath.Join(doltDir, "tmp")
+	doltTmpDir := filepath.Join(doltDir, env.TmpDirName)
 	stat, err = os.Stat(doltTmpDir)
 	if err != nil {
 		err := os.MkdirAll(doltTmpDir, os.ModePerm)
@@ -76,7 +77,7 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 
 	err = file.Rename(name, movedName)
 	if err == nil {
-		// tmp file system is the same as the data dir, so no need to change it.
+		// If rename was successful, then the tmp dir is fine, so no need to change it. Clean up the things we created.
 		_ = file.Remove(movedName)
 
 		if tmpDirCreated {
@@ -89,7 +90,7 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 
 		return nil
 	}
-	_ = file.Remove(movedName)
+	_ = file.Remove(name)
 
 	// Rename failed. So we force the tmp dir to be the data dir.
 	tempfiles.MovableTempFileProvider = tempfiles.NewTempFileProviderAt(doltTmpDir)
