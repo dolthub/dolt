@@ -7135,6 +7135,23 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "text and blob key errors",
+		SetUpScript: []string{
+			"create table t (t text, b blob, unique(t(4)), unique(b));",
+			"insert into t values ('hello', 'goodbye');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "insert into t values('hello123', 'something different');",
+				ExpectedErrStr: "duplicate unique key given: [hell]",
+			},
+			{
+				Query:          "insert into t values('something different', 'goodbye');",
+				ExpectedErrStr: "duplicate unique key given: [goodbye]",
+			},
+		},
+	},
 }
 
 // DoltCallAsOf are tests of using CALL ... AS OF using commits

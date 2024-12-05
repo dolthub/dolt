@@ -202,9 +202,10 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 		}
 	}
 
-	// We check if we're inserting a subset of an already-existing row. If we are, we deny the insertion as the existing
-	// row will already match against ALL possible values for this row.
-	if ok, modPerms := tbl.Match(database, branch, user, host); ok {
+	// We check if we're inserting a subset of an already-existing row. We only consider this a subset if the
+	// permissions are as permissible as the existing ones, or are more restrictive (i.e. write is a "subset permission"
+	// of admin). If we are, we deny the insertion as the existing row will already match against ALL possible values for this row.
+	if ok, modPerms := tbl.Match(database, branch, user, host); ok && perms.Consolidate() >= modPerms.Consolidate() {
 		permBits := uint64(modPerms)
 		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 		return sql.NewUniqueKeyErr(

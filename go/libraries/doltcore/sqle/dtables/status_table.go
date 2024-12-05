@@ -61,12 +61,20 @@ func (st StatusTable) String() string {
 	return st.tableName
 }
 
-func (st StatusTable) Schema() sql.Schema {
+func getDoltStatusSchema(tableName string) sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: st.tableName, PrimaryKey: true, Nullable: false},
-		{Name: "status", Type: types.Text, Source: st.tableName, PrimaryKey: true, Nullable: false},
+		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: tableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
 	}
+}
+
+// GetDoltStatusSchema returns the schema of the dolt_status system table. This is used
+// by Doltgres to update the dolt_status schema using Doltgres types.
+var GetDoltStatusSchema = getDoltStatusSchema
+
+func (st StatusTable) Schema() sql.Schema {
+	return GetDoltStatusSchema(st.tableName)
 }
 
 func (st StatusTable) Collation() sql.CollationID {
@@ -123,6 +131,20 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Some tables may differ only in column tags and/or recorded conflicts.
+	// We try to make such changes invisible to users and shouldn't display them for unstaged tables.
+	changedUnstagedTables := make([]diff.TableDelta, 0, len(unstagedTables))
+	for _, unstagedTableDiff := range unstagedTables {
+		changed, err := unstagedTableDiff.HasChangesIgnoringColumnTags(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			changedUnstagedTables = append(changedUnstagedTables, unstagedTableDiff)
+		}
+	}
+	unstagedTables = changedUnstagedTables
 
 	stagedSchemas, unstagedSchemas, err := diff.GetStagedUnstagedDatabaseSchemaDeltas(ctx, roots)
 	if err != nil {

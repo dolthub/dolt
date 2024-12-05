@@ -404,6 +404,81 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 	return !fromSchemaHash.Equal(toSchemaHash), nil
 }
 
+func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, error) {
+
+	if td.FromTable == nil && td.ToTable == nil {
+		return true, nil
+	}
+
+	if td.IsAdd() || td.IsDrop() {
+		return true, nil
+	}
+
+	if td.IsRename() {
+		return true, nil
+	}
+
+	if td.HasFKChanges() {
+		return true, nil
+	}
+
+	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// Any change to the table data counts as a change
+	if !fromRowDataHash.Equal(toRowDataHash) {
+		return true, nil
+	}
+
+	fromTableHash, err := td.FromTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	toTableHash, err := td.FromTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	// If the data hashes have changed, the table has obviously changed.
+	if !fromTableHash.Equal(toTableHash) {
+		return true, nil
+	}
+
+	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toSchemaHash, err := td.ToTable.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// If neither data nor schema hashes have changed, the table is obviously the same.
+	if fromSchemaHash.Equal(toSchemaHash) {
+		return false, nil
+	}
+
+	// The schema hash has changed but the data has remained the same. We must inspect the schema to determine
+	// whether the change is observable or if only column tags have changed.
+
+	fromSchema, toSchema, err := td.GetSchemas(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// SchemasAreEqual correctly accounts for tags
+	return !schema.SchemasAreEqual(fromSchema, toSchema), nil
+}
+
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	// Database collation change is not a data change
 	if td.FromTable == nil && td.ToTable == nil {
