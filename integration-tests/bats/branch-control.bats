@@ -333,6 +333,11 @@ SQL
 @test "branch-control: Issue #8623" {
   # https://github.com/dolthub/dolt/issues/8623
   dolt sql <<SQL
+DELETE FROM dolt_branch_namespace_control WHERE true;
+DELETE FROM dolt_branch_control WHERE true;
+DROP USER IF EXISTS 'tadmin'@'%';
+DROP USER IF EXISTS 'ttask'@'%';
+DROP DATABASE IF EXISTS t;
 CREATE DATABASE t;
 CREATE USER 'ttask'@'%' IDENTIFIED BY 't';
 GRANT ALL ON t.* TO 'ttask'@'%';
