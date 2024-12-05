@@ -472,11 +472,19 @@ func runMain() int {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
-	globalConfig, ok := tmpEnv.Config.GetConfig(env.GlobalConfig)
-	if !ok {
-		cli.PrintErrln(color.RedString("Failed to get global config"))
-		return 1
+	var globalConfig config.ReadWriteConfig
+	if tmpEnv.Config != nil {
+		// NM4 - Not sure if this is common or not. Going to see if test bark on this.
+		var ok bool
+		globalConfig, ok = tmpEnv.Config.GetConfig(env.GlobalConfig)
+		if !ok {
+			cli.PrintErrln(color.RedString("Failed to get global config"))
+			return 1
+		}
+	} else {
+		panic("tmpEnv.Config is nil")
 	}
+
 	cfg, err := parseGlobalArgsAndSubCommandName(globalConfig, fs, args)
 	if err != nil {
 		return 0 // NM4
@@ -629,7 +637,7 @@ or check the docs for questions about usage.`)
 	return res
 }
 
-func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, fs filesys.Filesys) (string, error) {
+func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, fs filesys.Filesys) (string, error) {
 	// global config is the dolt --data-dir <foo> sub-command version. Applies to most CLI commands.
 	globalDir, hasGlobalDataDir := gArgs.GetValue(commands.DataDirFlag)
 	if hasGlobalDataDir {
@@ -644,8 +652,12 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, fs filesys.
 		globalDir = dataDir
 	}
 
-	if subCmd == "sql-server" {
-		// Load the server config??
+	if subCmd == "sql-server" { // NM4 - const.
+		dd, err := sqlserver.GetDataDirPreStart(fs, remainingArgs)
+		if err != nil {
+			return "", err
+		}
+		return dd, nil
 	}
 
 	return globalDir, nil
@@ -888,7 +900,7 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
 	// specified one.
 	cwdFS := fs
-	dataDir, err := resolveDataDir(apr, subCommand, fs)
+	dataDir, err := resolveDataDir(apr, subCommand, remainingArgs[1:], fs)
 	if err != nil {
 		return nil, err
 	}
