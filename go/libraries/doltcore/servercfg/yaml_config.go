@@ -253,12 +253,17 @@ func (cfg YAMLConfig) String() string {
 	return formattedYAMLMarshal(cfg)
 }
 
-// Same as String, but includes nil values for empty fields rather than omitting them.
+// Behaves like String, but includes empty fields instead of omitting them.
+// If an empty field has a default value, the default will be used.
+// If an empty field has no default value, a commented-out placeholder will be used.
 func (cfg YAMLConfig) VerboseString() string {
 	withDefaults := cfg
 	withDefaults.fillDefaults()
 
-	return formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
+	formatted := formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
+	formatted = commentNullYAMLValues(formatted)
+
+	return formatted
 }
 
 // Assumes YAMLConfig has no circular references.
@@ -379,6 +384,19 @@ func formattedYAMLMarshal(toMarshal any) string {
 
 	result := strings.Join(formatted, "\n")
 	return result
+}
+
+func commentNullYAMLValues(needsComments string) string {
+	lines := strings.Split(needsComments, "\n")
+	for i := 0; i < len(lines); i++ {
+		if strings.HasSuffix(lines[i], "null") {
+			withoutSpace := strings.TrimSpace(lines[i])
+			space := lines[i][:len(lines[i])-len(withoutSpace)]
+			lines[i] = space + "# " + withoutSpace
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
