@@ -261,6 +261,39 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return nil
 }
 
+// GetDataDirPreStart returns the data dir to use for the process. This is called early in the bootstrapping of the process
+// to ensure that we load the database once and only once. Later in sql-server start up we validate that the datadir
+// hasn't changed for unexpected reasons.
+func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
+	ap := SqlServerCmd{}.ArgParser()
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		// Parse failure at this stage is ignored. We'll handle it during command execution.
+		return "", nil
+	}
+
+	dataDir, hasDataDirArg := apr.GetValue(commands.DataDirFlag)
+	if hasDataDirArg {
+		// NM4 - ensure that dd is not specified in the config file before returning???
+		return dataDir, nil
+	}
+
+	confArg, hasConfArg := apr.GetValue(configFileFlag)
+	if hasConfArg {
+		reader := DoltServerConfigReader{}
+		cfg, err := reader.ReadConfigFile(fs, confArg)
+		if err != nil {
+			return "", err
+		}
+
+		if cfg.DataDir() != "" {
+			return cfg.DataDir(), nil
+		}
+	}
+
+	return fs.Abs("")
+}
+
 // ServerConfigFromArgs returns a ServerConfig from the given args
 func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (servercfg.ServerConfig, error) {
 	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
