@@ -1726,12 +1726,23 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrInvalidTableName.New(newName)
 	}
 
-	if _, ok, _ := db.GetTableInsensitive(ctx, newName); ok {
+	oldNameWithSchema, _, exists, err := resolve.Table(ctx, root, oldName)
+	if err != nil {
+		return err
+	}
+	
+	if !exists {
+		return sql.ErrTableNotFound.New(oldName)
+	}
+
+	// TODO: we have no way to rename a table to a different schema, need to change the GMS interface for that
+	newNameWithSchema := doltdb.TableName{Schema: oldNameWithSchema.Schema, Name: newName}
+	_, exists, err = root.ResolveTableName(ctx, newNameWithSchema)
+	if exists {
 		return sql.ErrTableAlreadyExists.New(newName)
 	}
 
-	newRoot, err := renameTable(ctx, root, oldName, newName)
-
+	newRoot, err := renameTable(ctx, root, oldNameWithSchema, newNameWithSchema)
 	if err != nil {
 		return err
 	}
