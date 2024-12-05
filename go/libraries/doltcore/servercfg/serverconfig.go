@@ -211,6 +211,10 @@ type ServerConfig interface {
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() ServerConfig {
+	return defaultServerConfigYAML()
+}
+
+func defaultServerConfigYAML() *YAMLConfig {
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(DefaultLogLevel)),
 		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),

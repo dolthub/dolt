@@ -255,7 +255,42 @@ func (cfg YAMLConfig) String() string {
 
 // Same as String, but includes nil values for empty fields rather than omitting them.
 func (cfg YAMLConfig) VerboseString() string {
-	return formattedYAMLMarshal(removeOmitemptyTags(cfg))
+	withDefaults := cfg
+	withDefaults.fillDefaults()
+
+	return formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
+}
+
+// Assumes YAMLConfig has no circular references.
+func (cfg *YAMLConfig) fillDefaults() {
+	defaults := defaultServerConfigYAML()
+	recursiveFillDefaults(reflect.ValueOf(cfg), reflect.ValueOf(defaults))
+}
+
+func recursiveFillDefaults(cfgValue, defaultsValue reflect.Value) {
+	cfgValue = cfgValue.Elem()
+	defaultsValue = defaultsValue.Elem()
+
+	if cfgValue.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := 0; i < cfgValue.NumField(); i++ {
+		field := cfgValue.Field(i)
+		defaultField := defaultsValue.Field(i)
+
+		if field.Kind() == reflect.Pointer {
+			if !defaultField.IsNil() {
+				if field.IsNil() {
+					field.Set(defaultField)
+				} else {
+					recursiveFillDefaults(field, defaultField)
+				}
+			}
+		} else {
+			recursiveFillDefaults(field.Addr(), defaultField.Addr())
+		}
+	}
 }
 
 // Assumes 'in' has no circular references.
