@@ -708,7 +708,16 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 		return false, err
 	}
 
-	return schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch), nil
+	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
+	if easyDiff {
+		return true, nil
+	}
+
+	_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
+	if err == nil {
+		return true, nil
+	}
+	return false, nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
