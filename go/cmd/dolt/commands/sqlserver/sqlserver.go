@@ -44,7 +44,6 @@ const (
 	configFileFlag              = "config"
 	queryParallelismFlag        = "query-parallelism"
 	maxConnectionsFlag          = "max-connections"
-	persistenceBehaviorFlag     = "persistence-behavior"
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
 	remotesapiPortFlag          = "remotesapi-port"
@@ -172,7 +171,6 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", "Deprecated, no effect in current versions of Dolt")
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server. Defaults to `%d`.", serverConfig.MaxConnections()))
-	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables. Defaults to `%s`.", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will be created as needed.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will be created as needed.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")

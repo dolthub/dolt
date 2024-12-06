@@ -51,7 +51,6 @@ const (
 	DefaultDoltTransactionCommit   = false
 	DefaultMaxConnections          = 100
 	DefaultQueryParallelism        = 0
-	DefaultPersistenceBahavior     = LoadPerisistentGlobals
 	DefaultDataDir                 = "."
 	DefaultCfgDir                  = ".doltcfg"
 	DefaultPrivilegeFilePath       = "privileges.db"
@@ -62,11 +61,6 @@ const (
 	DefaultMySQLUnixSocketFilePath = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen       = 0
 	DefaultEncodeLoggedQuery       = false
-)
-
-const (
-	IgnorePeristentGlobals = "ignore"
-	LoadPerisistentGlobals = "load"
 )
 
 func ptr[T any](t T) *T {
@@ -169,8 +163,6 @@ type ServerConfig interface {
 	// If true, queries will be logged as base64 encoded strings.
 	// If false (default behavior), queries will be logged as strings, but newlines and tabs will be replaced with spaces.
 	ShouldEncodeLoggedQuery() bool
-	// PersistenceBehavior is "load" if we include persisted system globals on server init
-	PersistenceBehavior() string
 	// DisableClientMultiStatements is true if we want the server to not
 	// process incoming ComQuery packets as if they had multiple queries in
 	// them, even if the client advertises support for MULTI_STATEMENTS.
@@ -218,7 +210,6 @@ func DefaultServerConfig() ServerConfig {
 		BehaviorConfig: BehaviorYAMLConfig{
 			ReadOnly:              ptr(DefaultReadOnly),
 			AutoCommit:            ptr(DefaultAutoCommit),
-			PersistenceBehavior:   ptr(DefaultPersistenceBahavior),
 			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
 		},
 		UserConfig: UserYAMLConfig{

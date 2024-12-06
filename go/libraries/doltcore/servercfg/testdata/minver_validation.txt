@@ -7,7 +7,7 @@ EncodeLoggedQuery *bool 0.0.0 encode_logged_query,omitempty
 BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior
 -ReadOnly *bool 0.0.0 read_only
 -AutoCommit *bool 0.0.0 autocommit
--PersistenceBehavior *string 0.0.0 persistence_behavior
+-PersistenceBehavior *string 0.0.0 persistence_behavior,omitempty
 -DisableClientMultiStatements *bool 0.0.0 disable_client_multi_statements
 -DoltTransactionCommit *bool 0.0.0 dolt_transaction_commit
 -EventSchedulerStatus *string 1.17.0 event_scheduler,omitempty
