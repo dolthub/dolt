@@ -47,7 +47,6 @@ type commandLineServerConfig struct {
 	requireSecureTransport  bool
 	maxLoggedQueryLen       int
 	shouldEncodeLoggedQuery bool
-	persistenceBehavior     string
 	privilegeFilePath       string
 	branchControlFilePath   string
 	allowCleartextPasswords bool
@@ -73,7 +72,6 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		queryParallelism:        servercfg.DefaultQueryParallelism,
-		persistenceBehavior:     servercfg.DefaultPersistenceBahavior,
 		dataDir:                 servercfg.DefaultDataDir,
 		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
 		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
@@ -123,11 +121,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		val := true
 		config.WithRemotesapiReadOnly(&val)
 	}
-
-	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		config.withPersistenceBehavior(persistenceBehavior)
-	}
-
+	
 	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
 		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
 
@@ -239,11 +233,6 @@ func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg *commandLineServerConfig) QueryParallelism() int {
 	return cfg.queryParallelism
-}
-
-// PersistenceBehavior returns whether to autoload persisted server configuration
-func (cfg *commandLineServerConfig) PersistenceBehavior() string {
-	return cfg.persistenceBehavior
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
@@ -417,12 +406,6 @@ func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServ
 // withCfgDir updates the path to a directory to use to store the dolt configuration files.
 func (cfg *commandLineServerConfig) withCfgDir(cfgDir string) *commandLineServerConfig {
 	cfg.cfgDir = cfgDir
-	return cfg
-}
-
-// withPersistenceBehavior updates persistence behavior of system globals on server init
-func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
-	cfg.persistenceBehavior = persistenceBehavior
 	return cfg
 }
 

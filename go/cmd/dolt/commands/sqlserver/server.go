@@ -956,18 +956,9 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig) (server.Conf
 		return server.Config{}, err
 	}
 
-	// if persist is 'load' we use currently set persisted global variable,
-	// else if 'ignore' we set persisted global variable to current value from serverConfig
-	if serverConfig.PersistenceBehavior() == servercfg.LoadPerisistentGlobals {
-		serverConf, err = serverConf.NewConfig()
-		if err != nil {
-			return server.Config{}, err
-		}
-	} else {
-		err = sql.SystemVariables.SetGlobal("max_connections", serverConfig.MaxConnections())
-		if err != nil {
-			return server.Config{}, err
-		}
+	serverConf, err = serverConf.NewConfig()
+	if err != nil {
+		return server.Config{}, err
 	}
 
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
