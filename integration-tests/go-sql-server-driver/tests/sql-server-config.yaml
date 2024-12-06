@@ -211,11 +211,11 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["999"]]
-- name: persistence behavior set to load
+- name: persistence behavior
   repos:
   - name: repo1
     server:
-      args: ["--persistence-behavior", "load"]
+      args: []
   connections:
   - on: repo1
     queries:
@@ -223,51 +223,11 @@ tests:
       result:
         columns: ["@@GLOBAL.max_connections"]
         rows: [["151"]]
-- name: persistence behavior set to ignore
-  repos:
-  - name: repo1
-    server:
-      args: ["--persistence-behavior", "ignore"]
-  connections:
-  - on: repo1
-    queries:
-    - query: "select @@GLOBAL.max_connections"
-      result:
-        columns: ["@@GLOBAL.max_connections"]
-        rows: [["100"]]
 - name: persisted global variable defined on the command line
   repos:
   - name: repo1
     server:
       args: ["--max-connections", "555"]
-  connections:
-  - on: repo1
-    queries:
-    - query: "select @@GLOBAL.max_connections"
-      result:
-        columns: ["@@GLOBAL.max_connections"]
-        rows: [["555"]]
-- name: persist global variable before server startup with persistence behavior with ignore
-  repos:
-  - name: repo1
-    with_files:
-      - name: ".dolt/config.json"
-        contents: |
-          {"sqlserver.global.max_connections":"999"}
-    server:
-      args: ["--persistence-behavior", "ignore"]
-  connections:
-  - on: repo1
-    queries:
-    - query: "select @@GLOBAL.max_connections"
-      result:
-        columns: ["@@GLOBAL.max_connections"]
-        rows: [["100"]]
-- name: persisted global variable defined on the command line with persistence ignored
-  repos:
-  - name: repo1
-    server:
-      args: ["--max-connections", "555", "--persistence-behavior", "ignore"]
   connections:
   - on: repo1
     queries:
