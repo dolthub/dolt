@@ -1,8 +1,6 @@
 module github.com/dolthub/dolt/integration-tests/go-sql-server-driver
 
-go 1.22.5
-
-toolchain go1.22.7
+go 1.23.3
 
 require (
 	github.com/dolthub/dolt/go v0.40.4

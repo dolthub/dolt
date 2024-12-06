@@ -51,8 +51,8 @@ func nillableIntPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool `yaml:"autocommit"`
-	// PersistenceBehavior regulates loading persisted system variable configuration.
-	PersistenceBehavior *string `yaml:"persistence_behavior"`
+	// PersistenceBehavior is unused, but still present to prevent breaking any YAML configs that still use it.
+	PersistenceBehavior *string `yaml:"persistence_behavior,omitempty"`
 	// Disable processing CLIENT_MULTI_STATEMENTS support on the
 	// sql server.  Dolt's handling of CLIENT_MULTI_STATEMENTS is currently
 	// broken. If a client advertises to support it (mysql cli client
@@ -174,34 +174,33 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
-	systemVars := map[string]interface{}(cfg.SystemVars())
+	systemVars := cfg.SystemVars()
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
-			ptr(cfg.ReadOnly()),
-			ptr(cfg.AutoCommit()),
-			ptr(cfg.PersistenceBehavior()),
-			ptr(cfg.DisableClientMultiStatements()),
-			ptr(cfg.DoltTransactionCommit()),
-			ptr(cfg.EventSchedulerStatus()),
+			ReadOnly:                     ptr(cfg.ReadOnly()),
+			AutoCommit:                   ptr(cfg.AutoCommit()),
+			DisableClientMultiStatements: ptr(cfg.DisableClientMultiStatements()),
+			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
+			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 		},
 		UserConfig: UserYAMLConfig{
 			Name:     ptr(cfg.User()),
 			Password: ptr(cfg.Password()),
 		},
 		ListenerConfig: ListenerYAMLConfig{
-			ptr(cfg.Host()),
-			ptr(cfg.Port()),
-			ptr(cfg.MaxConnections()),
-			ptr(cfg.ReadTimeout()),
-			ptr(cfg.WriteTimeout()),
-			nillableStrPtr(cfg.TLSKey()),
-			nillableStrPtr(cfg.TLSCert()),
-			nillableBoolPtr(cfg.RequireSecureTransport()),
-			nillableBoolPtr(cfg.AllowCleartextPasswords()),
-			nillableStrPtr(cfg.Socket()),
+			HostStr:                 ptr(cfg.Host()),
+			PortNumber:              ptr(cfg.Port()),
+			MaxConnections:          ptr(cfg.MaxConnections()),
+			ReadTimeoutMillis:       ptr(cfg.ReadTimeout()),
+			WriteTimeoutMillis:      ptr(cfg.WriteTimeout()),
+			TLSKey:                  nillableStrPtr(cfg.TLSKey()),
+			TLSCert:                 nillableStrPtr(cfg.TLSCert()),
+			RequireSecureTransport:  nillableBoolPtr(cfg.RequireSecureTransport()),
+			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
+			Socket:                  nillableStrPtr(cfg.Socket()),
 		},
 		PerformanceConfig: PerformanceYAMLConfig{
 			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
@@ -526,14 +525,6 @@ func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
 	}
 
 	return *cfg.EncodeLoggedQuery
-}
-
-// PersistenceBehavior is "load" if we include persisted system globals on server init
-func (cfg YAMLConfig) PersistenceBehavior() string {
-	if cfg.BehaviorConfig.PersistenceBehavior == nil {
-		return LoadPerisistentGlobals
-	}
-	return *cfg.BehaviorConfig.PersistenceBehavior
 }
 
 // DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.

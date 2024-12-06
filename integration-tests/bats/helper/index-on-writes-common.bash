@@ -108,7 +108,7 @@ test_mutation() {
     run dolt sql -q "select * from $table ORDER BY pk1" -r csv
     [ "$status" -eq "0" ]
     [ "$output" == "$expected" ] || (echo $output && exit 1)
-    run dolt sql -q "explain $dml"
+    run dolt sql -q "explain plan $dml"
     [ "$status" -eq "0" ]
     if ! [ -z "$uses_pk" ]; then
         [[ "$output" =~ "IndexedTableAccess" ]] || exit 1

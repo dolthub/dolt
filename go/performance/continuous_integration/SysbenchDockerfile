@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.3-labs
-FROM --platform=linux/amd64 golang:1.22-alpine as gobin
+FROM --platform=linux/amd64 golang:1.23.3-alpine as gobin
 FROM --platform=linux/amd64 ubuntu:22.04
 
 COPY --from=gobin /usr/local/go/ /go/
