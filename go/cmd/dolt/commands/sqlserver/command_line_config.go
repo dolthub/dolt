@@ -121,7 +121,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		val := true
 		config.WithRemotesapiReadOnly(&val)
 	}
-	
+
 	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
 		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
 
