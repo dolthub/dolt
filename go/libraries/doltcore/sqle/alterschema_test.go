@@ -96,7 +96,7 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 			beforeSch := schemas[doltdb.TableName{Name: tt.oldName}]
 
-			updatedRoot, err := renameTable(ctx, root, tt.oldName, tt.newName)
+			updatedRoot, err := renameTable(ctx, root, doltdb.TableName{Name: tt.oldName}, doltdb.TableName{Name: tt.newName})
 			if len(tt.expectedErr) > 0 {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

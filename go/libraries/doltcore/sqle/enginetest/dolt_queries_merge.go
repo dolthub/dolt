@@ -1661,7 +1661,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (NULL,5),(6,6),(NULL,7);",
+				Query:    "INSERT INTO t(c0) VALUES (5),(6),(7);",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 5}}},
 			},
 			{
@@ -1698,7 +1698,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
-				Query:    "INSERT INTO t VALUES (NULL,6),(7,7),(NULL,8);",
+				Query:    "INSERT INTO t(c0) VALUES (6),(7),(8);",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 3, InsertID: 6}}},
 			},
 			{
