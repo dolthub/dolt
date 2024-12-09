@@ -17,6 +17,7 @@ package servercfg
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -248,7 +249,113 @@ func clusterConfigAsYAMLConfig(config ClusterConfig) *ClusterYAMLConfig {
 
 // String returns the YAML representation of the config
 func (cfg YAMLConfig) String() string {
-	data, err := yaml.Marshal(cfg)
+	return formattedYAMLMarshal(cfg)
+}
+
+// Behaves like String, but includes empty fields instead of omitting them.
+// If an empty field has a default value, the default will be used.
+// If an empty field has no default value, a commented-out placeholder will be used.
+func (cfg YAMLConfig) VerboseString() string {
+	withDefaults := cfg
+	withDefaults.fillDefaults()
+
+	formatted := formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
+	formatted = commentNullYAMLValues(formatted)
+
+	return formatted
+}
+
+// Assumes YAMLConfig has no circular references.
+func (cfg *YAMLConfig) fillDefaults() {
+	defaults := defaultServerConfigYAML()
+	recursiveFillDefaults(reflect.ValueOf(cfg), reflect.ValueOf(defaults))
+}
+
+func recursiveFillDefaults(cfgValue, defaultsValue reflect.Value) {
+	cfgValue = cfgValue.Elem()
+	defaultsValue = defaultsValue.Elem()
+
+	if cfgValue.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := 0; i < cfgValue.NumField(); i++ {
+		field := cfgValue.Field(i)
+		defaultField := defaultsValue.Field(i)
+
+		if field.Kind() == reflect.Pointer {
+			if !defaultField.IsNil() {
+				if field.IsNil() {
+					field.Set(defaultField)
+				} else {
+					recursiveFillDefaults(field, defaultField)
+				}
+			}
+		} else {
+			recursiveFillDefaults(field.Addr(), defaultField.Addr())
+		}
+	}
+}
+
+// Assumes 'in' has no circular references.
+func removeOmitemptyTags(in any) any {
+	val := reflect.ValueOf(in)
+	typ := reflect.TypeOf(in)
+
+	newType := removeOmitemptyTagsType(typ)
+	newVal := deepConvert(val, newType)
+
+	return newVal.Interface()
+}
+
+func removeOmitemptyTagsType(typ reflect.Type) reflect.Type {
+	switch typ.Kind() {
+	case reflect.Pointer:
+		return reflect.PointerTo(removeOmitemptyTagsType(typ.Elem()))
+	case reflect.Struct:
+		fields := []reflect.StructField{}
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if field.IsExported() {
+				field.Tag = reflect.StructTag(strings.Replace(string(field.Tag), ",omitempty", "", -1))
+				field.Type = removeOmitemptyTagsType(field.Type)
+				fields = append(fields, field)
+			}
+		}
+
+		return reflect.StructOf(fields)
+	default:
+		return typ
+	}
+}
+
+func deepConvert(val reflect.Value, typ reflect.Type) reflect.Value {
+	switch val.Kind() {
+	case reflect.Pointer:
+		if val.IsNil() {
+			return reflect.Zero(typ)
+		}
+		elemType := typ.Elem()
+		convertedPtr := reflect.New(elemType)
+		convertedPtr.Elem().Set(deepConvert(val.Elem(), elemType))
+
+		return convertedPtr
+	case reflect.Struct:
+		convertedStruct := reflect.New(typ).Elem()
+		for i := 0; i < convertedStruct.NumField(); i++ {
+			fieldName := typ.Field(i).Name
+			field := convertedStruct.Field(i)
+			field.Set(deepConvert(val.FieldByName(fieldName), field.Type()))
+		}
+
+		return convertedStruct
+	default:
+		return val.Convert(typ)
+	}
+}
+
+func formattedYAMLMarshal(toMarshal any) string {
+	data, err := yaml.Marshal(toMarshal)
 
 	if err != nil {
 		return "Failed to marshal as yaml: " + err.Error()
@@ -276,6 +383,19 @@ func (cfg YAMLConfig) String() string {
 
 	result := strings.Join(formatted, "\n")
 	return result
+}
+
+func commentNullYAMLValues(needsComments string) string {
+	lines := strings.Split(needsComments, "\n")
+	for i := 0; i < len(lines); i++ {
+		if strings.HasSuffix(lines[i], "null") {
+			withoutSpace := strings.TrimSpace(lines[i])
+			space := lines[i][:len(lines[i])-len(withoutSpace)]
+			lines[i] = space + "# " + withoutSpace
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
