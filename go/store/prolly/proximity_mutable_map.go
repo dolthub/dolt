@@ -68,8 +68,8 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	editIter := mutableMap.tuples.Mutations()
 	key, value := editIter.NextMutation(ctx)
 	// TODO: Set correct log chunk size
-	keyLevel := tree.DeterministicHashLevel(10, key)
 	for key != nil {
+		keyLevel := tree.DeterministicHashLevel(10, key)
 		edits = append(edits, VectorIndexKV{
 			key:   key,
 			value: value,

@@ -275,8 +275,18 @@ func (b *proximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
 	// won't be needed once we finish building the ProximityMap. This could potentially be avoided by creating a
 	// separate in-memory NodeStore for these values.
 
-	// Check if index is empty.
-	if !b.levelMap.HasEdits() {
+	flushedLevelMap, err := b.levelMap.Map(ctx)
+	if err != nil {
+		return ProximityMap{}, err
+	}
+
+	levelMapSize, err := flushedLevelMap.Count()
+	if err != nil {
+		return ProximityMap{}, err
+	}
+
+	if levelMapSize == 0 {
+		// Index is empty.
 		return b.makeRootNode(ctx, nil, nil, nil, 0)
 	}
 
