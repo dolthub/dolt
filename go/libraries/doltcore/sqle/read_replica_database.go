@@ -275,7 +275,7 @@ type pullBehavior bool
 const pullBehaviorFastForward pullBehavior = false
 const pullBehaviorForcePull pullBehavior = true
 
-// pullBranches pulls the remote branches named and returns the map of their hashes keyed by branch path.
+// pullBranches pulls the named remote branches and tags and returns the map of their hashes keyed by ref ID.
 func pullBranches(
 	ctx *sql.Context,
 	rrd ReadReplicaDatabase,
@@ -283,17 +283,17 @@ func pullBranches(
 	localRefs []doltdb.RefWithHash,
 	behavior pullBehavior,
 ) (map[string]doltdb.RefWithHash, error) {
-	localRefsByPath := make(map[string]doltdb.RefWithHash)
-	remoteRefsByPath := make(map[string]doltdb.RefWithHash)
+	localRefsById := make(map[string]doltdb.RefWithHash)
+	remoteRefsById := make(map[string]doltdb.RefWithHash)
 	remoteHashes := make([]hash.Hash, len(remoteRefs))
 
 	for i, b := range remoteRefs {
-		remoteRefsByPath[b.Ref.GetPath()] = b
+		remoteRefsById[b.Ref.String()] = b
 		remoteHashes[i] = b.Hash
 	}
 
 	for _, b := range localRefs {
-		localRefsByPath[b.Ref.GetPath()] = b
+		localRefsById[b.Ref.String()] = b
 	}
 
 	// XXX: Our view of which remote branches to pull and what to set the
@@ -311,7 +311,7 @@ func pullBranches(
 	REFS: // every successful pass through the loop below must end with `continue REFS` to get out of the retry loop
 		for _, remoteRef := range remoteRefs {
 			trackingRef := ref.NewRemoteRef(rrd.remote.Name, remoteRef.Ref.GetPath())
-			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
+			localRef, localRefExists := localRefsById[remoteRef.Ref.String()]
 
 			// loop on optimistic lock failures
 		OPTIMISTIC_RETRY:
@@ -378,7 +378,7 @@ func pullBranches(
 		return nil, err
 	}
 
-	return remoteRefsByPath, nil
+	return remoteRefsById, nil
 }
 
 // expandWildcardBranchPattern evaluates |pattern| and returns a list of branch names from the source database that
