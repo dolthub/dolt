@@ -95,7 +95,6 @@ EOF
     start_sql_server_with_args \
         --readonly \
         --no-auto-commit \
-        --persistence-behavior ignore \
         --max-connections 77 \
         --timeout 7777777 \
         --allow-cleartext-passwords true \
@@ -106,7 +105,6 @@ EOF
     [ $status -eq 0 ]
     [[ "$output" =~ "read_only: true" ]] || false
     [[ "$output" =~ "autocommit: false" ]] || false
-    [[ "$output" =~ "persistence_behavior: ignore" ]] || false
     [[ "$output" =~ "max_connections: 77" ]] || false
     [[ "$output" =~ "read_timeout_millis: 7777777" ]] || false
     [[ "$output" =~ "write_timeout_millis: 7777777" ]] || false
@@ -131,7 +129,6 @@ EOF
     # default (not set by args)
     [[ "$output" =~ "read_only: false" ]] || false
     [[ "$output" =~ "autocommit: true" ]] || false
-    [[ "$output" =~ "persistence_behavior: load" ]] || false
     [[ "$output" =~ "allow_cleartext_passwords: false" ]] || false
 }
 
