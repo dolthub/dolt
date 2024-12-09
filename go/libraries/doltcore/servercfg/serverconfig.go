@@ -50,7 +50,6 @@ const (
 	DefaultAutoCommit              = true
 	DefaultDoltTransactionCommit   = false
 	DefaultMaxConnections          = 100
-	DefaultQueryParallelism        = 0
 	DefaultDataDir                 = "."
 	DefaultCfgDir                  = ".doltcfg"
 	DefaultPrivilegeFilePath       = "privileges.db"
@@ -147,8 +146,6 @@ type ServerConfig interface {
 	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
-	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-	QueryParallelism() int
 	// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
@@ -224,7 +221,7 @@ func DefaultServerConfig() ServerConfig {
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
 		},
-		PerformanceConfig: PerformanceYAMLConfig{QueryParallelism: ptr(DefaultQueryParallelism)},
+		PerformanceConfig: PerformanceYAMLConfig{},
 		DataDirStr:        ptr(DefaultDataDir),
 		CfgDirStr:         ptr(filepath.Join(DefaultDataDir, DefaultCfgDir)),
 		PrivilegeFile:     ptr(filepath.Join(DefaultDataDir, DefaultCfgDir, DefaultPrivilegeFilePath)),

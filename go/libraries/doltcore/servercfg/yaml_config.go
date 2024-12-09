@@ -94,7 +94,8 @@ type ListenerYAMLConfig struct {
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
 type PerformanceYAMLConfig struct {
-	QueryParallelism *int `yaml:"query_parallelism"`
+	// QueryParallelism is deprecated but still present to prevent breaking YAML config that still uses it
+	QueryParallelism *int `yaml:"query_parallelism,omitempty"`
 }
 
 type MetricsYAMLConfig struct {
@@ -202,9 +203,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			Socket:                  nillableStrPtr(cfg.Socket()),
 		},
-		PerformanceConfig: PerformanceYAMLConfig{
-			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
-		},
+		PerformanceConfig: PerformanceYAMLConfig{},
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
@@ -473,15 +472,6 @@ func (cfg YAMLConfig) AllowCleartextPasswords() bool {
 		return DefaultAllowCleartextPasswords
 	}
 	return *cfg.ListenerConfig.AllowCleartextPasswords
-}
-
-// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-func (cfg YAMLConfig) QueryParallelism() int {
-	if cfg.PerformanceConfig.QueryParallelism == nil {
-		return DefaultQueryParallelism
-	}
-
-	return *cfg.PerformanceConfig.QueryParallelism
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.

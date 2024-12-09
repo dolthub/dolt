@@ -26,7 +26,7 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener
 -AllowCleartextPasswords *bool 0.0.0 allow_cleartext_passwords
 -Socket *string 0.0.0 socket,omitempty
 PerformanceConfig servercfg.PerformanceYAMLConfig 0.0.0 performance
--QueryParallelism *int 0.0.0 query_parallelism
+-QueryParallelism *int 0.0.0 query_parallelism,omitempty
 DataDirStr *string 0.0.0 data_dir,omitempty
 CfgDirStr *string 0.0.0 cfg_dir,omitempty
 MetricsConfig servercfg.MetricsYAMLConfig 0.0.0 metrics
