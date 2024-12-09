@@ -221,7 +221,6 @@ func DefaultServerConfig() ServerConfig {
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
 		},
-		PerformanceConfig: PerformanceYAMLConfig{},
 		DataDirStr:        ptr(DefaultDataDir),
 		CfgDirStr:         ptr(filepath.Join(DefaultDataDir, DefaultCfgDir)),
 		PrivilegeFile:     ptr(filepath.Join(DefaultDataDir, DefaultCfgDir, DefaultPrivilegeFilePath)),

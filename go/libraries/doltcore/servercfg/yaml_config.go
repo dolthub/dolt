@@ -130,7 +130,7 @@ type YAMLConfig struct {
 	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
 	UserConfig        UserYAMLConfig        `yaml:"user"`
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
-	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
+	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
 	DataDirStr        *string               `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
@@ -203,7 +203,6 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			Socket:                  nillableStrPtr(cfg.Socket()),
 		},
-		PerformanceConfig: PerformanceYAMLConfig{},
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
