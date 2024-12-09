@@ -11,6 +11,9 @@ DATABASE_DIRS=(
 )
 
 setup() {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "This test tests remote connections directly, SQL_ENGINE is not needed."
+    fi
     setup_common
 }
 
