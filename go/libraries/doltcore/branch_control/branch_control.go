@@ -19,6 +19,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -243,7 +244,7 @@ func CheckAccess(ctx context.Context, flags Permissions) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := branchAwareSession.GetCurrentDatabase()
+	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
 	branch, err := branchAwareSession.GetBranch()
 	if err != nil {
 		return err
@@ -277,7 +278,7 @@ func CanCreateBranch(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := branchAwareSession.GetCurrentDatabase()
+	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
 	if controller.Namespace.CanCreate(database, branchName, user, host) {
 		return nil
 	}
@@ -304,7 +305,7 @@ func CanDeleteBranch(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := branchAwareSession.GetCurrentDatabase()
+	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(database, branchName, user, host)
 	// If the user has the write or admin flags, then we allow access
@@ -329,7 +330,7 @@ func AddAdminForContext(ctx context.Context, branchName string) error {
 
 	user := branchAwareSession.GetUser()
 	host := branchAwareSession.GetHost()
-	database := branchAwareSession.GetCurrentDatabase()
+	database := getDatabaseNameOnly(branchAwareSession.GetCurrentDatabase())
 	// Check if we already have admin permissions for the given branch, as there's no need to do another insertion if so
 	controller.Access.RWMutex.RLock()
 	_, modPerms := controller.Access.Match(database, branchName, user, host)
@@ -380,4 +381,11 @@ func HasDatabasePrivileges(ctx Context, database string) bool {
 	isDatabaseAdmin := privSet.Database(database).Has(sql.PrivilegeType_Create, sql.PrivilegeType_Alter, sql.PrivilegeType_Drop,
 		sql.PrivilegeType_Insert, sql.PrivilegeType_Update, sql.PrivilegeType_Delete, sql.PrivilegeType_Execute, sql.PrivilegeType_GrantOption)
 	return hasSuper || isGlobalAdmin || isDatabaseAdmin
+}
+
+// getDatabaseNameOnly gets the database name only, which is useful for when the database name includes a revision.
+// This is a direct reimplementation of the logic in dsess.SplitRevisionDbName, however we cannot use that function due
+// to import cycles.
+func getDatabaseNameOnly(dbName string) string {
+	return strings.SplitN(dbName, "/", 2)[0]
 }

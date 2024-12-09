@@ -52,8 +52,8 @@ func nillableIntPtr(n int) *int {
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
 	AutoCommit *bool `yaml:"autocommit"`
-	// PersistenceBehavior regulates loading persisted system variable configuration.
-	PersistenceBehavior *string `yaml:"persistence_behavior"`
+	// PersistenceBehavior is unused, but still present to prevent breaking any YAML configs that still use it.
+	PersistenceBehavior *string `yaml:"persistence_behavior,omitempty"`
 	// Disable processing CLIENT_MULTI_STATEMENTS support on the
 	// sql server.  Dolt's handling of CLIENT_MULTI_STATEMENTS is currently
 	// broken. If a client advertises to support it (mysql cli client
@@ -95,7 +95,8 @@ type ListenerYAMLConfig struct {
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
 type PerformanceYAMLConfig struct {
-	QueryParallelism *int `yaml:"query_parallelism"`
+	// QueryParallelism is deprecated but still present to prevent breaking YAML config that still uses it
+	QueryParallelism *int `yaml:"query_parallelism,omitempty"`
 }
 
 type MetricsYAMLConfig struct {
@@ -124,20 +125,20 @@ type UserSessionVars struct {
 
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr       *string               `yaml:"log_level,omitempty"`
-	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len,omitempty"`
-	EncodeLoggedQuery *bool                 `yaml:"encode_logged_query,omitempty"`
-	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
-	UserConfig        UserYAMLConfig        `yaml:"user"`
-	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
-	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	DataDirStr        *string               `yaml:"data_dir,omitempty"`
-	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
-	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
-	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
-	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
-	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
+	LogLevelStr       *string                `yaml:"log_level,omitempty"`
+	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
+	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
+	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior"`
+	UserConfig        UserYAMLConfig         `yaml:"user"`
+	ListenerConfig    ListenerYAMLConfig     `yaml:"listener"`
+	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
+	DataDirStr        *string                `yaml:"data_dir,omitempty"`
+	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
+	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics"`
+	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi"`
+	ClusterCfg        *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
+	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
+	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
@@ -175,37 +176,33 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
-	systemVars := map[string]interface{}(cfg.SystemVars())
+	systemVars := cfg.SystemVars()
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
-			ptr(cfg.ReadOnly()),
-			ptr(cfg.AutoCommit()),
-			ptr(cfg.PersistenceBehavior()),
-			ptr(cfg.DisableClientMultiStatements()),
-			ptr(cfg.DoltTransactionCommit()),
-			ptr(cfg.EventSchedulerStatus()),
+			ReadOnly:                     ptr(cfg.ReadOnly()),
+			AutoCommit:                   ptr(cfg.AutoCommit()),
+			DisableClientMultiStatements: ptr(cfg.DisableClientMultiStatements()),
+			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
+			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 		},
 		UserConfig: UserYAMLConfig{
 			Name:     ptr(cfg.User()),
 			Password: ptr(cfg.Password()),
 		},
 		ListenerConfig: ListenerYAMLConfig{
-			ptr(cfg.Host()),
-			ptr(cfg.Port()),
-			ptr(cfg.MaxConnections()),
-			ptr(cfg.ReadTimeout()),
-			ptr(cfg.WriteTimeout()),
-			nillableStrPtr(cfg.TLSKey()),
-			nillableStrPtr(cfg.TLSCert()),
-			nillableBoolPtr(cfg.RequireSecureTransport()),
-			nillableBoolPtr(cfg.AllowCleartextPasswords()),
-			nillableStrPtr(cfg.Socket()),
-		},
-		PerformanceConfig: PerformanceYAMLConfig{
-			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
+			HostStr:                 ptr(cfg.Host()),
+			PortNumber:              ptr(cfg.Port()),
+			MaxConnections:          ptr(cfg.MaxConnections()),
+			ReadTimeoutMillis:       ptr(cfg.ReadTimeout()),
+			WriteTimeoutMillis:      ptr(cfg.WriteTimeout()),
+			TLSKey:                  nillableStrPtr(cfg.TLSKey()),
+			TLSCert:                 nillableStrPtr(cfg.TLSCert()),
+			RequireSecureTransport:  nillableBoolPtr(cfg.RequireSecureTransport()),
+			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
+			Socket:                  nillableStrPtr(cfg.Socket()),
 		},
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
@@ -596,15 +593,6 @@ func (cfg YAMLConfig) AllowCleartextPasswords() bool {
 	return *cfg.ListenerConfig.AllowCleartextPasswords
 }
 
-// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-func (cfg YAMLConfig) QueryParallelism() int {
-	if cfg.PerformanceConfig.QueryParallelism == nil {
-		return DefaultQueryParallelism
-	}
-
-	return *cfg.PerformanceConfig.QueryParallelism
-}
-
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 func (cfg YAMLConfig) TLSKey() string {
 	if cfg.ListenerConfig.TLSKey == nil {
@@ -646,14 +634,6 @@ func (cfg YAMLConfig) ShouldEncodeLoggedQuery() bool {
 	}
 
 	return *cfg.EncodeLoggedQuery
-}
-
-// PersistenceBehavior is "load" if we include persisted system globals on server init
-func (cfg YAMLConfig) PersistenceBehavior() string {
-	if cfg.BehaviorConfig.PersistenceBehavior == nil {
-		return LoadPerisistentGlobals
-	}
-	return *cfg.BehaviorConfig.PersistenceBehavior
 }
 
 // DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.

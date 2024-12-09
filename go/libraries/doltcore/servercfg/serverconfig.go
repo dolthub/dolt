@@ -50,8 +50,6 @@ const (
 	DefaultAutoCommit              = true
 	DefaultDoltTransactionCommit   = false
 	DefaultMaxConnections          = 100
-	DefaultQueryParallelism        = 0
-	DefaultPersistenceBahavior     = LoadPerisistentGlobals
 	DefaultDataDir                 = "."
 	DefaultCfgDir                  = ".doltcfg"
 	DefaultPrivilegeFilePath       = "privileges.db"
@@ -62,11 +60,6 @@ const (
 	DefaultMySQLUnixSocketFilePath = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen       = 0
 	DefaultEncodeLoggedQuery       = false
-)
-
-const (
-	IgnorePeristentGlobals = "ignore"
-	LoadPerisistentGlobals = "load"
 )
 
 func ptr[T any](t T) *T {
@@ -153,8 +146,6 @@ type ServerConfig interface {
 	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
-	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-	QueryParallelism() int
 	// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
@@ -169,8 +160,6 @@ type ServerConfig interface {
 	// If true, queries will be logged as base64 encoded strings.
 	// If false (default behavior), queries will be logged as strings, but newlines and tabs will be replaced with spaces.
 	ShouldEncodeLoggedQuery() bool
-	// PersistenceBehavior is "load" if we include persisted system globals on server init
-	PersistenceBehavior() string
 	// DisableClientMultiStatements is true if we want the server to not
 	// process incoming ComQuery packets as if they had multiple queries in
 	// them, even if the client advertises support for MULTI_STATEMENTS.
@@ -222,7 +211,6 @@ func defaultServerConfigYAML() *YAMLConfig {
 		BehaviorConfig: BehaviorYAMLConfig{
 			ReadOnly:              ptr(DefaultReadOnly),
 			AutoCommit:            ptr(DefaultAutoCommit),
-			PersistenceBehavior:   ptr(DefaultPersistenceBahavior),
 			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
 		},
 		UserConfig: UserYAMLConfig{
@@ -237,7 +225,6 @@ func defaultServerConfigYAML() *YAMLConfig {
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
 		},
-		PerformanceConfig: PerformanceYAMLConfig{QueryParallelism: ptr(DefaultQueryParallelism)},
 		DataDirStr:        ptr(DefaultDataDir),
 		CfgDirStr:         ptr(filepath.Join(DefaultDataDir, DefaultCfgDir)),
 		PrivilegeFile:     ptr(filepath.Join(DefaultDataDir, DefaultCfgDir, DefaultPrivilegeFilePath)),

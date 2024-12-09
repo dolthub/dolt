@@ -270,6 +270,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			// Get a fresh session after running setup scripts, since some setup scripts can change the session state
+			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+			require.NoError(t, err)
 		}
 
 		if d.configureStats {
@@ -304,15 +308,13 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
-	// Get a fresh session if we are reusing the engine
-	if !initializeEngine {
-		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
-		require.NoError(t, err)
-	}
-
+	var err error
 	ctx := enginetest.NewContext(d)
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+
+	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+	require.NoError(t, err)
 
 	return e, err
 }

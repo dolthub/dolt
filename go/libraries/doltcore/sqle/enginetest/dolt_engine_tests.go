@@ -683,6 +683,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	require.NoError(t, err)
 	defer e.Close()
 	ctx := h.NewContext()
+	ctx.SetCurrentDatabase("mydb")
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},

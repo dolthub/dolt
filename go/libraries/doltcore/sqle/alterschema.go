@@ -28,15 +28,14 @@ import (
 )
 
 // renameTable renames a table with in a RootValue and returns the updated root.
-func renameTable(ctx context.Context, root doltdb.RootValue, oldName, newName string) (doltdb.RootValue, error) {
+func renameTable(ctx context.Context, root doltdb.RootValue, oldName, newName doltdb.TableName) (doltdb.RootValue, error) {
 	if newName == oldName {
 		return root, nil
 	} else if root == nil {
 		panic("invalid parameters")
 	}
 
-	// TODO: schema name
-	return root.RenameTable(ctx, doltdb.TableName{Name: oldName}, doltdb.TableName{Name: newName})
+	return root.RenameTable(ctx, oldName, newName)
 }
 
 // Nullable represents whether a column can have a null value.

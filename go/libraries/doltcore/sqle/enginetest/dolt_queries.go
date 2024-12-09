@@ -2076,7 +2076,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.pk = 3)"},
@@ -2087,7 +2087,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
@@ -2151,7 +2151,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 4",
+				Query: "explain plan select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.c = 4)"},
@@ -2162,7 +2162,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
+				Query: "explain plan select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},

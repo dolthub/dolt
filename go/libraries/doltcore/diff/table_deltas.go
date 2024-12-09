@@ -520,9 +520,6 @@ func (td TableDelta) HasPrimaryKeySetChanged() bool {
 }
 
 func (td TableDelta) HasChanges() (bool, error) {
-	fromString := td.FromTable.DebugString(context.Background(), td.FromTable.NodeStore())
-	toString := td.ToTable.DebugString(context.Background(), td.ToTable.NodeStore())
-	_, _ = fromString, toString
 	hashChanged, err := td.HasHashChanged()
 	if err != nil {
 		return false, err
