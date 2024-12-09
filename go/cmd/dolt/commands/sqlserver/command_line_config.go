@@ -41,7 +41,6 @@ type commandLineServerConfig struct {
 	autoCommit              bool
 	doltTransactionCommit   bool
 	maxConnections          uint64
-	queryParallelism        int
 	tlsKey                  string
 	tlsCert                 string
 	requireSecureTransport  bool
@@ -71,7 +70,6 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		logLevel:                servercfg.DefaultLogLevel,
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
-		queryParallelism:        servercfg.DefaultQueryParallelism,
 		dataDir:                 servercfg.DefaultDataDir,
 		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
 		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
@@ -150,10 +148,6 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withDataDir(dataDir)
 	}
 
-	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
-		config.withQueryParallelism(queryParallelism)
-	}
-
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
 		config.withMaxConnections(uint64(maxConnections))
 	}
@@ -228,11 +222,6 @@ func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 	return cfg.maxConnections
-}
-
-// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-func (cfg *commandLineServerConfig) QueryParallelism() int {
-	return cfg.queryParallelism
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
@@ -388,12 +377,6 @@ func (cfg *commandLineServerConfig) withLogLevel(loglevel servercfg.LogLevel) *c
 func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
 	cfg.maxConnections = maxConnections
 	cfg.valuesSet[servercfg.MaxConnectionsKey] = struct{}{}
-	return cfg
-}
-
-// withQueryParallelism updates the query parallelism and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withQueryParallelism(queryParallelism int) *commandLineServerConfig {
-	cfg.queryParallelism = queryParallelism
 	return cfg
 }
 

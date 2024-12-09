@@ -94,7 +94,8 @@ type ListenerYAMLConfig struct {
 
 // PerformanceYAMLConfig contains configuration parameters for performance tweaking
 type PerformanceYAMLConfig struct {
-	QueryParallelism *int `yaml:"query_parallelism"`
+	// QueryParallelism is deprecated but still present to prevent breaking YAML config that still uses it
+	QueryParallelism *int `yaml:"query_parallelism,omitempty"`
 }
 
 type MetricsYAMLConfig struct {
@@ -123,20 +124,20 @@ type UserSessionVars struct {
 
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr       *string               `yaml:"log_level,omitempty"`
-	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len,omitempty"`
-	EncodeLoggedQuery *bool                 `yaml:"encode_logged_query,omitempty"`
-	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
-	UserConfig        UserYAMLConfig        `yaml:"user"`
-	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
-	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	DataDirStr        *string               `yaml:"data_dir,omitempty"`
-	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
-	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
-	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
-	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
-	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
+	LogLevelStr       *string                `yaml:"log_level,omitempty"`
+	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
+	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
+	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior"`
+	UserConfig        UserYAMLConfig         `yaml:"user"`
+	ListenerConfig    ListenerYAMLConfig     `yaml:"listener"`
+	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
+	DataDirStr        *string                `yaml:"data_dir,omitempty"`
+	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
+	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics"`
+	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi"`
+	ClusterCfg        *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
+	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
+	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
@@ -201,9 +202,6 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			RequireSecureTransport:  nillableBoolPtr(cfg.RequireSecureTransport()),
 			AllowCleartextPasswords: nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			Socket:                  nillableStrPtr(cfg.Socket()),
-		},
-		PerformanceConfig: PerformanceYAMLConfig{
-			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
 		},
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
@@ -473,15 +471,6 @@ func (cfg YAMLConfig) AllowCleartextPasswords() bool {
 		return DefaultAllowCleartextPasswords
 	}
 	return *cfg.ListenerConfig.AllowCleartextPasswords
-}
-
-// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
-func (cfg YAMLConfig) QueryParallelism() int {
-	if cfg.PerformanceConfig.QueryParallelism == nil {
-		return DefaultQueryParallelism
-	}
-
-	return *cfg.PerformanceConfig.QueryParallelism
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
