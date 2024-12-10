@@ -15,6 +15,7 @@
 package shim
 
 import (
+	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -49,7 +50,7 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
-func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
+func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
 	root, fileId, err := NodeFromValue(v)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, 
 	vd := sch.GetValueDescriptor()
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(ctx, ns, root, kd, vd, vector.DistanceL2Squared{})
+		return prolly.NewProximityMap(ctx, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}

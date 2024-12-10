@@ -113,7 +113,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
-		m, err := shim.MapInterfaceFromValue(v, sch, ns, isKeylessTable)
+		m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
 		if err != nil {
 			return nil, err
 		}
