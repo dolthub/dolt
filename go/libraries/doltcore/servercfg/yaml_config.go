@@ -250,7 +250,7 @@ func (cfg YAMLConfig) String() string {
 	return formattedYAMLMarshal(cfg)
 }
 
-// Behaves like String, but includes empty fields instead of omitting them.
+// VerboseString behaves like String, but includes empty fields instead of omitting them.
 // If an empty field has a default value, the default will be used.
 // If an empty field has no default value, a commented-out placeholder will be used.
 func (cfg YAMLConfig) VerboseString() string {
@@ -262,6 +262,7 @@ func (cfg YAMLConfig) VerboseString() string {
 	return formatted
 }
 
+// withDefaultsFilledIn returns the config with default values in place of nil values.
 func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	defaults := defaultServerConfigYAML()
 	withDefaults := cfg
@@ -385,6 +386,8 @@ func deepConvert(val reflect.Value, typ reflect.Type) reflect.Value {
 	}
 }
 
+// formattedYAMLMarshal returns the same result as yaml.Marshal,
+// but with top-level fields separated by an additional newline.
 func formattedYAMLMarshal(toMarshal any) string {
 	data, err := yaml.Marshal(toMarshal)
 
@@ -416,6 +419,8 @@ func formattedYAMLMarshal(toMarshal any) string {
 	return result
 }
 
+// commentNullYAMLValues returns the given YAML-formatted string with null fields commented out.
+//
 // Assumes no non-null fields will be set to unquoted strings ending in null.
 // For example, `field: 123-null` will be falsely commented but `field: '123-null'` is fine.
 func commentNullYAMLValues(needsComments string) string {

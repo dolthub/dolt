@@ -437,6 +437,10 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	return nil
 }
 
+// generateYamlConfigIfNone creates a YAML config file in the database directory if one is not specified in the args
+// and one doesn't already exist in the database directory. The fields of the generated YAML config file are set
+// using serverConfig if serverConfig specifies a value for the field, otherwise the field is set to a default value
+// or is replaced with a commented-out placeholder.
 func generateYamlConfigIfNone(
 	ap *argparser.ArgParser,
 	help cli.UsagePrinter,
@@ -469,6 +473,7 @@ func generateYamlConfigIfNone(
 	return nil
 }
 
+// argsSpecifyServerConfigFile returns true if the args specify a config file, false otherwise.
 func argsSpecifyServerConfigFile(ap *argparser.ArgParser, help cli.UsagePrinter, args []string) (bool, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
