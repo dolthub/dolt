@@ -168,7 +168,8 @@ func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.Tupl
 }
 
 func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
-	proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, vector.DistanceL2Squared{}, kd, vd, 10)
+	// The value of the logChunkSize parameter is never used and should have no effect.
+	proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, vector.DistanceL2Squared{}, kd, vd, 0)
 	if err != nil {
 		return nil, err
 	}

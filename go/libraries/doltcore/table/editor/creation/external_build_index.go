@@ -62,7 +62,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 		// Secondary indexes are always covering and have no non-key columns
 		valDesc := val.NewTupleDescriptor()
 		// TODO: Don't hardcode a chunk size.
-		proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, 10)
+		proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
 		if err != nil {
 			return nil, err
 		}

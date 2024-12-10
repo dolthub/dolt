@@ -67,9 +67,8 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	edits := make([]VectorIndexKV, 0, mutableMap.tuples.Edits.Count())
 	editIter := mutableMap.tuples.Mutations()
 	key, value := editIter.NextMutation(ctx)
-	// TODO: Set correct log chunk size
 	for key != nil {
-		keyLevel := tree.DeterministicHashLevel(10, key)
+		keyLevel := tree.DeterministicHashLevel(DefaultLogChunkSize, key)
 		edits = append(edits, VectorIndexKV{
 			key:   key,
 			value: value,
@@ -78,7 +77,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		key, value = editIter.NextMutation(ctx)
 	}
 	// TODO: Set correct distance type.
-	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, 10)
+	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, DefaultLogChunkSize)
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
@@ -286,6 +285,8 @@ func (f ProximityFlusher) visitNode(
 	return newNode, subtrees, err
 }
 
+var DefaultLogChunkSize = uint8(8)
+
 func (f ProximityFlusher) rebuildNode(
 	ctx context.Context,
 	serializer message.Serializer,
@@ -297,7 +298,7 @@ func (f ProximityFlusher) rebuildNode(
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,
 ) (newNode tree.Node, subtrees int, err error) {
-	proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, 10)
+	proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, DefaultLogChunkSize)
 	if err != nil {
 		return tree.Node{}, 0, err
 	}
