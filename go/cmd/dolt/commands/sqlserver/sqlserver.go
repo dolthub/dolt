@@ -455,12 +455,8 @@ func generateYamlConfigIfNone(
 	}
 
 	path := filepath.Join(serverConfig.DataDir(), yamlConfigName)
-	exists, isDir := dEnv.FS.Exists(path)
+	exists, _ := dEnv.FS.Exists(path)
 	if exists {
-		if isDir {
-			cli.PrintErrf("Couldn't generate YAML config at %s: directory with same name already exists", path)
-		}
-
 		return nil
 	}
 
