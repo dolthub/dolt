@@ -254,8 +254,7 @@ func (cfg YAMLConfig) String() string {
 // If an empty field has a default value, the default will be used.
 // If an empty field has no default value, a commented-out placeholder will be used.
 func (cfg YAMLConfig) VerboseString() string {
-	withDefaults := cfg
-	withDefaults.fillDefaults()
+	withDefaults := cfg.withDefaultsFilledIn()
 
 	formatted := formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
 	formatted = commentNullYAMLValues(formatted)
@@ -263,36 +262,70 @@ func (cfg YAMLConfig) VerboseString() string {
 	return formatted
 }
 
-// Assumes YAMLConfig has no circular references.
-func (cfg *YAMLConfig) fillDefaults() {
+func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	defaults := defaultServerConfigYAML()
-	recursiveFillDefaults(reflect.ValueOf(cfg), reflect.ValueOf(defaults))
-}
+	withDefaults := cfg
 
-func recursiveFillDefaults(cfgValue, defaultsValue reflect.Value) {
-	cfgValue = cfgValue.Elem()
-	defaultsValue = defaultsValue.Elem()
-
-	if cfgValue.Kind() != reflect.Struct {
-		return
+	if withDefaults.LogLevelStr == nil {
+		withDefaults.LogLevelStr = defaults.LogLevelStr
+	}
+	if withDefaults.MaxQueryLenInLogs == nil {
+		withDefaults.MaxQueryLenInLogs = defaults.MaxQueryLenInLogs
+	}
+	if withDefaults.EncodeLoggedQuery == nil {
+		withDefaults.EncodeLoggedQuery = defaults.EncodeLoggedQuery
 	}
 
-	for i := 0; i < cfgValue.NumField(); i++ {
-		field := cfgValue.Field(i)
-		defaultField := defaultsValue.Field(i)
-
-		if field.Kind() == reflect.Pointer {
-			if !defaultField.IsNil() {
-				if field.IsNil() {
-					field.Set(defaultField)
-				} else {
-					recursiveFillDefaults(field, defaultField)
-				}
-			}
-		} else {
-			recursiveFillDefaults(field.Addr(), defaultField.Addr())
-		}
+	if withDefaults.BehaviorConfig.ReadOnly == nil {
+		withDefaults.BehaviorConfig.ReadOnly = defaults.BehaviorConfig.ReadOnly
 	}
+	if withDefaults.BehaviorConfig.AutoCommit == nil {
+		withDefaults.BehaviorConfig.AutoCommit = defaults.BehaviorConfig.AutoCommit
+	}
+	if withDefaults.BehaviorConfig.DoltTransactionCommit == nil {
+		withDefaults.BehaviorConfig.DoltTransactionCommit = defaults.BehaviorConfig.DoltTransactionCommit
+	}
+
+	if withDefaults.UserConfig.Name == nil {
+		withDefaults.UserConfig.Name = defaults.UserConfig.Name
+	}
+	if withDefaults.UserConfig.Password == nil {
+		withDefaults.UserConfig.Password = defaults.UserConfig.Password
+	}
+
+	if withDefaults.ListenerConfig.HostStr == nil {
+		withDefaults.ListenerConfig.HostStr = defaults.ListenerConfig.HostStr
+	}
+	if withDefaults.ListenerConfig.PortNumber == nil {
+		withDefaults.ListenerConfig.PortNumber = defaults.ListenerConfig.PortNumber
+	}
+	if withDefaults.ListenerConfig.MaxConnections == nil {
+		withDefaults.ListenerConfig.MaxConnections = defaults.ListenerConfig.MaxConnections
+	}
+	if withDefaults.ListenerConfig.ReadTimeoutMillis == nil {
+		withDefaults.ListenerConfig.ReadTimeoutMillis = defaults.ListenerConfig.ReadTimeoutMillis
+	}
+	if withDefaults.ListenerConfig.WriteTimeoutMillis == nil {
+		withDefaults.ListenerConfig.WriteTimeoutMillis = defaults.ListenerConfig.WriteTimeoutMillis
+	}
+	if withDefaults.ListenerConfig.AllowCleartextPasswords == nil {
+		withDefaults.ListenerConfig.AllowCleartextPasswords = defaults.ListenerConfig.AllowCleartextPasswords
+	}
+
+	if withDefaults.DataDirStr == nil {
+		withDefaults.DataDirStr = defaults.DataDirStr
+	}
+	if withDefaults.CfgDirStr == nil {
+		withDefaults.CfgDirStr = defaults.CfgDirStr
+	}
+	if withDefaults.PrivilegeFile == nil {
+		withDefaults.PrivilegeFile = defaults.PrivilegeFile
+	}
+	if withDefaults.BranchControlFile == nil {
+		withDefaults.BranchControlFile = defaults.BranchControlFile
+	}
+
+	return withDefaults
 }
 
 // Assumes 'in' has no circular references.
