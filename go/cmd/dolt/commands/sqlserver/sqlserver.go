@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -243,6 +244,11 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
+	if err != nil {
+		return err
+	}
+
 	err = servercfg.ApplySystemVariables(serverConfig, sql.SystemVariables)
 	if err != nil {
 		return err
@@ -429,4 +435,53 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	}
 
 	return nil
+}
+
+// generateYamlConfigIfNone creates a YAML config file in the database directory if one is not specified in the args
+// and one doesn't already exist in the database directory. The fields of the generated YAML config file are set
+// using serverConfig if serverConfig specifies a value for the field, otherwise the field is set to a default value
+// or is replaced with a commented-out placeholder.
+func generateYamlConfigIfNone(
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	serverConfig servercfg.ServerConfig) error {
+	const yamlConfigName = "config.yaml"
+
+	specifiesConfigFile, err := argsSpecifyServerConfigFile(ap, help, args)
+	if err != nil {
+		return err
+	}
+
+	if specifiesConfigFile {
+		return nil
+	}
+
+	path := filepath.Join(serverConfig.DataDir(), yamlConfigName)
+	exists, _ := dEnv.FS.Exists(path)
+	if exists {
+		return nil
+	}
+
+	yamlConfig := servercfg.ServerConfigAsYAMLConfig(serverConfig)
+	err = dEnv.FS.WriteFile(path, []byte(yamlConfig.VerboseString()), os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// argsSpecifyServerConfigFile returns true if the args specify a config file, false otherwise.
+func argsSpecifyServerConfigFile(ap *argparser.ArgParser, help cli.UsagePrinter, args []string) (bool, error) {
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
+		return false, err
+	}
+
+	_, hasConfigFlag := apr.GetValue(configFileFlag)
+
+	return hasConfigFlag, nil
 }
