@@ -416,6 +416,8 @@ func formattedYAMLMarshal(toMarshal any) string {
 	return result
 }
 
+// Assumes no non-null fields will be set to unquoted strings ending in null.
+// For example, `field: 123-null` will be falsely commented but `field: '123-null'` is fine.
 func commentNullYAMLValues(needsComments string) string {
 	lines := strings.Split(needsComments, "\n")
 	for i := 0; i < len(lines); i++ {
