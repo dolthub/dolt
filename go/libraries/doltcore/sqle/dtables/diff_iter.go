@@ -470,6 +470,7 @@ func schemaSize(sch schema.Schema) int {
 	if sch == nil {
 		return 0
 	}
+
 	return sch.GetAllCols().Size()
 }
 

@@ -307,9 +307,9 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 // use to map key, value val.Tuple's of schema |inSch| to |outSch|. The first
 // ordinal map is for keys, and the second is for values. If a column of |inSch|
 // is missing in |outSch| then that column's index in the ordinal map holds -1.
-func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
-	keyMapping := make([]int, inSch.GetPKCols().Size())
-	valMapping := make([]int, inSch.GetNonPKCols().Size())
+func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
+	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
+	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())
 
 	// if inSch or outSch is empty schema. This can be from added or dropped table.
 	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
