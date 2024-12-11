@@ -144,11 +144,15 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		return err
 	}
 
-	if oldSchHash := statDb.GetSchemaHash(branch, tableName); oldSchHash.IsEmpty() {
-		statDb.SetSchemaHash(branch, tableName, schHash)
+	if oldSchHash, err := statDb.GetSchemaHash(ctx, branch, tableName); oldSchHash.IsEmpty() {
+		if err := statDb.SetSchemaHash(ctx, branch, tableName, schHash); err != nil {
+			return err
+		}
 	} else if oldSchHash != schHash {
 		ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
-		statDb.SetSchemaHash(branch, tableName, schHash)
+		if err := statDb.SetSchemaHash(ctx, branch, tableName, schHash); err != nil {
+			return err
+		}
 
 		stats, err := p.GetTableDoltStats(ctx, branch, dbName, schemaName, tableName)
 		if err != nil {
@@ -157,6 +161,8 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		for _, stat := range stats {
 			statDb.DeleteStats(ctx, branch, stat.Qualifier())
 		}
+	} else if err != nil {
+		return err
 	}
 
 	tablePrefix := fmt.Sprintf("%s.", tableName)

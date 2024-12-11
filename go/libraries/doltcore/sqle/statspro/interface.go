@@ -52,8 +52,8 @@ type Database interface {
 	Close() error
 	SetTableHash(branch, tableName string, h hash.Hash)
 	GetTableHash(branch, tableName string) hash.Hash
-	SetSchemaHash(branch, tableName string, h hash.Hash)
-	GetSchemaHash(branch, tableName string) hash.Hash
+	SetSchemaHash(ctx context.Context, branch, tableName string, h hash.Hash) error
+	GetSchemaHash(ctx context.Context, branch, tableName string) (hash.Hash, error)
 	Branches() []string
 }
 

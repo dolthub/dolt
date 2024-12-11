@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"path"
 	"strings"
 	"sync"
@@ -139,6 +140,18 @@ func (n *NomsStatsDatabase) Branches() []string {
 }
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
+	// TODO check table exists and schema is compliant
+	// otherwise purge stats
+	if ok, err := n.validSchemaHashes(ctx, branch); err != nil {
+		return err
+	} else if !ok {
+		ctx.GetLogger().Debugf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
+		//log.Printf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
+		if err := n.DeleteBranchStats(ctx, branch, true); err != nil {
+			return err
+		}
+	}
+
 	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
 	if errors.Is(err, doltdb.ErrNoStatistics) {
 		return n.trackBranch(ctx, branch)
@@ -152,6 +165,7 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	} else if cnt == 0 {
 		return n.trackBranch(ctx, branch)
 	}
+
 	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)
 	if err != nil {
 		return err
@@ -162,6 +176,63 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	n.tableHashes = append(n.tableHashes, make(map[string]hash.Hash))
 	n.schemaHashes = append(n.schemaHashes, make(map[string]hash.Hash))
 	return nil
+}
+
+func (n *NomsStatsDatabase) validSchemaHashes(ctx *sql.Context, branch string) (bool, error) {
+	root, err := n.sourceDb.GetRoot(ctx)
+	if err != nil {
+		return false, err
+	}
+	tables, err := n.sourceDb.GetTableNames(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	var tags []ref.TagRef
+	var schHashes []hash.Hash
+	for _, tableName := range tables {
+		table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+		curHash, err := table.GetSchemaHash(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		tags = append(tags, ref.NewTagRef(branch+"/"+tableName))
+		schHashes = append(schHashes, curHash)
+	}
+
+	ddb := n.destDb.DbData().Ddb
+	validSchemas := true
+	for i, tag := range tags {
+		curHash := schHashes[i]
+		// get tag
+		if _, ok, err := ddb.HasTag(ctx, tag.GetPath()); ok {
+			tag, err := ddb.ResolveTag(ctx, tag)
+			if err != nil {
+				return false, err
+			}
+			oldHash, ok := hash.MaybeParse(tag.Meta.Description)
+			if !ok || !oldHash.Equal(curHash) {
+				validSchemas = false
+				break
+			}
+		} else if err != nil {
+			return false, err
+		}
+	}
+	if !validSchemas {
+		for _, tag := range tags {
+			ddb.DeleteTag(ctx, tag)
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
@@ -272,6 +343,7 @@ func (n *NomsStatsDatabase) DeleteBranchStats(ctx *sql.Context, branch string, f
 			n.dirty = append(n.dirty[:i], n.dirty[i+1:]...)
 			n.stats = append(n.stats[:i], n.stats[i+1:]...)
 			n.tableHashes = append(n.tableHashes[:i], n.tableHashes[i+1:]...)
+			n.schemaHashes = append(n.schemaHashes[:i], n.schemaHashes[i+1:]...)
 		}
 	}
 	if flush {
@@ -364,24 +436,64 @@ func (n *NomsStatsDatabase) SetTableHash(branch, tableName string, h hash.Hash) 
 	}
 }
 
-func (n *NomsStatsDatabase) GetSchemaHash(branch, tableName string) hash.Hash {
+func (n *NomsStatsDatabase) GetSchemaHash(ctx context.Context, branch, tableName string) (hash.Hash, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
-			return n.schemaHashes[i][tableName]
+			return n.schemaHashes[i][tableName], nil
 		}
+		// get tag
+		if t, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, branch+"/"+tableName); ok {
+			tag, err := n.destDb.DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(t))
+			if err != nil {
+				return hash.Hash{}, err
+			}
+			h := hash.New([]byte(tag.Meta.Description))
+			n.schemaHashes[i][tableName] = h
+			return h, nil
+		} else if err != nil {
+			return hash.Hash{}, err
+		}
+		break
 	}
-	return hash.Hash{}
+	return hash.Hash{}, nil
 }
 
-func (n *NomsStatsDatabase) SetSchemaHash(branch, tableName string, h hash.Hash) {
+func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName string, h hash.Hash) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
 			n.schemaHashes[i][tableName] = h
-			break
+			tagRef := ref.NewTagRef(branch + "/" + tableName)
+
+			if _, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, tagRef.GetPath()); ok {
+				if err := n.destDb.DbData().Ddb.DeleteTag(ctx, tagRef); err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+
+			branchSpec, err := doltdb.NewCommitSpec(branch)
+			if err != nil {
+				return err
+			}
+
+			headRef, err := n.destDb.DbData().Rsr.CWBHeadRef()
+			if err != nil {
+				return err
+			}
+
+			optCmt, err := n.destDb.DbData().Ddb.Resolve(ctx, branchSpec, headRef)
+			if err != nil {
+				return err
+			}
+
+			props := datas.NewTagMeta("stats", "stats@dolt.com", h.String())
+			return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, optCmt.Commit, props)
 		}
 	}
+	return fmt.Errorf("failed to update schema hash tag")
 }

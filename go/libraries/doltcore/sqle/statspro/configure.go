@@ -16,7 +16,6 @@ package statspro
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
+
+var helpMsg = "call dolt_stats_purge() to reset statistics"
 
 func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
 	p.SetStarter(NewStatsInitDatabaseHook(p, ctxFactory, bThreads))
@@ -66,16 +67,16 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		// copy closure variables
 		db := db
 		eg.Go(func() (err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					if str, ok := r.(fmt.Stringer); ok {
-						err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
-					} else {
-						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
-					}
-					return
-				}
-			}()
+			//defer func() {
+			//	if r := recover(); r != nil {
+			//		if str, ok := r.(fmt.Stringer); ok {
+			//			err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
+			//		} else {
+			//			err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
+			//		}
+			//		return
+			//	}
+			//}()
 
 			fs, err := p.pro.FileSystemForDatabase(db.Name())
 			if err != nil {
@@ -134,7 +135,7 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 	// |statPath| is either file://./stat or mem://stat
 	statsDb, err := p.sf.Init(ctx, db, p.pro, fs, env.GetCurrentUserHomeDir)
 	if err != nil {
-		ctx.GetLogger().Errorf("initialize stats failure: %s\n", err.Error())
+		ctx.GetLogger().Errorf("initialize stats failure: %s; %s\n", err.Error(), helpMsg)
 		return
 	}
 
@@ -142,11 +143,11 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 		if err = statsDb.LoadBranchStats(ctx, branch); err != nil {
 			// if branch name is invalid, continue loading rest
 			// TODO: differentiate bad branch name from other errors
-			ctx.GetLogger().Errorf("load stats init failure: %s\n", err.Error())
+			ctx.GetLogger().Errorf("load stats init failure: %s; %s\n", err.Error(), helpMsg)
 			continue
 		}
 		if err := statsDb.Flush(ctx, branch); err != nil {
-			ctx.GetLogger().Errorf("load stats flush failure: %s\n", err.Error())
+			ctx.GetLogger().Errorf("load stats flush failure: %s; %s\n", err.Error(), helpMsg)
 			continue
 		}
 	}
