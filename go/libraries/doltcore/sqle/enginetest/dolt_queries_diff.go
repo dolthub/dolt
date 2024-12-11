@@ -1496,6 +1496,50 @@ on a.to_pk = b.to_pk;`,
 			},
 		},
 	},
+	{
+		Name: "diff table function works with virtual generated columns",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int, k int, jk int generated always as (10 * j + k), l int);",
+			"call dolt_commit('-Am', 'created table')",
+			"insert into t(i, j, k, l) values (1, 2, 3, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 2, 3, 23, 4},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
+				Expected: []sql.Row{
+					{1, nil, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "diff table function works with stored generated columns",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int, k int, jk int generated always as (10 * j + k) stored, l int);",
+			"call dolt_commit('-Am', 'created table')",
+			"insert into t(i, j, k, l) values (1, 2, 3, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 2, 3, 23, 4},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from t;",
+				Expected: []sql.Row{
+					{1, 23, nil, nil},
+				},
+			},
+		},
+	},
 }
 
 var DiffStatTableFunctionScriptTests = []queries.ScriptTest{

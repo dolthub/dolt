@@ -112,15 +112,17 @@ func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tup
 }
 
 func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow sql.Row, isPk bool) error {
+	virtualOffset := 0
 	for i, j := range proj {
 		if j == -1 {
 			continue
 		}
 		// Skip over virtual columns in non-pk cols as they are not stored
 		if !isPk && c.inSchema.GetNonPKCols().GetByIndex(i).Virtual {
+			virtualOffset++
 			continue
 		}
-		f, err := tree.GetField(ctx, desc, i, tup, c.ns)
+		f, err := tree.GetField(ctx, desc, i - virtualOffset, tup, c.ns)
 		if err != nil {
 			return err
 		}
