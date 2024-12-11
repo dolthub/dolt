@@ -122,7 +122,7 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 			virtualOffset++
 			continue
 		}
-		f, err := tree.GetField(ctx, desc, i - virtualOffset, tup, c.ns)
+		f, err := tree.GetField(ctx, desc, i-virtualOffset, tup, c.ns)
 		if err != nil {
 			return err
 		}
