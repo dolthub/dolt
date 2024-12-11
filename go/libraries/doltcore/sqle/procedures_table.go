@@ -133,7 +133,8 @@ func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
 
 // The fixed dolt schema for the `dolt_procedures` table.
 func ProceduresTableSchema() schema.Schema {
-	t, err := gmstypes.CreateStringWithDefaults(sqltypes.VarChar, typeinfo.MaxVarcharLength)
+	// Max len is 8K - big enough to be useful, but not too big to exceed max total row len of 64K.
+	t, err := gmstypes.CreateStringWithDefaults(sqltypes.VarChar, typeinfo.MaxVarcharLength/2)
 	if err != nil {
 		panic(err) // should never happen. All constants.
 	}
