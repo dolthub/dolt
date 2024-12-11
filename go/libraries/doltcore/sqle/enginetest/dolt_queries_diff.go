@@ -1516,6 +1516,12 @@ on a.to_pk = b.to_pk;`,
 					{1, nil, nil, nil},
 				},
 			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
+				Expected: []sql.Row{
+					{1, nil, nil, nil},
+				},
+			},
 		},
 	},
 	{
@@ -1533,7 +1539,13 @@ on a.to_pk = b.to_pk;`,
 				},
 			},
 			{
-				Query: "select to_i, to_jk, from_i, from_jk from t;",
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
+				Expected: []sql.Row{
+					{1, 23, nil, nil},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
 				Expected: []sql.Row{
 					{1, 23, nil, nil},
 				},
