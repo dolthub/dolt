@@ -16,7 +16,8 @@ package schema
 
 import (
 	"fmt"
-	"reflect"
+	"github.com/dolthub/dolt/go/store/val"
+"reflect"
 	strings "strings"
 	"testing"
 
@@ -231,7 +232,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 		From     Schema
 		To       Schema
 		Diffable bool
-		KeyMap   []int
+		KeyMap   val.OrdinalMapping
 	}{
 		{
 			Name: "Basic",
@@ -240,7 +241,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 0, types.IntKind, true))),
 			Diffable: true,
-			KeyMap:   []int{0},
+			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
 			Name: "PK-Column renames",
@@ -249,7 +250,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk2", 1, types.IntKind, true))),
 			Diffable: true,
-			KeyMap:   []int{0},
+			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability",
@@ -259,7 +260,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 			To: MustSchemaFromCols(NewColCollection(
 				NewColumn("pk", 1, types.IntKind, true))),
 			Diffable: true,
-			KeyMap:   []int{0},
+			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability - inverse",
@@ -269,7 +270,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 				NewColumn("col1", 2, types.IntKind, false),
 				NewColumn("pk", 1, types.IntKind, true))),
 			Diffable: true,
-			KeyMap:   []int{0},
+			KeyMap:   val.OrdinalMapping{0},
 		},
 		{
 			Name: "Only pk ordering should matter for diffability - compound",
@@ -281,7 +282,7 @@ func TestArePrimaryKeySetsDiffable(t *testing.T) {
 				NewColumn("pk1", 0, types.IntKind, true),
 				NewColumn("pk2", 2, types.IntKind, true))),
 			Diffable: true,
-			KeyMap:   []int{0, 1},
+			KeyMap:   val.OrdinalMapping{0, 1},
 		},
 		{
 			Name: "Tag mismatches",
