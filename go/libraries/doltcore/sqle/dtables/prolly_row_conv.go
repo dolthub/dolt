@@ -122,7 +122,7 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 			continue
 		}
 
-		f, err := tree.GetField(ctx, desc, i - virtualOffset, tup, c.ns)
+		f, err := tree.GetField(ctx, desc, i-virtualOffset, tup, c.ns)
 		if t := targetTypes[i]; t != nil {
 			var inRange sql.ConvertInRange
 			dstRow[j], inRange, err = t.Convert(f)
