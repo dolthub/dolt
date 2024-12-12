@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -67,16 +68,16 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		// copy closure variables
 		db := db
 		eg.Go(func() (err error) {
-			//defer func() {
-			//	if r := recover(); r != nil {
-			//		if str, ok := r.(fmt.Stringer); ok {
-			//			err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
-			//		} else {
-			//			err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
-			//		}
-			//		return
-			//	}
-			//}()
+			defer func() {
+				if r := recover(); r != nil {
+					if str, ok := r.(fmt.Stringer); ok {
+						err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
+					} else {
+						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
+					}
+					return
+				}
+			}()
 
 			fs, err := p.pro.FileSystemForDatabase(db.Name())
 			if err != nil {
@@ -135,7 +136,7 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 	// |statPath| is either file://./stat or mem://stat
 	statsDb, err := p.sf.Init(ctx, db, p.pro, fs, env.GetCurrentUserHomeDir)
 	if err != nil {
-		ctx.GetLogger().Errorf("initialize stats failure: %s; %s\n", err.Error(), helpMsg)
+		ctx.GetLogger().Errorf("initialize stats failure for %s: %s; %s\n", db.Name(), err.Error(), helpMsg)
 		return
 	}
 
@@ -143,11 +144,11 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 		if err = statsDb.LoadBranchStats(ctx, branch); err != nil {
 			// if branch name is invalid, continue loading rest
 			// TODO: differentiate bad branch name from other errors
-			ctx.GetLogger().Errorf("load stats init failure: %s; %s\n", err.Error(), helpMsg)
+			ctx.GetLogger().Errorf("load stats init failure for %s: %s; %s\n", db.Name(), err.Error(), helpMsg)
 			continue
 		}
 		if err := statsDb.Flush(ctx, branch); err != nil {
-			ctx.GetLogger().Errorf("load stats flush failure: %s; %s\n", err.Error(), helpMsg)
+			ctx.GetLogger().Errorf("load stats flush failure for %s: %s; %s\n", db.Name(), err.Error(), helpMsg)
 			continue
 		}
 	}

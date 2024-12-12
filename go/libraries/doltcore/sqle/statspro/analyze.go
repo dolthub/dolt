@@ -146,7 +146,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 
 	if oldSchHash, err := statDb.GetSchemaHash(ctx, branch, tableName); oldSchHash.IsEmpty() {
 		if err := statDb.SetSchemaHash(ctx, branch, tableName, schHash); err != nil {
-			return err
+			return fmt.Errorf("set schema hash error: %w", err)
 		}
 	} else if oldSchHash != schHash {
 		ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)

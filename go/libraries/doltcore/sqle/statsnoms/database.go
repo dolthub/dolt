@@ -146,7 +146,6 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 		return err
 	} else if !ok {
 		ctx.GetLogger().Debugf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
-		//log.Printf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
 		if err := n.DeleteBranchStats(ctx, branch, true); err != nil {
 			return err
 		}
@@ -463,37 +462,45 @@ func (n *NomsStatsDatabase) GetSchemaHash(ctx context.Context, branch, tableName
 func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName string, h hash.Hash) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	branchIdx := -1
 	for i, b := range n.branches {
 		if strings.EqualFold(branch, b) {
-			n.schemaHashes[i][tableName] = h
-			tagRef := ref.NewTagRef(branch + "/" + tableName)
-
-			if _, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, tagRef.GetPath()); ok {
-				if err := n.destDb.DbData().Ddb.DeleteTag(ctx, tagRef); err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			}
-
-			branchSpec, err := doltdb.NewCommitSpec(branch)
-			if err != nil {
-				return err
-			}
-
-			headRef, err := n.destDb.DbData().Rsr.CWBHeadRef()
-			if err != nil {
-				return err
-			}
-
-			optCmt, err := n.destDb.DbData().Ddb.Resolve(ctx, branchSpec, headRef)
-			if err != nil {
-				return err
-			}
-
-			props := datas.NewTagMeta("stats", "stats@dolt.com", h.String())
-			return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, optCmt.Commit, props)
+			branchIdx = i
+			break
 		}
 	}
-	return fmt.Errorf("failed to update schema hash tag")
+	if branchIdx < 0 {
+		branchIdx = len(n.branches)
+		if err := n.trackBranch(ctx, branch); err != nil {
+			return err
+		}
+	}
+
+	n.schemaHashes[branchIdx][tableName] = h
+	tagRef := ref.NewTagRef(branch + "/" + tableName)
+	if _, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, tagRef.GetPath()); ok {
+		if err := n.destDb.DbData().Ddb.DeleteTag(ctx, tagRef); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	branchSpec, err := doltdb.NewCommitSpec(branch)
+	if err != nil {
+		return err
+	}
+
+	headRef, err := n.destDb.DbData().Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+
+	optCmt, err := n.destDb.DbData().Ddb.Resolve(ctx, branchSpec, headRef)
+	if err != nil {
+		return err
+	}
+
+	props := datas.NewTagMeta("stats", "stats@dolt.com", h.String())
+	return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, optCmt.Commit, props)
 }

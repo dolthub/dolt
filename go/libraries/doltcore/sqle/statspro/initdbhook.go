@@ -45,6 +45,8 @@ func NewStatsInitDatabaseHook(
 				return nil
 			}
 			statsProv.setStatDb(dbName, statsDb)
+		} else {
+			ctx.GetLogger().Debugf("statistics init error: preexisting stats db: %s", dbName)
 		}
 		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
 		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
@@ -62,6 +64,7 @@ func NewStatsDropDatabaseHook(statsProv *Provider) sqle.DropDatabaseHook {
 			if err := db.Close(); err != nil {
 				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
 			}
+			delete(statsProv.statDbs, name)
 		}
 	}
 }
