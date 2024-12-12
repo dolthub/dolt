@@ -431,7 +431,7 @@ func runMain() int {
 			case featureVersionFlag:
 				var err error
 				if len(args) == 0 {
-					err = fmt.Errorf("missing argument for the --feature-version flag")
+					err = errors.New("missing argument for the --feature-version flag")
 				} else {
 					if featureVersion, err := strconv.Atoi(args[1]); err == nil {
 						doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
@@ -742,12 +742,12 @@ If you're interested in running this command against a remote host, hit us up on
 
 	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
-			err := fmt.Errorf("The current directory is not a valid dolt repository.")
+			err := errors.New("The current directory is not a valid dolt repository.")
 			if errors.Is(rootEnv.DBLoadError, nbs.ErrUnsupportedTableFileFormat) {
 				// This is fairly targeted and specific to allow for better error messaging. We should consider
 				// breaking this out into its own function if we add more conditions.
 
-				err = fmt.Errorf("The data in this database is in an unsupported format. Please upgrade to the latest version of Dolt.")
+				err = errors.New("The data in this database is in an unsupported format. Please upgrade to the latest version of Dolt.")
 			}
 
 			return nil, nil, nil, err
@@ -894,7 +894,7 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args 
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			if hasProfile {
-				return nil, nil, "", fmt.Errorf("no profiles found")
+				return nil, nil, "", errors.New("no profiles found")
 			} else {
 				return apr, remaining, subcommandName, nil
 			}
