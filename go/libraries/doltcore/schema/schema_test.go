@@ -16,8 +16,7 @@ package schema
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
-"reflect"
+	"reflect"
 	strings "strings"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
