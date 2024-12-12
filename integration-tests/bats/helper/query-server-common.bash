@@ -60,12 +60,18 @@ start_sql_server() {
 # arguments to dolt-sql-server (excluding --port, which is defined in
 # this func)
 start_sql_server_with_args() {
-    DEFAULT_DB=""
     PORT=$( definePORT )
+    start_sql_server_with_args_no_port "$@" --port=$PORT
+}
+
+# behaves like start_sql_server_with_args, but doesn't define --port.
+# caller must set variable PORT to proper value before calling.
+start_sql_server_with_args_no_port() {
+    DEFAULT_DB=""
     if [ "$IS_WINDOWS" == true ]; then
-      dolt sql-server "$@" --port=$PORT &
+      dolt sql-server "$@" &
     else
-      dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
+      dolt sql-server "$@" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
     wait_for_connection $PORT 8500
