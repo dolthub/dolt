@@ -88,12 +88,14 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "")
 	}
 
-	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
-	if err != nil {
-		return nil, err
-	}
+	if dEnv.DoltDB == nil {
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
+		if err != nil {
+			return nil, err
+		}
 
-	dEnv.DoltDB = ddb
+		dEnv.DoltDB = ddb
+	}
 
 	deaf := dEnv.DbEaFactory()
 
@@ -140,9 +142,7 @@ func (n *NomsStatsDatabase) Branches() []string {
 }
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
-	// TODO check table exists and schema is compliant
-	// otherwise purge stats
-	if ok, err := n.validSchemaHashes(ctx, branch); err != nil {
+	if ok, err := n.ValidateSchemas(ctx, branch); err != nil {
 		return err
 	} else if !ok {
 		ctx.GetLogger().Debugf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
@@ -177,7 +177,7 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	return nil
 }
 
-func (n *NomsStatsDatabase) validSchemaHashes(ctx *sql.Context, branch string) (bool, error) {
+func (n *NomsStatsDatabase) ValidateSchemas(ctx *sql.Context, branch string) (bool, error) {
 	root, err := n.sourceDb.GetRoot(ctx)
 	if err != nil {
 		return false, err
@@ -486,21 +486,11 @@ func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName
 		return err
 	}
 
-	branchSpec, err := doltdb.NewCommitSpec(branch)
-	if err != nil {
-		return err
-	}
-
-	headRef, err := n.destDb.DbData().Rsr.CWBHeadRef()
-	if err != nil {
-		return err
-	}
-
-	optCmt, err := n.destDb.DbData().Ddb.Resolve(ctx, branchSpec, headRef)
+	cm, err := n.destDb.DbData().Ddb.ResolveCommitRef(ctx, ref.NewBranchRef("main"))
 	if err != nil {
 		return err
 	}
 
 	props := datas.NewTagMeta("stats", "stats@dolt.com", h.String())
-	return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, optCmt.Commit, props)
+	return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, cm, props)
 }

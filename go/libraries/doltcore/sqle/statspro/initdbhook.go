@@ -38,7 +38,7 @@ func NewStatsInitDatabaseHook(
 		db dsess.SqlDatabase,
 	) error {
 		dbName := strings.ToLower(db.Name())
-		if _, ok := statsProv.getStatDb(dbName); !ok {
+		if statsDb, ok := statsProv.getStatDb(dbName); !ok {
 			statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
 			if err != nil {
 				ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
@@ -46,6 +46,15 @@ func NewStatsInitDatabaseHook(
 			}
 			statsProv.setStatDb(dbName, statsDb)
 		} else {
+			for _, br := range statsDb.Branches() {
+				if ok, err := statsDb.ValidateSchemas(ctx, br); err != nil {
+					return err
+				} else if !ok {
+					if err := statsDb.DeleteBranchStats(ctx, br, true); err != nil {
+						return err
+					}
+				}
+			}
 			ctx.GetLogger().Debugf("statistics init error: preexisting stats db: %s", dbName)
 		}
 		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
