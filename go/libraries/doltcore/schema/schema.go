@@ -308,34 +308,45 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 // ordinal map is for keys, and the second is for values. If a column of |inSch|
 // is missing in |outSch| then that column's index in the ordinal map holds -1.
 func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
+	keyMapping := make([]int, inSch.GetPKCols().Size())
+
 	// if inSch or outSch is empty schema. This can be from added or dropped table.
 	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
-		return nil, nil, nil
+		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
-	inPKCols := inSch.GetPKCols()
-	outPKCols := outSch.GetPKCols()
-	keyMapping := make(val.OrdinalMapping, inPKCols.Size())
-	for i, inCol := range inPKCols.cols {
-		j, ok := outPKCols.TagToIdx[inCol.Tag]
-		if !ok {
-			return nil, nil, fmt.Errorf("could not map primary key column %s", inCol.Name)
+	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		i := inSch.GetPKCols().TagToIdx[tag]
+		if foundCol, ok := outSch.GetPKCols().GetByTag(tag); ok {
+			j := outSch.GetPKCols().TagToIdx[foundCol.Tag]
+			keyMapping[i] = j
+		} else {
+			return true, fmt.Errorf("could not map primary key column %s", col.Name)
 		}
-		keyMapping[i] = j
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 
 	inNonPKCols := inSch.GetNonPKCols()
 	outNonPKCols := outSch.GetNonPKCols()
-	var valMapping val.OrdinalMapping
-	for _, inCol := range inNonPKCols.cols {
-		if inCol.Virtual {
-			continue
+	valMapping := make([]int, inSch.GetNonPKCols().Size())
+	err = inNonPKCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		i := inNonPKCols.TagToIdx[col.Tag]
+		if col.Virtual {
+			valMapping[i] = -1
+		} else if col, ok := outNonPKCols.GetByName(col.Name); ok {
+			j := outNonPKCols.TagToIdx[col.Tag]
+			valMapping[i] = j
+		} else {
+			valMapping[i] = -1
 		}
-		j, ok := outNonPKCols.TagToIdx[inCol.Tag]
-		if !ok {
-			return nil, nil, fmt.Errorf("could not map non-primary key column %s", inCol.Name)
-		}
-		valMapping = append(valMapping, j)
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return keyMapping, valMapping, nil
