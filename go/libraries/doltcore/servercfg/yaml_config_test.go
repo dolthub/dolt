@@ -415,7 +415,6 @@ listener:
 	assert.Error(t, err)
 }
 
-
 func TestYAMLConfigMetrics(t *testing.T) {
 	var cfg YAMLConfig
 	err := yaml.Unmarshal([]byte(`
