@@ -50,11 +50,20 @@ type Database interface {
 	Flush(ctx context.Context, branch string) error
 	// Close finalizes any file references.
 	Close() error
+	// SetTableHash updates the most recently tracked table stats table hash
 	SetTableHash(branch, tableName string, h hash.Hash)
+	// GetTableHash returns the most recently tracked table stats table hash
 	GetTableHash(branch, tableName string) hash.Hash
-	SetSchemaHash(branch, tableName string, h hash.Hash)
-	GetSchemaHash(branch, tableName string) hash.Hash
+	// SetSchemaHash updates the most recently stored table stat's schema hash
+	SetSchemaHash(ctx context.Context, branch, tableName string, h hash.Hash) error
+	// GetSchemaHash returns the schema hash for the latest stored statistics
+	GetSchemaHash(ctx context.Context, branch, tableName string) (hash.Hash, error)
+	// Branches returns the set of branches with tracked statistics databases
 	Branches() []string
+	// SchemaChange returns false if any table schema in the session
+	// root is incompatible with the latest schema used to create a stored
+	// set of statistics.
+	SchemaChange(ctx *sql.Context, branch string) (bool, error)
 }
 
 // StatsFactory instances construct statistic databases.

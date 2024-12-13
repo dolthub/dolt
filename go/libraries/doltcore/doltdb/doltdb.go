@@ -1066,6 +1066,7 @@ func (ddb *DoltDB) GetRefsWithHashes(ctx context.Context) ([]RefWithHash, error)
 }
 
 var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
+var tuplesRefFilter = map[ref.RefType]struct{}{ref.TupleRefType: {}}
 
 // GetTags returns a list of all tags in the database.
 func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
@@ -1111,6 +1112,35 @@ func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error)
 		return nil
 	})
 	return refs, err
+}
+
+// SetTuple sets a key ref value
+func (ddb *DoltDB) SetTuple(ctx context.Context, key string, value []byte) error {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewTupleRef(key).String())
+	if err != nil {
+		return err
+	}
+	_, err = ddb.db.SetTuple(ctx, ds, value)
+	return err
+}
+
+// GetTuple returns a key's value, whether the key was valid, and an optional error.
+func (ddb *DoltDB) GetTuple(ctx context.Context, key string) ([]byte, bool, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewTupleRef(key).String())
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !ds.HasHead() {
+		return nil, false, nil
+	}
+
+	tup, err := datas.LoadTuple(ctx, ddb.Format(), ddb.NodeStore(), ddb.ValueReadWriter(), ds)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return tup.Bytes(), true, nil
 }
 
 var workspacesRefFilter = map[ref.RefType]struct{}{ref.WorkspaceRefType: {}}
@@ -1584,6 +1614,14 @@ func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.Worki
 	}
 
 	_, err = ddb.db.Delete(ctx, ds, "")
+	return err
+}
+
+func (ddb *DoltDB) DeleteTuple(ctx context.Context, key string) error {
+	err := ddb.deleteRef(ctx, ref.NewTupleRef(key), nil, "")
+	if err == ErrBranchNotFound {
+		return ErrTupleNotFound
+	}
 	return err
 }
 

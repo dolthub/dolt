@@ -168,12 +168,15 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
 		}
 
-		if oldSchHash := statDb.GetSchemaHash(branch, table); oldSchHash.IsEmpty() {
-			statDb.SetSchemaHash(branch, table, schHash)
+		if oldSchHash, err := statDb.GetSchemaHash(ctx, branch, table); oldSchHash.IsEmpty() {
+			if err := statDb.SetSchemaHash(ctx, branch, table, schHash); err != nil {
+				return err
+			}
 		} else if oldSchHash != schHash {
 			ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
-			statDb.SetSchemaHash(branch, table, schHash)
-
+			if err := statDb.SetSchemaHash(ctx, branch, table, schHash); err != nil {
+				return err
+			}
 			stats, err := p.GetTableDoltStats(ctx, branch, dbName, schemaName, table)
 			if err != nil {
 				return err
@@ -181,6 +184,8 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			for _, stat := range stats {
 				statDb.DeleteStats(ctx, branch, stat.Qualifier())
 			}
+		} else if err != nil {
+			return err
 		}
 
 		iat, ok := sqlTable.(sql.IndexAddressableTable)
