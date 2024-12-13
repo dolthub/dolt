@@ -206,9 +206,6 @@ user_session_vars:
 
     start_sql_server_with_config "" server.yaml
 
-    run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user0 --password=pass0 sql -q "SELECT @@autocommit;"
-    [[ "$output" =~ "1" ]] || false
-
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user0 --password=pass0 sql -q "SELECT @@aws_credentials_file, @@aws_credentials_profile;"
     [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false
 
@@ -222,7 +219,7 @@ user_session_vars:
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user3 --password=pass3 sql -q "SELECT @@autocommit;"
-
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "sql-server: read-only mode" {
