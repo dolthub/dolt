@@ -17,6 +17,6 @@ table Tuple {
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
-file_identifier "KVAL";
+file_identifier "TUPL";
 
 root_type Tuple;
