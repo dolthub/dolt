@@ -195,3 +195,11 @@ func (db hooksDatabase) Tag(ctx context.Context, ds datas.Dataset, commitAddr ha
 	}
 	return ds, err
 }
+
+func (db hooksDatabase) SetTuple(ctx context.Context, ds datas.Dataset, val []byte) (datas.Dataset, error) {
+	ds, err := db.Database.SetTuple(ctx, ds, val)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds, false)
+	}
+	return ds, err
+}

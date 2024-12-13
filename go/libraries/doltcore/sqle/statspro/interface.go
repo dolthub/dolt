@@ -60,10 +60,10 @@ type Database interface {
 	GetSchemaHash(ctx context.Context, branch, tableName string) (hash.Hash, error)
 	// Branches returns the set of branches with tracked statistics databases
 	Branches() []string
-	// ValidateSchemas returns false if any table schema in the session
+	// SchemaChange returns false if any table schema in the session
 	// root is incompatible with the latest schema used to create a stored
 	// set of statistics.
-	ValidateSchemas(ctx *sql.Context, branch string) (bool, error)
+	SchemaChange(ctx *sql.Context, branch string) (bool, error)
 }
 
 // StatsFactory instances construct statistic databases.

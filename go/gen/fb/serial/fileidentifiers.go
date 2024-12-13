@@ -41,6 +41,7 @@ const StashListFileID = "SLST"
 const StashFileID = "STSH"
 const StatisticFileID = "STAT"
 const DoltgresRootValueFileID = "DGRV"
+const TupleFileID = "KVAL"
 
 const MessageTypesKind int = 27
 

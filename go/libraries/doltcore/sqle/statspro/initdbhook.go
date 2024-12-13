@@ -47,9 +47,9 @@ func NewStatsInitDatabaseHook(
 			statsProv.setStatDb(dbName, statsDb)
 		} else {
 			for _, br := range statsDb.Branches() {
-				if ok, err := statsDb.ValidateSchemas(ctx, br); err != nil {
+				if ok, err := statsDb.SchemaChange(ctx, br); err != nil {
 					return err
-				} else if !ok {
+				} else if ok {
 					if err := statsDb.DeleteBranchStats(ctx, br, true); err != nil {
 						return err
 					}

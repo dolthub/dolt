@@ -65,7 +65,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(SkipEmptyFlag, "", "Only create a commit if there are staged changes. If no changes are staged, the call to commit is a no-op. Cannot be used with --allow-empty.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard author {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")

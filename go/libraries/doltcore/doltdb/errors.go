@@ -33,6 +33,7 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTagNotFound = errors.New("tag not found")
+var ErrTupleNotFound = errors.New("tuple not found")
 var ErrWorkingSetNotFound = errors.New("working set not found")
 var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrTableNotFound = errors.New("table not found")

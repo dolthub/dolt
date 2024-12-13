@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -142,9 +141,9 @@ func (n *NomsStatsDatabase) Branches() []string {
 }
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
-	if ok, err := n.ValidateSchemas(ctx, branch); err != nil {
+	if ok, err := n.SchemaChange(ctx, branch); err != nil {
 		return err
-	} else if !ok {
+	} else if ok {
 		ctx.GetLogger().Debugf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
 		if err := n.DeleteBranchStats(ctx, branch, true); err != nil {
 			return err
@@ -177,7 +176,7 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	return nil
 }
 
-func (n *NomsStatsDatabase) ValidateSchemas(ctx *sql.Context, branch string) (bool, error) {
+func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string) (bool, error) {
 	root, err := n.sourceDb.GetRoot(ctx)
 	if err != nil {
 		return false, err
@@ -187,7 +186,7 @@ func (n *NomsStatsDatabase) ValidateSchemas(ctx *sql.Context, branch string) (bo
 		return false, err
 	}
 
-	var tags []ref.TagRef
+	var keys []string
 	var schHashes []hash.Hash
 	for _, tableName := range tables {
 		table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
@@ -202,36 +201,33 @@ func (n *NomsStatsDatabase) ValidateSchemas(ctx *sql.Context, branch string) (bo
 			return false, err
 		}
 
-		tags = append(tags, ref.NewTagRef(branch+"/"+tableName))
+		keys = append(keys, branch+"/"+tableName)
 		schHashes = append(schHashes, curHash)
 	}
 
 	ddb := n.destDb.DbData().Ddb
-	validSchemas := true
-	for i, tag := range tags {
+	var schemaChange bool
+	for i, key := range keys {
 		curHash := schHashes[i]
-		// get tag
-		if _, ok, err := ddb.HasTag(ctx, tag.GetPath()); ok {
-			tag, err := ddb.ResolveTag(ctx, tag)
-			if err != nil {
-				return false, err
-			}
-			oldHash, ok := hash.MaybeParse(tag.Meta.Description)
+		if val, ok, err := ddb.GetTuple(ctx, key); err != nil {
+			return false, err
+		} else if ok {
+			oldHash := hash.Parse(string(val))
 			if !ok || !oldHash.Equal(curHash) {
-				validSchemas = false
+				schemaChange = true
 				break
 			}
 		} else if err != nil {
 			return false, err
 		}
 	}
-	if !validSchemas {
-		for _, tag := range tags {
-			ddb.DeleteTag(ctx, tag)
+	if schemaChange {
+		for _, key := range keys {
+			ddb.DeleteTuple(ctx, key)
 		}
-		return false, nil
+		return true, nil
 	}
-	return true, nil
+	return false, nil
 }
 
 func (n *NomsStatsDatabase) getBranchStats(branch string) dbStats {
@@ -442,13 +438,11 @@ func (n *NomsStatsDatabase) GetSchemaHash(ctx context.Context, branch, tableName
 		if strings.EqualFold(branch, b) {
 			return n.schemaHashes[i][tableName], nil
 		}
-		// get tag
-		if t, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, branch+"/"+tableName); ok {
-			tag, err := n.destDb.DbData().Ddb.ResolveTag(ctx, ref.NewTagRef(t))
+		if val, ok, err := n.destDb.DbData().Ddb.GetTuple(ctx, branch+"/"+tableName); ok {
 			if err != nil {
 				return hash.Hash{}, err
 			}
-			h := hash.New([]byte(tag.Meta.Description))
+			h := hash.Parse(string(val))
 			n.schemaHashes[i][tableName] = h
 			return h, nil
 		} else if err != nil {
@@ -477,20 +471,10 @@ func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName
 	}
 
 	n.schemaHashes[branchIdx][tableName] = h
-	tagRef := ref.NewTagRef(branch + "/" + tableName)
-	if _, ok, err := n.destDb.DbData().Ddb.HasTag(ctx, tagRef.GetPath()); ok {
-		if err := n.destDb.DbData().Ddb.DeleteTag(ctx, tagRef); err != nil {
-			return err
-		}
-	} else if err != nil {
+	key := branch + "/" + tableName
+	if err := n.destDb.DbData().Ddb.DeleteTuple(ctx, key); err != doltdb.ErrTupleNotFound {
 		return err
 	}
 
-	cm, err := n.destDb.DbData().Ddb.ResolveCommitRef(ctx, ref.NewBranchRef("main"))
-	if err != nil {
-		return err
-	}
-
-	props := datas.NewTagMeta("stats", "stats@dolt.com", h.String())
-	return n.destDb.DbData().Ddb.NewTagAtCommit(ctx, tagRef, cm, props)
+	return n.destDb.DbData().Ddb.SetTuple(ctx, key, []byte(h.String()))
 }
