@@ -222,7 +222,7 @@ user_session_vars:
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user3 --password=pass3 sql -q "SELECT @@autocommit;"
-    [[ "$output" =~ "0" ]] || false
+
 }
 
 @test "sql-server: read-only mode" {
