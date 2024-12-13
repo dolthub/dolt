@@ -106,7 +106,7 @@ jwks:
 	expected.Vars = []UserSessionVars{
 		{
 			Name: "user0",
-			Vars: map[string]string{
+			Vars: map[string]interface{}{
 				"var1": "val0_1",
 				"var2": "val0_2",
 				"var3": "val0_3",
@@ -114,7 +114,7 @@ jwks:
 		},
 		{
 			Name: "user1",
-			Vars: map[string]string{
+			Vars: map[string]interface{}{
 				"var1": "val1_1",
 				"var2": "val1_2",
 				"var4": "val1_4",
