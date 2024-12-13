@@ -54,7 +54,7 @@ PrivilegeFile *string 0.0.0 privilege_file,omitempty
 BranchControlFile *string 0.0.0 branch_control_file,omitempty
 Vars []servercfg.UserSessionVars 0.0.0 user_session_vars
 -Name string 0.0.0 name
--Vars map[string]string 0.0.0 vars
+-Vars map[string]interface{} 0.0.0 vars
 SystemVars_ map[string]interface{} 1.11.1 system_variables,omitempty
 Jwks []servercfg.JwksConfig 0.0.0 jwks
 -Name string 0.0.0 name
