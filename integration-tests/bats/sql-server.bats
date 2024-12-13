@@ -190,6 +190,7 @@ user_session_vars:
   vars:
     aws_credentials_file: /Users/user0/.aws/config
     aws_credentials_profile: default
+    autocommit: 0
 - name: user1
   vars:
     aws_credentials_file: /Users/user1/.aws/config
@@ -201,6 +202,9 @@ user_session_vars:
     dolt --privilege-file=privs.json sql -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
 
     start_sql_server_with_config "" server.yaml
+
+    run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user0 --password=pass0 sql -q "SELECT @@autocommit;"
+    [[ "$output" =~ "1" ]] || false
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user0 --password=pass0 sql -q "SELECT @@aws_credentials_file, @@aws_credentials_profile;"
     [[ "$output" =~ /Users/user0/.aws/config.*default ]] || false

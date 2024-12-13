@@ -903,7 +903,7 @@ func portInUse(hostPort string) bool {
 }
 
 func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) server.SessionBuilder {
-	userToSessionVars := make(map[string]map[string]string)
+	userToSessionVars := make(map[string]map[string]interface{})
 	userVars := config.UserVars()
 	for _, curr := range userVars {
 		userToSessionVars[curr.Name] = curr.Vars
