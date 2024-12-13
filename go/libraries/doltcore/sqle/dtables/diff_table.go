@@ -685,39 +685,39 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
 // If the primary key sets changed between the two commits, it may not be
 // possible to diff them.
-func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
 	// dp.to is nil when a table has been deleted previously. In this case, we return
 	// false, to stop processing diffs, since that previously deleted table is considered
 	// a logically different table and we don't want to mix the diffs together.
 	if dp.to == nil {
-		return false, nil
+		return false, false, nil
 	}
 
 	// dp.from is nil when the to commit created a new table
 	if dp.from == nil {
-		return true, nil
+		return true, false, nil
 	}
 
 	fromSch, err := dp.from.GetSchema(ctx)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	toSch, err := dp.to.GetSchema(ctx)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	easyDiff := schema.ArePrimaryKeySetsDiffable(dp.from.Format(), fromSch, toSch)
 	if easyDiff {
-		return true, nil
+		return true, false, nil
 	}
 
 	_, _, err = schema.MapSchemaBasedOnTagAndName(fromSch, toSch)
 	if err == nil {
-		return true, nil
+		return false, true, nil
 	}
-	return false, nil
+	return false, false, nil
 }
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
@@ -771,6 +771,7 @@ type DiffPartitions struct {
 	selectFunc      partitionSelectFunc
 	toSch           schema.Schema
 	fromSch         schema.Schema
+	stopNext        bool
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
@@ -830,6 +831,10 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 }
 
 func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
+	if dps.stopNext {
+		return nil, io.EOF
+	}
+
 	for {
 		cmHash, optCmt, err := dps.cmItr.Next(ctx)
 		if err != nil {
@@ -861,14 +866,19 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 
 		if next != nil {
 			// If we can't diff this commit with its parent, don't traverse any lower
-			canDiff, err := next.isDiffablePartition(ctx)
+			simpleDiff, fuzzyDiff, err := next.isDiffablePartition(ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			if !canDiff {
+			if !simpleDiff && !fuzzyDiff {
 				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
 				return nil, io.EOF
+			}
+
+			if !simpleDiff && fuzzyDiff {
+				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
+				dps.stopNext = true
 			}
 
 			return *next, nil

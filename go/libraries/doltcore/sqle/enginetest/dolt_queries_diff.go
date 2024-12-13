@@ -561,6 +561,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 23, "removed"},
 					{nil, 23, nil, nil, "added"},
 				},
+				ExpectedWarningsCount:           1,
 				ExpectedWarning:                 1105,
 				ExpectedWarningMessageSubstring: "due to primary key set change",
 			},

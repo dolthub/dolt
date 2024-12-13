@@ -216,7 +216,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		fromSch:  dt.targetSchema,
 	}
 
-	isDiffable, err := dp.isDiffablePartition(ctx)
+	isDiffable, _, err := dp.isDiffablePartition(ctx)
 	if err != nil {
 		return nil, err
 	}
