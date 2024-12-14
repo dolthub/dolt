@@ -414,3 +414,16 @@ listener:
 	err = ValidateConfig(cfg)
 	assert.Error(t, err)
 }
+
+func TestYAMLConfigMetrics(t *testing.T) {
+	var cfg YAMLConfig
+	err := yaml.Unmarshal([]byte(`
+metrics:
+  host: localhost
+  port: null
+`), &cfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, "localhost", cfg.MetricsHost())
+	assert.Equal(t, -1, cfg.MetricsPort())
+}

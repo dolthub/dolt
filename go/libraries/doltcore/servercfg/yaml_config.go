@@ -412,6 +412,9 @@ func (cfg YAMLConfig) MetricsPort() int {
 	if cfg.MetricsConfig.Host == nil {
 		return DefaultMetricsPort
 	}
+	if cfg.MetricsConfig.Port == nil {
+		return DefaultMetricsPort
+	}
 
 	return *cfg.MetricsConfig.Port
 }
