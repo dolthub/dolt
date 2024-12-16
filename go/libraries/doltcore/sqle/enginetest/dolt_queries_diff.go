@@ -559,7 +559,6 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{42, 23, nil, nil, "added"},
 					{nil, nil, nil, 23, "removed"},
-					{nil, 23, nil, nil, "added"},
 				},
 				ExpectedWarningsCount:           1,
 				ExpectedWarning:                 1105,
@@ -747,7 +746,6 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 				Query: "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
 				Expected: []sql.Row{
 					{"2", "2", nil, nil, "added"},
-					{"1", "1", nil, nil, "added"},
 				},
 			},
 		},
