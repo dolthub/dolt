@@ -117,6 +117,10 @@ func (f ProximityFlusher) visitNode(
 	valDesc val.TupleDesc,
 	logChunkSize uint8,
 ) (newNode tree.Node, subtrees int, err error) {
+	node, err = node.LoadSubtrees()
+	if err != nil {
+		return tree.Node{}, 0, err
+	}
 	if node.Count() == 0 {
 		// Original index was empty. We need to make a new index based on the edits.
 		proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, logChunkSize)
@@ -237,6 +241,7 @@ func (f ProximityFlusher) visitNode(
 			if level == node.SmallNode.Level()-1 {
 				childEditList.mustRebuild = true
 			}
+			childEdits[closestIdx] = childEditList
 		}
 		// Recursively build the new tree.
 		// We need keys, values, subtrees, and levels.
@@ -266,6 +271,7 @@ func (f ProximityFlusher) visitNode(
 				}
 				var newChildNode tree.Node
 				var childSubtrees int
+				// TODO: What about changes to the root node?
 				if childEditList.mustRebuild {
 					var newLargeChildNode tree.LargeNode
 					newLargeChildNode, childSubtrees, err = f.rebuildNode(ctx, serializer, ns, largeChildNode, fullEdits, childEditList.edits, distanceType, keyDesc, valDesc)
