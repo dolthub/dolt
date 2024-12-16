@@ -141,7 +141,19 @@ func (n *NomsStatsDatabase) Branches() []string {
 }
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
-	if ok, err := n.SchemaChange(ctx, branch); err != nil {
+	branchQDbName := statspro.BranchQualifiedDatabase(n.sourceDb.Name(), branch)
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+	sqlDb, err := dSess.Provider().Database(ctx, branchQDbName)
+	if err != nil {
+		return fmt.Errorf("branch/database not found: %s", branchQDbName)
+	}
+	branchQDb, ok := sqlDb.(sqle.Database)
+	if !ok {
+		return fmt.Errorf("branch/database not found: %s", branchQDbName)
+	}
+
+	if ok, err := n.SchemaChange(ctx, branch, branchQDb); err != nil {
 		return err
 	} else if ok {
 		ctx.GetLogger().Debugf("statistics load: detected schema change incompatility, purging %s/%s", branch, n.sourceDb.Name())
@@ -164,7 +176,7 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 		return n.trackBranch(ctx, branch)
 	}
 
-	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)
+	doltStats, err := loadStats(ctx, branchQDb, statsMap)
 	if err != nil {
 		return err
 	}
@@ -176,12 +188,12 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	return nil
 }
 
-func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string) (bool, error) {
-	root, err := n.sourceDb.GetRoot(ctx)
+func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string, branchQDb sqle.Database) (bool, error) {
+	root, err := branchQDb.GetRoot(ctx)
 	if err != nil {
 		return false, err
 	}
-	tables, err := n.sourceDb.GetTableNames(ctx)
+	tables, err := branchQDb.GetTableNames(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -201,7 +213,7 @@ func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string) (bool,
 			return false, err
 		}
 
-		keys = append(keys, branch+"/"+tableName)
+		keys = append(keys, n.schemaTupleKey(branch, tableName))
 		schHashes = append(schHashes, curHash)
 	}
 
@@ -217,8 +229,6 @@ func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string) (bool,
 				schemaChange = true
 				break
 			}
-		} else if err != nil {
-			return false, err
 		}
 	}
 	if schemaChange {
@@ -438,7 +448,7 @@ func (n *NomsStatsDatabase) GetSchemaHash(ctx context.Context, branch, tableName
 		if strings.EqualFold(branch, b) {
 			return n.schemaHashes[i][tableName], nil
 		}
-		if val, ok, err := n.destDb.DbData().Ddb.GetTuple(ctx, branch+"/"+tableName); ok {
+		if val, ok, err := n.destDb.DbData().Ddb.GetTuple(ctx, n.schemaTupleKey(branch, tableName)); ok {
 			if err != nil {
 				return hash.Hash{}, err
 			}
@@ -451,6 +461,10 @@ func (n *NomsStatsDatabase) GetSchemaHash(ctx context.Context, branch, tableName
 		break
 	}
 	return hash.Hash{}, nil
+}
+
+func (n *NomsStatsDatabase) schemaTupleKey(branch, tableName string) string {
+	return n.sourceDb.Name() + "/" + branch + "/" + tableName
 }
 
 func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName string, h hash.Hash) error {
@@ -471,7 +485,7 @@ func (n *NomsStatsDatabase) SetSchemaHash(ctx context.Context, branch, tableName
 	}
 
 	n.schemaHashes[branchIdx][tableName] = h
-	key := branch + "/" + tableName
+	key := n.schemaTupleKey(branch, tableName)
 	if err := n.destDb.DbData().Ddb.DeleteTuple(ctx, key); err != doltdb.ErrTupleNotFound {
 		return err
 	}

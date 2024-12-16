@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -46,8 +47,19 @@ func NewStatsInitDatabaseHook(
 			}
 			statsProv.setStatDb(dbName, statsDb)
 		} else {
+			dSess := dsess.DSessFromSess(ctx.Session)
 			for _, br := range statsDb.Branches() {
-				if ok, err := statsDb.SchemaChange(ctx, br); err != nil {
+				branchQDbName := BranchQualifiedDatabase(dbName, br)
+				sqlDb, err := dSess.Provider().Database(ctx, branchQDbName)
+				if err != nil {
+					return fmt.Errorf("branch/database not found: %s", branchQDbName)
+				}
+				branchQDb, ok := sqlDb.(sqle.Database)
+				if !ok {
+					return fmt.Errorf("branch/database not found: %s", branchQDbName)
+				}
+
+				if ok, err := statsDb.SchemaChange(ctx, br, branchQDb); err != nil {
 					return err
 				} else if ok {
 					if err := statsDb.DeleteBranchStats(ctx, br, true); err != nil {

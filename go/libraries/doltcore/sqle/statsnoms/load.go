@@ -17,6 +17,7 @@ package statsnoms
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"io"
 	"strconv"
 	"strings"
@@ -37,7 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
+func loadStats(ctx *sql.Context, db sqle.Database, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
 	schemaName := db.SchemaName()
 	iter, err := NewStatsIter(ctx, schemaName, m)
@@ -45,6 +46,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		return nil, err
 	}
 	currentStat := statspro.NewDoltStats()
+	invalidTables := make(map[string]bool)
 	for {
 		row, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -74,27 +76,31 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		}
 
 		qual := sql.NewStatQualifier(dbName, schemaName, tableName, indexName)
+		if _, ok := invalidTables[tableName]; ok {
+			continue
+		}
+
 		if currentStat.Statistic.Qual.String() != qual.String() {
 			if !currentStat.Statistic.Qual.Empty() {
-				currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
-				if err != nil {
-					return nil, err
-				}
-				fds, colSet, err := loadFuncDeps(ctx, db, currentStat.Statistic.Qual)
-				if err != nil {
-					return nil, err
-				}
-				currentStat.Statistic.Fds = fds
-				currentStat.Statistic.Colset = colSet
 				currentStat.UpdateActive()
 				qualToStats[currentStat.Statistic.Qual] = currentStat
 			}
 
 			currentStat = statspro.NewDoltStats()
-			currentStat.Statistic.Qual = qual
-			currentStat.Statistic.Cols = columns
-			currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
-			if err != nil {
+
+			tab, ok, err := db.GetTableInsensitive(ctx, qual.Table())
+			if ok {
+				currentStat.Statistic.Qual = qual
+				currentStat.Statistic.Cols = columns
+				currentStat.Statistic.LowerBnd, currentStat.Tb, currentStat.Statistic.Fds, currentStat.Statistic.Colset, err = loadRefdProps(ctx, db, tab, currentStat.Statistic.Qual, len(currentStat.Columns()))
+				if err != nil {
+					return nil, err
+				}
+			} else if !ok {
+				ctx.GetLogger().Debugf("stats load: table previously collected is missing from root: %s", tableName)
+				invalidTables[qual.Table()] = true
+				continue
+			} else if err != nil {
 				return nil, err
 			}
 		}
@@ -168,18 +174,10 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat.Statistic.Created = createdAt
 		}
 	}
-	currentStat.Statistic.LowerBnd, currentStat.Tb, err = loadLowerBound(ctx, db, currentStat.Statistic.Qual, len(currentStat.Columns()))
-	if err != nil {
-		return nil, err
+	if !currentStat.Qualifier().Empty() {
+		currentStat.UpdateActive()
+		qualToStats[currentStat.Statistic.Qual] = currentStat
 	}
-	fds, colSet, err := loadFuncDeps(ctx, db, currentStat.Statistic.Qual)
-	if err != nil {
-		return nil, err
-	}
-	currentStat.Statistic.Fds = fds
-	currentStat.Statistic.Colset = colSet
-	currentStat.UpdateActive()
-	qualToStats[currentStat.Statistic.Qual] = currentStat
 	return qualToStats, nil
 }
 
@@ -195,14 +193,44 @@ func parseTypeStrings(typs []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, error) {
+func loadRefdProps(ctx *sql.Context, db sqle.Database, sqlTable sql.Table, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, *sql.FuncDepSet, sql.ColSet, error) {
 	root, err := db.GetRoot(ctx)
-	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: qual.Table()})
+	if err != nil {
+		return nil, nil, nil, sql.ColSet{}, err
+	}
+
+	iat, ok := sqlTable.(sql.IndexAddressable)
 	if !ok {
-		return nil, nil, sql.ErrTableNotFound.New(qual.Table())
+		return nil, nil, nil, sql.ColSet{}, nil
+	}
+
+	indexes, err := iat.GetIndexes(ctx)
+	if err != nil {
+		return nil, nil, nil, sql.ColSet{}, err
+	}
+
+	var sqlIdx sql.Index
+	for _, i := range indexes {
+		if strings.EqualFold(i.ID(), qual.Index()) {
+			sqlIdx = i
+			break
+		}
+	}
+
+	if sqlIdx == nil {
+		return nil, nil, nil, sql.ColSet{}, fmt.Errorf("%w: index not found: '%s'", statspro.ErrFailedToLoad, qual.Index())
+	}
+
+	fds, colset, err := stats.IndexFds(qual.Table(), sqlTable.Schema(), sqlIdx)
+	if err != nil {
+		return nil, nil, nil, sql.ColSet{}, err
+	}
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: sqlTable.Name()})
+	if !ok {
+		return nil, nil, nil, sql.ColSet{}, sql.ErrTableNotFound.New(qual.Table())
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, sql.ColSet{}, err
 	}
 
 	var idx durable.Index
@@ -212,7 +240,7 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 		idx, err = table.GetIndexRowData(ctx, qual.Index())
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, sql.ColSet{}, err
 	}
 
 	prollyMap := durable.ProllyMapFromIndex(idx)
@@ -220,17 +248,17 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 	buffPool := prollyMap.NodeStore().Pool()
 
 	if cnt, err := prollyMap.Count(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, sql.ColSet{}, err
 	} else if cnt == 0 {
-		return nil, keyBuilder, nil
+		return nil, keyBuilder, nil, sql.ColSet{}, nil
 	}
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, sql.ColSet{}, err
 	}
 	keyBytes, _, err := firstIter.Next(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, sql.ColSet{}, err
 	}
 	for i := range keyBuilder.Desc.Types {
 		keyBuilder.PutRaw(i, keyBytes.GetField(i))
@@ -241,10 +269,10 @@ func loadLowerBound(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifi
 	for i := 0; i < keyBuilder.Desc.Count(); i++ {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, sql.ColSet{}, err
 		}
 	}
-	return firstRow, keyBuilder, nil
+	return firstRow, keyBuilder, fds, colset, nil
 }
 
 func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier) (*sql.FuncDepSet, sql.ColSet, error) {

@@ -570,6 +570,109 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "differentiate table cases",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches ='main'",
+			"CREATE table XY (x bigint primary key, y varchar(16))",
+			"insert into XY values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table XY",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{{"xy", "2"}},
+			},
+		},
+	},
+	{
+		Name: "deleted table loads OK",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches ='main'",
+			"CREATE table xy (x bigint primary key, y varchar(16))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+			"CREATE table uv (u bigint primary key, v varchar(16))",
+			"insert into uv values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table uv",
+			"drop table uv",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{{"xy", "2"}},
+			},
+		},
+	},
+	{
+		Name: "new index loads OK",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches ='main'",
+			"CREATE table xy (x bigint primary key, y varchar(16))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+			"alter table xy add key (y,x)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// losing an index is a schema change, dropped stats
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dropped index loads OK",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches ='main'",
+			"CREATE table xy (x bigint primary key, y varchar(16), key (y,x))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{{"xy", "2"}, {"xy", "2,2"}},
+			},
+		},
+	},
+	{
+		Name: "differentiate branch cases",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches ='main,feat'",
+			"CREATE table xy (x bigint primary key, y varchar(16))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"analyze table xy",
+			"call dolt_checkout('-b', 'feat')",
+			"CREATE table xy (x varchar(16) primary key, y bigint, z bigint)",
+			"insert into xy values (3,'3',3)",
+			"analyze table xy",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{{"xy", "2"}},
+			},
+			{
+				Query: "call dolt_checkout('feat')",
+			},
+			{
+				Query:    "select table_name, upper_bound from dolt_statistics",
+				Expected: []sql.Row{{"xy", "3"}},
+			},
+		},
+	},
+	{
 		Name: "drop primary key",
 		SetUpScript: []string{
 			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
@@ -963,11 +1066,15 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 				t.Errorf("expected *gms.Engine but found: %T", e)
 			}
 
+			branches := eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).TrackedBranches("mydb")
+			brCopy := make([]string, len(branches))
+			copy(brCopy, branches)
 			err := eng.Analyzer.Catalog.StatsProvider.DropDbStats(ctx, "mydb", false)
 			require.NoError(t, err)
-
-			err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", "main")
-			require.NoError(t, err)
+			for _, branch := range brCopy {
+				err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", branch)
+				require.NoError(t, err)
+			}
 		}
 
 		for _, assertion := range assertions {
