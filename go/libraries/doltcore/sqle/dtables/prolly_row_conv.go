@@ -115,10 +115,14 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 	virtualOffset := 0
 	for i, j := range proj {
 		if j == -1 {
-			// Skip over virtual columns in non-pk cols as they are not stored
-			if !isPk && c.inSchema.GetNonPKCols().GetByIndex(i).Virtual {
-				virtualOffset++
+			nonPkCols := c.inSchema.GetNonPKCols()
+			if len(nonPkCols.GetColumns()) > i {
+				// Skip over virtual columns in non-pk cols as they are not stored
+				if !isPk && nonPkCols.GetByIndex(i).Virtual {
+					virtualOffset++
+				}
 			}
+
 			continue
 		}
 
