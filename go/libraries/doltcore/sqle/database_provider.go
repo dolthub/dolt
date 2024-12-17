@@ -1414,12 +1414,11 @@ func (p *DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name str
 }
 
 // TableFunction implements the sql.TableFunctionProvider interface
-func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
+func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, bool) {
 	if fun, ok := p.tableFunctions[strings.ToLower(name)]; ok {
-		return fun, nil
+		return fun, true
 	}
-
-	return nil, sql.ErrTableFunctionNotFound.New(name)
+	return nil, false
 }
 
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch
