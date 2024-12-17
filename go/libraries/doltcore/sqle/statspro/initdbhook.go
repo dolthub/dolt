@@ -52,9 +52,10 @@ func NewStatsInitDatabaseHook(
 				branchQDbName := BranchQualifiedDatabase(dbName, br)
 				sqlDb, err := dSess.Provider().Database(ctx, branchQDbName)
 				if err != nil {
-					return fmt.Errorf("branch/database not found: %s", branchQDbName)
+					ctx.GetLogger().Logger.Errorf("branch not found: %s", br)
+					continue
 				}
-				branchQDb, ok := sqlDb.(sqle.Database)
+				branchQDb, ok := sqlDb.(dsess.SqlDatabase)
 				if !ok {
 					return fmt.Errorf("branch/database not found: %s", branchQDbName)
 				}
