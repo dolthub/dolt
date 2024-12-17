@@ -591,7 +591,10 @@ SQL
     done
 }
 
-@test "sql-diff: supports multiple primary keys" {
+run_2pk5col_ints() {
+    local query_name=$1
+
+    # Initial setup
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -605,40 +608,56 @@ CREATE TABLE test (
   PRIMARY KEY (pk1,pk2)
 );
 SQL
-    dolt table import -u test `batshelper 2pk5col-ints.csv`
+    dolt table import -u test $(batshelper 2pk5col-ints.csv)
     dolt add .
     dolt commit -m "create/init table test"
-
-    # for each query file in helper/queries/2pk5col-ints/
-    # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete add update single_pk_update all_pk_update create_table
-    do
-        dolt checkout newbranch
-        dolt sql < $BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/$query.sql
-        dolt add .
-        dolt diff -r sql
-        dolt commit -m "applied $query query "
 
-        # confirm a difference exists
+    # Apply the query
+    dolt checkout newbranch
+    dolt sql < "$BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/${query_name}.sql"
+    dolt add .
+    dolt diff -r sql
+    dolt commit -m "applied ${query_name} query"
 
-        run dolt diff -r sql firstbranch newbranch
-        [ "$status" -eq 0 ]
-        [ ! "$output" = "" ]
+    # Confirm a difference exists
+    run dolt diff -r sql firstbranch newbranch
+    [ "$status" -eq 0 ]
+    [ ! "$output" = "" ]
 
-        dolt diff -r sql firstbranch > patch.sql newbranch
-        dolt checkout firstbranch
-        dolt sql < patch.sql
-        rm patch.sql
-        dolt add .
-        dolt commit -m "Reconciled with newbranch"
+    # Generate patch, apply on firstbranch, and verify no differences
+    dolt diff -r sql firstbranch > patch.sql newbranch
+    dolt checkout firstbranch
+    dolt sql < patch.sql
+    rm patch.sql
+    dolt add .
+    dolt commit -m "Reconciled with newbranch"
 
-        # confirm that both branches have the same content
-        run dolt diff -r sql firstbranch newbranch
-        [ "$status" -eq 0 ]
-        [ "$output" = "" ]
-    done
+    # Confirm branches are identical
+    run dolt diff -r sql firstbranch newbranch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
 }
+
+@test "sql-diff: supports multiple primary keys (delete)" {
+    run_2pk5col_ints "delete"
+}
+@test "sql-diff: supports multiple primary keys (add)" {
+    run_2pk5col_ints "add"
+}
+@test "sql-diff: supports multiple primary keys (update)" {
+    run_2pk5col_ints "update"
+}
+@test "sql-diff: supports multiple primary keys (single_pk_update)" {
+    run_2pk5col_ints "single_pk_update"
+}
+@test "sql-diff: supports multiple primary keys (all_pk_update)" {
+    run_2pk5col_ints "all_pk_update"
+}
+@test "sql-diff: supports multiple primary keys (create_table)" {
+    run_2pk5col_ints "create_table"
+}
+
 
 @test "sql-diff: escapes values for MySQL string literals" {
     # https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
