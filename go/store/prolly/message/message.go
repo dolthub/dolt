@@ -42,7 +42,7 @@ func UnpackFields(msg serial.Message) (fileId string, keys, values ItemAccess, l
 		keys, values, level, count, err = getProllyMapKeysAndValues(msg)
 		return
 	case serial.VectorIndexNodeFileID:
-		keys, values, level, count, err = getVectorIndexKeysAndValues(msg)
+		keys, values, level, count, err = GetVectorIndexKeysAndValues(msg)
 		return
 	case serial.AddressMapFileID:
 		keys, values, level, count, err = getAddressMapKeysAndValues(msg)
@@ -136,6 +136,13 @@ func lookupVectorOffset(vo fb.VOffsetT, tab fb.Table) uint16 {
 	off += fb.GetUOffsetT(tab.Bytes[off:])
 	// data starts after metadata containing the vector length
 	return uint16(off + fb.UOffsetT(fb.SizeUOffsetT))
+}
+
+func lookupVectorOffset32(vo fb.VOffsetT, tab fb.Table) uint32 {
+	off := fb.UOffsetT(tab.Offset(vo)) + tab.Pos
+	off += fb.GetUOffsetT(tab.Bytes[off:])
+	// data starts after metadata containing the vector length
+	return uint32(off + fb.UOffsetT(fb.SizeUOffsetT))
 }
 
 func assertTrue(b bool, msg string) {

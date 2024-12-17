@@ -81,8 +81,12 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
+	newLargeRoot, err := tree.LargeNodeFromNode(newRoot)
+	if err != nil {
+		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+	}
 	return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
-		Root:         newRoot,
+		Root:         newLargeRoot,
 		NodeStore:    ns,
 		DistanceType: vector.DistanceL2Squared{},
 		Convert:      convert,
@@ -104,7 +108,7 @@ func (f ProximityFlusher) visitNode(
 	ctx context.Context,
 	serializer message.Serializer,
 	ns tree.NodeStore,
-	node tree.Node,
+	node tree.LargeNode,
 	fullEdits *skip.List,
 	edits []VectorIndexKV,
 	convert func([]byte) []float64,
@@ -138,7 +142,7 @@ func (f ProximityFlusher) visitNode(
 	var keys [][]byte
 	var values [][]byte
 	var nodeSubtrees []uint64
-	if node.IsLeaf() {
+	if node.SmallNode.IsLeaf() {
 		// combine edits with node keys. Use merge sort.
 
 		// The first key in the node is inherited from the parent and isn't necessarily in order.
@@ -230,7 +234,7 @@ func (f ProximityFlusher) visitNode(
 			}
 			childEditList := childEdits[closestIdx]
 			childEditList.edits = append(childEditList.edits, edit)
-			if level == node.Level()-1 {
+			if level == node.SmallNode.Level()-1 {
 				childEditList.mustRebuild = true
 			}
 		}
@@ -245,18 +249,32 @@ func (f ProximityFlusher) visitNode(
 			if len(childEditList.edits) == 0 {
 				// No edits affected this node, leave it as is.
 				values = append(values, childValue)
+				subtreeCount, err := node.SmallNode.GetSubtreeCount(i)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				nodeSubtrees = append(nodeSubtrees, subtreeCount)
 			} else {
 				childNodeAddress := hash.New(childValue)
 				childNode, err := ns.Read(ctx, childNodeAddress)
 				if err != nil {
 					return tree.Node{}, 0, err
 				}
+				largeChildNode, err := tree.LargeNodeFromNode(childNode)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
 				var newChildNode tree.Node
 				var childSubtrees int
 				if childEditList.mustRebuild {
-					newChildNode, childSubtrees, err = f.rebuildNode(ctx, serializer, ns, childNode, fullEdits, childEditList.edits, distanceType, keyDesc, valDesc)
+					var newLargeChildNode tree.LargeNode
+					newLargeChildNode, childSubtrees, err = f.rebuildNode(ctx, serializer, ns, largeChildNode, fullEdits, childEditList.edits, distanceType, keyDesc, valDesc)
+					if err != nil {
+						return tree.Node{}, 0, err
+					}
+					newChildNode = newLargeChildNode.SmallNode
 				} else {
-					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, childNode, fullEdits, childEditList.edits, convert, distanceType, keyDesc, valDesc, logChunkSize)
+					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, largeChildNode, fullEdits, childEditList.edits, convert, distanceType, keyDesc, valDesc, logChunkSize)
 				}
 
 				if err != nil {
@@ -291,28 +309,32 @@ func (f ProximityFlusher) rebuildNode(
 	ctx context.Context,
 	serializer message.Serializer,
 	ns tree.NodeStore,
-	node tree.Node,
+	node tree.LargeNode,
 	fullEdits *skip.List,
 	edits []VectorIndexKV,
 	distanceType vector.DistanceType,
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,
-) (newNode tree.Node, subtrees int, err error) {
+) (newNode tree.LargeNode, subtrees int, err error) {
 	proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, DefaultLogChunkSize)
 	if err != nil {
-		return tree.Node{}, 0, err
+		return tree.LargeNode{}, 0, err
 	}
 	// When rebuilding a subtree, we need to make sure that the vector inherited from the parent is still in position 0.
 	// Walk through the existing keys
 	// The easiest way to do that is just to construct a tree and call Iterall
 	// But we also need to get the level. And remove keys that have been deleted / updated in edits
 
-	err = tree.WalkNodes(ctx, node, ns, func(ctx context.Context, nd tree.Node) error {
+	err = tree.WalkNodes(ctx, node.SmallNode, ns, func(ctx context.Context, nd tree.Node) error {
 		// Visit every key once, but track the level that the key appears on.
 		// We do this by skipping the first entry (except for at the root node)
-		for i := 1; i < nd.Count(); i++ {
-			key := nd.GetKey(0)
-			value := nd.GetValue(0)
+		largeNode, err := tree.LargeNodeFromNode(nd)
+		if err != nil {
+			return err
+		}
+		for i := 1; i < largeNode.Count(); i++ {
+			key := largeNode.GetKey(0)
+			value := largeNode.GetValue(0)
 			err = proximityMapBuilder.InsertAtLevel(ctx, key, value, nd.Level())
 			if err != nil {
 				return err
@@ -321,24 +343,24 @@ func (f ProximityFlusher) rebuildNode(
 		return nil
 	})
 	if err != nil {
-		return tree.Node{}, 0, err
+		return tree.LargeNode{}, 0, err
 	}
 	for _, edit := range edits {
 		key := edit.key
 		value := edit.value
 		err = proximityMapBuilder.Insert(ctx, key, value)
 		if err != nil {
-			return tree.Node{}, 0, err
+			return tree.LargeNode{}, 0, err
 		}
 	}
 	newMap, err := proximityMapBuilder.Flush(ctx)
 	if err != nil {
-		return tree.Node{}, 0, err
+		return tree.LargeNode{}, 0, err
 	}
 	newRoot := newMap.tuples.Root
 	newTreeCount, err := newRoot.TreeCount()
 	if err != nil {
-		return tree.Node{}, 0, err
+		return tree.LargeNode{}, 0, err
 	}
 	return newRoot, newTreeCount, nil
 }

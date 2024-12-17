@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
 
@@ -61,13 +62,13 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	// serialize keys and offStart
 	keyTups = writeItemBytes(b, keys, keySz)
 	serial.VectorIndexNodeStartKeyOffsetsVector(b, len(keys)+1)
-	keyOffs = writeItemOffsets(b, keys, keySz)
+	keyOffs = writeItemOffsets32(b, keys, keySz)
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, values, valSz)
 		serial.VectorIndexNodeStartValueOffsetsVector(b, len(values)+1)
-		valOffs = writeItemOffsets(b, values, valSz)
+		valOffs = writeItemOffsets32(b, values, valSz)
 	} else {
 		// serialize child refs and subtree counts for internal nodes
 		refArr = writeItemBytes(b, values, valSz)
@@ -92,7 +93,7 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	return serial.FinishMessage(b, serial.VectorIndexNodeEnd(b), vectorIvfFileID)
 }
 
-func getVectorIndexKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+func GetVectorIndexKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
 	var pm serial.VectorIndexNode
 	err = serial.InitVectorIndexNodeRoot(&pm, msg, serial.MessagePrefixSz)
 	if err != nil {
@@ -115,6 +116,34 @@ func getVectorIndexKeysAndValues(msg serial.Message) (keys, values ItemAccess, l
 	} else {
 		values.bufStart = lookupVectorOffset(vectorIvfAddressArrayBytesVOffset, pm.Table())
 		values.bufLen = uint16(pm.AddressArrayLength())
+		values.itemWidth = hash.ByteLen
+	}
+	return
+}
+
+func GetVectorIndexKeysAndValues32(msg serial.Message) (keys, values ItemAccess32, level, count uint16, err error) {
+	var pm serial.VectorIndexNode
+	err = serial.InitVectorIndexNodeRoot(&pm, msg, serial.MessagePrefixSz)
+	if err != nil {
+		return
+	}
+	keys.bufStart = lookupVectorOffset32(vectorIvfKeyItemBytesVOffset, pm.Table())
+	keys.bufLen = uint32(pm.KeyItemsLength())
+	keys.offStart = lookupVectorOffset32(vectorIvfKeyOffsetsVOffset, pm.Table())
+	keys.offLen = uint32(pm.KeyOffsetsLength() * uint16Size)
+
+	count = uint16(keys.offLen/2) - 1
+	level = uint16(pm.TreeLevel())
+
+	vv := pm.ValueItemsBytes()
+	if vv != nil {
+		values.bufStart = lookupVectorOffset32(vectorIvfValueItemBytesVOffset, pm.Table())
+		values.bufLen = uint32(pm.ValueItemsLength())
+		values.offStart = lookupVectorOffset32(vectorIvfValueOffsetsVOffset, pm.Table())
+		values.offLen = uint32(pm.ValueOffsetsLength() * uint16Size)
+	} else {
+		values.bufStart = lookupVectorOffset32(vectorIvfAddressArrayBytesVOffset, pm.Table())
+		values.bufLen = uint32(pm.AddressArrayLength())
 		values.itemWidth = hash.ByteLen
 	}
 	return
@@ -193,10 +222,10 @@ func estimateVectorIndexSize(keys, values [][]byte, subtrees []uint64) (int, int
 	subtreesSz := len(subtrees) * binary.MaxVarintLen64
 
 	// constraints enforced upstream
-	if keySz > int(MaxVectorOffset) {
+	if keySz > math.MaxUint32 {
 		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, MaxVectorOffset))
 	}
-	if valSz > int(MaxVectorOffset) {
+	if valSz > math.MaxUint32 {
 		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
 	}
 

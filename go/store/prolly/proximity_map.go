@@ -44,7 +44,7 @@ func (m ProximityMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
 }
 
 func (m ProximityMap) Node() tree.Node {
-	return m.tuples.Root
+	return m.tuples.Root.SmallNode
 }
 
 func (m ProximityMap) HashOf() hash.Hash {
@@ -132,9 +132,13 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType) ProximityMap {
+func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType) (ProximityMap, error) {
+	largeNode, err := tree.LargeNodeFromNode(node)
+	if err != nil {
+		return ProximityMap{}, err
+	}
 	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
-		Root:         node,
+		Root:         largeNode,
 		NodeStore:    ns,
 		Order:        keyDesc,
 		DistanceType: distanceType,
@@ -156,7 +160,7 @@ func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, key
 		tuples:  tuples,
 		keyDesc: keyDesc,
 		valDesc: valDesc,
-	}
+	}, nil
 }
 
 var levelMapKeyDesc = val.NewTupleDescriptor(
@@ -241,7 +245,7 @@ func (b *proximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 		return ProximityMap{}, err
 	}
 
-	return NewProximityMap(ctx, b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType), nil
+	return NewProximityMap(ctx, b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType)
 }
 
 func (b *proximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {

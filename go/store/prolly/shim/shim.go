@@ -61,7 +61,7 @@ func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, 
 	vd := sch.GetValueDescriptor()
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+		return prolly.NewProximityMap(ctx, ns, root, kd, vd, vector.DistanceL2Squared{})
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}
@@ -74,7 +74,7 @@ func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.No
 	}
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{})
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}

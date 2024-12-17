@@ -209,21 +209,49 @@ func getInt64(t *testing.T, tuple val.Tuple, idx int) int64 {
 func TestProximityMapWithOverflowNode(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
+	bp := pool.NewBuffPool()
+
+	var keyDesc = val.NewTupleDescriptor(
+		val.Type{Enc: val.JSONAddrEnc, Nullable: true},
+		val.Type{Enc: val.StringEnc, Nullable: true},
+	)
 
 	// Create an index with enough rows that it can't fit in a single physical chunk
-	vectors := make([][]interface{}, 0, 4000)
-	pks := make([][]interface{}, 0, 4000)
+	vectors := make([][]interface{}, 0, 1200)
+	pks := make([][]interface{}, 0, 1200)
 
-	for i := int64(0); i < 4000; i++ {
-		vectors = append(vectors, []interface{}{fmt.Sprintf("[%d]", i)})
+	for i := int64(0); i < 1200; i++ {
+		vectors = append(vectors, []interface{}{fmt.Sprintf("[%d]", i), "padding to make the key longer"})
 		pks = append(pks, []interface{}{i})
 	}
 
 	// Set logChunkSize to a high enough value that everything goes in a single chunk
-	_, _, _ = createProximityMap(t, ctx, ns, testKeyDesc, vectors, testValDesc, pks, 16)
+	m, _, _ := createProximityMap(t, ctx, ns, keyDesc, vectors, testValDesc, pks, 16)
 
 	// Confirm that all keys exist in the root node
+	count, err := m.Count()
+	require.NoError(t, err)
+	require.Equal(t, 1200, count)
 
+	require.False(t, m.tuples.Root.WouldFitInSmallItemAccess())
+
+	keyBuilder := val.NewTupleBuilder(keyDesc)
+	for i := int64(0); i < 1200; i++ {
+		err = tree.PutField(ctx, ns, keyBuilder, 0, fmt.Sprintf("[%d]", i))
+		require.NoError(t, err)
+		err = tree.PutField(ctx, ns, keyBuilder, 1, "padding to make the key longer")
+		require.NoError(t, err)
+		keyTuple := keyBuilder.Build(bp)
+
+		matches := 0
+		err = m.Get(ctx, keyTuple, func(foundKey val.Tuple, foundValue val.Tuple) error {
+			require.Equal(t, keyTuple, foundKey)
+			matches++
+			return nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, matches)
+	}
 }
 
 func TestMultilevelProximityMap(t *testing.T) {
@@ -271,8 +299,8 @@ func TestInsertOrderIndependence(t *testing.T) {
 	m2, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, keyStrings2, testValDesc, valueStrings2, 1)
 
 	if !assert.Equal(t, m1.tuples.Root.HashOf(), m2.tuples.Root.HashOf(), "trees have different hashes") {
-		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m1.tuples.Root))
-		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m2.tuples.Root))
+		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m1.tuples.Root.SmallNode))
+		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m2.tuples.Root.SmallNode))
 	}
 }
 

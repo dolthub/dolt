@@ -17,6 +17,7 @@ package message
 import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/val"
+	"math"
 )
 
 // ItemAccess accesses items in a serial.Message.
@@ -56,4 +57,47 @@ func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
 
 func (acc ItemAccess) IsEmpty() bool {
 	return acc.bufLen == 0
+}
+
+// ItemAccess32 accesses items in a serial.Message, using 32 bit offsets.
+type ItemAccess32 struct {
+	// bufStart is the offset to the start of the
+	// Item buffer within a serial.Message.
+	// bufLen is the length of the Item buffer.
+	bufStart, bufLen uint32
+
+	// offStart, if nonzero, is the offset to the
+	// start of the uin16 offset buffer within a
+	// serial.Message. A zero value for offStart
+	// indicates an empty offset buffer.
+	// bufLen is the length of the Item buffer.
+	offStart, offLen uint32
+
+	// If the serial.Message does not contain an
+	// offset buffer (offStart is zero), then
+	// Items have a fixed width equal to itemWidth.
+	itemWidth uint32
+}
+
+// GetItem returns the ith Item from the buffer.
+func (acc ItemAccess32) GetItem(i int, msg serial.Message) []byte {
+	buf := msg[acc.bufStart : acc.bufStart+acc.bufLen]
+	off := msg[acc.offStart : acc.offStart+acc.offLen]
+	if acc.offStart != 0 {
+		stop := val.ReadUint32(off[(i*4)+4 : (i*4)+8])
+		start := val.ReadUint32(off[(i * 4) : (i*4)+4])
+		return buf[start:stop]
+	} else {
+		stop := int(acc.itemWidth) * (i + 1)
+		start := int(acc.itemWidth) * i
+		return buf[start:stop]
+	}
+}
+
+func (acc ItemAccess32) IsEmpty() bool {
+	return acc.bufLen == 0
+}
+
+func (acc ItemAccess32) WouldFitInSmallItemAccess() bool {
+	return acc.offStart <= math.MaxUint16 && acc.offLen <= math.MaxUint16 && acc.bufStart <= math.MaxUint16 && acc.bufLen <= math.MaxUint16
 }

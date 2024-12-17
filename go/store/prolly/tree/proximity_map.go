@@ -17,8 +17,9 @@ package tree
 import (
 	"container/heap"
 	"context"
+	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -30,7 +31,7 @@ type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) err
 // ProximityMap is a static Prolly Tree where the position of a key in the tree is based on proximity, as opposed to a traditional ordering.
 // O provides the ordering only within a node.
 type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
-	Root         Node
+	Root         LargeNode
 	NodeStore    NodeStore
 	DistanceType vector.DistanceType
 	Convert      func([]byte) []float64
@@ -38,7 +39,7 @@ type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 }
 
 func (t ProximityMap[K, V, O]) GetRoot() Node {
-	return t.Root
+	return t.Root.SmallNode
 }
 
 func (t ProximityMap[K, V, O]) GetNodeStore() NodeStore {
@@ -81,11 +82,11 @@ func (t ProximityMap[K, V, O]) HashOf() hash.Hash {
 }
 
 func (t ProximityMap[K, V, O]) WalkAddresses(ctx context.Context, cb AddressCb) error {
-	return WalkAddresses(ctx, t.Root, t.NodeStore, cb)
+	return WalkAddresses(ctx, t.Root.SmallNode, t.NodeStore, cb)
 }
 
 func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
-	return WalkNodes(ctx, t.Root, t.NodeStore, cb)
+	return WalkNodes(ctx, t.Root.SmallNode, t.NodeStore, cb)
 }
 
 // Get searches for an exact vector in the index, calling |cb| with the matching key-value pairs.
@@ -101,7 +102,7 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 		var closestIdx int
 		distance := math.Inf(1)
 
-		for i := 0; i < int(nd.count); i++ {
+		for i := 0; i < nd.Count(); i++ {
 			k := nd.GetKey(i)
 			newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
 			if err != nil {
@@ -114,11 +115,15 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 			}
 		}
 
-		if nd.IsLeaf() {
+		if nd.SmallNode.IsLeaf() {
 			return cb(closestKey, []byte(nd.GetValue(closestIdx)))
 		}
 
-		nd, err = fetchChild(ctx, t.NodeStore, nd.getAddress(closestIdx))
+		newNode, err := fetchChild(ctx, t.NodeStore, nd.SmallNode.getAddress(closestIdx))
+		if err != nil {
+			return err
+		}
+		nd, err = LargeNodeFromNode(newNode)
 		if err != nil {
 			return err
 		}
@@ -197,7 +202,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 	// |nodes| holds the current candidates for closest vectors, up to |limit|
 	nodes := newNodePriorityHeap(limit)
 
-	for i := 0; i < int(t.Root.count); i++ {
+	for i := 0; i < t.Root.Count(); i++ {
 		k := t.Root.GetKey(i)
 		newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
 		if err != nil {
@@ -217,14 +222,18 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 			if err != nil {
 				return err
 			}
-			nextLevelNodes.Insert(keyAndDistance.key, node.GetValue(0), keyAndDistance.distance)
+			largeNode, err := LargeNodeFromNode(node)
+			if err != nil {
+				return err
+			}
+			nextLevelNodes.Insert(keyAndDistance.key, largeNode.GetValue(0), keyAndDistance.distance)
 			for i := 1; i < int(node.count); i++ {
-				k := node.GetKey(i)
+				k := largeNode.GetKey(i)
 				newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
 				if err != nil {
 					return err
 				}
-				nextLevelNodes.Insert(k, node.GetValue(i), newDistance)
+				nextLevelNodes.Insert(k, largeNode.GetValue(i), newDistance)
 			}
 		}
 		nodes = nextLevelNodes
@@ -242,12 +251,12 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 }
 
 func (t ProximityMap[K, V, O]) IterAll(ctx context.Context) (*OrderedTreeIter[K, V], error) {
-	c, err := newCursorAtStart(ctx, t.NodeStore, t.Root)
+	c, err := newCursorAtStart(ctx, t.NodeStore, t.Root.SmallNode)
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := newCursorPastEnd(ctx, t.NodeStore, t.Root)
+	s, err := newCursorPastEnd(ctx, t.NodeStore, t.Root.SmallNode)
 	if err != nil {
 		return nil, err
 	}
