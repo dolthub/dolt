@@ -538,7 +538,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 	{
 		// Similar to previous test, but with one row to avoid ordering issues.
-		Name: "altered keyless table add pk with removed", // https://github.com/dolthub/dolt/issues/8625
+		Name: "altered keyless table add pk", // https://github.com/dolthub/dolt/issues/8625
 		SetUpScript: []string{
 			"create table tbl (i int, j int);",
 			"insert into tbl values (42, 23);",
