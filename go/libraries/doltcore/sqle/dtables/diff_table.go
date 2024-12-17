@@ -684,7 +684,9 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
 // If the primary key sets changed between the two commits, it may not be
-// possible to diff them.
+// possible to diff them. We return two bools: simpleDiff is returned if the primary key sets are close enough that we
+// can confidently merge the diff (using schema.ArePrimaryKeySetsDiffable). fuzzyDiff is returned if the primary key
+// sets are not close enough to merge the diff, but we can still make an approximate comparison (using schema.MapSchemaBasedOnTagAndName).
 func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool, fuzzyDiff bool, err error) {
 	// dp.to is nil when a table has been deleted previously. In this case, we return
 	// false, to stop processing diffs, since that previously deleted table is considered
