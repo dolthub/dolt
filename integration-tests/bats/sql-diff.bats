@@ -592,6 +592,8 @@ SQL
 }
 
 @test "sql-diff: supports multiple primary keys" {
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;"
+
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
