@@ -124,14 +124,20 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 }
 
 // NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
-func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
-	return newEmptyIndex(ctx, vrw, ns, sch, false)
+func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, indexSchema schema.Schema) (Index, error) {
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, false)
 }
 
-// NewEmptyIndexFromSchemaIndex creates a new empty Index described by a schema.Index.
-func NewEmptyIndexFromSchemaIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index) (Index, error) {
-	sch := idx.Schema()
-	return newEmptyIndex(ctx, vrw, ns, sch, schema.IsKeyless(sch))
+// NewEmptyForeignKeyIndex creates a new empty Index for use as a foreign key index.
+// Foreign keys cannot appear on keyless tables.
+func NewEmptyForeignKeyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, indexSchema schema.Schema) (Index, error) {
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, false)
+}
+
+// NewEmptyIndexFromTableSchema creates a new empty Index described by a schema.Index.
+func NewEmptyIndexFromTableSchema(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index, tableSchema schema.Schema) (Index, error) {
+	indexSchema := idx.Schema()
+	return newEmptyIndex(ctx, vrw, ns, indexSchema, schema.IsKeyless(tableSchema))
 }
 
 // newEmptyIndex returns an index with no rows.
@@ -408,7 +414,7 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		empty, err := NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, index)
+		empty, err := NewEmptyIndexFromTableSchema(ctx, vrw, ns, index, sch)
 		if err != nil {
 			return nil, err
 		}

@@ -370,7 +370,7 @@ func parentFkConstraintViolations(
 	}
 	var idx durable.Index
 	if empty {
-		idx, err = durable.NewEmptyIndexFromSchemaIndex(ctx, postChild.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Index)
+		idx, err = durable.NewEmptyForeignKeyIndex(ctx, postChild.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Index.Schema())
 		if err != nil {
 			return err
 		}
@@ -405,7 +405,7 @@ func childFkConstraintViolations(
 	}
 	var idx durable.Index
 	if empty {
-		idx, err = durable.NewEmptyIndexFromSchemaIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Index)
+		idx, err = durable.NewEmptyForeignKeyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Index.Schema())
 		if err != nil {
 			return err
 		}

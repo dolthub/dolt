@@ -1041,7 +1041,7 @@ func (t *WritableDoltTable) truncate(
 	}
 
 	for _, idx := range sch.Indexes().AllIndexes() {
-		empty, err := durable.NewEmptyIndexFromSchemaIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx)
+		empty, err := durable.NewEmptyIndexFromTableSchema(ctx, table.ValueReadWriter(), table.NodeStore(), idx, sch)
 		if err != nil {
 			return nil, err
 		}
