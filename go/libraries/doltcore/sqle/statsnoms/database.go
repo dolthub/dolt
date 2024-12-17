@@ -146,9 +146,10 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	dSess := dsess.DSessFromSess(ctx.Session)
 	sqlDb, err := dSess.Provider().Database(ctx, branchQDbName)
 	if err != nil {
-		return fmt.Errorf("branch/database not found: %s", branchQDbName)
+		ctx.GetLogger().Debugf("statistics load: branch not found: %s; `call dolt_stats_prune()` to delete stale statistics", branch)
+		return nil
 	}
-	branchQDb, ok := sqlDb.(sqle.Database)
+	branchQDb, ok := sqlDb.(dsess.SqlDatabase)
 	if !ok {
 		return fmt.Errorf("branch/database not found: %s", branchQDbName)
 	}
@@ -188,7 +189,7 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	return nil
 }
 
-func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string, branchQDb sqle.Database) (bool, error) {
+func (n *NomsStatsDatabase) SchemaChange(ctx *sql.Context, branch string, branchQDb dsess.SqlDatabase) (bool, error) {
 	root, err := branchQDb.GetRoot(ctx)
 	if err != nil {
 		return false, err

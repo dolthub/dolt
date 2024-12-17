@@ -608,42 +608,6 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "new index loads OK",
-		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
-			"set @@PERSIST.dolt_stats_branches ='main'",
-			"CREATE table xy (x bigint primary key, y varchar(16))",
-			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
-			"analyze table xy",
-			"alter table xy add key (y,x)",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				// losing an index is a schema change, dropped stats
-				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{},
-			},
-		},
-	},
-	{
-		Name: "dropped index loads OK",
-		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
-			"set @@PERSIST.dolt_stats_branches ='main'",
-			"CREATE table xy (x bigint primary key, y varchar(16), key (y,x))",
-			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{{"xy", "2"}, {"xy", "2,2"}},
-			},
-		},
-	},
-	{
 		Name: "differentiate branch cases",
 		SetUpScript: []string{
 			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",

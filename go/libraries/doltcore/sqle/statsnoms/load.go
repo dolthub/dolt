@@ -17,7 +17,6 @@ package statsnoms
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"io"
 	"strconv"
 	"strings"
@@ -38,7 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func loadStats(ctx *sql.Context, db sqle.Database, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
+func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
 	schemaName := db.SchemaName()
 	iter, err := NewStatsIter(ctx, schemaName, m)
@@ -193,7 +192,7 @@ func parseTypeStrings(typs []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func loadRefdProps(ctx *sql.Context, db sqle.Database, sqlTable sql.Table, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, *sql.FuncDepSet, sql.ColSet, error) {
+func loadRefdProps(ctx *sql.Context, db dsess.SqlDatabase, sqlTable sql.Table, qual sql.StatQualifier, cols int) (sql.Row, *val.TupleBuilder, *sql.FuncDepSet, sql.ColSet, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, sql.ColSet{}, err
