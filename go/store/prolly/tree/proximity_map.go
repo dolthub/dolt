@@ -16,16 +16,13 @@ package tree
 
 import (
 	"container/heap"
-	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
-	"github.com/esote/minmaxheap"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"math"
-	"sort"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/esote/minmaxheap"
 )
 
 type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) error
@@ -136,11 +133,60 @@ func (t ProximityMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err e
 	return ok, err
 }
 
+type DistancePriorityHeapElem struct {
+	key      Item
+	value    Item
+	distance float64
+}
+
+type DistancePriorityHeap []DistancePriorityHeapElem
+
+var _ heap.Interface = (*DistancePriorityHeap)(nil)
+
+func newNodePriorityHeap(capacity int) DistancePriorityHeap {
+	// Allocate one extra slot: whenever this fills we remove the max element.
+	return make(DistancePriorityHeap, 0, capacity+1)
+}
+
+func (n DistancePriorityHeap) Len() int {
+	return len(n)
+}
+
+func (n DistancePriorityHeap) Less(i, j int) bool {
+	return n[i].distance < n[j].distance
+}
+
+func (n DistancePriorityHeap) Swap(i, j int) {
+	n[i], n[j] = n[j], n[i]
+}
+
+func (n *DistancePriorityHeap) Push(x any) {
+	*n = append(*n, x.(DistancePriorityHeapElem))
+}
+
+func (n *DistancePriorityHeap) Pop() any {
+	length := len(*n)
+	last := (*n)[length-1]
+	*n = (*n)[:length-1]
+	return last
+}
+
+func (n *DistancePriorityHeap) Insert(key Item, value Item, distance float64) {
+	minmaxheap.Push(n, DistancePriorityHeapElem{
+		key:      key,
+		value:    value,
+		distance: distance,
+	})
+	if len(*n) == cap(*n) {
+		minmaxheap.PopMax(n)
+	}
+}
+
 // GetClosest performs an approximate nearest neighbors search. It finds |limit| vectors that are close to the query vector,
 // and calls |cb| with the matching key-value pairs.
 func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}, cb KeyValueDistanceFn[K, V], limit int) (err error) {
-	if limit != 1 {
-		return fmt.Errorf("currently only limit = 1 (find single closest vector) is supported for ProximityMap")
+	if limit == 0 {
+		return nil
 	}
 
 	queryVector, err := sql.ConvertToVector(query)
@@ -148,35 +194,51 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 		return err
 	}
 
-	nd := t.Root
+	// |nodes| holds the current candidates for closest vectors, up to |limit|
+	nodes := newNodePriorityHeap(limit)
 
-	var closestKey K
-	var closestIdx int
-	distance := math.Inf(1)
+	for i := 0; i < int(t.Root.count); i++ {
+		k := t.Root.GetKey(i)
+		newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+		if err != nil {
+			return err
+		}
+		nodes.Insert(k, t.Root.GetValue(i), newDistance)
+	}
 
-	for {
-		for i := 0; i < int(nd.count); i++ {
-			k := nd.GetKey(i)
-			newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+	for level := t.Root.Level() - 1; level >= 0; level-- {
+		// visit each candidate node at the current level, building a priority list of candidates for the next level.
+		nextLevelNodes := newNodePriorityHeap(limit)
+
+		for _, keyAndDistance := range nodes {
+			address := keyAndDistance.value
+
+			node, err := fetchChild(ctx, t.NodeStore, hash.New(address))
 			if err != nil {
 				return err
 			}
-			if newDistance < distance {
-				closestIdx = i
-				distance = newDistance
-				closestKey = []byte(k)
+			// TODO: We don't need to recompute the distance when visiting the same key as the parent.
+			for i := 0; i < int(node.count); i++ {
+				k := node.GetKey(i)
+				newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+				if err != nil {
+					return err
+				}
+				nextLevelNodes.Insert(k, node.GetValue(i), newDistance)
 			}
 		}
+		nodes = nextLevelNodes
+	}
 
-		if nd.IsLeaf() {
-			return cb(closestKey, []byte(nd.GetValue(closestIdx)), distance)
-		}
-
-		nd, err = fetchChild(ctx, t.NodeStore, nd.getAddress(closestIdx))
+	for nodes.Len() > 0 {
+		node := minmaxheap.Pop(&nodes).(DistancePriorityHeapElem)
+		err := cb([]byte(node.key), []byte(node.value), node.distance)
 		if err != nil {
 			return err
 		}
 	}
+
+	return nil
 }
 
 func (t ProximityMap[K, V, O]) IterAll(ctx context.Context) (*OrderedTreeIter[K, V], error) {

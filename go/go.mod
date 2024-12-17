@@ -110,6 +110,7 @@ require (
 	github.com/dolthub/go-icu-regex v0.0.0-20241215010122-db690dd53c90 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
+	github.com/esote/minmaxheap v1.0.0 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-latex/latex v0.0.0-20210823091927-c0d11ff05a81 // indirect
