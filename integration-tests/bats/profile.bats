@@ -48,7 +48,7 @@ teardown() {
 
     run dolt --profile nonExistentProfile sql -q "select * from altDB_tbl"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Failure to parse arguments: profile nonExistentProfile not found" ]] || false
+    [[ "$output" =~ "Failed to inject profile arguments: profile nonExistentProfile not found" ]] || false
 }
 
 @test "profile: additional flag gets used" {
