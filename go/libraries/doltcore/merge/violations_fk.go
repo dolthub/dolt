@@ -107,7 +107,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 				return err
 			}
 			// Parent does not exist in the ancestor so we use an empty map
-			emptyIdx, err := durable.NewEmptyIndex(ctx, postParent.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Schema, false)
+			emptyIdx, err := durable.NewEmptyPrimaryIndex(ctx, postParent.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Schema)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 				return err
 			}
 			// Child does not exist in the ancestor so we use an empty map
-			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema, false)
+			emptyIdx, err := durable.NewEmptyPrimaryIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema)
 			if err != nil {
 				return err
 			}
@@ -370,7 +370,7 @@ func parentFkConstraintViolations(
 	}
 	var idx durable.Index
 	if empty {
-		idx, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Schema, false)
+		idx, err = durable.NewEmptyForeignKeyIndex(ctx, postChild.Table.ValueReadWriter(), postParent.Table.NodeStore(), postParent.Index.Schema())
 		if err != nil {
 			return err
 		}
@@ -405,7 +405,7 @@ func childFkConstraintViolations(
 	}
 	var idx durable.Index
 	if empty {
-		idx, err = durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Schema, false)
+		idx, err = durable.NewEmptyForeignKeyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Table.NodeStore(), postChild.Index.Schema())
 		if err != nil {
 			return err
 		}
