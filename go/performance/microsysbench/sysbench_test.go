@@ -17,6 +17,7 @@ package microsysbench
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/server"
 	"io"
 	"math/rand"
 	"os"
@@ -57,6 +58,18 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		q := "SELECT c FROM sbtest1 WHERE id=%d"
 		return fmt.Sprintf(q, rand.Intn(tableSize))
+	})
+}
+
+func BenchmarkTableScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1"
+	})
+}
+
+func BenchmarkOltpIndexScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1 WHERE k > 0"
 	})
 }
 
@@ -108,17 +121,27 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
+	buf := sql.NewByteBuffer(16000)
 	for i := 0; i < b.N; i++ {
-		_, iter, _, err := eng.Query(ctx, getQuery(i))
+		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
+		i := 0
 		for {
-			if _, err = iter.Next(ctx); err != nil {
+			i++
+			row, err := iter.Next(ctx)
+			if err != nil {
 				break
+			}
+			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+			_ = outputRow
+			if i%128 == 0 {
+				buf.Reset()
 			}
 		}
 		require.Error(b, io.EOF)
 		err = iter.Close(ctx)
 		require.NoError(b, err)
+		buf.Reset()
 	}
 	_ = eng.Close()
 	b.ReportAllocs()
@@ -160,6 +183,10 @@ func populateRepo(dEnv *env.DoltEnv, insertData string) {
 		if err != nil {
 			panic(err)
 		}
+
+		defer func() {
+			sql.SingletonBuf.Reset()
+		}()
 
 		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 	}
