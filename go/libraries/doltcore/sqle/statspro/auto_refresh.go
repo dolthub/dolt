@@ -85,7 +85,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
 						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
 						// update WORKING session references
-						sqlDb, err := dSess.Provider().Database(sqlCtx, p.branchQualifiedDatabase(dbName, branch))
+						sqlDb, err := dSess.Provider().Database(sqlCtx, BranchQualifiedDatabase(dbName, branch))
 						if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							return
