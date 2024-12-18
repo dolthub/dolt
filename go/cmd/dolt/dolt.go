@@ -30,16 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
-	"github.com/pkg/profile"
-	"github.com/tidwall/gjson"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/sdk/resource"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
@@ -66,6 +56,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+	"github.com/pkg/profile"
+	"github.com/tidwall/gjson"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -468,37 +467,12 @@ func runMain() int {
 		return exit
 	}
 
-	// NM4 - push this all into the parseGlobalArgsAndSubCommandName function???
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
-	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
-	var globalConfig config.ReadWriteConfig
-	if tmpEnv.Config != nil {
-		// NM4 - Not sure if this is common or not. Going to see if test bark on this.
-		var ok bool
-		globalConfig, ok = tmpEnv.Config.GetConfig(env.GlobalConfig)
-		if !ok {
-			cli.PrintErrln(color.RedString("Failed to get global config"))
-			return 1
-		}
-	} else {
-		panic("tmpEnv.Config is nil")
+	cfg, terminate, status := parseGlobalArgsAndSubCommandName(ctx, args)
+	if terminate {
+		return status
 	}
 
-	cfg, err := parseGlobalArgsAndSubCommandName(globalConfig, fs, args)
-	if err != nil {
-		return 0 // NM4
-	}
-
-	// NM4 - first real dEnv??
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
-
-	homeDir, err := env.GetCurrentUserHomeDir()
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
-		return 1
-	}
-
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
@@ -506,21 +480,13 @@ func runMain() int {
 
 	strMetricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 	var metricsEmitter events.Emitter
-	metricsEmitter = events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	metricsEmitter = events.NewFileEmitter(cfg.homeDir, dbfactory.DoltDir)
 	metricsDisabled, err := strconv.ParseBool(strMetricsDisabled)
 	if err != nil || metricsDisabled {
 		metricsEmitter = events.NullEmitter{}
 	}
 
 	events.SetGlobalCollector(events.NewCollector(doltversion.Version, metricsEmitter))
-
-	globalConfig.Iter(func(name, val string) (stop bool) {
-		option := strings.ToLower(name)
-		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
-		}
-		return false
-	})
 
 	// try verifying contents of local config
 	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
@@ -879,20 +845,57 @@ type TheConfig struct {
 	dataDir       string
 	cwdFS         filesys.Filesys
 	subCommand    string
+	homeDir       string
 }
 
 // parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
-func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs filesys.Filesys, args []string) (cfg *TheConfig, err error) {
+func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *TheConfig, terminate bool, status int) {
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
+	var globalConfig config.ReadWriteConfig
+
+	//
+	homeDir, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+		return nil, true, 1
+	}
+
+	if tmpEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config: %v", tmpEnv.CfgLoadErr))
+		return nil, true, 1
+	}
+
+	if tmpEnv.Config != nil {
+		var ok bool
+		globalConfig, ok = tmpEnv.Config.GetConfig(env.GlobalConfig)
+		if !ok {
+			cli.PrintErrln(color.RedString("Failed to load the global config"))
+			return nil, true, 1
+		}
+	} else {
+		panic("runtime error. tmpEnv.Config is nil by no tmpEnv.CfgLoadErr set")
+	}
+
+	globalConfig.Iter(func(name, val string) (stop bool) {
+		option := strings.ToLower(name)
+		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
+			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
+		}
+		return false
+	})
+
 	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
-	if err == argparser.ErrHelp {
+	if errors.Is(err, argparser.ErrHelp) {
 		doltCommand.PrintUsage("dolt")
 		cli.Println(globalSpecialMsg)
 		usage()
-		return nil, errors.New("FIXME") //return 0  NM4 - need to signal that termination is needed with 0 exit status.
+		return nil, true, 0
 	} else if err != nil {
-		e := errors.New(fmt.Sprintf("Failure to parse global arguments: %v", err))
-		return nil, e
+		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
+		return nil, true, 1
 	}
 	subCommand := remainingArgs[0]
 
@@ -902,12 +905,14 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 	cwdFS := fs
 	dataDir, err := resolveDataDir(apr, subCommand, remainingArgs[1:], fs)
 	if err != nil {
-		return nil, err
+		cli.PrintErrln(color.RedString("Failed to resolve the data directory: %v", err))
+		return nil, true, 1
 	}
 
 	dataDirFS, err := fs.WithWorkingDir(dataDir)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to set the data directory to: %s. %v", dataDir, err))
+		cli.PrintErrln(color.RedString("Failed to set the data directory to: %s. %v", dataDir, err))
+		return nil, true, 1
 	}
 
 	useDefaultProfile := false
@@ -917,19 +922,21 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			if hasProfile {
-				msg := fmt.Sprintf("Unable to load profile: %s. Not found.", profileName)
-				return nil, errors.New(msg)
+				cli.PrintErrln(color.RedString("Unable to load profile: %s. Not found.", profileName))
+				return nil, true, 1
 			} else {
 				// We done. Jump to returning what we have.
 			}
 		} else {
-			return nil, err
+			cli.Println(color.RedString("Failed to retrieve config key: %v", err))
+			return nil, true, 1
 		}
 	}
 
 	profiles, err := commands.DecodeProfile(encodedProfiles)
 	if err != nil {
-		return nil, err
+		cli.PrintErrln(color.RedString("Failed to decode profiles: %v", err))
+		return nil, true, 1
 	}
 
 	if !hasProfile && supportsGlobalArgs(subCommand) {
@@ -953,7 +960,8 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 	if hasProfile || useDefaultProfile {
 		apr, err = injectProfileArgs(apr, profileName, profiles)
 		if err != nil {
-			return nil, err
+			cli.PrintErrln(color.RedString("Failed to inject profile arguments: %v", err))
+			return nil, true, 1
 		}
 	}
 
@@ -964,9 +972,10 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, fs fi
 		dataDir:       dataDir,
 		cwdFS:         cwdFS,
 		subCommand:    subCommand,
+		homeDir:       homeDir,
 	}
 
-	return cfg, nil
+	return cfg, false, 0
 }
 
 // getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
