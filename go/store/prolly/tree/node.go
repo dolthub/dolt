@@ -163,7 +163,7 @@ func (nd Node) GetValue(i int) Item {
 	return nd.values.GetItem(i, nd.msg)
 }
 
-func (nd Node) loadSubtrees() (Node, error) {
+func (nd Node) LoadSubtrees() (Node, error) {
 	var err error
 	if nd.subtrees == nil {
 		// deserializing subtree counts requires a malloc,
@@ -177,7 +177,7 @@ func (nd Node) loadSubtrees() (Node, error) {
 	return nd, err
 }
 
-func (nd Node) getSubtreeCount(i int) (uint64, error) {
+func (nd Node) GetSubtreeCount(i int) (uint64, error) {
 	if nd.IsLeaf() {
 		return 1, nil
 	}

@@ -86,7 +86,7 @@ func NewTableFromDurable(table durable.Table) *Table {
 }
 
 func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	rows, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return nil, err
 	}

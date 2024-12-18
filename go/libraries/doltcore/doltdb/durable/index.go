@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"io"
 	"strings"
 
@@ -112,7 +113,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
 
 	case types.Format_DOLT:
-		m, err := shim.MapInterfaceFromValue(v, sch, ns, isKeylessTable)
+		m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
 		if err != nil {
 			return nil, err
 		}
@@ -123,8 +124,17 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 }
 
-// NewEmptyIndex returns an index with no rows.
-func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isKeylessSecondary bool) (Index, error) {
+func NewEmptyPrimaryIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
+	return newEmptyIndex(ctx, vrw, ns, sch, false, false)
+}
+
+func NewEmptyIndexFromSchemaIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, idx schema.Index) (Index, error) {
+	sch := idx.Schema()
+	return newEmptyIndex(ctx, vrw, ns, sch, idx.IsVector(), schema.IsKeyless(sch))
+}
+
+// newEmptyIndex returns an index with no rows.
+func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
@@ -138,15 +148,36 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		if isKeylessSecondary {
 			kd = prolly.AddHashToSchema(kd)
 		}
-		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
-		if err != nil {
-			return nil, err
+		if isVector {
+			return NewEmptyProximityIndex(ctx, ns, kd, vd)
+		} else {
+			return NewEmptyProllyIndex(ctx, ns, kd, vd)
 		}
-		return IndexFromProllyMap(m), nil
 
 	default:
 		return nil, errNbfUnknown
 	}
+}
+
+func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProllyMap(m), nil
+}
+
+func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+	// The value of the logChunkSize parameter is never used and should have no effect.
+	proximityMapBuilder, err := prolly.NewProximityMapFromTuples(ctx, ns, vector.DistanceL2Squared{}, kd, vd, 0)
+	if err != nil {
+		return nil, err
+	}
+	m, err := proximityMapBuilder.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromProximityMap(m), nil
 }
 
 type nomsIndex struct {
@@ -243,6 +274,8 @@ func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
 	switch indexType := i.(type) {
 	case prollyIndex:
 		return indexType.index
+	case proximityIndex:
+		return indexType.index
 	}
 	return i.(prollyIndex).index
 }
@@ -257,6 +290,8 @@ func IndexFromMapInterface(m prolly.MapInterface) Index {
 	switch m := m.(type) {
 	case prolly.Map:
 		return IndexFromProllyMap(m)
+	case prolly.ProximityMap:
+		return IndexFromProximityMap(m)
 	default:
 		panic("unknown map type")
 	}
@@ -393,7 +428,7 @@ func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter,
 		return nil, err
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		empty, err := NewEmptyIndex(ctx, vrw, ns, index.Schema(), false)
+		empty, err := NewEmptyIndexFromSchemaIndex(ctx, vrw, ns, index)
 		if err != nil {
 			return nil, err
 		}

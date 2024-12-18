@@ -1,0 +1,422 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package prolly
+
+import (
+	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/skip"
+	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
+)
+
+type ProximityMutableMap = GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]
+
+type ProximityFlusher struct{}
+
+var _ MutableMapFlusher[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProximityFlusher{}
+
+func (f ProximityFlusher) ApplyMutationsWithSerializer(
+	ctx context.Context,
+	serializer message.Serializer,
+	mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]],
+) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
+	// Identify what parts of the tree need to be rebuilt:
+	// For each edit, identify the node closest to the root that is affected.
+	// Then, walk the tree creating a new one.
+	// In order to skip walking parts of the tree that aren't modified, we need to know when a node
+	// has no edits in any of its children.
+	// We can have a cursor that fast-forwards to the affected value.
+	// - How does this work with inserts?
+	// Do it recursively, starting with the root. Sort each edit into the affected child node (or the current node).
+	// If the current node if affected, rebuild.
+	// Otherwise visit each child node.
+	keyDesc := mutableMap.keyDesc
+	valDesc := mutableMap.valDesc
+	ns := mutableMap.NodeStore()
+	convert := func(bytes []byte) []float64 {
+		h, _ := keyDesc.GetJSONAddr(0, bytes)
+		doc := tree.NewJSONDoc(h, ns)
+		jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
+		if err != nil {
+			panic(err)
+		}
+		floats, err := sql.ConvertToVector(jsonWrapper)
+		if err != nil {
+			panic(err)
+		}
+		return floats
+	}
+	edits := make([]VectorIndexKV, 0, mutableMap.tuples.Edits.Count())
+	editIter := mutableMap.tuples.Mutations()
+	key, value := editIter.NextMutation(ctx)
+	for key != nil {
+		keyLevel := tree.DeterministicHashLevel(DefaultLogChunkSize, key)
+		edits = append(edits, VectorIndexKV{
+			key:   key,
+			value: value,
+			level: int(keyLevel),
+		})
+		key, value = editIter.NextMutation(ctx)
+	}
+	// TODO: Set correct distance type.
+	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, DefaultLogChunkSize)
+	if err != nil {
+		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+	}
+	newLargeRoot, err := tree.LargeNodeFromNode(newRoot)
+	if err != nil {
+		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+	}
+	return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
+		Root:         newLargeRoot,
+		NodeStore:    ns,
+		DistanceType: vector.DistanceL2Squared{},
+		Convert:      convert,
+		Order:        keyDesc,
+	}, nil
+}
+
+type VectorIndexKV struct {
+	key, value tree.Item
+	level      int
+}
+
+type childEditList struct {
+	edits       []VectorIndexKV
+	mustRebuild bool
+}
+
+func (f ProximityFlusher) visitNode(
+	ctx context.Context,
+	serializer message.Serializer,
+	ns tree.NodeStore,
+	node tree.LargeNode,
+	fullEdits *skip.List,
+	edits []VectorIndexKV,
+	convert func([]byte) []float64,
+	distanceType vector.DistanceType,
+	keyDesc val.TupleDesc,
+	valDesc val.TupleDesc,
+	logChunkSize uint8,
+) (newNode tree.Node, subtrees int, err error) {
+	node, err = node.LoadSubtrees()
+	if err != nil {
+		return tree.Node{}, 0, err
+	}
+	if node.Count() == 0 {
+		// Original index was empty. We need to make a new index based on the edits.
+		proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, logChunkSize)
+		if err != nil {
+			return tree.Node{}, 0, err
+		}
+		for _, edit := range edits {
+			// Can we assume that all edits are inserts?
+			if edit.key != nil {
+				err = proximityMapBuilder.InsertAtLevel(ctx, edit.key, edit.value, edit.level)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+			}
+		}
+		proximityMap, err := proximityMapBuilder.Flush(ctx)
+		if err != nil {
+			return tree.Node{}, 0, err
+		}
+
+		return proximityMap.Node(), len(edits), nil
+	}
+	var keys [][]byte
+	var values [][]byte
+	var nodeSubtrees []uint64
+	if node.SmallNode.IsLeaf() {
+		// combine edits with node keys. Use merge sort.
+
+		// The first key in the node is inherited from the parent and isn't necessarily in order.
+		// It can't have been deleted, but it might have changed.
+		firstKey := node.GetKey(0)
+		newFirstValue, hasNewFirstValue := fullEdits.Get(firstKey)
+		if hasNewFirstValue {
+			keys = append(keys, firstKey)
+			values = append(values, newFirstValue)
+			nodeSubtrees = append(nodeSubtrees, 0)
+		} else {
+			keys = append(keys, firstKey)
+			values = append(values, node.GetValue(0))
+			nodeSubtrees = append(nodeSubtrees, 0)
+		}
+		editIdx := 0
+		nodeIdx := 1
+		for editIdx < len(edits) || nodeIdx < node.Count() {
+			// Edit doesn't match an existing key: it must be an insert.
+			if editIdx >= len(edits) {
+				keys = append(keys, node.GetKey(nodeIdx))
+				values = append(values, node.GetValue(nodeIdx))
+				nodeSubtrees = append(nodeSubtrees, 0)
+				nodeIdx++
+				continue
+			}
+			if nodeIdx >= node.Count() {
+				keys = append(keys, edits[editIdx].key)
+				values = append(values, edits[editIdx].value)
+				nodeSubtrees = append(nodeSubtrees, 0)
+				editIdx++
+				continue
+			}
+			editKey := val.Tuple(edits[editIdx].key)
+			nodeKey := val.Tuple(node.GetKey(nodeIdx))
+			cmp := keyDesc.Compare(editKey, nodeKey)
+			if cmp < 0 {
+				//edit comes first
+				// Edit doesn't match an existing key: it must be an insert.
+				keys = append(keys, node.GetKey(nodeIdx))
+				values = append(values, node.GetValue(nodeIdx))
+				nodeSubtrees = append(nodeSubtrees, 0)
+				nodeIdx++
+				continue
+			}
+			if cmp > 0 {
+				// node comes first
+				keys = append(keys, edits[editIdx].key)
+				values = append(values, edits[editIdx].value)
+				nodeSubtrees = append(nodeSubtrees, 0)
+				editIdx++
+				continue
+			}
+			// edit to an existing key.
+			newValue := edits[editIdx].value
+			editIdx++
+			nodeIdx++
+			if newValue == nil {
+				// delete
+				continue
+			}
+			keys = append(keys, editKey)
+			values = append(values, newValue)
+			nodeSubtrees = append(nodeSubtrees, 0)
+		}
+	} else {
+		childEdits := make(map[int]childEditList)
+		for _, edit := range edits {
+			key := edit.key
+			editVector := convert(key)
+			level := edit.level
+			// visit each child in the node to determine which is closest
+			closestIdx := 0
+			childKey := node.GetKey(0)
+			closestDistance, err := distanceType.Eval(convert(childKey), editVector)
+			if err != nil {
+				return tree.Node{}, 0, err
+			}
+			for i := 1; i < node.Count(); i++ {
+				childKey = node.GetKey(i)
+				newDistance, err := distanceType.Eval(convert(childKey), editVector)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				if newDistance < closestDistance {
+					closestDistance = newDistance
+					closestIdx = i
+				}
+			}
+			childEditList := childEdits[closestIdx]
+			childEditList.edits = append(childEditList.edits, edit)
+			if level == node.SmallNode.Level()-1 {
+				childEditList.mustRebuild = true
+			}
+			childEdits[closestIdx] = childEditList
+		}
+		// Recursively build the new tree.
+		// We need keys, values, subtrees, and levels.
+		for i := 0; i < node.Count(); i++ {
+			childKey := node.GetKey(i)
+			keys = append(keys, childKey)
+			childValue := node.GetValue(i)
+
+			childEditList := childEdits[i]
+			if len(childEditList.edits) == 0 {
+				// No edits affected this node, leave it as is.
+				values = append(values, childValue)
+				subtreeCount, err := node.SmallNode.GetSubtreeCount(i)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				nodeSubtrees = append(nodeSubtrees, subtreeCount)
+			} else {
+				childNodeAddress := hash.New(childValue)
+				childNode, err := ns.Read(ctx, childNodeAddress)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				largeChildNode, err := tree.LargeNodeFromNode(childNode)
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				var newChildNode tree.Node
+				var childSubtrees int
+				// TODO: What about changes to the root node?
+				if childEditList.mustRebuild {
+					var newLargeChildNode tree.LargeNode
+					newLargeChildNode, childSubtrees, err = f.rebuildNode(ctx, serializer, ns, largeChildNode, fullEdits, childEditList.edits, distanceType, keyDesc, valDesc)
+					if err != nil {
+						return tree.Node{}, 0, err
+					}
+					newChildNode = newLargeChildNode.SmallNode
+				} else {
+					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, largeChildNode, fullEdits, childEditList.edits, convert, distanceType, keyDesc, valDesc, logChunkSize)
+				}
+
+				if err != nil {
+					return tree.Node{}, 0, err
+				}
+				newChildAddress := newChildNode.HashOf()
+
+				values = append(values, newChildAddress[:])
+				nodeSubtrees = append(nodeSubtrees, uint64(childSubtrees))
+			}
+		}
+	}
+	msg := serializer.Serialize(keys, values, nodeSubtrees, node.Level())
+	newNode, fileId, err := tree.NodeFromBytes(msg)
+	if err != nil {
+		return tree.Node{}, 0, err
+	}
+	subtrees, err = newNode.TreeCount()
+	if err != nil {
+		return tree.Node{}, 0, err
+	}
+	if fileId != serial.VectorIndexNodeFileID {
+		return tree.Node{}, 0, fmt.Errorf("expected file id %s, received %s", serial.VectorIndexNodeFileID, fileId)
+	}
+	_, err = ns.Write(ctx, newNode)
+	return newNode, subtrees, err
+}
+
+var DefaultLogChunkSize = uint8(8)
+
+func (f ProximityFlusher) rebuildNode(
+	ctx context.Context,
+	serializer message.Serializer,
+	ns tree.NodeStore,
+	node tree.LargeNode,
+	fullEdits *skip.List,
+	edits []VectorIndexKV,
+	distanceType vector.DistanceType,
+	keyDesc val.TupleDesc,
+	valDesc val.TupleDesc,
+) (newNode tree.LargeNode, subtrees int, err error) {
+	proximityMapBuilder, err := NewProximityMapFromTuples(ctx, ns, distanceType, keyDesc, valDesc, DefaultLogChunkSize)
+	if err != nil {
+		return tree.LargeNode{}, 0, err
+	}
+	// When rebuilding a subtree, we need to make sure that the vector inherited from the parent is still in position 0.
+	// Walk through the existing keys
+	// The easiest way to do that is just to construct a tree and call Iterall
+	// But we also need to get the level. And remove keys that have been deleted / updated in edits
+
+	err = tree.WalkNodes(ctx, node.SmallNode, ns, func(ctx context.Context, nd tree.Node) error {
+		// Visit every key once, but track the level that the key appears on.
+		// We do this by skipping the first entry (except for at the root node)
+		largeNode, err := tree.LargeNodeFromNode(nd)
+		if err != nil {
+			return err
+		}
+		for i := 1; i < largeNode.Count(); i++ {
+			key := largeNode.GetKey(0)
+			value := largeNode.GetValue(0)
+			err = proximityMapBuilder.InsertAtLevel(ctx, key, value, nd.Level())
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return tree.LargeNode{}, 0, err
+	}
+	for _, edit := range edits {
+		key := edit.key
+		value := edit.value
+		err = proximityMapBuilder.Insert(ctx, key, value)
+		if err != nil {
+			return tree.LargeNode{}, 0, err
+		}
+	}
+	newMap, err := proximityMapBuilder.Flush(ctx)
+	if err != nil {
+		return tree.LargeNode{}, 0, err
+	}
+	newRoot := newMap.tuples.Root
+	newTreeCount, err := newRoot.TreeCount()
+	if err != nil {
+		return tree.LargeNode{}, 0, err
+	}
+	return newRoot, newTreeCount, nil
+}
+
+func (f ProximityFlusher) GetDefaultSerializer(ctx context.Context, mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
+	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool())
+}
+
+// newMutableMap returns a new MutableMap.
+func newProximityMutableMap(m ProximityMap) *ProximityMutableMap {
+	return &ProximityMutableMap{
+		tuples:     m.tuples.Mutate(),
+		keyDesc:    m.keyDesc,
+		valDesc:    m.valDesc,
+		maxPending: defaultMaxPending,
+		flusher:    ProximityFlusher{},
+	}
+}
+
+// newMutableMapWithDescriptors returns a new MutableMap with the key and value TupleDescriptors overridden to the
+// values specified in |kd| and |vd|. This is useful if you are rewriting the data in a map to change its schema.
+func newProximityMutableMapWithDescriptors(m ProximityMap, kd, vd val.TupleDesc) *ProximityMutableMap {
+	return &ProximityMutableMap{
+		tuples:     m.tuples.Mutate(),
+		keyDesc:    kd,
+		valDesc:    vd,
+		maxPending: defaultMaxPending,
+		flusher:    ProximityFlusher{},
+	}
+}
+
+func (f ProximityFlusher) MapInterface(ctx context.Context, mut *ProximityMutableMap) (MapInterface, error) {
+	return f.Map(ctx, mut)
+}
+
+// TreeMap materializes all pending and applied mutations in the MutableMap.
+func (f ProximityFlusher) TreeMap(ctx context.Context, mut *ProximityMutableMap) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
+	s := message.NewVectorIndexSerializer(mut.NodeStore().Pool())
+	return mut.flushWithSerializer(ctx, s)
+}
+
+// TreeMap materializes all pending and applied mutations in the MutableMap.
+func (f ProximityFlusher) Map(ctx context.Context, mut *ProximityMutableMap) (ProximityMap, error) {
+	treeMap, err := f.TreeMap(ctx, mut)
+	if err != nil {
+		return ProximityMap{}, err
+	}
+	return ProximityMap{
+		tuples:  treeMap,
+		keyDesc: mut.keyDesc,
+		valDesc: mut.valDesc,
+	}, nil
+}
