@@ -473,6 +473,7 @@ func runMain() int {
 		return status
 	}
 
+	// NM4 - can we use the tmpEnv here??
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -625,6 +626,10 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingAr
 			return "", err
 		}
 		return dd, nil
+	}
+
+	if globalDir == "" {
+		globalDir, _ = fs.Abs("")
 	}
 
 	return globalDir, nil
@@ -849,6 +854,8 @@ type TheConfig struct {
 	homeDir       string
 }
 
+// NM4 - This name needs to be updated.
+
 // parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
 func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *TheConfig, terminate bool, status int) {
 	var fs filesys.Filesys
@@ -900,6 +907,45 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 	}
 	subCommand := remainingArgs[0]
 
+	// If there is a profile flag, we want to load the profile and inject it's args into the global args.
+	useDefaultProfile := false
+	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
+	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
+	if err != nil {
+		if err == config.ErrConfigParamNotFound {
+			if hasProfile {
+				cli.PrintErrln(color.RedString("Unable to load profile: %s. Not found.", profileName))
+				return nil, true, 1
+			} else {
+				// We done. Jump to returning what we have.
+			}
+		} else {
+			cli.Println(color.RedString("Failed to retrieve config key: %v", err))
+			return nil, true, 1
+		}
+	}
+	profilesJson, err := commands.DecodeProfile(encodedProfiles)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to decode profiles: %v", err))
+		return nil, true, 1
+	}
+
+	if !hasProfile && supportsGlobalArgs(subCommand) {
+		defaultProfile := gjson.Get(profilesJson, commands.DefaultProfileName)
+		if defaultProfile.Exists() {
+			profileName = commands.DefaultProfileName
+			useDefaultProfile = true
+		}
+	}
+
+	if hasProfile || useDefaultProfile {
+		apr, err = injectProfileArgs(apr, profileName, profilesJson)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to inject profile arguments: %v", err))
+			return nil, true, 1
+		}
+	}
+
 	// Current working directory is preserved to ensure that user provided path arguments are always calculated
 	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
 	// specified one.
@@ -916,56 +962,6 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 		return nil, true, 1
 	}
 
-	useDefaultProfile := false
-
-	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
-	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
-	if err != nil {
-		if err == config.ErrConfigParamNotFound {
-			if hasProfile {
-				cli.PrintErrln(color.RedString("Unable to load profile: %s. Not found.", profileName))
-				return nil, true, 1
-			} else {
-				// We done. Jump to returning what we have.
-			}
-		} else {
-			cli.Println(color.RedString("Failed to retrieve config key: %v", err))
-			return nil, true, 1
-		}
-	}
-
-	profiles, err := commands.DecodeProfile(encodedProfiles)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to decode profiles: %v", err))
-		return nil, true, 1
-	}
-
-	if !hasProfile && supportsGlobalArgs(subCommand) {
-		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
-		if defaultProfile.Exists() {
-			/*
-				/// NM4 - don't do this.
-				args = append([]string{"--profile", commands.DefaultProfileName}, args...)
-				apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
-				if err != nil {
-					return nil, nil, "", err
-				}
-				profileName, _ = apr.GetValue(commands.ProfileFlag)
-				useDefaultProfile = true
-
-			*/
-			panic("TODO: implement this")
-		}
-	}
-
-	if hasProfile || useDefaultProfile {
-		apr, err = injectProfileArgs(apr, profileName, profiles)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to inject profile arguments: %v", err))
-			return nil, true, 1
-		}
-	}
-
 	cfg = &TheConfig{
 		apr:           apr,
 		remainingArgs: remainingArgs,
@@ -979,10 +975,12 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 	return cfg, false, 0
 }
 
+// NM4 -Update DOCs
 // getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
 // for that profile in a []string. If the profile is not found, an error is returned.
 func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profiles string) (aprUpdated *argparser.ArgParseResults, err error) {
 	prof := gjson.Get(profiles, profileName)
+	aprUpdated = apr
 	if prof.Exists() {
 		hasPassword := false
 		password := ""
@@ -995,17 +993,17 @@ func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profiles str
 				} else if flag == cli.NoTLSFlag {
 					if value.Bool() {
 						// NM4 - I don't think this is right. Test it, or make another accessor.
-						aprUpdated = apr.InsertArgument(flag, "true")
+						aprUpdated = aprUpdated.InsertArgument(flag, "true")
 					}
 				} else {
 					if value.Str != "" {
-						aprUpdated = apr.InsertArgument(flag, value.Str)
+						aprUpdated = aprUpdated.InsertArgument(flag, value.Str)
 					}
 				}
 			}
 		}
 		if !apr.Contains(cli.PasswordFlag) && hasPassword {
-			aprUpdated = apr.InsertArgument(cli.PasswordFlag, password)
+			aprUpdated = aprUpdated.InsertArgument(cli.PasswordFlag, password)
 		}
 		return aprUpdated, nil
 	} else {
