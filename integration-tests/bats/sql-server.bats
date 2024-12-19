@@ -25,6 +25,108 @@ teardown() {
     teardown_common
 }
 
+# Asserts that the root@% superuser is automatically created when a sql-server is started
+# for the first time and no users are defined yet. As additional users are created, the
+# root@% superuser remains and can be manually removed without coming back.
+@test "sql-server: implicit root superuser doesn't disappear after adding users" {
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user can log in and run a query
+    run dolt -u root sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    [[ $output =~ "| root | %    |" ]] || false
+
+    # Create a new user
+    dolt -u root sql -q "CREATE USER user1@localhost; GRANT ALL PRIVILEGES on *.* to user1@localhost;"
+
+    # Restart the SQL server
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that both users are still present
+    run dolt -u root sql -q "select user, host from mysql.user where user in ('root', 'user1');"
+    [ $status -eq 0 ]
+    [[ $output =~ "| root  | %         |" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
+
+    # Delete the root user
+    dolt -u root sql -q "DROP USER root@`%`;"
+
+    # Restart the SQL server
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user is gone
+    run dolt -u user1 sql -q "select user, host from mysql.user where user in ('root', 'user1');"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
+}
+
+# Asserts that creating users via 'dolt sql' before starting a sql-server causes the privileges.db to be
+# initialized and prevents the root superuser from being created, since the customer has already started
+# manually managing user accounts.
+@test "sql-server: implicit root superuser doesn't get created when users are created before the server starts" {
+    dolt sql -q "CREATE USER user1@localhost; GRANT ALL PRIVILEGES on *.* to user1@localhost;"
+
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root superuser was not automatically created
+    run dolt -u user1 sql -q "select user, host from mysql.user where user in ('root', 'user1');"
+    echo "OUTPUT: $output"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
+}
+
+# Asserts that the root@% superuser does not get created when a temporary superuser is specified the
+# first time a sql-server is started and privileges.db is initialized.
+@test "sql-server: implicit root superuser doesn't get created when specifying a temporary superuser" {
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT -u temp1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that there is no root user
+    run dolt -u temp1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+}
+
+# Asserts that the root@% superuser is not created when the --skip-default-root-user flag is specified
+# when first running sql-server and initializing privileges.db.
+@test "sql-server: implicit root superuser doesn't get created when skipped" {
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT --skip-root-user-initialization &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user cannot log in
+    run dolt -u root sql -q "select user, host from mysql.user where user='root';"
+    [ $status -ne 0 ]
+
+    # Restart the SQL server with a temporary superuser
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT --u user1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that there is no root user
+    run dolt -u user1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+}
+
 @test "sql-server: innodb_autoinc_lock_mode is set to 2" {
     # assert that loglevel on command line is not case sensitive
     cd repo1
