@@ -38,6 +38,7 @@ import (
 const (
 	hostFlag                    = "host"
 	portFlag                    = "port"
+	skipRootUserInitialization  = "skip-root-user-initialization"
 	passwordFlag                = "password"
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
@@ -83,7 +84,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}log_level{{.EmphasisRight}}: Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
 
-{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created as needed.
+{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created automatically if it doesn't exist.
 
 {{.EmphasisLeft}}branch_control_file{{.EmphasisRight}}: Path to a file to load and store branch control permissions. Defaults to {{.EmphasisLeft}}$doltcfg-dir/branch_control.db{{.EmphasisRight}}. Will be created as needed.
 
@@ -95,9 +96,9 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
 
-{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username that connections should use for authentication
+{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database. 
 
-{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password that connections should use for authentication.
+{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database.
 
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
@@ -163,6 +164,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
+	ap.SupportsFlag(skipRootUserInitialization, "", "Skips the automatic creation of a default root super user on the first launch of a SQL server.")
 	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
@@ -378,6 +380,12 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, data
 			pass, _ := apr.GetValue(passwordFlag)
 			wcfg.SetUserName(user)
 			wcfg.SetPassword(pass)
+		}
+	}
+
+	if apr.Contains(skipRootUserInitialization) {
+		if wcfg, ok := cfg.(servercfg.WritableServerConfig); ok {
+			wcfg.SetSkipRootUserInitialization(true)
 		}
 	}
 

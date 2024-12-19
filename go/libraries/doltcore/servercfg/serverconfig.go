@@ -125,8 +125,13 @@ type ServerConfig interface {
 	Port() int
 	// User returns the username that connecting clients must use.
 	User() string
+	// UserIsSpecified returns true if a user was explicitly provided in the configuration.
+	UserIsSpecified() bool
 	// Password returns the password that connecting clients must use.
 	Password() string
+	// SkipRootUserInitialization returns whether the server should skip initializing the default root superuser.
+	// This option is only valid the first time a sql-server is started, when the root user is being initialized.
+	SkipRootUserInitialization() bool
 	// ReadTimeout returns the read timeout in milliseconds
 	ReadTimeout() uint64
 	// WriteTimeout returns the write timeout in milliseconds
@@ -239,6 +244,9 @@ type WritableServerConfig interface {
 	SetUserName(string)
 	// SetPassword sets the password for servers with no other auth established
 	SetPassword(string)
+	// SetSkipRootUserInitialization controls whether the default root superuser should be initialized,
+	// or if it should be skipped and not created.
+	SetSkipRootUserInitialization(bool)
 }
 
 type ValidatingServerConfig interface {

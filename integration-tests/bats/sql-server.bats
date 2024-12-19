@@ -711,7 +711,7 @@ SQL
 
      # verify changes outside the session
      cd newdb
-     run dolt --user=dolt sql -q "show tables"
+     run dolt sql -q "show tables"
      [ "$status" -eq 0 ]
      [[ "$output" =~ "test" ]] || false
 }
@@ -1095,7 +1095,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt --user=dolt sql -q "show tables"
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1104,7 +1104,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt --user=dolt sql -q "show tables"
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 
@@ -1337,7 +1337,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table a" ]] || false
 
-    run dolt --user=dolt sql -q "show tables"
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "a" ]] || false
 
@@ -1346,7 +1346,7 @@ END""")
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table b" ]] || false
 
-    run dolt --user=dolt sql -q "show tables"
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b" ]] || false
 

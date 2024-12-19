@@ -14,6 +14,7 @@ BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior,omitempty
 UserConfig servercfg.UserYAMLConfig 0.0.0 user,omitempty
 -Name *string 0.0.0 name,omitempty
 -Password *string 0.0.0 password,omitempty
+SkipRootUserInit *bool 0.0.0 skip_root_user_initialization,omitempty
 ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener,omitempty
 -HostStr *string 0.0.0 host,omitempty
 -PortNumber *int 0.0.0 port,omitempty
