@@ -15,6 +15,7 @@
 package val
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -123,8 +124,8 @@ func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 
 func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, offs offsets) {
 	offSz := offsetsSize(fields)
-	tup = pool.Get(uint64(bufSz + offSz + countSize))
-
+	//tup = pool.Get(uint64(bufSz + offSz + countSize))
+	tup = sql.SingletonBuf.GetFull(int(bufSz + offSz + countSize))
 	writeFieldCount(tup, fields)
 	offs = offsets(tup[bufSz : bufSz+offSz])
 
