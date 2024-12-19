@@ -302,7 +302,7 @@ func newLateBindingEngine(
 			// If the user doesn't exist, we'll create it with superuser privs.
 			ed = rawDb.Editor()
 			defer ed.Close()
-			rawDb.AddSuperUser(ed, dbUser, config.ServerHost, "")
+			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
 		}
 
 		// Set client to specified user

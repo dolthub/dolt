@@ -53,36 +53,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-privs: default user is root. create new user destroys default user." {
-    make_test_repo
-    PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT &
-    SERVER_PID=$! # will get killed by teardown_common
-    SQL_USER='root'
-    wait_for_connection $PORT 8500
-
-    run dolt sql -q "select user from mysql.user order by user"
-    [ $status -eq 0 ]
-    [[ $output =~ "root" ]] || false
-
-    dolt sql -q "create user new_user"
-    run dolt sql -q "select user from mysql.user order by user"
-    [ $status -eq 0 ]
-    [[ $output =~ "root" ]] || false
-    [[ $output =~ "new_user" ]] || false
-
-    stop_sql_server
-
-    # restarting server
-    PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT &
-    SERVER_PID=$! # will get killed by teardown_common
-    SQL_USER='new_user'
-    wait_for_connection $PORT 8500
-
-    run dolt -u root sql -q "select user from mysql.user order by user"
-    [ $status -ne 0 ]
-}
 
 @test "sql-privs: starting server with empty config works" {
     make_test_repo
@@ -245,6 +215,7 @@ behavior:
     [[ $output =~ dolt ]] || false
     [[ $output =~ new_user ]] || false
     [[ $output =~ privs_user ]] || false
+    [[ $output =~ __dolt_local_user__ ]] || false
 }
 
 @test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
@@ -263,7 +234,7 @@ behavior:
     start_sql_server test_db
 
     run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -321,7 +292,7 @@ behavior:
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run ls -a db_dir
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
@@ -362,7 +333,7 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -389,8 +360,9 @@ behavior:
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
 
     run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -415,7 +387,7 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run ls -a db_dir
@@ -461,10 +433,10 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
 
     run ls -a db_dir
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
@@ -505,8 +477,9 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -536,9 +509,9 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]
