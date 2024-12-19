@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -57,6 +58,18 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		q := "SELECT c FROM sbtest1 WHERE id=%d"
 		return fmt.Sprintf(q, rand.Intn(tableSize))
+	})
+}
+
+func BenchmarkTableScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1"
+	})
+}
+
+func BenchmarkOltpIndexScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1 WHERE k > 0"
 	})
 }
 
@@ -109,12 +122,17 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		_, iter, _, err := eng.Query(ctx, getQuery(i))
+		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
+		i := 0
 		for {
-			if _, err = iter.Next(ctx); err != nil {
+			i++
+			row, err := iter.Next(ctx)
+			if err != nil {
 				break
 			}
+			outputRow, err := server.RowToSQL(ctx, schema, row, nil)
+			_ = outputRow
 		}
 		require.Error(b, io.EOF)
 		err = iter.Close(ctx)
