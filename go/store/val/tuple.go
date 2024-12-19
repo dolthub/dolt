@@ -15,11 +15,11 @@
 package val
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
