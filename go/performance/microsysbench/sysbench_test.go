@@ -121,7 +121,6 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
-	buf := sql.NewByteBuffer(16000)
 	for i := 0; i < b.N; i++ {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
@@ -132,16 +131,12 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 			if err != nil {
 				break
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+			outputRow, err := server.RowToSQL(ctx, schema, row, nil)
 			_ = outputRow
-			if i%128 == 0 {
-				buf.Reset()
-			}
 		}
 		require.Error(b, io.EOF)
 		err = iter.Close(ctx)
 		require.NoError(b, err)
-		buf.Reset()
 	}
 	_ = eng.Close()
 	b.ReportAllocs()
@@ -183,10 +178,6 @@ func populateRepo(dEnv *env.DoltEnv, insertData string) {
 		if err != nil {
 			panic(err)
 		}
-
-		defer func() {
-			sql.SingletonBuf.Reset()
-		}()
 
 		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 	}
