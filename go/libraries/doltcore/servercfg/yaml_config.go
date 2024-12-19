@@ -129,6 +129,7 @@ type YAMLConfig struct {
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior,omitempty"`
 	UserConfig        UserYAMLConfig         `yaml:"user,omitempty"`
+	SkipRootUserInit  *bool                  `yaml:"skip_root_user_initialization,omitempty"`
 	ListenerConfig    ListenerYAMLConfig     `yaml:"listener,omitempty"`
 	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
@@ -582,6 +583,27 @@ func (cfg YAMLConfig) User() string {
 	}
 
 	return *cfg.UserConfig.Name
+}
+
+// UserIsSpecified returns true if the configuration explicitly specified a user.
+func (cfg YAMLConfig) UserIsSpecified() bool {
+	return cfg.UserConfig.Name != nil
+}
+
+// SkipRootUserInitialization returns whether the server should skip initializing the default, root
+// superuser.
+func (cfg YAMLConfig) SkipRootUserInitialization() bool {
+	if cfg.SkipRootUserInit == nil {
+		return false
+	}
+
+	return *cfg.SkipRootUserInit
+}
+
+// SetSkipRootUserInitialization sets whether the server should skip initializing the default, root
+// superuser.
+func (cfg YAMLConfig) SetSkipRootUserInitialization(b bool) {
+	cfg.SkipRootUserInit = &b
 }
 
 func (cfg *YAMLConfig) SetUserName(s string) {

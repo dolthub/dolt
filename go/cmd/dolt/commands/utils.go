@@ -291,7 +291,7 @@ func newLateBindingEngine(
 			dbUser = DefaultUser
 			ed := rawDb.Editor()
 			defer ed.Close()
-			rawDb.AddSuperUser(ed, dbUser, config.ServerHost, "")
+			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
 		}
 
 		// Set client to specified user
