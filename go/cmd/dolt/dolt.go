@@ -605,6 +605,7 @@ or check the docs for questions about usage.`)
 	return res
 }
 
+// NM4 - resolveDataDir
 func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, fs filesys.Filesys) (string, error) {
 	// global config is the dolt --data-dir <foo> sub-command version. Applies to most CLI commands.
 	globalDir, hasGlobalDataDir := gArgs.GetValue(commands.DataDirFlag)
@@ -625,7 +626,10 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingAr
 		if err != nil {
 			return "", err
 		}
-		return dd, nil
+
+		if dd != "" {
+			return dd, nil
+		}
 	}
 
 	if globalDir == "" {
@@ -978,8 +982,8 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 // NM4 -Update DOCs
 // getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
 // for that profile in a []string. If the profile is not found, an error is returned.
-func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profiles string) (aprUpdated *argparser.ArgParseResults, err error) {
-	prof := gjson.Get(profiles, profileName)
+func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profilesJson string) (aprUpdated *argparser.ArgParseResults, err error) {
+	prof := gjson.Get(profilesJson, profileName)
 	aprUpdated = apr
 	if prof.Exists() {
 		hasPassword := false
@@ -992,7 +996,6 @@ func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profiles str
 					hasPassword = value.Bool()
 				} else if flag == cli.NoTLSFlag {
 					if value.Bool() {
-						// NM4 - I don't think this is right. Test it, or make another accessor.
 						aprUpdated = aprUpdated.InsertArgument(flag, "true")
 					}
 				} else {

@@ -156,21 +156,32 @@ func ConfigureServices(
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
+			/* NM4 - For the moment let's just ignore the arg at this point.
 			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+
 				absDataDir, err := dEnv.FS.Abs("")
 				if err != nil {
 					return err
 				}
-				if serverConfig.DataDir() != absDataDir {
+
+				scDataDir := serverConfig.DataDir()
+				scDataDir, err = fs.Abs(scDataDir)
+				if err != nil {
+					return err
+				}
+
+				if scDataDir != absDataDir {
 					return errors.New("runtime error: server configured datadir mismatch")
 				}
+			}
 
 				// Load any persisted global variables from the new datadir's local configuration store
 				err = dsess.InitPersistedSystemVars(dEnv)
 				if err != nil {
 					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
 				}
-			}
+			*/
+
 			dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 			return nil
 		},
