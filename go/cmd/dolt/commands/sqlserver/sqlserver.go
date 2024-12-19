@@ -262,19 +262,28 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 }
 
 // GetDataDirPreStart returns the data dir to use for the process. This is called early in the bootstrapping of the process
-// to ensure that we load the database once and only once. Later in sql-server start up we validate that the datadir
-// hasn't changed for unexpected reasons.
+// to ensure that we know the data dir early. This function first parses the args for the --data-dir flag,
+// then attempts to find it in the server's yaml config file if it was specified.
+//
+// The returned value is non-empty only if we found a data dir. The string will be an absolute path to the data dir. An
+// empty string indicates that there was no data dir specified, and the caller should determine the data dir.
 func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 	ap := SqlServerCmd{}.ArgParser()
 	apr, err := cli.ParseArgs(ap, args, nil)
 	if err != nil {
-		// Parse failure at this stage is ignored. We'll handle it during command execution.
+		// Parse failure at this stage is ignored. We'll handle it during command execution, to be more consistent with
+		// other commands.
 		return "", nil
 	}
 
 	dataDir, hasDataDirArg := apr.GetValue(commands.DataDirFlag)
 	if hasDataDirArg {
 		// NM4 - ensure that dd is not specified in the config file before returning???
+		dataDir, err := fs.Abs(dataDir)
+		if err != nil {
+			return "", err
+		}
+
 		return dataDir, nil
 	}
 
@@ -287,11 +296,15 @@ func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 		}
 
 		if cfg.DataDir() != "" {
-			return cfg.DataDir(), nil
+			dataDir, err := fs.Abs(cfg.DataDir())
+			if err != nil {
+				return "", err
+			}
+			return dataDir, nil
 		}
 	}
 
-	return fs.Abs("")
+	return "", nil
 }
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
@@ -313,7 +326,12 @@ func ServerConfigFromArgsWithReader(
 		return nil, err
 	}
 
-	serverConfig, err := getServerConfig(dEnv.FS, apr, reader)
+	dataDir, err := dEnv.FS.Abs("")
+	if err != nil {
+		return nil, err
+	}
+
+	serverConfig, err := getServerConfig(dEnv.FS, apr, dataDir, reader)
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
@@ -327,10 +345,10 @@ func ServerConfigFromArgsWithReader(
 
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (servercfg.ServerConfig, error) {
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, dataDirOverride string, reader ServerConfigReader) (servercfg.ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 	if !ok {
-		return reader.ReadConfigArgs(apr)
+		return reader.ReadConfigArgs(apr, dataDirOverride)
 	}
 
 	cfg, err := reader.ReadConfigFile(cwdFS, cfgFile)
@@ -365,7 +383,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
 
 	if !hasCfgFile {
-		return NewCommandLineConfig(creds, apr)
+		return NewCommandLineConfig(creds, apr, "") // NM4.
 	}
 
 	var yamlCfg servercfg.YAMLConfig
