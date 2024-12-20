@@ -941,7 +941,6 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 			useDefaultProfile = true
 		}
 	}
-
 	if hasProfile || useDefaultProfile {
 		apr, err = injectProfileArgs(apr, profileName, profilesJson)
 		if err != nil {
