@@ -18,7 +18,6 @@ import (
 	"math"
 
 	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
@@ -124,7 +123,8 @@ func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, offs offsets) {
 	offSz := offsetsSize(fields)
 	tup = pool.Get(uint64(bufSz + offSz + countSize))
-
+	// todo: this causes panics still
+	//tup = sql.SingletonBuf.GetFull(int(bufSz + offSz + countSize))
 	writeFieldCount(tup, fields)
 	offs = offsets(tup[bufSz : bufSz+offSz])
 
