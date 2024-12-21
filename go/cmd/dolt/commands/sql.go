@@ -778,7 +778,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
+			subSqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
 
 			cmdType, subCmd, newQuery, err := preprocessQuery(query, lastSqlCmd, cliCtx)
 			if err != nil {
@@ -787,7 +787,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			if cmdType == DoltCliCommand {
-				err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
+				err := handleSlashCommand(subSqlCtx, subCmd, query, cliCtx)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -799,15 +799,15 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				lastSqlCmd = query
 				var sqlSch sql.Schema
 				var rowIter sql.RowIter
-				if sqlSch, rowIter, _, err = processQuery(sqlCtx, query, qryist); err != nil {
+				if sqlSch, rowIter, _, err = processQuery(subSqlCtx, query, qryist); err != nil {
 					verr := formatQueryError("", err)
 					shell.Println(verr.Verbose())
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter)
+						err = engine.PrettyPrintResultsExtended(subSqlCtx, closureFormat, sqlSch, rowIter)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter)
+						err = engine.PrettyPrintResults(subSqlCtx, closureFormat, sqlSch, rowIter)
 					}
 
 					if err != nil {
@@ -816,7 +816,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			}
 
-			nextPrompt, multiPrompt = postCommandUpdate(sqlCtx, qryist)
+			nextPrompt, multiPrompt = postCommandUpdate(subSqlCtx, qryist)
 
 			return true
 		}()
