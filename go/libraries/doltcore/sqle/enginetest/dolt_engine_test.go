@@ -1663,9 +1663,9 @@ func TestStatsHistograms(t *testing.T) {
 
 // TestStatsIO force a provider reload in-between setup and assertions that
 // forces a round trip of the statistics table before inspecting values.
-func TestStatsIO(t *testing.T) {
+func TestStatsStorage(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
-	RunStatsIOTests(t, h)
+	RunStatsStorageTests(t, h)
 }
 
 func TestStatsIOWithoutReload(t *testing.T) {

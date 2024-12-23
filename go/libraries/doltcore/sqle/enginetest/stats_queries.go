@@ -295,7 +295,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 	},
 }
 
-var DoltStatsIOTests = []queries.ScriptTest{
+var DoltStatsStorageTests = []queries.ScriptTest{
 	{
 		Name: "single-table",
 		SetUpScript: []string{
@@ -608,7 +608,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "differentiate branch cases",
+		Name: "differentiate branch names",
 		SetUpScript: []string{
 			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
 			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
