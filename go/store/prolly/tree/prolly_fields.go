@@ -165,6 +165,140 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 	return v, err
 }
 
+// GetFieldIntoRow reads the value from the ith field of the Tuple
+// into a row position.
+func GetFieldIntoRow(ctx context.Context, td val.TupleDesc, from, to int, tup val.Tuple, row sql.Row, ns NodeStore) error {
+	var ok bool
+	var v interface{}
+	var err error
+	switch td.Types[from].Enc {
+	case val.Int8Enc:
+		v, ok = td.GetInt8(from, tup)
+	case val.Uint8Enc:
+		v, ok = td.GetUint8(from, tup)
+	case val.Int16Enc:
+		v, ok = td.GetInt16(from, tup)
+	case val.Uint16Enc:
+		v, ok = td.GetUint16(from, tup)
+	case val.Int32Enc:
+		v, ok = td.GetInt32(from, tup)
+	case val.Uint32Enc:
+		v, ok = td.GetUint32(from, tup)
+	case val.Int64Enc:
+		v, ok = td.GetInt64(from, tup)
+	case val.Uint64Enc:
+		v, ok = td.GetUint64(from, tup)
+	case val.Float32Enc:
+		v, ok = td.GetFloat32(from, tup)
+	case val.Float64Enc:
+		v, ok = td.GetFloat64(from, tup)
+	case val.Bit64Enc:
+		v, ok = td.GetBit(from, tup)
+	case val.DecimalEnc:
+		v, ok = td.GetDecimal(from, tup)
+	case val.YearEnc:
+		v, ok = td.GetYear(from, tup)
+	case val.DateEnc:
+		v, ok = td.GetDate(from, tup)
+	case val.TimeEnc:
+		var t int64
+		t, ok = td.GetSqlTime(from, tup)
+		if ok {
+			v = types.Timespan(t)
+		}
+	case val.DatetimeEnc:
+		v, ok = td.GetDatetime(from, tup)
+	case val.EnumEnc:
+		v, ok = td.GetEnum(from, tup)
+	case val.SetEnc:
+		v, ok = td.GetSet(from, tup)
+	case val.StringEnc:
+		v, ok = td.GetString(from, tup)
+	case val.ByteStringEnc:
+		v, ok = td.GetBytes(from, tup)
+	case val.JSONEnc:
+		var buf []byte
+		buf, ok = td.GetJSON(from, tup)
+		if ok {
+			var doc types.JSONDocument
+			err = json.Unmarshal(buf, &doc.Val)
+			v = doc
+		}
+	// TODO: eventually remove this, and only read GeomAddrEnc
+	case val.GeometryEnc:
+		var buf []byte
+		buf, ok = td.GetGeometry(from, tup)
+		if ok {
+			v, err = deserializeGeometry(buf)
+		}
+	case val.GeomAddrEnc:
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+		var buf []byte
+		buf, ok = td.GetGeometry(from, tup)
+		if ok {
+			v, err = deserializeGeometry(buf)
+		}
+		if !ok || err != nil {
+			var h hash.Hash
+			h, ok = td.GetGeometryAddr(from, tup)
+			if ok {
+				buf, err = NewByteArray(h, ns).ToBytes(ctx)
+				if err != nil {
+					return err
+				}
+				v, err = deserializeGeometry(buf)
+			}
+		}
+	case val.Hash128Enc:
+		v, ok = td.GetHash128(from, tup)
+	case val.BytesAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetBytesAddr(from, tup)
+		if ok {
+			v, err = NewByteArray(h, ns).ToBytes(ctx)
+		}
+	case val.JSONAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetJSONAddr(from, tup)
+		if ok {
+			v, err = NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
+		}
+	case val.StringAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetStringAddr(from, tup)
+		if ok {
+			v, err = NewTextStorage(h, ns).ToString(ctx)
+		}
+	case val.CommitAddrEnc:
+		v, ok = td.GetCommitAddr(from, tup)
+	case val.CellEnc:
+		v, ok = td.GetCell(from, tup)
+	case val.ExtendedEnc:
+		var b []byte
+		b, ok = td.GetExtended(from, tup)
+		if ok {
+			v, err = td.Handlers[from].DeserializeValue(b)
+		}
+	case val.ExtendedAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetExtendedAddr(from, tup)
+		if ok {
+			var b []byte
+			b, err = NewByteArray(h, ns).ToBytes(ctx)
+			if err == nil {
+				v, err = td.Handlers[from].DeserializeValue(b)
+			}
+		}
+	default:
+		panic("unknown val.encoding")
+	}
+	if !ok || err != nil {
+		return err
+	}
+	row[to] = v
+	return err
+}
+
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
 // and a boolean indicating success.
 func Serialize(ctx context.Context, ns NodeStore, t val.Type, v interface{}) (result []byte, err error) {
