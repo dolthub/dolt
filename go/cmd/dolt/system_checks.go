@@ -19,14 +19,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-// reconfigIfTempFileMoveFails checks to see if the file system used for the data directory supports moved from TMPDIR.
-// If this is not possible, we can't perform automic moves of storage files, so we force the temp dir to be the data dir
+// reconfigIfTempFileMoveFails checks to see if the file system used for the data directory supports moves from TMPDIR.
+// If this is not possible, we can't perform atomic moves of storage files, so we force the temp dir to be in the datadir
 // to assure they are on the same file system.
 func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 	absP, err := dataDir.Abs("")
@@ -37,7 +38,7 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 	dotDoltCreated := false
 	tmpDirCreated := false
 
-	doltDir := filepath.Join(absP, ".dolt")
+	doltDir := filepath.Join(absP, dbfactory.DoltDir)
 	stat, err := os.Stat(doltDir)
 	if err != nil {
 		err := os.MkdirAll(doltDir, os.ModePerm)
