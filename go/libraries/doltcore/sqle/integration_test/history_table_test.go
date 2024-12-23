@@ -212,7 +212,7 @@ var INIT = ""   // HEAD~4
 func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
 	for _, c := range setupCommon {
@@ -239,7 +239,7 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 
 func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	ctx := context.Background()
-	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
 	for _, c := range test.setup {

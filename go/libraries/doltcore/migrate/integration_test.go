@@ -170,7 +170,7 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 		dEnv, err = test.hook(ctx, dEnv)
 		require.NoError(t, err)
 	}
-	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
 	cmd := commands.SqlCmd{}
