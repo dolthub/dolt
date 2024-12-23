@@ -324,7 +324,12 @@ func TestYAMLConfigDefaults(t *testing.T) {
 
 	assert.Equal(t, DefaultHost, cfg.Host())
 	assert.Equal(t, DefaultPort, cfg.Port())
-	assert.Equal(t, DefaultUser, cfg.User())
+	// TODO: Testing out not defaulting the user to "root", so that we can
+	//       distinguish between when a user is explicitly specified or not.
+	//       We want this, so we can tell if the user was explicitly specified
+	//       and should be an ephemeral superuser, or if none was specified
+	//       and we should initialize the implicit root superuser.
+	assert.Equal(t, "", cfg.User())
 	assert.Equal(t, DefaultPass, cfg.Password())
 	assert.Equal(t, uint64(DefaultTimeout), cfg.WriteTimeout())
 	assert.Equal(t, uint64(DefaultTimeout), cfg.ReadTimeout())

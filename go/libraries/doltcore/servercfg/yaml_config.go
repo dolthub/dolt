@@ -316,7 +316,13 @@ func (cfg YAMLConfig) WriteTimeout() uint64 {
 // User returns the username that connecting clients must use.
 func (cfg YAMLConfig) User() string {
 	if cfg.UserConfig.Name == nil {
-		return DefaultUser
+		// TODO: Having this return "root" by default prevents us from being able to
+		//       tell is a user was explicitly specified or not. The server initialization
+		//       code then thinks an ephemeral user was requested, and doesn't create the
+		//       implicit, persisted root superuser.
+		// TODO: But... why would this have not allowed a root user to log in?
+		//return DefaultUser
+		return ""
 	}
 
 	return *cfg.UserConfig.Name
