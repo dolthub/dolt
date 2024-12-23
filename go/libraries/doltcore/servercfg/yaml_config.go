@@ -129,6 +129,7 @@ type YAMLConfig struct {
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior"`
 	UserConfig        UserYAMLConfig         `yaml:"user"`
+	SkipRootUserInit  *bool                  `yaml:"skip_root_user_initialization,omitempty"`
 	ListenerConfig    ListenerYAMLConfig     `yaml:"listener"`
 	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
@@ -315,10 +316,32 @@ func (cfg YAMLConfig) WriteTimeout() uint64 {
 // User returns the username that connecting clients must use.
 func (cfg YAMLConfig) User() string {
 	if cfg.UserConfig.Name == nil {
-		return DefaultUser
+		// TODO: Having this return "root" by default prevents us from being able to
+		//       tell is a user was explicitly specified or not. The server initialization
+		//       code then thinks an ephemeral user was requested, and doesn't create the
+		//       implicit, persisted root superuser.
+		// TODO: But... why would this have not allowed a root user to log in?
+		//return DefaultUser
+		return ""
 	}
 
 	return *cfg.UserConfig.Name
+}
+
+// SkipRootUserInitialization returns whether the server should skip initializing the default, root
+// superuser.
+func (cfg YAMLConfig) SkipRootUserInitialization() bool {
+	if cfg.SkipRootUserInit == nil {
+		return false
+	}
+
+	return *cfg.SkipRootUserInit
+}
+
+// SetSkipRootUserInitialization sets whether the server should skip initializing the default, root
+// superuser.
+func (cfg YAMLConfig) SetSkipRootUserInitialization(b bool) {
+	cfg.SkipRootUserInit = &b
 }
 
 func (cfg *YAMLConfig) SetUserName(s string) {

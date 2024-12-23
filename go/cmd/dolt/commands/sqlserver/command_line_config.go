@@ -29,32 +29,33 @@ import (
 )
 
 type commandLineServerConfig struct {
-	host                    string
-	port                    int
-	user                    string
-	password                string
-	timeout                 uint64
-	readOnly                bool
-	logLevel                servercfg.LogLevel
-	dataDir                 string
-	cfgDir                  string
-	autoCommit              bool
-	doltTransactionCommit   bool
-	maxConnections          uint64
-	tlsKey                  string
-	tlsCert                 string
-	requireSecureTransport  bool
-	maxLoggedQueryLen       int
-	shouldEncodeLoggedQuery bool
-	privilegeFilePath       string
-	branchControlFilePath   string
-	allowCleartextPasswords bool
-	socket                  string
-	remotesapiPort          *int
-	remotesapiReadOnly      *bool
-	goldenMysqlConn         string
-	eventSchedulerStatus    string
-	valuesSet               map[string]struct{}
+	host                       string
+	port                       int
+	user                       string
+	password                   string
+	skipRootUserInitialization bool
+	timeout                    uint64
+	readOnly                   bool
+	logLevel                   servercfg.LogLevel
+	dataDir                    string
+	cfgDir                     string
+	autoCommit                 bool
+	doltTransactionCommit      bool
+	maxConnections             uint64
+	tlsKey                     string
+	tlsCert                    string
+	requireSecureTransport     bool
+	maxLoggedQueryLen          int
+	shouldEncodeLoggedQuery    bool
+	privilegeFilePath          string
+	branchControlFilePath      string
+	allowCleartextPasswords    bool
+	socket                     string
+	remotesapiPort             *int
+	remotesapiReadOnly         *bool
+	goldenMysqlConn            string
+	eventSchedulerStatus       string
+	valuesSet                  map[string]struct{}
 }
 
 var _ servercfg.ServerConfig = (*commandLineServerConfig)(nil)
@@ -110,6 +111,10 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	} else {
 		config.withUser(creds.Username)
 		config.withPassword(creds.Password)
+	}
+
+	if apr.Contains(skipRootUserInitialization) {
+		config.skipRootUserInitialization = true
 	}
 
 	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
@@ -186,6 +191,12 @@ func (cfg *commandLineServerConfig) User() string {
 // Password returns the password that connecting clients must use.
 func (cfg *commandLineServerConfig) Password() string {
 	return cfg.password
+}
+
+// SkipRootUserInitialization returns whether the server should skip creating the implicit root
+// superuser the first time a sql-server instance is launched.
+func (cfg *commandLineServerConfig) SkipRootUserInitialization() bool {
+	return cfg.skipRootUserInitialization
 }
 
 // ReadTimeout returns the read and write timeouts.
