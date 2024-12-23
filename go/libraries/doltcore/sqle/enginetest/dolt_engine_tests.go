@@ -1553,8 +1553,8 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
@@ -1569,7 +1569,7 @@ func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()

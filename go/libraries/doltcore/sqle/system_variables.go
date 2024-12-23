@@ -244,7 +244,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
-		Default: 120,
+		Default: 600,
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsBranches,

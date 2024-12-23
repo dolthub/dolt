@@ -63,7 +63,7 @@ type Database interface {
 	// SchemaChange returns false if any table schema in the session
 	// root is incompatible with the latest schema used to create a stored
 	// set of statistics.
-	SchemaChange(ctx *sql.Context, branch string) (bool, error)
+	SchemaChange(ctx *sql.Context, branch string, branchQdb dsess.SqlDatabase) (bool, error)
 }
 
 // StatsFactory instances construct statistic databases.

@@ -162,6 +162,15 @@ func (p *Provider) ThreadStatus(dbName string) string {
 	return "no active stats thread"
 }
 
+func (p *Provider) TrackedBranches(dbName string) []string {
+	db, ok := p.getStatDb(dbName)
+	if !ok {
+		return nil
+	}
+	return db.Branches()
+
+}
+
 func (p *Provider) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
