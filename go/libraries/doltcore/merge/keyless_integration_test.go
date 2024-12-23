@@ -114,7 +114,7 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
-			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			for _, c := range test.setup {
@@ -249,7 +249,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)
-		cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+		cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 		require.NoError(t, err)
 
 		for _, c := range cc {
@@ -282,7 +282,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
-			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, verr)
 
 			resolve := cnfcmds.ResolveCmd{}
@@ -302,7 +302,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
-			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, verr)
 
 			resolve := cnfcmds.ResolveCmd{}
