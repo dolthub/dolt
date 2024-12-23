@@ -125,14 +125,18 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
 		i := 0
+		buf := sql.NewByteBuffer(16000)
 		for {
 			i++
 			row, err := iter.Next(ctx)
 			if err != nil {
 				break
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil)
+			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
 			_ = outputRow
+			if i%128 == 0 {
+				buf.Reset()
+			}
 		}
 		require.Error(b, io.EOF)
 		err = iter.Close(ctx)
