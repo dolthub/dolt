@@ -168,7 +168,7 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv)
+	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv, dEnv.FS)
 	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(context.Background())
 	if err != nil {
 		mr.Errhand(err)

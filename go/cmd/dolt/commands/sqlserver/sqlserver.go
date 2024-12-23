@@ -213,7 +213,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, cliCtx.WorkingDir(), controller)
 	if err != nil {
 		cli.Println(color.RedString(err.Error()))
 		return 1
@@ -235,10 +235,10 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 }
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped.
-func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
+func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv)
+	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv, cwd)
 	if err != nil {
 		return err
 	}
@@ -308,8 +308,8 @@ func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 }
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
-func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (servercfg.ServerConfig, error) {
-	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
+func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys) (servercfg.ServerConfig, error) {
+	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, cwd, DoltServerConfigReader{})
 }
 
 // ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
@@ -318,6 +318,7 @@ func ServerConfigFromArgsWithReader(
 	help cli.UsagePrinter,
 	args []string,
 	dEnv *env.DoltEnv,
+	cwd filesys.Filesys,
 	reader ServerConfigReader,
 ) (servercfg.ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -336,7 +337,7 @@ func ServerConfigFromArgsWithReader(
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
 
-	if err = setupDoltConfig(dEnv, apr, serverConfig); err != nil {
+	if err = setupDoltConfig(dEnv, cwd, apr, serverConfig); err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
 
@@ -408,7 +409,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 }
 
 // setupDoltConfig updates the given server config with where to create .doltcfg directory
-func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config servercfg.ServerConfig) error {
+func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgParseResults, config servercfg.ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
 		return nil
 	}
@@ -423,6 +424,13 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	dataDir := serverConfig.DataDir()
 	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
 	if cfgDirSpecified {
+		if !filepath.IsAbs(cfgDir) {
+			var err error
+			cfgDir, err = cwd.Abs(cfgDir)
+			if err != nil {
+				return err
+			}
+		}
 		cfgDirPath = cfgDir
 	} else if dataDirSpecified {
 		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)

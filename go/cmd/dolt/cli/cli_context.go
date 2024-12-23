@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -39,17 +40,23 @@ type LateBindQueryist func(ctx context.Context) (Queryist, *sql.Context, func(),
 type CliContext interface {
 	// GlobalArgs returns the arguments passed before the subcommand.
 	GlobalArgs() *argparser.ArgParseResults
+	WorkingDir() filesys.Filesys
 	Config() *env.DoltCliConfig
 	QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error)
 }
 
 // NewCliContext creates a new CliContext instance. Arguments must not be nil.
-func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
+func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, cwd filesys.Filesys, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
 	if args == nil || config == nil || latebind == nil {
 		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, and latebind must be non nil."))
 	}
 
-	return LateBindCliContext{globalArgs: args, config: config, activeContext: &QueryistContext{}, bind: latebind}, nil
+	return LateBindCliContext{
+		globalArgs:    args,
+		config:        config,
+		cwd:           cwd,
+		activeContext: &QueryistContext{},
+		bind:          latebind}, nil
 }
 
 type QueryistContext struct {
@@ -62,6 +69,7 @@ type QueryistContext struct {
 // created once.
 type LateBindCliContext struct {
 	globalArgs    *argparser.ArgParseResults
+	cwd           filesys.Filesys
 	config        *env.DoltCliConfig
 	activeContext *QueryistContext
 
@@ -90,6 +98,10 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.C
 	lbc.activeContext.sqlCtx = sqlCtx
 
 	return qryist, sqlCtx, closer, nil
+}
+
+func (lbc LateBindCliContext) WorkingDir() filesys.Filesys {
+	return lbc.cwd
 }
 
 // Config returns the dolt config stored in CliContext

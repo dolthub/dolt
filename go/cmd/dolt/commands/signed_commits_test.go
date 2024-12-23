@@ -149,7 +149,7 @@ func execCommand(ctx context.Context, wd string, cmd cli.Command, args []string,
 		return
 	}
 
-	cliCtx, err := cli.NewCliContext(apr, cfg, latebind)
+	cliCtx, err := cli.NewCliContext(apr, cfg, dEnv.FS, latebind)
 	if err != nil {
 		err = fmt.Errorf("error creating cli context: %w", err)
 		return

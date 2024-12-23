@@ -178,7 +178,7 @@ func populateRepo(dEnv *env.DoltEnv, insertData string) {
 	execSql := func(dEnv *env.DoltEnv, q string) int {
 		ctx := context.Background()
 		args := []string{"-r", "null", "-q", q}
-		cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+		cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 		if err != nil {
 			panic(err)
 		}

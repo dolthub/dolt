@@ -202,7 +202,7 @@ func filterBranchTests() []filterBranchTest {
 func setupFilterBranchTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
 	for _, c := range setupCommon {
@@ -217,7 +217,7 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 	ctx := context.Background()
 	dEnv := setupFilterBranchTests(t)
 	defer dEnv.DoltDB.Close()
-	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
 	for _, c := range test.setup {

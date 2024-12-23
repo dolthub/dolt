@@ -132,7 +132,7 @@ var doltSubCommands = []cli.Command{
 
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
+	// NM4???	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.CloneCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},
@@ -564,7 +564,7 @@ func runMain() int {
 			return 1
 		}
 
-		cliCtx, err = cli.NewCliContext(cfg.apr, dEnv.Config, lateBind)
+		cliCtx, err = cli.NewCliContext(cfg.apr, dEnv.Config, cfg.cwdFS, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
