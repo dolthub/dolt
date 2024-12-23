@@ -176,14 +176,14 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	row := make(sql.Row, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
-		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
+		err = tree.GetFieldIntoRow(ctx, it.keyDesc, idx, outputIdx, key, row, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
+		err = tree.GetFieldIntoRow(ctx, it.valDesc, idx, outputIdx, value, row, it.ns)
 		if err != nil {
 			return nil, err
 		}
