@@ -164,6 +164,7 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, v
 		RSLoadErr:  rsErr,
 		FS:         fs,
 		hdp:        hdp,
+		urlStr:     doltdb.LocalDirDoltDB,
 	}
 }
 
