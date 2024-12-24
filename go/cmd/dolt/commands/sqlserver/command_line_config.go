@@ -80,8 +80,10 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 	}
 }
 
-// NewCommandLineConfig returns server config based on the credentials and command line arguments given.
-func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (servercfg.ServerConfig, error) {
+// NewCommandLineConfig returns server config based on the credentials and command line arguments given. The dataDirOverride
+// parameter is used to override the data dir specified in the command line arguments. This comes up when there are
+// situations where there are multiple ways to specify the data dir.
+func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults, dataDirOverride string) (servercfg.ServerConfig, error) {
 	config := DefaultCommandLineServerConfig()
 
 	if sock, ok := apr.GetValue(socketFlag); ok {
@@ -144,8 +146,16 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withDataDir(dataDir)
 	}
 
-	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		config.withDataDir(dataDir)
+	// We explicitly don't use the dataDir flag from the APR here. The data dif flag is pull out early and converted
+	// to an absolute path. It is read in the GetDataDirPreStart function, which is called early in dolt.go to get the
+	// data dir for any dolt process. This complexity exists because the server's config.yaml config file can contain the
+	// dataDir, but we don't execute any server specific logic until after the database environment is initialized.
+	if dataDirOverride != "" {
+		config.withDataDir(dataDirOverride)
+	} else {
+		if dd, ok := apr.GetValue(commands.DataDirFlag); ok {
+			config.withDataDir(dd)
+		}
 	}
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
@@ -466,7 +476,7 @@ type ServerConfigReader interface {
 	// ReadConfigFile reads a config file and returns a ServerConfig for it
 	ReadConfigFile(cwdFS filesys.Filesys, file string) (servercfg.ServerConfig, error)
 	// ReadConfigArgs reads command line arguments and returns a ServerConfig for them
-	ReadConfigArgs(args *argparser.ArgParseResults) (servercfg.ServerConfig, error)
+	ReadConfigArgs(args *argparser.ArgParseResults, dataDirOverride string) (servercfg.ServerConfig, error)
 }
 
 var _ ServerConfigReader = DoltServerConfigReader{}
@@ -475,6 +485,6 @@ func (d DoltServerConfigReader) ReadConfigFile(cwdFS filesys.Filesys, file strin
 	return servercfg.YamlConfigFromFile(cwdFS, file)
 }
 
-func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults) (servercfg.ServerConfig, error) {
-	return NewCommandLineConfig(nil, args)
+func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults, dataDirOverride string) (servercfg.ServerConfig, error) {
+	return NewCommandLineConfig(nil, args, dataDirOverride)
 }

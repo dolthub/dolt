@@ -434,7 +434,11 @@ behavior:
     [ $status -eq 0 ]
     [[ $output =~ dolt ]] || false
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    echo "------------------"
+    echo "$output"
+    echo "------------------"
+    [ $status -eq 0 ]
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]

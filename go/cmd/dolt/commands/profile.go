@@ -324,9 +324,10 @@ type Profile struct {
 	NoTLS         bool   `json:"no-tls"`
 	DataDir       string `json:"data-dir"`
 	DoltCfgDir    string `json:"doltcfg-dir"`
-	PrivilegeFile string `json:"privilege-file"`
+	PrivilegeFile string `json:"privilege-file"` // NM4 - Not sure about this config and the next.
 	BranchControl string `json:"branch-control-file"`
 	UseDB         string `json:"use-db"`
+	// NM4 - Seems like we can't specify --branch in a profile.
 }
 
 func (p Profile) String() string {
