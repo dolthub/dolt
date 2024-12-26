@@ -467,7 +467,7 @@ func runMain() int {
 		return exit
 	}
 
-	cfg, terminate, status := parseGlobalArgsAndSubCommandName(ctx, args)
+	cfg, terminate, status := createBootstrapConfig(ctx, args)
 	if terminate {
 		return status
 	}
@@ -846,27 +846,40 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
-// NM4 - naming is hard.
-type TheConfig struct {
-	apr           *argparser.ArgParseResults
+// bootstrapConfig is the struct that holds the parsed arguments and other configurations.
+type bootstrapConfig struct {
+	// apr is the parsed global arguments. This will not include hidden administrative arguments, which are pulled out first.
+	// This APR will include profile injected arguments.
+	apr *argparser.ArgParseResults
+
+	// dataDir is the absolute path to the data directory. This should be the final word - uses of dataDir downstream should
+	// only use this path.
+	dataDir string
+	// dataDirFS is the filesys.Filesys for the data directory.
+	dataDirFS filesys.Filesys
+	// cwdFS is the filesys.Filesys where the process started. Used whan there are relative path arguments provided by the user.
+	cwdFS filesys.Filesys
+
+	// remainingArgs is the remaining arguments after parsing global arguments. This includes the subCommand at location 0
+	// always.
 	remainingArgs []string
-	dataDirFS     filesys.Filesys
-	dataDir       string
-	cwdFS         filesys.Filesys
 	subCommand    string
-	homeDir       string
+
+	// homeDir is the absolute path to the user's home directory. This is resolved as part of looking up the global config.
+	homeDir string
 }
 
-// NM4 - This name needs to be updated.
-
-// parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
-func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *TheConfig, terminate bool, status int) {
+// createBootstrapConfig parses the global arguments, inspects current working directory, loads the profile, and
+// even digs into server config to build the bootstrapConfig struct. If all goes well, |cfg| is set to a struct that
+// contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
+// |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
+// |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
+func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
 	var globalConfig config.ReadWriteConfig
 
-	//
 	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
@@ -965,7 +978,7 @@ func parseGlobalArgsAndSubCommandName(ctx context.Context, args []string) (cfg *
 		return nil, true, 1
 	}
 
-	cfg = &TheConfig{
+	cfg = &bootstrapConfig{
 		apr:           apr,
 		remainingArgs: remainingArgs,
 		dataDirFS:     dataDirFS,
