@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -267,6 +268,8 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 //
 // The returned value is non-empty only if we found a data dir. The string will be an absolute path to the data dir. An
 // empty string indicates that there was no data dir specified, and the caller should determine the data dir.
+//
+// If the --data-dir flag is specified in the command line, and the config file, an error is returned.
 func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 	ap := SqlServerCmd{}.ArgParser()
 	apr, err := cli.ParseArgs(ap, args, nil)
@@ -276,17 +279,15 @@ func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 		return "", nil
 	}
 
-	dataDir, hasDataDirArg := apr.GetValue(commands.DataDirFlag)
-	if hasDataDirArg {
-		// NM4 - ensure that dd is not specified in the config file before returning???
-		dataDir, err := fs.Abs(dataDir)
+	cliDataDir, hasDataDirCliArg := apr.GetValue(commands.DataDirFlag)
+	if hasDataDirCliArg {
+		cliDataDir, err = fs.Abs(cliDataDir)
 		if err != nil {
 			return "", err
 		}
-
-		return dataDir, nil
 	}
 
+	var cfgDataDir string
 	confArg, hasConfArg := apr.GetValue(configFileFlag)
 	if hasConfArg {
 		reader := DoltServerConfigReader{}
@@ -296,14 +297,22 @@ func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 		}
 
 		if cfg.DataDir() != "" {
-			dataDir, err := fs.Abs(cfg.DataDir())
+			cfgDataDir, err = fs.Abs(cfg.DataDir())
 			if err != nil {
 				return "", err
 			}
-			return dataDir, nil
 		}
 	}
 
+	if cfgDataDir != "" && cliDataDir != "" {
+		return "", errors.New("--data-dir specified in both config file and command line. Please specify only one.")
+	}
+	if cfgDataDir != "" {
+		return cfgDataDir, nil
+	}
+	if cliDataDir != "" {
+		return cliDataDir, nil
+	}
 	return "", nil
 }
 
