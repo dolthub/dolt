@@ -6241,7 +6241,11 @@ var SystemTableIndexTests = []systabScript{
 				exp: []sql.Row{{5}},
 			},
 			{
-				query: "select count(*) from dolt_diff_xy join xy on x = to_x",
+				query: "select count(*) /*+ JOIN_ORDER(a,b) */ from dolt_diff_xy a join xy b on x = to_x",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) /*+ JOIN_ORDER(b,a) */ from dolt_diff_xy a join xy b on x = to_x",
 				exp:   []sql.Row{{45}},
 			},
 		},
