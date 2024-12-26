@@ -558,14 +558,14 @@ func runMain() int {
 		}
 		cfg.apr = aprAlt
 
-		lateBind, err := buildLateBinder(ctx, cfg.cwdFS, dEnv, mrEnv, creds, cfg.apr, cfg.subCommand, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, cfg.cwdFs, dEnv, mrEnv, creds, cfg.apr, cfg.subCommand, verboseEngineSetup)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
 			return 1
 		}
 
-		cliCtx, err = cli.NewCliContext(cfg.apr, dEnv.Config, cfg.cwdFS, lateBind)
+		cliCtx, err = cli.NewCliContext(cfg.apr, dEnv.Config, cfg.cwdFs, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
@@ -606,37 +606,44 @@ or check the docs for questions about usage.`)
 }
 
 // NM4 - resolveDataDir
-func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, fs filesys.Filesys) (string, error) {
+func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, cwdFs filesys.Filesys) (dataDir string, err error) {
 	// global config is the dolt --data-dir <foo> sub-command version. Applies to most CLI commands.
 	globalDir, hasGlobalDataDir := gArgs.GetValue(commands.DataDirFlag)
 	if hasGlobalDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
-		dataDir, err := fs.Abs(globalDir)
+		dd, err := cwdFs.Abs(globalDir)
 		if err != nil {
 			return "", errors.New(fmt.Sprintf("Failed to get absolute path for %s: %v", dataDir, err))
 		}
-		if ok, dir := fs.Exists(dataDir); !ok || !dir {
-			return "", errors.New(fmt.Sprintf("Provided data directory does not exist: %s", dataDir))
-		}
-		globalDir = dataDir
+		dataDir = dd
 	}
 
 	if subCmd == "sql-server" { // NM4 - const.
-		dd, err := sqlserver.GetDataDirPreStart(fs, remainingArgs)
+		// GetDataDirPreStart always returns an absolute path.
+		dd, err := sqlserver.GetDataDirPreStart(cwdFs, remainingArgs)
 		if err != nil {
 			return "", err
 		}
 
 		if dd != "" {
-			return dd, nil
+			if hasGlobalDataDir {
+				return "", errors.New("cannot specify both global --data-dir argument and --data-dir in sql-server config. Please specify only one.")
+			}
+			dataDir = dd
 		}
 	}
 
-	if globalDir == "" {
-		globalDir, _ = fs.Abs("")
+	// NM4 - not sure if it's always the case that dd must exist if it's specified.
+	if ok, dir := cwdFs.Exists(dataDir); !ok || !dir {
+		return "", errors.New(fmt.Sprintf("Provided data directory does not exist: %s", dataDir))
 	}
 
-	return globalDir, nil
+	if dataDir == "" {
+		// No data dir specified, so we default to the current directory.
+		dataDir, _ = cwdFs.Abs("")
+	}
+
+	return dataDir, nil
 }
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
@@ -862,8 +869,8 @@ type bootstrapConfig struct {
 	dataDir string
 	// dataDirFS is the filesys.Filesys for the data directory.
 	dataDirFS filesys.Filesys
-	// cwdFS is the filesys.Filesys where the process started. Used whan there are relative path arguments provided by the user.
-	cwdFS filesys.Filesys
+	// cwdFs is the filesys.Filesys where the process started. Used when there are relative path arguments provided by the user.
+	cwdFs filesys.Filesys
 
 	// remainingArgs is the remaining arguments after parsing global arguments. This includes the subCommand at location 0
 	// always.
@@ -880,9 +887,8 @@ type bootstrapConfig struct {
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
-	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, fs, doltversion.Version)
+	cwdFs := filesys.LocalFS
+	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, doltversion.Version)
 	var globalConfig config.ReadWriteConfig
 
 	homeDir, err := env.GetCurrentUserHomeDir()
@@ -973,17 +979,13 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		}
 	}
 
-	// Current working directory is preserved to ensure that user provided path arguments are always calculated
-	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
-	// specified one.
-	cwdFS := fs
-	dataDir, err := resolveDataDir(apr, subCommand, remainingArgs[1:], fs)
+	dataDir, err := resolveDataDir(apr, subCommand, remainingArgs[1:], cwdFs)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to resolve the data directory: %v", err))
 		return nil, true, 1
 	}
 
-	dataDirFS, err := fs.WithWorkingDir(dataDir)
+	dataDirFS, err := cwdFs.WithWorkingDir(dataDir)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to set the data directory to: %s. %v", dataDir, err))
 		return nil, true, 1
@@ -995,7 +997,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		remainingArgs: remainingArgs,
 		dataDirFS:     dataDirFS,
 		dataDir:       dataDir,
-		cwdFS:         cwdFS,
+		cwdFs:         cwdFs,
 		subCommand:    subCommand,
 		homeDir:       homeDir,
 	}
