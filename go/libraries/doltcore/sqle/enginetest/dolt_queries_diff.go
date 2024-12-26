@@ -6240,6 +6240,10 @@ var SystemTableIndexTests = []systabScript{
            ORDER BY cm.date, cm.message asc`,
 				exp: []sql.Row{{5}},
 			},
+			{
+				query: "select count(*) from dolt_diff_xy join xy on x = to_x",
+				exp:   []sql.Row{{45}},
+			},
 		},
 	},
 	{

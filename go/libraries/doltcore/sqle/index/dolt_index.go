@@ -152,7 +152,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		vrw:                           t.ValueReadWriter(),
 		ns:                            t.NodeStore(),
 		keyBld:                        keyBld,
-		order:                         sql.IndexOrderAsc,
+		order:                         sql.IndexOrderNone, // disjoint commit
 		constrainedToLookupExpression: false,
 	}
 
