@@ -59,7 +59,6 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 		tmpDirCreated = true
 
 	} else if !stat.IsDir() {
-		// Should the file exist?? If it does is it a problem? Is it a directory??
 		return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", doltTmpDir)
 	}
 
