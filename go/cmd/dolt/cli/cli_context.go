@@ -18,12 +18,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // LateBindQueryist is a function that will be called the first time Queryist is needed for use. Input is a context which
