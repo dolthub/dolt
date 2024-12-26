@@ -144,16 +144,31 @@ func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
 	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
 }
 
-// InsertArgument inserts a new argument into the results. A new ArgParseResults object is returned with the new
-// argument added. // NM4 - error when is exists??
-func (res *ArgParseResults) InsertArgument(name, val string) *ArgParseResults {
+// SetArgument inserts or replaces an argument. A new ArgParseResults object is returned with the new
+// argument added. The parser of the original ArgParseResults is used to verify that the option is supported.
+//
+// If the option is not supported, this is considered a runtime error, and an error is returned to that effect.
+func (res *ArgParseResults) SetArgument(name, val string) (*ArgParseResults, error) {
 	newNamedArgs := make(map[string]string, len(res.options)+1)
 	for flag, origVal := range res.options {
 		newNamedArgs[flag] = origVal
 	}
+
+	found := false
+	// Verify that the options is supported - using the long name
+	for _, opt := range res.parser.Supported {
+		if opt.Name == name {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil, UnknownArgumentParam{name: name}
+	}
 	newNamedArgs[name] = val
 
-	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
+	return &ArgParseResults{newNamedArgs, res.Args, res.parser, res.PositionalArgsSeparatorIndex}, nil
 }
 
 func (res *ArgParseResults) MustGetValue(name string) string {
