@@ -141,18 +141,19 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 
 	// to_ columns
 	toIndex := doltIndex{
-		id:                            "PRIMARY",
-		tblName:                       doltdb.DoltDiffTablePrefix + tbl,
-		dbName:                        db,
-		columns:                       toCols,
-		indexSch:                      sch,
-		tableSch:                      sch,
-		unique:                        true,
-		comment:                       "",
-		vrw:                           t.ValueReadWriter(),
-		ns:                            t.NodeStore(),
-		keyBld:                        keyBld,
-		order:                         sql.IndexOrderNone, // disjoint commit
+		id:       "PRIMARY",
+		tblName:  doltdb.DoltDiffTablePrefix + tbl,
+		dbName:   db,
+		columns:  toCols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		ns:       t.NodeStore(),
+		keyBld:   keyBld,
+		// only ordered on PK within a diff partition
+		order:                         sql.IndexOrderNone,
 		constrainedToLookupExpression: false,
 	}
 
