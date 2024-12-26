@@ -2076,7 +2076,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.UntypedSqlRow{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.pk = 3)"},
@@ -2087,7 +2087,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.UntypedSqlRow{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
@@ -2151,7 +2151,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 4",
+				Query: "explain plan select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.UntypedSqlRow{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.c = 4)"},
@@ -2162,7 +2162,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
+				Query: "explain plan select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.UntypedSqlRow{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
@@ -7132,6 +7132,23 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			{
 				Query:       "alter table t modify column i text",
 				ExpectedErr: sql.ErrKeyTooLong,
+			},
+		},
+	},
+	{
+		Name: "text and blob key errors",
+		SetUpScript: []string{
+			"create table t (t text, b blob, unique(t(4)), unique(b));",
+			"insert into t values ('hello', 'goodbye');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "insert into t values('hello123', 'something different');",
+				ExpectedErrStr: "duplicate unique key given: [hell]",
+			},
+			{
+				Query:          "insert into t values('something different', 'goodbye');",
+				ExpectedErrStr: "duplicate unique key given: [goodbye]",
 			},
 		},
 	},

@@ -578,6 +578,8 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 	gcs, gcsOK := lvs.cs.(chunks.GenerationalCS)
 	collector, collectorOK := lvs.cs.(chunks.ChunkStoreGarbageCollector)
 
+	var chksMode chunks.GCMode
+
 	if gcsOK && collectorOK {
 		oldGen := gcs.OldGen()
 		newGen := gcs.NewGen()
@@ -586,8 +588,10 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		switch mode {
 		case GCModeDefault:
 			oldGenHasMany = oldGen.HasMany
+			chksMode = chunks.GCMode_Default
 		case GCModeFull:
 			oldGenHasMany = unfilteredHashFunc
+			chksMode = chunks.GCMode_Full
 		default:
 			return fmt.Errorf("unsupported GCMode %v", mode)
 		}
@@ -617,7 +621,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			newGenRefs.Insert(root)
 
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
-			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, collector, oldGen, nil, func() hash.HashSet {
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, chksMode, collector, oldGen, nil, func() hash.HashSet {
 				n := lvs.transitionToNewGenGC()
 				newGenRefs.InsertAll(n)
 				return make(hash.HashSet)
@@ -638,7 +642,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -685,7 +689,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, collector, collector, safepointF, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, collector, collector, safepointF, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -719,6 +723,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
+	chksMode chunks.GCMode,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointF func() error,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
@@ -729,7 +734,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		var err error
-		gcFinalizer, err = src.MarkAndSweepChunks(ctx, keepChunks, dest)
+		gcFinalizer, err = src.MarkAndSweepChunks(ctx, keepChunks, dest, chksMode)
 		return err
 	})
 

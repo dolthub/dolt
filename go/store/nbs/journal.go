@@ -206,7 +206,7 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 	}
 
 	prev := mc.lock
-	next := generateLockHash(mc.root, mc.specs, mc.appendix)
+	next := generateLockHash(mc.root, mc.specs, mc.appendix, nil)
 	mc.lock = next
 
 	mc, err = backing.Update(ctx, prev, mc, &Stats{}, nil)

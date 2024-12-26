@@ -7,7 +7,7 @@ EncodeLoggedQuery *bool 0.0.0 encode_logged_query,omitempty
 BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior
 -ReadOnly *bool 0.0.0 read_only
 -AutoCommit *bool 0.0.0 autocommit
--PersistenceBehavior *string 0.0.0 persistence_behavior
+-PersistenceBehavior *string 0.0.0 persistence_behavior,omitempty
 -DisableClientMultiStatements *bool 0.0.0 disable_client_multi_statements
 -DoltTransactionCommit *bool 0.0.0 dolt_transaction_commit
 -EventSchedulerStatus *string 1.17.0 event_scheduler,omitempty
@@ -25,8 +25,8 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener
 -RequireSecureTransport *bool 0.0.0 require_secure_transport
 -AllowCleartextPasswords *bool 0.0.0 allow_cleartext_passwords
 -Socket *string 0.0.0 socket,omitempty
-PerformanceConfig servercfg.PerformanceYAMLConfig 0.0.0 performance
--QueryParallelism *int 0.0.0 query_parallelism
+PerformanceConfig *servercfg.PerformanceYAMLConfig 0.0.0 performance,omitempty
+-QueryParallelism *int 0.0.0 query_parallelism,omitempty
 DataDirStr *string 0.0.0 data_dir,omitempty
 CfgDirStr *string 0.0.0 cfg_dir,omitempty
 MetricsConfig servercfg.MetricsYAMLConfig 0.0.0 metrics
@@ -54,7 +54,7 @@ PrivilegeFile *string 0.0.0 privilege_file,omitempty
 BranchControlFile *string 0.0.0 branch_control_file,omitempty
 Vars []servercfg.UserSessionVars 0.0.0 user_session_vars
 -Name string 0.0.0 name
--Vars map[string]string 0.0.0 vars
+-Vars map[string]interface{} 0.0.0 vars
 SystemVars_ map[string]interface{} 1.11.1 system_variables,omitempty
 Jwks []servercfg.JwksConfig 0.0.0 jwks
 -Name string 0.0.0 name

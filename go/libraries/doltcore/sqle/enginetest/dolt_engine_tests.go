@@ -683,6 +683,7 @@ func RunDoltRevisionDbScriptsTest(t *testing.T, h DoltEnginetestHarness) {
 	require.NoError(t, err)
 	defer e.Close()
 	ctx := h.NewContext()
+	ctx.SetCurrentDatabase("mydb")
 
 	setupScripts := []setup.SetupScript{
 		{"create table t01 (pk int primary key, c1 int)"},
@@ -1552,8 +1553,8 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
@@ -1568,7 +1569,7 @@ func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()

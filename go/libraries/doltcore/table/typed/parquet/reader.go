@@ -68,6 +68,8 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 		return nil, err
 	}
 
+	rootName := pr.SchemaHandler.GetRootExName()
+
 	columns := sche.GetAllCols().GetColumns()
 	num := pr.GetNumRows()
 
@@ -75,7 +77,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	data := make(map[string][]interface{})
 	var colName []string
 	for _, col := range columns {
-		colData, _, _, cErr := pr.ReadColumnByPath(common.ReformPathStr(fmt.Sprintf("parquet_go_root.%s", col.Name)), num)
+		colData, _, _, cErr := pr.ReadColumnByPath(common.ReformPathStr(fmt.Sprintf("%s.%s", rootName, col.Name)), num)
 		if cErr != nil {
 			return nil, fmt.Errorf("cannot read column: %s", cErr.Error())
 		}

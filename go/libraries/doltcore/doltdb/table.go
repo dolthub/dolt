@@ -20,13 +20,9 @@ import (
 	"fmt"
 	"unicode"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -34,8 +30,6 @@ import (
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
-
-const dolt_row_hash_tag = 0
 
 // IsValidTableName checks if name is a valid identifier, and doesn't end with space characters
 func IsValidTableName(name string) bool {
@@ -92,7 +86,7 @@ func NewTableFromDurable(table durable.Table) *Table {
 }
 
 func NewEmptyTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (*Table, error) {
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	rows, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -349,46 +343,6 @@ func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch
 		return nil, nil, nil, err
 	}
 	return cs.Base, cs.Schema, cs.MergeSchema, nil
-}
-
-// GetConstraintViolationsSchema returns this table's dolt_constraint_violations system table schema.
-func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schema, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	typeType, err := typeinfo.FromSqlType(
-		gmstypes.MustCreateEnumType([]string{"foreign key", "unique index", "check constraint", "not null"}, sql.Collation_Default))
-	if err != nil {
-		return nil, err
-	}
-	typeCol, err := schema.NewColumnWithTypeInfo("violation_type", schema.DoltConstraintViolationsTypeTag, typeType, true, "", false, "")
-	if err != nil {
-		return nil, err
-	}
-	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", false, "")
-	if err != nil {
-		return nil, err
-	}
-
-	colColl := schema.NewColCollection()
-
-	// the commit hash or working set hash of the right side during merge
-	colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
-	colColl = colColl.Append(typeCol)
-	if schema.IsKeyless(sch) {
-		// If this is a keyless table, we need to add a new column for the keyless table's generated row hash.
-		// We need to add this internal row hash value, in order to guarantee a unique primary key in the
-		// constraint violations table.
-		colColl = colColl.Append(schema.NewColumn("dolt_row_hash", dolt_row_hash_tag, types.BlobKind, true))
-	} else {
-		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
-	}
-	colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
-	colColl = colColl.Append(infoCol)
-
-	return schema.SchemaFromCols(colColl)
 }
 
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating

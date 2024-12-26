@@ -41,14 +41,22 @@ func (mst MergeStatusTable) String() string {
 	return mst.tableName
 }
 
-func (mst MergeStatusTable) Schema() sql.Schema {
+func getDoltMergeStatusSchema(dbName, tableName string) sql.Schema {
 	return []*sql.Column{
-		{Name: "is_merging", Type: types.Boolean, Source: mst.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: mst.dbName},
-		{Name: "source", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
-		{Name: "source_commit", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
-		{Name: "target", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
-		{Name: "unmerged_tables", Type: types.Text, Source: mst.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: mst.dbName},
+		{Name: "is_merging", Type: types.Boolean, Source: tableName, PrimaryKey: false, Nullable: false, DatabaseSource: dbName},
+		{Name: "source", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: dbName},
+		{Name: "source_commit", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: dbName},
+		{Name: "target", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: dbName},
+		{Name: "unmerged_tables", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: dbName},
 	}
+}
+
+// GetDoltMergeStatusSchema returns the schema of the dolt_merge_status system table. This is used
+// by Doltgres to update the dolt_merge_status schema using Doltgres types.
+var GetDoltMergeStatusSchema = getDoltMergeStatusSchema
+
+func (mst MergeStatusTable) Schema() sql.Schema {
+	return GetDoltMergeStatusSchema(mst.dbName, mst.tableName)
 }
 
 func (mst MergeStatusTable) Collation() sql.CollationID {

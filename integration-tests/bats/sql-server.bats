@@ -193,12 +193,16 @@ user_session_vars:
 - name: user1
   vars:
     aws_credentials_file: /Users/user1/.aws/config
-    aws_credentials_profile: lddev" > server.yaml
+    aws_credentials_profile: lddev
+- name: user3
+  vars:
+    autocommit: 0" > server.yaml
 
     dolt --privilege-file=privs.json sql -q "CREATE USER dolt@'127.0.0.1'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user3@'127.0.0.1' IDENTIFIED BY 'pass3'"
 
     start_sql_server_with_config "" server.yaml
 
@@ -213,6 +217,9 @@ user_session_vars:
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user2 --password=pass2 sql -q "SET @@aws_credentials_file='/Users/should_fail';"
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+
+    run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user3 --password=pass3 sql -q "SELECT @@autocommit;"
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "sql-server: read-only mode" {
@@ -1827,7 +1834,7 @@ behavior:
     start_sql_server
     dolt sql -q "SET character_set_results = utf8; CREATE TABLE mapping(branch_id binary(16) PRIMARY KEY, user_id binary(16) NOT NULL, company_id binary(16) NOT NULL);"
 
-    run dolt sql -q "EXPLAIN SELECT m.* FROM mapping m WHERE user_id = uuid_to_bin('1c4c4e33-8ad7-4421-8450-9d5182816ac3');"
+    run dolt sql -q "EXPLAIN PLAN SELECT m.* FROM mapping m WHERE user_id = uuid_to_bin('1c4c4e33-8ad7-4421-8450-9d5182816ac3');"
     [ $status -eq 0 ]
     [[ "$output" =~ "0x1C4C4E338AD7442184509D5182816AC3" ]] || false
 }

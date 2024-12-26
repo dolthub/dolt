@@ -163,6 +163,44 @@ teardown() {
     [[ ! "$output" =~ "feature" ]] || false
 }
 
+# Asserts that when a branch is deleted and a tag is created and they have the same name,
+# the replica is able to correctly apply both changes.
+@test "replication: pull branch delete and tag create with same name on read" {
+    # Configure repo1 to push changes on commit and create branch b1
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt sql -q "call dolt_branch('b1');"
+
+    # Configure repo2 to pull changes on read and assert the b1 branch exists
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "b1" ]] || false
+
+    # Delete branch b1 in repo1 and create tag b1
+    cd ../repo1
+    dolt sql -q "call dolt_branch('-D', 'b1'); call dolt_tag('b1');"
+
+    # Confirm that branch b1 is deleted and tag b1 is created in repo2
+    cd ../repo2
+    run dolt sql -q "select name from dolt_branches" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "main" ]] || false
+    run dolt sql -q "select tag_name from dolt_tags" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "tag_name" ]] || false
+    [[ "$output" =~ "b1" ]] || false
+}
+
 @test "replication: pull branch delete current branch" {
     skip "broken by latest transaction changes"
 

@@ -604,3 +604,62 @@ EOF
     [[ "${lines[0]}" =~ "stats bootstrap aborted" ]] || false
     [ "${lines[2]}" = "0" ]
 }
+
+@test "stats: stats delete index schema change" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    dolt sql -q "analyze table xy"
+
+    # stats OK after analyze
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "alter table xy drop index y"
+
+    # load after schema change should purge
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+
+    dolt sql -q "analyze table xy"
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+}
+
+@test "stats: stats recreate table without index" {
+    cd repo2
+
+    dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    dolt sql -q "drop table xy"
+    dolt sql -q "create table xy (x int primary key, y int)"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    # make sure no stats
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+
+    stop_sql_server
+}

@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -125,7 +126,12 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc)
+		remappedSqlRow := make(sql.Row, len(sqlRow))
+		for to := range m.keyMap {
+			from := m.keyMap.MapOrdinal(to)
+			remappedSqlRow[to] = sqlRow[from]
+		}
+		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
 	return nil
@@ -182,7 +188,12 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc)
+		remappedSqlRow := make(sql.Row, len(newRow))
+		for to := range m.keyMap {
+			from := m.keyMap.MapOrdinal(to)
+			remappedSqlRow[to] = newRow[from]
+		}
+		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
 	}
 
@@ -354,8 +365,13 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 	existingPK := m.pkBld.Build(sharePool)
 
+	remappedSqlRow := make(sql.Row, m.idxCols)
+	for to := range m.keyMap[:m.idxCols] {
+		from := m.keyMap.MapOrdinal(to)
+		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow[from])
+	}
 	return secondaryUniqueKeyError{
-		keyStr:      FormatKeyForUniqKeyErr(key, desc),
+		keyStr:      FormatKeyForUniqKeyErr(key, desc, remappedSqlRow),
 		existingKey: existingPK,
 	}
 }
@@ -413,7 +429,7 @@ func (m prollySecondaryIndexWriter) IterRange(ctx context.Context, rng prolly.Ra
 
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
 // string is suitable for use in a sql.UniqueKeyError
-func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
+func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc, sqlRow sql.Row) string {
 	var sb strings.Builder
 	sb.WriteString("[")
 	seenOne := false
@@ -422,7 +438,13 @@ func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
 			sb.WriteString(",")
 		}
 		seenOne = true
-		sb.WriteString(d.FormatValue(i, key.GetField(i)))
+		switch d.Types[i].Enc {
+		// address encodings should be printed as strings
+		case val.BytesAddrEnc, val.StringAddrEnc:
+			sb.WriteString(fmt.Sprintf("%s", sqlRow[i]))
+		default:
+			sb.WriteString(d.FormatValue(i, key.GetField(i)))
+		}
 	}
 	sb.WriteString("]")
 	return sb.String()

@@ -385,6 +385,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumC
 github.com/dimchansky/utfbom v1.1.1/go.mod h1:SxdoEBH5qIqFocHMyGOXVAybYJdr71b1Q/j0mACtrfE=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240918194055-f75a63f64679 h1:O6eSicGwVPYnEzE0jgLakX2Ud54p6OGdcaqwBgNB+vU=
 github.com/dolthub/go-mysql-server v0.18.2-0.20240918194055-f75a63f64679/go.mod h1:m88EMm9OthVVa6qIhbpnRDpj/eYUXuNpvY/+0YWKVwc=
+github.com/dolthub/go-mysql-server v0.18.2-0.20241127222236-78bb5585a417 h1:ExP/nK6FbcXsiBxS/lTAfbq/kZdKJsyrEZOjql0chdY=
+github.com/dolthub/go-mysql-server v0.18.2-0.20241127222236-78bb5585a417/go.mod h1:QdaXQKE8XFwM4P1yN14m2eydx4V2xyuqpQp4tmNoXzQ=
 github.com/dolthub/vitess v0.0.0-20241104125316-860772ba6683 h1:2/RJeUfNAXS7mbBnEr9C36htiCJHk5XldDPzhxtEsME=
 github.com/dolthub/vitess v0.0.0-20241104125316-860772ba6683/go.mod h1:uBvlRluuL+SbEWTCZ68o0xvsdYZER3CEG/35INdzfJM=
 github.com/dylanmei/iso8601 v0.1.0/go.mod h1:w9KhXSgIyROl1DefbMYIE7UVSIvELTbMrCfx+QkYnoQ=

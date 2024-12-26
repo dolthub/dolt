@@ -47,7 +47,7 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 	branches := p.getStatsBranches(ctx)
 	var rows uint64
 	for _, branch := range branches {
-		sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
+		sqlDb, err := dSess.Provider().Database(ctx, BranchQualifiedDatabase(db, branch))
 		if err != nil {
 			if sql.ErrDatabaseNotFound.Is(err) {
 				// default branch is not valid
@@ -91,7 +91,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
+	sqlDb, err := dSess.Provider().Database(ctx, BranchQualifiedDatabase(db, branch))
 	if err != nil {
 		return err
 	}
@@ -144,11 +144,15 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		return err
 	}
 
-	if oldSchHash := statDb.GetSchemaHash(branch, tableName); oldSchHash.IsEmpty() {
-		statDb.SetSchemaHash(branch, tableName, schHash)
+	if oldSchHash, err := statDb.GetSchemaHash(ctx, branch, tableName); oldSchHash.IsEmpty() {
+		if err := statDb.SetSchemaHash(ctx, branch, tableName, schHash); err != nil {
+			return fmt.Errorf("set schema hash error: %w", err)
+		}
 	} else if oldSchHash != schHash {
 		ctx.GetLogger().Debugf("statistics refresh: detected table schema change: %s,%s/%s", dbName, table, branch)
-		statDb.SetSchemaHash(branch, tableName, schHash)
+		if err := statDb.SetSchemaHash(ctx, branch, tableName, schHash); err != nil {
+			return err
+		}
 
 		stats, err := p.GetTableDoltStats(ctx, branch, dbName, schemaName, tableName)
 		if err != nil {
@@ -157,6 +161,8 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		for _, stat := range stats {
 			statDb.DeleteStats(ctx, branch, stat.Qualifier())
 		}
+	} else if err != nil {
+		return err
 	}
 
 	tablePrefix := fmt.Sprintf("%s.", tableName)
@@ -208,9 +214,9 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 	return statDb.Flush(ctx, branch)
 }
 
-// branchQualifiedDatabase returns a branch qualified database. If the database
+// BranchQualifiedDatabase returns a branch qualified database. If the database
 // is already branch suffixed no duplication is applied.
-func (p *Provider) branchQualifiedDatabase(db, branch string) string {
+func BranchQualifiedDatabase(db, branch string) string {
 	suffix := fmt.Sprintf("/%s", branch)
 	if !strings.HasSuffix(db, suffix) {
 		return fmt.Sprintf("%s%s", db, suffix)

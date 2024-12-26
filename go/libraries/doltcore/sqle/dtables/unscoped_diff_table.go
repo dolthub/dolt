@@ -86,18 +86,26 @@ func (dt *UnscopedDiffTable) String() string {
 	return dt.tableName
 }
 
+func getUnscopedDoltDiffSchema(dbName, tableName string) sql.Schema {
+	return []*sql.Column{
+		{Name: "commit_hash", Type: types.Text, Source: tableName, PrimaryKey: true, DatabaseSource: dbName},
+		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, DatabaseSource: dbName},
+		{Name: "committer", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "email", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "date", Type: types.Datetime, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "message", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "data_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "schema_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+	}
+}
+
+// GetUnscopedDoltDiffSchema returns the schema of the dolt_diff system table. This is used
+// by Doltgres to update the dolt_diff schema using Doltgres types.
+var GetUnscopedDoltDiffSchema = getUnscopedDoltDiffSchema
+
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
-	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "table_name", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "data_change", Type: types.Boolean, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "schema_change", Type: types.Boolean, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-	}
+	return GetUnscopedDoltDiffSchema(dt.dbName, dt.tableName)
 }
 
 // Collation implements the sql.Table interface.

@@ -110,7 +110,9 @@ func (ltf *LogTableFunction) Name() string {
 // Resolved implements the sql.Resolvable interface
 func (ltf *LogTableFunction) Resolved() bool {
 	for _, expr := range ltf.revisionExprs {
-		return expr.Resolved()
+		if !expr.Resolved() {
+			return false
+		}
 	}
 	return true
 }

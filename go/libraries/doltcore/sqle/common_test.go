@@ -181,7 +181,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
 
-	rows, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	rows, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	require.NoError(t, err)
 	tbl, err := doltdb.NewTable(ctx, vrw, ns, sch, rows, nil, nil)
 	require.NoError(t, err)

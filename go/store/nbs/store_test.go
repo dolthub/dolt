@@ -340,7 +340,7 @@ func TestNBSCopyGC(t *testing.T) {
 	go func() {
 		require.NoError(t, st.BeginGC(nil))
 		var finalizer chunks.GCFinalizer
-		finalizer, msErr = st.MarkAndSweepChunks(ctx, keepChan, nil)
+		finalizer, msErr = st.MarkAndSweepChunks(ctx, keepChan, nil, chunks.GCMode_Full)
 		if msErr == nil {
 			msErr = finalizer.SwapChunksInStore(ctx)
 		}

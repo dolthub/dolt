@@ -105,7 +105,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 					newSpecs = append(newSpecs, spec)
 				}
 			}
-			err = gs.oldGen.swapTables(ctx, newSpecs)
+			err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
 			if err != nil {
 				return err
 			}
@@ -175,7 +175,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				newSpecs = append(newSpecs, spec)
 			}
 		}
-		err = gs.oldGen.swapTables(ctx, newSpecs)
+		err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
 		if err != nil {
 			return err
 		}

@@ -103,20 +103,30 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
 // and places the converted row in |dstRow|.
 func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tuple, dstRow sql.UntypedSqlRow) error {
-	err := c.putFields(ctx, key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow)
+	err := c.putFields(ctx, key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow, true)
 	if err != nil {
 		return err
 	}
 
-	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
+	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow, false)
 }
 
-func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow sql.UntypedSqlRow) error {
+func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow sql.UntypedSqlRow, isPk bool) error {
+	virtualOffset := 0
 	for i, j := range proj {
 		if j == -1 {
+			nonPkCols := c.inSchema.GetNonPKCols()
+			if len(nonPkCols.GetColumns()) > i {
+				// Skip over virtual columns in non-pk cols as they are not stored
+				if !isPk && nonPkCols.GetByIndex(i).Virtual {
+					virtualOffset++
+				}
+			}
+
 			continue
 		}
-		f, err := tree.GetField(ctx, desc, i, tup, c.ns)
+
+		f, err := tree.GetField(ctx, desc, i-virtualOffset, tup, c.ns)
 		if err != nil {
 			return err
 		}

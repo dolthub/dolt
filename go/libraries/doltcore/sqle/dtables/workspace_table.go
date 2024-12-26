@@ -21,7 +21,8 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -406,7 +407,13 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		fromSch = toSch
 	}
 
-	totalSch, err := workspaceSchema(fromSch, toSch)
+	sch := sql.NewPrimaryKeySchema(GetDoltWorkspaceBaseSqlSchema())
+	baseDoltSch, err := sqlutil.ToDoltSchema(ctx, head, tableName, sch, head, sql.Collation_Default)
+	if err != nil {
+		return nil, err
+	}
+
+	totalSch, err := workspaceSchema(fromSch, toSch, baseDoltSch)
 	if err != nil {
 		return nil, err
 	}
@@ -438,9 +445,21 @@ func (wt *WorkspaceTable) Schema() sql.Schema {
 	return wt.sqlSchema
 }
 
-// CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
+// GetDoltWorkspaceBaseSqlSchema returns the base schema for the dolt_workspace_* system table.
+// This is used by Doltgres to update the dolt_workspace_* schema using Doltgres types.
+var GetDoltWorkspaceBaseSqlSchema = getDoltWorkspaceBaseSqlSchema
+
+func getDoltWorkspaceBaseSqlSchema() sql.Schema {
+	return []*sql.Column{
+		{Name: "id", Type: gmstypes.Uint64, PrimaryKey: true, Nullable: false},
+		{Name: "staged", Type: gmstypes.Boolean, Nullable: false},
+		{Name: "diff_type", Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 1023), Nullable: false},
+	}
+}
+
+// workspaceSchema returns the schema for the dolt_workspace table based on the schemas from the from and to tables.
 // Either may be nil, in which case the nil argument will use the schema of the non-nil argument
-func workspaceSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
+func workspaceSchema(fromSch, toSch, baseSch schema.Schema) (schema.Schema, error) {
 	if fromSch == nil && toSch == nil {
 		return nil, errors.New("Runtime error:non-nil argument required to CalculateDiffSchema")
 	} else if fromSch == nil {
@@ -449,13 +468,10 @@ func workspaceSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		toSch = fromSch
 	}
 
-	cols := make([]schema.Column, 0, 3+toSch.GetAllCols().Size()+fromSch.GetAllCols().Size())
-
-	cols = append(cols,
-		schema.NewColumn("id", 0, types.UintKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("staged", 0, types.BoolKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("diff_type", 0, types.StringKind, false, schema.NotNullConstraint{}),
-	)
+	baseColColl := baseSch.GetAllCols()
+	baseCols := baseColColl.GetColumns()
+	cols := make([]schema.Column, 0, baseColColl.Size()+toSch.GetAllCols().Size()+fromSch.GetAllCols().Size())
+	cols = append(cols, baseCols...)
 
 	transformer := func(sch schema.Schema, namer func(string) string) error {
 		return sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -644,7 +660,7 @@ func getWorkspaceTableRow(
 	row := make(sql.UntypedSqlRow, 3+tLen+fLen)
 
 	var err error
-	row[0] = rowId
+	row[0] = int64(rowId)
 	row[1] = staged
 	row[2] = diffTypeString(dif)
 
@@ -869,10 +885,9 @@ func (e emptyWorkspaceTable) String() string {
 }
 
 func (e emptyWorkspaceTable) Schema() sql.Schema {
-	return []*sql.Column{
-		{Name: "id", Type: sqltypes.Int32, Nullable: false},
-		{Name: "staged", Type: sqltypes.Boolean, Nullable: false},
-	}
+	sch := GetDoltWorkspaceBaseSqlSchema()
+	// Only return the "id" and "staged" columns.
+	return sch[0:2]
 }
 
 func (e emptyWorkspaceTable) Collation() sql.CollationID { return sql.Collation_Default }
