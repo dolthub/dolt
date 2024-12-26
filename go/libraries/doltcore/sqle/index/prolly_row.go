@@ -43,7 +43,7 @@ type ProllyRow struct {
 var _ sql.Row = (*ProllyRow)(nil)
 var _ sql.BytesRow = (*ProllyRow)(nil)
 
-func (r *ProllyRow) GetBytes(i int, typ sql.Type) ([]byte, error) {
+func (r *ProllyRow) GetBytes(i int, typ sql.Type, buf []byte) ([]byte, error) {
 	if i > len(r.ords) {
 		return nil, fmt.Errorf("invalid index for value: %d:%T", i, typ)
 	}

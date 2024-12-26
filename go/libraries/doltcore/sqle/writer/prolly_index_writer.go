@@ -126,10 +126,10 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(sqlRow))
+		remappedSqlRow := make(sql.UntypedSqlRow, sqlRow.Len())
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = sqlRow[from]
+			remappedSqlRow[to] = sqlRow.GetValue(from)
 		}
 		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
@@ -188,10 +188,10 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(newRow))
+		remappedSqlRow := make(sql.UntypedSqlRow, newRow.Len())
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = newRow[from]
+			remappedSqlRow[to] = newRow.GetValue(from)
 		}
 		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
@@ -365,10 +365,10 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 	existingPK := m.pkBld.Build(sharePool)
 
-	remappedSqlRow := make(sql.Row, m.idxCols)
+	remappedSqlRow := make(sql.UntypedSqlRow, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow[from])
+		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow.GetValue(from))
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(key, desc, remappedSqlRow),
@@ -441,7 +441,7 @@ func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc, sqlRow sql.Row) stri
 		switch d.Types[i].Enc {
 		// address encodings should be printed as strings
 		case val.BytesAddrEnc, val.StringAddrEnc:
-			sb.WriteString(fmt.Sprintf("%s", sqlRow[i]))
+			sb.WriteString(fmt.Sprintf("%s", sqlRow.GetValue(i)))
 		default:
 			sb.WriteString(d.FormatValue(i, key.GetField(i)))
 		}

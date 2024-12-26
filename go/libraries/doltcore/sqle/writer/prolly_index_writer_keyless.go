@@ -286,10 +286,10 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		return err
 	}
 	if err == nil {
-		remappedSqlRow := make(sql.Row, len(sqlRow))
+		remappedSqlRow := make(sql.UntypedSqlRow, sqlRow.Len())
 		for to := range writer.keyMap {
 			from := writer.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = writer.trimKeyPart(to, sqlRow[from])
+			remappedSqlRow[to] = writer.trimKeyPart(to, sqlRow.GetValue(from))
 		}
 		keyStr := FormatKeyForUniqKeyErr(prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
