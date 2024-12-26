@@ -471,8 +471,10 @@ func runMain() int {
 	if terminate {
 		return status
 	}
+	args = nil
 
-	// NM4 - can we use the tmpEnv here??
+	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment. dEnv is kind of
+	// Busted in that is requires the loading of the database which can be time consuming. Unfortunately, we can't
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -569,8 +571,7 @@ func runMain() int {
 			return 1
 		}
 	} else {
-		// NM4 - INSPECT CAREFULLY
-		if args[0] != cfg.subCommand {
+		if cfg.hasGlobalArgs {
 			if supportsGlobalArgs(cfg.subCommand) {
 				cli.PrintErrln(
 					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
@@ -846,11 +847,15 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
-// bootstrapConfig is the struct that holds the parsed arguments and other configurations.
+// bootstrapConfig is the struct that holds the parsed arguments and other configurations. Most importantly, is holds
+// the data dir information for the process. There are multiple ways for users to specify the data directory, and constructing
+// the bootstrap config early in the process start up allows us to simplify the startup process.
 type bootstrapConfig struct {
 	// apr is the parsed global arguments. This will not include hidden administrative arguments, which are pulled out first.
 	// This APR will include profile injected arguments.
 	apr *argparser.ArgParseResults
+	// hasGlobalArgs is true if the global arguments were provided.
+	hasGlobalArgs bool
 
 	// dataDir is the absolute path to the data directory. This should be the final word - uses of dataDir downstream should
 	// only use this path.
@@ -865,7 +870,7 @@ type bootstrapConfig struct {
 	remainingArgs []string
 	subCommand    string
 
-	// homeDir is the absolute path to the user's home directory. This is resolved as part of looking up the global config.
+	// homeDir is the absolute path to the user's home directory. This is resolved using env.GetCurrentUserHomeDir, and saved
 	homeDir string
 }
 
@@ -921,6 +926,12 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
 		return nil, true, 1
 	}
+
+	hasGlobalArgs := false
+	if len(remainingArgs) != len(args) {
+		hasGlobalArgs = true
+	}
+
 	subCommand := remainingArgs[0]
 
 	// If there is a profile flag, we want to load the profile and inject it's args into the global args.
@@ -980,6 +991,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 
 	cfg = &bootstrapConfig{
 		apr:           apr,
+		hasGlobalArgs: hasGlobalArgs,
 		remainingArgs: remainingArgs,
 		dataDirFS:     dataDirFS,
 		dataDir:       dataDir,
