@@ -393,7 +393,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
 
 	if !hasCfgFile {
-		return NewCommandLineConfig(creds, apr, "") // NM4.
+		return NewCommandLineConfig(creds, apr, "")
 	}
 
 	var yamlCfg servercfg.YAMLConfig

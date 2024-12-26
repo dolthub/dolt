@@ -473,8 +473,7 @@ func runMain() int {
 	}
 	args = nil
 
-	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment. dEnv is kind of
-	// Busted in that is requires the loading of the database which can be time consuming. Unfortunately, we can't
+	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -605,8 +604,12 @@ or check the docs for questions about usage.`)
 	return res
 }
 
-// NM4 - resolveDataDir
-func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, cwdFs filesys.Filesys) (dataDir string, err error) {
+// resolveDataDirDeeply goes through three levels of resolution for the data directory. The simple case is to look at
+// the --data-dir flag which was provide before the sub-command. When runing sql-server, the data directory can also
+// be specificed in the arguments after the sub-command, and the config file. This method will ensure there is only
+// one of these three options specified, and return it as an absolute path. If there is an error, or if there are multiple
+// options specified, an error is returned.
+func resolveDataDirDeeply(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, cwdFs filesys.Filesys) (dataDir string, err error) {
 	// global config is the dolt --data-dir <foo> sub-command version. Applies to most CLI commands.
 	globalDir, hasGlobalDataDir := gArgs.GetValue(commands.DataDirFlag)
 	if hasGlobalDataDir {
@@ -618,7 +621,7 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingAr
 		dataDir = dd
 	}
 
-	if subCmd == "sql-server" { // NM4 - const.
+	if subCmd == (sqlserver.SqlServerCmd{}).Name() {
 		// GetDataDirPreStart always returns an absolute path.
 		dd, err := sqlserver.GetDataDirPreStart(cwdFs, remainingArgs)
 		if err != nil {
@@ -633,14 +636,9 @@ func resolveDataDir(gArgs *argparser.ArgParseResults, subCmd string, remainingAr
 		}
 	}
 
-	// NM4 - not sure if it's always the case that dd must exist if it's specified.
-	if ok, dir := cwdFs.Exists(dataDir); !ok || !dir {
-		return "", errors.New(fmt.Sprintf("Provided data directory does not exist: %s", dataDir))
-	}
-
 	if dataDir == "" {
 		// No data dir specified, so we default to the current directory.
-		dataDir, _ = cwdFs.Abs("")
+		return cwdFs.Abs("")
 	}
 
 	return dataDir, nil
@@ -979,7 +977,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		}
 	}
 
-	dataDir, err := resolveDataDir(apr, subCommand, remainingArgs[1:], cwdFs)
+	dataDir, err := resolveDataDirDeeply(apr, subCommand, remainingArgs[1:], cwdFs)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to resolve the data directory: %v", err))
 		return nil, true, 1
@@ -1005,9 +1003,9 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 	return cfg, false, 0
 }
 
-// NM4 -Update DOCs
-// getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
-// for that profile in a []string. If the profile is not found, an error is returned.
+// injectProfileArgs retrieves the given |profileName| from the provided |profilesJson| and inject the profile details
+// in the provided |apr|. A new ArgParseResults is returned which contains the profile details. If the profile is not
+// found, an error is returned.
 func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profilesJson string) (aprUpdated *argparser.ArgParseResults, err error) {
 	prof := gjson.Get(profilesJson, profileName)
 	aprUpdated = apr
