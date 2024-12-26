@@ -1020,17 +1020,27 @@ func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profilesJson
 					hasPassword = value.Bool()
 				} else if flag == cli.NoTLSFlag {
 					if value.Bool() {
-						aprUpdated = aprUpdated.InsertArgument(flag, "true")
+						// There is currently no way to unset a flag, but setting is to the empty string at least sets it to true.
+						aprUpdated, err = aprUpdated.SetArgument(flag, "")
+						if err != nil {
+							return nil, err
+						}
 					}
 				} else {
 					if value.Str != "" {
-						aprUpdated = aprUpdated.InsertArgument(flag, value.Str)
+						aprUpdated, err = aprUpdated.SetArgument(flag, value.Str)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
 		}
 		if !apr.Contains(cli.PasswordFlag) && hasPassword {
-			aprUpdated = aprUpdated.InsertArgument(cli.PasswordFlag, password)
+			aprUpdated, err = aprUpdated.SetArgument(cli.PasswordFlag, password)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return aprUpdated, nil
 	} else {
