@@ -53,7 +53,6 @@ require (
 	github.com/Shopify/toxiproxy/v2 v2.5.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible
 	github.com/cenkalti/backoff/v4 v4.1.3
-	github.com/cespare/xxhash v1.1.0
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
