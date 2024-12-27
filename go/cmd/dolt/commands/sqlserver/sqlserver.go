@@ -341,7 +341,7 @@ func ServerConfigFromArgsWithReader(
 		return nil, err
 	}
 
-	serverConfig, err := getServerConfig(dEnv.FS, apr, dataDir, reader)
+	serverConfig, err := getServerConfig(cwd, apr, dataDir, reader)
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}

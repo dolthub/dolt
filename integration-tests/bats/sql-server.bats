@@ -1362,7 +1362,7 @@ END""")
     [[ $output =~ "test2" ]] || false
 }
 
-@test "sql-server: fetch uses database tempdir from different working directory" {
+@test "sql-server: fetch uses database data dir from different working directory" {
     skiponwindows "Missing dependencies"
 
     mkdir remote1

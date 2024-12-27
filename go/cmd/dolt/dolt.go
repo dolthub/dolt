@@ -885,7 +885,14 @@ type bootstrapConfig struct {
 // |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
 // |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
 func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
-	cwdFs := filesys.LocalFS
+	lfs := filesys.LocalFS
+	cwd, err := lfs.Abs("")
+	cwdFs, err := lfs.WithWorkingDir(cwd)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
+	}
+
 	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, doltversion.Version)
 	var globalConfig config.ReadWriteConfig
 
