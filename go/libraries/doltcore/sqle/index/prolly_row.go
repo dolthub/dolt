@@ -17,9 +17,11 @@ package index
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func NewProllyRow(key, val val.Tuple, kd, vd val.TupleDesc, ords []int, ns tree.NodeStore) *ProllyRow {
