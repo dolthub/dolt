@@ -15,8 +15,7 @@
 package index
 
 import (
-	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
+		"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -162,6 +161,17 @@ func ProjectionMappingsForIndex2(sch schema.Schema, projections []uint64) (val.O
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 	ords := make(val.OrdinalMapping, len(projections))
+
+	numPhysicalColumns := len(projections)
+	if schema.IsVirtual(sch) {
+		numPhysicalColumns = 0
+		for _, t := range projections {
+			if idx, ok := sch.GetAllCols().TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+				numPhysicalColumns++
+			}
+		}
+	}
+
 	for i, tag := range projections {
 		if idx, ok := pks.StoredIndexByTag(tag); ok {
 			if pks.GetByStoredIndex(idx).Virtual {
@@ -176,7 +186,7 @@ func ProjectionMappingsForIndex2(sch schema.Schema, projections []uint64) (val.O
 				ords[i] = pks.Size() + idx
 			}
 		} else {
-			return nil, fmt.Errorf("tag not found in schema: %d", tag)
+			//return nil, fmt.Errorf("tag not found in schema: %d", tag)
 		}
 	}
 	return ords, nil

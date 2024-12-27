@@ -341,7 +341,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	d.kb.PutCommitAddr(d.kd.Count()-2, h)
 
 	// Finally the artifact type
-	artType := merge.UnmapCVType(merge.CvType(r.GetValue(1).(uint64)))
+	artType := merge.UnmapCVType(r.GetValue(1).(uint64))
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
 	key := d.kb.Build(d.pool)

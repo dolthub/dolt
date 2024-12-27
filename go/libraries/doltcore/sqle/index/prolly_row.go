@@ -126,7 +126,7 @@ func (r *ProllyRow) Copy() sql.Row {
 	if r.dirty.Len() > 0 {
 		return sql.UntypedSqlRow(r.Values())
 	}
-	return &ProllyRow{key: r.key, value: r.value, kd: r.kd, vd: r.vd, ords: r.ords}
+	return &ProllyRow{key: r.key, value: r.value, kd: r.kd, vd: r.vd, ords: r.ords, ns: r.ns}
 }
 
 func (r *ProllyRow) Len() int {

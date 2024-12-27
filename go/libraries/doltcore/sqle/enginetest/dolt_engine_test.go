@@ -106,7 +106,51 @@ func TestSchemaOverrides(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	t.Skip()
 
-	var scripts = []queries.ScriptTest{}
+	var scripts = []queries.ScriptTest{
+		{
+			// https://github.com/dolthub/dolt/issues/7275
+			Name: "keyless table merge with constraint violations",
+			SetUpScript: []string{
+				"CREATE TABLE aTable (aColumn INT NULL, bColumn INT NULL, UNIQUE INDEX aColumn_UNIQUE (aColumn ASC) VISIBLE, UNIQUE INDEX bColumn_UNIQUE (bColumn ASC) VISIBLE);",
+				"CALL dolt_commit('-Am', 'add tables');",
+				"CALL dolt_checkout('-b', 'side');",
+				"INSERT INTO aTable VALUES (1,2);",
+				"CALL dolt_commit('-am', 'add side data');",
+
+				"CALL dolt_checkout('main');",
+				"INSERT INTO aTable VALUES (1,3);",
+				"CALL dolt_commit('-am', 'add main data');",
+				"CALL dolt_checkout('side');",
+				"SET @@dolt_force_transaction_commit=1;",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "call dolt_merge('main');",
+					Expected: []sql.UntypedSqlRow{{"", 0, 1, "conflicts found"}},
+				},
+				{
+					// Fix the data
+					Query:    "UPDATE aTable SET aColumn = 2 WHERE bColumn = 2;",
+					Expected: []sql.UntypedSqlRow{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				},
+				{
+					// clear out the violations
+					Query:    "DELETE FROM dolt_constraint_violations_aTable;",
+					Expected: []sql.UntypedSqlRow{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					// Commit the merge after resolving the constraint violations
+					Query:    "call dolt_commit('-am', 'merging in main and resolving unique constraint violations');",
+					Expected: []sql.UntypedSqlRow{{doltCommit}},
+				},
+				{
+					// Merging again is a no-op
+					Query:    "call dolt_merge('main');",
+					Expected: []sql.UntypedSqlRow{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
+				},
+			},
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
