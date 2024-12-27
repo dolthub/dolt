@@ -556,7 +556,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				//
 				// In the past we just returned an empty set in this case. The
 				// warning is kind of essential to understand what is happening.
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{42, 23, nil, nil, "added"},
 					{nil, nil, nil, 23, "removed"},
 				},
@@ -1538,19 +1538,19 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, 23, 4},
 				},
 			},
 			{
 				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil},
 				},
 			},
 			{
 				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, nil, nil, nil},
 				},
 			},
@@ -1566,19 +1566,19 @@ on a.to_pk = b.to_pk;`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, 3, 23, 4},
 				},
 			},
 			{
 				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 23, nil, nil},
 				},
 			},
 			{
 				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 23, nil, nil},
 				},
 			},
@@ -6242,11 +6242,11 @@ var SystemTableIndexTests = []systabScript{
 			},
 			{
 				query: "select count(*) /*+ JOIN_ORDER(a,b) */ from dolt_diff_xy a join xy b on x = to_x",
-				exp:   []sql.Row{{45}},
+				exp:   []sql.UntypedSqlRow{{45}},
 			},
 			{
 				query: "select count(*) /*+ JOIN_ORDER(b,a) */ from dolt_diff_xy a join xy b on x = to_x",
-				exp:   []sql.Row{{45}},
+				exp:   []sql.UntypedSqlRow{{45}},
 			},
 		},
 	},

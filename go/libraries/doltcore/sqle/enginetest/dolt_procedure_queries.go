@@ -445,7 +445,7 @@ END
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call long_proc();",
-				Expected: []sql.Row{{"a702e99e5ee2dc03095bb2efd58e28330b6ea085d036249de82977a5c0dbb4be", 1335}},
+				Expected: []sql.UntypedSqlRow{{"a702e99e5ee2dc03095bb2efd58e28330b6ea085d036249de82977a5c0dbb4be", 1335}},
 			},
 		},
 	},

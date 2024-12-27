@@ -582,7 +582,7 @@ var DoltStatsStorageTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{{"xy", "2"}},
+				Expected: []sql.UntypedSqlRow{{"xy", "2"}},
 			},
 		},
 	},
@@ -603,7 +603,7 @@ var DoltStatsStorageTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{{"xy", "2"}},
+				Expected: []sql.UntypedSqlRow{{"xy", "2"}},
 			},
 		},
 	},
@@ -625,14 +625,14 @@ var DoltStatsStorageTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{{"xy", "2"}},
+				Expected: []sql.UntypedSqlRow{{"xy", "2"}},
 			},
 			{
 				Query: "call dolt_checkout('feat')",
 			},
 			{
 				Query:    "select table_name, upper_bound from dolt_statistics",
-				Expected: []sql.Row{{"xy", "3"}},
+				Expected: []sql.UntypedSqlRow{{"xy", "3"}},
 			},
 		},
 	},

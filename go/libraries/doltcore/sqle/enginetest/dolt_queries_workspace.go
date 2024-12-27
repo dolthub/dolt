@@ -29,11 +29,11 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "describe dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
 					{"staged", "tinyint(1)", "NO", "", nil, ""},
 				},
@@ -62,7 +62,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "describe dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
 					{"staged", "tinyint(1)", "NO", "", nil, ""},
 					{"diff_type", "varchar(1023)", "NO", "", nil, ""},
