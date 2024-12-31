@@ -166,3 +166,10 @@ teardown_remote_server() {
     stop_sql_server
   fi
 }
+
+skip_if_remote() {
+  if [ "$SQL_ENGINE" = "remote-engine" ];
+  then
+    skip
+  fi
+}
