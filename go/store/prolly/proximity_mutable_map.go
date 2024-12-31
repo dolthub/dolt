@@ -29,7 +29,9 @@ import (
 
 type ProximityMutableMap = GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]
 
-type ProximityFlusher struct{}
+type ProximityFlusher struct {
+	logChunkSize uint8
+}
 
 var _ MutableMapFlusher[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProximityFlusher{}
 
@@ -68,7 +70,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	editIter := mutableMap.tuples.Mutations()
 	key, value := editIter.NextMutation(ctx)
 	for key != nil {
-		keyLevel := tree.DeterministicHashLevel(DefaultLogChunkSize, key)
+		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)
 		edits = append(edits, VectorIndexKV{
 			key:   key,
 			value: value,
@@ -77,7 +79,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		key, value = editIter.NextMutation(ctx)
 	}
 	// TODO: Set correct distance type.
-	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, DefaultLogChunkSize)
+	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, f.logChunkSize)
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
@@ -360,7 +362,7 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 }
 
 func (f ProximityFlusher) GetDefaultSerializer(ctx context.Context, mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
-	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool())
+	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool(), f.logChunkSize)
 }
 
 // newMutableMap returns a new MutableMap.
@@ -370,7 +372,7 @@ func newProximityMutableMap(m ProximityMap) *ProximityMutableMap {
 		keyDesc:    m.keyDesc,
 		valDesc:    m.valDesc,
 		maxPending: defaultMaxPending,
-		flusher:    ProximityFlusher{},
+		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize},
 	}
 }
 
@@ -382,7 +384,7 @@ func newProximityMutableMapWithDescriptors(m ProximityMap, kd, vd val.TupleDesc)
 		keyDesc:    kd,
 		valDesc:    vd,
 		maxPending: defaultMaxPending,
-		flusher:    ProximityFlusher{},
+		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize},
 	}
 }
 
@@ -392,7 +394,7 @@ func (f ProximityFlusher) MapInterface(ctx context.Context, mut *ProximityMutabl
 
 // TreeMap materializes all pending and applied mutations in the MutableMap.
 func (f ProximityFlusher) TreeMap(ctx context.Context, mut *ProximityMutableMap) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	s := message.NewVectorIndexSerializer(mut.NodeStore().Pool())
+	s := message.NewVectorIndexSerializer(mut.NodeStore().Pool(), f.logChunkSize)
 	return mut.flushWithSerializer(ctx, s)
 }
 

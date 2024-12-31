@@ -425,7 +425,8 @@ func TestIncrementalDeletes(t *testing.T) {
 	}
 	pks1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
 
-	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors1, testValDesc, pks1, 1)
+	logChunkSize := uint8(1)
+	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors1, testValDesc, pks1, logChunkSize)
 
 	mutableMap := newProximityMutableMap(m1)
 
@@ -441,13 +442,13 @@ func TestIncrementalDeletes(t *testing.T) {
 		err := mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
-		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
+		newMap, err := ProximityFlusher{logChunkSize: logChunkSize}.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
 		newCount, err := newMap.Count()
 		require.NoError(t, err)
 
-		require.Equal(t, 4, newCount)
+		require.Equal(t, 3, newCount)
 	}
 
 	// update root node
@@ -464,7 +465,7 @@ func TestIncrementalDeletes(t *testing.T) {
 		newCount, err := newMap.Count()
 		require.NoError(t, err)
 
-		require.Equal(t, 4, newCount)
+		require.Equal(t, 2, newCount)
 	}
 }
 
