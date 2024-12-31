@@ -63,8 +63,8 @@ func TestScheduler(t *testing.T) {
 	// bucket cache has 2 new buckets
 	require.Equal(t, 2, len(sc.BucketCache))
 	// stats state has two new indexes
-	require.Equal(t, 2, len(sc.StatsState))
-	for _, hist := range sc.StatsState {
+	require.Equal(t, 2, len(sc.Histograms))
+	for _, hist := range sc.Histograms {
 		// each hist has one bucket
 		require.Equal(t, 1, len(hist))
 	}

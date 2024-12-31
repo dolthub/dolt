@@ -225,7 +225,7 @@ func (p *Provider) branchQualifiedDatabase(db, branch string) string {
 }
 
 // GetLatestTable will get the WORKING root table for the current database/branch
-func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
+func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (*sqle.DoltTable, *doltdb.Table, error) {
 	var db sqle.Database
 	switch d := sqlDb.(type) {
 	case sqle.Database:
@@ -244,12 +244,16 @@ func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql
 	}
 
 	var dTab *doltdb.Table
+	var sqleTable *sqle.DoltTable
 	switch t := sqlTable.(type) {
 	case *sqle.AlterableDoltTable:
+		sqleTable = t.DoltTable
 		dTab, err = t.DoltTable.DoltTable(ctx)
 	case *sqle.WritableDoltTable:
+		sqleTable = t.DoltTable
 		dTab, err = t.DoltTable.DoltTable(ctx)
 	case *sqle.DoltTable:
+		sqleTable = t
 		dTab, err = t.DoltTable(ctx)
 	default:
 		err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
@@ -257,7 +261,7 @@ func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql
 	if err != nil {
 		return nil, nil, err
 	}
-	return sqlTable, dTab, nil
+	return sqleTable, dTab, nil
 }
 
 func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, sqlIndex sql.Index, cols []string) (indexMeta, error) {

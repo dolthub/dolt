@@ -111,7 +111,7 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 
 		var start, stop uint64
 		// read leaf rows for each bucket
-		for i, chunk := range meta.newNodes {
+		for i, _ := range meta.newNodes {
 			// each node is a bucket
 			updater.newBucket()
 
@@ -143,7 +143,6 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 			if err != nil {
 				return nil, err
 			}
-			bucket.Chunk = chunk.HashOf()
 			ret[updater.qual].Hist = append(ret[updater.qual].Hist, bucket)
 		}
 
@@ -266,7 +265,7 @@ func (u *bucketBuilder) newBucket() {
 
 // finalize converts the current aggregation stats into a histogram bucket,
 // which includes deserializing most common value tuples into sql.Rows.
-func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBucket, error) {
+func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (*stats.Bucket, error) {
 	// update MCV in case we've ended on a run of many identical keys
 	u.updateMcv()
 
@@ -276,27 +275,25 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	// convert the MCV tuples into SQL rows (most efficient to only do this once)
 	mcvRows, err := u.mcvs.Values(ctx, u.tupleDesc, ns, u.prefixLen)
 	if err != nil {
-		return DoltBucket{}, err
+		return nil, err
 	}
 	upperBound := make(sql.Row, u.prefixLen)
 	if u.currentKey != nil {
 		for i := 0; i < u.prefixLen; i++ {
 			upperBound[i], err = tree.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
 			if err != nil {
-				return DoltBucket{}, err
+				return nil, err
 			}
 		}
 	}
-	return DoltBucket{
-		Bucket: &stats.Bucket{
-			RowCnt:      uint64(u.count),
-			DistinctCnt: uint64(u.distinct),
-			BoundCnt:    uint64(u.currentCnt),
-			McvVals:     mcvRows,
-			McvsCnt:     u.mcvs.Counts(),
-			BoundVal:    upperBound,
-			NullCnt:     uint64(u.nulls),
-		},
+	return &stats.Bucket{
+		RowCnt:      uint64(u.count),
+		DistinctCnt: uint64(u.distinct),
+		BoundCnt:    uint64(u.currentCnt),
+		McvVals:     mcvRows,
+		McvsCnt:     u.mcvs.Counts(),
+		BoundVal:    upperBound,
+		NullCnt:     uint64(u.nulls),
 	}, nil
 }
 
