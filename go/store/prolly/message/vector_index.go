@@ -38,12 +38,13 @@ const (
 
 var vectorIvfFileID = []byte(serial.VectorIndexNodeFileID)
 
-func NewVectorIndexSerializer(pool pool.BuffPool) VectorIndexSerializer {
-	return VectorIndexSerializer{pool: pool}
+func NewVectorIndexSerializer(pool pool.BuffPool, logChunkSize uint8) VectorIndexSerializer {
+	return VectorIndexSerializer{pool: pool, logChunkSize: logChunkSize}
 }
 
 type VectorIndexSerializer struct {
-	pool pool.BuffPool
+	pool         pool.BuffPool
+	logChunkSize uint8
 }
 
 var _ Serializer = VectorIndexSerializer{}
@@ -88,6 +89,7 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 		serial.VectorIndexNodeAddTreeCount(b, sumSubtrees(subtrees))
 	}
 	serial.VectorIndexNodeAddTreeLevel(b, uint8(level))
+	serial.VectorIndexNodeAddLogChunkSize(b, s.logChunkSize)
 
 	return serial.FinishMessage(b, serial.VectorIndexNodeEnd(b), vectorIvfFileID)
 }
