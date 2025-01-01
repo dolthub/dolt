@@ -50,7 +50,7 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
-func MapInterfaceFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
+func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema, ns tree.NodeStore, isKeylessSecondary bool) (prolly.MapInterface, error) {
 	root, fileId, err := NodeFromValue(v)
 	if err != nil {
 		return nil, err
