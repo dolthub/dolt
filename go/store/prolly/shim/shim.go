@@ -62,7 +62,10 @@ func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema
 	vd := sch.GetValueDescriptor()
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(ctx, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+		// TODO: We should read the distance function and chunk size from the message.
+		// Currently, vector.DistanceL2Squared{} and prolly.DefaultLogChunkSize are the only values that can be written,
+		// but this may not be true in the future.
+		return prolly.NewProximityMap(ctx, ns, root, kd, vd, vector.DistanceL2Squared{}, prolly.DefaultLogChunkSize), nil
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}
@@ -75,7 +78,10 @@ func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.No
 	}
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
-		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}), nil
+		// TODO: We should read the distance function and chunk size from the message.
+		// Currently, vector.DistanceL2Squared{} and prolly.DefaultLogChunkSize are the only values that can be written,
+		// but this may not be true in the future.
+		return prolly.NewProximityMap(nil, ns, root, kd, vd, vector.DistanceL2Squared{}, prolly.DefaultLogChunkSize), nil
 	default:
 		return prolly.NewMap(root, ns, kd, vd), nil
 	}
