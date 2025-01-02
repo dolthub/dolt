@@ -140,7 +140,9 @@ func TestMerge(t *testing.T) {
 
 			require.Equal(t, len(test.expected), len(actRows))
 			for i := range test.expected {
-				assert.Equal(t, test.expected[i], actRows[i])
+				for j := range test.expected[i] {
+					assert.Equal(t, test.expected[i][j], actRows[i].GetValue(j))
+				}
 			}
 		})
 	}
