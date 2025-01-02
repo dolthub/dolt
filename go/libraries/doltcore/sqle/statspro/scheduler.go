@@ -56,7 +56,7 @@ var _ StatsJob = (*GCJob)(nil)
 var _ StatsJob = (*SeedDbTablesJob)(nil)
 var _ StatsJob = (*ControlJob)(nil)
 
-func NewSeedJob(ctx *sql.Context, sqlDb dsess.SqlDatabase) SeedDbTablesJob {
+func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 	return SeedDbTablesJob{
 		ctx:    ctx,
 		sqlDb:  sqlDb,
@@ -67,7 +67,7 @@ func NewSeedJob(ctx *sql.Context, sqlDb dsess.SqlDatabase) SeedDbTablesJob {
 
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
-	sqlDb  dsess.SqlDatabase
+	sqlDb  sqle.Database
 	tables []string
 	done   chan struct{}
 }
@@ -77,8 +77,7 @@ func (j SeedDbTablesJob) Done() {
 }
 
 func (j SeedDbTablesJob) String() string {
-	//TODO implement me
-	panic("implement me")
+	return "seed db: " + j.sqlDb.RevisionQualifiedName() + "[" + strings.Join(j.tables, ", ") + "]"
 }
 
 func (j SeedDbTablesJob) JobType() StatsJobType {
@@ -115,7 +114,6 @@ func (j GCJob) Done() {
 type ReadJob struct {
 	ctx      *sql.Context
 	db       dsess.SqlDatabase
-	branch   string
 	table    string
 	m        prolly.Map
 	nodes    []tree.Node
@@ -181,6 +179,8 @@ func (j ControlJob) String() string {
 
 func NewStatsCoord(sleep time.Duration, logger *logrus.Logger) *StatsCoord {
 	return &StatsCoord{
+		dbMu:            &sync.Mutex{},
+		statsMu:         &sync.Mutex{},
 		logger:          logger,
 		Jobs:            make(chan StatsJob, 1024),
 		SleepMult:       sleep,
@@ -225,16 +225,17 @@ func (sc *StatsCoord) Stop() {
 	close(sc.Interrupts)
 }
 
-func (sc *StatsCoord) Start() {
+func (sc *StatsCoord) Start(ctx context.Context) {
 	sc.Interrupts = make(chan ControlJob)
-
+	// todo put into background threads
+	go sc.run(ctx)
 }
 
 func (sc *StatsCoord) Close() {
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} {
+func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
 	sc.dbMu.Lock()
 	sc.dbs = append(sc.dbs, db)
 	sc.dbMu.Unlock()
@@ -268,27 +269,35 @@ func (sc *StatsCoord) putStatistic(h hash.Hash, r sql.Row) {
 func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
 	case _, ok := <-sc.Interrupts:
-		if !ok {
+		if ok {
 			return nil, fmt.Errorf("cannot read queue while event loop is active")
 		}
 		// inactive event loop cannot be interrupted, discard
 	default:
 	}
 	var ret []StatsJob
-	select {
-	case <-ctx.Done():
-		return nil, nil
-	case j, ok := <-sc.Jobs:
-		if !ok {
+	for _ = range len(sc.Jobs) {
+		select {
+		case <-ctx.Done():
 			return nil, nil
+		case j, ok := <-sc.Jobs:
+			if !ok {
+				return nil, nil
+			}
+			ret = append(ret, j)
 		}
-		ret = append(ret, j)
 	}
 	return ret, nil
 }
 
-func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb dsess.SqlDatabase) chan struct{} {
+func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb sqle.Database) chan struct{} {
 	j := NewSeedJob(ctx, sqlDb)
+	sc.Jobs <- j
+	return j.done
+}
+
+func (sc *StatsCoord) Control(desc string, cb func(sc *StatsCoord) error) chan struct{} {
+	j := NewControl(desc, cb)
 	sc.Jobs <- j
 	return j.done
 }
@@ -300,7 +309,7 @@ func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan
 }
 
 func (sc *StatsCoord) error(j StatsJob, err error) {
-	sc.logger.Debugf("stats error; job detail: %s; verbose: %w", j.String(), err)
+	sc.logger.Debugf("stats error; job detail: %s; verbose: %s", j.String(), err)
 }
 
 // statsRunner operates on stats jobs
@@ -308,7 +317,7 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 	var err error
 	var newJobs []StatsJob
 	start := time.Now()
-	ticker := time.NewTicker(0)
+	ticker := time.NewTicker(time.Nanosecond)
 
 	queuedCnt := 0
 
@@ -355,6 +364,7 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 				sc.Jobs <- j
 				queuedCnt++
 			}
+			newJobs = nil
 
 			j.Done()
 
@@ -445,7 +455,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 				fullIndexBuckets[indexKey] = append(fullIndexBuckets[indexKey], n.HashOf())
 			}
 
-			readJobs, err := sc.partitionStatReadJobs(levelNodes, prollyMap)
+			readJobs, err := sc.partitionStatReadJobs(j.ctx, j.sqlDb, table, levelNodes, prollyMap)
 			if err != nil {
 				return nil, err
 			}
@@ -456,7 +466,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 			// if there are any reads to perform, we follow those reads with a table finalize
 			ret = append(ret, FinalizeJob{
 				tableKey: tableIndexesKey{
-					db:     j.sqlDb.Name(),
+					db:     j.sqlDb.AliasedName(),
 					branch: j.sqlDb.Revision(),
 					table:  table,
 				},
@@ -473,6 +483,10 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 type templateCacheKey struct {
 	h       hash.Hash
 	idxName string
+}
+
+func (k templateCacheKey) String() string {
+	return k.idxName + "/" + k.h.String()
 }
 
 func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) error {
@@ -663,7 +677,7 @@ func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
 					return nil, err
 				}
 
-				readJobs, err := sc.partitionStatReadJobs(levelNodes, prollyMap)
+				readJobs, err := sc.partitionStatReadJobs(j.ctx, sqlDb, table, levelNodes, prollyMap)
 				if err != nil {
 					return nil, err
 				}

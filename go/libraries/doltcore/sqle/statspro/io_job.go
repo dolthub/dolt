@@ -1,11 +1,13 @@
 package statspro
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
-func (sc *StatsCoord) partitionStatReadJobs(levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
+func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableName string, levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
 
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
@@ -39,8 +41,13 @@ func (sc *StatsCoord) partitionStatReadJobs(levelNodes []tree.Node, prollyMap pr
 		batchOrdinals = append(batchOrdinals, ord)
 
 		if curCnt > jobSize {
-			jobs = append(jobs, ReadJob{m: prollyMap, nodes: levelNodes[lastStart : i+1]})
+			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: levelNodes[lastStart : i+1], ordinals: batchOrdinals, done: make(chan struct{})})
+			curCnt = 0
+			batchOrdinals = batchOrdinals[:0]
 		}
+	}
+	if curCnt > 0 {
+		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: levelNodes[lastStart:], ordinals: batchOrdinals, done: make(chan struct{})})
 	}
 	return jobs, nil
 }

@@ -163,10 +163,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			return err
 		}
 
-		var schemaName string
-		if schTab, ok := sqlTable.(sql.DatabaseSchemaTable); ok {
-			schemaName = strings.ToLower(schTab.DatabaseSchema().SchemaName())
-		}
+		schemaName := strings.ToLower(sqlTable.DatabaseSchema().SchemaName())
 
 		if oldSchHash, err := statDb.GetSchemaHash(ctx, branch, table); oldSchHash.IsEmpty() {
 			if err := statDb.SetSchemaHash(ctx, branch, table, schHash); err != nil {
@@ -188,12 +185,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			return err
 		}
 
-		iat, ok := sqlTable.(sql.IndexAddressableTable)
-		if !ok {
-			return fmt.Errorf("table does not support indexes %s", table)
-		}
-
-		indexes, err := iat.GetIndexes(ctx)
+		indexes, err := sqlTable.GetIndexes(ctx)
 		if err != nil {
 			return err
 		}

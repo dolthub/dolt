@@ -958,7 +958,7 @@ func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQua
 			}
 		}
 
-		db, err := revisionDbForBranch(ctx, srcDb, resolvedRevSpec, requestedName)
+		db, err := RevisionDbForBranch(ctx, srcDb, resolvedRevSpec, requestedName)
 		// preserve original user case in the case of not found
 		if sql.ErrDatabaseNotFound.Is(err) {
 			return nil, false, sql.ErrDatabaseNotFound.New(revisionQualifiedName)
@@ -1499,8 +1499,8 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (string, b
 	return "", false, nil
 }
 
-// revisionDbForBranch returns a new database that is tied to the branch named by revSpec
-func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string, requestedName string) (dsess.SqlDatabase, error) {
+// RevisionDbForBranch returns a new database that is tied to the branch named by revSpec
+func RevisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string, requestedName string) (dsess.SqlDatabase, error) {
 	static := staticRepoState{
 		branch:          ref.NewBranchRef(revSpec),
 		RepoStateWriter: srcDb.DbData().Rsw,

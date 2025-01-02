@@ -1126,6 +1126,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 		IsServerLocked: false,
 	}), sqlCtx
 }
+
 func TestIndexOverwrite(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()

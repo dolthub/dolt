@@ -65,12 +65,11 @@ func (p *Provider) BootstrapDatabaseStats(ctx *sql.Context, db string) error {
 				return err
 			}
 
-			if st, ok := sqlTable.(sql.StatisticsTable); ok {
-				cnt, ok, err := st.RowCount(ctx)
-				if ok && err == nil {
-					rows += cnt
-				}
+			cnt, ok, err := sqlTable.RowCount(ctx)
+			if ok && err == nil {
+				rows += cnt
 			}
+
 			if rows >= boostrapRowLimit {
 				return fmt.Errorf("stats bootstrap aborted because %s exceeds the default row limit; manually run \"ANALYZE <table>\" or \"call dolt_stats_restart()\" to collect statistics", db)
 			}
