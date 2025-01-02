@@ -47,8 +47,8 @@ type CliContext interface {
 
 // NewCliContext creates a new CliContext instance. Arguments must not be nil.
 func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, cwd filesys.Filesys, latebind LateBindQueryist) (CliContext, errhand.VerboseError) {
-	if args == nil || config == nil || latebind == nil {
-		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, and latebind must be non nil."))
+	if args == nil || config == nil || cwd == nil || latebind == nil {
+		return nil, errhand.VerboseErrorFromError(errors.New("Invariant violated. args, config, cwd, and latebind must be non nil."))
 	}
 
 	return LateBindCliContext{
