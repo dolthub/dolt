@@ -209,7 +209,7 @@ insert into foo values (1,2,3)|`,
 	for _, tt := range testcases {
 		t.Run(tt.input, func(t *testing.T) {
 			reader := strings.NewReader(tt.input)
-			scanner := newStreamScanner(reader)
+			scanner := NewStreamScanner(reader)
 			var i int
 			for scanner.Scan() {
 				require.True(t, i < len(tt.statements))
