@@ -109,7 +109,7 @@ func TestForeignKeyErrors(t *testing.T) {
 
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
 	for _, c := range cmds {
@@ -154,7 +154,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 
-	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
 	for _, c := range fkSetupCommon {

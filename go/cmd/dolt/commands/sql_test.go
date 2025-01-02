@@ -43,7 +43,7 @@ func TestSqlConsole(t *testing.T) {
 		require.NoError(t, err)
 		defer dEnv.DoltDB.Close()
 
-		cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+		cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 		require.NoError(t, err)
 
 		args := []string{}
@@ -76,7 +76,7 @@ func TestSqlBatchMode(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-b", "-q", test.query}
@@ -119,7 +119,7 @@ func TestSqlSelect(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -149,7 +149,7 @@ func TestSqlShow(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -188,7 +188,7 @@ func TestCreateTable(t *testing.T) {
 			assert.NoError(t, err)
 			assert.False(t, has, "table exists before creating it")
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -232,7 +232,7 @@ func TestShowTables(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -268,7 +268,7 @@ func TestAlterTable(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -299,7 +299,7 @@ func TestDropTable(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -420,7 +420,7 @@ func TestInsert(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -504,7 +504,7 @@ func TestUpdate(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}
@@ -582,7 +582,7 @@ func TestDelete(t *testing.T) {
 			require.NoError(t, err)
 			defer dEnv.DoltDB.Close()
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
 
 			args := []string{"-q", test.query}

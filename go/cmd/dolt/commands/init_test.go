@@ -72,7 +72,7 @@ func TestInit(t *testing.T) {
 			gCfg.SetStrings(test.GlobalConfig)
 			apr := argparser.ArgParseResults{}
 			latebind := func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) { return nil, nil, func() {}, nil }
-			cliCtx, _ := cli.NewCliContext(&apr, dEnv.Config, latebind)
+			cliCtx, _ := cli.NewCliContext(&apr, dEnv.Config, dEnv.FS, latebind)
 
 			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv, cliCtx)
 			defer dEnv.DoltDB.Close()

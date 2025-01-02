@@ -77,7 +77,7 @@ func TestServerArgs(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ listener:
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
 		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestServerBadArgs(t *testing.T) {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			controller := svcs.NewController()
 			go func() {
-				StartServer(context.Background(), "test", "dolt sql-server", test, env, controller)
+				StartServer(context.Background(), "test", "dolt sql-server", test, env, env.FS, controller)
 			}()
 			if !assert.Error(t, controller.WaitForStart()) {
 				controller.Stop()
@@ -286,7 +286,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
 	}()
 
 	err = controller.WaitForStart()

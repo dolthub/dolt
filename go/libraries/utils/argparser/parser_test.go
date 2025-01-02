@@ -169,3 +169,16 @@ func TestArgParser(t *testing.T) {
 		}
 	}
 }
+
+func TestArgParserSet(t *testing.T) {
+	ap := createParserWithOptionalArgs()
+	apr, err := ap.Parse([]string{"-o", "optional value", "-f", "foo", "bar"})
+	require.NoError(t, err)
+
+	apr, err = apr.SetArgument("param", "abcdefg")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"flag": "", "optional": "optional value", "param": "abcdefg"}, apr.options)
+
+	apr, err = apr.SetArgument("garbage", "garbage value")
+	require.Error(t, err)
+}
