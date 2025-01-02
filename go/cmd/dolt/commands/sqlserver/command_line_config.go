@@ -146,7 +146,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withDataDir(dataDir)
 	}
 
-	// We explicitly don't use the dataDir flag from the APR here. The data dif flag is pull out early and converted
+	// We explicitly don't use the dataDir flag from the APR here. The data dir flag is pulled out early and converted
 	// to an absolute path. It is read in the GetDataDirPreStart function, which is called early in dolt.go to get the
 	// data dir for any dolt process. This complexity exists because the server's config.yaml config file can contain the
 	// dataDir, but we don't execute any server specific logic until after the database environment is initialized.
