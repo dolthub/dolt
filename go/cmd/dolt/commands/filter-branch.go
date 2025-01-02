@@ -281,7 +281,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		return nil, err
 	}
 
-	scanner := newStreamScanner(strings.NewReader(query))
+	scanner := NewStreamScanner(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
