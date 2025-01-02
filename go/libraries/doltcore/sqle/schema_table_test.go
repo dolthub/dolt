@@ -87,7 +87,7 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
 		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
 	}
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 }
 
 func TestV1SchemasTable(t *testing.T) {

@@ -54,7 +54,7 @@ func TestProceduresMigration(t *testing.T) {
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 		}
-		assert.Equal(t, expectedRows, rows)
+		assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 	})
 
 	t.Run("test that fetching stored procedure triggers the migration logic", func(t *testing.T) {
@@ -77,7 +77,7 @@ func TestProceduresMigration(t *testing.T) {
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 		}
-		assert.Equal(t, expectedRows, rows)
+		assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 	})
 
 	t.Run("test that adding a new stored procedure triggers the migration logic", func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestProceduresMigration(t *testing.T) {
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
 			{"proc3", "create procedure proc3() SELECT 47 as pk from dual;", timestamp, timestamp, "NO_ENGINE_SUBSTITUTION"},
 		}
-		assert.Equal(t, expectedRows, rows)
+		assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 	})
 
 }
