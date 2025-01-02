@@ -138,12 +138,7 @@ func TestMerge(t *testing.T) {
 			actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 			require.NoError(t, err)
 
-			require.Equal(t, len(test.expected), len(actRows))
-			for i := range test.expected {
-				for j := range test.expected[i] {
-					assert.Equal(t, test.expected[i][j], actRows[i].GetValue(j))
-				}
-			}
+			require.Equal(t, test.expected, sql.RowsToUntyped(actRows))
 		})
 	}
 }
@@ -268,12 +263,7 @@ func TestMergeConflicts(t *testing.T) {
 			actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
 			require.NoError(t, err)
 
-			require.Equal(t, len(test.expected), len(actRows))
-			for i := range test.expected {
-				for j := range test.expected[i] {
-					assert.Equal(t, test.expected[i][j], actRows[i].GetValue(j))
-				}
-			}
+			require.Equal(t, test.expected, sql.RowsToUntyped(actRows))
 		})
 	}
 }

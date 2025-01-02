@@ -237,7 +237,7 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 
 			actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
 			require.NoError(t, err)
-			require.Equal(t, a.rows, actRows)
+			require.Equal(t, a.rows, sql.RowsToUntyped(actRows))
 		})
 	}
 }
