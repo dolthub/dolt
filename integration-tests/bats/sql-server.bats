@@ -1968,3 +1968,32 @@ behavior:
     [[ "$output" =~ "Detected that a Dolt sql-server is running from this directory." ]] || false
     [[ "$output" =~ "Stop the sql-server before initializing this directory as a Dolt database." ]] || false
 }
+
+
+@test "sql-server: fail to start when multiple data dirs found" {
+    skiponwindows "Missing dependencies"
+
+    mkdir datadir1
+    mkdir datadir2
+
+    # This file is legit, and would work if there was no --data-dir on the cli.
+    cat > config.yml <<EOF
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: 4444
+data_dir: ./datadir1
+EOF
+    run dolt --data-dir datadir2 sql-server --config ./config.yml
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot specify both global --data-dir argument and --data-dir in sql-server config" ]] || false
+
+    run dolt sql-server --data-dir datadir2 --config ./config.yml
+    [ $status -eq 1 ]
+    [[ "$output" =~ "--data-dir specified in both config file and command line" ]] || false
+
+    run dolt --data-dir datadir1 sql-server --data-dir datadir2
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot specify both global --data-dir argument and --data-dir in sql-server config" ]] || false
+}
