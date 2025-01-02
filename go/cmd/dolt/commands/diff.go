@@ -1674,13 +1674,13 @@ func writeDiffResults(
 			var filteredOldRow, filteredNewRow diff.RowDiff
 			for i, changeType := range newRow.ColDiffs {
 				if (changeType == diff.Added|diff.Removed) || modifiedColNames[targetSch[i].Name] {
-					if i < oldRow.Row.Len() {
+					if oldRow.Row != nil && i < oldRow.Row.Len() {
 						filteredOldRow.Row = filteredOldRow.Row.Append(oldRow.Row.Subslice(i, i+1))
 						filteredOldRow.ColDiffs = append(filteredOldRow.ColDiffs, oldRow.ColDiffs[i])
 						filteredOldRow.RowDiff = oldRow.RowDiff
 					}
 
-					if i < newRow.Row.Len() {
+					if oldRow.Row != nil && i < newRow.Row.Len() {
 						filteredNewRow.Row = filteredNewRow.Row.Append(newRow.Row.Subslice(i, i+1))
 						filteredNewRow.ColDiffs = append(filteredNewRow.ColDiffs, newRow.ColDiffs[i])
 						filteredNewRow.RowDiff = newRow.RowDiff

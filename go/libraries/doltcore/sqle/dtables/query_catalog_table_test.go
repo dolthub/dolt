@@ -64,7 +64,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 		{uint64(1), "select 1 from dual", "name", "description"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 
 	queryStr2 := "select 2 from dual"
 	sq2, root, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr2, "description2")
@@ -88,7 +88,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 		{uint64(2), "select 2 from dual", "name2", "description2"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 
 	rows, err = sqle.ExecuteSelect(dEnv, root, "select id from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
