@@ -17,6 +17,7 @@ package encoding
 import (
 	"context"
 	"fmt"
+
 	fb "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"

@@ -17,13 +17,15 @@ package shim
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 )
 
 func NodeFromValue(v types.Value) (node tree.Node, fileId string, err error) {
