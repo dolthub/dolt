@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -297,8 +296,10 @@ func TestNBSCopyGC(t *testing.T) {
 	st, _, _ := makeTestLocalStore(t, 8)
 	defer st.Close()
 
-	keepers := makeChunkSet(64, 64)
-	tossers := makeChunkSet(64, 64)
+	const numChunks = 64
+
+	keepers := makeChunkSet(numChunks, 64)
+	tossers := makeChunkSet(numChunks, 64)
 
 	for _, c := range keepers {
 		err := st.Put(ctx, c, noopGetAddrs)
@@ -333,26 +334,17 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	keepChan := make(chan []hash.Hash, 16)
-	var msErr error
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		require.NoError(t, st.BeginGC(nil))
-		var finalizer chunks.GCFinalizer
-		finalizer, msErr = st.MarkAndSweepChunks(ctx, keepChan, nil, chunks.GCMode_Full)
-		if msErr == nil {
-			msErr = finalizer.SwapChunksInStore(ctx)
-		}
-		st.EndGC()
-		wg.Done()
-	}()
+	keepChan := make(chan []hash.Hash, numChunks)
 	for h := range keepers {
 		keepChan <- []hash.Hash{h}
 	}
 	close(keepChan)
-	wg.Wait()
-	require.NoError(t, msErr)
+
+	require.NoError(t, st.BeginGC(nil))
+	finalizer, err := st.MarkAndSweepChunks(ctx, keepChan, nil, chunks.GCMode_Full)
+	require.NoError(t, err)
+	require.NoError(t, finalizer.SwapChunksInStore(ctx))
+	st.EndGC()
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)

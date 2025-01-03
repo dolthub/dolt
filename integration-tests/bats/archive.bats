@@ -7,7 +7,7 @@ setup() {
     dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
     dolt commit -A -m "create tbl"
 
-    make_inserts
+    dolt sql -q "$(insert_statement)"
 }
 
 teardown() {
@@ -15,29 +15,50 @@ teardown() {
     teardown_common
 }
 
-# Insert 25 new rows, then commit.
-make_inserts() {
-  for ((i=1; i<=25; i++))
+# Inserts 25 new rows and commits them.
+insert_statement() {
+  res="INSERT INTO tbl (guid) VALUES (UUID());"
+  for ((i=1; i<=24; i++))
   do
-    dolt sql -q "INSERT INTO tbl (guid) VALUES (UUID())"
+    res="$res INSERT INTO tbl (guid) VALUES (UUID());"
   done
-  dolt commit -a -m "Add 25 values"
+  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Add 25 values\");"
+  echo "$res"
 }
 
-# Randomly update 10 rows, then commit.
-make_updates() {
-  for ((i=1; i<=10; i++))
+# Updates 10 random rows and commits the changes.
+update_statement() {
+  res="SET @max_id = (SELECT MAX(i) FROM tbl);
+SET @random_id = FLOOR(1 + RAND() * @max_id);
+UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
+  for ((i=1; i<=9; i++))
   do
-    dolt sql -q	"
-    SET @max_id = (SELECT MAX(i) FROM tbl);
-    SET @random_id = FLOOR(1 + RAND() * @max_id);
-    UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
+    res="$res
+SET @max_id = (SELECT MAX(i) FROM tbl);
+SET @random_id = FLOOR(1 + RAND() * @max_id);
+UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   done
-  dolt commit -a -m "Update 10 values."
+  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Update 10 values\");"
+  echo "$res"
+}
+
+# A series of 10 update-and-commit-then-insert-and-commit pairs, followed by a dolt_gc call
+#
+# This is useful because we need at least 25 retained chunks to create a commit.
+mutations_and_gc_statement() {
+  query=`update_statement`
+  for ((j=1; j<=9; j++))
+  do
+    query="$query $(insert_statement)"
+    query="$query $(update_statement)"
+  done
+  query="$query $(insert_statement)"
+  query="$query call dolt_gc();"
+  echo "$query"
 }
 
 @test "archive: too few chunks" {
-  make_updates
+  dolt sql -q "$(update_statement)"
   dolt gc
 
   run dolt archive
@@ -51,51 +72,21 @@ make_updates() {
   [[ "$output" =~ "Run 'dolt gc' first" ]] || false
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: single archive" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
 
   # Ensure updates continue to work.
-  make_updates
+  dolt sql -q "$(update_statement)"
 }
 
-
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: multiple archives" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
-
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
-
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
 
   dolt archive
 
@@ -107,42 +98,19 @@ make_updates() {
   [ "$commits" -eq "186" ]
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: archive multiple times" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "2" ]
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: archive with remotesrv no go" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
-
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
   run dolt sql-server --remotesapi-port=12321
@@ -154,16 +122,8 @@ make_updates() {
   [[ "$output" =~ "archive files present" ]] || false
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: archive --revert (fast)" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
   dolt archive --revert
 
@@ -172,16 +132,8 @@ make_updates() {
   [ "$commits" -eq "66" ]
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: archive --revert (rebuild)" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
   dolt gc                         # This will delete the unused table files.
   dolt archive --revert
@@ -191,17 +143,8 @@ make_updates() {
   [ "$commits" -eq "66" ]
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "archive: archive backup no go" {
-  # We need at least 25 chunks to create an archive.
-  for ((j=1; j<=10; j++))
-  do
-    make_updates
-    make_inserts
-  done
-
-  dolt gc
+  dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
   dolt backup add bac1 file://../bac1
