@@ -62,7 +62,7 @@ const (
 
 type StatsJob interface {
 	JobType() StatsJobType
-	Done()
+	Finish()
 	String() string
 }
 
@@ -71,7 +71,7 @@ var _ StatsJob = (*GCJob)(nil)
 var _ StatsJob = (*SeedDbTablesJob)(nil)
 var _ StatsJob = (*ControlJob)(nil)
 
-func NewSeedJob(ctx *sql.Context, sqlDb *sqle.Database) SeedDbTablesJob {
+func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 	return SeedDbTablesJob{
 		ctx:    ctx,
 		sqlDb:  sqlDb,
@@ -82,12 +82,12 @@ func NewSeedJob(ctx *sql.Context, sqlDb *sqle.Database) SeedDbTablesJob {
 
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
-	sqlDb  *sqle.Database
+	sqlDb  sqle.Database
 	tables []string
 	done   chan struct{}
 }
 
-func (j SeedDbTablesJob) Done() {
+func (j SeedDbTablesJob) Finish() {
 	close(j.done)
 }
 
@@ -121,14 +121,41 @@ func (j GCJob) JobType() StatsJobType {
 	panic("implement me")
 }
 
-func (j GCJob) Done() {
+func (j GCJob) Finish() {
+	close(j.done)
+	return
+}
+
+func NewAnalyzeJob(ctx *sql.Context, sqlDb sqle.Database, tables []string, after ControlJob) AnalyzeJob {
+	return AnalyzeJob{ctx: ctx, sqlDb: sqlDb, tables: tables, after: after, done: make(chan struct{})}
+}
+
+type AnalyzeJob struct {
+	ctx    *sql.Context
+	sqlDb  sqle.Database
+	tables []string
+	after  ControlJob
+	done   chan struct{}
+}
+
+func (j AnalyzeJob) String() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (j AnalyzeJob) JobType() StatsJobType {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (j AnalyzeJob) Finish() {
 	close(j.done)
 	return
 }
 
 type ReadJob struct {
 	ctx      *sql.Context
-	db       dsess.SqlDatabase
+	db       sqle.Database
 	table    string
 	m        prolly.Map
 	nodes    []tree.Node
@@ -136,7 +163,7 @@ type ReadJob struct {
 	done     chan struct{}
 }
 
-func (j ReadJob) Done() {
+func (j ReadJob) Finish() {
 	close(j.done)
 }
 
@@ -156,7 +183,7 @@ type FinalizeJob struct {
 	done     chan struct{}
 }
 
-func (j FinalizeJob) Done() {
+func (j FinalizeJob) Finish() {
 	close(j.done)
 }
 
@@ -180,7 +207,7 @@ type ControlJob struct {
 	done chan struct{}
 }
 
-func (j ControlJob) Done() {
+func (j ControlJob) Finish() {
 	close(j.done)
 }
 
@@ -192,17 +219,21 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(sleep time.Duration, logger *logrus.Logger) *StatsCoord {
+func NewStatsCoord(sleep time.Duration, logger *logrus.Logger, threads *sql.BackgroundThreads) *StatsCoord {
 	return &StatsCoord{
 		dbMu:            &sync.Mutex{},
 		statsMu:         &sync.Mutex{},
 		logger:          logger,
 		Jobs:            make(chan StatsJob, 1024),
+		Done:            make(chan struct{}),
+		Interrupts:      make(chan ControlJob),
 		SleepMult:       sleep,
+		gcInterval:      24 * time.Hour,
 		BucketCache:     make(map[hash.Hash]*stats.Bucket),
 		LowerBoundCache: make(map[hash.Hash]sql.Row),
 		TemplateCache:   make(map[templateCacheKey]stats.Statistic),
 		Stats:           make(map[tableIndexesKey][]*stats.Statistic),
+		threads:         threads,
 	}
 }
 
@@ -215,9 +246,10 @@ type tableIndexesKey struct {
 type StatsCoord struct {
 	logger    *logrus.Logger
 	SleepMult time.Duration
+	threads   *sql.BackgroundThreads
 
 	dbMu *sync.Mutex
-	dbs  []*sqle.Database
+	dbs  []sqle.Database
 
 	readCounter atomic.Int32
 	doGc        atomic.Bool
@@ -226,6 +258,7 @@ type StatsCoord struct {
 
 	Jobs       chan StatsJob
 	Interrupts chan ControlJob
+	Done       chan struct{}
 
 	// BucketCache are in-memory stats buckets, always tracked
 	// on disk
@@ -242,24 +275,30 @@ type StatsCoord struct {
 }
 
 func (sc *StatsCoord) Stop() {
-	close(sc.Interrupts)
+	close(sc.Done)
 }
 
-func (sc *StatsCoord) Start(ctx *sql.Context, threads *sql.BackgroundThreads) error {
-	sc.Interrupts = make(chan ControlJob)
-	// todo put into background threads
-	if err := threads.Add("stats", func(_ context.Context) {
-		sc.run(ctx)
-	}); err != nil {
-		return err
+func (sc *StatsCoord) Restart(ctx *sql.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sc.Done:
+	default:
+		sc.Stop()
 	}
+
+	sc.Done = make(chan struct{})
+	return sc.threads.Add("stats", func(_ context.Context) {
+		sc.run(ctx)
+	})
 }
 
 func (sc *StatsCoord) Close() {
+	sc.Stop()
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db *sqle.Database) chan struct{} {
+func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
 	sc.dbMu.Lock()
 	sc.dbs = append(sc.dbs, db)
 	sc.dbMu.Unlock()
@@ -341,7 +380,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	return ret, nil
 }
 
-func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb *sqle.Database) chan struct{} {
+func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb sqle.Database) chan struct{} {
 	j := NewSeedJob(ctx, sqlDb)
 	sc.Jobs <- j
 	return j.done
@@ -365,13 +404,9 @@ func (sc *StatsCoord) error(j StatsJob, err error) {
 
 // statsRunner operates on stats jobs
 func (sc *StatsCoord) run(ctx *sql.Context) error {
-	var err error
-	var newJobs []StatsJob
-	start := time.Now()
+	var start time.Time
 	jobTicker := time.NewTicker(time.Nanosecond)
 	gcTicker := time.NewTicker(sc.gcInterval)
-
-	queuedCnt := 0
 
 	for {
 		select {
@@ -380,11 +415,13 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		case <-jobTicker.C:
 		case <-gcTicker.C:
 			if sc.doGc.Load() {
-				if err := sc.gc(); err != nil {
-
+				if err := sc.gc(ctx); err != nil {
+					sc.error(GCJob{}, err)
 				}
 			}
 			gcTicker.Reset(sc.gcInterval)
+		case <-sc.Done:
+			return nil
 		case j, ok := <-sc.Interrupts:
 			if !ok {
 				return nil
@@ -398,43 +435,71 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-sc.Done:
+			return nil
 		case j, ok := <-sc.Jobs:
 			if !ok {
 				return nil
 			}
-			queuedCnt--
 			start = time.Now()
-			switch j := j.(type) {
-			case SeedDbTablesJob:
-				newJobs, err = sc.seedDbTables(ctx, j)
-			case ReadJob:
-				sc.readCounter.Add(-1)
-				newJobs, err = sc.readChunks(ctx, j)
-			case FinalizeJob:
-				newJobs, err = sc.finalizeUpdate(ctx, j)
-			case ControlJob:
-				if err := j.cb(sc); err != nil {
-					sc.error(j, err)
-				}
-			default:
-			}
-			for _, j := range newJobs {
-				if _, ok := j.(ReadJob); ok {
-					sc.readCounter.Add(1)
-				}
-				sc.Jobs <- j
-				queuedCnt++
-			}
-			newJobs = nil
-
-			j.Done()
-
+			newJobs, err := sc.executeJob(ctx, j)
 			if err != nil {
 				sc.error(j, err)
 			}
+			err = sc.sendJobs(ctx, newJobs)
+			if err != nil {
+				sc.error(j, err)
+			}
+			j.Finish()
 		}
 		jobTicker.Reset(time.Since(start) * sc.SleepMult)
 	}
+}
+
+func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs []StatsJob) error {
+	for i := 0; i < len(jobs); i++ {
+		j := jobs[i]
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case sc.Jobs <- j:
+			if _, ok := j.(ReadJob); ok {
+				sc.readCounter.Add(1)
+			}
+		default:
+			sc.doubleChannelSize(ctx)
+			i--
+		}
+	}
+	return nil
+}
+
+func (sc *StatsCoord) executeJob(ctx *sql.Context, j StatsJob) ([]StatsJob, error) {
+	switch j := j.(type) {
+	case SeedDbTablesJob:
+		return sc.seedDbTables(ctx, j)
+	case ReadJob:
+		sc.readCounter.Add(-1)
+		return sc.readChunks(ctx, j)
+	case FinalizeJob:
+		return sc.finalizeUpdate(ctx, j)
+	case ControlJob:
+		if err := j.cb(sc); err != nil {
+			sc.error(j, err)
+		}
+	default:
+	}
+	return nil, nil
+}
+
+func (sc *StatsCoord) doubleChannelSize(ctx *sql.Context) {
+	sc.Stop()
+	ch := make(chan StatsJob, cap(sc.Jobs)*2)
+	for j := range sc.Jobs {
+		ch <- j
+	}
+	sc.Jobs = ch
+	sc.Restart(ctx)
 }
 
 func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
@@ -478,7 +543,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	return ret, nil
 }
 
-func (sc *StatsCoord) readJobsForTables(ctx *sql.Context, sqlDb *sqle.Database, tableNames []string) ([]StatsJob, error) {
+func (sc *StatsCoord) readJobsForTables(ctx *sql.Context, sqlDb sqle.Database, tableNames []string) ([]StatsJob, error) {
 	var ret []StatsJob
 	for _, table := range tableNames {
 		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
@@ -510,7 +575,7 @@ func (sc *StatsCoord) readJobsForTables(ctx *sql.Context, sqlDb *sqle.Database, 
 			}
 
 			if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
-				sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", j.sqlDb.RevisionQualifiedName(), table, sqlIdx, sqlIdx, err)
+				sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), table, sqlIdx, sqlIdx, err)
 				continue
 			}
 
@@ -746,7 +811,7 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 					return err
 				}
 
-				readJobs, err := sc.partitionStatReadJobs(j.ctx, sqlDb, table, levelNodes, prollyMap)
+				readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, table, levelNodes, prollyMap)
 				if err != nil {
 					return err
 				}
@@ -769,4 +834,13 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 	sc.BucketCache = newBucketCache
 
 	return nil
+}
+
+func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, error) {
+	readJobs, err := sc.readJobsForTables(j.ctx, j.sqlDb, j.tables)
+	if err != nil {
+		return nil, err
+	}
+	readJobs = append(readJobs, j.after)
+	return readJobs, nil
 }

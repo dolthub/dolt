@@ -40,6 +40,7 @@ func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// add more data
@@ -61,7 +62,7 @@ func TestScheduleLoop(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
 		// run two cycles -> (1) seed, (2) populate
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{
 				db: sqlDbs[0], table: "ab",
@@ -88,7 +89,7 @@ func TestScheduleLoop(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"ab", "xy"}},
 		})
 
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"ab", "xy"}},
 		})
@@ -108,6 +109,7 @@ func TestAlterIndex(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// drop index
@@ -115,7 +117,7 @@ func TestAlterIndex(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y varchar(200)"))
 
 		// expect finalize, no GC
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -126,7 +128,7 @@ func TestAlterIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
 		})
 
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
 		})
@@ -146,6 +148,7 @@ func TestDropIndex(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
@@ -154,7 +157,7 @@ func TestDropIndex(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
 
 		// finalize and GC
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -164,7 +167,7 @@ func TestDropIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
 		})
 
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
 		})
@@ -184,12 +187,13 @@ func TestDropIndexGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
 
 		// finalize and GC
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -200,7 +204,7 @@ func TestDropIndexGC(t *testing.T) {
 			GCJob{},
 		})
 
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
 		})
@@ -220,14 +224,14 @@ func TestDropTable(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
-
+	wg := sync.WaitGroup{}
 	{
 		sc.disableGc.Store(true)
 		sc.gcInterval = time.Nanosecond
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// no finalize, just GC
 		validateJobState(t, ctx, sc, []StatsJob{
@@ -241,10 +245,11 @@ func TestDropTableGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// no finalize, just GC
 		validateJobState(t, ctx, sc, []StatsJob{
@@ -252,7 +257,7 @@ func TestDropTableGC(t *testing.T) {
 		})
 
 		// check for clean slate
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 	}
 }
@@ -261,12 +266,13 @@ func TestDeleteOffBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 447"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize and new read
 
@@ -277,12 +283,13 @@ func TestDeleteOffBoundaryGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 415"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize and new read
 
@@ -293,12 +300,13 @@ func TestDeleteOnBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 147"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize, no new read
 	}
@@ -308,12 +316,13 @@ func TestDeleteOnBoundaryGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 147"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize, no new read
 	}
@@ -322,22 +331,66 @@ func TestDeleteOnBoundaryGC(t *testing.T) {
 func TestAddDatabases(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
+	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	var otherDb sqle.Database
 	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 147"))
-		runAndPause(ctx, sc, threads)
+		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
 
-		// finalize, no new read
+		for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
+			if db.Name() == "otherdb" {
+				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
+				require.NoError(t, err)
+				otherDb = dsessDb.(sqle.Database)
+				addHook(ctx, nil, "otherdb", nil, otherDb)
+			}
+		}
+
+		// finish queue of read/finalize
+		runAndPause(ctx, sc, &wg)
+
+		validateJobState(t, ctx, sc, []StatsJob{
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
+			ReadJob{db: otherDb, table: "t", ordinals: []updateOrdinal{{0, 2}}},
+			FinalizeJob{
+				tableKey: tableIndexesKey{db: "otherdb", branch: "main", table: "t"},
+				indexes: map[templateCacheKey][]hash.Hash{
+					templateCacheKey{idxName: "PRIMARY"}: nil,
+				}},
+			SeedDbTablesJob{sqlDb: otherDb, tables: []string{"t"}},
+		})
+
+		runAndPause(ctx, sc, &wg)
+
+		// xy and t
+		require.Equal(t, 5, len(sc.BucketCache))
+		require.Equal(t, 3, len(sc.LowerBoundCache))
+		require.Equal(t, 3, len(sc.TemplateCache))
+		require.Equal(t, 2, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{db: "otherdb", branch: "main", table: "t"}]
+		require.Equal(t, 1, len(stat))
+	}
+
+	dropHook := NewStatsDropDatabaseHook2(sc)
+	{
+		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
+		dropHook(ctx, "otherdb")
+
+		_, ok := sc.Stats[tableIndexesKey{db: "otherdb", branch: "main", table: "t"}]
+		require.False(t, ok)
 	}
 }
 
-func TestDeleteDatabases(t *testing.T) {
+func TestDropDatabases(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
@@ -345,7 +398,7 @@ func TestDeleteDatabases(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database theirdb"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		require.Equal(t, 1, len(sc.Stats[tableIndexesKey{
 			db:     "theirdb",
@@ -354,37 +407,7 @@ func TestDeleteDatabases(t *testing.T) {
 		}]))
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database theirdb"))
-		runAndPause(ctx, sc, threads)
-
-		// finalize, no new read
-	}
-}
-
-func TestStartFn(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
-
-	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_start()"))
-		runAndPause(ctx, sc, threads)
-
-		// finalize, no new read
-	}
-}
-
-func TestStopFn(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
-
-	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize, no new read
 	}
@@ -394,26 +417,28 @@ func TestDropFn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// alter index
 		// TODO detect schema change?
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_drop()"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		// finalize, no new read
 	}
 }
 
-func TestGCFn(t *testing.T) {
+func TestGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		// Gc function is an interrupt, no GC timer, reset current gc state afterwards
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-		runAndPause(ctx, sc, threads)
+		require.NoError(t, executeQuery(ctx, sqlEng, ""))
+		runAndPause(ctx, sc, &wg)
 
 		// test for cleanup
 	}
@@ -423,29 +448,15 @@ func TestReadCounter(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
 
 	{
 		require.Equal(t, 0, sc.Info().ReadCnt)
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (501, 0)"))
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		require.Equal(t, 2, sc.Info().ReadCnt)
-	}
-}
-
-func TestDbsCounter(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
-
-	{
-		require.Equal(t, 1, sc.Info().DbCnt)
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database theirdb"))
-		runAndPause(ctx, sc, threads)
-
-		require.Equal(t, 2, sc.Info().DbCnt)
 	}
 }
 
@@ -467,7 +478,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 	}
 	require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
-	sc := NewStatsCoord(time.Nanosecond, ctx.GetLogger().Logger)
+	sc := NewStatsCoord(time.Nanosecond, ctx.GetLogger().Logger, threads)
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 	wg := sync.WaitGroup{}
@@ -500,7 +511,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	{
 		// seed creates read jobs
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 415}, {415, 500}}},
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 240}, {240, 500}}},
@@ -516,7 +527,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	{
 		// read jobs populate cache
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
@@ -533,7 +544,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	{
 		// seed with no changes yields no new jobs
-		runAndPause(ctx, sc, threads)
+		runAndPause(ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []string{"xy"}},
@@ -570,7 +581,7 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 			require.True(t, ok)
 			require.Equal(t, ej.table, j.table)
 			require.Equal(t, ej.ordinals, j.ordinals)
-			require.Equal(t, ej.db.Name(), j.db.Name())
+			require.Equal(t, ej.db.AliasedName(), j.db.AliasedName())
 			require.Equal(t, ej.db.Revision(), j.db.Revision())
 		case FinalizeJob:
 			ej, ok := expected[i].(FinalizeJob)
@@ -618,19 +629,18 @@ func waitOnJob(wg *sync.WaitGroup, done chan struct{}) {
 	}()
 }
 
-func runAndPause(ctx *sql.Context, sc *StatsCoord, threads *sql.BackgroundThreads) {
+func runAndPause(ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {
 	// The stop job closes the controller's done channel before the job
 	// is finished. The done channel is closed before the next run loop,
 	// making the loop effectively inactive even if the goroutine is still
 	// in the process of closing by the time we are flushing/validating
 	// the queue.
-	wg := sync.WaitGroup{}
 	pauseDone := sc.Control("pause", func(sc *StatsCoord) error {
 		sc.Stop()
 		return nil
 	})
-	waitOnJob(&wg, pauseDone)
-	sc.Start(ctx, threads)
+	waitOnJob(wg, pauseDone)
+	sc.Restart(ctx)
 	wg.Wait()
 	return
 }

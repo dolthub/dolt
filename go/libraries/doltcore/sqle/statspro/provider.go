@@ -53,42 +53,40 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		return err
 	}
 
-	var sqlDb *sqle.Database
+	var sqlDb sqle.Database
 	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
 		for _, db := range sc.dbs {
 			if db.AliasedName() == dbName && db.Revision() == branch {
 				sqlDb = db
-				break
+				return
 			}
 		}
 	}()
 
-	if sqlDb == nil {
+	if sqlDb.Name() == "" {
 		return fmt.Errorf("qualified database not found: %s/%s", branch, dbName)
 	}
 
-	readJobs, err := sc.readJobsForTables(ctx, sqlDb, []string{table.String()})
-	if err != nil {
-		return err
-	}
-	if len(readJobs) == 0 {
-		return nil
-	}
-	lastFinalize, ok := readJobs[len(readJobs)-1].(FinalizeJob)
-	if !ok {
-		return fmt.Errorf("expected read bartch to end with a finalize, found %T", readJobs[len(readJobs)-1])
-	}
-	for _, j := range readJobs {
-		sc.Jobs <- j
+	after := NewControl("finish analyze", func(sc *StatsCoord) error { return nil })
+	analyze := NewAnalyzeJob(ctx, sqlDb, []string{table.String()}, after)
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-sc.Done:
+		return fmt.Errorf("stat queue was interrupted")
+	case sc.Jobs <- analyze:
 	}
 
 	// wait for finalize to finish before returning
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-lastFinalize.done:
+	case <-sc.Done:
+		return fmt.Errorf("stat queue was interrupted")
+	case <-after.done:
 		return nil
 	}
 }
@@ -136,6 +134,9 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, db string, flush bool) error
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return err
+	}
+	if branch == "" {
+		branch = "main"
 	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()

@@ -1,13 +1,13 @@
 package statspro
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableName string, levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
+func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Database, tableName string, levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
 
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err

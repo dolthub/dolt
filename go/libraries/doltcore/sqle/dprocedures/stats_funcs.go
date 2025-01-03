@@ -16,7 +16,6 @@ package dprocedures
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -105,7 +104,7 @@ func statsStatus(ctx *sql.Context) (interface{}, error) {
 // statsStop cancels a refresh thread
 func statsStop(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	statsPro := dSess.StatsProvider().(*statspro.StatsCoord)
+	statsPro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
 	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
