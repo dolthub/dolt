@@ -59,15 +59,11 @@ func (i rowIterImpl) Close(ctx context.Context) error {
 
 // NewTableIterator creates a RowIter that iterates sql.Row's from |idx|.
 // |offset| can be supplied to read at some start point in |idx|.
-func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index, offset uint64) (RowIter, error) {
+func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index) (RowIter, error) {
 	var rowItr sql.RowIter
 	if types.IsFormat_DOLT(idx.Format()) {
-		m := durable.ProllyMapFromIndex(idx)
-		c, err := m.Count()
-		if err != nil {
-			return nil, err
-		}
-		itr, err := m.IterOrdinalRange(ctx, offset, uint64(c))
+		m := durable.MapFromIndex(idx)
+		itr, err := m.IterAll(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +74,7 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index,
 	} else {
 
 		noms := durable.NomsMapFromIndex(idx)
-		itr, err := noms.IteratorAt(ctx, offset)
+		itr, err := noms.IteratorAt(ctx, 0)
 		if err != nil {
 			return nil, err
 		}
