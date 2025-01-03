@@ -1,3 +1,17 @@
+// Copyright 2025 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package statspro
 
 import (
@@ -17,6 +31,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,7 +71,7 @@ var _ StatsJob = (*GCJob)(nil)
 var _ StatsJob = (*SeedDbTablesJob)(nil)
 var _ StatsJob = (*ControlJob)(nil)
 
-func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
+func NewSeedJob(ctx *sql.Context, sqlDb *sqle.Database) SeedDbTablesJob {
 	return SeedDbTablesJob{
 		ctx:    ctx,
 		sqlDb:  sqlDb,
@@ -67,7 +82,7 @@ func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
-	sqlDb  sqle.Database
+	sqlDb  *sqle.Database
 	tables []string
 	done   chan struct{}
 }
@@ -202,7 +217,12 @@ type StatsCoord struct {
 	SleepMult time.Duration
 
 	dbMu *sync.Mutex
-	dbs  []dsess.SqlDatabase
+	dbs  []*sqle.Database
+
+	readCounter atomic.Int32
+	doGc        atomic.Bool
+	disableGc   atomic.Bool
+	gcInterval  time.Duration
 
 	Jobs       chan StatsJob
 	Interrupts chan ControlJob
@@ -225,17 +245,21 @@ func (sc *StatsCoord) Stop() {
 	close(sc.Interrupts)
 }
 
-func (sc *StatsCoord) Start(ctx context.Context) {
+func (sc *StatsCoord) Start(ctx *sql.Context, threads *sql.BackgroundThreads) error {
 	sc.Interrupts = make(chan ControlJob)
 	// todo put into background threads
-	go sc.run(ctx)
+	if err := threads.Add("stats", func(_ context.Context) {
+		sc.run(ctx)
+	}); err != nil {
+		return err
+	}
 }
 
 func (sc *StatsCoord) Close() {
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
+func (sc *StatsCoord) Add(ctx *sql.Context, db *sqle.Database) chan struct{} {
 	sc.dbMu.Lock()
 	sc.dbs = append(sc.dbs, db)
 	sc.dbMu.Unlock()
@@ -250,6 +274,33 @@ func (sc *StatsCoord) Drop(dbName string) {
 			sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
 			return
 		}
+	}
+}
+
+type StatsInfo struct {
+	DbCnt   int
+	ReadCnt int
+	Active  bool
+	JobCnt  int
+}
+
+func (sc *StatsCoord) Info() StatsInfo {
+	sc.dbMu.Lock()
+	dbCnt := len(sc.dbs)
+	defer sc.dbMu.Unlock()
+
+	var active bool
+	select {
+	case _, ok := <-sc.Interrupts:
+		active = ok
+	default:
+		active = true
+	}
+	return StatsInfo{
+		DbCnt:   dbCnt,
+		ReadCnt: int(sc.readCounter.Load()),
+		Active:  active,
+		JobCnt:  len(sc.Jobs),
 	}
 }
 
@@ -290,7 +341,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	return ret, nil
 }
 
-func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb sqle.Database) chan struct{} {
+func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb *sqle.Database) chan struct{} {
 	j := NewSeedJob(ctx, sqlDb)
 	sc.Jobs <- j
 	return j.done
@@ -313,11 +364,12 @@ func (sc *StatsCoord) error(j StatsJob, err error) {
 }
 
 // statsRunner operates on stats jobs
-func (sc *StatsCoord) run(ctx context.Context) error {
+func (sc *StatsCoord) run(ctx *sql.Context) error {
 	var err error
 	var newJobs []StatsJob
 	start := time.Now()
-	ticker := time.NewTicker(time.Nanosecond)
+	jobTicker := time.NewTicker(time.Nanosecond)
+	gcTicker := time.NewTicker(sc.gcInterval)
 
 	queuedCnt := 0
 
@@ -325,7 +377,14 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
+		case <-jobTicker.C:
+		case <-gcTicker.C:
+			if sc.doGc.Load() {
+				if err := sc.gc(); err != nil {
+
+				}
+			}
+			gcTicker.Reset(sc.gcInterval)
 		case j, ok := <-sc.Interrupts:
 			if !ok {
 				return nil
@@ -349,11 +408,10 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			case SeedDbTablesJob:
 				newJobs, err = sc.seedDbTables(ctx, j)
 			case ReadJob:
+				sc.readCounter.Add(-1)
 				newJobs, err = sc.readChunks(ctx, j)
 			case FinalizeJob:
 				newJobs, err = sc.finalizeUpdate(ctx, j)
-			case GCJob:
-				newJobs, err = sc.gc(ctx, j)
 			case ControlJob:
 				if err := j.cb(sc); err != nil {
 					sc.error(j, err)
@@ -361,6 +419,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			default:
 			}
 			for _, j := range newJobs {
+				if _, ok := j.(ReadJob); ok {
+					sc.readCounter.Add(1)
+				}
 				sc.Jobs <- j
 				queuedCnt++
 			}
@@ -372,7 +433,7 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 				sc.error(j, err)
 			}
 		}
-		ticker.Reset(time.Since(start) * sc.SleepMult)
+		jobTicker.Reset(time.Since(start) * sc.SleepMult)
 	}
 }
 
@@ -403,23 +464,33 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 		deleted = true
 	}
 
-	var ret []StatsJob
+	ret, err := sc.readJobsForTables(j.ctx, j.sqlDb, tableNames)
+	if err != nil {
+		return nil, err
+	}
 
 	if deleted {
 		ret = append(ret, NewGCJob())
 	}
 
+	// retry again after finishing planned work
+	ret = append(ret, SeedDbTablesJob{tables: tableNames, sqlDb: j.sqlDb, ctx: j.ctx, done: make(chan struct{})})
+	return ret, nil
+}
+
+func (sc *StatsCoord) readJobsForTables(ctx *sql.Context, sqlDb *sqle.Database, tableNames []string) ([]StatsJob, error) {
+	var ret []StatsJob
 	for _, table := range tableNames {
-		sqlTable, dTab, err := GetLatestTable(j.ctx, table, j.sqlDb)
+		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return nil, err
 		}
-		indexes, err := sqlTable.GetIndexes(j.ctx)
+		indexes, err := sqlTable.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		schHashKey, _, err := sqlTable.IndexCacheKey(j.ctx)
+		schHashKey, _, err := sqlTable.IndexCacheKey(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -438,7 +509,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 				return nil, err
 			}
 
-			if err := sc.cacheTemplate(j.ctx, sqlTable, sqlIdx); err != nil {
+			if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
 				sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", j.sqlDb.RevisionQualifiedName(), table, sqlIdx, sqlIdx, err)
 				continue
 			}
@@ -455,7 +526,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 				fullIndexBuckets[indexKey] = append(fullIndexBuckets[indexKey], n.HashOf())
 			}
 
-			readJobs, err := sc.partitionStatReadJobs(j.ctx, j.sqlDb, table, levelNodes, prollyMap)
+			readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, table, levelNodes, prollyMap)
 			if err != nil {
 				return nil, err
 			}
@@ -466,8 +537,8 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 			// if there are any reads to perform, we follow those reads with a table finalize
 			ret = append(ret, FinalizeJob{
 				tableKey: tableIndexesKey{
-					db:     j.sqlDb.AliasedName(),
-					branch: j.sqlDb.Revision(),
+					db:     sqlDb.AliasedName(),
+					branch: sqlDb.Revision(),
 					table:  table,
 				},
 				indexes: fullIndexBuckets,
@@ -475,8 +546,6 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 			})
 		}
 	}
-	// retry again after finishing planned work
-	ret = append(ret, SeedDbTablesJob{tables: tableNames, sqlDb: j.sqlDb, ctx: j.ctx, done: make(chan struct{})})
 	return ret, nil
 }
 
@@ -629,7 +698,7 @@ func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJ
 }
 
 // delete table, delete index
-func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
+func (sc *StatsCoord) gc(ctx *sql.Context) error {
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
 
@@ -638,19 +707,19 @@ func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
 	newTemplateCache := make(map[templateCacheKey]stats.Statistic)
 
 	for _, sqlDb := range sc.dbs {
-		tableNames, err := sqlDb.GetTableNames(j.ctx)
+		tableNames, err := sqlDb.GetTableNames(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, table := range tableNames {
-			sqlTable, dTab, err := GetLatestTable(j.ctx, table, sqlDb)
+			sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 			print(dTab)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			indexes, err := sqlTable.GetIndexes(j.ctx)
+			indexes, err := sqlTable.GetIndexes(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			for _, sqlIdx := range indexes {
 				var idx durable.Index
@@ -661,10 +730,10 @@ func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
 					idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
 				}
 				if err != nil {
-					return nil, err
+					return err
 				}
 
-				schHash, _, err := sqlTable.IndexCacheKey(j.ctx)
+				schHash, _, err := sqlTable.IndexCacheKey(ctx)
 				key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 				if t, ok := sc.TemplateCache[key]; ok {
 					newTemplateCache[key] = t
@@ -674,12 +743,12 @@ func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
 
 				levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				readJobs, err := sc.partitionStatReadJobs(j.ctx, sqlDb, table, levelNodes, prollyMap)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				for _, read := range readJobs {
@@ -699,5 +768,5 @@ func (sc *StatsCoord) gc(ctx context.Context, j GCJob) ([]StatsJob, error) {
 
 	sc.BucketCache = newBucketCache
 
-	return nil, nil
+	return nil
 }

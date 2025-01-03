@@ -28,7 +28,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 		}
 		ord := updateOrdinal{
 			start: offset,
-			stop:  uint64(treeCnt),
+			stop:  offset + uint64(treeCnt),
 		}
 		offset += uint64(treeCnt)
 
@@ -44,6 +44,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: levelNodes[lastStart : i+1], ordinals: batchOrdinals, done: make(chan struct{})})
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
+			lastStart = i + 1
 		}
 	}
 	if curCnt > 0 {
