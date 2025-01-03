@@ -19,24 +19,32 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+type offsetSize uint8
+
+const (
+	OFFSET_SIZE_16 offsetSize = iota
+	OFFSET_SIZE_32
+)
+
 // ItemAccess accesses items in a serial.Message.
 type ItemAccess struct {
 	// bufStart is the offset to the start of the
 	// Item buffer within a serial.Message.
 	// bufLen is the length of the Item buffer.
-	bufStart, bufLen uint16
+	bufStart, bufLen uint32
 
 	// offStart, if nonzero, is the offset to the
 	// start of the uin16 offset buffer within a
 	// serial.Message. A zero value for offStart
 	// indicates an empty offset buffer.
 	// bufLen is the length of the Item buffer.
-	offStart, offLen uint16
+	offStart, offLen uint32
 
 	// If the serial.Message does not contain an
 	// offset buffer (offStart is zero), then
 	// Items have a fixed width equal to itemWidth.
-	itemWidth uint16
+	itemWidth  uint16
+	offsetSize offsetSize
 }
 
 // GetItem returns the ith Item from the buffer.
@@ -44,8 +52,16 @@ func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
 	buf := msg[acc.bufStart : acc.bufStart+acc.bufLen]
 	off := msg[acc.offStart : acc.offStart+acc.offLen]
 	if acc.offStart != 0 {
-		stop := val.ReadUint16(off[(i*2)+2 : (i*2)+4])
-		start := val.ReadUint16(off[(i * 2) : (i*2)+2])
+		var stop, start uint32
+		switch acc.offsetSize {
+		case OFFSET_SIZE_16:
+			stop = uint32(val.ReadUint16(off[(i*2)+2 : (i*2)+4]))
+			start = uint32(val.ReadUint16(off[(i * 2) : (i*2)+2]))
+		case OFFSET_SIZE_32:
+			stop = val.ReadUint32(off[(i*4)+4 : (i*4)+8])
+			start = val.ReadUint32(off[(i * 4) : (i*4)+4])
+		}
+
 		return buf[start:stop]
 	} else {
 		stop := int(acc.itemWidth) * (i + 1)
