@@ -151,7 +151,7 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 
 	sqlCtx := sql.NewEmptyContext()
 
-	rowItr, err := table.NewTableIterator(ctx, doltSch, idx, 0)
+	rowItr, err := table.NewTableIterator(ctx, doltSch, idx)
 	if err != nil {
 		return err
 	}
