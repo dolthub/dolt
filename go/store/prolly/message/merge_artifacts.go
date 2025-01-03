@@ -113,22 +113,22 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, l
 		return
 	}
 	keys.bufStart = lookupVectorOffset(mergeArtifactKeyItemBytesVOffset, ma.Table())
-	keys.bufLen = uint16(ma.KeyItemsLength())
+	keys.bufLen = uint32(ma.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(mergeArtifactKeyOffsetsVOffset, ma.Table())
-	keys.offLen = uint16(ma.KeyOffsetsLength() * uint16Size)
+	keys.offLen = uint32(ma.KeyOffsetsLength() * uint16Size)
 
-	count = (keys.offLen / 2) - 1
+	count = uint16(keys.offLen/2) - 1
 	level = uint16(ma.TreeLevel())
 
 	vv := ma.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(mergeArtifactValueItemBytesVOffset, ma.Table())
-		values.bufLen = uint16(ma.ValueItemsLength())
+		values.bufLen = uint32(ma.ValueItemsLength())
 		values.offStart = lookupVectorOffset(mergeArtifactValueOffsetsVOffset, ma.Table())
-		values.offLen = uint16(ma.ValueOffsetsLength() * uint16Size)
+		values.offLen = uint32(ma.ValueOffsetsLength() * uint16Size)
 	} else {
 		values.bufStart = lookupVectorOffset(mergeArtifactAddressArrayVOffset, ma.Table())
-		values.bufLen = uint16(ma.AddressArrayLength())
+		values.bufLen = uint32(ma.AddressArrayLength())
 		values.itemWidth = hash.ByteLen
 	}
 	return
