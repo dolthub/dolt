@@ -51,7 +51,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 	switch n := n.(type) {
 	case *plan.JoinNode:
 		switch {
-		case n.Op.IsPartial() || r.Len() != 0:
+		case n.Op.IsPartial() || (r != nil && r.Len() != 0):
 			return nil, nil
 		case n.Op.IsLookup():
 			if ita, ok := getIta(n.Right()); ok && simpleLookupExpressions(ita.Expressions()) {
