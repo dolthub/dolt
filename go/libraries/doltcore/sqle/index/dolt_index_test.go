@@ -445,7 +445,6 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 		})
 	}
 }
-
 func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 	root, indexMap := doltIndexSetup(t)
 

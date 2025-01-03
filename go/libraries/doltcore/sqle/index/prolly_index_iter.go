@@ -212,7 +212,7 @@ func newProllyCoveringIndexIter(
 	//} else {
 	//	keyMap, ordMap = coveringIndexMapping(idx, projections)
 	//}
-	ordMap, err := ProjectionMappingsForIndex2(idx.Schema(), projections)
+	ordMap, err := ProjectionMappingsForIndex2(idx.IndexSchema(), projections)
 	if err != nil {
 		return prollyCoveringIndexIter{}, err
 	}
