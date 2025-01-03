@@ -83,8 +83,6 @@ mutations_and_gc_statement() {
   dolt sql -q "$(update_statement)"
 }
 
-# The `dolt archive` invocation here gets "Killed" in lambda, maybe due to memory use? For now, skip.
-# bats test_tags=no_lambda
 @test "archive: multiple archives" {
   dolt sql -q "$(mutations_and_gc_statement)"
   dolt sql -q "$(mutations_and_gc_statement)"
