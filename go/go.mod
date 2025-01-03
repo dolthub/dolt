@@ -59,6 +59,7 @@ require (
 	github.com/dolthub/go-mysql-server v0.19.1-0.20241231201953-4af32d139747
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
+	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/btree v1.1.2
 	github.com/google/go-github/v57 v57.0.0
@@ -110,7 +111,6 @@ require (
 	github.com/dolthub/go-icu-regex v0.0.0-20241215010122-db690dd53c90 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
-	github.com/esote/minmaxheap v1.0.0 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-latex/latex v0.0.0-20210823091927-c0d11ff05a81 // indirect

@@ -16,9 +16,10 @@ package schema
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"sort"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 )
 
 type IndexCollection interface {

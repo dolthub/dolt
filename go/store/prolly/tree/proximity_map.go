@@ -17,13 +17,14 @@ package tree
 import (
 	"container/heap"
 	"context"
-	"github.com/dolthub/dolt/go/store/skip"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"math"
 
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/esote/minmaxheap"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/skip"
 )
 
 type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) error
