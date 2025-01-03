@@ -1680,7 +1680,7 @@ func writeDiffResults(
 						filteredOldRow.RowDiff = oldRow.RowDiff
 					}
 
-					if oldRow.Row != nil && i < newRow.Row.Len() {
+					if newRow.Row != nil && i < newRow.Row.Len() {
 						filteredNewRow.Row = filteredNewRow.Row.Append(newRow.Row.Subslice(i, i+1))
 						filteredNewRow.ColDiffs = append(filteredNewRow.ColDiffs, newRow.ColDiffs[i])
 						filteredNewRow.RowDiff = newRow.RowDiff
