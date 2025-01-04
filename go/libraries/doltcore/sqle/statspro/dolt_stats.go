@@ -265,8 +265,8 @@ func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (sql.Histogram, error
 	ret := make(sql.Histogram, len(hist))
 	var err error
 	for i, b := range hist {
-		upperBound := make(sql.Row, len(b.UpperBound()))
-		for i, v := range b.UpperBound() {
+		upperBound := make(sql.UntypedSqlRow, b.UpperBound().Len())
+		for i, v := range b.UpperBound().Values() {
 			upperBound[i], _, err = types[i].Convert(v)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert %v to type %s", v, types[i].String())
@@ -274,12 +274,13 @@ func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (sql.Histogram, error
 		}
 		mcvs := make([]sql.Row, len(b.Mcvs()))
 		for i, mcv := range b.Mcvs() {
-			for _, v := range mcv {
+			mcvs[i] = make(sql.UntypedSqlRow, mcv.Len())
+			for j, v := range mcv.Values() {
 				conv, _, err := types[i].Convert(v)
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert %v to type %s", v, types[i].String())
 				}
-				mcvs[i] = append(mcvs[i], conv)
+				mcvs[i].SetValue(j, conv)
 			}
 		}
 		ret[i] = DoltBucket{

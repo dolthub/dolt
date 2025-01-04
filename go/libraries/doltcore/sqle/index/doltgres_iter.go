@@ -213,7 +213,7 @@ func NewDoltgresPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.Par
 // doltgresProllyMapIterator returns a map iterator, which handles the contiguous iteration over the underlying map that
 // stores an index's data. This also handles filter expressions, if any are present.
 func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.NodeStore, root tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
-	searchRow := make(sql.Row, len(keyDesc.Types))
+	searchRow := make(sql.UntypedSqlRow, len(keyDesc.Types))
 	var findStartErr error
 	findStart := func(nd tree.Node) int {
 		return sort.Search(nd.Count(), func(i int) bool {
@@ -290,11 +290,12 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.
 // doltgresMapSearchKeyToRow writes the given key into the given row. As all used functions are expressions, they expect
 // a sql.Row, and we must therefore convert the key tuple into the format expected of the expression.
 func doltgresMapSearchKeyToRow(ctx context.Context, key val.Tuple, keyDesc val.TupleDesc, ns tree.NodeStore, row sql.Row) (err error) {
-	for i := range row {
-		row[i], err = tree.GetField(ctx, keyDesc, i, key, ns)
+	for i := 0; i < row.Len(); i++ {
+		v, err := tree.GetField(ctx, keyDesc, i, key, ns)
 		if err != nil {
 			return err
 		}
+		row.SetValue(i, v)
 	}
 	return
 }

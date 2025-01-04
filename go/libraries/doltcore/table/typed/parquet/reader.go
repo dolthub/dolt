@@ -136,7 +136,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	}
 
 	allCols := pr.sch.GetAllCols()
-	row := make(sql.Row, allCols.Size())
+	row := make(sql.UntypedSqlRow, allCols.Size())
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val := pr.fileData[col.Name][pr.rowReadCounter]
 		if val != nil {
@@ -153,7 +153,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			val = DecimalByteArrayToString([]byte(val.(string)), int(prec), int(scale))
 		}
 
-		row[allCols.TagToIdx[tag]] = val
+		row.SetValue(allCols.TagToIdx[tag], val)
 
 		return false, nil
 	})

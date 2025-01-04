@@ -59,7 +59,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	localConn, localSess := newConnection(t, serverConfig)
 	rows, err := localSess.Query("select 1")
 	require.NoError(t, err)
-	assertResultsEqual(t, []sql.Row{{1}}, rows)
+	assertResultsEqual(t, []sql.UntypedSqlRow{{1}}, rows)
 
 	t.Run("connecting to local server with tcp connections", func(t *testing.T) {
 		// connect with port defined
@@ -67,21 +67,21 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		conn1, sess1 := newConnection(t, serverConfigWithPortOnly)
 		rows1, err := sess1.Query("select 1")
 		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows1)
+		assertResultsEqual(t, []sql.UntypedSqlRow{{1}}, rows1)
 
 		// connect with host defined
 		serverConfigWithPortandHost := sqlserver.DefaultCommandLineServerConfig().WithHost("127.0.0.1")
 		conn2, sess2 := newConnection(t, serverConfigWithPortandHost)
 		rows2, err := sess2.Query("select 1")
 		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows2)
+		assertResultsEqual(t, []sql.UntypedSqlRow{{1}}, rows2)
 
 		// connect with port and host defined
 		serverConfigWithPortandHost1 := sqlserver.DefaultCommandLineServerConfig().WithPort(3306).WithHost("0.0.0.0")
 		conn3, sess3 := newConnection(t, serverConfigWithPortandHost1)
 		rows3, err := sess3.Query("select 1")
 		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows3)
+		assertResultsEqual(t, []sql.UntypedSqlRow{{1}}, rows3)
 
 		// close connections
 		require.NoError(t, conn3.Close())
@@ -115,7 +115,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 		conn1, sess1 := newConnection(t, tcpServerConfig)
 		rows1, err := sess1.Query("select 1")
 		require.NoError(t, err)
-		assertResultsEqual(t, []sql.Row{{1}}, rows1)
+		assertResultsEqual(t, []sql.UntypedSqlRow{{1}}, rows1)
 		require.NoError(t, conn1.Close())
 	})
 

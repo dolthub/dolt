@@ -44,8 +44,8 @@ var inCols = []schema.Column{
 var colColl = schema.NewColCollection(inCols...)
 var rowSch = schema.MustSchemaFromCols(colColl)
 
-func getSampleRows() []sql.Row {
-	return []sql.Row{
+func getSampleRows() []sql.UntypedSqlRow {
+	return []sql.UntypedSqlRow{
 		{"Bill Billerson", 32, "Senior Dufus"},
 		{"Rob Robertson", 25, "Dufus"},
 		{"John Johnson", 21, ""},
@@ -53,7 +53,7 @@ func getSampleRows() []sql.Row {
 	}
 }
 
-func writeToCSV(csvWr *CSVWriter, rows []sql.Row, t *testing.T) {
+func writeToCSV(csvWr *CSVWriter, rows []sql.UntypedSqlRow, t *testing.T) {
 	func() {
 		defer csvWr.Close(context.Background())
 

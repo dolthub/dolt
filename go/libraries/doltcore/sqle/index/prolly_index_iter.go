@@ -41,7 +41,8 @@ type prollyIndexIter struct {
 
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
-	keyMap, valMap val.OrdinalMapping
+	//keyMap, valMap val.OrdinalMapping
+	keyDesc, valDesc val.TupleDesc
 	// ordMap are output ordinals for |keyMap| and |valMap| concatenated
 	ordMap      val.OrdinalMapping
 	projections []uint64
@@ -69,17 +70,24 @@ func newProllyIndexIter(
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := OrdinalMappingFromIndex(idx)
-	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
+	//keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
+
+	ordMap, err := ProjectionMappingsForIndex2(idx.Schema(), projections)
+	if err != nil {
+		return prollyIndexIter{}, err
+	}
 
 	iter := prollyIndexIter{
-		idx:         idx,
-		indexIter:   indexIter,
-		primary:     primary,
-		pkBld:       pkBld,
-		pkMap:       pkMap,
-		keyMap:      keyProj,
-		valMap:      valProj,
-		ordMap:      ordProj,
+		idx:       idx,
+		indexIter: indexIter,
+		primary:   primary,
+		pkBld:     pkBld,
+		pkMap:     pkMap,
+		//keyMap:      keyProj,
+		//valMap:      valProj,
+		keyDesc:     primary.KeyDesc(),
+		valDesc:     primary.ValDesc(),
+		ordMap:      ordMap,
 		projections: projections,
 		sqlSch:      pkSch.Schema,
 	}
@@ -99,37 +107,45 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	pk := p.pkBld.Build(sharePool)
 
-	r := make(sql.Row, len(p.projections))
-	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
-		return p.rowFromTuples(ctx, key, value, r)
+	// TODO
+
+	//r := make(sql.UntypedSqlRow, len(p.projections))
+	var value val.Tuple
+	err = p.primary.Get(ctx, pk, func(_, v val.Tuple) error {
+		//return p.rowFromTuples(ctx, key, value, r)
+		value = v
+		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
+	//if err != nil {
+	//	return nil, err
+	//}
+	return NewProllyRow(pk, value, p.keyDesc, p.valDesc, p.ordMap, p.primary.NodeStore()), nil
+	//return r, nil
 }
 
-func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
-	keyDesc, valDesc := p.primary.Descriptors()
-
-	for i, idx := range p.keyMap {
-		outputIdx := p.ordMap[i]
-		r[outputIdx], err = tree.GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
-		if err != nil {
-			return err
-		}
-	}
-
-	for i, idx := range p.valMap {
-		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = tree.GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
-		if err != nil {
-			return err
-		}
-	}
-
-	return
-}
+//func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
+//	keyDesc, valDesc := p.primary.Descriptors()
+//
+//	for i, idx := range p.keyMap {
+//		outputIdx := p.ordMap[i]
+//		v, err := tree.GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
+//		if err != nil {
+//			return err
+//		}
+//		r.SetValue(outputIdx, v)
+//	}
+//
+//	for i, idx := range p.valMap {
+//		outputIdx := p.ordMap[len(p.keyMap)+i]
+//		v, err := tree.GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
+//		if err != nil {
+//			return err
+//		}
+//		r.SetValue(outputIdx, v)
+//	}
+//
+//	return
+//}
 
 func (p prollyIndexIter) Close(*sql.Context) error {
 	return nil
@@ -190,20 +206,24 @@ func newProllyCoveringIndexIter(
 	}
 	keyDesc, valDesc := secondary.Descriptors()
 
-	var keyMap, valMap, ordMap val.OrdinalMapping
-	if idx.IsPrimaryKey() {
-		keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
-	} else {
-		keyMap, ordMap = coveringIndexMapping(idx, projections)
+	//var keyMap, valMap, ordMap val.OrdinalMapping
+	//if idx.IsPrimaryKey() {
+	//	keyMap, valMap, ordMap = primaryIndexMapping(idx, projections)
+	//} else {
+	//	keyMap, ordMap = coveringIndexMapping(idx, projections)
+	//}
+	ordMap, err := ProjectionMappingsForIndex2(idx.IndexSchema(), projections)
+	if err != nil {
+		return prollyCoveringIndexIter{}, err
 	}
 
 	return prollyCoveringIndexIter{
-		idx:         idx,
-		indexIter:   indexIter,
-		keyDesc:     keyDesc,
-		valDesc:     valDesc,
-		keyMap:      keyMap,
-		valMap:      valMap,
+		idx:       idx,
+		indexIter: indexIter,
+		keyDesc:   keyDesc,
+		valDesc:   valDesc,
+		//keyMap:      keyMap,
+		//valMap:      valMap,
 		ordMap:      ordMap,
 		sqlSch:      pkSch.Schema,
 		projections: projections,
@@ -218,29 +238,32 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row, len(p.projections))
-	if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
-		return nil, err
-	}
+	return NewProllyRow(k, v, p.keyDesc, p.valDesc, p.ordMap, p.ns), nil
 
-	return r, nil
+	//r := make(sql.UntypedSqlRow, len(p.projections))
+	//if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
+	//	return nil, err
+	//}
+	//return r, nil
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		r[outputIdx], err = tree.GetField(ctx, p.keyDesc, idx, key, p.ns)
+		v, err := tree.GetField(ctx, p.keyDesc, idx, key, p.ns)
 		if err != nil {
 			return err
 		}
+		r.SetValue(outputIdx, v)
 	}
 
 	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = tree.GetField(ctx, p.valDesc, idx, value, p.ns)
+		v, err := tree.GetField(ctx, p.valDesc, idx, value, p.ns)
 		if err != nil {
 			return err
 		}
+		r.SetValue(outputIdx, v)
 	}
 	return
 }
@@ -398,14 +421,15 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
 	card := val.ReadKeylessCardinality(value)
 	rows = make([]sql.Row, card)
-	rows[0] = make(sql.Row, len(p.valueMap))
+	rows[0] = make(sql.UntypedSqlRow, len(p.valueMap))
 
 	for i, idx := range p.valueMap {
 		outputIdx := p.ordMap[i]
-		rows[0][outputIdx], err = tree.GetField(ctx, p.valueDesc, idx, value, ns)
+		v, err := tree.GetField(ctx, p.valueDesc, idx, value, ns)
 		if err != nil {
 			return nil, err
 		}
+		rows[0].SetValue(outputIdx, v)
 	}
 
 	// duplicate row |card| times

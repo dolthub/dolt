@@ -54,8 +54,8 @@ func (j *jsonRowDiffWriter) WriteRow(
 	rowDiffType diff.ChangeType,
 	colDiffTypes []diff.ChangeType,
 ) error {
-	if len(row) != len(colDiffTypes) {
-		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	if row.Len() != len(colDiffTypes) {
+		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", row.Len(), len(colDiffTypes))
 	}
 
 	prefix := ""

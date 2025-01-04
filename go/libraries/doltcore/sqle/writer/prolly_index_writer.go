@@ -109,7 +109,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.MapInterface, error)
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow.GetValue(from)); err != nil {
 			return nil, err
 		}
 	}
@@ -126,10 +126,10 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(sqlRow))
+		remappedSqlRow := make(sql.UntypedSqlRow, sqlRow.Len())
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = sqlRow[from]
+			remappedSqlRow[to] = sqlRow.GetValue(from)
 		}
 		keyStr := FormatKeyForUniqKeyErr(k, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
@@ -145,7 +145,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow.GetValue(from)); err != nil {
 			return err
 		}
 	}
@@ -188,10 +188,10 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(newRow))
+		remappedSqlRow := make(sql.UntypedSqlRow, newRow.Len())
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = newRow[from]
+			remappedSqlRow[to] = newRow.GetValue(from)
 		}
 		keyStr := FormatKeyForUniqKeyErr(newKey, m.keyBld.Desc, remappedSqlRow)
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
@@ -199,7 +199,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
+		if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow.GetValue(from)); err != nil {
 			return err
 		}
 	}
@@ -232,7 +232,7 @@ func (m prollyIndexWriter) errForSecondaryUniqueKeyError(ctx context.Context, er
 // uniqueKeyError builds a sql.UniqueKeyError. It fetches the existing row using
 // |key| and passes it as the |existing| row.
 func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, key val.Tuple, isPk bool) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	existing := make(sql.UntypedSqlRow, len(m.keyMap)+len(m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
@@ -309,7 +309,7 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -329,13 +329,13 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	ns := m.mut.NodeStore()
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		if sqlRow[from] == nil {
+		if sqlRow.GetValue(from) == nil {
 			// NULL is incomparable and cannot
 			// trigger a UNIQUE KEY violation
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow.GetValue(from))
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -365,10 +365,10 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	}
 	existingPK := m.pkBld.Build(sharePool)
 
-	remappedSqlRow := make(sql.Row, m.idxCols)
+	remappedSqlRow := make(sql.UntypedSqlRow, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow[from])
+		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow.GetValue(from))
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(key, desc, remappedSqlRow),
@@ -441,7 +441,7 @@ func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc, sqlRow sql.Row) stri
 		switch d.Types[i].Enc {
 		// address encodings should be printed as strings
 		case val.BytesAddrEnc, val.StringAddrEnc:
-			sb.WriteString(fmt.Sprintf("%s", sqlRow[i]))
+			sb.WriteString(fmt.Sprintf("%s", sqlRow.GetValue(i)))
 		default:
 			sb.WriteString(d.FormatValue(i, key.GetField(i)))
 		}

@@ -259,12 +259,12 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 	b.WriteString(prefix)
 
 	// Write procedure name
-	nameStr := r[0].(string)
+	nameStr := r.GetValue(0).(string)
 	b.WriteString(QuoteIdentifier(nameStr))
 	b.WriteString(" ") // add a space
 
 	// Write definition
-	defStmt, err := sqlparser.Parse(r[1].(string))
+	defStmt, err := sqlparser.Parse(r.GetValue(1).(string))
 	if err != nil {
 		return "", err
 	}
@@ -282,16 +282,16 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	var b strings.Builder
 
 	// If type is view, add DROP VIEW IF EXISTS statement before CREATE VIEW STATEMENT
-	typeStr := strings.ToUpper(r[0].(string))
+	typeStr := strings.ToUpper(r.GetValue(0).(string))
 	if typeStr == "VIEW" {
-		nameStr := r[1].(string)
+		nameStr := r.GetValue(1).(string)
 		dropStmt := fmt.Sprintf("DROP VIEW IF EXISTS `%s`", nameStr)
 		b.WriteString(dropStmt)
 		b.WriteString(";\n")
 	}
 
 	// Parse statement to extract definition (and remove any weird whitespace issues)
-	defStmt, err := sqlparser.Parse(r[2].(string))
+	defStmt, err := sqlparser.Parse(r.GetValue(2).(string))
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +300,7 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 
 	// TODO: this is temporary fix for create statements
 	if typeStr == "TRIGGER" {
-		nameStr := r[1].(string)
+		nameStr := r.GetValue(1).(string)
 		defStr = fmt.Sprintf("CREATE TRIGGER `%s` %s", nameStr, defStr[len("CREATE TRIGGER ")+len(nameStr)+1:])
 	} else {
 		defStr = strings.Replace(defStr, "create ", "CREATE ", -1)
@@ -342,7 +342,7 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 
 	b.WriteString("(")
 	seenOne := false
-	for i, val := range r {
+	for i, val := range r.Values() {
 		if seenOne {
 			b.WriteRune(',')
 		}
@@ -366,9 +366,9 @@ func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 // SqlRowAsStrings returns the string representation for each column of |r|
 // which should have schema |sch|.
 func SqlRowAsStrings(r sql.Row, sch sql.Schema) ([]string, error) {
-	out := make([]string, len(r))
+	out := make([]string, r.Len())
 	for i := range out {
-		v := r[i]
+		v := r.GetValue(i)
 		sqlType := sch[i].Type
 		s, err := sqlutil.SqlColToStr(sqlType, v)
 		if err != nil {
@@ -395,7 +395,7 @@ func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema, lim
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r.GetValue(i))
 			if err != nil {
 				return true, err
 			}
@@ -442,7 +442,7 @@ func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, col
 			}
 			seenOne = true
 
-			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r.GetValue(i))
 			if err != nil {
 				return true, err
 			}
@@ -469,7 +469,7 @@ func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, col
 			}
 			seenOne = true
 
-			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r.GetValue(i))
 			if err != nil {
 				return true, err
 			}

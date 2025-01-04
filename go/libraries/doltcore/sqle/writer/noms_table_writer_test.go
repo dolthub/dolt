@@ -39,7 +39,7 @@ type tableEditorTest struct {
 	// The select query to run to verify the results
 	selectQuery string
 	// The rows this query should return, nil if an error is expected
-	expectedRows []sql.Row
+	expectedRows []sql.UntypedSqlRow
 }
 
 func TestTableEditor(t *testing.T) {

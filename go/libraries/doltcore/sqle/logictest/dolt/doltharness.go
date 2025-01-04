@@ -209,7 +209,7 @@ func rowsToResultStrings(ctx *sql.Context, iter sql.RowIter) ([]string, error) {
 			drainIteratorIgnoreErrors(ctx, iter)
 			return nil, err
 		} else {
-			for _, col := range row {
+			for _, col := range row.Values() {
 				results = append(results, toSqlString(col))
 			}
 		}

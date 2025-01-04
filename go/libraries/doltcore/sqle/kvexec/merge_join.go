@@ -279,7 +279,7 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 	rightKeyNil := rightKey == nil
 
 	if l.leftFilter != nil {
-		res, err := sql.EvaluateCondition(ctx, l.leftFilter, candidate[:l.joiner.kvSplits[0]])
+		res, err := sql.EvaluateCondition(ctx, l.leftFilter, candidate.Subslice(0, l.joiner.kvSplits[0]))
 		if err != nil {
 			return nil, false, err
 		}
@@ -289,7 +289,7 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 	}
 
 	if l.rightFilter != nil && !rightKeyNil {
-		res, err := sql.EvaluateCondition(ctx, l.rightFilter, candidate[l.joiner.kvSplits[0]:])
+		res, err := sql.EvaluateCondition(ctx, l.rightFilter, candidate.Subslice(l.joiner.kvSplits[0], candidate.Len()))
 		if err != nil {
 			return nil, false, err
 		}

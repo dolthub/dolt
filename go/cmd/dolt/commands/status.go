@@ -191,9 +191,9 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 	ignoredTables := doltdb.IgnoredTables{}
 	if statusPresent {
 		for _, row := range statusRows {
-			tableName := row[0].(string)
-			staged := row[1]
-			status := row[2].(string)
+			tableName := row.GetValue(0).(string)
+			staged := row.GetValue(1)
+			status := row.GetValue(2).(string)
 
 			isStaged, err := GetTinyIntColAsBool(staged)
 			if err != nil {
@@ -315,8 +315,8 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 func getConflictedTables(statusRows []sql.Row) map[string]bool {
 	conflictedTables := make(map[string]bool)
 	for _, row := range statusRows {
-		tableName := row[0].(string)
-		status := row[2].(string)
+		tableName := row.GetValue(0).(string)
+		status := row.GetValue(2).(string)
 		if status == "conflict" {
 			conflictedTables[tableName] = true
 		}
@@ -338,7 +338,7 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		if len(remoteBranches) != 1 {
 			return ahead, behind, fmt.Errorf("could not find remote branch %s", remoteBranchRef)
 		}
-		remoteBranchCommit := remoteBranches[0][1].(string)
+		remoteBranchCommit := remoteBranches[0].GetValue(1).(string)
 
 		q = fmt.Sprintf("call dolt_count_commits('--from', '%s', '--to', '%s')", currentBranchCommit, remoteBranchCommit)
 		rows, err := GetRowsForSql(queryist, sqlCtx, q)
@@ -348,8 +348,8 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		if len(rows) != 1 {
 			return ahead, behind, fmt.Errorf("could not count commits between %s and %s", currentBranchCommit, remoteBranchCommit)
 		}
-		aheadDb := rows[0][0]
-		behindDb := rows[0][1]
+		aheadDb := rows[0].GetValue(0)
+		behindDb := rows[0].GetValue(1)
 
 		ahead, err = getInt64ColAsInt64(aheadDb)
 		if err != nil {
@@ -373,11 +373,11 @@ func getLocalBranchInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName s
 		return remoteName, remoteBranchName, currentBranchCommit, err
 	}
 	for _, row := range localBranches {
-		branch := row[0].(string)
+		branch := row.GetValue(0).(string)
 		if branch == branchName {
-			currentBranchCommit = row[1].(string)
-			remoteName = row[2].(string)
-			remoteBranchName = row[3].(string)
+			currentBranchCommit = row.GetValue(1).(string)
+			remoteName = row.GetValue(2).(string)
+			remoteBranchName = row.GetValue(3).(string)
 		}
 	}
 	if currentBranchCommit == "" {
@@ -394,7 +394,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	// determine if a merge is active
 	mergeActive := false
 	if len(mergeRows) == 1 {
-		isMerging := mergeRows[0][0]
+		isMerging := mergeRows[0].GetValue(0)
 		mergeActive, err = GetTinyIntColAsBool(isMerging)
 		if err != nil {
 			return false, err
@@ -412,7 +412,7 @@ func getDataConflictsTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[str
 		return nil, err
 	}
 	for _, row := range dataConflicts {
-		tableName := row[0].(string)
+		tableName := row.GetValue(0).(string)
 		dataConflictTables[tableName] = true
 	}
 	return dataConflictTables, nil
@@ -425,7 +425,7 @@ func getConstraintViolationTables(queryist cli.Queryist, sqlCtx *sql.Context) (m
 		return nil, err
 	}
 	for _, row := range constraintViolations {
-		tableName := row[0].(string)
+		tableName := row.GetValue(0).(string)
 		constraintViolationTables[tableName] = true
 	}
 	return constraintViolationTables, nil
@@ -439,8 +439,8 @@ func getWorkingStagedTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[str
 		return nil, nil, err
 	}
 	for _, row := range diffs {
-		commitHash := row[0].(string)
-		tableName := row[1].(string)
+		commitHash := row.GetValue(0).(string)
+		tableName := row.GetValue(1).(string)
 		if commitHash == "STAGED" {
 			stagedTableNames[tableName] = true
 		} else {
@@ -457,8 +457,8 @@ func getIgnoredTablePatternsFromSql(queryist cli.Queryist, sqlCtx *sql.Context) 
 		return nil, err
 	}
 	for _, row := range ignoreRows {
-		pattern := row[0].(string)
-		ignoreVal := row[1]
+		pattern := row.GetValue(0).(string)
+		ignoreVal := row.GetValue(1)
 
 		var ignore bool
 		if ignoreString, ok := ignoreVal.(string); ok {

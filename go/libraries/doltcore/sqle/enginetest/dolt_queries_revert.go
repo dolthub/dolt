@@ -34,11 +34,11 @@ var RevertScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from test as of 'HEAD' where pk = 2;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "select * from test as of 'HEAD~1' where pk = 2;",
-				Expected: []sql.Row{{2, 42}},
+				Expected: []sql.UntypedSqlRow{{2, 42}},
 			},
 		},
 	},
@@ -58,15 +58,15 @@ var RevertScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from test as of 'HEAD' where pk = 2;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "select * from test as of 'HEAD~2' where pk = 2;",
-				Expected: []sql.Row{{2, 42}},
+				Expected: []sql.UntypedSqlRow{{2, 42}},
 			},
 			{
 				Query:    "select * from test as of 'HEAD' where pk = 3;",
-				Expected: []sql.Row{{3, 23}},
+				Expected: []sql.UntypedSqlRow{{3, 23}},
 			},
 		},
 	},
@@ -123,11 +123,11 @@ var RevertScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from test as of 'HEAD' where pk = 2;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "select * from test as of 'HEAD~1' where pk = 2;",
-				Expected: []sql.Row{{2, 42}},
+				Expected: []sql.UntypedSqlRow{{2, 42}},
 			},
 			{
 				Query:          "select * from dont_track as of 'HEAD'",
@@ -135,7 +135,7 @@ var RevertScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"dont_track", false, "new table"}},
+				Expected: []sql.UntypedSqlRow{{"dont_track", false, "new table"}},
 			},
 		},
 	},
@@ -175,7 +175,7 @@ var RevertScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from tableA",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},

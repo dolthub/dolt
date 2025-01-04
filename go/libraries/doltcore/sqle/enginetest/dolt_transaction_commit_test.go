@@ -46,120 +46,120 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit_message='Commit Message 42';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ create table newTable(pk int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT message from dolt_log ORDER BY date DESC LIMIT 1;",
-				Expected: []sql.Row{{"Commit Message 42"}},
+				Expected: []sql.UntypedSqlRow{{"Commit Message 42"}},
 			},
 		},
 	})
@@ -219,126 +219,126 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// Concurrent with the two transactions which are going to (dolt_)commit changes, we
 			// have a transaction which only modifies the working set. At the end of this
 			// sequence, the changes to the working set should not be committed.
 			{
 				Query:    "/* client c */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client c */ INSERT INTO x values (4, 4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client c */ COMMIT",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// Now we have the two concurrent transactions commit their changes.
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {3, 3}},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit_message='ClientA Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client b */ SELECT @@mydb_head like @initial_head;",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x AS OF 'HEAD' ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			// After we commit both transactions, our working set should still have the change which
 			// was never dolt_committed.
 			{
 				Query:    "/* client c */ SELECT COUNT(*) FROM DOLT_DIFF('HEAD', 'WORKING', 'x');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	})
@@ -395,35 +395,35 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			// these SET statements currently commit a transaction (since autocommit is on)
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO x VALUES (3,3);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 			{
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}, {3, 3}},
 			},
 		},
 	})
@@ -481,51 +481,51 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ START TRANSACTION;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO child VALUES (1, 1);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ INSERT INTO child VALUES (2, 2);",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT * FROM child ORDER BY pk;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ SELECT * FROM child ORDER BY pk;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{ // This uses the index, which is automatically created by the late fk resolution, so it's also tested here
 				Query:    "/* client a */ SELECT * FROM child WHERE v1 > 0 ORDER BY pk;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{ // This uses the index, which is automatically created by the late fk resolution, so it's also tested here
 				Query:    "/* client b */ SELECT * FROM child WHERE v1 > 0 ORDER BY pk;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:       "/* client a */ INSERT INTO child VALUES (3, 3);",

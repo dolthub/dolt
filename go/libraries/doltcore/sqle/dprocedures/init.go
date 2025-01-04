@@ -84,9 +84,9 @@ func int64Schema(columnNames ...string) sql.Schema {
 
 // rowToIter returns a sql.RowIter with a single row containing the values passed in.
 func rowToIter(vals ...interface{}) sql.RowIter {
-	row := make(sql.Row, len(vals))
+	row := make(sql.UntypedSqlRow, len(vals))
 	for i, val := range vals {
-		row[i] = val
+		row.SetValue(i, val)
 	}
 	return sql.RowsToRowIter(row)
 }

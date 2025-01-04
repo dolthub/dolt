@@ -308,7 +308,7 @@ func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row
 	return mutated
 }
 
-func GetAllRows(root doltdb.RootValue, tableName string) ([]sql.Row, error) {
+func GetAllRows(root doltdb.RootValue, tableName string) ([]sql.UntypedSqlRow, error) {
 	ctx := context.Background()
 	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {

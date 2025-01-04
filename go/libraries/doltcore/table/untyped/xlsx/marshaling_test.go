@@ -42,7 +42,7 @@ func TestDecodeXLSXRows(t *testing.T) {
 	}
 	assert.NoError(t, err)
 
-	newRow := sql.Row{"1", "oshieza", "otori", 24}
+	newRow := sql.UntypedSqlRow{"1", "oshieza", "otori", 24}
 
 	if !reflect.DeepEqual(decoded[0], newRow) {
 		t.Log("error!")

@@ -20250,7 +20250,7 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 			numErrors++
 			continue
 		}
-		if !assert.Equal(t, expected[i], actual[i]) {
+		if !assert.Equal(t, expected[i].Values(), actual[i].Values()) {
 			numErrors++
 		}
 	}

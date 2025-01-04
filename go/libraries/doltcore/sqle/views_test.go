@@ -43,7 +43,7 @@ func TestViews(t *testing.T) {
 	root, err = ExecuteSql(dEnv, root, "create view plus1 as select a + 1 from test")
 	require.NoError(t, err)
 
-	expectedRows := []sql.Row{
+	expectedRows := []sql.UntypedSqlRow{
 		{int64(2)},
 		{int64(3)},
 		{int64(4)},

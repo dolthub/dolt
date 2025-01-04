@@ -38,7 +38,7 @@ type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
-func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.Row, sql.Schema, error) {
+func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.UntypedSqlRow, sql.Schema, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
@@ -55,10 +55,10 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root do
 		return nil, nil, err
 	}
 
-	sqlRows := make([]sql.Row, 0)
+	sqlRows := make([]sql.UntypedSqlRow, 0)
 	var r sql.Row
 	for r, err = iter.Next(sqlCtx); err == nil; r, err = iter.Next(sqlCtx) {
-		sqlRows = append(sqlRows, r)
+		sqlRows = append(sqlRows, r.Values())
 	}
 
 	if err != io.EOF {

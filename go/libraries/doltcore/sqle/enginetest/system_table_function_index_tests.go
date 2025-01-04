@@ -35,21 +35,21 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT table_name, diff_type, statement from dolt_patch(@Commit0, @Commit1, 't') WHERE diff_type = 'schema';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "schema", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 				},
 				ExpectedIndexes: []string{"diff_type"},
 			},
 			{
 				Query: "SELECT table_name, diff_type, statement from dolt_patch(@Commit0, @Commit1, 't') WHERE diff_type = 'data';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 				},
 				ExpectedIndexes: []string{"diff_type"},
 			},
 			{
 				Query: "SELECT /*+ JOIN_ORDER(diff_type_name,dolt_patch) LOOKUP_JOIN(diff_type_name,dolt_patch) */ name, t, table_name, statement from diff_type_name join dolt_patch(@Commit0, @Commit1, 't') on diff_type_name.t = diff_type;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"s", "schema", "t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{"d", "data", "t", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 				},
@@ -57,7 +57,7 @@ var SystemTableFunctionIndexTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT ( SELECT statement FROM (SELECT * FROM dolt_patch(@Commit0, @Commit1, 't') where diff_type = diff_type_name.t) as rhs) from diff_type_name;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
 					{"INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 				},

@@ -93,7 +93,7 @@ func replicaStatusesToRows(rss []ReplicaStatus) []sql.Row {
 }
 
 func replicaStatusToRow(rs ReplicaStatus) sql.Row {
-	ret := make(sql.Row, 7)
+	ret := make(sql.UntypedSqlRow, 7)
 	ret[0] = rs.Database
 	ret[1] = rs.Remote
 	ret[2] = rs.Role
