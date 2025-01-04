@@ -145,17 +145,17 @@ get_commit_hash_at() {
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db altDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --use-db altDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" --use-db defaultDB sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --use-db defaultDB sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "defaultDB_tbl" ]] || false
 
-    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" --user dolt --password "" sql -q "show tables"
+    run dolt --verbose-engine-setup --data-dir="$ROOT_DIR" sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
@@ -310,7 +310,7 @@ get_commit_hash_at() {
   [ "$status" -eq 0 ] || false
   localOutput=$output
 
-  run dolt --user dolt --password "" status --ignored
+  run dolt status --ignored
   [ "$status" -eq 0 ] || false
   localIgnoredOutput=$output
 
@@ -376,11 +376,11 @@ get_commit_hash_at() {
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup --user dolt --password "" branch b2
+    run dolt --verbose-engine-setup branch b2
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
 
-    run dolt --verbose-engine-setup --user dolt --password "" branch
+    run dolt --verbose-engine-setup branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "main" ]] || false

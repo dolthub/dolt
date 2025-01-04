@@ -37,6 +37,7 @@ import (
 const (
 	hostFlag                    = "host"
 	portFlag                    = "port"
+	skipRootUserInitialization  = "skip-root-user-initialization"
 	passwordFlag                = "password"
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
@@ -162,6 +163,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
+	ap.SupportsFlag(skipRootUserInitialization, "", "Skips the automatic creation of a default root super user on the first launch of a SQL server.")
 	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
@@ -372,6 +374,12 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, data
 			pass, _ := apr.GetValue(passwordFlag)
 			wcfg.SetUserName(user)
 			wcfg.SetPassword(pass)
+		}
+	}
+
+	if apr.Contains(skipRootUserInitialization) {
+		if wcfg, ok := cfg.(servercfg.WritableServerConfig); ok {
+			wcfg.SetSkipRootUserInitialization(true)
 		}
 	}
 

@@ -56,6 +56,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -219,19 +220,20 @@ func ConfigureServices(
 	InitSqlEngineConfig := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			config = &engine.SqlEngineConfig{
-				IsReadOnly:              serverConfig.ReadOnly(),
-				PrivFilePath:            serverConfig.PrivilegeFilePath(),
-				BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
-				DoltCfgDirPath:          serverConfig.CfgDir(),
-				ServerUser:              serverConfig.User(),
-				ServerPass:              serverConfig.Password(),
-				ServerHost:              serverConfig.Host(),
-				Autocommit:              serverConfig.AutoCommit(),
-				DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
-				JwksConfig:              serverConfig.JwksConfig(),
-				SystemVariables:         serverConfig.SystemVars(),
-				ClusterController:       clusterController,
-				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
+				IsReadOnly:                 serverConfig.ReadOnly(),
+				PrivFilePath:               serverConfig.PrivilegeFilePath(),
+				BranchCtrlFilePath:         serverConfig.BranchControlFilePath(),
+				DoltCfgDirPath:             serverConfig.CfgDir(),
+				ServerUser:                 serverConfig.User(),
+				ServerPass:                 serverConfig.Password(),
+				ServerHost:                 serverConfig.Host(),
+				Autocommit:                 serverConfig.AutoCommit(),
+				DoltTransactionCommit:      serverConfig.DoltTransactionCommit(),
+				JwksConfig:                 serverConfig.JwksConfig(),
+				SystemVariables:            serverConfig.SystemVars(),
+				ClusterController:          clusterController,
+				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
+				SkipRootUserInitialization: serverConfig.SkipRootUserInitialization(),
 			}
 			return nil
 		},
@@ -363,30 +365,82 @@ func ConfigureServices(
 	}
 	controller.Register(InitBinlogging)
 
-	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
-	InitSuperUser := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			userSpecified := config.ServerUser != ""
+	// MySQL creates a root superuser when the mysql install is first initialized. Depending on the options
+	// specified, the root superuser is created without a password, or with a random password. This varies
+	// slightly in some OS-specific installers. Dolt initializes the root superuser the first time a
+	// sql-server is started and initializes its privileges database. We do this on sql-server initialization,
+	// instead of dolt db initialization, because we only want to create the privileges database when it's
+	// used for a server, and because we want the same root initialization logic when a sql-server is started
+	// for a clone. More details: https://dev.mysql.com/doc/mysql-security-excerpt/8.0/en/default-privileges.html
+	//
+	// NOTE: The MySQL root user is created for host 'localhost', not any host ('%'). We could do the same here,
+	//       but it seems like it would cause problems for users who want to connect from outside of Docker.
+	InitImplicitRootSuperUser := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			// TODO: Extract helper function?
+			// If privileges.db has already been initialized, indicating that this is NOT the
+			// first time sql-server has been launched, then don't initialize the root superuser.
+			cfgDir, err := dEnv.FS.WithWorkingDir(serverConfig.CfgDir())
+			if err != nil {
+				return err
+			}
+			// TODO: Is there a setting that changes the privileges db name/location?
+			permissionDbExists, _ := cfgDir.Exists(commands.DefaultPrivsName)
+			if permissionDbExists {
+				logrus.Debug("privileges.db already exists, not creating root superuser")
+				return nil
+			}
 
+			// We always persist the privileges.db file, to signal that the privileges system has been initialized
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			var numUsers int
-			ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
-			privsExist := numUsers != 0
+			defer ed.Close()
+
+			// If no temporary superuser has been configured and root user initialization wasn't skipped,
+			// then create the root superuser.
+			createRootUser := (config.ServerUser == "") && !config.SkipRootUserInitialization
+			if createRootUser {
+				logrus.Info("Creating root@% superuser")
+				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, "%", servercfg.DefaultPass)
+			}
+
+			sqlCtx, err := sqlEngine.NewDefaultContext(context.Background())
+			if err != nil {
+				return err
+			}
+
+			// TODO: The in-memory filesystem doesn't work with the GMS API
+			//       for persisting the privileges database. The filesys API
+			//       is in the Dolt layer, so when the file path is passed to
+			//       GMS, it expects it to be a path on disk, and errors out.
+			if _, isInMemFs := dEnv.FS.(*filesys.InMemFS); isInMemFs {
+				return nil
+			} else {
+				return mysqlDb.Persist(sqlCtx, ed)
+			}
+		},
+	}
+	controller.Register(InitImplicitRootSuperUser)
+
+	// Add an ephemeral superuser if one was requested
+	InitEphemeralSuperUser := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+			ed := mysqlDb.Editor()
+
+			userSpecified := config.ServerUser != ""
 			if userSpecified {
 				superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
-				if userSpecified && superuser == nil {
-					mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
+				if superuser == nil {
+					mysqlDb.AddEphemeralSuperUser(ed, config.ServerUser, "%", config.ServerPass)
 				}
-			} else if !privsExist {
-				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, "%", servercfg.DefaultPass)
 			}
 			ed.Close()
 
 			return nil
 		},
 	}
-	controller.Register(InitSuperUser)
+	controller.Register(InitEphemeralSuperUser)
 
 	var metListener *metricsListener
 	InitMetricsListener := &svcs.AnonService{
@@ -406,7 +460,7 @@ func ConfigureServices(
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
+			mysqlDb.AddEphemeralSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
 			ed.Close()
 			return nil
 		},
