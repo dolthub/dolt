@@ -116,6 +116,9 @@ func (r *ProllyRow) GetType(i int) {
 }
 
 func (r *ProllyRow) Values() []interface{} {
+	if r == nil {
+		return nil
+	}
 	for i := range r.ords {
 		if !r.decoded.Contains(i+1) && !r.dirty.Contains(i+1) {
 			r.decode(context.Background(), i)

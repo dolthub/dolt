@@ -54,7 +54,7 @@ func testIterator(t *testing.T, iter RowIter, expected []sql.Row) {
 	for _, eR := range expected {
 		r, err := iter.Next(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, eR, r)
+		assert.Equal(t, eR, sql.RowsToUntyped([]sql.Row{r})[0])
 	}
 	_, err := iter.Next(ctx)
 	require.Equal(t, io.EOF, err)
