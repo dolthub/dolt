@@ -59,6 +59,7 @@ require (
 	github.com/dolthub/go-mysql-server v0.19.1-0.20241231201953-4af32d139747
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
+	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/btree v1.1.2
 	github.com/google/go-github/v57 v57.0.0

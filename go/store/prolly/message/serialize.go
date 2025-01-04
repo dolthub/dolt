@@ -62,6 +62,17 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	return b.EndVector(len(items) + 1)
 }
 
+func writeItemOffsets32(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
+	var off = sumSz
+	for i := len(items) - 1; i >= 0; i-- {
+		b.PrependUint32(uint32(off))
+		off -= len(items[i])
+	}
+	assertTrue(off == 0, "incorrect final value after serializing offStart")
+	b.PrependUint32(uint32(off))
+	return b.EndVector(len(items) + 1)
+}
+
 // countAddresses returns the number of chunk addresses stored within |items|.
 func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 	for i := len(items) - 1; i >= 0; i-- {

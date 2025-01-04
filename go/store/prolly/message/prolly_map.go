@@ -111,22 +111,22 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, lev
 		return
 	}
 	keys.bufStart = lookupVectorOffset(prollyMapKeyItemBytesVOffset, pm.Table())
-	keys.bufLen = uint16(pm.KeyItemsLength())
+	keys.bufLen = uint32(pm.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(prollyMapKeyOffsetsVOffset, pm.Table())
-	keys.offLen = uint16(pm.KeyOffsetsLength() * uint16Size)
+	keys.offLen = uint32(pm.KeyOffsetsLength() * uint16Size)
 
-	count = (keys.offLen / 2) - 1
+	count = uint16(keys.offLen/2) - 1
 	level = uint16(pm.TreeLevel())
 
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(prollyMapValueItemBytesVOffset, pm.Table())
-		values.bufLen = uint16(pm.ValueItemsLength())
+		values.bufLen = uint32(pm.ValueItemsLength())
 		values.offStart = lookupVectorOffset(prollyMapValueOffsetsVOffset, pm.Table())
-		values.offLen = uint16(pm.ValueOffsetsLength() * uint16Size)
+		values.offLen = uint32(pm.ValueOffsetsLength() * uint16Size)
 	} else {
 		values.bufStart = lookupVectorOffset(prollyMapAddressArrayBytesVOffset, pm.Table())
-		values.bufLen = uint16(pm.AddressArrayLength())
+		values.bufLen = uint32(pm.AddressArrayLength())
 		values.itemWidth = hash.ByteLen
 	}
 	return
