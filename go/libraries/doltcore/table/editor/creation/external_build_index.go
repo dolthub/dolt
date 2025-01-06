@@ -59,35 +59,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	if idx.IsVector() {
-		// Secondary indexes are always covering and have no non-key columns
-		valDesc := val.NewTupleDescriptor()
-		proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			k, v, err := iter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-
-			idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
-			if err != nil {
-				return nil, err
-			}
-
-			if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
-				continue
-			}
-
-			if err := proximityMapBuilder.Insert(ctx, idxKey, val.EmptyTuple); err != nil {
-				return nil, err
-			}
-		}
-		proximityMap, err := proximityMapBuilder.Flush(ctx)
-		return durable.IndexFromProximityMap(proximityMap), nil
+		return BuildProximityIndex(ctx, ns, idx, keyDesc, prefixDesc, iter, secondaryBld, uniqCb)
 	}
 
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
@@ -142,6 +114,48 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	return durable.IndexFromProllyMap(ret), nil
+}
+
+// func BuildProximityIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
+func BuildProximityIndex(
+	ctx *sql.Context,
+	ns tree.NodeStore,
+	idx schema.Index,
+	keyDesc val.TupleDesc,
+	prefixDesc val.TupleDesc,
+	iter prolly.MapIter,
+	secondaryBld index.SecondaryKeyBuilder,
+	uniqCb DupEntryCb,
+) (durable.Index, error) {
+	// Secondary indexes have no non-key columns
+	valDesc := val.NewTupleDescriptor()
+	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
+
+		if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
+			continue
+		}
+
+		if err := proximityMapBuilder.Insert(ctx, idxKey, val.EmptyTuple); err != nil {
+			return nil, err
+		}
+	}
+	proximityMap, err := proximityMapBuilder.Flush(ctx)
+	return durable.IndexFromProximityMap(proximityMap), nil
 }
 
 type tupleIterWithCb struct {

@@ -2901,7 +2901,7 @@ func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sq
 // CreateIndexForForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.IndexDef) error {
 	if idx.Constraint != sql.IndexConstraint_None && idx.Constraint != sql.IndexConstraint_Unique && idx.Constraint != sql.IndexConstraint_Spatial {
-		return fmt.Errorf("only the following types of index constraints are supported for foriegn keys: none, unique, spatial")
+		return fmt.Errorf("only the following types of index constraints are supported for foreign keys: none, unique, spatial")
 	}
 	columns := make([]string, len(idx.Columns))
 	for i, indexCol := range idx.Columns {

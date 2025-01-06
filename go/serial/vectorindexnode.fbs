@@ -19,25 +19,21 @@ namespace serial;
 table VectorIndexNode {
   // sorted array of key items
   key_items:[ubyte] (required);
-  // items offets for |key_items|
+  // item offsets for |key_items|
   // first offset is 0, last offset is len(key_items)
   key_offsets:[uint32] (required);
-  // item type for |key_items|
-  // key_type:ItemType;
 
   // array of values items, ordered by paired key
   value_items:[ubyte];
   // item offsets for |value_items|
   // first offset is 0, last offset is len(value_items)
   value_offsets:[uint32];
-  // item type for |value_items|
-  // value_type:ItemType;
 
   // array of chunk addresses
   //  - subtree addresses for internal prolly tree nodes
   //  - value addresses for AddressMap leaf nodes
-  // node that while the keys in this index are addresses to JSON chunks, we don't store those in the address_array
-  // because we are guarenteed to have other references to those chunks in the primary index.
+  // note that while the keys in this index are addresses to JSON chunks, we don't store those in the address_array
+  // because we are guaranteed to have other references to those chunks in the primary index.
   address_array:[ubyte] (required);
 
   // array of varint encoded subtree counts

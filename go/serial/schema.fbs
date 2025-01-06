@@ -109,7 +109,7 @@ table Index {
   fulltext_key:bool;
   fulltext_info:FulltextInfo;
 
-  // fulltext information
+  // vector information
   // these fields should be set for vector indexes and otherwise omitted, for backwards compatibility
   vector_key:bool;
   vector_info:VectorInfo;
