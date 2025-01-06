@@ -98,6 +98,7 @@ type DoltEnginetestHarness interface {
 	WithSkippedQueries(skipped []string) DoltEnginetestHarness
 
 	// WithParallelism returns a copy of the harness with parallelism set to the given number of threads
+	// Deprecated: parallelism currently no-ops
 	WithParallelism(parallelism int) DoltEnginetestHarness
 
 	// WithConfigureStats returns a copy of the harness with the given configureStats value

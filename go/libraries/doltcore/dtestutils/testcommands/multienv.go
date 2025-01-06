@@ -168,7 +168,7 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv)
+	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv, dEnv.FS)
 	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(context.Background())
 	if err != nil {
 		mr.Errhand(err)
@@ -390,7 +390,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) err
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	ns := dEnv.DoltDB.NodeStore()
 
-	idx, err := durable.NewEmptyIndex(ctx, vrw, ns, sch, false)
+	idx, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {
 		return err
 	}

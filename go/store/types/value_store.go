@@ -675,6 +675,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			if err != nil {
 				return err
 			}
+			defer collector.EndGC()
 
 			root, err := lvs.Root(ctx)
 			if err != nil {

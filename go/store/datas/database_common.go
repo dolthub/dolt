@@ -744,6 +744,26 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	})
 }
 
+func (db *database) SetTuple(ctx context.Context, ds Dataset, val []byte) (Dataset, error) {
+	tupleAddr, _, err := newTuple(ctx, db, val)
+	if err != nil {
+		return Dataset{}, err
+	}
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		return db.update(ctx, func(_ context.Context, datasets types.Map) (types.Map, error) {
+			// this is for old format, so this should not happen
+			return datasets, errors.New("WriteTuple is not supported for old storage format")
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), tupleAddr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	})
+}
+
 func (db *database) SetStatsRef(ctx context.Context, ds Dataset, mapAddr hash.Hash) (Dataset, error) {
 	statAddr, _, err := newStat(ctx, db, mapAddr)
 	if err != nil {

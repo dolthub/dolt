@@ -37,6 +37,7 @@ fi
   stat.fbs \
   table.fbs \
   tag.fbs \
+  tuple.fbs \
   workingset.fbs
 
 # prefix files with copyright header

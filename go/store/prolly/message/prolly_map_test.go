@@ -48,7 +48,7 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 
 func TestItemAccessSize(t *testing.T) {
 	sz := unsafe.Sizeof(ItemAccess{})
-	assert.Equal(t, 10, int(sz))
+	assert.Equal(t, 20, int(sz))
 }
 
 func randomByteSlices(t *testing.T, count int) (keys, values [][]byte) {

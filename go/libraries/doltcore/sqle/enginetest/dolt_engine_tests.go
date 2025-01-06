@@ -1410,7 +1410,7 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 
 	for _, stt := range SystemTableIndexTests {
-		harness = harness.NewHarness(t).WithParallelism(2)
+		harness = harness.NewHarness(t).WithParallelism(1)
 		defer harness.Close()
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
@@ -1422,27 +1422,30 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 			enginetest.RunQueryWithContext(t, e, harness, ctx, q)
 		}
 
-		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
-			e.EngineAnalyzer().Coster = biasedCosters[i]
-			for _, tt := range stt.queries {
-				if tt.query == "select count(*) from dolt_blame_xy" && c == "inner" {
-					// todo we either need join hints to work inside the blame view
-					// and force the window relation to be primary, or we need the
-					// blame view's timestamp columns to be specific enough to not
-					// overlap during testing.
-					t.Skip("the blame table is unstable as secondary table in join with exchange node")
-				}
-				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
-					if tt.skip {
-						t.Skip()
+		costers := []string{"inner", "lookup", "hash", "merge"}
+		for i, c := range costers {
+			t.Run(c, func(t *testing.T) {
+				e.EngineAnalyzer().Coster = biasedCosters[i]
+				for _, tt := range stt.queries {
+					if tt.query == "select count(*) from dolt_blame_xy" && c == "inner" {
+						// todo we either need join hints to work inside the blame view
+						// and force the window relation to be primary, or we need the
+						// blame view's timestamp columns to be specific enough to not
+						// overlap during testing.
+						t.Skip("the blame table is unstable as secondary table in join with exchange node")
 					}
+					t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
+						if tt.skip {
+							t.Skip()
+						}
 
-					ctx = ctx.WithQuery(tt.query)
-					if tt.exp != nil {
-						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
-					}
-				})
-			}
+						ctx = ctx.WithQuery(tt.query)
+						if tt.exp != nil {
+							enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
+						}
+					})
+				}
+			})
 		}
 	}
 }
@@ -1553,8 +1556,8 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
@@ -1569,7 +1572,7 @@ func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()

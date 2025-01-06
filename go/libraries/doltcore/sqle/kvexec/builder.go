@@ -524,7 +524,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
-			return ms, nil
+			return ms, fmt.Errorf("non-standard indexed table not supported")
 		}
 
 		if idx.Format() != types.Format_DOLT {

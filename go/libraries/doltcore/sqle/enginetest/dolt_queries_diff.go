@@ -528,11 +528,41 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{7}},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t where to_commit=@Commit4;",
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		// Similar to previous test, but with one row to avoid ordering issues.
+		Name: "altered keyless table add pk", // https://github.com/dolthub/dolt/issues/8625
+		SetUpScript: []string{
+			"create table tbl (i int, j int);",
+			"insert into tbl values (42, 23);",
+			"call dolt_commit('-Am', 'commit1');",
+			"alter table tbl add primary key(i);",
+			"call dolt_commit('-am', 'commit2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT to_i,to_j,from_i,from_j,diff_type  FROM dolt_diff_tbl;",
+				// Output in the situation is admittedly wonky. Updating the PK leaves in a place where we can't really render
+				// the diff, but we want to show something. In this case, the 'pk' column tag changes, so in the last two rows
+				// of the output you see we add "nil,23" and remove "nil,23" when in fact those columns were "42" with a different
+				// tag.
+				//
+				// In the past we just returned an empty set in this case. The
+				// warning is kind of essential to understand what is happening.
+				Expected: []sql.Row{
+					{42, 23, nil, nil, "added"},
+					{nil, nil, nil, 23, "removed"},
+				},
+				ExpectedWarningsCount:           1,
+				ExpectedWarning:                 1105,
+				ExpectedWarningMessageSubstring: "due to primary key set change",
 			},
 		},
 	},
@@ -713,8 +743,10 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
-				Expected: []sql.Row{{"2", "2", nil, nil, "added"}},
+				Query: "SELECT to_pk1, to_pk2, from_pk1, from_pk2, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{
+					{"2", "2", nil, nil, "added"},
+				},
 			},
 		},
 	},
@@ -1492,6 +1524,62 @@ on a.to_pk = b.to_pk;`,
 					{nil, "HEAD~1", 4, "HEAD", "removed"},
 					{nil, "HEAD~1", 5, "HEAD", "removed"},
 					{nil, "HEAD~1", 6, "HEAD", "removed"},
+				},
+			},
+		},
+	},
+	{
+		Name: "diff table function works with virtual generated columns",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int, k int, jk int generated always as (10 * j + k), l int);",
+			"call dolt_commit('-Am', 'created table')",
+			"insert into t(i, j, k, l) values (1, 2, 3, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 2, 3, 23, 4},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
+				Expected: []sql.Row{
+					{1, nil, nil, nil},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
+				Expected: []sql.Row{
+					{1, nil, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "diff table function works with stored generated columns",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int, k int, jk int generated always as (10 * j + k) stored, l int);",
+			"call dolt_commit('-Am', 'created table')",
+			"insert into t(i, j, k, l) values (1, 2, 3, 4);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 2, 3, 23, 4},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
+				Expected: []sql.Row{
+					{1, 23, nil, nil},
+				},
+			},
+			{
+				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
+				Expected: []sql.Row{
+					{1, 23, nil, nil},
 				},
 			},
 		},
@@ -5242,6 +5330,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+
 	{
 		Name: "added and dropped table",
 		SetUpScript: []string{
@@ -6150,6 +6239,14 @@ var SystemTableIndexTests = []systabScript{
            ON cm.commit_hash = an.parent_hash
            ORDER BY cm.date, cm.message asc`,
 				exp: []sql.Row{{5}},
+			},
+			{
+				query: "select count(*) /*+ JOIN_ORDER(a,b) */ from dolt_diff_xy a join xy b on x = to_x",
+				exp:   []sql.Row{{45}},
+			},
+			{
+				query: "select count(*) /*+ JOIN_ORDER(b,a) */ from dolt_diff_xy a join xy b on x = to_x",
+				exp:   []sql.Row{{45}},
 			},
 		},
 	},

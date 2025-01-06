@@ -225,10 +225,12 @@ func convertTableFileToArchive(
 	//	cg.print(n, p)
 	//}
 
-	// Allocate buffer used to compress chunks.
-	cmpBuff := make([]byte, 0, maxChunkSize)
+	const fourMb = 1 << 22
 
-	cmpDefDict := gozstd.Compress(cmpBuff, defaultDict)
+	// Allocate buffer used to compress chunks.
+	cmpBuff := make([]byte, 0, fourMb)
+
+	cmpBuff = gozstd.Compress(cmpBuff[:0], defaultDict)
 	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
 
 	arcW, err := newArchiveWriter()
@@ -236,12 +238,12 @@ func convertTableFileToArchive(
 		return "", hash.Hash{}, err
 	}
 	var defaultDictByteSpanId uint32
-	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpDefDict)
+	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpBuff)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
 
-	_, grouped, singles, err := writeDataToArchive(ctx, cmpBuff, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
+	_, grouped, singles, err := writeDataToArchive(ctx, cmpBuff[:0], allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -337,9 +339,9 @@ func writeDataToArchive(
 			if cg.totalBytesSavedWDict > cg.totalBytesSavedDefaultDict {
 				groupCount++
 
-				cmpDict := gozstd.Compress(cmpBuff, cg.dict)
+				cmpBuff = gozstd.Compress(cmpBuff[:0], cg.dict)
 
-				dictId, err := arcW.writeByteSpan(cmpDict)
+				dictId, err := arcW.writeByteSpan(cmpBuff)
 				if err != nil {
 					return 0, 0, 0, err
 				}
@@ -351,9 +353,9 @@ func writeDataToArchive(
 					}
 
 					if !arcW.chunkSeen(cs.chunkId) {
-						compressed := gozstd.CompressDict(cmpBuff, c.Data(), cg.cDict)
+						cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), cg.cDict)
 
-						dataId, err := arcW.writeByteSpan(compressed)
+						dataId, err := arcW.writeByteSpan(cmpBuff)
 						if err != nil {
 							return 0, 0, 0, err
 						}
@@ -380,7 +382,6 @@ func writeDataToArchive(
 		case <-ctx.Done():
 			return 0, 0, 0, ctx.Err()
 		default:
-			var compressed []byte
 			dictId := uint32(0)
 
 			c, e2 := chunkCache.get(ctx, h, stats)
@@ -388,10 +389,10 @@ func writeDataToArchive(
 				return 0, 0, 0, e2
 			}
 
-			compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultDict)
+			cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
 			dictId = defaultSpanId
 
-			id, err := arcW.writeByteSpan(compressed)
+			id, err := arcW.writeByteSpan(cmpBuff)
 			if err != nil {
 				return 0, 0, 0, err
 			}

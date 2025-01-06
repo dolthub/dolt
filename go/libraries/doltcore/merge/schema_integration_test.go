@@ -40,7 +40,7 @@ type testCommand struct {
 }
 
 func (tc testCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
-	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 	return tc.cmd.Exec(ctx, tc.cmd.Name(), tc.args, dEnv, cliCtx)
 }
@@ -559,7 +559,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
-	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
 	for _, c := range setupCommon {
 		exit := c.exec(t, ctx, dEnv)
@@ -618,7 +618,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		require.Equal(t, 0, exit)
 	}
 
-	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
 	// assert that we're on main
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
@@ -680,7 +680,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		require.Equal(t, 0, exit)
 	}
 
-	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
 	// assert that we're on main
 	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)

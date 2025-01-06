@@ -307,13 +307,12 @@ func ArePrimaryKeySetsDiffable(format *types.NomsBinFormat, fromSch, toSch Schem
 // use to map key, value val.Tuple's of schema |inSch| to |outSch|. The first
 // ordinal map is for keys, and the second is for values. If a column of |inSch|
 // is missing in |outSch| then that column's index in the ordinal map holds -1.
-func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
+func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
 	keyMapping := make([]int, inSch.GetPKCols().Size())
-	valMapping := make([]int, inSch.GetNonPKCols().Size())
 
 	// if inSch or outSch is empty schema. This can be from added or dropped table.
 	if len(inSch.GetAllCols().cols) == 0 || len(outSch.GetAllCols().cols) == 0 {
-		return keyMapping, valMapping, nil
+		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
@@ -330,14 +329,20 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 		return nil, nil, err
 	}
 
-	err = inSch.GetNonPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
-		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
-			j := outSch.GetNonPKCols().TagToIdx[col.Tag]
+	inNonPKCols := inSch.GetNonPKCols()
+	outNonPKCols := outSch.GetNonPKCols()
+	valMapping := make([]int, inSch.GetNonPKCols().Size())
+	err = inNonPKCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		i := inNonPKCols.TagToIdx[col.Tag]
+		if col.Virtual {
+			valMapping[i] = -1
+		} else if col, ok := outNonPKCols.GetByName(col.Name); ok {
+			j := outNonPKCols.TagToIdx[col.Tag]
 			valMapping[i] = j
 		} else {
 			valMapping[i] = -1
 		}
+
 		return false, nil
 	})
 	if err != nil {

@@ -106,7 +106,7 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 }
 
 // NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
-func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
+func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv, cwd filesys.Filesys) (cli.CliContext, errhand.VerboseError) {
 	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -119,7 +119,7 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 	if err != nil {
 		return nil, verr
 	}
-	return cli.NewCliContext(argparser.NewEmptyResults(), dEnv.Config, lateBind)
+	return cli.NewCliContext(argparser.NewEmptyResults(), dEnv.Config, cwd, lateBind)
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using

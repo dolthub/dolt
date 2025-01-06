@@ -193,12 +193,16 @@ user_session_vars:
 - name: user1
   vars:
     aws_credentials_file: /Users/user1/.aws/config
-    aws_credentials_profile: lddev" > server.yaml
+    aws_credentials_profile: lddev
+- name: user3
+  vars:
+    autocommit: 0" > server.yaml
 
     dolt --privilege-file=privs.json sql -q "CREATE USER dolt@'127.0.0.1'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user0@'127.0.0.1' IDENTIFIED BY 'pass0'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user1@'127.0.0.1' IDENTIFIED BY 'pass1'"
     dolt --privilege-file=privs.json sql -q "CREATE USER user2@'127.0.0.1' IDENTIFIED BY 'pass2'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user3@'127.0.0.1' IDENTIFIED BY 'pass3'"
 
     start_sql_server_with_config "" server.yaml
 
@@ -213,6 +217,9 @@ user_session_vars:
 
     run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user2 --password=pass2 sql -q "SET @@aws_credentials_file='/Users/should_fail';"
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
+
+    run dolt --host=127.0.0.1 --port=$PORT --no-tls --user=user3 --password=pass3 sql -q "SELECT @@autocommit;"
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "sql-server: read-only mode" {
@@ -1355,7 +1362,7 @@ END""")
     [[ $output =~ "test2" ]] || false
 }
 
-@test "sql-server: fetch uses database tempdir from different working directory" {
+@test "sql-server: fetch uses database data dir from different working directory" {
     skiponwindows "Missing dependencies"
 
     mkdir remote1
@@ -1960,4 +1967,33 @@ behavior:
     [ $status -ne 0 ]
     [[ "$output" =~ "Detected that a Dolt sql-server is running from this directory." ]] || false
     [[ "$output" =~ "Stop the sql-server before initializing this directory as a Dolt database." ]] || false
+}
+
+
+@test "sql-server: fail to start when multiple data dirs found" {
+    skiponwindows "Missing dependencies"
+
+    mkdir datadir1
+    mkdir datadir2
+
+    # This file is legit, and would work if there was no --data-dir on the cli.
+    cat > config.yml <<EOF
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: 4444
+data_dir: ./datadir1
+EOF
+    run dolt --data-dir datadir2 sql-server --config ./config.yml
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot specify both global --data-dir argument and --data-dir in sql-server config" ]] || false
+
+    run dolt sql-server --data-dir datadir2 --config ./config.yml
+    [ $status -eq 1 ]
+    [[ "$output" =~ "--data-dir specified in both config file and command line" ]] || false
+
+    run dolt --data-dir datadir1 sql-server --data-dir datadir2
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot specify both global --data-dir argument and --data-dir in sql-server config" ]] || false
 }

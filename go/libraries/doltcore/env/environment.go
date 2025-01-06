@@ -51,6 +51,8 @@ const (
 	DefaultRemotesApiPort = "443"
 
 	tempTablesDir = "temptf"
+
+	TmpDirName = "tmp"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -149,7 +151,7 @@ func (dEnv *DoltEnv) ReloadRepoState() error {
 	return nil
 }
 
-func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 
 	repoState, rsErr := createRepoState(fs)
@@ -450,13 +452,21 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	}
 
 	if dEnv.hasDoltDir(dir) {
-		// Special case a completely empty directory. We can allow that.
+		// Special case a completely empty directory, or one which has a "tmp" directory but nothing else.
+		// The `.dolt/tmp` directory is created while verifying that we can rename table files which is early
+		// in the startup process. It will only exist if we need it because the TMPDIR environment variable is set to
+		// a path which is on a different partition than the .dolt directory.
 		dotDolt := mustAbs(dEnv, dbfactory.DoltDir)
 		entries, err := os.ReadDir(dotDolt)
 		if err != nil {
 			return "", err
 		}
-		if len(entries) != 0 {
+
+		if len(entries) == 1 {
+			if !entries[0].IsDir() || entries[0].Name() != TmpDirName {
+				return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
+			}
+		} else if len(entries) != 0 {
 			return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
 		}
 	}

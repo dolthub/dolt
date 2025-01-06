@@ -154,30 +154,13 @@ func ConfigureServices(
 	controller.Register(newHeartbeatService(version, dEnv))
 
 	fs := dEnv.FS
-	InitDataDir := &svcs.AnonService{
+	InitFailsafes := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
-				if err != nil {
-					return err
-				}
-				// If datadir has changed, then reload the DoltEnv to ensure its local
-				// configuration store gets configured correctly
-				dEnv.FS = fs
-				dEnv = env.Load(ctx, dEnv.GetUserHomeDir, fs, doltdb.LocalDirDoltDB, dEnv.Version)
-
-				// If the datadir has changed, then we need to load any persisted global variables
-				// from the new datadir's local configuration store
-				err = dsess.InitPersistedSystemVars(dEnv)
-				if err != nil {
-					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
-				}
-			}
 			dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 			return nil
 		},
 	}
-	controller.Register(InitDataDir)
+	controller.Register(InitFailsafes)
 
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
@@ -903,7 +886,7 @@ func portInUse(hostPort string) bool {
 }
 
 func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) server.SessionBuilder {
-	userToSessionVars := make(map[string]map[string]string)
+	userToSessionVars := make(map[string]map[string]interface{})
 	userVars := config.UserVars()
 	for _, curr := range userVars {
 		userToSessionVars[curr.Name] = curr.Vars

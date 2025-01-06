@@ -21,10 +21,13 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -130,9 +133,21 @@ func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
 
 // The fixed dolt schema for the `dolt_procedures` table.
 func ProceduresTableSchema() schema.Schema {
+	// Max len is 8K - big enough to be useful, but not too big to exceed max total row len of 64K.
+	t, err := gmstypes.CreateStringWithDefaults(sqltypes.VarChar, typeinfo.MaxVarcharLength/2)
+	if err != nil {
+		panic(err) // should never happen. All constants.
+	}
+	ti := typeinfo.CreateVarStringTypeFromSqlType(t)
+
+	stmtCol, err := schema.NewColumnWithTypeInfo(doltdb.ProceduresTableCreateStmtCol, schema.DoltProceduresCreateStmtTag, ti, false, "", false, "")
+	if err != nil {
+		panic(err) // should never happen.
+	}
+
 	colColl := schema.NewColCollection(
 		schema.NewColumn(doltdb.ProceduresTableNameCol, schema.DoltProceduresNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn(doltdb.ProceduresTableCreateStmtCol, schema.DoltProceduresCreateStmtTag, types.StringKind, false),
+		stmtCol,
 		schema.NewColumn(doltdb.ProceduresTableCreatedAtCol, schema.DoltProceduresCreatedAtTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.ProceduresTableModifiedAtCol, schema.DoltProceduresModifiedAtTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.ProceduresTableSqlModeCol, schema.DoltProceduresSqlModeTag, types.StringKind, false),

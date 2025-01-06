@@ -558,6 +558,42 @@ func (s statisticsHead) value() types.Value {
 	return s.msg
 }
 
+func newTupleHead(sm types.SerialMessage, addr hash.Hash) serialStashListHead {
+	return serialStashListHead{sm, addr}
+}
+
+type tupleHead struct {
+	msg  types.SerialMessage
+	addr hash.Hash
+}
+
+var _ dsHead = tupleHead{}
+
+// TypeName implements dsHead
+func (s tupleHead) TypeName() string {
+	return "Tuple"
+}
+
+// Addr implements dsHead
+func (s tupleHead) Addr() hash.Hash {
+	return s.addr
+}
+
+// HeadTag implements dsHead
+func (s tupleHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	return nil, hash.Hash{}, errors.New("HeadTag called on tuple")
+}
+
+// HeadWorkingSet implements dsHead
+func (s tupleHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	return nil, errors.New("HeadWorkingSet called on statistic")
+}
+
+// value implements dsHead
+func (s tupleHead) value() types.Value {
+	return s.msg
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
@@ -615,6 +651,8 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 			return newSerialStashListHead(sm, addr), nil
 		case serial.StatisticFileID:
 			return newStatisticHead(sm, addr), nil
+		case serial.TupleFileID:
+			return newTupleHead(sm, addr), nil
 		}
 	}
 

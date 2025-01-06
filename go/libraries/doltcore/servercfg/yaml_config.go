@@ -119,8 +119,8 @@ func (r RemotesapiYAMLConfig) ReadOnly() bool {
 }
 
 type UserSessionVars struct {
-	Name string            `yaml:"name"`
-	Vars map[string]string `yaml:"vars"`
+	Name string                 `yaml:"name"`
+	Vars map[string]interface{} `yaml:"vars"`
 }
 
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
@@ -570,6 +570,9 @@ func (cfg YAMLConfig) MetricsHost() string {
 
 func (cfg YAMLConfig) MetricsPort() int {
 	if cfg.MetricsConfig.Host == nil {
+		return DefaultMetricsPort
+	}
+	if cfg.MetricsConfig.Port == nil {
 		return DefaultMetricsPort
 	}
 

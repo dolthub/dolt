@@ -124,11 +124,11 @@ func GetSubtrees(msg serial.Message) ([]uint64, error) {
 	}
 }
 
-func lookupVectorOffset(vo fb.VOffsetT, tab fb.Table) uint16 {
+func lookupVectorOffset(vo fb.VOffsetT, tab fb.Table) uint32 {
 	off := fb.UOffsetT(tab.Offset(vo)) + tab.Pos
 	off += fb.GetUOffsetT(tab.Bytes[off:])
 	// data starts after metadata containing the vector length
-	return uint16(off + fb.UOffsetT(fb.SizeUOffsetT))
+	return uint32(off + fb.UOffsetT(fb.SizeUOffsetT))
 }
 
 func assertTrue(b bool, msg string) {
