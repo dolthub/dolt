@@ -431,6 +431,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if err := sc.gc(ctx); err != nil {
 					sc.error(GCJob{}, err)
 				}
+				sc.doGc.Store(false)
 			}
 		case <-sc.Done:
 			return nil
@@ -529,7 +530,6 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 
 	i := 0
 	k := 0
-	var deleted bool
 	for i < len(tableNames) && k < len(j.tables) {
 		var jobs []StatsJob
 		var ti tableStatsInfo
@@ -545,9 +545,8 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 			i++
 		case +1:
 			// dropped table
-			jobs = append(jobs, sc.deleteTableJob(j.sqlDb, j.tables[k].name))
+			jobs = append(jobs, sc.dropTableJob(j.sqlDb, j.tables[k].name))
 			k++
-			deleted = true
 		}
 		if err != nil {
 			return nil, err
@@ -567,13 +566,9 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 		i++
 	}
 
-	if !deleted && k < len(j.tables) {
+	for k < len(j.tables) {
+		ret = append(ret, sc.dropTableJob(j.sqlDb, j.tables[k].name))
 		k++
-		deleted = true
-	}
-
-	if deleted {
-		ret = append(ret, NewGCJob())
 	}
 
 	// retry again after finishing planned work
@@ -598,6 +593,9 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 	}
 
 	schemaChanged := !tableInfo.schHash.Equal(schHashKey.Hash)
+	if schemaChanged {
+		sc.doGc.Store(true)
+	}
 
 	var dataChanged bool
 	var isNewData bool
@@ -625,7 +623,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 
 		idxRoot := prollyMap.Node().HashOf()
 		newIdxRoots = append(newIdxRoots, idxRoot)
-		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) {
+		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged {
 			continue
 		}
 		dataChanged = true
@@ -663,7 +661,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 	return ret, tableStatsInfo{name: tableInfo.name, schHash: schHashKey.Hash, idxRoots: newIdxRoots}, nil
 }
 
-func (sc *StatsCoord) deleteTableJob(sqlDb sqle.Database, tableName string) StatsJob {
+func (sc *StatsCoord) dropTableJob(sqlDb sqle.Database, tableName string) StatsJob {
 	return FinalizeJob{
 		tableKey: tableIndexesKey{
 			db:     sqlDb.AliasedName(),
@@ -772,8 +770,11 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 }
 
 func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJob, error) {
-
 	if len(j.indexes) == 0 {
+		// delete table
+		sc.statsMu.Lock()
+		delete(sc.Stats, j.tableKey)
+		sc.statsMu.Unlock()
 		return nil, nil
 	}
 

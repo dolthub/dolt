@@ -149,20 +149,20 @@ func TestAnalyze(t *testing.T) {
 	}
 }
 
-func TestAlterIndex(t *testing.T) {
+func TestModifyColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
 
 	{
-		// drop index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y varchar(200)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y bigint"))
 
 		// expect finalize, no GC
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
+			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 210}, {210, 415}, {415, 470}, {470, 500}}},
+			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 267}, {267, 500}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
 				indexes: map[templateCacheKey][]hash.Hash{
@@ -177,14 +177,49 @@ func TestAlterIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		// 2 old + 2 new xy
-		require.Equal(t, 4, len(sc.BucketCache))
+		require.Equal(t, 10, len(sc.BucketCache))
 		require.Equal(t, 4, len(sc.LowerBoundCache))
 		require.Equal(t, 4, len(sc.TemplateCache))
 		require.Equal(t, 1, len(sc.Stats))
-		for _, tableStats := range sc.Stats {
-			require.Equal(t, 2, len(tableStats))
-		}
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		require.Equal(t, 4, len(stat[0].Hist))
+		require.Equal(t, 2, len(stat[1].Hist))
+	}
+}
+
+func TestAddColumn(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
+
+	{
+		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy add column z int"))
+
+		// schema but no data change
+		runAndPause(ctx, sc, &wg)
+		validateJobState(t, ctx, sc, []StatsJob{
+			FinalizeJob{
+				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
+				indexes: map[templateCacheKey][]hash.Hash{
+					templateCacheKey{idxName: "PRIMARY"}: nil,
+				},
+			},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
+		})
+
+		runAndPause(ctx, sc, &wg)
+		validateJobState(t, ctx, sc, []StatsJob{
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
+		})
+
+		require.Equal(t, 4, len(sc.BucketCache))
+		require.Equal(t, 2, len(sc.LowerBoundCache))
+		require.Equal(t, 4, len(sc.TemplateCache)) // +2 for new schema
+		require.Equal(t, 1, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		require.Equal(t, 2, len(stat[0].Hist))
+		require.Equal(t, 2, len(stat[1].Hist))
 	}
 }
 
@@ -195,19 +230,16 @@ func TestDropIndex(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	{
-		// alter index
-		// TODO detect schema change?
-		// TODO disable GC?
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
 
-		// finalize and GC
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
 				indexes: map[templateCacheKey][]hash.Hash{
 					templateCacheKey{idxName: "PRIMARY"}: nil,
-				}},
+				},
+			},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
@@ -216,51 +248,28 @@ func TestDropIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		// 2 old + 2 new xy
-		require.Equal(t, 2, len(sc.BucketCache))
+		require.Equal(t, 4, len(sc.BucketCache))
 		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 2, len(sc.TemplateCache))
+		require.Equal(t, 3, len(sc.TemplateCache))
 		require.Equal(t, 1, len(sc.Stats))
-		for _, tableStats := range sc.Stats {
-			require.Equal(t, 1, len(tableStats))
-		}
-	}
-}
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		require.Equal(t, 1, len(stat))
+		require.Equal(t, 2, len(stat[0].Hist))
+		require.True(t, sc.doGc.Load())
 
-func TestDropIndexGC(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
-	wg := sync.WaitGroup{}
-
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
-
-		// finalize and GC
-		runAndPause(ctx, sc, &wg)
-		validateJobState(t, ctx, sc, []StatsJob{
-			FinalizeJob{
-				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
-				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
-			GCJob{},
-		})
+		sc.gcInterval = time.Nanosecond
+		sc.SleepMult = time.Hour
 
 		runAndPause(ctx, sc, &wg)
-		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
-		})
 
-		// 2 old + 2 new xy
-		require.Equal(t, 1, len(sc.BucketCache))
+		require.Equal(t, 2, len(sc.BucketCache))
 		require.Equal(t, 1, len(sc.LowerBoundCache))
 		require.Equal(t, 1, len(sc.TemplateCache))
 		require.Equal(t, 1, len(sc.Stats))
-		for _, tableStats := range sc.Stats {
-			require.Equal(t, 1, len(tableStats))
-		}
+		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		require.Equal(t, 1, len(stat))
+		require.Equal(t, 2, len(stat[0].Hist))
+		require.False(t, sc.doGc.Load())
 	}
 }
 
@@ -270,39 +279,51 @@ func TestDropTable(t *testing.T) {
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
 	{
-		sc.disableGc.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b int)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into ab values (0,0)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
+
+		runAndPause(ctx, sc, &wg)
+
+		validateJobState(t, ctx, sc, []StatsJob{
+			ReadJob{db: sqlDbs[0], table: "ab", ordinals: []updateOrdinal{{0, 1}}},
+			FinalizeJob{
+				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "ab"},
+				indexes: map[templateCacheKey][]hash.Hash{
+					templateCacheKey{idxName: "PRIMARY"}: nil,
+				},
+			},
+			FinalizeJob{
+				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
+				indexes:  nil,
+			},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}}},
+		})
+
+		runAndPause(ctx, sc, &wg)
+
+		require.Equal(t, 5, len(sc.BucketCache))
+		require.Equal(t, 3, len(sc.LowerBoundCache))
+		require.Equal(t, 3, len(sc.TemplateCache))
+		require.Equal(t, 1, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		require.Equal(t, 1, len(stat))
+		require.Equal(t, 1, len(stat[0].Hist))
+		require.True(t, sc.doGc.Load())
+
 		sc.gcInterval = time.Nanosecond
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
+		sc.SleepMult = time.Hour
+
 		runAndPause(ctx, sc, &wg)
 
-		// no finalize, just GC
-		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: nil},
-		})
-
-	}
-}
-
-func TestDropTableGC(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
-	wg := sync.WaitGroup{}
-
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
-		runAndPause(ctx, sc, &wg)
-
-		// no finalize, just GC
-		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: nil},
-		})
-
-		// check for clean slate
-		runAndPause(ctx, sc, &wg)
-
+		require.Equal(t, 1, len(sc.BucketCache))
+		require.Equal(t, 1, len(sc.LowerBoundCache))
+		require.Equal(t, 1, len(sc.TemplateCache))
+		require.Equal(t, 1, len(sc.Stats))
+		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		require.Equal(t, 1, len(stat))
+		require.Equal(t, 1, len(stat[0].Hist))
+		require.False(t, sc.doGc.Load())
 	}
 }
 
