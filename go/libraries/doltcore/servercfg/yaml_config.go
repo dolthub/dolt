@@ -325,7 +325,7 @@ func (cfg YAMLConfig) String() string {
 		}
 
 		r, _ := utf8.DecodeRuneInString(lines[i])
-		if !unicode.IsSpace(r) {
+		if !unicode.IsSpace(r) && r != '-' {
 			formatted = append(formatted, "")
 		}
 
