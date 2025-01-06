@@ -353,3 +353,80 @@ SQL
     run dolt sql -q "ALTER TABLE onepk ADD INDEX dolt_idx_v1 (v1)"
     [ "$status" -eq "1" ]
 }
+
+@test "vector-index: DROP INDEX" {
+    dolt sql <<SQL
+CREATE VECTOR INDEX idx_v1 ON onepk(v1);
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'VECTOR KEY `idx_v1` (`v1`)' ]] || false
+
+    dolt sql <<SQL
+DROP INDEX idx_v1 ON onepk;
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ 'VECTOR KEY `idx_v1` (`v1`)' ]] || false
+}
+
+@test "vector-index: ALTER TABLE DROP INDEX" {
+    dolt sql <<SQL
+CREATE VECTOR INDEX idx_v1 ON onepk(v1);
+ALTER TABLE onepk DROP INDEX idx_v1;
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+}
+
+@test "vector-index: ALTER TABLE RENAME INDEX" {
+    dolt sql <<SQL
+CREATE VECTOR INDEX idx_v1 ON onepk(v1);
+CREATE VECTOR INDEX idx_v2 ON onepk(v1);
+SQL
+    run dolt sql -q "ALTER TABLE onepk RENAME INDEX idx_v1 TO idx_v2"
+    [ "$status" -eq "1" ]
+    dolt sql -q "ALTER TABLE onepk RENAME INDEX idx_v1 TO idx_vfirst"
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_vfirst(v1)" ]] || false
+    [[ "$output" =~ "idx_v2(v1)" ]] || false
+    ! [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'VECTOR KEY `idx_v2` (`v1`)' ]] || false
+    [[ "$output" =~ 'VECTOR KEY `idx_vfirst` (`v1`)' ]] || false
+    ! [[ "$output" =~ 'VECTOR KEY `idx_v1` (`v1`)' ]] || false
+}
+
+@test "vector-index: TRUNCATE TABLE" {
+    dolt sql <<SQL
+CREATE VECTOR INDEX idx_v1 ON onepk(v1);
+INSERT INTO onepk VALUES (1, '[99, 51]'), (2, '[11, 55]'), (3, '[88, 52]'), (4, '[22, 54]'), (5, '[77, 53]');
+TRUNCATE TABLE onepk;
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt index cat onepk idx_v1 -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'VECTOR KEY `idx_v1` (`v1`)' ]] || false
+    run dolt sql -q "SELECT pk1 FROM onepk ORDER BY VEC_DISTANCE(v1, '[99,51]') LIMIT 1;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
