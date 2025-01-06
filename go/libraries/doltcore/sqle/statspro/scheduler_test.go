@@ -47,19 +47,14 @@ func TestScheduleLoop(t *testing.T) {
 		b := strings.Repeat("b", 100)
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(100), key (b,a))"))
 		abIns := strings.Builder{}
-		xyIns := strings.Builder{}
 		abIns.WriteString("insert into ab values")
-		xyIns.WriteString("insert into xy values")
 		for i := range 200 {
 			if i > 0 {
 				abIns.WriteString(", ")
-				xyIns.WriteString(", ")
 			}
 			abIns.WriteString(fmt.Sprintf("(%d, '%s')", i, b))
-			xyIns.WriteString(fmt.Sprintf("(%d, %d)", i+5, i%25))
 		}
 		require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
-		require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
 		// run two cycles -> (1) seed, (2) populate
 		runAndPause(ctx, sc, &wg)
@@ -78,14 +73,6 @@ func TestScheduleLoop(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 					templateCacheKey{idxName: "b"}:       nil,
 				}},
-			ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 205}}},
-			ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 205}}},
-			FinalizeJob{
-				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
-					templateCacheKey{idxName: "y"}:       nil,
-				}},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
@@ -94,15 +81,35 @@ func TestScheduleLoop(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
-		// 2 old + 2 new xy + 7 new ab
-		require.Equal(t, 11, len(sc.BucketCache))
+		// 4 old + 2*7 new xy
+		require.Equal(t, 18, len(sc.BucketCache))
 		require.Equal(t, 4, len(sc.LowerBoundCache))
 		require.Equal(t, 4, len(sc.TemplateCache))
 		require.Equal(t, 2, len(sc.Stats))
-		for _, tableStats := range sc.Stats {
-			require.Equal(t, 2, len(tableStats))
-		}
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		require.Equal(t, 7, len(stat[0].Hist))
+		require.Equal(t, 7, len(stat[1].Hist))
 	}
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
+	runAndPause(ctx, sc, &wg)
+	runAndPause(ctx, sc, &wg)
+
+	sc.gcInterval = time.Nanosecond
+	sc.SleepMult = time.Hour
+
+	runAndPause(ctx, sc, &wg)
+
+	require.Equal(t, 14, len(sc.BucketCache))
+	require.Equal(t, 2, len(sc.LowerBoundCache))
+	require.Equal(t, 2, len(sc.TemplateCache))
+	require.Equal(t, 1, len(sc.Stats))
+	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+	require.Equal(t, 2, len(stat))
+	require.Equal(t, 7, len(stat[0].Hist))
+	require.Equal(t, 7, len(stat[1].Hist))
+	require.False(t, sc.doGc.Load())
+
 }
 
 func TestAnalyze(t *testing.T) {
@@ -659,7 +666,6 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 		case FinalizeJob:
 			ej, ok := expected[i].(FinalizeJob)
 			require.True(t, ok)
-			fmt.Println(j.indexes)
 			require.Equal(t, ej.tableKey, j.tableKey)
 			idx := make(map[string]bool)
 			for k, _ := range j.indexes {
