@@ -86,12 +86,12 @@ func TestScheduleLoop(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 					templateCacheKey{idxName: "y"}:       nil,
 				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "ab"}, {name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "ab"}, {name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
 		// 2 old + 2 new xy + 7 new ab
@@ -169,12 +169,12 @@ func TestAlterIndex(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 					templateCacheKey{idxName: "y"}:       nil,
 				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		// 2 old + 2 new xy
@@ -208,12 +208,12 @@ func TestDropIndex(t *testing.T) {
 				indexes: map[templateCacheKey][]hash.Hash{
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		// 2 old + 2 new xy
@@ -244,13 +244,13 @@ func TestDropIndexGC(t *testing.T) {
 				indexes: map[templateCacheKey][]hash.Hash{
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 			GCJob{},
 		})
 
 		runAndPause(ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		// 2 old + 2 new xy
@@ -306,37 +306,49 @@ func TestDropTableGC(t *testing.T) {
 	}
 }
 
-func TestDeleteOffBoundary(t *testing.T) {
+func TestDeleteAboveBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
 
+	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
+
 	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 447"))
-		runAndPause(ctx, sc, &wg)
+		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 498"))
 
-		// finalize and new read
+		runAndPause(ctx, sc, &wg) // seed
+		runAndPause(ctx, sc, &wg) // finalize
 
+		require.Equal(t, 5, len(sc.BucketCache)) // +1 for new chunk
+		require.Equal(t, 2, len(sc.LowerBoundCache))
+		require.Equal(t, 3, len(sc.TemplateCache)) // +1 for schema change
+		require.Equal(t, 1, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+		require.Equal(t, 2, len(stat[0].Hist))
 	}
 }
 
-func TestDeleteOffBoundaryGC(t *testing.T) {
+func TestDeleteBelowBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
 
+	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
+
 	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 415"))
-		runAndPause(ctx, sc, &wg)
+		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 410"))
 
-		// finalize and new read
+		runAndPause(ctx, sc, &wg) // seed
+		runAndPause(ctx, sc, &wg) // finalize
 
+		require.Equal(t, 5, len(sc.BucketCache))     // +1 rewrite partial chunk
+		require.Equal(t, 3, len(sc.LowerBoundCache)) // +1 rewrite first chunk
+		require.Equal(t, 3, len(sc.TemplateCache))
+		require.Equal(t, 1, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+		require.Equal(t, 1, len(stat[0].Hist))
 	}
 }
 
@@ -346,29 +358,21 @@ func TestDeleteOnBoundary(t *testing.T) {
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
 
-	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 147"))
-		runAndPause(ctx, sc, &wg)
-
-		// finalize, no new read
-	}
-}
-
-func TestDeleteOnBoundaryGC(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
-	wg := sync.WaitGroup{}
+	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
 
 	{
-		// alter index
-		// TODO detect schema change?
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where y > 147"))
-		runAndPause(ctx, sc, &wg)
+		// PRIMARY boundary chunk -> rewrite y_idx's second
+		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 414"))
 
-		// finalize, no new read
+		runAndPause(ctx, sc, &wg) // seed
+		runAndPause(ctx, sc, &wg) // finalize
+
+		require.Equal(t, 4, len(sc.BucketCache))
+		require.Equal(t, 2, len(sc.LowerBoundCache))
+		require.Equal(t, 3, len(sc.TemplateCache)) // +1 schema change
+		require.Equal(t, 1, len(sc.Stats))
+		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+		require.Equal(t, 1, len(stat[0].Hist))
 	}
 }
 
@@ -399,14 +403,14 @@ func TestAddDropDatabases(t *testing.T) {
 		runAndPause(ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 			ReadJob{db: otherDb, table: "t", ordinals: []updateOrdinal{{0, 2}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "otherdb", branch: "main", table: "t"},
 				indexes: map[templateCacheKey][]hash.Hash{
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 				}},
-			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsTracking{{name: "t"}}},
+			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsInfo{{name: "t"}}},
 		})
 
 		runAndPause(ctx, sc, &wg)
@@ -567,7 +571,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 					templateCacheKey{idxName: "PRIMARY"}: nil,
 					templateCacheKey{idxName: "y"}:       nil,
 				}},
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 	}
 
@@ -576,7 +580,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 		runAndPause(ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		require.Equal(t, 4, len(sc.BucketCache))
@@ -593,7 +597,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 		runAndPause(ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsTracking{{name: "xy"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
 		require.Equal(t, 4, len(sc.BucketCache))

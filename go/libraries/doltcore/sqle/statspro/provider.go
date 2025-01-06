@@ -159,7 +159,7 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 			if start < 0 {
 				start = i
 			}
-		} else if start > 0 && end < 0 {
+		} else if start > 0 && i < end {
 			end = i
 		}
 	}

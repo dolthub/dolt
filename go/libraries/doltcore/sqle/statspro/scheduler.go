@@ -80,15 +80,16 @@ func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 	}
 }
 
-type tableStatsTracking struct {
-	name    string
-	schHash hash.Hash
+type tableStatsInfo struct {
+	name     string
+	schHash  hash.Hash
+	idxRoots []hash.Hash
 }
 
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
 	sqlDb  sqle.Database
-	tables []tableStatsTracking
+	tables []tableStatsInfo
 	done   chan struct{}
 }
 
@@ -97,7 +98,19 @@ func (j SeedDbTablesJob) Finish() {
 }
 
 func (j SeedDbTablesJob) String() string {
-	return "seed db: " + j.sqlDb.RevisionQualifiedName() + "[" + strings.Join(j.tables, ", ") + "]"
+	b := strings.Builder{}
+	b.WriteString("seed db: ")
+	b.WriteString(j.sqlDb.RevisionQualifiedName())
+	b.WriteString("[")
+
+	var sep = ""
+	for _, ti := range j.tables {
+		b.WriteString(sep)
+		b.WriteString("(" + ti.name + ": " + ti.schHash.String()[:5] + ")")
+
+		b.WriteString("]")
+	}
+	return b.String()
 }
 
 func (j SeedDbTablesJob) JobType() StatsJobType {
@@ -355,10 +368,6 @@ func (sc *StatsCoord) putFirstRow(h hash.Hash, r sql.Row) {
 	sc.LowerBoundCache[h] = r
 }
 
-func (sc *StatsCoord) putStatistic(h hash.Hash, r sql.Row) {
-	sc.LowerBoundCache[h] = r
-}
-
 // event loop must be stopped
 func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
@@ -514,29 +523,53 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	if err != nil {
 		return nil, err
 	}
+
+	var newTableInfo []tableStatsInfo
+	var ret []StatsJob
+
 	i := 0
 	k := 0
 	var deleted bool
 	for i < len(tableNames) && k < len(j.tables) {
-		switch strings.Compare(tableNames[i], j.tables[k]) {
+		var jobs []StatsJob
+		var ti tableStatsInfo
+		switch strings.Compare(tableNames[i], j.tables[k].name) {
 		case 0:
+			// continue
+			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, j.tables[k])
 			i++
 			k++
 		case -1:
+			// new table
+			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableNames[i]})
 			i++
 		case +1:
+			// dropped table
+			jobs = append(jobs, sc.deleteTableJob(j.sqlDb, j.tables[k].name))
 			k++
 			deleted = true
 		}
+		if err != nil {
+			return nil, err
+		}
+		if ti.name != "" {
+			newTableInfo = append(newTableInfo, ti)
+		}
+		ret = append(ret, jobs...)
 	}
+	for i < len(tableNames) {
+		jobs, ti, err := sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableNames[i]})
+		if err != nil {
+			return nil, err
+		}
+		newTableInfo = append(newTableInfo, ti)
+		ret = append(ret, jobs...)
+		i++
+	}
+
 	if !deleted && k < len(j.tables) {
 		k++
 		deleted = true
-	}
-
-	ret, err := sc.readJobsForTables(j.ctx, j.sqlDb, tableNames)
-	if err != nil {
-		return nil, err
 	}
 
 	if deleted {
@@ -544,79 +577,102 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	}
 
 	// retry again after finishing planned work
-	ret = append(ret, SeedDbTablesJob{tables: tableNames, sqlDb: j.sqlDb, ctx: j.ctx, done: make(chan struct{})})
+	ret = append(ret, SeedDbTablesJob{tables: newTableInfo, sqlDb: j.sqlDb, ctx: j.ctx, done: make(chan struct{})})
 	return ret, nil
 }
 
-func (sc *StatsCoord) readJobsForTables(ctx *sql.Context, sqlDb sqle.Database, tableNames []string) ([]StatsJob, error) {
+func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, tableInfo tableStatsInfo) ([]StatsJob, tableStatsInfo, error) {
 	var ret []StatsJob
-	for _, table := range tableNames {
-		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
-		if err != nil {
-			return nil, err
-		}
-		indexes, err := sqlTable.GetIndexes(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		schHashKey, _, err := sqlTable.IndexCacheKey(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		var isReadJobs bool
-		fullIndexBuckets := make(map[templateCacheKey][]hash.Hash)
-		for _, sqlIdx := range indexes {
-			var idx durable.Index
-			var err error
-			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
-				idx, err = dTab.GetRowData(ctx)
-			} else {
-				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
-			}
-			if err != nil {
-				return nil, err
-			}
-
-			if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
-				sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), table, sqlIdx, sqlIdx, err)
-				continue
-			}
-
-			prollyMap := durable.ProllyMapFromIndex(idx)
-
-			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-			if err != nil {
-				return nil, err
-			}
-
-			indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
-			for _, n := range levelNodes {
-				fullIndexBuckets[indexKey] = append(fullIndexBuckets[indexKey], n.HashOf())
-			}
-
-			readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, table, levelNodes, prollyMap)
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, readJobs...)
-			isReadJobs = isReadJobs || len(readJobs) > 0
-		}
-		if isReadJobs {
-			// if there are any reads to perform, we follow those reads with a table finalize
-			ret = append(ret, FinalizeJob{
-				tableKey: tableIndexesKey{
-					db:     sqlDb.AliasedName(),
-					branch: sqlDb.Revision(),
-					table:  table,
-				},
-				indexes: fullIndexBuckets,
-				done:    make(chan struct{}),
-			})
-		}
+	sqlTable, dTab, err := GetLatestTable(ctx, tableInfo.name, sqlDb)
+	if err != nil {
+		return nil, tableStatsInfo{}, err
 	}
-	return ret, nil
+	indexes, err := sqlTable.GetIndexes(ctx)
+	if err != nil {
+		return nil, tableStatsInfo{}, err
+	}
+
+	schHashKey, _, err := sqlTable.IndexCacheKey(ctx)
+	if err != nil {
+		return nil, tableStatsInfo{}, err
+	}
+
+	schemaChanged := !tableInfo.schHash.Equal(schHashKey.Hash)
+
+	var dataChanged bool
+	var isNewData bool
+	var newIdxRoots []hash.Hash
+
+	fullIndexBuckets := make(map[templateCacheKey][]hash.Hash)
+	for i, sqlIdx := range indexes {
+		var idx durable.Index
+		var err error
+		if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
+			idx, err = dTab.GetRowData(ctx)
+		} else {
+			idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
+		}
+		if err != nil {
+			return nil, tableStatsInfo{}, err
+		}
+
+		if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
+			sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableInfo.name, sqlIdx, sqlIdx, err)
+			continue
+		}
+
+		prollyMap := durable.ProllyMapFromIndex(idx)
+
+		idxRoot := prollyMap.Node().HashOf()
+		newIdxRoots = append(newIdxRoots, idxRoot)
+		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) {
+			continue
+		}
+		dataChanged = true
+
+		levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+		if err != nil {
+			return nil, tableStatsInfo{}, err
+		}
+
+		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
+		for _, n := range levelNodes {
+			fullIndexBuckets[indexKey] = append(fullIndexBuckets[indexKey], n.HashOf())
+		}
+
+		readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, tableInfo.name, levelNodes, prollyMap)
+		if err != nil {
+			return nil, tableStatsInfo{}, err
+		}
+		ret = append(ret, readJobs...)
+		isNewData = isNewData || len(readJobs) > 0
+	}
+	if isNewData || schemaChanged || dataChanged {
+		// if there are any reads to perform, we follow those reads with a table finalize
+		ret = append(ret, FinalizeJob{
+			tableKey: tableIndexesKey{
+				db:     sqlDb.AliasedName(),
+				branch: sqlDb.Revision(),
+				table:  tableInfo.name,
+			},
+			indexes: fullIndexBuckets,
+			done:    make(chan struct{}),
+		})
+	}
+
+	return ret, tableStatsInfo{name: tableInfo.name, schHash: schHashKey.Hash, idxRoots: newIdxRoots}, nil
+}
+
+func (sc *StatsCoord) deleteTableJob(sqlDb sqle.Database, tableName string) StatsJob {
+	return FinalizeJob{
+		tableKey: tableIndexesKey{
+			db:     sqlDb.AliasedName(),
+			branch: sqlDb.Revision(),
+			table:  tableName,
+		},
+		indexes: nil,
+		done:    make(chan struct{}),
+	}
 }
 
 type templateCacheKey struct {
@@ -679,14 +735,6 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
 	for i, n := range j.nodes {
-		if i == 0 {
-			firstRow, err := firstRowForIndex(j.ctx, prollyMap, keyBuilder, prollyMap.KeyDesc().Count())
-			if err != nil {
-				return nil, err
-			}
-			sc.putFirstRow(j.nodes[0].HashOf(), firstRow)
-		}
-
 		// each node is a bucket
 		updater.newBucket()
 
@@ -735,7 +783,6 @@ func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJ
 		if !ok {
 			return nil, fmt.Errorf("failed to finalize update, missing template dependency for table: %s", key)
 		}
-
 		template.Qual = sql.NewStatQualifier(j.tableKey.db, "", j.tableKey.table, key.idxName)
 
 		for i, bh := range bucketHashes {
@@ -837,12 +884,16 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 }
 
 func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, error) {
-	readJobs, err := sc.readJobsForTables(j.ctx, j.sqlDb, j.tables)
-	if err != nil {
-		return nil, err
+	var ret []StatsJob
+	for _, tableName := range j.tables {
+		readJobs, _, err := sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableName})
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, readJobs...)
 	}
 	if j.after.done != nil {
-		readJobs = append(readJobs, j.after)
+		ret = append(ret, j.after)
 	}
-	return readJobs, nil
+	return ret, nil
 }
