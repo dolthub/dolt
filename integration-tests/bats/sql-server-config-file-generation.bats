@@ -111,7 +111,7 @@ EOF
     [[ "$output" =~ "allow_cleartext_passwords: true" ]] || false
 }
 
-@test "sql-server-config-file-generation: generated config file has unset fields set to default values" {
+@test "sql-server-config-file-generation: generated config file uses default values as placeholders for unset fields" {
     start_sql_server_with_args \
         --max-connections 77 \
         --timeout 7777777 \
@@ -127,9 +127,9 @@ EOF
     [[ "$output" =~ "write_timeout_millis: 7777777" ]] || false
 
     # default (not set by args)
-    [[ "$output" =~ "read_only: false" ]] || false
-    [[ "$output" =~ "autocommit: true" ]] || false
-    [[ "$output" =~ "allow_cleartext_passwords: false" ]] || false
+    [[ "$output" =~ "# read_only: false" ]] || false
+    [[ "$output" =~ "# autocommit: true" ]] || false
+    [[ "$output" =~ "# allow_cleartext_passwords: false" ]] || false
 }
 
 @test "sql-server-config-file-generation: generated config file has placeholders for unset fields with no default values" {
