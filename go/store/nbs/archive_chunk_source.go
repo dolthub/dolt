@@ -150,7 +150,7 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord) 
 	return nil, errors.New("Archive chunk source does not support getRecordRanges")
 }
 
-func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), stats *Stats) (bool, error) {
 	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk *chunks.Chunk) {
 		found(ctx, ChunkToCompressedChunk(*chk))
 	}, stats)

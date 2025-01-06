@@ -123,7 +123,7 @@ func (f *ChunkFetcher) CloseSend() error {
 // by |Get|. Returns |io.EOF| after |CloseSend| is called and all requested
 // chunks have been successfully received. Returns an error if this
 // |ChunkFetcher| is terminally failed or if the supplied |ctx| is |Done|.
-func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
+func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
 	select {
 	case <-ctx.Done():
 		return nbs.CompressedChunk{}, context.Cause(ctx)

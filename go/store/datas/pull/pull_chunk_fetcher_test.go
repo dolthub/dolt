@@ -70,8 +70,12 @@ func TestPullChunkFetcher(t *testing.T) {
 			defer wg.Done()
 			cmp, err := f.Recv(context.Background())
 			assert.NoError(t, err)
-			assert.Equal(t, cmp.H, gm.C.H)
-			assert.Equal(t, cmp.FullCompressedChunk, gm.C.FullCompressedChunk)
+			assert.Equal(t, cmp.Hash(), gm.C.H)
+
+			cc, ok := cmp.(nbs.CompressedChunk)
+			assert.True(t, ok)
+
+			assert.Equal(t, cc.FullCompressedChunk, gm.C.FullCompressedChunk)
 			_, err = f.Recv(context.Background())
 			assert.ErrorIs(t, err, io.EOF)
 			assert.NoError(t, f.Close())
@@ -92,8 +96,11 @@ func TestPullChunkFetcher(t *testing.T) {
 			defer wg.Done()
 			cmp, err := f.Recv(context.Background())
 			assert.NoError(t, err)
-			assert.Equal(t, cmp.H, h)
-			assert.Nil(t, cmp.FullCompressedChunk)
+			assert.Equal(t, cmp.Hash(), h)
+
+			cc, ok := cmp.(nbs.CompressedChunk)
+			assert.True(t, ok)
+			assert.Nil(t, cc.FullCompressedChunk)
 			_, err = f.Recv(context.Background())
 			assert.ErrorIs(t, err, io.EOF)
 			assert.NoError(t, f.Close())
@@ -136,7 +143,7 @@ func TestPullChunkFetcher(t *testing.T) {
 type emptyGetManyer struct {
 }
 
-func (emptyGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (emptyGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	return nil
 }
 
@@ -144,7 +151,7 @@ type deliveringGetManyer struct {
 	C nbs.CompressedChunk
 }
 
-func (d deliveringGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (d deliveringGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	for _ = range hashes {
 		found(ctx, d.C)
 	}
@@ -155,7 +162,7 @@ type blockingGetManyer struct {
 	block chan struct{}
 }
 
-func (b blockingGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (b blockingGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	<-b.block
 	return nil
 }
@@ -165,6 +172,6 @@ type errorGetManyer struct {
 
 var getManyerErr = fmt.Errorf("always return an error")
 
-func (errorGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (errorGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	return getManyerErr
 }

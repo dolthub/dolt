@@ -676,7 +676,7 @@ func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), stats *Stats) (bool, error) {
 	panic("never used")
 }
 

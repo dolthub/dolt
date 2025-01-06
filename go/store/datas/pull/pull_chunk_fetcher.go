@@ -26,7 +26,7 @@ import (
 )
 
 type GetManyer interface {
-	GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error
+	GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error
 }
 
 type ChunkFetcherable interface {
@@ -52,7 +52,7 @@ type PullChunkFetcher struct {
 
 	batchCh chan hash.HashSet
 	doneCh  chan struct{}
-	resCh   chan nbs.CompressedChunk
+	resCh   chan nbs.ToChunker
 }
 
 func NewPullChunkFetcher(ctx context.Context, getter GetManyer) *PullChunkFetcher {
@@ -63,7 +63,7 @@ func NewPullChunkFetcher(ctx context.Context, getter GetManyer) *PullChunkFetche
 		getter:  getter,
 		batchCh: make(chan hash.HashSet),
 		doneCh:  make(chan struct{}),
-		resCh:   make(chan nbs.CompressedChunk),
+		resCh:   make(chan nbs.ToChunker),
 	}
 	ret.eg.Go(func() error {
 		return ret.fetcherThread(func() {
@@ -86,9 +86,9 @@ func (f *PullChunkFetcher) fetcherThread(finalize func()) error {
 			missing := batch.Copy()
 
 			// Blocking get, no concurrency, only one fetcher.
-			err := f.getter.GetManyCompressed(f.ctx, batch, func(ctx context.Context, chk nbs.CompressedChunk) {
+			err := f.getter.GetManyCompressed(f.ctx, batch, func(ctx context.Context, chk nbs.ToChunker) {
 				mu.Lock()
-				missing.Remove(chk.H)
+				missing.Remove(chk.Hash())
 				mu.Unlock()
 				select {
 				case <-ctx.Done():
@@ -139,7 +139,7 @@ func (f *PullChunkFetcher) Close() error {
 	return f.eg.Wait()
 }
 
-func (f *PullChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
+func (f *PullChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
 	select {
 	case res, ok := <-f.resCh:
 		if !ok {

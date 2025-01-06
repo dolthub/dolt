@@ -75,9 +75,14 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 }
 
 // AddCmpChunk adds a compressed chunk
-func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
-	if len(c.CompressedData) == 0 {
+func (tw *CmpChunkTableWriter) AddCmpChunk(tc ToChunker) error {
+	if tc.IsEmpty() {
 		panic("NBS blocks cannot be zero length")
+	}
+
+	c, ok := tc.(CompressedChunk)
+	if !ok {
+		panic("Require a CompressedChunk") // NM4
 	}
 
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
