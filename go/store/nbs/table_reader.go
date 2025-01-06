@@ -38,6 +38,14 @@ import (
 // Do not read more than 128MB at a time.
 const maxReadSize = 128 * 1024 * 1024
 
+type ToChunker interface {
+	Hash() hash.Hash
+	ToChunk() (chunks.Chunk, error)
+	FullCompressedChunkLen() uint32
+	IsEmpty() bool
+	IsGhost() bool
+}
+
 // CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
 type CompressedChunk struct {
 	// H is the hash of the chunk
@@ -52,6 +60,8 @@ type CompressedChunk struct {
 	// true if the chunk is a ghost chunk.
 	ghost bool
 }
+
+var _ ToChunker = CompressedChunk{}
 
 // NewCompressedChunk creates a CompressedChunk
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
@@ -112,6 +122,10 @@ func (cmp CompressedChunk) IsGhost() bool {
 // CompressedSize returns the size of this CompressedChunk.
 func (cmp CompressedChunk) CompressedSize() int {
 	return len(cmp.CompressedData)
+}
+
+func (cmp CompressedChunk) FullCompressedChunkLen() uint32 {
+	return uint32(len(cmp.FullCompressedChunk))
 }
 
 var EmptyCompressedChunk CompressedChunk
@@ -323,10 +337,10 @@ var _ chunkReader = tableReader{}
 func (tr tableReader) readCompressedAtOffsets(
 	ctx context.Context,
 	rb readBatch,
-	found func(context.Context, CompressedChunk),
+	found func(context.Context, ToChunker),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, cmp ToChunker) error {
 		found(ctx, cmp)
 		return nil
 	})
@@ -338,7 +352,7 @@ func (tr tableReader) readAtOffsets(
 	found func(context.Context, *chunks.Chunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, cmp ToChunker) error {
 		chk, err := cmp.ToChunk()
 
 		if err != nil {
@@ -354,7 +368,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 	ctx context.Context,
 	rb readBatch,
 	stats *Stats,
-	cb func(ctx context.Context, cmp CompressedChunk) error,
+	cb func(ctx context.Context, cmp ToChunker) error,
 ) error {
 	readLength := rb.End() - rb.Start()
 	buff := make([]byte, readLength)
@@ -405,7 +419,7 @@ func (tr tableReader) getMany(
 	err = tr.getManyAtOffsets(ctx, eg, offsetRecords, found, stats)
 	return remaining, gcBehavior_Continue, err
 }
-func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining, gcb, err := tr.findOffsets(reqs, keeper)
@@ -419,7 +433,7 @@ func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group,
 	return remaining, gcBehavior_Continue, err
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, eg *errgroup.Group, offsetRecords offsetRecSlice, found func(context.Context, CompressedChunk), stats *Stats) error {
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, eg *errgroup.Group, offsetRecords offsetRecSlice, found func(context.Context, ToChunker), stats *Stats) error {
 	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(
 		ctx context.Context,
 		rb readBatch,

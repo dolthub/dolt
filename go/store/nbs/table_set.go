@@ -228,7 +228,7 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			remaining, gcb, err := haver.getManyCompressed(ctx, eg, reqs, found, keeper, stats)
