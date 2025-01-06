@@ -482,8 +482,17 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 
+	if cfgDirSpecified {
+		serverConfig.valuesSet[servercfg.CfgDirKey] = struct{}{}
+	}
+
+	if dataDirSpecified {
+		serverConfig.valuesSet[servercfg.DataDirKey] = struct{}{}
+	}
+
 	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privsFp)
+		serverConfig.valuesSet[servercfg.PrivilegeFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
 		if err != nil {
@@ -494,6 +503,7 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 
 	if branchControlFilePath, ok := apr.GetValue(commands.BranchCtrlPathFlag); ok {
 		serverConfig.withBranchControlFilePath(branchControlFilePath)
+		serverConfig.valuesSet[servercfg.BranchControlFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultBranchCtrlName))
 		if err != nil {
@@ -517,12 +527,13 @@ func generateYamlConfigIfNone(
 	serverConfig servercfg.ServerConfig) error {
 	const yamlConfigName = "config.yaml"
 
-	specifiesConfigFile, err := argsSpecifyServerConfigFile(ap, help, args)
-	if err != nil {
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
 		return err
 	}
 
-	if specifiesConfigFile {
+	if apr.Contains(configFileFlag) {
 		return nil
 	}
 
@@ -532,24 +543,19 @@ func generateYamlConfigIfNone(
 		return nil
 	}
 
-	yamlConfig := servercfg.ServerConfigAsYAMLConfig(serverConfig)
-	err = dEnv.FS.WriteFile(path, []byte(yamlConfig.VerboseString()), os.ModePerm)
+	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
+
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		yamlConfig.GoldenMysqlConn = &connStr
+	}
+
+	generatedYaml := `# This file was generated using your configuration.
+# Uncomment and edit lines as necessary to modify your configuration.` + "\n\n" + yamlConfig.VerboseString()
+
+	err := dEnv.FS.WriteFile(path, []byte(generatedYaml), os.ModePerm)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// argsSpecifyServerConfigFile returns true if the args specify a config file, false otherwise.
-func argsSpecifyServerConfigFile(ap *argparser.ArgParser, help cli.UsagePrinter, args []string) (bool, error) {
-	apr := cli.ParseArgsOrDie(ap, args, help)
-	if err := validateSqlServerArgs(apr); err != nil {
-		cli.PrintErrln(color.RedString(err.Error()))
-		return false, err
-	}
-
-	_, hasConfigFlag := apr.GetValue(configFileFlag)
-
-	return hasConfigFlag, nil
 }

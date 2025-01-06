@@ -17,7 +17,6 @@ package servercfg
 import (
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -50,8 +49,8 @@ func nillableIntPtr(n int) *int {
 
 // BehaviorYAMLConfig contains server configuration regarding how the server should behave
 type BehaviorYAMLConfig struct {
-	ReadOnly   *bool `yaml:"read_only"`
-	AutoCommit *bool `yaml:"autocommit"`
+	ReadOnly   *bool `yaml:"read_only,omitempty"`
+	AutoCommit *bool `yaml:"autocommit,omitempty"`
 	// PersistenceBehavior is unused, but still present to prevent breaking any YAML configs that still use it.
 	PersistenceBehavior *string `yaml:"persistence_behavior,omitempty"`
 	// Disable processing CLIENT_MULTI_STATEMENTS support on the
@@ -60,35 +59,35 @@ type BehaviorYAMLConfig struct {
 	// does), and then sends statements that contain embedded unquoted ';'s
 	// (such as a CREATE TRIGGER), then those incoming queries will be
 	// misprocessed.
-	DisableClientMultiStatements *bool `yaml:"disable_client_multi_statements"`
+	DisableClientMultiStatements *bool `yaml:"disable_client_multi_statements,omitempty"`
 	// DoltTransactionCommit enables the @@dolt_transaction_commit system variable, which
 	// automatically creates a Dolt commit when any SQL transaction is committed.
-	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit"`
+	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit,omitempty"`
 
 	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
 type UserYAMLConfig struct {
-	Name     *string `yaml:"name"`
-	Password *string `yaml:"password"`
+	Name     *string `yaml:"name,omitempty"`
+	Password *string `yaml:"password,omitempty"`
 }
 
 // ListenerYAMLConfig contains information on the network connection that the server will open
 type ListenerYAMLConfig struct {
-	HostStr            *string `yaml:"host"`
-	PortNumber         *int    `yaml:"port"`
-	MaxConnections     *uint64 `yaml:"max_connections"`
-	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis"`
-	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis"`
+	HostStr            *string `yaml:"host,omitempty"`
+	PortNumber         *int    `yaml:"port,omitempty"`
+	MaxConnections     *uint64 `yaml:"max_connections,omitempty"`
+	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis,omitempty"`
+	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis,omitempty"`
 	// TLSKey is a file system path to an unencrypted private TLS key in PEM format.
-	TLSKey *string `yaml:"tls_key"`
+	TLSKey *string `yaml:"tls_key,omitempty"`
 	// TLSCert is a file system path to a TLS certificate chain in PEM format.
-	TLSCert *string `yaml:"tls_cert"`
+	TLSCert *string `yaml:"tls_cert,omitempty"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
-	RequireSecureTransport *bool `yaml:"require_secure_transport"`
+	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
-	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords"`
+	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords,omitempty"`
 	// Socket is unix socket file path
 	Socket *string `yaml:"socket,omitempty"`
 }
@@ -100,9 +99,9 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels map[string]string `yaml:"labels"`
-	Host   *string           `yaml:"host"`
-	Port   *int              `yaml:"port"`
+	Labels map[string]string `yaml:"labels,omitempty"`
+	Host   *string           `yaml:"host,omitempty"`
+	Port   *int              `yaml:"port,omitempty"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -128,21 +127,21 @@ type YAMLConfig struct {
 	LogLevelStr       *string                `yaml:"log_level,omitempty"`
 	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
-	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior"`
-	UserConfig        UserYAMLConfig         `yaml:"user"`
-	ListenerConfig    ListenerYAMLConfig     `yaml:"listener"`
+	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior,omitempty"`
+	UserConfig        UserYAMLConfig         `yaml:"user,omitempty"`
+	ListenerConfig    ListenerYAMLConfig     `yaml:"listener,omitempty"`
 	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
-	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi"`
+	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics,omitempty"`
+	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi,omitempty"`
 	ClusterCfg        *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
-	Vars            []UserSessionVars      `yaml:"user_session_vars"`
+	Vars            []UserSessionVars      `yaml:"user_session_vars,omitempty"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []JwksConfig           `yaml:"jwks"`
+	Jwks            []JwksConfig           `yaml:"jwks,omitempty"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 }
 
@@ -245,21 +244,228 @@ func clusterConfigAsYAMLConfig(config ClusterConfig) *ClusterYAMLConfig {
 	}
 }
 
-// String returns the YAML representation of the config
-func (cfg YAMLConfig) String() string {
-	return formattedYAMLMarshal(cfg)
+// ServerConfigSetValuesAsYAMLConfig returns a YAMLConfig containing only values
+// that were explicitly set in the given ServerConfig.
+func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
+	systemVars := cfg.SystemVars()
+
+	return &YAMLConfig{
+		LogLevelStr:       zeroIf(ptr(string(cfg.LogLevel())), !cfg.ValueSet(LogLevelKey)),
+		MaxQueryLenInLogs: zeroIf(ptr(cfg.MaxLoggedQueryLen()), !cfg.ValueSet(MaxLoggedQueryLenKey)),
+		EncodeLoggedQuery: zeroIf(ptr(cfg.ShouldEncodeLoggedQuery()), !cfg.ValueSet(ShouldEncodeLoggedQueryKey)),
+		BehaviorConfig: BehaviorYAMLConfig{
+			ReadOnly:                     zeroIf(ptr(cfg.ReadOnly()), !cfg.ValueSet(ReadOnlyKey)),
+			AutoCommit:                   zeroIf(ptr(cfg.AutoCommit()), !cfg.ValueSet(AutoCommitKey)),
+			DisableClientMultiStatements: zeroIf(ptr(cfg.DisableClientMultiStatements()), !cfg.ValueSet(DisableClientMultiStatementsKey)),
+			DoltTransactionCommit:        zeroIf(ptr(cfg.DoltTransactionCommit()), !cfg.ValueSet(DoltTransactionCommitKey)),
+			EventSchedulerStatus:         zeroIf(ptr(cfg.EventSchedulerStatus()), !cfg.ValueSet(EventSchedulerKey)),
+		},
+		UserConfig: UserYAMLConfig{
+			Name:     zeroIf(ptr(cfg.User()), !cfg.ValueSet(UserKey)),
+			Password: zeroIf(ptr(cfg.Password()), !cfg.ValueSet(PasswordKey)),
+		},
+		ListenerConfig: ListenerYAMLConfig{
+			HostStr:                 zeroIf(ptr(cfg.Host()), !cfg.ValueSet(HostKey)),
+			PortNumber:              zeroIf(ptr(cfg.Port()), !cfg.ValueSet(PortKey)),
+			MaxConnections:          zeroIf(ptr(cfg.MaxConnections()), !cfg.ValueSet(MaxConnectionsKey)),
+			ReadTimeoutMillis:       zeroIf(ptr(cfg.ReadTimeout()), !cfg.ValueSet(ReadTimeoutKey)),
+			WriteTimeoutMillis:      zeroIf(ptr(cfg.WriteTimeout()), !cfg.ValueSet(WriteTimeoutKey)),
+			TLSKey:                  zeroIf(ptr(cfg.TLSKey()), !cfg.ValueSet(TLSKeyKey)),
+			TLSCert:                 zeroIf(ptr(cfg.TLSCert()), !cfg.ValueSet(TLSCertKey)),
+			RequireSecureTransport:  zeroIf(ptr(cfg.RequireSecureTransport()), !cfg.ValueSet(RequireSecureTransportKey)),
+			AllowCleartextPasswords: zeroIf(ptr(cfg.AllowCleartextPasswords()), !cfg.ValueSet(AllowCleartextPasswordsKey)),
+			Socket:                  zeroIf(ptr(cfg.Socket()), !cfg.ValueSet(SocketKey)),
+		},
+		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
+		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
+		MetricsConfig: MetricsYAMLConfig{
+			Labels: zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:   zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:   zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+		},
+		RemotesapiConfig: RemotesapiYAMLConfig{
+			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
+			ReadOnly_: zeroIf(cfg.RemotesapiReadOnly(), !cfg.ValueSet(RemotesapiReadOnlyKey)),
+		},
+		ClusterCfg:        zeroIf(clusterConfigAsYAMLConfig(cfg.ClusterConfig()), !cfg.ValueSet(ClusterConfigKey)),
+		PrivilegeFile:     zeroIf(ptr(cfg.PrivilegeFilePath()), !cfg.ValueSet(PrivilegeFilePathKey)),
+		BranchControlFile: zeroIf(ptr(cfg.BranchControlFilePath()), !cfg.ValueSet(BranchControlFilePathKey)),
+		SystemVars_:       zeroIf(systemVars, !cfg.ValueSet(SystemVarsKey)),
+		Vars:              zeroIf(cfg.UserVars(), !cfg.ValueSet(UserVarsKey)),
+		Jwks:              zeroIf(cfg.JwksConfig(), !cfg.ValueSet(JwksConfigKey)),
+	}
 }
 
-// VerboseString behaves like String, but includes empty fields instead of omitting them.
-// If an empty field has a default value, the default will be used.
-// If an empty field has no default value, a commented-out placeholder will be used.
+func zeroIf[T any](val T, condition bool) T {
+	if condition {
+		var zero T
+		return zero
+	}
+	return val
+}
+
+// String returns the YAML representation of the config
+func (cfg YAMLConfig) String() string {
+	data, err := yaml.Marshal(cfg)
+
+	if err != nil {
+		return "Failed to marshal as yaml: " + err.Error()
+	}
+
+	unformatted := string(data)
+
+	// format the yaml to be easier to read.
+	lines := strings.Split(unformatted, "\n")
+
+	var formatted []string
+	formatted = append(formatted, lines[0])
+	for i := 1; i < len(lines); i++ {
+		if len(lines[i]) == 0 {
+			continue
+		}
+
+		r, _ := utf8.DecodeRuneInString(lines[i])
+		if !unicode.IsSpace(r) {
+			formatted = append(formatted, "")
+		}
+
+		formatted = append(formatted, lines[i])
+	}
+
+	result := strings.Join(formatted, "\n")
+	return result
+}
+
+// VerboseString behaves like String, but includes commented-out placeholders for empty fields instead of omitting them.
 func (cfg YAMLConfig) VerboseString() string {
-	withDefaults := cfg.withDefaultsFilledIn()
+	withPlaceholders := cfg.withPlaceholdersFilledIn()
 
-	formatted := formattedYAMLMarshal(removeOmitemptyTags(withDefaults))
-	formatted = commentNullYAMLValues(formatted)
+	return commentYAMLDiffs(cfg.String(), withPlaceholders.String())
+}
 
-	return formatted
+// withPlaceholdersFilledIn returns the config with placeholder values in place of nil values.
+//
+// The placeholder value for a field will be its default value if one exists, or an arbitrary
+// example value if no default exists. Deprecated/unused fields won't be given an example value.
+//
+// The config generated by this function should only be used to produce example values for
+// commented-out YAML fields, and shouldn't be used to actually configure anything.
+func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
+	withPlaceholders := cfg.withDefaultsFilledIn()
+
+	if withPlaceholders.BehaviorConfig.DisableClientMultiStatements == nil {
+		withPlaceholders.BehaviorConfig.DisableClientMultiStatements = ptr(false)
+	}
+	if withPlaceholders.BehaviorConfig.EventSchedulerStatus == nil {
+		withPlaceholders.BehaviorConfig.EventSchedulerStatus = ptr("OFF")
+	}
+
+	if withPlaceholders.ListenerConfig.TLSKey == nil {
+		withPlaceholders.ListenerConfig.TLSKey = ptr("key.pem")
+	}
+	if withPlaceholders.ListenerConfig.TLSCert == nil {
+		withPlaceholders.ListenerConfig.TLSCert = ptr("cert.pem")
+	}
+	if withPlaceholders.ListenerConfig.RequireSecureTransport == nil {
+		withPlaceholders.ListenerConfig.RequireSecureTransport = ptr(false)
+	}
+	if withPlaceholders.ListenerConfig.Socket == nil {
+		withPlaceholders.ListenerConfig.Socket = ptr(DefaultUnixSocketFilePath)
+	}
+
+	if withPlaceholders.MetricsConfig.Labels == nil {
+		withPlaceholders.MetricsConfig.Labels = map[string]string{
+			"label1": "value1",
+			"label2": "2",
+			"label3": "true",
+		}
+	}
+	if withPlaceholders.MetricsConfig.Host == nil {
+		withPlaceholders.MetricsConfig.Host = ptr("123.45.67.89")
+	}
+	if withPlaceholders.MetricsConfig.Port == nil {
+		withPlaceholders.MetricsConfig.Port = ptr(9091)
+	}
+
+	if withPlaceholders.RemotesapiConfig.Port_ == nil {
+		withPlaceholders.RemotesapiConfig.Port_ = ptr(8000)
+	}
+	if withPlaceholders.RemotesapiConfig.ReadOnly_ == nil {
+		withPlaceholders.RemotesapiConfig.ReadOnly_ = ptr(false)
+	}
+
+	if withPlaceholders.ClusterCfg == nil {
+		withPlaceholders.ClusterCfg = &ClusterYAMLConfig{
+			StandbyRemotes_: []StandbyRemoteYAMLConfig{
+				StandbyRemoteYAMLConfig{
+					Name_:              "standby_replica_one",
+					RemoteURLTemplate_: "https://standby_replica_one.svc.cluster.local:50051/{database}",
+				},
+				StandbyRemoteYAMLConfig{
+					Name_:              "standby_replica_two",
+					RemoteURLTemplate_: "https://standby_replica_two.svc.cluster.local:50051/{database}",
+				},
+			},
+			BootstrapRole_:  "primary",
+			BootstrapEpoch_: 1,
+			RemotesAPI: ClusterRemotesAPIYAMLConfig{
+				Addr_:    "127.0.0.1",
+				Port_:    50051,
+				TLSKey_:  "remotesapi_key.pem",
+				TLSCert_: "remotesapi_chain.pem",
+				TLSCA_:   "standby_cas.pem",
+				URLMatches: []string{
+					"https://standby_replica_one.svc.cluster.local",
+					"https://standby_replica_two.svc.cluster.local",
+				},
+				DNSMatches: []string{
+					"standby_replica_one.svc.cluster.local",
+					"standby_replica_two.svc.cluster.local",
+				},
+			},
+		}
+	}
+
+	if withPlaceholders.Vars == nil {
+		withPlaceholders.Vars = []UserSessionVars{
+			UserSessionVars{
+				Name: "root",
+				Vars: map[string]interface{}{
+					"dolt_show_system_tables": 1,
+					"dolt_log_level":          "warn",
+				},
+			},
+		}
+	}
+
+	if withPlaceholders.SystemVars_ == nil {
+		withPlaceholders.SystemVars_ = map[string]interface{}{
+			"dolt_transaction_commit": 1,
+			"dolt_log_level":          "info",
+		}
+	}
+
+	if withPlaceholders.Jwks == nil {
+		withPlaceholders.Jwks = []JwksConfig{
+			JwksConfig{
+				Name:        "name1",
+				LocationUrl: "https://example.com",
+				Claims: map[string]string{
+					"field1": "a",
+					"field2": "b",
+				},
+				FieldsToLog: []string{
+					"field1", "field2",
+				},
+			},
+		}
+	}
+
+	if withPlaceholders.GoldenMysqlConn == nil {
+		withPlaceholders.GoldenMysqlConn = ptr("username:password@tcp(127.0.0.1:3306)/db")
+	}
+
+	return withPlaceholders
 }
 
 // withDefaultsFilledIn returns the config with default values in place of nil values.
@@ -329,111 +535,28 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	return withDefaults
 }
 
-// Assumes 'in' has no circular references.
-func removeOmitemptyTags(in any) any {
-	val := reflect.ValueOf(in)
-	typ := reflect.TypeOf(in)
-
-	newType := removeOmitemptyTagsType(typ)
-	newVal := deepConvert(val, newType)
-
-	return newVal.Interface()
-}
-
-func removeOmitemptyTagsType(typ reflect.Type) reflect.Type {
-	switch typ.Kind() {
-	case reflect.Pointer:
-		return reflect.PointerTo(removeOmitemptyTagsType(typ.Elem()))
-	case reflect.Struct:
-		fields := []reflect.StructField{}
-		for i := 0; i < typ.NumField(); i++ {
-			field := typ.Field(i)
-			if field.IsExported() {
-				field.Tag = reflect.StructTag(strings.Replace(string(field.Tag), ",omitempty", "", -1))
-				field.Type = removeOmitemptyTagsType(field.Type)
-				fields = append(fields, field)
-			}
-		}
-
-		return reflect.StructOf(fields)
-	default:
-		return typ
-	}
-}
-
-func deepConvert(val reflect.Value, typ reflect.Type) reflect.Value {
-	switch val.Kind() {
-	case reflect.Pointer:
-		if val.IsNil() {
-			return reflect.Zero(typ)
-		}
-		elemType := typ.Elem()
-		convertedPtr := reflect.New(elemType)
-		convertedPtr.Elem().Set(deepConvert(val.Elem(), elemType))
-
-		return convertedPtr
-	case reflect.Struct:
-		convertedStruct := reflect.New(typ).Elem()
-		for i := 0; i < convertedStruct.NumField(); i++ {
-			fieldName := typ.Field(i).Name
-			field := convertedStruct.Field(i)
-			field.Set(deepConvert(val.FieldByName(fieldName), field.Type()))
-		}
-
-		return convertedStruct
-	default:
-		return val.Convert(typ)
-	}
-}
-
-// formattedYAMLMarshal returns the same result as yaml.Marshal,
-// but with top-level fields separated by an additional newline.
-func formattedYAMLMarshal(toMarshal any) string {
-	data, err := yaml.Marshal(toMarshal)
-
-	if err != nil {
-		return "Failed to marshal as yaml: " + err.Error()
-	}
-
-	unformatted := string(data)
-
-	// format the yaml to be easier to read.
-	lines := strings.Split(unformatted, "\n")
-
-	var formatted []string
-	formatted = append(formatted, lines[0])
-	for i := 1; i < len(lines); i++ {
-		if len(lines[i]) == 0 {
-			continue
-		}
-
-		r, _ := utf8.DecodeRuneInString(lines[i])
-		if !unicode.IsSpace(r) {
-			formatted = append(formatted, "")
-		}
-
-		formatted = append(formatted, lines[i])
-	}
-
-	result := strings.Join(formatted, "\n")
-	return result
-}
-
-// commentNullYAMLValues returns the given YAML-formatted string with null fields commented out.
+// commentYAMLDiffs takes YAML-formatted strings |a| and |b| and returns a YAML-formatted string
+// containing all of the lines in |a|, along with comments containing all of the lines in |b| that are not in |a|.
 //
-// Assumes no non-null fields will be set to unquoted strings ending in null.
-// For example, `field: 123-null` will be falsely commented but `field: '123-null'` is fine.
-func commentNullYAMLValues(needsComments string) string {
-	lines := strings.Split(needsComments, "\n")
-	for i := 0; i < len(lines); i++ {
-		if strings.HasSuffix(lines[i], "null") {
-			withoutSpace := strings.TrimSpace(lines[i])
-			space := lines[i][:len(lines[i])-len(withoutSpace)]
-			lines[i] = space + "# " + withoutSpace
+// Assumes all lines in |a| appear in |b|, with the same relative ordering.
+func commentYAMLDiffs(a, b string) string {
+	linesA := strings.Split(a, "\n")
+	linesB := strings.Split(b, "\n")
+
+	aIdx := 0
+	for bIdx := range linesB {
+		if aIdx >= len(linesA) || linesA[aIdx] != linesB[bIdx] {
+			withoutSpace := strings.TrimSpace(linesB[bIdx])
+			if len(withoutSpace) > 0 {
+				space := linesB[bIdx][:len(linesB[bIdx])-len(withoutSpace)]
+				linesB[bIdx] = space + "# " + withoutSpace
+			}
+		} else {
+			aIdx++
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(linesB, "\n")
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.

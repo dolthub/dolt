@@ -427,33 +427,3 @@ metrics:
 	assert.Equal(t, "localhost", cfg.MetricsHost())
 	assert.Equal(t, -1, cfg.MetricsPort())
 }
-
-func TestCommentNullYAMLValues(t *testing.T) {
-	toComment := `
-value1: value
-value2: null
-null: value
-nest1:
-  value1: null
-  value2: value
-  nest2:
-    value1: "null"
-    nest3:
-	           with_many_spaces: null
-`
-
-	withComments := `
-value1: value
-# value2: null
-null: value
-nest1:
-  # value1: null
-  value2: value
-  nest2:
-    value1: "null"
-    nest3:
-	           # with_many_spaces: null
-`
-
-	assert.Equal(t, withComments, commentNullYAMLValues(toComment))
-}
