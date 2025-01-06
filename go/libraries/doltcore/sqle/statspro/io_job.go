@@ -8,7 +8,6 @@ import (
 )
 
 func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Database, tableName string, levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
-
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
@@ -16,12 +15,12 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 	}
 
 	curCnt := 0
-	lastStart := 0
 	jobSize := 100_000
 	var jobs []StatsJob
 	var batchOrdinals []updateOrdinal
+	var nodes []tree.Node
 	var offset uint64
-	for i, n := range levelNodes {
+	for _, n := range levelNodes {
 		treeCnt, err := n.TreeCount()
 		if err != nil {
 			return nil, err
@@ -39,16 +38,17 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 
 		curCnt += treeCnt
 		batchOrdinals = append(batchOrdinals, ord)
+		nodes = append(nodes, n)
 
 		if curCnt > jobSize {
-			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: levelNodes[lastStart : i+1], ordinals: batchOrdinals, done: make(chan struct{})})
+			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, done: make(chan struct{})})
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
-			lastStart = i + 1
+			nodes = nodes[:0]
 		}
 	}
 	if curCnt > 0 {
-		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: levelNodes[lastStart:], ordinals: batchOrdinals, done: make(chan struct{})})
+		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, done: make(chan struct{})})
 	}
 	return jobs, nil
 }

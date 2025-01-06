@@ -80,10 +80,15 @@ func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 	}
 }
 
+type tableStatsTracking struct {
+	name    string
+	schHash hash.Hash
+}
+
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
 	sqlDb  sqle.Database
-	tables []string
+	tables []tableStatsTracking
 	done   chan struct{}
 }
 
@@ -112,8 +117,7 @@ type GCJob struct {
 }
 
 func (j GCJob) String() string {
-	//TODO implement me
-	panic("implement me")
+	return "gc"
 }
 
 func (j GCJob) JobType() StatsJobType {
@@ -405,21 +409,20 @@ func (sc *StatsCoord) error(j StatsJob, err error) {
 // statsRunner operates on stats jobs
 func (sc *StatsCoord) run(ctx *sql.Context) error {
 	var start time.Time
-	jobTicker := time.NewTicker(time.Nanosecond)
+	jobTimer := time.NewTimer(0)
 	gcTicker := time.NewTicker(sc.gcInterval)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-jobTicker.C:
+		case <-jobTimer.C:
 		case <-gcTicker.C:
 			if sc.doGc.Load() {
 				if err := sc.gc(ctx); err != nil {
 					sc.error(GCJob{}, err)
 				}
 			}
-			gcTicker.Reset(sc.gcInterval)
 		case <-sc.Done:
 			return nil
 		case j, ok := <-sc.Interrupts:
@@ -452,7 +455,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			}
 			j.Finish()
 		}
-		jobTicker.Reset(time.Since(start) * sc.SleepMult)
+		jobTimer.Reset(time.Since(start) * sc.SleepMult)
 	}
 }
 
@@ -487,6 +490,8 @@ func (sc *StatsCoord) executeJob(ctx *sql.Context, j StatsJob) ([]StatsJob, erro
 		if err := j.cb(sc); err != nil {
 			sc.error(j, err)
 		}
+	case AnalyzeJob:
+		return sc.runAnalyze(ctx, j)
 	default:
 	}
 	return nil, nil
@@ -811,19 +816,12 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 					return err
 				}
 
-				readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, table, levelNodes, prollyMap)
-				if err != nil {
-					return err
+				if r, ok := sc.LowerBoundCache[levelNodes[0].HashOf()]; ok {
+					newLowerBoundCache[levelNodes[0].HashOf()] = r
 				}
-
-				for _, read := range readJobs {
-					for _, node := range read.(ReadJob).nodes {
-						if b, ok := sc.BucketCache[node.HashOf()]; ok {
-							newBucketCache[node.HashOf()] = b
-							if r, ok := sc.LowerBoundCache[node.HashOf()]; ok {
-								newLowerBoundCache[node.HashOf()] = r
-							}
-						}
+				for _, node := range levelNodes {
+					if b, ok := sc.BucketCache[node.HashOf()]; ok {
+						newBucketCache[node.HashOf()] = b
 					}
 				}
 
@@ -832,6 +830,8 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 	}
 
 	sc.BucketCache = newBucketCache
+	sc.TemplateCache = newTemplateCache
+	sc.LowerBoundCache = newLowerBoundCache
 
 	return nil
 }
@@ -841,6 +841,8 @@ func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, e
 	if err != nil {
 		return nil, err
 	}
-	readJobs = append(readJobs, j.after)
+	if j.after.done != nil {
+		readJobs = append(readJobs, j.after)
+	}
 	return readJobs, nil
 }

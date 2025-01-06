@@ -53,6 +53,10 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		return err
 	}
 
+	if branch == "" {
+		branch = "main"
+	}
+
 	var sqlDb sqle.Database
 	func() {
 		sc.dbMu.Lock()
@@ -129,7 +133,7 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 	return nil
 }
 
-func (sc *StatsCoord) DropDbStats(ctx *sql.Context, db string, flush bool) error {
+func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
@@ -141,29 +145,46 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, db string, flush bool) error
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	for key, _ := range sc.Stats {
-		if strings.EqualFold(key.db, db) && strings.EqualFold(key.branch, branch) {
+		if strings.EqualFold(key.db, dbName) && strings.EqualFold(key.branch, branch) {
 			delete(sc.Stats, key)
 		}
 	}
+
+	start := -1
+	end := len(sc.dbs)
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	for i, db := range sc.dbs {
+		if strings.EqualFold(db.AliasedName(), dbName) && strings.EqualFold(db.Revision(), branch) {
+			if start < 0 {
+				start = i
+			}
+		} else if start > 0 && end < 0 {
+			end = i
+		}
+	}
+	sc.dbs = append(sc.dbs[:start], sc.dbs[end:]...)
+	sc.doGc.Store(true)
+
 	return nil
 }
 
-func (sc *StatsCoord) statsKey(ctx *sql.Context, db, table string) (tableIndexesKey, error) {
+func (sc *StatsCoord) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return tableIndexesKey{}, err
 	}
 	key := tableIndexesKey{
-		db:     db,
+		db:     dbName,
 		branch: branch,
 		table:  table,
 	}
 	return key, nil
 }
 
-func (sc *StatsCoord) RowCount(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, db, table.Name())
+func (sc *StatsCoord) RowCount(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -177,8 +198,8 @@ func (sc *StatsCoord) RowCount(ctx *sql.Context, db string, table sql.Table) (ui
 	return 0, nil
 }
 
-func (sc *StatsCoord) DataLength(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
-	key, err := sc.statsKey(ctx, db, table.Name())
+func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
+	key, err := sc.statsKey(ctx, dbName, table.Name())
 	if err != nil {
 		return 0, err
 	}
