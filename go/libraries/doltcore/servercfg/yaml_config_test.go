@@ -427,3 +427,59 @@ metrics:
 	assert.Equal(t, "localhost", cfg.MetricsHost())
 	assert.Equal(t, -1, cfg.MetricsPort())
 }
+
+// Tests that YAMLConfig.String() and YAMLConfig.VerboseString() produce equivalent YAML.
+func TestYAMLConfigVerboseStringEquivalent(t *testing.T) {
+	yamlEquivalent := func(a, b string) bool {
+		var unmarshaled1 any
+		err := yaml.Unmarshal([]byte(a), &unmarshaled1)
+		require.NoError(t, err)
+
+		var unmarshaled2 any
+		err = yaml.Unmarshal([]byte(a), &unmarshaled2)
+		require.NoError(t, err)
+
+		remarshaled1, err := yaml.Marshal(unmarshaled1)
+		require.NoError(t, err)
+
+		remarshaled2, err := yaml.Marshal(unmarshaled1)
+		require.NoError(t, err)
+
+		return string(remarshaled1) == string(remarshaled2)
+	}
+
+	configs := []YAMLConfig{
+		YAMLConfig{
+			LogLevelStr:       ptr("warn"),
+			MaxQueryLenInLogs: ptr(1234),
+			ListenerConfig: ListenerYAMLConfig{
+				HostStr:    ptr("XXYYZZ"),
+				PortNumber: ptr(33333),
+			},
+			DataDirStr:      ptr("abcdef"),
+			GoldenMysqlConn: ptr("abc123"),
+		},
+		YAMLConfig{
+			MetricsConfig: MetricsYAMLConfig{
+				Labels: map[string]string{
+					"xyz": "123",
+					"0":   "AAABBB",
+				},
+				Host: ptr("!!!!!!!!"),
+			},
+		},
+		YAMLConfig{
+			MetricsConfig: MetricsYAMLConfig{
+				Port: ptr(0),
+			},
+			RemotesapiConfig: RemotesapiYAMLConfig{
+				Port_:     ptr(111),
+				ReadOnly_: ptr(false),
+			},
+		},
+	}
+
+	for _, config := range configs {
+		assert.True(t, yamlEquivalent(config.String(), config.VerboseString()))
+	}
+}
