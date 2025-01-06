@@ -139,13 +139,13 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ctx context.Context, ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) ProximityMap {
+func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) ProximityMap {
 	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         node,
 		NodeStore:    ns,
 		Order:        keyDesc,
 		DistanceType: distanceType,
-		Convert: func(bytes []byte) []float64 {
+		Convert: func(ctx context.Context, bytes []byte) []float64 {
 			h, _ := keyDesc.GetJSONAddr(0, bytes)
 			doc := tree.NewJSONDoc(h, ns)
 			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
@@ -249,7 +249,7 @@ func (b *ProximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 		return ProximityMap{}, err
 	}
 
-	return NewProximityMap(ctx, b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize), nil
+	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize), nil
 }
 
 func (b *ProximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {

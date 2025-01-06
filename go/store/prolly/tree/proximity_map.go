@@ -35,7 +35,7 @@ type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	Root         Node
 	NodeStore    NodeStore
 	DistanceType vector.DistanceType
-	Convert      func([]byte) []float64
+	Convert      func(context.Context, []byte) []float64
 	Order        O
 }
 
@@ -94,7 +94,7 @@ func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	nd := t.Root
 
-	queryVector := t.Convert(query)
+	queryVector := t.Convert(ctx, query)
 
 	// Find the child with the minimum distance.
 
@@ -105,7 +105,7 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 
 		for i := 0; i < int(nd.count); i++ {
 			k := nd.GetKey(i)
-			newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+			newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
 			if err != nil {
 				return err
 			}
@@ -201,7 +201,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 
 	for i := 0; i < int(t.Root.count); i++ {
 		k := t.Root.GetKey(i)
-		newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+		newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
 		if err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 			// TODO: We don't need to recompute the distance when visiting the same key as the parent.
 			for i := 0; i < int(node.count); i++ {
 				k := node.GetKey(i)
-				newDistance, err := t.DistanceType.Eval(t.Convert(k), queryVector)
+				newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
 				if err != nil {
 					return err
 				}

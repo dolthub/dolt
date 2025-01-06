@@ -55,7 +55,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	keyDesc := mutableMap.keyDesc
 	valDesc := mutableMap.valDesc
 	ns := mutableMap.NodeStore()
-	convert := func(bytes []byte) []float64 {
+	convert := func(ctx context.Context, bytes []byte) []float64 {
 		h, _ := keyDesc.GetJSONAddr(0, bytes)
 		doc := tree.NewJSONDoc(h, ns)
 		jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
@@ -111,7 +111,7 @@ func (f ProximityFlusher) visitNode(
 	node tree.Node,
 	fullEdits *skip.List,
 	edits []VectorIndexKV,
-	convert func([]byte) []float64,
+	convert func(context.Context, []byte) []float64,
 	distanceType vector.DistanceType,
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,
@@ -199,18 +199,18 @@ func (f ProximityFlusher) visitNode(
 		childEdits := make(map[int]childEditList)
 		for _, edit := range edits {
 			key := edit.key
-			editVector := convert(key)
+			editVector := convert(ctx, key)
 			level := edit.level
 			// visit each child in the node to determine which is closest
 			closestIdx := 0
 			childKey := node.GetKey(0)
-			closestDistance, err := distanceType.Eval(convert(childKey), editVector)
+			closestDistance, err := distanceType.Eval(convert(ctx, childKey), editVector)
 			if err != nil {
 				return tree.Node{}, 0, err
 			}
 			for i := 1; i < node.Count(); i++ {
 				childKey = node.GetKey(i)
-				newDistance, err := distanceType.Eval(convert(childKey), editVector)
+				newDistance, err := distanceType.Eval(convert(ctx, childKey), editVector)
 				if err != nil {
 					return tree.Node{}, 0, err
 				}
