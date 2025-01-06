@@ -56,7 +56,7 @@ func newGarbageCollectionCopier(tfp tableFilePersister) (*gcCopier, error) {
 	return &gcCopier{writer, tfp}, nil
 }
 
-func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
+func (gcc *gcCopier) addChunk(ctx context.Context, c ToChunker) error {
 	return gcc.writer.AddCmpChunk(c)
 }
 

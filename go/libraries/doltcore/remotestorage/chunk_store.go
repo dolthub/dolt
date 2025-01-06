@@ -317,7 +317,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ae := atomicerr.New()
 	decompressedSize := uint64(0)
-	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.CompressedChunk) {
+	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.ToChunker) {
 		if ae.IsSet() {
 			return
 		}
@@ -340,7 +340,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	ctx, span := tracer.Start(ctx, "remotestorage.GetManyCompressed")
 	defer span.End()
 
@@ -353,7 +353,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	for h := range hashes {
 		c := hashToChunk[h]
 
-		if c.IsEmpty() {
+		if c == nil || c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
 			found(ctx, c)
@@ -432,7 +432,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, chunkChan chan nbs.ToChunker, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -574,7 +574,7 @@ type RepoRequest interface {
 	SetRepoPath(string)
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.CompressedChunk)) (err error) {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.ToChunker)) (err error) {
 	toSend := hash.NewHashSet(hashes...)
 
 	fetcher := dcs.ChunkFetcher(ctx)
@@ -603,7 +603,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash
 				return err
 			}
 			// Don't forward on empty/not found chunks.
-			if len(cc.CompressedData) > 0 {
+			if !cc.IsEmpty() {
 				if dcs.cache.PutChunk(cc) {
 					return ErrCacheCapacityExceeded
 				}
@@ -644,7 +644,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []nbs.CompressedChunk
+	var found []nbs.ToChunker
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -738,7 +738,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	}
 
 	cc := nbs.ChunkToCompressedChunk(c)
-	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
+	if dcs.cache.Put([]nbs.ToChunker{cc}) {
 		return ErrCacheCapacityExceeded
 	}
 	return nil

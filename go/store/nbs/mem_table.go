@@ -193,7 +193,7 @@ func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getR
 	return remaining, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	var remaining bool
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]

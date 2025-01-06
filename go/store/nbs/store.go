@@ -86,7 +86,7 @@ func makeGlobalCaches() {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
+	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, ToChunker)) error
 }
 
 type gcDependencyMode int
@@ -97,7 +97,7 @@ const (
 )
 
 type CompressedChunkStoreForGC interface {
-	getManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk), gcDependencyMode) error
+	getManyCompressed(context.Context, hash.HashSet, func(context.Context, ToChunker), gcDependencyMode) error
 }
 
 type NomsBlockStore struct {
@@ -896,11 +896,11 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	)
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker)) error {
 	return nbs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
 }
 
-func (nbs *NomsBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
+func (nbs *NomsBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker), gcDepMode gcDependencyMode) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, gcDepMode,
@@ -1844,25 +1844,25 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		found := 0
 		var addErr error
-		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, cc CompressedChunk) {
+		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, tc ToChunker) {
 			mu.Lock()
 			defer mu.Unlock()
 			if addErr != nil {
 				return
 			}
 			found += 1
-			if cc.IsGhost() {
+			if tc.IsGhost() {
 				// Ghost chunks encountered on the walk can be left alone --- they
 				// do not bring their dependencies, and because of how generational
 				// store works, they will still be ghost chunks
 				// in the store after the GC is finished.
 				return
 			}
-			addErr = i.gcc.addChunk(ctx, cc)
+			addErr = i.gcc.addChunk(ctx, tc)
 			if addErr != nil {
 				return
 			}
-			c, err := cc.ToChunk()
+			c, err := tc.ToChunk()
 			if err != nil {
 				addErr = err
 				return

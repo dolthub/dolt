@@ -221,7 +221,7 @@ type chunkReader interface {
 
 	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.
-	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)

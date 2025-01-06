@@ -24,16 +24,16 @@ import (
 // mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.
 type mapChunkCache struct {
 	mu          *sync.Mutex
-	hashToChunk map[hash.Hash]nbs.CompressedChunk
-	toFlush     map[hash.Hash]nbs.CompressedChunk
+	hashToChunk map[hash.Hash]nbs.ToChunker
+	toFlush     map[hash.Hash]nbs.ToChunker
 	cm          CapacityMonitor
 }
 
 func newMapChunkCache() *mapChunkCache {
 	return &mapChunkCache{
 		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.ToChunker),
+		make(map[hash.Hash]nbs.ToChunker),
 		NewUncappedCapacityMonitor(),
 	}
 }
@@ -42,14 +42,14 @@ func newMapChunkCache() *mapChunkCache {
 func NewMapChunkCacheWithMaxCapacity(maxCapacity int64) *mapChunkCache {
 	return &mapChunkCache{
 		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.ToChunker),
+		make(map[hash.Hash]nbs.ToChunker),
 		NewFixedCapacityMonitor(maxCapacity),
 	}
 }
 
 // Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
+func (mcc *mapChunkCache) Put(chnks []nbs.ToChunker) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -63,7 +63,7 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 			}
 		}
 
-		if mcc.cm.CapacityExceeded(len(c.FullCompressedChunk)) {
+		if mcc.cm.CapacityExceeded(int(c.FullCompressedChunkLen())) {
 			return true
 		}
 
@@ -79,8 +79,8 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 
 // Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
 // is put in it's place
-func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
-	hashToChunk := make(map[hash.Hash]nbs.CompressedChunk)
+func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.ToChunker {
+	hashToChunk := make(map[hash.Hash]nbs.ToChunker)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
@@ -112,13 +112,13 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return absent
 }
 
-func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
+func (mcc *mapChunkCache) PutChunk(ch nbs.ToChunker) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
 	h := ch.Hash()
 	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
-		if mcc.cm.CapacityExceeded(len(ch.FullCompressedChunk)) {
+		if mcc.cm.CapacityExceeded(int(ch.FullCompressedChunkLen())) {
 			return true
 		}
 		mcc.hashToChunk[h] = ch
@@ -130,8 +130,8 @@ func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 
 // GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
 // between the last time GetAndClearChunksToFlush was called and now.
-func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
-	newToFlush := make(map[hash.Hash]nbs.CompressedChunk)
+func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.ToChunker {
+	newToFlush := make(map[hash.Hash]nbs.ToChunker)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
