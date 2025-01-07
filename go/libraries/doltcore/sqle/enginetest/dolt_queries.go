@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/hashicorp/go-uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
@@ -4769,6 +4770,46 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// JSON chunking can't currently break chunks in a JSON value, so large string values can
+		// generate chunks that are larger than typical chunks.
+		Name: "JSON with large string (> 1MB)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j1 JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// NOTE: This doesn't trigger the same error that we see with sql-server
+				//       because the Golang enginetests use an in-memory chunk store, and
+				//       not the filesystem journaling chunk store.
+				Query:    fmt.Sprintf(`insert into t (pk, j1) VALUES (1, '{"large_value": "%s"}');`, generateStringData(1024*1024*3)),
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Skip: true,
+				// TODO: The JSON is coming back truncated for some reason and failing this test.
+				//       When that's fixed, unskip this test, and fix the length value below.
+				Query:    `SELECT pk, length(j1) from t;`,
+				Expected: []sql.Row{{1, 123}},
+			},
+		},
+	},
+}
+
+// generateStringData generates random string data of length |length|. The data is generated
+// using UUIDs to avoid data that could be easily compressed.
+func generateStringData(length int) string {
+	var b strings.Builder
+	for length > 0 {
+		uuid, err := uuid.GenerateUUID()
+		if err != nil {
+			panic(err)
+		}
+		uuid = strings.ReplaceAll(uuid, "-", "")
+		b.WriteString(uuid)
+		length -= len(uuid)
+	}
+	return b.String()
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
