@@ -483,3 +483,72 @@ func TestYAMLConfigVerboseStringEquivalent(t *testing.T) {
 		assert.True(t, yamlEquivalent(config.String(), config.VerboseString()))
 	}
 }
+
+func TestCommentYAMLDiffs(t *testing.T) {
+	a := `abc: 100
+dddddd: "1234"
+fire: water
+
+a:
+  b:
+	c: 1001011
+
+	t: g
+
+x:
+- we
+- se
+- ll`
+
+	b := `abc: 100
+dddddd: "1234"
+
+fire: water
+extra1: 12345
+
+a:
+  b:
+	c: 1001011
+	extra2: iiiii
+
+	t: g
+
+x:
+- we
+- extra3
+- extra4
+- se
+- extra5
+- ll
+
+extra6:
+  extra7:
+    extra8: 999`
+
+	expected := `abc: 100
+dddddd: "1234"
+
+fire: water
+# extra1: 12345
+
+a:
+  b:
+	c: 1001011
+	# extra2: iiiii
+
+	t: g
+
+x:
+- we
+# - extra3
+# - extra4
+- se
+# - extra5
+- ll
+
+# extra6:
+  # extra7:
+    # extra8: 999`
+
+	assert.Equal(t, expected, commentYAMLDiffs(a, b))
+}
