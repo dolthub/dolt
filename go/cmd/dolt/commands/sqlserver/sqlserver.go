@@ -542,10 +542,7 @@ func generateYamlConfigIfNone(
 		return nil
 	}
 
-	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
-
-	generatedYaml := `# This file was generated using your configuration.
-# Uncomment and edit lines as necessary to modify your configuration.` + "\n\n" + yamlConfig.VerboseString()
+	generatedYaml := generateYamlConfig(serverConfig)
 
 	err := dEnv.FS.WriteFile(path, []byte(generatedYaml), os.ModePerm)
 	if err != nil {
@@ -553,4 +550,14 @@ func generateYamlConfigIfNone(
 	}
 
 	return nil
+}
+
+// generateYamlConfig returns a YAML string containing the fields in serverConfig that
+// were explicitly set by the command line args, along with commented-out placeholders for any
+// fields that were not explicitly set by the command line args.
+func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
+	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
+
+	return `# This file was generated using your configuration.
+# Uncomment and edit lines as necessary to modify your configuration.` + "\n\n" + yamlConfig.VerboseString()
 }
