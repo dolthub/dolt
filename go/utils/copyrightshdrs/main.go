@@ -96,8 +96,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/chunks/chunk_test.go", NomsPath: "go/chunks/chunk_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/memory_store.go", NomsPath: "go/chunks/memory_store.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/memory_store_test.go", NomsPath: "go/chunks/memory_store_test.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/remote_requests.go", NomsPath: "go/chunks/remote_requests.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/remote_requests_test.go", NomsPath: "go/chunks/remote_requests_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/test_utils.go", NomsPath: "go/chunks/test_utils.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/commit_iterator.go", NomsPath: "cmd/noms/commit_iterator.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms.go", NomsPath: "cmd/noms/noms.go", HadCopyrightNotice: true},
