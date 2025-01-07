@@ -27,10 +27,10 @@ import (
 )
 
 var destroyDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Drops database tables used to store continuous integration configuration",
-	LongDesc:  "Drops database tables used to store continuous integration configuration",
+	ShortDesc: "Drops all database tables used to store continuous integration configuration",
+	LongDesc:  "Drops all database tables used to store continuous integration configuration and creates a Dolt commit",
 	Synopsis: []string{
-		"{{.LessThan}}destroy{{.GreaterThan}}",
+		"",
 	},
 }
 
@@ -59,7 +59,7 @@ func (cmd DestroyCmd) Docs() *cli.CommandDocumentation {
 
 // Hidden should return true if this command should be hidden from the help text
 func (cmd DestroyCmd) Hidden() bool {
-	return true
+	return false
 }
 
 // ArgParser implements cli.Command.
@@ -71,7 +71,8 @@ func (cmd DestroyCmd) ArgParser() *argparser.ArgParser {
 // Exec implements cli.Command.
 func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, destroyDocs, ap))
+	cli.ParseArgsOrDie(ap, args, help)
 
 	if !cli.CheckEnvIsValid(dEnv) {
 		return 1

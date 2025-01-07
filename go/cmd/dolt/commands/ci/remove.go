@@ -27,8 +27,8 @@ import (
 )
 
 var removeDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Remove a Dolt continuous integration workflow by name",
-	LongDesc:  "Remove a Dolt continuous integration workflow by name",
+	ShortDesc: "Removes a Dolt continuous integration workflow by name",
+	LongDesc:  "Removes a Dolt continuous integration workflow by name and creates a Dolt commit",
 	Synopsis: []string{
 		"{{.LessThan}}workflow name{{.GreaterThan}}",
 	},
@@ -59,7 +59,7 @@ func (cmd RemoveCmd) Docs() *cli.CommandDocumentation {
 
 // Hidden should return true if this command should be hidden from the help text
 func (cmd RemoveCmd) Hidden() bool {
-	return true
+	return false
 }
 
 // ArgParser implements cli.Command.

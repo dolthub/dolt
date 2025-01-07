@@ -18,7 +18,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewHiddenSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("ci", "Commands for working with Dolt continuous integration configuration.", []cli.Command{
 	InitCmd{},
 	DestroyCmd{},
 	ImportCmd{},
