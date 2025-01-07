@@ -516,9 +516,8 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 }
 
 // generateYamlConfigIfNone creates a YAML config file in the database directory if one is not specified in the args
-// and one doesn't already exist in the database directory. The fields of the generated YAML config file are set
-// using serverConfig if serverConfig specifies a value for the field, otherwise the field is set to a default value
-// or is replaced with a commented-out placeholder.
+// and one doesn't already exist in the database directory. The fields of the YAML file are generated using the values
+// in serverConfig that were explicitly set by the command line args.
 func generateYamlConfigIfNone(
 	ap *argparser.ArgParser,
 	help cli.UsagePrinter,
