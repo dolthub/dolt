@@ -33,7 +33,7 @@ import (
 
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Import a Dolt continuous integration workflow file into the database",
-	LongDesc:  "Import a Dolt continuous integration workflow file into the database",
+	LongDesc:  "Import a Dolt continuous integration workflow file into the database and create a Dolt commit",
 	Synopsis: []string{
 		"{{.LessThan}}file{{.GreaterThan}}",
 	},
@@ -64,7 +64,7 @@ func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 
 // Hidden should return true if this command should be hidden from the help text
 func (cmd ImportCmd) Hidden() bool {
-	return true
+	return false
 }
 
 // ArgParser implements cli.Command.
