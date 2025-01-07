@@ -89,6 +89,8 @@ message RangeChunk {
   bytes hash = 1;
   uint64 offset = 2;
   uint32 length = 3;
+  uint64 dictionary_offset = 4;
+  uint32 dictionary_length = 5;
 }
 
 message HttpGetRange {
