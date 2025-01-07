@@ -249,7 +249,7 @@ func clusterConfigAsYAMLConfig(config ClusterConfig) *ClusterYAMLConfig {
 func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 	systemVars := cfg.SystemVars()
 
-	return &YAMLConfig{
+	res := &YAMLConfig{
 		LogLevelStr:       zeroIf(ptr(string(cfg.LogLevel())), !cfg.ValueSet(LogLevelKey)),
 		MaxQueryLenInLogs: zeroIf(ptr(cfg.MaxLoggedQueryLen()), !cfg.ValueSet(MaxLoggedQueryLenKey)),
 		EncodeLoggedQuery: zeroIf(ptr(cfg.ShouldEncodeLoggedQuery()), !cfg.ValueSet(ShouldEncodeLoggedQueryKey)),
@@ -294,6 +294,12 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		Vars:              zeroIf(cfg.UserVars(), !cfg.ValueSet(UserVarsKey)),
 		Jwks:              zeroIf(cfg.JwksConfig(), !cfg.ValueSet(JwksConfigKey)),
 	}
+
+	if validatingCfg, ok := cfg.(ValidatingServerConfig); ok {
+		res.GoldenMysqlConn = zeroIf(ptr(validatingCfg.GoldenMysqlConnectionString()), !cfg.ValueSet(GoldenMysqlConnectionStringKey))
+	}
+
+	return res
 }
 
 func zeroIf[T any](val T, condition bool) T {

@@ -544,10 +544,6 @@ func generateYamlConfigIfNone(
 
 	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
 
-	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		yamlConfig.GoldenMysqlConn = &connStr
-	}
-
 	generatedYaml := `# This file was generated using your configuration.
 # Uncomment and edit lines as necessary to modify your configuration.` + "\n\n" + yamlConfig.VerboseString()
 
