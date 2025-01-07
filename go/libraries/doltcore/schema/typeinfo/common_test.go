@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -184,7 +183,7 @@ func mustBlobBytes(t *testing.T, b []byte) types.Blob {
 func loop(t *testing.T, start int64, endInclusive int64, numOfSteps uint16, loopedFunc func(int64)) {
 	require.True(t, endInclusive > start)
 	maxNumOfSteps := endInclusive - start + 1
-	trueNumOfSteps := mathutil.MinInt64(int64(numOfSteps), maxNumOfSteps) - 1
+	trueNumOfSteps := min(int64(numOfSteps), maxNumOfSteps) - 1
 	inc := float64(maxNumOfSteps) / float64(trueNumOfSteps)
 	fCurrentVal := float64(start)
 	currentVal := int64(math.Round(fCurrentVal))

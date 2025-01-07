@@ -29,8 +29,6 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
-
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -81,7 +79,7 @@ func (b Blob) Compare(ctx context.Context, nbf *NomsBinFormat, other LesserValua
 		var b2Array [maxSliceSize]byte
 		length := uint64(0)
 		for i := uint64(0); i < minBlobLength; i += length {
-			length = mathutil.MinUint64(maxSliceSize, minBlobLength-i)
+			length = min(maxSliceSize, minBlobLength-i)
 			b1Data := b1Array[:length]
 			b2Data := b2Array[:length]
 			n1, err := b1Reader.Read(b1Data)

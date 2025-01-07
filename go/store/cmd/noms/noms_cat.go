@@ -342,20 +342,6 @@ func hexStr(bytes []byte) string {
 
 const bytesPerRow = 16
 
-func max(i, j int) int {
-	if i > j {
-		return i
-	}
-	return j
-}
-
-func min(i, j int) int {
-	if i < j {
-		return i
-	}
-	return j
-}
-
 func hexView(bytes []byte, indent string) string {
 	str := ""
 	for i := 0; i < len(bytes); i += bytesPerRow {
