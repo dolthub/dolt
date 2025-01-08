@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -519,6 +520,9 @@ func TestGenerateYamlConfig(t *testing.T) {
 		"--branch-control-file", "dir1/dir2/abc.db",
 	}
 
+	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
+	require.NoError(t, err)
+
 	expected := `# This file was generated using your configuration.
 # Uncomment and edit lines as necessary to modify your configuration.
 
@@ -588,7 +592,8 @@ listener:
     # - standby_replica_one.svc.cluster.local
     # - standby_replica_two.svc.cluster.local
 
-# privilege_file: .doltcfg/privileges.db
+# privilege_file: ` + privilegeFilePath +
+		`
 
 branch_control_file: dir1/dir2/abc.db
 
