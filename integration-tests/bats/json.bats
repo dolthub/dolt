@@ -262,6 +262,26 @@ SQL
     [ "${lines[1]}" = '1,"[{""a"":""<>&""}]"' ]
 }
 
+@test "json: insert large string value (> 1MB)" {
+    dolt sql <<SQL
+    CREATE TABLE t (
+        pk int PRIMARY KEY,
+        j1 json
+    );
+SQL
+
+    dolt sql -f $BATS_TEST_DIRNAME/json-large-value-insert.sql
+
+    # TODO: Retrieving the JSON errors with a JSON truncated message
+    #       Unskip this once the JSON truncation issue is fixed and
+    #       fill in the expected length below.
+    skip "Function Support is currently disabled"
+
+    run dolt sql -q "SELECT pk, length(j1) FROM t;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '1,???' ]
+}
+
 # This test inserts a large JSON document with the `dolt_dont_optimize_json` flag set.
 # We expect that the document gets stored as a blob.
 @test "json: Test dolt_optimize_json system variable" {
