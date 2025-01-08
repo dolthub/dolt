@@ -38,8 +38,11 @@ const (
 	chunkJournalFileSize = 16 * 1024
 
 	// todo(andy): buffer must be able to hold an entire record,
-	//   but we don't have a hard limit on record size right now
-	journalWriterBuffSize = 1024 * 1024
+	//   but we don't have a hard limit on record size right now.
+	//   JSON data has cases where it won't chunk down as small as other data,
+	//   so we have increased this to 5MB. If/when JSON chunking handles those
+	//   cases, we could decrease this size to 1MB again.
+	journalWriterBuffSize = 5 * 1024 * 1024
 
 	chunkJournalAddr = chunks.JournalFileID
 
