@@ -41,9 +41,10 @@ type JsonScanner struct {
 
 // The JSONChunker can't draw a chunk boundary within an object key.
 // This can lead to large chunks that may cause problems.
+// We've observed chunks getting written incorrectly if they exceed 48KB.
 // Since boundaries are always drawn once a chunk exceeds maxChunkSize (16KB),
-// this is the largest length that can be appended to a chunk without exceeding 1MB.
-var maxJsonKeyLength = 1024*1024 - maxChunkSize
+// this is the largest length that can be appended to a chunk without exceeding 48KB.
+var maxJsonKeyLength = 48*1024 - maxChunkSize
 
 var jsonParseError = fmt.Errorf("encountered invalid JSON while reading JSON from the database, or while preparing to write JSON to the database. This is most likely a bug in JSON diffing")
 var largeJsonKeyError = errorkinds.NewKind("encountered JSON key with length %s, larger than max allowed length %s")
