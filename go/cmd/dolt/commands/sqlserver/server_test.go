@@ -581,7 +581,10 @@ branch_control_file: dir1/dir2/abc.db
   # dolt_log_level: info
   # dolt_transaction_commit: 1
 
+# jwks: []
+
 # metrics:
+  # labels: {}
   # host: localhost
   # port: 9091
 
