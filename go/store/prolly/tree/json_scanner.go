@@ -16,6 +16,7 @@ package tree
 
 import (
 	"fmt"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
 	"io"
 )
 
@@ -38,7 +39,14 @@ type JsonScanner struct {
 	valueOffset int
 }
 
+// The JSONChunker can't draw a chunk boundary within an object key.
+// This can lead to large chunks that may cause problems.
+// Since boundaries are always drawn once a chunk exceeds maxChunkSize (16KB),
+// this is the largest length that can be appended to a chunk without exceeding 1MB.
+var maxJsonKeyLength = 1024*1024 - maxChunkSize
+
 var jsonParseError = fmt.Errorf("encountered invalid JSON while reading JSON from the database, or while preparing to write JSON to the database. This is most likely a bug in JSON diffing")
+var largeJsonKeyError = errorkinds.NewKind("encountered JSON key with length %s, larger than max allowed length %s")
 
 func (j JsonScanner) Clone() JsonScanner {
 	return JsonScanner{
@@ -118,12 +126,12 @@ func (s *JsonScanner) AdvanceToNextLocation() error {
 		} else {
 			return s.acceptNextKeyValue()
 		}
-	case middleOfString:
-		_, finishedString, err := s.acceptRestOfString()
+	case middleOfStringValue:
+		finishedString, err := s.acceptRestOfValueString()
 		if finishedString {
 			s.currentPath.setScannerState(endOfValue)
 		} else {
-			s.currentPath.setScannerState(middleOfString)
+			s.currentPath.setScannerState(middleOfStringValue)
 		}
 		return err
 	default:
@@ -135,14 +143,14 @@ func (s *JsonScanner) acceptValue() error {
 	current := s.current()
 	switch current {
 	case '"':
-		_, finishedString, err := s.acceptString()
+		finishedString, err := s.acceptValueString()
 		if err != nil {
 			return err
 		}
 		if finishedString {
 			s.currentPath.setScannerState(endOfValue)
 		} else {
-			s.currentPath.setScannerState(middleOfString)
+			s.currentPath.setScannerState(middleOfStringValue)
 		}
 
 		return nil
@@ -190,18 +198,39 @@ func (s *JsonScanner) accept(b byte) error {
 	return nil
 }
 
-func (s *JsonScanner) acceptString() (stringBytes []byte, finishedString bool, err error) {
+func (s *JsonScanner) acceptKeyString() (stringBytes []byte, err error) {
 	err = s.accept('"')
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return s.acceptRestOfString()
+	stringStart := s.valueOffset
+	for s.current() != '"' {
+		switch s.current() {
+		case '\\':
+			s.valueOffset++
+		}
+		s.valueOffset++
+	}
+	if s.valueOffset-stringStart > maxJsonKeyLength {
+		return nil, largeJsonKeyError.New(s.valueOffset-stringStart, maxJsonKeyLength)
+	}
+	result := s.jsonBuffer[stringStart:s.valueOffset]
+	// Advance past the ending quotes
+	s.valueOffset++
+	return result, nil
 }
 
-func (s *JsonScanner) acceptRestOfString() (stringBytes []byte, finishedString bool, err error) {
-	stringStart := s.valueOffset
+func (s *JsonScanner) acceptValueString() (finishedString bool, err error) {
+	err = s.accept('"')
+	if err != nil {
+		return false, err
+	}
+	return s.acceptRestOfValueString()
+}
+
+func (s *JsonScanner) acceptRestOfValueString() (finishedString bool, err error) {
 	stringLength := 0
-	for s.current() != '"' && stringLength < 1000 {
+	for s.current() != '"' && stringLength < maxJsonKeyLength {
 		switch s.current() {
 		case '\\':
 			s.valueOffset++
@@ -209,14 +238,13 @@ func (s *JsonScanner) acceptRestOfString() (stringBytes []byte, finishedString b
 		s.valueOffset++
 		stringLength++
 	}
-	result := s.jsonBuffer[stringStart:s.valueOffset]
-	if stringLength == 1000 {
+	if stringLength == maxJsonKeyLength {
 		// Split the segment here, so that the chunk doesn't get too large.
-		return result, false, nil
+		return false, nil
 	}
 	// Advance past the ending quotes
 	s.valueOffset++
-	return result, true, nil
+	return true, nil
 }
 
 func (s *JsonScanner) acceptKeyValue() error {
@@ -252,10 +280,7 @@ func (s *JsonScanner) acceptNextKeyValue() error {
 }
 
 func (s *JsonScanner) acceptObjectKey() error {
-	objectKey, finishedString, err := s.acceptString()
-	if !finishedString {
-		// a very long key that might not fit? How to handle this?
-	}
+	objectKey, err := s.acceptKeyString()
 	if err != nil {
 		return err
 	}

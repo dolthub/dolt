@@ -68,7 +68,7 @@ const (
 	objectInitialElement
 	arrayInitialElement
 	endOfValue
-	middleOfString
+	middleOfStringValue
 )
 
 func compareJsonPathTypes(left, right jsonPathType) int {
@@ -186,7 +186,7 @@ func isUnsupportedJsonArrayIndex(index []byte) bool {
 }
 
 func errorIfNotSupportedLocation(key []byte) error {
-	if jsonPathType(key[0]) > middleOfString {
+	if jsonPathType(key[0]) > middleOfStringValue {
 		return unknownLocationKeyError
 	}
 	return nil
@@ -353,7 +353,7 @@ func (p *jsonLocation) getScannerState() jsonPathType {
 }
 
 func (p jsonLocation) IsMiddleOfString() bool {
-	return p.getScannerState() == middleOfString
+	return p.getScannerState() == middleOfStringValue
 }
 
 type jsonPathElement struct {
