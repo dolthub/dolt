@@ -133,9 +133,7 @@ type YAMLConfig struct {
 	PerformanceConfig *PerformanceYAMLConfig `yaml:"performance,omitempty"`
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
-	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics,omitempty"`
 	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi,omitempty"`
-	ClusterCfg        *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
@@ -143,6 +141,8 @@ type YAMLConfig struct {
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
 	Jwks            []JwksConfig           `yaml:"jwks,omitempty"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
+	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
+	ClusterCfg      *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
 }
 
 var _ ServerConfig = YAMLConfig{}
