@@ -249,15 +249,10 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutGeometryAddr(i, h)
 	case val.JSONAddrEnc:
-		j, err := convJson(v)
+		h, err := getJSONAddrHash(ctx, ns, v)
 		if err != nil {
 			return err
 		}
-		root, err := SerializeJsonToAddr(ctx, ns, j)
-		if err != nil {
-			return err
-		}
-		h := root.HashOf()
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
 		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
@@ -306,6 +301,32 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
 	return nil
+}
+
+func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Hash, error) {
+	j, err := convJson(v)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	sqlCtx, isSqlCtx := ctx.(*sql.Context)
+	if isSqlCtx {
+		dontOptimizeJson, err := sqlCtx.Session.GetSessionVariable(sqlCtx, "dolt_dont_optimize_json")
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		if dontOptimizeJson != 0 {
+			buf, err := types.MarshallJson(j)
+			if err != nil {
+				return hash.Hash{}, err
+			}
+			return SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
+		}
+	}
+	root, err := SerializeJsonToAddr(ctx, ns, j)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return root.HashOf(), nil
 }
 
 func convInt(v interface{}) int {
