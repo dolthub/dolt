@@ -558,6 +558,9 @@ func generateYamlConfigIfNone(
 func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
 	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
 
-	return `# This file was generated using your configuration.
-# Uncomment and edit lines as necessary to modify your configuration.` + "\n\n" + yamlConfig.VerboseString()
+	return `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#` + "\n\n" + yamlConfig.VerboseString()
 }
