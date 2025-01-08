@@ -455,3 +455,19 @@ func TestJsonCompare(t *testing.T) {
 		})
 	})
 }
+
+// Test that we can write a JSON document with a multi-MB string value into storage and read it back.
+func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
+	doc := make(map[string]interface{})
+	value := strings.Repeat("x", 2097152)
+	doc["key"] = value
+	indexedDoc := newIndexedJsonDocumentFromValue(t, ctx, ns, doc)
+
+	lookup, err := indexedDoc.Lookup(ctx, "$.key")
+	require.NoError(t, err)
+	extractedValue, _, err := types.LongText.Convert(lookup)
+	require.NoError(t, err)
+	require.Equal(t, value, extractedValue)
+}
