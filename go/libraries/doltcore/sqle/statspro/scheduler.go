@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -190,8 +192,14 @@ func (j ReadJob) JobType() StatsJobType {
 }
 
 func (j ReadJob) String() string {
-	//TODO implement me
-	panic("implement me")
+	b := strings.Builder{}
+	b.WriteString("read: " + j.db.RevisionQualifiedName() + "/" + j.table + ": ")
+	sep := ""
+	for _, o := range j.ordinals {
+		b.WriteString(fmt.Sprintf("%s[%d-%d]", sep, o.start, o.stop))
+		sep = ", "
+	}
+	return b.String()
 }
 
 type FinalizeJob struct {
@@ -210,8 +218,21 @@ func (j FinalizeJob) JobType() StatsJobType {
 }
 
 func (j FinalizeJob) String() string {
-	//TODO implement me
-	panic("implement me")
+	b := strings.Builder{}
+	b.WriteString("finalize " + j.tableKey.String())
+	b.WriteString(": ")
+	sep := ""
+	for idx, hashes := range j.indexes {
+		b.WriteString(fmt.Sprintf("%s(%s: ", sep, idx.idxName))
+		sep = ""
+		for _, h := range hashes {
+			b.WriteString(fmt.Sprintf("%s%s", sep, h.String()[:5]))
+			sep = ", "
+		}
+		b.WriteString(")")
+		sep = ", "
+	}
+	return b.String()
 }
 
 func NewControl(desc string, cb func(sc *StatsCoord) error) ControlJob {
@@ -237,19 +258,23 @@ func (j ControlJob) String() string {
 }
 
 func NewStatsCoord(sleep time.Duration, logger *logrus.Logger, threads *sql.BackgroundThreads) *StatsCoord {
+	done := make(chan struct{})
+	close(done)
 	return &StatsCoord{
 		dbMu:            &sync.Mutex{},
 		statsMu:         &sync.Mutex{},
 		logger:          logger,
 		Jobs:            make(chan StatsJob, 1024),
-		Done:            make(chan struct{}),
+		Done:            done,
 		Interrupts:      make(chan ControlJob),
-		SleepMult:       sleep,
+		JobInterval:     sleep,
 		gcInterval:      24 * time.Hour,
+		branchInterval:  24 * time.Hour,
 		BucketCache:     make(map[hash.Hash]*stats.Bucket),
 		LowerBoundCache: make(map[hash.Hash]sql.Row),
 		TemplateCache:   make(map[templateCacheKey]stats.Statistic),
 		Stats:           make(map[tableIndexesKey][]*stats.Statistic),
+		Branches:        make(map[string][]ref.DoltRef),
 		threads:         threads,
 	}
 }
@@ -260,13 +285,18 @@ type tableIndexesKey struct {
 	table  string
 }
 
-type StatsCoord struct {
-	logger    *logrus.Logger
-	SleepMult time.Duration
-	threads   *sql.BackgroundThreads
+func (k tableIndexesKey) String() string {
+	return k.db + "/" + k.branch + "/" + k.table
+}
 
-	dbMu *sync.Mutex
-	dbs  []sqle.Database
+type StatsCoord struct {
+	logger      *logrus.Logger
+	JobInterval time.Duration
+	threads     *sql.BackgroundThreads
+
+	dbMu           *sync.Mutex
+	dbs            []sqle.Database
+	branchInterval time.Duration
 
 	readCounter atomic.Int32
 	doGc        atomic.Bool
@@ -285,6 +315,7 @@ type StatsCoord struct {
 	// TemplateCache saves statistic templates based on table
 	// schema + index name
 	TemplateCache map[templateCacheKey]stats.Statistic
+	Branches      map[string][]ref.DoltRef
 
 	statsMu *sync.Mutex
 	// Stats tracks table statistics accessible to sessions.
@@ -316,9 +347,27 @@ func (sc *StatsCoord) Close() {
 }
 
 func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	dbd, ok := dSess.GetDbData(ctx, db.AliasedName())
+	if !ok {
+		sc.error(ControlJob{desc: "add db"}, fmt.Errorf("database in branches list does not exist: %s", db.AliasedName()))
+		ret := make(chan struct{})
+		close(ret)
+		return ret
+	}
+	curBranches, err := dbd.Ddb.GetBranches(ctx)
+	if err != nil {
+		sc.error(ControlJob{desc: "add db"}, err)
+		ret := make(chan struct{})
+		close(ret)
+		return ret
+	}
+
 	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
 	sc.dbs = append(sc.dbs, db)
-	sc.dbMu.Unlock()
+	sc.Branches[db.AliasedName()] = curBranches
+
 	return sc.Seed(ctx, db)
 }
 
@@ -371,12 +420,10 @@ func (sc *StatsCoord) putFirstRow(h hash.Hash, r sql.Row) {
 // event loop must be stopped
 func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
-	case _, ok := <-sc.Interrupts:
-		if ok {
-			return nil, fmt.Errorf("cannot read queue while event loop is active")
-		}
-		// inactive event loop cannot be interrupted, discard
+	case <-sc.Done:
 	default:
+		return nil, fmt.Errorf("cannot read queue while event loop is active")
+		// inactive event loop cannot be interrupted, discard
 	}
 	var ret []StatsJob
 	for _ = range len(sc.Jobs) {
@@ -412,20 +459,48 @@ func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan
 }
 
 func (sc *StatsCoord) error(j StatsJob, err error) {
+	fmt.Println(err.Error())
 	sc.logger.Debugf("stats error; job detail: %s; verbose: %s", j.String(), err)
 }
 
 // statsRunner operates on stats jobs
 func (sc *StatsCoord) run(ctx *sql.Context) error {
-	var start time.Time
 	jobTimer := time.NewTimer(0)
 	gcTicker := time.NewTicker(sc.gcInterval)
+	branchTicker := time.NewTicker(sc.branchInterval)
 
 	for {
+		select {
+		case <-sc.Done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-jobTimer.C:
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-sc.Done:
+				return nil
+			case j, ok := <-sc.Jobs:
+				if !ok {
+					return nil
+				}
+				newJobs, err := sc.executeJob(ctx, j)
+				if err != nil {
+					sc.error(j, err)
+				}
+				err = sc.sendJobs(ctx, newJobs)
+				if err != nil {
+					sc.error(j, err)
+				}
+				j.Finish()
+			default:
+			}
 		case <-gcTicker.C:
 			if sc.doGc.Load() {
 				if err := sc.gc(ctx); err != nil {
@@ -443,35 +518,25 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				sc.error(j, err)
 				continue
 			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-sc.Done:
-			return nil
-		case j, ok := <-sc.Jobs:
-			if !ok {
-				return nil
-			}
-			start = time.Now()
-			newJobs, err := sc.executeJob(ctx, j)
+		case <-branchTicker.C:
+			j := ControlJob{desc: "branch update"}
+			newJobs, err := sc.updateBranches(ctx, j)
 			if err != nil {
-				sc.error(j, err)
+				sc.error(ControlJob{desc: "branches update"}, err)
 			}
 			err = sc.sendJobs(ctx, newJobs)
 			if err != nil {
 				sc.error(j, err)
 			}
-			j.Finish()
 		}
-		jobTimer.Reset(time.Since(start) * sc.SleepMult)
+		jobTimer.Reset(sc.JobInterval)
 	}
 }
 
 func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs []StatsJob) error {
 	for i := 0; i < len(jobs); i++ {
 		j := jobs[i]
+		fmt.Printf("new job %s\n", j)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -522,6 +587,9 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	// return list of IO jobs for table/index/ordinal blocks
 	tableNames, err := j.sqlDb.GetTableNames(j.ctx)
 	if err != nil {
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
+			return []StatsJob{sc.dropBranchJob(j.sqlDb.AliasedName(), j.sqlDb.Revision())}, nil
+		}
 		return nil, err
 	}
 
@@ -670,6 +738,44 @@ func (sc *StatsCoord) dropTableJob(sqlDb sqle.Database, tableName string) StatsJ
 		},
 		indexes: nil,
 		done:    make(chan struct{}),
+	}
+}
+
+func (sc *StatsCoord) dropBranchJob(dbName string, branch string) ControlJob {
+	return ControlJob{
+		desc: "drop branch",
+		cb: func(sc *StatsCoord) error {
+			sc.dbMu.Lock()
+			defer sc.dbMu.Unlock()
+			curRefs := sc.Branches[branch]
+			for i, ref := range curRefs {
+				if strings.EqualFold(ref.GetPath(), branch) {
+					sc.Branches[branch] = append(curRefs[:i], curRefs[:i+1]...)
+					break
+				}
+			}
+			for i, db := range sc.dbs {
+				if strings.EqualFold(db.Revision(), branch) && strings.EqualFold(db.AliasedName(), dbName) {
+					sc.dbs = append(sc.dbs[:i], sc.dbs[1+1:]...)
+					break
+				}
+			}
+
+			// stats lock is more contentious, do last
+			sc.statsMu.Lock()
+			defer sc.statsMu.Unlock()
+			var deleteKeys []tableIndexesKey
+			for k, _ := range sc.Stats {
+				if strings.EqualFold(dbName, k.db) && strings.EqualFold(branch, k.branch) {
+					deleteKeys = append(deleteKeys, k)
+				}
+			}
+			for _, k := range deleteKeys {
+				delete(sc.Stats, k)
+			}
+			return nil
+		},
+		done: make(chan struct{}),
 	}
 }
 
@@ -831,7 +937,6 @@ func (sc *StatsCoord) gc(ctx *sql.Context) error {
 		}
 		for _, table := range tableNames {
 			sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
-			print(dTab)
 			if err != nil {
 				return err
 			}
@@ -896,5 +1001,86 @@ func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, e
 	if j.after.done != nil {
 		ret = append(ret, j.after)
 	}
+	return ret, nil
+}
+
+func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob, error) {
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	var ret []StatsJob
+	newBranches := make(map[string][]ref.DoltRef)
+	var newDbs []sqle.Database
+	for dbName, branches := range sc.Branches {
+		var sqlDb sqle.Database
+		for _, db := range sc.dbs {
+			if strings.EqualFold(db.AliasedName(), dbName) {
+				sqlDb = db
+				break
+			}
+		}
+
+		if sqlDb.Name() == "" {
+			sc.error(j, fmt.Errorf("database in branches list is not tracked: %s", dbName))
+			continue
+		}
+
+		dSess := dsess.DSessFromSess(ctx.Session)
+		dbd, ok := dSess.GetDbData(ctx, dbName)
+		if !ok {
+			sc.error(j, fmt.Errorf("database in branches list does not exist: %s", dbName))
+		}
+		curBranches, err := dbd.Ddb.GetBranches(ctx)
+		if err != nil {
+			sc.error(j, err)
+			continue
+		}
+
+		newBranches[sqlDb.AliasedName()] = curBranches
+
+		i := 0
+		k := 0
+		for i < len(branches) && k < len(curBranches) {
+			br := curBranches[k]
+			switch strings.Compare(branches[i].GetPath(), curBranches[k].GetPath()) {
+			case 0:
+				sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+				if err != nil {
+					sc.error(j, err)
+					continue
+				}
+				newDbs = append(newDbs, sqlDb.(sqle.Database))
+				i++
+				k++
+			case -1:
+				//ret = append(ret, sc.dropBranchJob(ctx, dbName, branches[i]))
+				i++
+			case +1:
+				// add
+				sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+				if err != nil {
+					sc.error(j, err)
+					continue
+				}
+
+				newDbs = append(newDbs, sqlDb.(sqle.Database))
+				ret = append(ret, NewSeedJob(ctx, sqlDb.(sqle.Database)))
+				k++
+			}
+		}
+		if k < len(curBranches) {
+			br := curBranches[k]
+			sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+			if err != nil {
+				sc.error(j, err)
+				continue
+			}
+
+			newDbs = append(newDbs, sqlDb.(sqle.Database))
+			ret = append(ret, NewSeedJob(ctx, sqlDb.(sqle.Database)))
+			k++
+		}
+	}
+	sc.Branches = newBranches
+	sc.dbs = newDbs
 	return ret, nil
 }

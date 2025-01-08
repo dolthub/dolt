@@ -134,37 +134,32 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
-	}
-	if branch == "" {
-		branch = "main"
-	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	for key, _ := range sc.Stats {
-		if strings.EqualFold(key.db, dbName) && strings.EqualFold(key.branch, branch) {
-			delete(sc.Stats, key)
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	for i := 0; i < len(sc.dbs); i++ {
+		db := sc.dbs[i]
+		if strings.EqualFold(db.AliasedName(), dbName) {
+			sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
+			i--
 		}
 	}
 
-	start := -1
-	end := len(sc.dbs)
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-	for i, db := range sc.dbs {
-		if strings.EqualFold(db.AliasedName(), dbName) && strings.EqualFold(db.Revision(), branch) {
-			if start < 0 {
-				start = i
-			}
-		} else if start > 0 && i < end {
-			end = i
+	delete(sc.Branches, dbName)
+
+	sc.doGc.Store(true)
+
+	// stats lock is more contentious, do last
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	var deleteKeys []tableIndexesKey
+	for k, _ := range sc.Stats {
+		if strings.EqualFold(dbName, k.db) {
+			deleteKeys = append(deleteKeys, k)
 		}
 	}
-	sc.dbs = append(sc.dbs[:start], sc.dbs[end:]...)
-	sc.doGc.Store(true)
+	for _, k := range deleteKeys {
+		delete(sc.Stats, k)
+	}
 
 	return nil
 }

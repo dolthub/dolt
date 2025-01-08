@@ -96,7 +96,7 @@ func TestScheduleLoop(t *testing.T) {
 	runAndPause(ctx, sc, &wg)
 
 	sc.gcInterval = time.Nanosecond
-	sc.SleepMult = time.Hour
+	sc.JobInterval = time.Hour
 
 	runAndPause(ctx, sc, &wg)
 
@@ -109,7 +109,6 @@ func TestScheduleLoop(t *testing.T) {
 	require.Equal(t, 7, len(stat[0].Hist))
 	require.Equal(t, 7, len(stat[1].Hist))
 	require.False(t, sc.doGc.Load())
-
 }
 
 func TestAnalyze(t *testing.T) {
@@ -265,7 +264,7 @@ func TestDropIndex(t *testing.T) {
 		require.True(t, sc.doGc.Load())
 
 		sc.gcInterval = time.Nanosecond
-		sc.SleepMult = time.Hour
+		sc.JobInterval = time.Hour
 
 		runAndPause(ctx, sc, &wg)
 
@@ -319,7 +318,7 @@ func TestDropTable(t *testing.T) {
 		require.True(t, sc.doGc.Load())
 
 		sc.gcInterval = time.Nanosecond
-		sc.SleepMult = time.Hour
+		sc.JobInterval = time.Hour
 
 		runAndPause(ctx, sc, &wg)
 
@@ -511,7 +510,7 @@ func TestGC(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // finalize
 
 		sc.gcInterval = time.Nanosecond
-		sc.SleepMult = time.Hour
+		sc.JobInterval = time.Hour
 		runAndPause(ctx, sc, &wg) // GC
 
 		// test for cleanup
@@ -519,6 +518,144 @@ func TestGC(t *testing.T) {
 		require.Equal(t, 3, len(sc.LowerBoundCache))
 		require.Equal(t, 3, len(sc.TemplateCache))
 		require.Equal(t, 2, len(sc.Stats))
+	}
+}
+
+func TestBranches(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
+
+	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+
+	{
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy')"))
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add t')"))
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "create database thirddb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "use thirddb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table s (i int primary key, j int, key (j))"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into s values (0,0), (1,1), (2,2)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add s')"))
+
+		var otherDb sqle.Database
+		var thirdDb sqle.Database
+		for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
+			if db.Name() == "otherdb" {
+				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
+				require.NoError(t, err)
+				otherDb = dsessDb.(sqle.Database)
+				addHook(ctx, nil, "otherdb", nil, otherDb)
+			}
+			if db.Name() == "thirddb" {
+				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
+				require.NoError(t, err)
+				thirdDb = dsessDb.(sqle.Database)
+				addHook(ctx, nil, "thirddb", nil, thirdDb)
+			}
+		}
+
+		runAndPause(ctx, sc, &wg) // read jobs
+		runAndPause(ctx, sc, &wg) // finalize
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat1')"))
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat2')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (2), (3)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'insert into t')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat3')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "drop table t"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'drop t')"))
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "use thirddb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat1')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "alter table s drop index j"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'drop index j')"))
+
+		runAndPause(ctx, sc, &wg) // pick up table changes
+		runAndPause(ctx, sc, &wg) // finalize
+
+		sc.branchInterval = time.Nanosecond
+		runAndPause(ctx, sc, &wg) // new branches
+
+		require.Equal(t, 7, len(sc.dbs))
+		stat, ok := sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t"}]
+		require.Equal(t, 1, len(stat))
+		stat = sc.Stats[tableIndexesKey{"thirddb", "main", "s"}]
+		require.Equal(t, 2, len(stat))
+
+		runAndPause(ctx, sc, &wg) // seed new branches
+		runAndPause(ctx, sc, &wg) // finalize branches
+
+		require.Equal(t, 7, len(sc.dbs))
+
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy"}]
+		require.True(t, ok)
+		require.Equal(t, 2, len(stat))
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		require.True(t, ok)
+		require.Equal(t, 1, len(stat))
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s"}]
+		require.True(t, ok)
+		require.Equal(t, 1, len(stat))
+
+		// mydb: 4 shared
+		// otherdb: 1 + 1
+		// thirddb: 2 + shared
+		require.Equal(t, 4+2+2, len(sc.BucketCache))
+		require.Equal(t, 2+(1+1)+2, len(sc.LowerBoundCache))
+		require.Equal(t, 2+1+(2+1), len(sc.TemplateCache))
+		require.Equal(t, 7-1, len(sc.Stats))
+
+		dropHook := NewStatsDropDatabaseHook2(sc)
+		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
+		dropHook(ctx, "otherdb")
+
+		runAndPause(ctx, sc, &wg) // finalize drop otherdb
+
+		require.Equal(t, 4, len(sc.dbs))
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t"}]
+		require.False(t, ok)
+
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('-D', 'feat1')"))
+
+		runAndPause(ctx, sc, &wg) // detect deleted branch
+		runAndPause(ctx, sc, &wg) // process branch delete
+
+		require.Equal(t, 3, len(sc.dbs))
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy"}]
+		require.False(t, ok)
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		require.True(t, ok)
+
+		sc.gcInterval = time.Nanosecond
+		runAndPause(ctx, sc, &wg) // GC
+
+		// 3 dbs remaining, mydb/main, thirddb/feat1, thirddb/main
+		require.Equal(t, 4+2, len(sc.BucketCache))
+		require.Equal(t, 4, len(sc.LowerBoundCache))
+		require.Equal(t, 5, len(sc.TemplateCache))
+		require.Equal(t, 3, len(sc.Stats))
 	}
 }
 
@@ -541,7 +678,10 @@ func TestReadCounter(t *testing.T) {
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
 	dEnv := dtestutils.CreateTestEnv()
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
-
+	ctx.Session.SetClient(sql.Client{
+		User:    "billy boy",
+		Address: "bigbillie@fake.horse",
+	})
 	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int, key (y,x))"))
@@ -645,7 +785,7 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 	jobs, err := sc.flushQueue(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, len(expected), len(jobs))
+	require.Equal(t, len(expected), len(jobs), fmt.Sprintf("expected: %s; found: %s", expected, jobs))
 	for i, j := range jobs {
 		switch j := j.(type) {
 		case SeedDbTablesJob:
