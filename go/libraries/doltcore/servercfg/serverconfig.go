@@ -302,7 +302,6 @@ const (
 	RemotesapiReadOnlyKey           = "remotesapi_read_only"
 	ClusterConfigKey                = "cluster_config"
 	EventSchedulerKey               = "event_scheduler"
-	GoldenMysqlConnectionStringKey  = "golden_mysql_connection_string"
 )
 
 type SystemVariableTarget interface {

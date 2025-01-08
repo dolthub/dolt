@@ -517,7 +517,6 @@ func TestGenerateYamlConfig(t *testing.T) {
 		"--user", "my_name",
 		"--timeout", "11",
 		"--branch-control-file", "dir1/dir2/abc.db",
-		"--golden", "abc:xyz@tcp(127.0.0.1:3306)/db123",
 	}
 
 	expected := `# This file was generated using your configuration.
@@ -611,9 +610,7 @@ branch_control_file: dir1/dir2/abc.db
     # field2: b
   # fields_to_log:
   # - field1
-  # - field2
-
-golden_mysql_conn: abc:xyz@tcp(127.0.0.1:3306)/db123`
+  # - field2`
 
 	ap := SqlServerCmd{}.ArgParser()
 

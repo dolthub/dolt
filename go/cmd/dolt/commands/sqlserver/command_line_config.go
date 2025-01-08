@@ -177,7 +177,6 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
 		cli.Println(connStr)
 		config.withGoldenMysqlConnectionString(connStr)
-		config.valuesSet[servercfg.GoldenMysqlConnectionStringKey] = struct{}{}
 	}
 
 	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
