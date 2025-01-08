@@ -527,10 +527,6 @@ func generateYamlConfigIfNone(
 	const yamlConfigName = "config.yaml"
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if err := validateSqlServerArgs(apr); err != nil {
-		cli.PrintErrln(color.RedString(err.Error()))
-		return err
-	}
 
 	if apr.Contains(configFileFlag) {
 		return nil
