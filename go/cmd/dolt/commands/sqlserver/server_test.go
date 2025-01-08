@@ -523,8 +523,11 @@ func TestGenerateYamlConfig(t *testing.T) {
 	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
 	require.NoError(t, err)
 
-	expected := `# This file was generated using your configuration.
+	expected := `# Dolt SQL server configuration
+#
 # Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#
 
 # log_level: info
 
@@ -559,17 +562,28 @@ listener:
 
 # cfg_dir: .doltcfg
 
-# metrics:
-  # labels:
-    # label1: value1
-    # label2: "2"
-    # label3: "true"
-  # host: 123.45.67.89
-  # port: 9091
-
 # remotesapi:
   # port: 8000
   # read_only: false
+
+# privilege_file: ` + privilegeFilePath +
+		`
+
+branch_control_file: dir1/dir2/abc.db
+
+# user_session_vars:
+# - name: root
+  # vars:
+    # dolt_log_level: warn
+    # dolt_show_system_tables: 1
+
+# system_variables:
+  # dolt_log_level: info
+  # dolt_transaction_commit: 1
+
+# metrics:
+  # host: localhost
+  # port: 9091
 
 # cluster:
   # standby_remotes:
@@ -590,32 +604,7 @@ listener:
     # - https://standby_replica_two.svc.cluster.local
     # server_name_dns:
     # - standby_replica_one.svc.cluster.local
-    # - standby_replica_two.svc.cluster.local
-
-# privilege_file: ` + privilegeFilePath +
-		`
-
-branch_control_file: dir1/dir2/abc.db
-
-# user_session_vars:
-# - name: root
-  # vars:
-    # dolt_log_level: warn
-    # dolt_show_system_tables: 1
-
-# system_variables:
-  # dolt_log_level: info
-  # dolt_transaction_commit: 1
-
-# jwks:
-# - name: name1
-  # location_url: https://example.com
-  # claims:
-    # field1: a
-    # field2: b
-  # fields_to_log:
-  # - field1
-  # - field2`
+    # - standby_replica_two.svc.cluster.local`
 
 	ap := SqlServerCmd{}.ArgParser()
 
