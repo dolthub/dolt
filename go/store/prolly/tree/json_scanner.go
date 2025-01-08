@@ -118,6 +118,14 @@ func (s *JsonScanner) AdvanceToNextLocation() error {
 		} else {
 			return s.acceptNextKeyValue()
 		}
+	case middleOfString:
+		_, finishedString, err := s.acceptRestOfString()
+		if finishedString {
+			s.currentPath.setScannerState(endOfValue)
+		} else {
+			s.currentPath.setScannerState(middleOfString)
+		}
+		return err
 	default:
 		return jsonParseError
 	}
@@ -127,11 +135,16 @@ func (s *JsonScanner) acceptValue() error {
 	current := s.current()
 	switch current {
 	case '"':
-		_, err := s.acceptString()
+		_, finishedString, err := s.acceptString()
 		if err != nil {
 			return err
 		}
-		s.currentPath.setScannerState(endOfValue)
+		if finishedString {
+			s.currentPath.setScannerState(endOfValue)
+		} else {
+			s.currentPath.setScannerState(middleOfString)
+		}
+
 		return nil
 	case '[':
 		s.valueOffset++
@@ -177,22 +190,33 @@ func (s *JsonScanner) accept(b byte) error {
 	return nil
 }
 
-func (s *JsonScanner) acceptString() ([]byte, error) {
-	err := s.accept('"')
+func (s *JsonScanner) acceptString() (stringBytes []byte, finishedString bool, err error) {
+	err = s.accept('"')
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	return s.acceptRestOfString()
+}
+
+func (s *JsonScanner) acceptRestOfString() (stringBytes []byte, finishedString bool, err error) {
 	stringStart := s.valueOffset
-	for s.current() != '"' {
+	stringLength := 0
+	for s.current() != '"' && stringLength < 1000 {
 		switch s.current() {
 		case '\\':
 			s.valueOffset++
 		}
 		s.valueOffset++
+		stringLength++
 	}
 	result := s.jsonBuffer[stringStart:s.valueOffset]
+	if stringLength == 1000 {
+		// Split the segment here, so that the chunk doesn't get too large.
+		return result, false, nil
+	}
+	// Advance past the ending quotes
 	s.valueOffset++
-	return result, nil
+	return result, true, nil
 }
 
 func (s *JsonScanner) acceptKeyValue() error {
@@ -228,7 +252,10 @@ func (s *JsonScanner) acceptNextKeyValue() error {
 }
 
 func (s *JsonScanner) acceptObjectKey() error {
-	objectKey, err := s.acceptString()
+	objectKey, finishedString, err := s.acceptString()
+	if !finishedString {
+		// a very long key that might not fit? How to handle this?
+	}
 	if err != nil {
 		return err
 	}

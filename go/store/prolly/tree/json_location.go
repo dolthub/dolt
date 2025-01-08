@@ -16,7 +16,6 @@ package tree
 
 import (
 	"bytes"
-	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -69,7 +68,24 @@ const (
 	objectInitialElement
 	arrayInitialElement
 	endOfValue
+	middleOfString
 )
+
+func compareJsonPathTypes(left, right jsonPathType) int {
+	if left == startOfValue && right != startOfValue {
+		return -1
+	}
+	if left == endOfValue && right != endOfValue {
+		return 1
+	}
+	if right == startOfValue && left != startOfValue {
+		return 1
+	}
+	if right == endOfValue && left != endOfValue {
+		return -1
+	}
+	return 0
+}
 
 func (t jsonPathType) isInitialElement() bool {
 	return t == objectInitialElement || t == arrayInitialElement
@@ -170,7 +186,7 @@ func isUnsupportedJsonArrayIndex(index []byte) bool {
 }
 
 func errorIfNotSupportedLocation(key []byte) error {
-	if jsonPathType(key[0]) > endOfValue {
+	if jsonPathType(key[0]) > middleOfString {
 		return unknownLocationKeyError
 	}
 	return nil
@@ -336,6 +352,10 @@ func (p *jsonLocation) getScannerState() jsonPathType {
 	return jsonPathType(p.key[0])
 }
 
+func (p jsonLocation) IsMiddleOfString() bool {
+	return p.getScannerState() == middleOfString
+}
+
 type jsonPathElement struct {
 	key          []byte
 	isArrayIndex bool
@@ -429,7 +449,7 @@ func compareJsonLocations(left, right jsonLocation) int {
 		return -1
 	}
 	// left and right have the exact same key elements
-	return cmp.Compare(left.getScannerState(), right.getScannerState())
+	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
 
 }
 
