@@ -310,11 +310,11 @@ func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Has
 	}
 	sqlCtx, isSqlCtx := ctx.(*sql.Context)
 	if isSqlCtx {
-		dontOptimizeJson, err := sqlCtx.Session.GetSessionVariable(sqlCtx, "dolt_dont_optimize_json")
+		dontOptimizeJson, err := sqlCtx.Session.GetSessionVariable(sqlCtx, "dolt_optimize_json")
 		if err != nil {
 			return hash.Hash{}, err
 		}
-		if dontOptimizeJson != 0 {
+		if dontOptimizeJson == uint8(0) {
 			buf, err := types.MarshallJson(j)
 			if err != nil {
 				return hash.Hash{}, err

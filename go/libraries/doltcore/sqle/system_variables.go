@@ -212,11 +212,11 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: int8(0),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    "dolt_dont_optimize_json",
+		Name:    "dolt_optimize_json",
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType("dolt_dont_optimize_json"),
-		Default: int8(0),
+		Type:    types.NewSystemBoolType("dolt_optimize_json"),
+		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsAutoRefreshEnabled,

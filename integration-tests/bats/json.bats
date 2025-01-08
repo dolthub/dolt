@@ -266,7 +266,7 @@ SQL
 # We expect that the document gets stored as a blob.
 @test "json: Test dolt_dont_optimize_json system variable" {
     run dolt sql <<SQL
-    set @@dolt_dont_optimize_json = 1;
+    set @@dolt_optimize_json = 0;
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
