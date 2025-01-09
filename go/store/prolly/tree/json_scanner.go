@@ -16,8 +16,9 @@ package tree
 
 import (
 	"fmt"
-	errorkinds "gopkg.in/src-d/go-errors.v1"
 	"io"
+
+	errorkinds "gopkg.in/src-d/go-errors.v1"
 )
 
 // JsonScanner is a state machine that parses already-normalized JSON while keeping track of the path to the current value.
