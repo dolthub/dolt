@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 )
@@ -150,7 +149,7 @@ func (gen *FixedRateDataGenerator) Read(p []byte) (int, error) {
 	case <-time.After(nextRead):
 		gen.dataGenerated += uint64(gen.BytesPerInterval)
 		gen.lastRead = time.Now()
-		return mathutil.Min(gen.BytesPerInterval, len(p)), nil
+		return min(gen.BytesPerInterval, len(p)), nil
 	}
 }
 
