@@ -460,12 +460,15 @@ func TestJsonCompare(t *testing.T) {
 func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
-	doc := make(map[string]interface{})
+	docMap := make(map[string]interface{})
 	value := strings.Repeat("x", 2097152)
-	doc["key"] = value
-	indexedDoc := newIndexedJsonDocumentFromValue(t, ctx, ns, doc)
-
-	lookup, err := indexedDoc.Lookup(ctx, "$.key")
+	docMap["key"] = value
+	doc, _, err := types.JSON.Convert(docMap)
+	require.NoError(t, err)
+	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
+	require.NoError(t, err)
+	indexedDoc, err := NewJSONDoc(root.HashOf(), ns).ToIndexedJSONDocument(ctx)
+	lookup, err := types.LookupJSONValue(indexedDoc, "$.key")
 	require.NoError(t, err)
 	extractedValue, _, err := types.LongText.Convert(lookup)
 	require.NoError(t, err)
