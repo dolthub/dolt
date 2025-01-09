@@ -38,7 +38,6 @@ CREATE TABLE big (
 );
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
-SQL
 dolt add .
 dolt commit -m "initialized data"
 dolt branch init
