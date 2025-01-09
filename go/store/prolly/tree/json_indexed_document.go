@@ -114,8 +114,8 @@ func tryWithFallback(
 	tryFunc func() error,
 	fallbackFunc func(document types.JSONDocument) error) error {
 	err := tryFunc()
-	if err == unknownLocationKeyError || err == unsupportedPathError || largeJsonStringError.Is(err) {
-		if err == unknownLocationKeyError {
+	if err == unknownLocationKeyError || err == unsupportedPathError || err == jsonParseError || largeJsonStringError.Is(err) {
+		if err != unsupportedPathError {
 			if sqlCtx, ok := ctx.(*sql.Context); ok {
 				sqlCtx.GetLogger().Warn(err)
 			}
