@@ -69,6 +69,7 @@ const (
 	arrayInitialElement
 	endOfValue
 	middleOfStringValue
+	jsonPathTypeNumElements
 )
 
 func compareJsonPathTypes(left, right jsonPathType) (int, error) {
@@ -190,7 +191,7 @@ func isUnsupportedJsonArrayIndex(index []byte) bool {
 }
 
 func errorIfNotSupportedLocation(key []byte) error {
-	if jsonPathType(key[0]) > middleOfStringValue {
+	if jsonPathType(key[0]) > jsonPathTypeNumElements {
 		return unknownLocationKeyError
 	}
 	return nil

@@ -236,14 +236,14 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
 		if err != nil {
 			return err
 		}
 		tb.PutGeometryAddr(i, h)
 	case val.GeomAddrEnc:
 		geo := serializeGeometry(v)
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
 		if err != nil {
 			return err
 		}
@@ -255,14 +255,14 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
 		if err != nil {
 			return err
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
 		if err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		if err != nil {
 			return err
 		}
-		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 		if err != nil {
 			return err
 		}
@@ -315,11 +315,8 @@ func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Has
 			return hash.Hash{}, err
 		}
 		if optimizeJson == int8(0) {
-			buf, err := types.MarshallJson(j)
-			if err != nil {
-				return hash.Hash{}, err
-			}
-			return SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
+			_, h, err := serializeJsonToBlob(ctx, ns, j)
+			return h, err
 		}
 	}
 	root, err := SerializeJsonToAddr(ctx, ns, j)
@@ -327,6 +324,14 @@ func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Has
 		return hash.Hash{}, err
 	}
 	return root.HashOf(), nil
+}
+
+func serializeJsonToBlob(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (Node, hash.Hash, error) {
+	buf, err := types.MarshallJson(j)
+	if err != nil {
+		return Node{}, hash.Hash{}, err
+	}
+	return SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
 }
 
 func convInt(v interface{}) int {
@@ -417,15 +422,15 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
+func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (Node, hash.Hash, error) {
 	bb := ns.BlobBuilder()
 	defer ns.PutBlobBuilder(bb)
 	bb.Init(dataSize)
-	_, addr, err := bb.Chunk(ctx, r)
+	node, addr, err := bb.Chunk(ctx, r)
 	if err != nil {
-		return hash.Hash{}, err
+		return Node{}, hash.Hash{}, err
 	}
-	return addr, nil
+	return node, addr, nil
 }
 
 func convJson(v interface{}) (res sql.JSONWrapper, err error) {
