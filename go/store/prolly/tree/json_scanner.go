@@ -208,6 +208,8 @@ func (s *JsonScanner) acceptKeyString() (stringBytes []byte, err error) {
 	stringStart := s.valueOffset
 	for s.current() != '"' {
 		switch s.current() {
+		case endOfFile:
+			return nil, jsonParseError
 		case '\\':
 			s.valueOffset++
 		}
