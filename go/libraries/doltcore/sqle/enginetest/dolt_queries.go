@@ -4786,11 +4786,8 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Skip: true,
-				// TODO: The JSON is coming back truncated for some reason and failing this test.
-				//       When that's fixed, unskip this test, and fix the length value below.
-				Query:    `SELECT pk, length(j1) from t;`,
-				Expected: []sql.Row{{1, 123}},
+				Query:    `SELECT pk, length(j1->>"$.large_value") from t;`,
+				Expected: []sql.Row{{1, 1024 * 1024 * 3}},
 			},
 		},
 	},

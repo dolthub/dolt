@@ -16,7 +16,6 @@ package tree
 
 import (
 	"bytes"
-	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -69,7 +68,29 @@ const (
 	objectInitialElement
 	arrayInitialElement
 	endOfValue
+	middleOfStringValue
+	jsonPathTypeNumElements
 )
+
+func compareJsonPathTypes(left, right jsonPathType) (int, error) {
+	if left >= jsonPathTypeNumElements || right >= jsonPathTypeNumElements {
+		// These paths were written by a future version of Dolt. We can't assume anything about them.
+		return 0, unknownLocationKeyError
+	}
+	if left == startOfValue && right != startOfValue {
+		return -1, nil
+	}
+	if left == endOfValue && right != endOfValue {
+		return 1, nil
+	}
+	if right == startOfValue && left != startOfValue {
+		return 1, nil
+	}
+	if right == endOfValue && left != endOfValue {
+		return -1, nil
+	}
+	return 0, nil
+}
 
 func (t jsonPathType) isInitialElement() bool {
 	return t == objectInitialElement || t == arrayInitialElement
@@ -170,7 +191,7 @@ func isUnsupportedJsonArrayIndex(index []byte) bool {
 }
 
 func errorIfNotSupportedLocation(key []byte) error {
-	if jsonPathType(key[0]) > endOfValue {
+	if jsonPathType(key[0]) > jsonPathTypeNumElements {
 		return unknownLocationKeyError
 	}
 	return nil
@@ -336,6 +357,10 @@ func (p *jsonLocation) getScannerState() jsonPathType {
 	return jsonPathType(p.key[0])
 }
 
+func (p jsonLocation) IsMiddleOfString() bool {
+	return p.getScannerState() == middleOfStringValue
+}
+
 type jsonPathElement struct {
 	key          []byte
 	isArrayIndex bool
@@ -378,17 +403,17 @@ func (p *jsonLocation) Clone() jsonLocation {
 
 // compareJsonLocations creates an ordering on locations by determining which one would come first in a normalized JSON
 // document where all keys are sorted lexographically.
-func compareJsonLocations(left, right jsonLocation) int {
+func compareJsonLocations(left, right jsonLocation) (int, error) {
 	minLength := min(left.size(), right.size())
 	for i := 0; i < minLength; i++ {
 		leftPathElement := left.getPathElement(i)
 		rightPathElement := right.getPathElement(i)
 		c := bytes.Compare(leftPathElement.key, rightPathElement.key)
 		if c < 0 {
-			return -1
+			return -1, nil
 		}
 		if c > 0 {
-			return 1
+			return 1, nil
 		}
 	}
 	if left.size() < right.size() {
@@ -400,14 +425,14 @@ func compareJsonLocations(left, right jsonLocation) int {
 			if left.getScannerState() == objectInitialElement {
 				rightIsArray := right.getLastPathElement().isArrayIndex
 				if rightIsArray {
-					return 1
+					return 1, nil
 				}
 			}
 		}
 		if left.getScannerState() != endOfValue {
-			return -1
+			return -1, nil
 		}
-		return 1
+		return 1, nil
 	}
 	if left.size() > right.size() {
 		// right is a parent of left
@@ -418,26 +443,28 @@ func compareJsonLocations(left, right jsonLocation) int {
 			if right.getScannerState() == objectInitialElement {
 				leftIsArray := left.getLastPathElement().isArrayIndex
 				if leftIsArray {
-					return -1
+					return -1, nil
 				}
 			}
 		}
 
 		if right.getScannerState() != endOfValue {
-			return 1
+			return 1, nil
 		}
-		return -1
+		return -1, nil
 	}
 	// left and right have the exact same key elements
-	return cmp.Compare(left.getScannerState(), right.getScannerState())
+	return compareJsonPathTypes(left.getScannerState(), right.getScannerState())
 
 }
 
-type jsonLocationOrdering struct{}
+type jsonLocationOrdering struct {
+	err error // store errors created during comparisons
+}
 
-var _ Ordering[[]byte] = jsonLocationOrdering{}
+var _ Ordering[[]byte] = &jsonLocationOrdering{}
 
-func (jsonLocationOrdering) Compare(left, right []byte) int {
+func (o *jsonLocationOrdering) Compare(left, right []byte) int {
 	// A JSON document that fits entirely in a single chunk has no keys,
 	if len(left) == 0 && len(right) == 0 {
 		return 0
@@ -448,5 +475,9 @@ func (jsonLocationOrdering) Compare(left, right []byte) int {
 	}
 	leftPath := jsonPathFromKey(left)
 	rightPath := jsonPathFromKey(right)
-	return compareJsonLocations(leftPath, rightPath)
+	cmp, err := compareJsonLocations(leftPath, rightPath)
+	if err != nil {
+		o.err = err
+	}
+	return cmp
 }
