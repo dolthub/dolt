@@ -31,7 +31,7 @@ type jsonLocationKey = []byte
 
 type address = []byte
 
-type StaticJsonMap = StaticMap[jsonLocationKey, address, jsonLocationOrdering]
+type StaticJsonMap = StaticMap[jsonLocationKey, address, *jsonLocationOrdering]
 
 // IndexedJsonDocument is an implementation of sql.JSONWrapper that stores the document in a prolly tree.
 // Every leaf node in the tree is a blob containing a substring of the original document. This allows the document
@@ -51,10 +51,10 @@ var _ fmt.Stringer = IndexedJsonDocument{}
 var _ driver.Valuer = IndexedJsonDocument{}
 
 func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) IndexedJsonDocument {
-	m := StaticMap[jsonLocationKey, address, jsonLocationOrdering]{
+	m := StaticMap[jsonLocationKey, address, *jsonLocationOrdering]{
 		Root:      root,
 		NodeStore: ns,
-		Order:     jsonLocationOrdering{},
+		Order:     &jsonLocationOrdering{},
 	}
 	return IndexedJsonDocument{
 		m: m,
@@ -282,7 +282,10 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 	// For example, attempting to insert into the path "$.a.b" in the document {"a": 1}
 	// We can detect this by checking to see if the insertion point in the original document comes before the inserted path.
 	// (For example, the insertion point occurs at $.a.START, which is before $.a.b)
-	cmp := compareJsonLocations(cursorPath, keyPath)
+	cmp, err := compareJsonLocations(cursorPath, keyPath)
+	if err != nil {
+		return IndexedJsonDocument{}, false, err
+	}
 	if cmp < 0 && cursorPath.getScannerState() == startOfValue {
 		// We just attempted to insert into a scalar.
 		return i, false, nil
@@ -444,7 +447,11 @@ func (i IndexedJsonDocument) setWithLocation(ctx context.Context, keyPath jsonLo
 		}
 
 		keyPath.pop()
-		found = compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath) == 0
+		cmp, err := compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath)
+		if err != nil {
+			return IndexedJsonDocument{}, false, err
+		}
+		found = cmp == 0
 	}
 
 	if found {
@@ -491,7 +498,11 @@ func (i IndexedJsonDocument) tryReplace(ctx context.Context, path string, val sq
 		}
 
 		keyPath.pop()
-		found = compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath) == 0
+		cmp, err := compareJsonLocations(keyPath, jsonCursor.jsonScanner.currentPath)
+		if err != nil {
+			return nil, false, err
+		}
+		found = cmp == 0
 	}
 
 	if !found {

@@ -23,7 +23,7 @@ import (
 )
 
 type IndexedJsonDiffer struct {
-	differ                             Differ[jsonLocationKey, jsonLocationOrdering]
+	differ                             Differ[jsonLocationKey, *jsonLocationOrdering]
 	currentFromCursor, currentToCursor *JsonCursor
 	from, to                           IndexedJsonDocument
 	started                            bool
@@ -32,8 +32,12 @@ type IndexedJsonDiffer struct {
 var _ IJsonDiffer = &IndexedJsonDiffer{}
 
 func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*IndexedJsonDiffer, error) {
-	differ, err := DifferFromRoots[jsonLocationKey, jsonLocationOrdering](ctx, from.m.NodeStore, to.m.NodeStore, from.m.Root, to.m.Root, jsonLocationOrdering{}, false)
+	ordering := jsonLocationOrdering{}
+	differ, err := DifferFromRoots[jsonLocationKey, *jsonLocationOrdering](ctx, from.m.NodeStore, to.m.NodeStore, from.m.Root, to.m.Root, &ordering, false)
 	if err != nil {
+		return nil, err
+	}
+	if ordering.err != nil {
 		return nil, err
 	}
 	// We want to diff the prolly tree as if it was an address map pointing to the individual blob fragments, rather
@@ -225,7 +229,11 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 			// Neither cursor points to the start of a value.
 			// This should only be possible if they're at the same location.
 			// Do a sanity check, then continue.
-			if compareJsonLocations(fromCurrentLocation, toCurrentLocation) != 0 {
+			cmp, err := compareJsonLocations(fromCurrentLocation, toCurrentLocation)
+			if err != nil {
+				return JsonDiff{}, err
+			}
+			if cmp != 0 {
 				return JsonDiff{}, jsonParseError
 			}
 			err = advanceCursor(ctx, &jd.currentFromCursor)
@@ -240,7 +248,10 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 		}
 
 		if fromScannerAtStartOfValue && toScannerAtStartOfValue {
-			cmp := compareJsonLocations(fromCurrentLocation, toCurrentLocation)
+			cmp, err := compareJsonLocations(fromCurrentLocation, toCurrentLocation)
+			if err != nil {
+				return JsonDiff{}, err
+			}
 			switch cmp {
 			case 0:
 				key := fromCurrentLocation.Clone().key
