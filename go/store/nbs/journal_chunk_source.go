@@ -182,6 +182,10 @@ func (s journalChunkSource) hash() hash.Hash {
 	return journalAddr
 }
 
+func (s journalChunkSource) name() string {
+	return s.hash().String()
+}
+
 // reader implements chunkSource.
 func (s journalChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
 	rdr, sz, err := s.journal.snapshot(ctx)
@@ -298,10 +302,10 @@ func equalSpecs(left, right []tableSpec) bool {
 	}
 	l := make(map[hash.Hash]struct{}, len(left))
 	for _, s := range left {
-		l[s.name] = struct{}{}
+		l[s.hash] = struct{}{}
 	}
 	for _, s := range right {
-		if _, ok := l[s.name]; !ok {
+		if _, ok := l[s.hash]; !ok {
 			return false
 		}
 	}

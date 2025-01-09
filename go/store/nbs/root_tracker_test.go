@@ -404,7 +404,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.FormatLD1String, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks) + 1)}}, nil)
+	fm.set(constants.FormatLD1String, newLock, newRoot, []tableSpec{{typeNoms, src.hash(), uint32(len(chunks) + 1)}}, nil)
 
 	if err = src.close(); err != nil {
 		return [20]byte{}, nil, err

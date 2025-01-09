@@ -48,8 +48,14 @@ type ChunkFetcher struct {
 	eg    *errgroup.Group
 	egCtx context.Context
 
+	// toGetCh is the channel used to request chunks. This will be initially given a root,
+	// and as refs are found, they will be added to the channel for workers to batch and request. NM4.
 	toGetCh chan hash.HashSet
-	resCh   chan nbs.ToChunker
+
+	// resCh is the results channel for the fetcher. It is used both to return
+	// chunks themselves, and to indicate which chunks were requested but missing
+	// buy having a Hash, but are empty. NM4.
+	resCh chan nbs.ToChunker
 
 	abortCh chan struct{}
 	stats   StatsRecorder

@@ -68,13 +68,13 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	assert.Equal(newLock, contents.lock)
 	assert.Equal(newRoot, contents.root)
 	if assert.Len(contents.appendix, 1) {
-		assert.Equal(tableName.String(), contents.specs[0].name.String())
+		assert.Equal(tableName.String(), contents.specs[0].hash.String())
 		assert.Equal(uint32(0), contents.specs[0].chunkCount)
-		assert.Equal(tableName.String(), contents.appendix[0].name.String())
+		assert.Equal(tableName.String(), contents.appendix[0].hash.String())
 		assert.Equal(uint32(0), contents.appendix[0].chunkCount)
 	}
 	if assert.Len(contents.specs, 2) {
-		assert.Equal(tableName.String(), contents.specs[1].name.String())
+		assert.Equal(tableName.String(), contents.specs[1].hash.String())
 		assert.Equal(uint32(0), contents.specs[1].chunkCount)
 	}
 }
@@ -109,7 +109,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	stats := &Stats{}
 
 	// First, test winning the race against another process.
-	contents := makeContents("locker", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
+	contents := makeContents("locker", "nuroot", []tableSpec{{typeNoms, computeAddr([]byte("a")), 3}}, nil)
 	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
@@ -145,7 +145,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
-	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)
+	assert.Equal([]tableSpec{{typeNoms, tableName, 1}}, upstream.specs)
 }
 
 func TestDynamoManifestUpdateAppendix(t *testing.T) {
@@ -155,11 +155,11 @@ func TestDynamoManifestUpdateAppendix(t *testing.T) {
 
 	// First, test winning the race against another process.
 	specs := []tableSpec{
-		{computeAddr([]byte("app-a")), 3},
-		{computeAddr([]byte("a")), 3},
+		{typeNoms, computeAddr([]byte("app-a")), 3},
+		{typeNoms, computeAddr([]byte("a")), 3},
 	}
 
-	app := []tableSpec{{computeAddr([]byte("app-a")), 3}}
+	app := []tableSpec{{typeNoms, computeAddr([]byte("app-a")), 3}}
 	contents := makeContents("locker", "nuroot", specs, app)
 
 	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
@@ -204,8 +204,8 @@ func TestDynamoManifestUpdateAppendix(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
-	assert.Equal([]tableSpec{{appTableName, 1}, {tableName, 1}}, upstream.specs)
-	assert.Equal([]tableSpec{{appTableName, 1}}, upstream.appendix)
+	assert.Equal([]tableSpec{{typeNoms, appTableName, 1}, {typeNoms, tableName, 1}}, upstream.specs)
+	assert.Equal([]tableSpec{{typeNoms, appTableName, 1}}, upstream.appendix)
 }
 
 func TestDynamoManifestCaching(t *testing.T) {
@@ -231,7 +231,7 @@ func TestDynamoManifestCaching(t *testing.T) {
 
 	// When failing the optimistic lock, we should hit persistent storage.
 	reads = ddb.NumGets()
-	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
+	contents := makeContents("lock2", "nuroot", []tableSpec{{typeNoms, computeAddr([]byte("a")), 3}}, nil)
 	upstream, err := mm.Update(context.Background(), hash.Hash{}, contents, stats, nil)
 	require.NoError(t, err)
 	assert.NotEqual(contents.lock, upstream.lock)
