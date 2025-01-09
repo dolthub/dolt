@@ -56,6 +56,13 @@ func SerializeJsonToAddr(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (
 	}
 	jsonChunker.appendJsonToBuffer(jsonBytes)
 	err = jsonChunker.processBuffer(ctx)
+	if largeJsonStringError.Is(err) {
+		// Due to current limits on chunk sizes, and an inability of older clients to read
+		// string keys and values split across multiple chunks, we can't use the JSON chunker for documents
+		// with extremely long strings.
+		node, _, err := serializeJsonToBlob(ctx, ns, j)
+		return node, err
+	}
 	if err != nil {
 		return Node{}, err
 	}
