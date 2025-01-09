@@ -355,7 +355,7 @@ func convInt(v interface{}) int {
 	case uint64:
 		return int(i)
 	default:
-		panic("impossible conversion")
+		panic(fmt.Sprintf("impossible conversion: %T cannot be converted to int", v))
 	}
 }
 
@@ -382,7 +382,7 @@ func convUint(v interface{}) uint {
 	case uint64:
 		return uint(i)
 	default:
-		panic("impossible conversion")
+		panic(fmt.Sprintf("impossible conversion: %T cannot be converted to uint", v))
 	}
 }
 
