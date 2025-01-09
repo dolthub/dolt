@@ -180,7 +180,7 @@ func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) 
 	var cmp int
 	var err error
 	for i, pkOrd := range pkOrds {
-		cmp, err = tf.schema1[i].Type.Compare(row1[pkOrd], row2[pkOrd])
+		cmp, err = tf.schema1[i].Type.Compare(row1.GetValue(pkOrd), row2.GetValue(pkOrd))
 		if err != nil {
 			return 0, false, err
 		}
@@ -189,8 +189,8 @@ func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) 
 		}
 	}
 	var diff bool
-	for i := 0; i < len(row1); i++ {
-		if row1[i] != row2[i] {
+	for i := 0; i < row1.Len(); i++ {
+		if row1.GetValue(i) != row2.GetValue(i) {
 			diff = true
 			break
 		}
@@ -211,8 +211,8 @@ func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowI
 // keylessRowIter uses the entire row for difference comparison
 func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 	var results []sql.Row
-	var newRow sql.Row
-	nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
+	var newRow sql.UntypedSqlRow
+	nilRow1, nilRow2 := make(sql.UntypedSqlRow, len(tf.schema1)), make(sql.UntypedSqlRow, len(tf.schema2))
 	for {
 		row, err := tf.rowIter1.Next(tf.ctx)
 		if err == io.EOF {
@@ -221,7 +221,7 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 		if err != nil {
 			return nil, err
 		}
-		newRow = append(append(row, nilRow2...), "deleted")
+		newRow = append(append(row.Values(), nilRow2...), "deleted")
 		results = append(results, newRow)
 	}
 	for {
@@ -232,7 +232,7 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 		if err != nil {
 			return nil, err
 		}
-		newRow = append(append(nilRow1, row...), "added")
+		newRow = append(append(nilRow1, row.Values()...), "added")
 		results = append(results, newRow)
 	}
 	return sql.RowsToRowIter(results...), nil
@@ -241,7 +241,7 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 // pkRowIter uses primary keys to do an efficient row comparison
 func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
 	var results []sql.Row
-	var newRow sql.Row
+	var newRow sql.UntypedSqlRow
 	row1, err1 := tf.rowIter1.Next(tf.ctx)
 	row2, err2 := tf.rowIter2.Next(tf.ctx)
 	var pkOrds []int
@@ -250,7 +250,8 @@ func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
 			pkOrds = append(pkOrds, i)
 		}
 	}
-	nilRow := make(sql.Row, len(tf.schema1))
+
+	nilRow := make(sql.UntypedSqlRow, len(tf.schema1))
 	for err1 == nil && err2 == nil {
 		cmp, d, err := tf.compareRows(pkOrds, row1, row2)
 		if err != nil {
@@ -258,16 +259,16 @@ func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
 		}
 		switch cmp {
 		case -1: // deleted
-			newRow = append(append(row1, nilRow...), "deleted")
+			newRow = append(append(row1.Values(), nilRow...), "deleted")
 			results = append(results, newRow)
 			row1, err1 = tf.rowIter1.Next(tf.ctx)
 		case 1: // added
-			newRow = append(append(nilRow, row2...), "added")
+			newRow = append(append(nilRow, row2.Values()...), "added")
 			results = append(results, newRow)
 			row2, err2 = tf.rowIter2.Next(tf.ctx)
 		default: // modified or no change
 			if d {
-				newRow = append(append(row1, row2...), "modified")
+				newRow = append(append(row1.Values(), row2.Values()...), "modified")
 				results = append(results, newRow)
 			}
 			row1, err1 = tf.rowIter1.Next(tf.ctx)
@@ -279,25 +280,25 @@ func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
 	if err1 == io.EOF && err2 == io.EOF {
 		return sql.RowsToRowIter(results...), nil
 	} else if err1 == io.EOF {
-		newRow = append(append(nilRow, row2...), "added")
+		newRow = append(append(nilRow, row2.Values()...), "added")
 		results = append(results, newRow)
 		for {
 			row2, err2 = tf.rowIter2.Next(tf.ctx)
 			if err2 == io.EOF {
 				break
 			}
-			newRow = append(append(nilRow, row2...), "added")
+			newRow = append(append(nilRow, row2.Values()...), "added")
 			results = append(results, newRow)
 		}
 	} else if err2 == io.EOF {
-		newRow = append(append(row1, nilRow...), "deleted")
+		newRow = append(append(row1.Values(), nilRow...), "deleted")
 		results = append(results, newRow)
 		for {
 			row1, err1 = tf.rowIter1.Next(tf.ctx)
 			if err1 == io.EOF {
 				break
 			}
-			newRow = append(append(row1, nilRow...), "deleted")
+			newRow = append(append(row1.Values(), nilRow...), "deleted")
 			results = append(results, newRow)
 		}
 	} else {

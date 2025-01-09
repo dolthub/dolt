@@ -39,7 +39,7 @@ type PersistTest struct {
 	// The schema of the result of the query, nil if an error is expected
 	ExpectedSchema schema.Schema
 	// The rows this query should return, nil if an error is expected
-	ExpectedRows []sql.Row
+	ExpectedRows []sql.UntypedSqlRow
 	// The rows this query should return, nil if an error is expected
 	ExpectedConfig map[string]string
 	// An expected error string

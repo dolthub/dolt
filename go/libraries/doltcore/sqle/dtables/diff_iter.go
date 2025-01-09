@@ -171,11 +171,11 @@ func (itr *ldDiffRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if hasTo && hasFrom {
-		sqlRow = append(sqlRow, diffTypeModified)
+		sqlRow = sqlRow.Append(sql.NewUntypedRow(diffTypeModified))
 	} else if hasTo && !hasFrom {
-		sqlRow = append(sqlRow, diffTypeAdded)
+		sqlRow = sqlRow.Append(sql.NewUntypedRow(diffTypeAdded))
 	} else {
-		sqlRow = append(sqlRow, diffTypeRemoved)
+		sqlRow = sqlRow.Append(sql.NewUntypedRow(diffTypeRemoved))
 	}
 
 	return sqlRow, nil
@@ -411,7 +411,7 @@ func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.D
 
 // getDiffTableRow returns a row for the diff table given the diff type and the row from the source and target tables. The
 // output schema is intended for dolt_diff_* tables and dolt_diff function.
-func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (row sql.Row, err error) {
+func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (sql.Row, error) {
 	tLen := schemaSize(itr.targetToSch)
 	fLen := schemaSize(itr.targetFromSch)
 
@@ -421,10 +421,11 @@ func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (r
 		tLen = fLen
 	}
 	// 2 commit names, 2 commit dates, 1 diff_type
-	row = make(sql.Row, fLen+tLen+5)
+	row := make(sql.UntypedSqlRow, fLen+tLen+5)
 
 	// todo (dhruv): implement warnings for row column value coercions.
 
+	var err error
 	if dif.Type != tree.RemovedDiff {
 		err = itr.toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To), row[0:tLen])
 		if err != nil {
@@ -461,8 +462,7 @@ func (r *repeatingRowIter) Next(ctx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 	r.n--
-	c := make(sql.Row, len(r.row))
-	copy(c, r.row)
+	c := r.row.Copy()
 	return c, nil
 }
 

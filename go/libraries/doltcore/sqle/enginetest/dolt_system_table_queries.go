@@ -32,7 +32,7 @@ var BrokenSystemTableQueries = []queries.QueryTest{
 						U0.to_commit = 'abc'
 					)) AS diff_type 
 				FROM myTable`,
-		Expected: []sql.Row{},
+		Expected: []sql.UntypedSqlRow{},
 	},
 	{
 		// extra filter clause breaks filter pushdown
@@ -49,6 +49,6 @@ var BrokenSystemTableQueries = []queries.QueryTest{
 						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
 					)) AS diff_type 
 				FROM myTable`,
-		Expected: []sql.Row{},
+		Expected: []sql.UntypedSqlRow{},
 	},
 }

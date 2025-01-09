@@ -54,7 +54,7 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 				ctx.Session.SetTransaction(nil)
 				dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerTransitionedRolesErr)
 			}
-			return sql.RowsToRowIter(sql.Row{0}), nil
+			return sql.RowsToRowIter(sql.UntypedSqlRow{0}), nil
 		},
 		ReadOnly: true,
 	}
@@ -106,7 +106,7 @@ func newTransitionToStandbyProcedure(controller *Controller) sql.ExternalStoredP
 					if r.caughtUp {
 						caughtUp = 1
 					}
-					rows[i] = sql.Row{
+					rows[i] = sql.UntypedSqlRow{
 						caughtUp,
 						r.database,
 						r.remote,

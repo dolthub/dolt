@@ -29,11 +29,11 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "describe dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
 					{"staged", "tinyint(1)", "NO", "", nil, ""},
 				},
@@ -56,13 +56,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, 51, 42, 42},
 				},
 			},
 			{
 				Query: "describe dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
 					{"staged", "tinyint(1)", "NO", "", nil, ""},
 					{"diff_type", "varchar(1023)", "NO", "", nil, ""},
@@ -75,7 +75,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			{
 				// Test case-insensitive table name
 				Query: "select * from dolt_workspace_TBL",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, 51, 42, 42},
 				},
 			},
@@ -84,7 +84,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, 51, 42, 42},
 					{1, false, "modified", 42, 108, 42, 51},
 				},
@@ -94,7 +94,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, 108, 42, 42},
 				},
 			},
@@ -115,7 +115,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 42, 51, 42, 42},
 				},
 			},
@@ -135,7 +135,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 44, 44, nil, nil},
 				},
 			},
@@ -144,7 +144,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 44, 44, nil, nil},
 				},
 			},
@@ -153,7 +153,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 44, 44, nil, nil},
 					{1, false, "modified", 44, 108, 44, 44},
 				},
@@ -174,7 +174,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "removed", nil, nil, 42, 42},
 				},
 			},
@@ -183,7 +183,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, nil, 42, 42},
 				},
 			},
@@ -202,11 +202,11 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_workspace_unknowntable",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -221,7 +221,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 42, 42, nil, nil},
 					{1, false, "added", 43, 43, nil, nil},
 				},
@@ -231,7 +231,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 42, 42, nil, nil},
 					{1, true, "added", 43, 43, nil, nil},
 				},
@@ -252,7 +252,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "removed", nil, nil, 42, 42},
 					{1, false, "removed", nil, nil, 43, 43},
 				},
@@ -262,7 +262,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, nil, 42, 42},
 					{1, true, "removed", nil, nil, 43, 43},
 				},
@@ -280,7 +280,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 42, 42, nil, nil},
 					{1, false, "added", 42, 42, nil, nil},
 				},
@@ -291,7 +291,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 42, 42, nil, nil},
 					{1, true, "added", 42, 42, nil, nil},
 				},
@@ -301,7 +301,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 42, 42, nil, nil},
 					{1, true, "added", 42, 42, nil, nil},
 					{2, false, "added", 42, 42, nil, nil},
@@ -324,7 +324,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 42, 51, 42, 42},
 				},
 			},
@@ -334,7 +334,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 42, 51, nil, 42, 42},
 				},
 			},
@@ -343,7 +343,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, 51, nil, 42, 42},
 				},
 			},
@@ -354,7 +354,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				},
 				{
 					Query: "select * from dolt_workspace_tbl",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{0, true, "modified", 42, 51, nil, 42, 42},
 					},
 				},
@@ -363,7 +363,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				},
 				{
 					Query: "select * from dolt_workspace_tbl",
-					Expected: []sql.Row{
+					Expected: []sql.UntypedSqlRow{
 						{0, true, "modified", 42, 51, nil, 42, 42},
 						{1, false, "modified", 42, 59, nil, nil, 42, 42}, //
 					},
@@ -398,7 +398,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 41, 23, 43, 41, 42, 43},
 					{1, false, "modified", 50, 23, 52, 50, 51, 52},
 				},
@@ -408,7 +408,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 41, 23, 43, 41, 42, 43},
 					{1, false, "modified", 50, 23, 52, 50, 51, 52},
 				},
@@ -418,7 +418,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 41, 23, 43, 41, 42, 43},
 					{1, true, "modified", 50, 23, 52, 50, 51, 52},
 				},
@@ -428,7 +428,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 41, 23, 43, 41, 42, 43},
 					{1, true, "modified", 50, 23, 52, 50, 51, 52},
 					{2, false, "modified", 41, 23, 81, 41, 23, 43},
@@ -437,13 +437,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select sum(y) from tbl AS OF STAGED",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{float64(95)},
 				},
 			},
 			{
 				Query: "select sum(y) from tbl AS OF WORKING",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{float64(162)},
 				},
 			},
@@ -453,7 +453,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 41, 23, 81, 41, 42, 43},
 					{1, true, "modified", 50, 23, 81, 50, 51, 52},
 				},
@@ -471,7 +471,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 41, 42, 43, nil, nil, nil},
 					{1, false, "added", 50, 51, 52, nil, nil, nil},
 				},
@@ -481,7 +481,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 41, 42, 43, nil, nil, nil},
 					{1, false, "added", 50, 51, 52, nil, nil, nil},
 				},
@@ -491,7 +491,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 41, 42, 43, nil, nil, nil},
 					{1, true, "added", 50, 51, 52, nil, nil, nil},
 				},
@@ -501,7 +501,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 41, 42, 43, nil, nil, nil},
 					{1, true, "added", 50, 51, 52, nil, nil, nil},
 					{2, false, "modified", 41, 81, 43, 41, 42, 43},
@@ -514,7 +514,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 41, 81, 43, nil, nil, nil},
 					{1, true, "added", 50, 81, 52, nil, nil, nil},
 				},
@@ -533,7 +533,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "removed", nil, 41},
 					{1, false, "removed", nil, 50},
 				},
@@ -543,7 +543,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 41},
 					{1, false, "removed", nil, 50},
 				},
@@ -553,7 +553,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 41},
 					{1, true, "removed", nil, 50},
 				},
@@ -563,7 +563,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 41},
 					{1, true, "removed", nil, 50},
 					{2, false, "added", 41, nil},
@@ -575,7 +575,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 50},
 				},
 			},
@@ -594,7 +594,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 23},
 					{1, true, "modified", 42},
 				},
@@ -604,7 +604,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42},
 					{1, false, "modified", 23},
 				},
@@ -614,7 +614,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 23},
 					{1, false, "modified", 42},
 				},
@@ -633,7 +633,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 23},
 					{1, true, "added", 42},
 				},
@@ -643,7 +643,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 42},
 					{1, false, "added", 23},
 				},
@@ -653,7 +653,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 23},
 					{1, false, "added", 42},
 				},
@@ -673,7 +673,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", 23, nil},
 					{1, true, "removed", 42, nil},
 				},
@@ -683,7 +683,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", 42, nil},
 					{1, false, "removed", 23, nil},
 				},
@@ -693,7 +693,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "removed", 23, nil},
 					{1, false, "removed", 42, nil},
 				},
@@ -714,7 +714,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", 23, nil},
 					{1, true, "modified", 42, 42},
 				},
@@ -724,7 +724,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", 23, nil},
 					{1, true, "modified", 42, 42},
 					{2, false, "modified", 42, 42},
@@ -735,7 +735,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", 23, nil},
 					{1, true, "modified", 42, 42},
 					{2, false, "added", nil, 23},
@@ -747,7 +747,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select id, staged, diff_type, from_pk, to_pk from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 23, 23},
 					{1, true, "modified", 42, 42},
 					{2, false, "modified", 42, 42},
@@ -768,7 +768,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "modified", 42, "staged", 42, "inserted"},
 					{1, false, "modified", 42, "working", 42, "staged"},
 				},
@@ -779,7 +779,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			{
 				// Removing the staged row should not affect the working row's final value, but it will change the from_ value.
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 42, "working", 42, "inserted"},
 				},
 			},
@@ -801,14 +801,14 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 51, nil},
 					{1, true, "removed", nil, 42},
 				},
 			},
 			{
 				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{42, 2},
 					{51, 3},
 				},
@@ -818,7 +818,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 42},
 					{1, false, "added", 51, nil},
 				},
@@ -828,20 +828,20 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{42, 2},
 					{51, 2},
 				},
 			},
 			{
 				Query: "select val, count(*) as num from tbl AS OF WORKING group by val order by val",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{23, 5},
 				},
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "removed", nil, 42},
 					{1, false, "added", 23, nil},
 					{2, false, "added", 23, nil},
@@ -859,7 +859,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 23, nil},
 					{1, true, "added", 23, nil},
 					{2, true, "removed", nil, 51},
@@ -874,7 +874,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select val, count(*) as num from tbl AS OF STAGED  group by val order by val",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{23, 2},
 					{42, 1},
 					{51, 1},
@@ -882,7 +882,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select val, count(*) as num from tbl AS OF WORKING group by val order by val",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{23, 5},
 				},
 			},
@@ -901,7 +901,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 42, 42, nil, nil},
 					{1, true, "added", 43, 43, nil, nil},
 				},
@@ -918,7 +918,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, true, "added", 43, 43, nil, nil},
 				},
 			},
@@ -940,13 +940,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "removed", nil, nil, 43, 43},
 				},
 			},
 			{
 				Query: "select * from tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{42, 42},
 				},
 			},
@@ -966,13 +966,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "added", 43, 43, nil, nil},
 				},
 			},
 			{
 				Query: "select * from tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{43, 43},
 				},
 			},
@@ -990,7 +990,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 42, 84, 42, 42},
 					{1, false, "modified", 43, 86, 43, 43},
 				},
@@ -1000,13 +1000,13 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from dolt_workspace_tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, false, "modified", 43, 86, 43, 43},
 				},
 			},
 			{
 				Query: "select * from tbl",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{42, 42}, // 42 is unchanged.
 					{43, 86},
 				},

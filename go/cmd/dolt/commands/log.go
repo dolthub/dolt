@@ -271,7 +271,7 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 			return nil, err
 		}
 		for _, r := range rows {
-			tableNames[r[0].(string)] = true
+			tableNames[r.GetValue(0).(string)] = true
 		}
 	}
 
@@ -286,7 +286,7 @@ func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist
 
 	var commitsInfo []CommitInfo
 	for _, hash := range commitHashes {
-		cmHash := hash[0].(string)
+		cmHash := hash.GetValue(0).(string)
 		commit, err := getCommitInfoWithOptions(queryist, sqlCtx, cmHash, opts)
 		if commit == nil {
 			return fmt.Errorf("no commits found for ref %s", cmHash)

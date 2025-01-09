@@ -56,8 +56,8 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 	rowDiffType diff.ChangeType,
 	colDiffTypes []diff.ChangeType,
 ) error {
-	if len(row) != len(colDiffTypes) {
-		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
+	if row.Len() != len(colDiffTypes) {
+		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", row.Len(), len(colDiffTypes))
 	}
 
 	diffMarker := ""
@@ -72,14 +72,14 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 		diffMarker = ">"
 	}
 
-	newRow := append(sql.Row{diffMarker}, row...)
+	newRow := sql.UntypedSqlRow{diffMarker}.Append(row)
 	newColDiffTypes := append([]diff.ChangeType{rowDiffType}, colDiffTypes...)
 
 	return w.tableWriter.WriteColoredSqlRow(ctx, newRow, colorsForDiffTypes(newColDiffTypes))
 }
 
 func (w FixedWidthDiffTableWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
-	combinedRow := make([]string, len(oldRow)+1)
+	combinedRow := make([]string, oldRow.Len()+1)
 	oldRowStrs := make([]string, len(combinedRow))
 	newRowStrs := make([]string, len(combinedRow))
 	columnDiffs := make([]bool, len(combinedRow))
@@ -92,13 +92,13 @@ func (w FixedWidthDiffTableWriter) WriteCombinedRow(ctx context.Context, oldRow,
 	columnDiffs[0] = true
 	widths[0] = NewFixedWidthString(combinedRow[0])
 
-	for i := range oldRow {
+	for i := 0; i < oldRow.Len(); i++ {
 		var err error
-		oldRowStrs[i+1], err = w.tableWriter.stringValue(i+1, oldRow[i])
+		oldRowStrs[i+1], err = w.tableWriter.stringValue(i+1, oldRow.GetValue(i))
 		if err != nil {
 			return err
 		}
-		newRowStrs[i+1], err = w.tableWriter.stringValue(i+1, newRow[i])
+		newRowStrs[i+1], err = w.tableWriter.stringValue(i+1, newRow.GetValue(i))
 		if err != nil {
 			return err
 		}

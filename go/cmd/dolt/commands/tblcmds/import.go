@@ -560,7 +560,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 		// record the first error encountered unless asked to ignore it
 		if row != nil && rowErr == nil && !options.contOnErr {
 			var sqlRowWithColumns []string
-			for i, val := range row {
+			for i, val := range row.Values() {
 				columnName := "<nil>"
 				if len(rowSchema.Schema) > i {
 					columnName = rowSchema.Schema[i].Name
@@ -831,16 +831,16 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 	for i, col := range rowOperationSchema.Schema {
 		// Check if this a string that can be converted to a boolean
-		val, ok := detectAndConvertToBoolean(row[i], col.Type)
+		val, ok := detectAndConvertToBoolean(row.GetValue(i), col.Type)
 		if ok {
-			row[i] = val
+			row.SetValue(i, val)
 			continue
 		}
 
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
 		if _, ok := col.Type.(gmstypes.BitType); ok {
-			colAsString, ok := row[i].(string)
+			colAsString, ok := row.GetValue(i).(string)
 			if !ok {
 				return nil, fmt.Errorf("error: column value should be of type string")
 			}
@@ -848,7 +848,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			// Check if the column can be parsed an uint64
 			val, err := strconv.ParseUint(colAsString, 10, 64)
 			if err == nil {
-				row[i] = val
+				row.SetValue(i, val)
 				continue
 			}
 
@@ -858,7 +858,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			if len(groups) > 1 {
 				val, err = strconv.ParseUint(groups[1], 2, 64)
 				if err == nil {
-					row[i] = val
+					row.SetValue(i, val)
 					continue
 				}
 			}
@@ -867,7 +867,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			numberStr := strings.Replace(colAsString, "0x", "", -1)
 			val, err = strconv.ParseUint(numberStr, 16, 64)
 			if err == nil {
-				row[i] = val
+				row.SetValue(i, val)
 			} else {
 				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
 			}
@@ -878,7 +878,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 		switch col.Type.(type) {
 		case sql.StringType, sql.EnumType, sql.SetType:
 		default:
-			row[i] = emptyStringToNil(row[i])
+			row.SetValue(i, emptyStringToNil(row.GetValue(i)))
 		}
 	}
 
@@ -933,11 +933,11 @@ func emptyStringToNil(val interface{}) interface{} {
 }
 
 func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) sql.Row {
-	returnRow := make(sql.Row, len(rowOperationSchema.Schema))
+	returnRow := make(sql.UntypedSqlRow, len(rowOperationSchema.Schema))
 
 	for i, col := range rowOperationSchema.Schema {
 		rdIdx := rdSchema.IndexOf(nameMapper.PreImage(col.Name), col.Source)
-		returnRow[i] = row[rdIdx]
+		returnRow.SetValue(i, row.GetValue(rdIdx))
 	}
 
 	return returnRow

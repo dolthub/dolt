@@ -209,7 +209,7 @@ func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.Tu
 	}
 
 	firstKey := keyBuilder.BuildPrefixNoRecycle(buffPool, prefixLen)
-	firstRow := make(sql.Row, prefixLen)
+	firstRow := make(sql.UntypedSqlRow, prefixLen)
 	for i := 0; i < prefixLen; i++ {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {
@@ -278,7 +278,7 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	if err != nil {
 		return DoltBucket{}, err
 	}
-	upperBound := make(sql.Row, u.prefixLen)
+	upperBound := make(sql.UntypedSqlRow, u.prefixLen)
 	if u.currentKey != nil {
 		for i := 0; i < u.prefixLen; i++ {
 			upperBound[i], err = tree.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
@@ -292,7 +292,7 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 			RowCnt:      uint64(u.count),
 			DistinctCnt: uint64(u.distinct),
 			BoundCnt:    uint64(u.currentCnt),
-			McvVals:     mcvRows,
+			McvVals:     sql.RowsToUntyped(mcvRows),
 			McvsCnt:     u.mcvs.Counts(),
 			BoundVal:    upperBound,
 			NullCnt:     uint64(u.nulls),
@@ -391,15 +391,17 @@ func (m *mcvHeap) Truncate(cutoff float64) {
 
 func (m mcvHeap) Values(ctx context.Context, keyDesc val.TupleDesc, ns tree.NodeStore, prefixLen int) ([]sql.Row, error) {
 	ret := make([]sql.Row, len(m))
+	var v interface{}
 	for i, mcv := range m {
 		// todo build sql.Row
-		row := make(sql.Row, prefixLen)
+		row := make(sql.UntypedSqlRow, prefixLen)
 		var err error
 		for i := 0; i < prefixLen; i++ {
-			row[i], err = tree.GetField(ctx, keyDesc, i, mcv.val, ns)
+			v, err = tree.GetField(ctx, keyDesc, i, mcv.val, ns)
 			if err != nil {
 				return nil, err
 			}
+			row.SetValue(i, v)
 		}
 		ret[i] = row
 	}

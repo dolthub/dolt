@@ -53,19 +53,19 @@ var ViewsWithAsOfScriptTest = queries.ScriptTest{
 	Assertions: []queries.ScriptTestAssertion{
 		{
 			Query:    "select * from v1",
-			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+			Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
 		},
 		{
 			Query:    "select * from v1 as of 'HEAD'",
-			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+			Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
 		},
 		{
 			Query:    "select * from v1 as of 'HEAD~1'",
-			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+			Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
 		},
 		{
 			Query:    "select * from v1 as of 'HEAD~2'",
-			Expected: []sql.Row{{1, "1"}, {2, "2"}},
+			Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "2"}},
 		},
 		{
 			// At this point table t1 doesn't exist yet, so the view should return an error
@@ -82,7 +82,7 @@ var ViewsWithAsOfScriptTest = queries.ScriptTest{
 		},
 		{
 			Query:    "select * from v1 as of HEAD",
-			Expected: []sql.Row{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
+			Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "2"}, {1, "one"}, {2, "two"}},
 		},
 		{
 			Query:          "select * from v1 as of HEAD.ASDF",
@@ -116,7 +116,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table a as of @Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
@@ -127,7 +127,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table a as of @Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
@@ -139,7 +139,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table a as of @Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c2` varchar(20),\n" +
@@ -151,7 +151,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table a as of HEAD;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c2` varchar(20),\n" +
@@ -182,7 +182,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table tbl",
-				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
+				Expected: []sql.UntypedSqlRow{{"tbl", "CREATE TABLE `tbl` (\n" +
 					"  `a` int NOT NULL,\n" +
 					"  `b` int NOT NULL DEFAULT '42',\n" + //
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
@@ -216,7 +216,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table tbl",
-				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
+				Expected: []sql.UntypedSqlRow{{"tbl", "CREATE TABLE `tbl` (\n" +
 					"  `a` int NOT NULL DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
 					"  `b` int NOT NULL DEFAULT '42',\n" + //
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
@@ -258,7 +258,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table child as of @Commit1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", "CREATE TABLE `child` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
@@ -272,7 +272,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table child as of @Commit2;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", "CREATE TABLE `child` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
@@ -288,7 +288,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table child as of @Commit3;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", "CREATE TABLE `child` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c3` int,\n" +
@@ -302,7 +302,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table child as of HEAD;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"child", "CREATE TABLE `child` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c3` int,\n" +
@@ -341,14 +341,14 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		},
 		{
 			Query: "describe a as of @Commit1;",
-			Expected: []sql.Row{
+			Expected: []sql.UntypedSqlRow{
 				{"pk", "int", "NO", "PRI", nil, ""},
 				{"c1", "int", "YES", "", nil, ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit2;",
-			Expected: []sql.Row{
+			Expected: []sql.UntypedSqlRow{
 				{"pk", "int", "NO", "PRI", nil, ""},
 				{"c1", "int", "YES", "", nil, ""},
 				{"c2", "varchar(20)", "YES", "", nil, ""},
@@ -356,14 +356,14 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		},
 		{
 			Query: "describe a as of @Commit3;",
-			Expected: []sql.Row{
+			Expected: []sql.UntypedSqlRow{
 				{"pk", "int", "NO", "PRI", nil, ""},
 				{"c2", "varchar(20)", "YES", "", nil, ""},
 			},
 		},
 		{
 			Query: "describe a as of HEAD;",
-			Expected: []sql.Row{
+			Expected: []sql.UntypedSqlRow{
 				{"pk", "int", "NO", "PRI", nil, ""},
 				{"c2", "varchar(20)", "YES", "", nil, ""},
 			},
@@ -393,33 +393,33 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "use `mydb/tag1~`;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// The database name is always the requested name
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/tag1~"}},
+				Expected: []sql.UntypedSqlRow{{"mydb/tag1~"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// The branch is nil in the case of a non-branch revision DB
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{nil}},
+				Expected: []sql.UntypedSqlRow{{nil}},
 			},
 			{
 				Query:    "select * from t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "select * from `mydb/tag1^`.t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				// Only merge commits are valid for ^2 ancestor spec
@@ -428,11 +428,11 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/tag1~1`.t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "select * from `mydb/tag1~2`.t01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:       "select * from `mydb/tag1~3`.t01;",
@@ -444,15 +444,15 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/branch1~`.t01;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
+				Expected: []sql.UntypedSqlRow{{100, 100}, {200, 200}},
 			},
 			{
 				Query:    "select * from `mydb/branch1^`.t01;",
-				Expected: []sql.Row{{100, 100}, {200, 200}},
+				Expected: []sql.UntypedSqlRow{{100, 100}, {200, 200}},
 			},
 			{
 				Query:    "select * from `mydb/branch1~2`.t01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:       "select * from `mydb/branch1~3`.t01;",
@@ -475,29 +475,29 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "use mydb/tag1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// The database name is always the requested name
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/tag1"}},
+				Expected: []sql.UntypedSqlRow{{"mydb/tag1"}},
 			},
 			{
 				// The branch is nil in the case of a non-branch revision DB
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{nil}},
+				Expected: []sql.UntypedSqlRow{{nil}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:          "call dolt_reset();",
@@ -505,27 +505,27 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "use mydb;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 		},
 	},
@@ -544,80 +544,80 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "use mydb/branch1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// The database name is always the requested name
 				Query:    "select database()",
-				Expected: []sql.Row{{"mydb/branch1"}},
+				Expected: []sql.UntypedSqlRow{{"mydb/branch1"}},
 			},
 			{
 				Query:    "select active_branch()",
-				Expected: []sql.Row{{"branch1"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}},
 			},
 			{
 				Query:    "select * from t01",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			},
 			{
 				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the
 				//  base database name. But we should also consider the connection string: if you connect to a revision
 				//  database, that database should always be visible.
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}},
 			},
 			{
 				Query:    "use mydb/branch1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_reset();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select database();",
-				Expected: []sql.Row{{"mydb/branch1"}},
+				Expected: []sql.UntypedSqlRow{{"mydb/branch1"}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Create a table in the working set to verify the main db
 				Query:    "create table working_set_table(pk int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
+				Expected: []sql.UntypedSqlRow{{"working_set_table"}},
 			},
 			{
 				Query:    "use mydb;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_checkout('branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
-				Expected: []sql.Row{{"working_set_table"}},
+				Expected: []sql.UntypedSqlRow{{"working_set_table"}},
 			},
 		},
 	},
@@ -630,39 +630,39 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch-to-delete'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch-to-delete'"}},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"branch-to-delete"}},
+				Expected: []sql.UntypedSqlRow{{"branch-to-delete"}},
 			},
 			{
 				Query:    "use `newtest/main`;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "call dolt_branch('-D', 'branch-to-delete');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'another-branch');",
-				Expected: []sql.Row{{0, "Switched to branch 'another-branch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'another-branch'"}},
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"another-branch"}},
+				Expected: []sql.UntypedSqlRow{{"another-branch"}},
 			},
 		},
 	},
@@ -679,23 +679,23 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "use `mydb/main`;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t01", false, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"t01", false, "modified"}},
 			},
 			{
 				Query:    "call dolt_checkout('t01')",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.UntypedSqlRow{{0, ""}},
 			},
 			{
 				Query: "select * from dolt_status",
-				// Expected: []sql.Row{},
+				// Expected: []sql.UntypedSqlRow{},
 				SkipResultsCheck: true, // TODO: https://github.com/dolthub/dolt/issues/5816
 			},
 		},
@@ -713,21 +713,21 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW TABLES;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1"},
 				},
 			},
 			{
 				Query:    "SELECT dolt_hashof_table('t1');",
-				Expected: []sql.Row{{"0lvgnnqah2lj1p6ilvfg0ssaec1v0jgk"}},
+				Expected: []sql.UntypedSqlRow{{"0lvgnnqah2lj1p6ilvfg0ssaec1v0jgk"}},
 			},
 			{
 				Query:    "INSERT INTO t1 VALUES (1);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "SELECT dolt_hashof_table('t1');",
-				Expected: []sql.Row{{"a2vkt9d1mtuhd90opbcseo5gqjae7tv6"}},
+				Expected: []sql.UntypedSqlRow{{"a2vkt9d1mtuhd90opbcseo5gqjae7tv6"}},
 			},
 			{
 				Query:          "SELECT dolt_hashof_table('noexist');",
@@ -753,11 +753,11 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE to_commit=\"WORKING\" and from_commit=hashof(\"main\") ORDER BY to_pk;",
-				Expected: []sql.Row{{2, 2, 2, 4, "modified"}},
+				Expected: []sql.UntypedSqlRow{{2, 2, 2, 4, "modified"}},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE from_commit=hashof(\"main\") ORDER BY to_pk;",
-				Expected: []sql.Row{{2, 2, 2, 4, "modified"}},
+				Expected: []sql.UntypedSqlRow{{2, 2, 2, 4, "modified"}},
 			},
 		},
 	},
@@ -772,7 +772,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW TABLES;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1"},
 					{"t2"},
 					{"t3"},
@@ -780,84 +780,84 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "CALL dolt_checkout('-b','new');",
-				Expected: []sql.Row{{0, "Switched to branch 'new'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'new'"}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "INSERT INTO t1 VALUES (1);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('WORKING');",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "CALL dolt_add('t1');",
-				Expected: []sql.Row{{int64(0)}},
+				Expected: []sql.UntypedSqlRow{{int64(0)}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query:            "CALL dolt_commit('-m', 'added some rows to branch `new`');",
@@ -865,37 +865,37 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('new');",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('main');",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 
 			{
 				Query:    "INSERT INTO t2 VALUES (1);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "create procedure proc1() SELECT * FROM t3;",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 		},
 	},
@@ -911,7 +911,7 @@ var DoltScripts = []queries.ScriptTest{
 				Query: "create table t2 (pk int primary key, c1 int, c2 int, " +
 					"FOREIGN KEY (`c1`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE, " +
 					"FOREIGN KEY (`c2`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 		},
 	},
@@ -951,42 +951,42 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select has_ancestor('main', @main1), has_ancestor('main', @main2), has_ancestor('main', @bone1), has_ancestor('main', @bone2), has_ancestor('main', @btwo1), has_ancestor('main', @onetwo1), has_ancestor('main', 'HEAD')",
-				Expected: []sql.Row{{true, true, false, false, false, false, false}},
+				Expected: []sql.UntypedSqlRow{{true, true, false, false, false, false, false}},
 			},
 			{
 				Query:    "select has_ancestor('bone', @main1), has_ancestor('bone', @main2), has_ancestor('bone', @bone1), has_ancestor('bone', @bone2), has_ancestor('bone', @btwo1), has_ancestor('bone', @onetwo1), has_ancestor('bone', 'HEAD')",
-				Expected: []sql.Row{{true, false, true, true, false, false, true}},
+				Expected: []sql.UntypedSqlRow{{true, false, true, true, false, false, true}},
 			},
 			{
 				Query:    "select has_ancestor('btwo', @main1), has_ancestor('btwo', @main2), has_ancestor('btwo', @bone1), has_ancestor('btwo', @bone2), has_ancestor('btwo', @btwo1), has_ancestor('btwo', @onetwo1), has_ancestor('btwo', 'HEAD')",
-				Expected: []sql.Row{{true, false, false, false, true, false, false}},
+				Expected: []sql.UntypedSqlRow{{true, false, false, false, true, false, false}},
 			},
 			{
 				Query:    "select has_ancestor('onetwo', @main1), has_ancestor('onetwo', @main2), has_ancestor('onetwo', @bone1), has_ancestor('onetwo', @bone2), has_ancestor('onetwo', @btwo1), has_ancestor('onetwo', @onetwo1), has_ancestor('onetwo', 'HEAD')",
-				Expected: []sql.Row{{true, false, true, true, true, true, true}},
+				Expected: []sql.UntypedSqlRow{{true, false, true, true, true, true, true}},
 			},
 			{
 				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log where commit_hash = @onetwo1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log as of 'onetwo' where commit_hash = @onetwo1",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 			{
 				Query:    "select has_ancestor('HEAD', 'tag_btwo1'), has_ancestor(@bone2, 'tag_btwo1'),has_ancestor(@onetwo1, 'tag_btwo1'), has_ancestor(@btwo1, 'tag_btwo1'), has_ancestor(@main2, 'tag_btwo1'), has_ancestor(@main1, 'tag_btwo1')",
-				Expected: []sql.Row{{false, false, true, true, false, false}},
+				Expected: []sql.UntypedSqlRow{{false, false, true, true, false, false}},
 			},
 			{
 				Query:    "select has_ancestor('tag_btwo1', 'HEAD'), has_ancestor('tag_btwo1', @bone2), has_ancestor('tag_btwo1', @onetwo1), has_ancestor('tag_btwo1', @btwo1), has_ancestor('tag_btwo1', @main2), has_ancestor('tag_btwo1', @main1)",
-				Expected: []sql.Row{{false, false, false, true, false, true}},
+				Expected: []sql.UntypedSqlRow{{false, false, false, true, false, true}},
 			},
 			{
 				Query: "use `mydb/onetwo`;",
 			},
 			{
 				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log where commit_hash = @onetwo1",
-				Expected: []sql.Row{{true}},
+				Expected: []sql.UntypedSqlRow{{true}},
 			},
 		},
 	},
@@ -1000,36 +1000,36 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from t where d is not null",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select count(*) from t where d is null",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test the null-safe equals operator
 				Query:    "select count(*) from t where d <=> NULL",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test the null-safe equals operator
 				Query:    "select count(*) from t where not(d <=> null)",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test an IndexedJoin
 				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is not null and t.pk = t2.pk and t2.d is not null;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test an IndexedJoin
 				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is null and t.pk = t2.pk and t2.d is null;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				// Test an IndexedJoin
 				Query:    "select count(ifnull(t.d, 1)) from t, t as t2 where t.d is null and t.pk = t2.pk and t2.d is not null;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1041,11 +1041,11 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t add index ```i```(c1);",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query: "show create table t;",
-				Expected: []sql.Row{{"t",
+				Expected: []sql.UntypedSqlRow{{"t",
 					"CREATE TABLE `t` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
@@ -1070,32 +1070,32 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:           "SELECT c1 from indexedTable;",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{},
 			},
 			{
 				Query:           "SELECT c1 from indexedTable where c1 > 'o';",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{"c1_idx"},
 			},
 			{
 				Query:           "SELECT c1 from indexedTable as of @commit2;",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{},
 			},
 			{
 				Query:           "SELECT c1 from indexedTable as of @commit2 where c1 > 'o';",
-				Expected:        []sql.Row{{"two"}},
+				Expected:        []sql.UntypedSqlRow{{"two"}},
 				ExpectedIndexes: []string{"c1_idx"},
 			},
 			{
 				Query:           "SELECT c1 from indexedTable as of @commit1;",
-				Expected:        []sql.Row{{"one"}},
+				Expected:        []sql.UntypedSqlRow{{"one"}},
 				ExpectedIndexes: []string{},
 			},
 			{
 				Query:           "SELECT c1 from indexedTable as of @commit1 where c1 > 'o';",
-				Expected:        []sql.Row{{"one"}},
+				Expected:        []sql.UntypedSqlRow{{"one"}},
 				ExpectedIndexes: []string{"c1_idx"},
 			},
 		},
@@ -1116,7 +1116,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
 					"left join a as of @first_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, 4},
 					{5, 5},
 					{6, 6},
@@ -1125,7 +1125,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
 					"left join a as of @second_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -1142,7 +1142,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table t1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1", "CREATE TABLE `t1` (\n" +
 						"  `a` int NOT NULL,\n" +
 						"  `b` varchar(10) NOT NULL DEFAULT 'abc',\n" +
@@ -1154,7 +1154,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "show create table t2",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t2", "CREATE TABLE `t2` (\n" +
 						"  `c` int NOT NULL,\n" +
 						"  `d` varchar(10),\n" +
@@ -1175,13 +1175,13 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select count(*) from bigTable;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int32(10_000)},
 				},
 			},
 			{
 				Query: "select * from bigTable order by pk limit 5 offset 9990;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(9990), int64(9990)},
 					{int64(9991), int64(9991)},
 					{int64(9992), int64(9992)},
@@ -1196,7 +1196,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW CREATE PROCEDURE dolt_checkout;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{
 						"dolt_checkout",
 						"",
@@ -1225,28 +1225,28 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from test as of 'HEAD~' where pk=?;",
-				Expected: []sql.Row{{0, 0}},
+				Expected: []sql.UntypedSqlRow{{0, 0}},
 				Bindings: map[string]sqlparser.Expr{
 					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
 			},
 			{
 				Query:    "select * from test as of hashof('HEAD') where pk=?;",
-				Expected: []sql.Row{{1, 1, nil}},
+				Expected: []sql.UntypedSqlRow{{1, 1, nil}},
 				Bindings: map[string]sqlparser.Expr{
 					"v1": sqlparser.NewIntVal([]byte("1")),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit1 where pk=?;",
-				Expected: []sql.Row{{0, 0}},
+				Expected: []sql.UntypedSqlRow{{0, 0}},
 				Bindings: map[string]sqlparser.Expr{
 					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit2 where pk=?;",
-				Expected: []sql.Row{{0, 0, nil}},
+				Expected: []sql.UntypedSqlRow{{0, 0, nil}},
 				Bindings: map[string]sqlparser.Expr{
 					"v1": sqlparser.NewIntVal([]byte("0")),
 				},
@@ -1266,7 +1266,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT pk, val, message FROM dolt_blame_t",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"add", 5, "add rows"},
 					{"alt", 12, "add more rows"},
 					{"ctl", 3, "add more rows"},
@@ -1280,7 +1280,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				// Test case-insensitive table name
 				Query: "SELECT count(*) FROM dolt_blame_T",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{8},
 				},
 			},
@@ -1298,7 +1298,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT `p-k`, message FROM `dolt_blame_t-1`;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "adding table t-1"},
 					{2, "adding another row to t-1"},
 				},
@@ -1344,7 +1344,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
 					"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
 			},
 		},
 	},
@@ -1358,7 +1358,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"view", "view1", "CREATE VIEW view1 AS SELECT v1 FROM viewtest"},
 					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
@@ -1373,7 +1373,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
 			},
@@ -1383,7 +1383,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT type, name, fragment FROM dolt_schemas ORDER BY 1, 2",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"view", "view1", "CREATE VIEW VIEW1 AS SELECT v1 FROM viewtest"},
 					{"view", "view2", "CREATE VIEW view2 AS SELECT v2 FROM viewtest"},
 				},
@@ -1405,23 +1405,23 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT (hashof(@Commit1) = hashof(@Commit2))",
-				Expected: []sql.Row{{false}},
+				Expected: []sql.UntypedSqlRow{{false}},
 			},
 			{
 				Query: "SELECT (hashof(@Commit1) = hashof('HEAD~1'))",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true},
 				},
 			},
 			{
 				Query: "SELECT (hashof(@Commit2) = hashof('HEAD'))",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true},
 				},
 			},
 			{
 				Query: "SELECT (hashof(@Commit2) = hashof('main'))",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true},
 				},
 			},
@@ -1472,21 +1472,21 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SUPER ON *.* TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// Now that tester has SUPER privileges, they can execute dolt_purge_dropped_databases
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "call dolt_purge_dropped_databases;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Since root has SUPER privileges, they can execute dolt_purge_dropped_databases
 				User:     "root",
 				Host:     "localhost",
 				Query:    "call dolt_purge_dropped_databases;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1570,21 +1570,21 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting access to mydb.test, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to mydb.test, dolt_diff with dots should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~..main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// With access to the db, but not the table, dolt_diff should fail
@@ -1689,7 +1689,7 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.test from tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking access, dolt_diff should fail
@@ -1710,77 +1710,77 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.* to tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~..main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff_stat should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff_stat with dots should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_stat('main~...main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff_summary should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_diff_summary with dots should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('main~...main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_patch should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_patch('main~', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_patch with dots should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_patch('main~...main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting access to the entire db, dolt_log should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_log('main');",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				// Revoke multi-table access
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE SELECT ON mydb.* from tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking access, dolt_diff should fail
@@ -1843,28 +1843,28 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON *.* to tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After granting global access to *.*, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~', 'main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// After granting global access to *.*, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('main~...main', 'test');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// Revoke global access
 				User:     "root",
 				Host:     "localhost",
 				Query:    "REVOKE ALL ON *.* from tester@localhost;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// After revoking global access, dolt_diff should fail
@@ -1899,7 +1899,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from DOLT_HISTORY_t;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -1923,19 +1923,19 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from DOLT_HISTORY_foO1;",
-				Expected: []sql.Row{{10}},
+				Expected: []sql.UntypedSqlRow{{10}},
 			},
 			{
 				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
-				Expected: []sql.Row{{1, "Ein"}, {2, "Zwei"}, {3, "Drei"}},
+				Expected: []sql.UntypedSqlRow{{1, "Ein"}, {2, "Zwei"}, {3, "Drei"}},
 			},
 			{
 				Query:    "select n, de from dolt_history_Foo1 where commit_hash=@Commit2;",
-				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}},
+				Expected: []sql.UntypedSqlRow{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}},
 			},
 			{
 				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit3;",
-				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}, {4, "Vier"}},
+				Expected: []sql.UntypedSqlRow{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}, {4, "Vier"}},
 			},
 		},
 	},
@@ -1969,27 +1969,27 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from Dolt_History_t1;",
-				Expected: []sql.Row{{18}},
+				Expected: []sql.UntypedSqlRow{{18}},
 			},
 			{
 				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit1;",
-				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
+				Expected: []sql.UntypedSqlRow{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
 			},
 			{
 				Query:    "select de, fr from dolt_history_T1 where commit_hash = @Commit1;",
-				Expected: []sql.Row{{"Eins", nil}, {"Zwei", nil}, {"Drei", nil}},
+				Expected: []sql.UntypedSqlRow{{"Eins", nil}, {"Zwei", nil}, {"Drei", nil}},
 			},
 			{
 				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit2;",
-				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+				Expected: []sql.UntypedSqlRow{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
 			{
 				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit3;",
-				Expected: []sql.Row{{1, "Eins", "Un"}, {2, "Zwei", "Deux"}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+				Expected: []sql.UntypedSqlRow{{1, "Eins", "Un"}, {2, "Zwei", "Deux"}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
 			{
 				Query: "select n, de, fr from dolt_history_T1 where commit_hash = @Commit4;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "Eins", "Un"},
 					{2, "Zwei, meine herren", "Deux"},
 					{3, "Drei, meine herren", nil},
@@ -1998,7 +1998,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select n, de, fr from dolt_history_T1 where commit_hash = @Commit5;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "Eins", "Un"},
 					{3, "Drei, meine herren", nil},
 					{4, "Vier, meine herren", "Quatre"},
@@ -2007,7 +2007,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
 					" from dolt_history_T1 where n=2 order by commit_date",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Zwei", nil, true, false, false, false},
 					{"Zwei", nil, false, true, false, false},
 					{"Zwei", "Deux", false, false, true, false},
@@ -2032,7 +2032,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select pk, c, commit_hash = @Commit1, commit_hash = @Commit2 from dolt_history_t1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2, false, true},
 					{3, 4, false, true},
 					{5, 6, false, true},
@@ -2043,7 +2043,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2},
 					{1, 2},
 					{3, 4},
@@ -2054,7 +2054,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 order by pk, c",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2},
 					{1, 2},
 					{3, 4},
@@ -2065,20 +2065,20 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 where pk = 3",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, 4},
 					{3, 4},
 				},
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 where pk = 3 and commit_hash = @Commit2",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, 4},
 				},
 			},
 			{
 				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.pk = 3)"},
 					{" └─ IndexedTableAccess(dolt_history_t1)"},
@@ -2089,7 +2089,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "explain plan select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
 					{" └─ Filter"},
@@ -2122,7 +2122,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select pk, c from dolt_history_t1 order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 2},
 					{1, 2},
 					{1, 2},
@@ -2139,7 +2139,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 where c = 4 order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, 4},
 					{3, 4},
 					{3, 4},
@@ -2147,13 +2147,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select pk, c from dolt_history_t1 where c = 10 order by pk",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{9, 10},
 				},
 			},
 			{
 				Query: "explain plan select pk, c from dolt_history_t1 where c = 4",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Filter"},
 					{" ├─ (dolt_history_t1.c = 4)"},
 					{" └─ IndexedTableAccess(dolt_history_t1)"},
@@ -2164,7 +2164,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "explain plan select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"Project"},
 					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
 					{" └─ Filter"},
@@ -2197,7 +2197,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			{
 				// TODO: Instead of just spot checking the non-existence of c1, it would be useful to be able to
@@ -2208,15 +2208,15 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
-				Expected: []sql.Row{{1, nil}, {4, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {4, nil}},
 			},
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-				Expected: []sql.Row{{1, nil}, {4, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {4, nil}},
 			},
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit3 order by pk;",
-				Expected: []sql.Row{{1, 2}, {4, 5}},
+				Expected: []sql.UntypedSqlRow{{1, 2}, {4, 5}},
 			},
 		},
 	},
@@ -2241,16 +2241,16 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.UntypedSqlRow{{6}},
 			},
 			// Can't represent the old schema in the current one, so it gets nil valued
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-				Expected: []sql.Row{{1, nil}, {4, nil}},
+				Expected: []sql.UntypedSqlRow{{1, nil}, {4, nil}},
 			},
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit4 order by pk;",
-				Expected: []sql.Row{{1, 3}, {4, 6}},
+				Expected: []sql.UntypedSqlRow{{1, 3}, {4, 6}},
 			},
 			{
 				// When filtering on a column from the original table, we use the primary index here, but if column
@@ -2262,7 +2262,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				//       we could consider using a different tuple descriptor based on the version of the row and
 				//       pull the data out and try to convert it to the new type.
 				Query:                 "select pk, c1, c2 from dolt_history_t where pk=4;",
-				Expected:              []sql.Row{{4, 5, 6}, {4, 5, nil}, {4, 5, nil}},
+				Expected:              []sql.UntypedSqlRow{{4, 5, 6}, {4, 5, nil}, {4, 5, nil}},
 				ExpectedWarning:       1246,
 				ExpectedWarningsCount: 1,
 				ExpectedWarningMessageSubstring: "Unable to convert field c2 in historical rows because " +
@@ -2292,11 +2292,11 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_history_T2;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "select pk, c1, c2 from dolt_history_t2 where commit_hash != @Commit1;",
-				Expected: []sql.Row{{1, 2, "3"}, {4, 5, "6"}},
+				Expected: []sql.UntypedSqlRow{{1, 2, "3"}, {4, 5, "6"}},
 			},
 		},
 	},
@@ -2328,7 +2328,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				//       to use something like an iterator approach where it goes back sequentially until it detects
 				//       the current table doesn't exist any more and then stop.
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},
@@ -2346,15 +2346,15 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{6}}, // 2 + 4
+				Expected: []sql.UntypedSqlRow{{6}}, // 2 + 4
 			},
 			{
 				Query:    "select count(*) from dolt_history_t AS OF 'head^';",
-				Expected: []sql.Row{{2}}, // 2
+				Expected: []sql.UntypedSqlRow{{2}}, // 2
 			},
 			{
 				Query: "select message from dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"added values again"},
 					{"added values"},
 					{"creating table t"},
@@ -2379,7 +2379,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log AS OF 'head^';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"added values"},
 					{"creating table t"},
 					{"checkpoint enginetest database mydb"},
@@ -2400,7 +2400,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select c1 from dolt_history_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"foo"},
 				},
 			},
@@ -2422,7 +2422,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select count(x) from dolt_history_yx where x = 1;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3},
 				},
 			},
@@ -2444,7 +2444,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2},
 				},
 			},
@@ -2482,7 +2482,7 @@ ORDER BY
   dolt_history_xyz.x,
   dolt_history_xyz.y,
   dolt_history_xyz.z;`,
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, 1, 100, doltCommit},
 					{0, 1, 100, doltCommit},
 					{0, 1, 100, doltCommit},
@@ -2506,7 +2506,7 @@ FROM
 ORDER BY
   dolt_history_xyz.y,
   dolt_history_xyz.z;`,
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 100, doltCommit},
 					{1, 100, doltCommit},
 					{1, 100, doltCommit},
@@ -2528,7 +2528,7 @@ FROM
   dolt_history_xyz.commit_hash = dolt_commits.commit_hash
 ORDER BY
   dolt_history_xyz.z;`,
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100, doltCommit},
 					{100, doltCommit},
 					{100, doltCommit},
@@ -2547,7 +2547,7 @@ WHERE z IN (
   LEFT JOIN dolt_commits
   ON dolt_history_xyz.commit_hash = dolt_commits.commit_hash
 );`,
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{100},
 					{200},
 					{300},
@@ -2561,25 +2561,25 @@ WHERE z IN (
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select 'something' from dolt_log order by commit_hash;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"something"},
 					{"something"},
 				},
 			},
 			{
 				Query:    "select 'something' from dolt_diff order by commit_hash;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select 'something' from dolt_commits order by commit_hash;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"something"},
 					{"something"},
 				},
 			},
 			{
 				Query: "select 'something' from dolt_commit_ancestors order by commit_hash;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"something"},
 					{"something"},
 				},
@@ -2605,7 +2605,7 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log AS OF 'head^';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"added values"},
 					{"creating table t"},
 					{"checkpoint enginetest database mydb"},
@@ -2637,11 +2637,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "call dolt_checkout('b2');",
@@ -2649,11 +2649,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:            "call dolt_checkout('b3');",
@@ -2661,11 +2661,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 			{
 				Query:            "call dolt_checkout('main');",
@@ -2673,11 +2673,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 		},
 	},
@@ -2694,7 +2694,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:            "call dolt_checkout('main');",
@@ -2702,7 +2702,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "call dolt_checkout('b2');",
@@ -2710,11 +2710,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t order by 1;",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {2, 2}},
 			},
 		},
 	},
@@ -2737,11 +2737,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"testbr"}},
+				Expected: []sql.UntypedSqlRow{{"testbr"}},
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"foo"}},
+				Expected: []sql.UntypedSqlRow{{"foo"}},
 			},
 			{
 				Query:            "call dolt_checkout('main');",
@@ -2749,11 +2749,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"bar"}, {"baz"}, {"foo"}},
+				Expected: []sql.UntypedSqlRow{{"bar"}, {"baz"}, {"foo"}},
 			},
 			{
 				Query:            "call dolt_checkout('-B', 'testbr', 'main~1');",
@@ -2761,11 +2761,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"testbr"}},
+				Expected: []sql.UntypedSqlRow{{"testbr"}},
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"bar"}, {"foo"}},
+				Expected: []sql.UntypedSqlRow{{"bar"}, {"foo"}},
 			},
 		},
 	},
@@ -2785,11 +2785,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"testbr"}},
+				Expected: []sql.UntypedSqlRow{{"testbr"}},
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"bar"}, {"foo"}, {"qux"}}, // Dirty working set
+				Expected: []sql.UntypedSqlRow{{"bar"}, {"foo"}, {"qux"}}, // Dirty working set
 			},
 			{
 				Query:            "call dolt_checkout('main');",
@@ -2797,7 +2797,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"bar"}, {"baz"}, {"foo"}},
+				Expected: []sql.UntypedSqlRow{{"bar"}, {"baz"}, {"foo"}},
 			},
 			{
 				Query:            "call dolt_checkout('-B', 'testbr', 'main~1');",
@@ -2805,11 +2805,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"testbr"}},
+				Expected: []sql.UntypedSqlRow{{"testbr"}},
 			},
 			{
 				Query:    "select * from t order by s;",
-				Expected: []sql.Row{{"bar"}, {"foo"}}, // Dirty working set was forcefully overwritten
+				Expected: []sql.UntypedSqlRow{{"bar"}, {"foo"}}, // Dirty working set was forcefully overwritten
 			},
 		},
 	},
@@ -2833,11 +2833,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "use `mydb/b2`;",
@@ -2845,11 +2845,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:            "use `mydb/b3`;",
@@ -2857,11 +2857,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 			{
 				Query:            "use `mydb/main`",
@@ -2869,11 +2869,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "use `mydb`",
@@ -2881,11 +2881,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "call dolt_checkout('b2');",
@@ -2897,7 +2897,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
 			{
@@ -2906,11 +2906,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 		},
 	},
@@ -2934,11 +2934,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "use `mydb/b2`;",
@@ -2946,15 +2946,15 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:    "select * from mydb.t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "use `mydb/b3`;",
@@ -2962,19 +2962,19 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 			{
 				Query:    "select * from mydb.t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "select * from `mydb/b2`.t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:            "use `mydb/main`",
@@ -2982,19 +2982,19 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "select * from mydb.t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "select * from `mydb/b3`.t;",
-				Expected: []sql.Row{{3, 3}},
+				Expected: []sql.UntypedSqlRow{{3, 3}},
 			},
 			{
 				Query:            "use `mydb`",
@@ -3002,15 +3002,15 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t;",
-				Expected: []sql.Row{{1, 1}},
+				Expected: []sql.UntypedSqlRow{{1, 1}},
 			},
 			{
 				Query:            "call dolt_checkout('b2');",
@@ -3022,12 +3022,12 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
 			{
 				Query:    "select * from `mydb`.t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 			{
 				Query:            "use `mydb`",
@@ -3035,11 +3035,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 		},
 	},
@@ -3067,7 +3067,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 
 			{
@@ -3076,23 +3076,23 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "insert into t values (4, 4);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "select * from t order by 1;",
-				Expected: []sql.Row{{1, 1}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {4, 4}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t order by 1;",
-				Expected: []sql.Row{{1, 1}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {4, 4}},
 			},
 			{
 				Query:    "select * from `mydb/b2`.t order by 1;",
-				Expected: []sql.Row{{2, 2}},
+				Expected: []sql.UntypedSqlRow{{2, 2}},
 			},
 		},
 	},
@@ -3118,19 +3118,19 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "insert into t values (4, 4);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
 				Query:    "select * from t order by 1;",
-				Expected: []sql.Row{{1, 1}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {4, 4}},
 			},
 			{
 				Query:    "select * from `mydb/main`.t order by 1;",
-				Expected: []sql.Row{{1, 1}, {4, 4}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {4, 4}},
 			},
 			{
 				Query:          "select * from `mydb/b2`.t order by 1;",
@@ -3150,7 +3150,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "use mydb/b1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "use mydb/b2",
@@ -3158,7 +3158,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "use mydb/tag1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:          "use mydb/tag2",
@@ -3201,137 +3201,137 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call dolt_checkout('HEAD~', '--', 't1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, ""},
 				},
 			},
 			{
 				Query: "select * from t1 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 				},
 			},
 			{
 				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 2},
 					{4, 4},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1", true, "modified"},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "call dolt_checkout('HEAD~', '--', 't2')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, ""},
 				},
 			},
 			{
 				Query: "select * from t1 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{3, 3},
 				},
 			},
 			{
 				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 2},
 				},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t2", true, "modified"},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "call dolt_checkout('b1', 't2', 't1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, ""},
 				},
 			},
 			{
 				Query: "select * from t1 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 				},
 			},
 			{
 				Query: "select * from t2 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, 2},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "call dolt_checkout('tag1', '.')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, ""},
 				},
 			},
 			{
 				Query:    "select * from t1 order by 1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t2 order by 1",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from dolt_status",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t1", true, "modified"},
 					{"t2", true, "modified"},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query:    "SET @commit1 = (select commit_hash from dolt_log order by date desc limit 1);",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query: "call dolt_checkout(@commit1, 't1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, ""},
 				},
 			},
 			{
 				Query: "select * from t1 order by 1",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{3, 3},
 				},
 			},
 			{
 				Query: "call dolt_reset('--hard')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
@@ -3387,11 +3387,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:            "call dolt_checkout('b2');",
@@ -3399,11 +3399,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"c"}},
 			},
 			{
 				Query:            "call dolt_checkout('b3');",
@@ -3411,11 +3411,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"d"}},
 			},
 		},
 	},
@@ -3433,11 +3433,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "/* main */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:            "use mydb/b2;",
@@ -3445,15 +3445,15 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "/* b2 */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b2' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"c"}},
 			},
 			{
 				Query:            "use mydb/b3;",
@@ -3461,15 +3461,15 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b3"}},
+				Expected: []sql.UntypedSqlRow{{"b3"}},
 			},
 			{
 				Query:    "/* b3 */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b3' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"d"}},
 			},
 		},
 	},
@@ -3488,11 +3488,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "/* main */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:            "use mydb/b2;",
@@ -3500,19 +3500,19 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"b2"}},
+				Expected: []sql.UntypedSqlRow{{"b2"}},
 			},
 			{
 				Query:    "/* b2 */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b2' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"c"}},
 			},
 			{
 				Query:    "select count(*) from information_schema.columns where table_schema = 'mydb/b3' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -3536,11 +3536,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}},
 			},
 			{
 				Query:            "use mydb/t2;",
@@ -3548,11 +3548,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{nil}},
+				Expected: []sql.UntypedSqlRow{{nil}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/t2' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"c"}},
 			},
 			{
 				Query:            "use mydb/t3;",
@@ -3560,11 +3560,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select active_branch();",
-				Expected: []sql.Row{{nil}},
+				Expected: []sql.UntypedSqlRow{{nil}},
 			},
 			{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/t3' and table_name = 't' order by 1;",
-				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
+				Expected: []sql.UntypedSqlRow{{"a"}, {"b"}, {"d"}},
 			},
 		},
 	},
@@ -3576,11 +3576,11 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				// Trying to recreate that branch fails without the force flag
@@ -3589,7 +3589,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-f', 'myNewBranch1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -3610,11 +3610,11 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('myNewBranch2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Renaming to an existing name fails without the force flag
@@ -3623,11 +3623,11 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch3', 'HEAD')",
@@ -3659,11 +3659,11 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch2';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
@@ -3671,7 +3671,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'HEAD')",
@@ -3705,15 +3705,15 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1'",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch2', 'myNewBranch3')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Trying to delete a branch with unpushed changes fails without force option
@@ -3722,7 +3722,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -3737,23 +3737,23 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}},
+				Expected: []sql.UntypedSqlRow{{"a"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
-				Expected: []sql.Row{{0, "Switched to branch 'newBranch'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'newBranch'"}},
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
-				Expected: []sql.Row{{0, "Switched to branch 'newBranch2'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'newBranch2'"}},
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}},
+				Expected: []sql.UntypedSqlRow{{"a"}},
 			},
 			{
 				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
@@ -3767,23 +3767,23 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_branches where name='-b';",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "call dolt_branch('--', '-b');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select count(*) from dolt_branches where name='-b';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "call dolt_branch('-d', '-f', '--', '-b');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select count(*) from dolt_branches where name='-b';",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -3802,11 +3802,11 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from `mydb/b1`.t join t",
-				Expected: []sql.Row{{1, 1}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {1, 2}},
 			},
 			{
 				Query:    "select * from `mydb/b1`.t join `mydb/main`.t",
-				Expected: []sql.Row{{1, 1}, {1, 2}},
+				Expected: []sql.UntypedSqlRow{{1, 1}, {1, 2}},
 			},
 		},
 	},
@@ -3877,16 +3877,16 @@ var DoltResetTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "start transaction;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_reset('--hard', 'HEAD~');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// dolt_status should be empty after a hard reset
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -3900,16 +3900,16 @@ var DoltResetTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "start transaction;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_reset('--soft', 'HEAD~');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.UntypedSqlRow{{"t", false, "new table"}},
 			},
 		},
 	},
@@ -3923,16 +3923,16 @@ var DoltResetTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "start transaction;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_reset('HEAD~');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.UntypedSqlRow{{"t", false, "new table"}},
 			},
 		},
 	},
@@ -3968,11 +3968,11 @@ var DoltGC = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_GC('--shallow');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "CALL DOLT_GC();",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:          "CALL DOLT_GC();",
@@ -4155,7 +4155,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT message from dolt_log();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t"},
 					{"creating table t"},
 					{"Initialize data repository"},
@@ -4163,7 +4163,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT message from dolt_log('main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t"},
 					{"creating table t"},
 					{"Initialize data repository"},
@@ -4171,14 +4171,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT message from dolt_log(@Commit1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"creating table t"},
 					{"Initialize data repository"},
 				},
 			},
 			{
 				Query: "SELECT message from dolt_log(@Commit2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t"},
 					{"creating table t"},
 					{"Initialize data repository"},
@@ -4186,7 +4186,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT message from dolt_log(@Commit3);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t again"},
 					{"inserting into t"},
 					{"creating table t"},
@@ -4195,7 +4195,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT message from dolt_log('new-branch');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t again"},
 					{"inserting into t"},
 					{"creating table t"},
@@ -4204,14 +4204,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT message from dolt_log('main^');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"creating table t"},
 					{"Initialize data repository"},
 				},
 			},
 			{
 				Query: "SELECT message from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserting into t"},
 					{"inserting into t"},
 				},
@@ -4251,83 +4251,83 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'new-branch');",
-				Expected: []sql.Row{{2}}, // 4, 3
+				Expected: []sql.UntypedSqlRow{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main..new-branch');",
-				Expected: []sql.Row{{2}}, // 4, 3
+				Expected: []sql.UntypedSqlRow{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main...new-branch');",
-				Expected: []sql.Row{{3}}, // 5, 4, 3
+				Expected: []sql.UntypedSqlRow{{3}}, // 5, 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch', '--not', 'main');",
-				Expected: []sql.Row{{2}}, // 4, 3
+				Expected: []sql.UntypedSqlRow{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('new-branch', '^main');",
-				Expected: []sql.Row{{2}}, // 4, 3
+				Expected: []sql.UntypedSqlRow{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^new-branch', 'main');",
-				Expected: []sql.Row{{1}}, // 5
+				Expected: []sql.UntypedSqlRow{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--not', 'new-branch');",
-				Expected: []sql.Row{{1}}, // 5
+				Expected: []sql.UntypedSqlRow{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main..main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main...main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--not', 'main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main~', 'main');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main^', 'main');",
-				Expected: []sql.Row{{1}}, // 5
+				Expected: []sql.UntypedSqlRow{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', 'main^');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', @Commit3);",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^new-branch', @Commit5);",
-				Expected: []sql.Row{{1}}, // 5
+				Expected: []sql.UntypedSqlRow{{1}}, // 5
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log(@Commit3, '--not', @Commit2);",
-				Expected: []sql.Row{{1}}, // 3
+				Expected: []sql.UntypedSqlRow{{1}}, // 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log(@Commit4, '--not', @Commit2);",
-				Expected: []sql.Row{{2}}, // 4, 3
+				Expected: []sql.UntypedSqlRow{{2}}, // 4, 3
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', '^new-branch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('^main', '--not', 'new-branch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -4352,7 +4352,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT commit_hash = @Commit2, commit_hash = @Commit1, committer, email, message from dolt_log();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, "root", "root@localhost", "inserting into t"},
 					{false, true, "root", "root@localhost", "creating table t"},
 					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
@@ -4360,15 +4360,15 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit2, committer, email, message from dolt_log('main') limit 1;",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('new-branch') limit 1;",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
+				Expected: []sql.UntypedSqlRow{{true, "John Doe", "johndoe@example.com", "inserting into t again"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit1, committer, email, message from dolt_log(@Commit1) limit 1;",
-				Expected: []sql.Row{{true, "root", "root@localhost", "creating table t"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "creating table t"}},
 			},
 		},
 	},
@@ -4405,21 +4405,21 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('^main', 'new-branch');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main..new-branch');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash = @Commit5, commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('main...new-branch');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, false, "root", "root@localhost", "inserting into t 5"},
 					{false, true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
@@ -4427,49 +4427,49 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '--not', 'main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
 				Query: "SELECT commit_hash = @Commit4, commit_hash = @Commit3, committer, email, message from dolt_log('new-branch', '^main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{true, false, "John Doe", "johndoe@example.com", "inserting into t 4"},
 					{false, true, "John Doe", "johndoe@example.com", "inserting into t 3"},
 				},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', 'main');",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT * from dolt_log('^main', 'main');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^main~', 'main');",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log( 'main', '--not', 'main~');",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log('^main', @Commit3);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Expected: []sql.UntypedSqlRow{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, committer, email, message from dolt_log(@Commit3, '--not', @Commit2);",
-				Expected: []sql.Row{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
+				Expected: []sql.UntypedSqlRow{{true, "John Doe", "johndoe@example.com", "inserting into t 3"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log('^new-branch', @Commit5);",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
-				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+				Expected: []sql.UntypedSqlRow{{true, "root", "root@localhost", "inserting into t 5"}},
 			},
 		},
 	},
@@ -4504,7 +4504,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log('branchB', 'branchA');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 3 BRANCHA [3A]"},
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 2 BRANCHA [2A]"},
@@ -4516,7 +4516,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('main', 'branchA');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 3 BRANCHA [3A]"},
 					{"commit 2 BRANCHA [2A]"},
 					{"commit 3 AFTER [3M]"},
@@ -4528,7 +4528,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('main', 'branchB', 'branchA');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 3 BRANCHA [3A]"},
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 2 BRANCHA [2A]"},
@@ -4541,27 +4541,27 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('branchB', 'main', '^branchA');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 3 AFTER [3M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('branchB', 'main', '--not', 'branchA');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 3 AFTER [3M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('branchB', 'main', '^branchA', '^main');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 1 BRANCHB [1B]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('tagM..branchB');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 2 BRANCHA [2A]"},
 					{"commit 1 BRANCHA [1A]"},
@@ -4569,7 +4569,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('HEAD..branchB');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"commit 1 BRANCHB [1B]"},
 					{"commit 2 BRANCHA [2A]"},
 					{"commit 1 BRANCHA [1A]"},
@@ -4615,7 +4615,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log('--tables', 'test');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserted 2 into test [6M]"},
 					{"merged test-branch [4M]"},
 					{"inserted 1 into test [3M]"},
@@ -4625,20 +4625,20 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"created table test2 [2M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test3')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"dropped table test3 [5M]"},
 					{"created table test3 [2TB]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test,test2');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserted 2 into test [6M]"},
 					{"merged test-branch [4M]"},
 					{"inserted 1 into test [3M]"},
@@ -4649,7 +4649,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select message from dolt_log('test-branch', '--tables', 'test');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"inserted 0 into test [1TB]"},
 					{"created table test [1M]"},
 				},
@@ -4683,63 +4683,63 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT committer, email, message from dolt_log('--merges');",
-				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
+				Expected: []sql.UntypedSqlRow{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT committer, email, message from dolt_log('--min-parents', '2');",
-				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
+				Expected: []sql.UntypedSqlRow{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT committer, email, message from dolt_log('main', '--min-parents', '2');",
-				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
+				Expected: []sql.UntypedSqlRow{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main');",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.UntypedSqlRow{{5}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1');", // Should show everything except first commit
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1', '--merges');", // --merges overrides --min-parents
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SELECT committer, email, message from dolt_log('branch1..main', '--min-parents', '2');",
-				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
+				Expected: []sql.UntypedSqlRow{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('--min-parents', '5');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT message, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('main', '--parents', '--merges');",
-				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}}, // shows two parents for merge commit
+				Expected: []sql.UntypedSqlRow{{"Merge branch 'branch2' into main", true, true}}, // shows two parents for merge commit
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
-				Expected: []sql.Row{{true, true}},
+				Expected: []sql.UntypedSqlRow{{true, true}},
 			},
 			{
 				Query:    "SELECT message, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('branch1..main', '--parents', '--merges') LIMIT 1;",
-				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}},
+				Expected: []sql.UntypedSqlRow{{"Merge branch 'branch2' into main", true, true}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1 from dolt_log('branch2..branch1', '--parents') LIMIT 1;",
-				Expected: []sql.Row{{true, true}},
+				Expected: []sql.UntypedSqlRow{{true, true}},
 			},
 			{
 				Query:    "SELECT refs from dolt_log('--decorate', 'short') LIMIT 1;",
-				Expected: []sql.Row{{"HEAD -> main, tag: v1"}},
+				Expected: []sql.UntypedSqlRow{{"HEAD -> main, tag: v1"}},
 			},
 			{
 				Query:    "SELECT refs from dolt_log('--decorate', 'full') LIMIT 1;",
-				Expected: []sql.Row{{"HEAD -> refs/heads/main, tag: refs/tags/v1"}},
+				Expected: []sql.UntypedSqlRow{{"HEAD -> refs/heads/main, tag: refs/tags/v1"}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1, refs from dolt_log('branch2..branch1', '--parents', '--decorate', 'short') LIMIT 1;",
-				Expected: []sql.Row{{true, true, "HEAD -> branch1"}},
+				Expected: []sql.UntypedSqlRow{{true, true, "HEAD -> branch1"}},
 			},
 		},
 	},
@@ -4754,7 +4754,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    `insert into t set j= concat('[', repeat('"word",', 10000000), '"word"]')`,
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1}}},
 			},
 		},
 	},
@@ -4821,19 +4821,19 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_TAG('v1', 'HEAD')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, IF(CHAR_LENGTH(tag_hash) < 0, NULL, 'not null'), tagger, email, IF(date IS NULL, NULL, 'not null'), message from dolt_tags",
-				Expected: []sql.Row{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
+				Expected: []sql.UntypedSqlRow{{"v1", "not null", "billy bob", "bigbillieb@fake.horse", "not null", ""}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('v2', '-m', 'create tag v2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v1", ""}, {"v2", "create tag v2"}},
+				Expected: []sql.UntypedSqlRow{{"v1", ""}, {"v2", "create tag v2"}},
 			},
 		},
 	},
@@ -4851,23 +4851,23 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v1", "create tag v1"}, {"v2", "create tag v2"}, {"v3", "create tag v3"}},
+				Expected: []sql.UntypedSqlRow{{"v1", "create tag v1"}, {"v2", "create tag v2"}, {"v3", "create tag v3"}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('-d','v1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{{"v2", "create tag v2"}, {"v3", "create tag v3"}},
+				Expected: []sql.UntypedSqlRow{{"v2", "create tag v2"}, {"v3", "create tag v3"}},
 			},
 			{
 				Query:    "CALL DOLT_TAG('-d','v2','v3')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT tag_name, message from dolt_tags",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -4885,27 +4885,27 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_TAG('v1','HEAD')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b','other','HEAD^')",
-				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (8), (9)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2}}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-am','made changes in other')",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('v1')",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * FROM test",
-				Expected: []sql.Row{{1}, {2}, {3}, {8}, {9}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}, {3}, {8}, {9}},
 			},
 		},
 	},
@@ -4921,13 +4921,13 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT tag_name FROM dolt_tags",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"ABC"},
 				},
 			},
 			{
 				Query: "select * from test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 					{1},
 					{2},
@@ -4935,11 +4935,11 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "use mydb/abc;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from test;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -4955,13 +4955,13 @@ var DoltTagTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT tag_name FROM dolt_tags",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"v1"},
 				},
 			},
 			{
 				Query: "select * from test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 					{1},
 					{2},
@@ -4981,11 +4981,11 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_REMOTE('add','origin','file://../test')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), types.MustJSON(`{}`)}},
+				Expected: []sql.UntypedSqlRow{{"origin", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin/*"]`), types.MustJSON(`{}`)}},
 			},
 			{
 				Query:          "CALL DOLT_REMOTE()",
@@ -5010,17 +5010,17 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"origin1", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), types.MustJSON(`{}`)},
 					{"origin2", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin2/*"]`), types.MustJSON(`{}`)}},
 			},
 			{
 				Query:    "CALL DOLT_REMOTE('remove','origin2')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT name, IF(CHAR_LENGTH(url) < 0, NULL, 'not null'), fetch_specs, params FROM DOLT_REMOTES",
-				Expected: []sql.Row{{"origin1", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), types.MustJSON(`{}`)}},
+				Expected: []sql.UntypedSqlRow{{"origin1", "not null", types.MustJSON(`["refs/heads/*:refs/remotes/origin1/*"]`), types.MustJSON(`{}`)}},
 			},
 			// 'origin1' remote must exist in order this error to be returned; otherwise, no error from EOF
 			{
@@ -5037,23 +5037,23 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "use one;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_REMOTE('add','test01','file:///foo');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select count(*) from dolt_remotes where name='test01';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "use mydb;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select count(*) from dolt_remotes where name='test01';",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -5077,39 +5077,39 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+				Expected: []sql.UntypedSqlRow{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
 			},
 			{
 				Query:    "drop database one;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+				Expected: []sql.UntypedSqlRow{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
 			},
 			{
 				Query:    "call dolt_undrop('one');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+				Expected: []sql.UntypedSqlRow{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
 			},
 			{
 				Query:    "use one;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from one.t1;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "select * from two.t2;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "drop database one;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:          "call dolt_undrop;",
@@ -5117,11 +5117,11 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_purge_dropped_databases;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+				Expected: []sql.UntypedSqlRow{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
 			},
 			{
 				Query:          "call dolt_undrop;",
@@ -5171,7 +5171,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select ref, commit_hash, commit_message from dolt_reflog();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/heads/branch1", doltCommit, "inserting row 3"},
 					{"refs/heads/branch1", doltCommit, "inserting row 2"},
@@ -5206,11 +5206,11 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_reflog('doesNotExist');",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/heads/main')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
@@ -5218,14 +5218,14 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 			}, {
 				// ref is case-insensitive
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('reFS/Heads/MaIn')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
@@ -5233,62 +5233,62 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 			}, {
 				// ref is case-insensitive
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('MaIN')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/heads/branch1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/branch1", doltCommit, "inserting row 3"},
 					{"refs/heads/branch1", doltCommit, "inserting row 2"},
 					{"refs/heads/branch1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('branch1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/branch1", doltCommit, "inserting row 3"},
 					{"refs/heads/branch1", doltCommit, "inserting row 2"},
 					{"refs/heads/branch1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/tags/tag1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				// ref is case-insensitive
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('Refs/TAGs/taG1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('tag1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				// ref is case-insensitive
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('tAG1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
 				},
 			}, {
 				// checkout main, so we can delete branch1
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'main'"}},
 			}, {
 				// delete branch branch1 and make sure we can still query it in reflog
 				Query:    "call dolt_branch('-D', 'branch1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('branch1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/branch1", doltCommit, "inserting row 3"},
 					{"refs/heads/branch1", doltCommit, "inserting row 2"},
 					{"refs/heads/branch1", doltCommit, "inserting row 1"},
@@ -5296,10 +5296,10 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 			}, {
 				// delete tag tag1 and make sure we can still query it in reflog
 				Query:    "call dolt_tag('-d', 'tag1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			}, {
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('tag1')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
 				},
@@ -5311,19 +5311,19 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			},
 			{
 				Query:    "call dolt_gc();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Calling dolt_gc() invalidates the session, so we have to ask this assertion to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected:   []sql.Row{},
+				Expected:   []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -5341,7 +5341,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"refs/heads/main", doltCommit, "inserting row 2"},
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
@@ -5350,13 +5350,13 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_gc();",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				// Calling dolt_gc() invalidates the session, so we have to force this test to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected:   []sql.Row{},
+				Expected:   []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -5376,11 +5376,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'two values on main')",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch1')",
@@ -5388,18 +5388,18 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (b) values (3), (4)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, 3},
 					{4, 4},
 				},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'two values on branch1')",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -5407,11 +5407,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 				},
@@ -5438,7 +5438,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "call dolt_checkout('main')",
@@ -5447,11 +5447,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is 6
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{7, 7},
@@ -5460,7 +5460,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -5469,11 +5469,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is still 6 (dropped table above)
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 					{7, 7},
@@ -5482,7 +5482,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "drop table t",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:            "create table t (a int primary key auto_increment, b int)",
@@ -5491,11 +5491,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// no value on any branch
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 				},
@@ -5514,7 +5514,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "delete from t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "alter table t auto_increment = 1",
@@ -5523,11 +5523,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// empty tables, start at 1
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 7},
 					{2, 8},
 				},
@@ -5551,11 +5551,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// previous update was ignored
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -5566,7 +5566,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (a, b) values (100, 100)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 5}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, InsertID: 5}}},
 			},
 			{
 				Query:            "alter table t auto_increment = 50",
@@ -5575,11 +5575,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// previous update was ignored, value still below max on that table
 				Query:    "insert into t (b) values (101)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
 			},
 			{
 				Query:    "select * from t where a >= 100 order by a",
-				Expected: []sql.Row{{100, 100}, {101, 101}},
+				Expected: []sql.UntypedSqlRow{{100, 100}, {101, 101}},
 			},
 		},
 	},
@@ -5600,15 +5600,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into `mydb/branch1`.t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 20}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 20}}},
 			},
 			{
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 22}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 22}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -5639,15 +5639,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "delete from t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "delete from `mydb/branch1`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "delete from `mydb/branch2`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "alter table `mydb/branch1`.t auto_increment = 1",
@@ -5664,11 +5664,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// empty tables, start at 1
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 7},
 					{2, 8},
 				},
@@ -5695,15 +5695,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "delete from t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "delete from `mydb/branch1`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "delete from `mydb/branch2`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "alter table t auto_increment = 1",
@@ -5716,11 +5716,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// empty tables, start at 5 (highest remaining value, update above ignored)
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 				},
@@ -5747,15 +5747,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "truncate t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "truncate `mydb/branch1`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:    "truncate `mydb/branch2`.t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "alter table t auto_increment = 1",
@@ -5764,11 +5764,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// empty tables, start at 1
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 7},
 					{2, 8},
 				},
@@ -5795,7 +5795,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{types.NewOkResult(2)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(2)}},
 			},
 			{
 				Query:            "call dolt_checkout('main')",
@@ -5804,11 +5804,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is 6
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{7, 7},
@@ -5817,7 +5817,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{types.NewOkResult(4)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(4)}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -5826,11 +5826,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				// highest value in any branch is still 6 (truncated table above)
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 					{7, 7},
@@ -5839,16 +5839,16 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "truncate table t",
-				Expected: []sql.Row{{types.NewOkResult(4)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(4)}},
 			},
 			{
 				// no value on any branch
 				Query:    "insert into t (b) values (1), (2)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 				},
@@ -5877,16 +5877,16 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t drop primary key",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				// highest value in any branch is 6
 				Query:    "insert into t (b) values (7), (8)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{7, 7},
@@ -5899,11 +5899,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "insert into t (b) values (9), (10)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 9}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 9}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 					{9, 9},
@@ -5912,15 +5912,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "alter table t drop primary key",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "insert into t (b) values (11), (12)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 11}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 2, InsertID: 11}}},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, 5},
 					{6, 6},
 					{9, 9},
@@ -5943,13 +5943,13 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t(b) values (3)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, InsertID: 3}},
 				},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{3, 3},
@@ -5970,13 +5970,13 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t(b) values (5)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, InsertID: 5}},
 				},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{5, 5},
@@ -6000,13 +6000,13 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "insert into t(b) values (101)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, InsertID: 101}},
 				},
 			},
 			{
 				Query: "select * from t order by a",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, 1},
 					{2, 2},
 					{101, 101},
@@ -6057,7 +6057,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
-				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:          "CALL dolt_cherry_pick('HEAD');",
@@ -6084,7 +6084,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_add('t');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:          "CALL Dolt_Cherry_Pick(@commit1);",
@@ -6127,28 +6127,28 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit2);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
-				Expected: []sql.Row{{2, "two"}},
+				Expected: []sql.UntypedSqlRow{{2, "two"}},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t order by pk;",
-				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}, {2, "two"}},
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
 				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -6166,15 +6166,15 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM keyless;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "CALL DOLT_CHERRY_PICK('branch1');",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM keyless;",
-				Expected: []sql.Row{{1, "1"}, {2, "3"}},
+				Expected: []sql.UntypedSqlRow{{1, "1"}, {2, "3"}},
 			},
 		},
 	},
@@ -6191,24 +6191,24 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
 				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"table_a"}},
+				Expected: []sql.UntypedSqlRow{{"table_a"}},
 			},
 			{
 				Query:    "SELECT * FROM table_a;",
-				Expected: []sql.Row{{11, "aa"}, {22, "ab"}},
+				Expected: []sql.UntypedSqlRow{{11, "aa"}, {22, "ab"}},
 			},
 		},
 	},
@@ -6227,15 +6227,15 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"dropme"}},
+				Expected: []sql.UntypedSqlRow{{"dropme"}},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -6253,11 +6253,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -6275,11 +6275,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -6297,11 +6297,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
-				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `v2` varchar(100),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -6322,29 +6322,29 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 		},
 	},
@@ -6366,29 +6366,29 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 		},
 	},
@@ -6409,46 +6409,46 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}, {"t", false, "conflict"}},
+				Expected: []sql.UntypedSqlRow{{"t", false, "modified"}, {"t", false, "conflict"}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
 				Query:    "call dolt_conflicts_resolve('--ours', 't');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}},
+				Expected: []sql.UntypedSqlRow{{"t", false, "modified"}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'committing cherry-pick');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
 				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -6472,52 +6472,52 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 			{
 				Query:    `CALL dolt_cherry_pick(@commit2);`,
-				Expected: []sql.Row{{"", 1, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 1, 0, 0}},
 			},
 			{
 				Query:    `SELECT * FROM dolt_conflicts;`,
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query:    `commit;`,
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    `SELECT * FROM dolt_conflicts;`,
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query:    `SELECT base_pk, base_c1, our_pk, our_c1, their_diff_type, their_pk, their_c1 FROM dolt_conflicts_t;`,
-				Expected: []sql.Row{{1, "uno", 1, "one", "modified", 1, "ein"}},
+				Expected: []sql.UntypedSqlRow{{1, "uno", 1, "one", "modified", 1, "ein"}},
 			},
 			{
 				Query:    `SELECT * FROM t;`,
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 			{
 				Query:    `call dolt_conflicts_resolve('--theirs', 't');`,
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    `SELECT * FROM t;`,
-				Expected: []sql.Row{{1, "ein"}},
+				Expected: []sql.UntypedSqlRow{{1, "ein"}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'committing cherry-pick');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				// Assert that our new commit only has one parent (i.e. not a merge commit)
 				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -6545,15 +6545,15 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(hashof('branch1'));",
-				Expected: []sql.Row{{"", 1, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 1, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(1)}},
+				Expected: []sql.UntypedSqlRow{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
@@ -6569,32 +6569,32 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			*/
 			{
 				Query:    "call dolt_cherry_pick('--abort');",
-				Expected: []sql.Row{{"", 0, 0, 0}},
+				Expected: []sql.UntypedSqlRow{{"", 0, 0, 0}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{1, "one"}},
+				Expected: []sql.UntypedSqlRow{{1, "one"}},
 			},
 			{
 				// An ignored table should still be present (and unstaged) after aborting the merge.
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{{"generated_foo", false, "new table"}},
+				Expected: []sql.UntypedSqlRow{{"generated_foo", false, "new table"}},
 			},
 			{
 				// Changes made to the table during the merge should not be reverted.
 				Query:    "select * from generated_foo;",
-				Expected: []sql.Row{{1}, {2}},
+				Expected: []sql.UntypedSqlRow{{1}, {2}},
 			},
 			/*{
 				// TODO: https://github.com/dolthub/dolt/issues/7411
 				// The table that was force-added should be treated like any other table
 				// and reverted to its state before the merge began.
 				Query:    "select * from generated_bar;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},*/
 		},
 	},
@@ -6613,56 +6613,56 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			// update a table
 			{
 				Query:    "DELETE from t where pk = 1;",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			// check last commit
 			{
 				Query:    "select message from dolt_log limit 1",
-				Expected: []sql.Row{{"update table terminator"}},
+				Expected: []sql.UntypedSqlRow{{"update table terminator"}},
 			},
 			// amend last commit
 			{
 				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			// check amended commit
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "select message from dolt_log limit 1",
-				Expected: []sql.Row{{"update table t"}},
+				Expected: []sql.UntypedSqlRow{{"update table t"}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			// delete a table
 			{
 				Query:    "DROP TABLE t;",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-Am', 'drop table t');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:       "SELECT * from t;",
@@ -6671,29 +6671,29 @@ var DoltCommitTests = []queries.ScriptTest{
 			// create a table
 			{
 				Query:    "CREATE table t2 (pk int primary key);",
-				Expected: []sql.Row{{types.NewOkResult(0)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-Am', 'add table 21');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			// amend last commit
 			{
 				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			// check amended commit
 			{
 				Query:    "select message from dolt_log limit 1",
-				Expected: []sql.Row{{"add table 2"}},
+				Expected: []sql.UntypedSqlRow{{"add table 2"}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "SELECT * from t2;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -6708,7 +6708,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT message from dolt_log where message = 'author: somebody'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"author: somebody"},
 				},
 			},
@@ -6726,7 +6726,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT  message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"original commit message"},
 					{"author: somebody"},
 					{"add table 2"},
@@ -6739,15 +6739,15 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_tEST;",
-				Expected: []sql.Row{{2, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{2, nil, "added"}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query: "SELECT  message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"amended commit message"},
 					{"author: somebody"},
 					{"add table 2"},
@@ -6760,7 +6760,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{{2, nil, "added"}},
+				Expected: []sql.UntypedSqlRow{{2, nil, "added"}},
 			},
 		},
 	},
@@ -6775,18 +6775,18 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{3, nil, "added"},
 					{2, nil, "added"},
 				},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query: "SELECT  message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"original commit message for adding changes to a commit"},
 					{"amended commit message"},
 					{"author: somebody"},
@@ -6800,23 +6800,23 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test (id) VALUES (4)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "CALL DOLT_ADD('.');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('--amend');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"original commit message for adding changes to a commit"},
 					{"amended commit message"},
 					{"author: somebody"},
@@ -6830,7 +6830,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{4, nil, "added"},
 					{3, nil, "added"},
 					{2, nil, "added"},
@@ -6838,27 +6838,27 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO test (id) VALUES (5)",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "CALL DOLT_ADD('.');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"amended commit with added changes"},
 					{"amended commit message"},
 					{"author: somebody"},
@@ -6872,7 +6872,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{5, nil, "added"},
 					{4, nil, "added"},
 					{3, nil, "added"},
@@ -6893,11 +6893,11 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{2}, {3}, {4}, {5}, {6}, {7}},
+				Expected: []sql.UntypedSqlRow{{2}, {3}, {4}, {5}, {6}, {7}},
 			},
 			{
 				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{7, nil, "added"},
 					{6, nil, "added"},
 					{5, nil, "added"},
@@ -6908,23 +6908,23 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "DELETE FROM test WHERE id = 6",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(1)}},
 			},
 			{
 				Query:    "CALL DOLT_ADD('.');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{2}, {3}, {4}, {5}, {7}},
+				Expected: []sql.UntypedSqlRow{{2}, {3}, {4}, {5}, {7}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"amended commit with removed changes"},
 					{"amended commit with added changes"},
 					{"amended commit message"},
@@ -6939,7 +6939,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT to_id, from_id, diff_type FROM dolt_diff_test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{7, nil, "added"},
 					{5, nil, "added"},
 					{4, nil, "added"},
@@ -6975,11 +6975,11 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.UntypedSqlRow{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"new merge"},
 					{"original commit message"},
 					{"conflicting commit message"},
@@ -6998,11 +6998,11 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @hash=(SELECT commit_hash FROM dolt_log LIMIT 1);",
-				Expected: []sql.Row{{}},
+				Expected: []sql.UntypedSqlRow{{}},
 			},
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 		},
 	},
@@ -7017,11 +7017,11 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10),\n  `v2` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10),\n  `v2` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
 			},
 			{
 				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
-				Expected: []sql.Row{{types.NewOkResult(4)}},
+				Expected: []sql.UntypedSqlRow{{types.NewOkResult(4)}},
 			},
 			{
 				Query:       "insert into t values (99, 'ABC', 'ABCDE')",
@@ -7041,43 +7041,43 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from t where v1 = 'A'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "a", "a"},
 				},
 			},
 			{
 				Query: "select * from t where v1 = 'ABC'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{2, "abc", "abc"},
 				},
 			},
 			{
 				Query:    "select * from t where v1 = 'ABCD'",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query: "select * from t where v1 > 'A' and v1 < 'ABCDE'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "ab", "ab"},
 					{2, "abc", "abc"},
 				},
 			},
 			{
 				Query: "select * from t where v1 > 'A' and v2 < 'ABCDE'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1, "ab", "ab"},
 					{2, "abc", "abc"},
 				},
 			},
 			{
 				Query: "update t set v1 = concat(v1, 'Z') where v1 >= 'A'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 4, InsertID: 0, Info: plan.UpdateInfo{Matched: 4, Updated: 4}}},
 				},
 			},
 			{
 				Query: "select * from t",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0, "aZ", "a"},
 					{1, "abZ", "ab"},
 					{2, "abcZ", "abc"},
@@ -7086,13 +7086,13 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "delete from t where v1 >= 'A'",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 4}},
 				},
 			},
 			{
 				Query:    "select * from t",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -7105,11 +7105,11 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j int",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` int,\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `j` int,\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -7121,11 +7121,11 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j varchar(2)",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` varchar(2),\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `j` varchar(2),\n  KEY `j` (`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -7137,11 +7137,11 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j varchar(200)",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `j` varchar(200),\n  KEY `j` (`j`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `j` varchar(200),\n  KEY `j` (`j`(10))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -7153,11 +7153,11 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table t modify column j int",
-				Expected: []sql.Row{{types.OkResult{}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{}}},
 			},
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` varchar(100),\n  `j` int,\n  KEY `i` (`i`(10),`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.UntypedSqlRow{{"t", "CREATE TABLE `t` (\n  `i` varchar(100),\n  `j` int,\n  KEY `i` (`i`(10),`j`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -7230,15 +7230,15 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL p1();",
-				Expected: []sql.Row{{"cd"}},
+				Expected: []sql.UntypedSqlRow{{"cd"}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p1();",
-				Expected: []sql.Row{{"cd"}},
+				Expected: []sql.UntypedSqlRow{{"cd"}},
 			},
 			{
 				Query:    "CALL `mydb/p12`.p1();",
-				Expected: []sql.Row{{"ab"}},
+				Expected: []sql.UntypedSqlRow{{"ab"}},
 			},
 		},
 	},
@@ -7270,23 +7270,23 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL p1();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD';",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD~1';",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD~2';",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD~3';",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 		},
 	},
@@ -7315,7 +7315,7 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "CALL p1();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 3", "1"},
 					{int64(2), "second row, 3", "2"},
 					{int64(3), "third row, 3", "3"},
@@ -7323,7 +7323,7 @@ END`,
 			},
 			{
 				Query: "CALL p1a();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 1"},
 					{int64(2), "second row, 1"},
 					{int64(3), "third row, 1"},
@@ -7331,7 +7331,7 @@ END`,
 			},
 			{
 				Query: "CALL p1b();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 2"},
 					{int64(2), "second row, 2"},
 					{int64(3), "third row, 2"},
@@ -7339,7 +7339,7 @@ END`,
 			},
 			{
 				Query: "CALL p2();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 3", "1"},
 					{int64(2), "second row, 3", "2"},
 					{int64(3), "third row, 3", "3"},
@@ -7347,7 +7347,7 @@ END`,
 			},
 			{
 				Query: "CALL p2a();",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 2"},
 					{int64(2), "second row, 2"},
 					{int64(3), "third row, 2"},
@@ -7355,7 +7355,7 @@ END`,
 			},
 			{
 				Query: "CALL p1() AS OF 'HEAD~2';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 1"},
 					{int64(2), "second row, 1"},
 					{int64(3), "third row, 1"},
@@ -7363,7 +7363,7 @@ END`,
 			},
 			{
 				Query: "CALL p1a() AS OF 'HEAD';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 1"},
 					{int64(2), "second row, 1"},
 					{int64(3), "third row, 1"},
@@ -7371,7 +7371,7 @@ END`,
 			},
 			{
 				Query: "CALL p1b() AS OF 'HEAD';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 2"},
 					{int64(2), "second row, 2"},
 					{int64(3), "third row, 2"},
@@ -7379,7 +7379,7 @@ END`,
 			},
 			{
 				Query: "CALL p2() AS OF 'HEAD~2';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 1"},
 					{int64(2), "second row, 1"},
 					{int64(3), "third row, 1"},
@@ -7387,7 +7387,7 @@ END`,
 			},
 			{
 				Query: "CALL p2a() AS OF 'HEAD';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{int64(1), "first row, 2"},
 					{int64(2), "second row, 2"},
 					{int64(3), "third row, 2"},
@@ -7412,15 +7412,15 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.UntypedSqlRow{{2}},
 			},
 			{
 				Query:    "CALL p1();",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				Expected: []sql.UntypedSqlRow{{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
 			},
 			{
 				Query:    "SELECT * FROM test;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:       "CALL p1() AS OF 'HEAD~1';",
@@ -7459,27 +7459,27 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL p4();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL p5();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p4();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p5();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.UntypedSqlRow{{4}},
 			},
 			{
 				Query:    "CALL `mydb/p45`.p4();",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 			{
 				Query:    "CALL `mydb/p45`.p5();",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.UntypedSqlRow{{3}},
 			},
 		},
 	},
@@ -7507,39 +7507,39 @@ END`,
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL p1();",
-				Expected: []sql.Row{{300}},
+				Expected: []sql.UntypedSqlRow{{300}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p1();",
-				Expected: []sql.Row{{300}},
+				Expected: []sql.UntypedSqlRow{{300}},
 			},
 			{
 				Query:    "CALL `mydb/other`.p1();",
-				Expected: []sql.Row{{30}},
+				Expected: []sql.UntypedSqlRow{{30}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD';",
-				Expected: []sql.Row{{300}},
+				Expected: []sql.UntypedSqlRow{{300}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p1() AS OF 'HEAD';",
-				Expected: []sql.Row{{300}},
+				Expected: []sql.UntypedSqlRow{{300}},
 			},
 			{
 				Query:    "CALL `mydb/other`.p1() AS OF 'HEAD';",
-				Expected: []sql.Row{{30}},
+				Expected: []sql.UntypedSqlRow{{30}},
 			},
 			{
 				Query:    "CALL p1() AS OF 'HEAD~1';",
-				Expected: []sql.Row{{200}},
+				Expected: []sql.UntypedSqlRow{{200}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p1() AS OF 'HEAD~1';",
-				Expected: []sql.Row{{200}},
+				Expected: []sql.UntypedSqlRow{{200}},
 			},
 			{
 				Query:    "CALL `mydb/other`.p1() AS OF 'HEAD~1';",
-				Expected: []sql.Row{{20}},
+				Expected: []sql.UntypedSqlRow{{20}},
 			},
 		},
 	},
@@ -7555,7 +7555,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW TABLES;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"dolt_branches"},
 					{"dolt_commit_ancestors"},
 					{"dolt_commit_diff_test"},
@@ -7589,7 +7589,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "CREATE TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
@@ -7598,13 +7598,13 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 3, InsertID: 1}},
 				},
 			},
 			{
 				Query: "show create table t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "CREATE TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
@@ -7613,7 +7613,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select * from t",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 					{2},
 					{3},
@@ -7621,13 +7621,13 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "insert into t values (100), (1000)",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 2, InsertID: 1}},
 				},
 			},
 			{
 				Query: "show create table t;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"t", "CREATE TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
@@ -7636,13 +7636,13 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "insert into t values (), (), ()",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 3, InsertID: 0x3e9}},
 				},
 			},
 			{
 				Query: "select * from t",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 					{2},
 					{3},
@@ -7663,7 +7663,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "CREATE TEMPORARY TABLE tmp_tbl(a int, b int, c int, d int, e int, f int, g int);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(0)},
 				},
 			},

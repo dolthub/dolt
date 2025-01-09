@@ -48,11 +48,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"branch1"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}},
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
@@ -60,11 +60,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch2');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch2'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch2'"}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -72,11 +72,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-df', 'branch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -89,11 +89,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"branch1"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}},
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-m', 'branch1', 'movedBranch1');",
@@ -101,11 +101,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-mf', 'branch1', 'movedBranch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-m', 'branch2', 'movedBranch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -118,23 +118,23 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ use dolt/branch1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+				Expected: []sql.UntypedSqlRow{{"dolt/branch1", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+				Expected: []sql.UntypedSqlRow{{"dolt/branch2", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
@@ -142,21 +142,21 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_BRANCH('-df', 'branch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+				Expected: []sql.UntypedSqlRow{{"dolt/branch1", "branch1"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
 				// fail if a branch-qualified database exists for a missing branch.
 				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -169,23 +169,23 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ use dolt/branch1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+				Expected: []sql.UntypedSqlRow{{"dolt/branch1", "branch1"}},
 			},
 			{
 				Query:    "/* client b */ use dolt/branch2;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
-				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+				Expected: []sql.UntypedSqlRow{{"dolt/branch2", "branch2"}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
@@ -193,17 +193,17 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_BRANCH('-mf', 'branch2', 'newName');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client a */ SHOW DATABASES;",
-				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.UntypedSqlRow{{"dolt"}, {"dolt/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Call a stored procedure since this searches across all databases and will
 				// fail if a branch-qualified database exists for a missing branch.
 				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -212,31 +212,31 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=1;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"branch1"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}},
 			},
 			{
 				Query:    "/* client b */ select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "/* client b */ select name from dolt_branches order by name;",
-				Expected: []sql.Row{{"branch1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-D', 'branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ select name from dolt_branches;",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
@@ -248,11 +248,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 		},
 	},
@@ -261,31 +261,31 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
-				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"branch1"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}},
 			},
 			{
 				Query:    "/* client b */ select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:    "/* client b */ select name from dolt_branches order by name;",
-				Expected: []sql.Row{{"branch1"}, {"main"}},
+				Expected: []sql.UntypedSqlRow{{"branch1"}, {"main"}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-D', 'branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				Query:    "/* client b */ select name from dolt_branches;",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
@@ -298,11 +298,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
-				Expected: []sql.Row{{"main"}},
+				Expected: []sql.UntypedSqlRow{{"main"}},
 			},
 		},
 	},
@@ -323,44 +323,44 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ use db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ use db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ show tables;",
-				Expected: []sql.Row{{"t01"}},
+				Expected: []sql.UntypedSqlRow{{"t01"}},
 			},
 			{
 				Query:    "/* client b */ show tables;",
-				Expected: []sql.Row{{"t01"}},
+				Expected: []sql.UntypedSqlRow{{"t01"}},
 			},
 			{
 				Query:    "/* client a */ drop database db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// TODO: This test runner doesn't currently support asserting against null values
 				Query:    "/* client a */ select database() is NULL;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ show databases like 'db01';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ create database db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select database();",
-				Expected: []sql.Row{{"db01"}},
+				Expected: []sql.UntypedSqlRow{{"db01"}},
 			},
 			{
 				Query:    "/* client b */ show tables;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 		},
 	},
@@ -379,40 +379,40 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ use db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ use `db01/branch1`;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ show tables;",
-				Expected: []sql.Row{{"t01"}},
+				Expected: []sql.UntypedSqlRow{{"t01"}},
 			},
 			{
 				Query:    "/* client b */ show tables;",
-				Expected: []sql.Row{{"t01"}},
+				Expected: []sql.UntypedSqlRow{{"t01"}},
 			},
 			{
 				Query:    "/* client a */ drop database db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				// TODO: This test runner doesn't currently support asserting against null values
 				Query:    "/* client a */ select database() is NULL;",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.UntypedSqlRow{{1}},
 			},
 			{
 				Query:    "/* client a */ show databases like 'db01';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client a */ create database db01;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				Query:    "/* client b */ select database();",
-				Expected: []sql.Row{{"db01/branch1"}},
+				Expected: []sql.UntypedSqlRow{{"db01/branch1"}},
 			},
 			{
 				Query:          "/* client b */ show tables;",
@@ -435,13 +435,13 @@ var PersistVariableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select @@dolt_skip_replication_errors",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},
 			{
 				Query: "select @@dolt_read_replica_force_pull",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
@@ -459,13 +459,13 @@ var PersistVariableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select @@dolt_skip_replication_errors",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{0},
 				},
 			},
 			{
 				Query: "select @@dolt_read_replica_force_pull",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{1},
 				},
 			},
@@ -587,7 +587,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	return dEnv, onEnv, config
 }
 
-func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
+func assertResultsEqual(t *testing.T, expected []sql.UntypedSqlRow, rows *gosql.Rows) {
 	columnTypes, err := rows.ColumnTypes()
 	assert.NoError(t, err)
 	dest := makeDestinationSlice(t, columnTypes)
@@ -599,10 +599,10 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 		}
 		err := rows.Scan(dest...)
 		assert.NoError(t, err)
-		assert.Equal(t, len(expectedRow), len(dest),
+		assert.Equal(t, expectedRow.Len(), len(dest),
 			"Different number of columns returned than expected")
 
-		for j, expectedValue := range expectedRow {
+		for j, expectedValue := range expectedRow.Values() {
 			switch strings.ToUpper(columnTypes[j].DatabaseTypeName()) {
 			case "TEXT":
 				actualValue, ok := dest[j].(*string)

@@ -83,13 +83,13 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, fmt.Errorf("%w: write version %d does not match read version %d", ErrIncompatibleVersion, version, schema.StatsVersion)
 	}
 
-	var row sql.Row
+	var row sql.Row = new(sql.UntypedSqlRow)
 	for i := 0; i < s.kb.Desc.Count(); i++ {
 		f, err := tree.GetField(ctx, s.kb.Desc, i, k, s.ns)
 		if err != nil {
 			return nil, err
 		}
-		row = append(row, f)
+		row = row.Append(sql.NewUntypedRow(f))
 	}
 
 	for i := 0; i < s.vb.Desc.Count(); i++ {
@@ -97,23 +97,23 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		row = append(row, f)
+		row = row.Append(sql.NewUntypedRow(f))
 	}
 
-	dbName := row[schema.StatsDbTag].(string)
-	tableName := row[schema.StatsTableTag].(string)
-	indexName := row[schema.StatsIndexTag].(string)
-	position := row[schema.StatsPositionTag].(int64)
-	_ = row[schema.StatsVersionTag]
-	commit := hash.Parse(row[schema.StatsCommitHashTag].(string))
-	rowCount := row[schema.StatsRowCountTag].(int64)
-	distinctCount := row[schema.StatsDistinctCountTag].(int64)
-	nullCount := row[schema.StatsNullCountTag].(int64)
-	columnsStr := row[schema.StatsColumnsTag].(string)
-	typesStr := row[schema.StatsTypesTag].(string)
-	upperBoundStr := row[schema.StatsUpperBoundTag].(string)
-	upperBoundCnt := row[schema.StatsUpperBoundCntTag].(int64)
-	createdAt := row[schema.StatsCreatedAtTag].(time.Time)
+	dbName := row.GetValue(int(schema.StatsDbTag)).(string)
+	tableName := row.GetValue(int(schema.StatsTableTag)).(string)
+	indexName := row.GetValue(int(schema.StatsIndexTag)).(string)
+	position := row.GetValue(int(schema.StatsPositionTag)).(int64)
+	_ = row.GetValue(int(schema.StatsVersionTag))
+	commit := hash.Parse(row.GetValue(int(schema.StatsCommitHashTag)).(string))
+	rowCount := row.GetValue(int(schema.StatsRowCountTag)).(int64)
+	distinctCount := row.GetValue(int(schema.StatsDistinctCountTag)).(int64)
+	nullCount := row.GetValue(int(schema.StatsNullCountTag)).(int64)
+	columnsStr := row.GetValue(int(schema.StatsColumnsTag)).(string)
+	typesStr := row.GetValue(int(schema.StatsTypesTag)).(string)
+	upperBoundStr := row.GetValue(int(schema.StatsUpperBoundTag)).(string)
+	upperBoundCnt := row.GetValue(int(schema.StatsUpperBoundCntTag)).(int64)
+	createdAt := row.GetValue(int(schema.StatsCreatedAtTag)).(time.Time)
 
 	typs := strings.Split(typesStr, "\n")
 	for i, t := range typs {
@@ -129,17 +129,17 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	mcvCountsStr := row[schema.StatsMcvCountsTag].(string)
+	mcvCountsStr := row.GetValue(int(schema.StatsMcvCountsTag)).(string)
 
 	numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
 	mcvs := make([]string, numMcvs)
-	for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
+	for i, v := range row.Subslice(int(schema.StatsMcv1Tag), int(schema.StatsMcvCountsTag)).Values() {
 		if v != nil {
 			mcvs[i] = v.(string)
 		}
 	}
 
-	return sql.Row{
+	return sql.UntypedSqlRow{
 		dbName,
 		tableName,
 		indexName,
@@ -166,7 +166,7 @@ func (s *statsIter) ParseRow(rowStr string) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		row = append(row, val)
+		row = row.Append(sql.NewUntypedRow(val))
 	}
 	return row, nil
 }

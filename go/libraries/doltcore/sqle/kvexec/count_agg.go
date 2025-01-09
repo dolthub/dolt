@@ -93,5 +93,5 @@ func (l *countAggKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		cnt++
 	}
 	l.done = true
-	return sql.Row{cnt}, nil
+	return sql.UntypedSqlRow{cnt}, nil
 }

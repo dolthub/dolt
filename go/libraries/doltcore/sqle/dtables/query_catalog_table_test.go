@@ -60,11 +60,11 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 
 	rows, err := sqle.ExecuteSelect(dEnv, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
-	expectedRows := []sql.Row{
+	expectedRows := []sql.UntypedSqlRow{
 		{uint64(1), "select 1 from dual", "name", "description"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 
 	queryStr2 := "select 2 from dual"
 	sq2, root, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr2, "description2")
@@ -83,18 +83,18 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 
 	rows, err = sqle.ExecuteSelect(dEnv, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
 	require.NoError(t, err)
-	expectedRows = []sql.Row{
+	expectedRows = []sql.UntypedSqlRow{
 		{uint64(1), "select 1 from dual", "name", "description"},
 		{uint64(2), "select 2 from dual", "name2", "description2"},
 	}
 
-	assert.Equal(t, expectedRows, rows)
+	assert.Equal(t, expectedRows, sql.RowsToUntyped(rows))
 
 	rows, err = sqle.ExecuteSelect(dEnv, root, "select id from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	for _, r := range rows {
 		assert.NotEmpty(t, r)
-		assert.NotEmpty(t, r[0])
+		assert.NotEmpty(t, r.GetValue(0))
 	}
 
 	queryStr3 := "select 3 from dual"

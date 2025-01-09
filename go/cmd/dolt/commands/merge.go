@@ -415,9 +415,9 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		return nil, false, err
 	}
 	for _, conflict := range dataConflicts {
-		tableName := conflict[0].(string)
+		tableName := conflict.GetValue(0).(string)
 
-		cf, err := getInt64ColAsInt64(conflict[1])
+		cf, err := getInt64ColAsInt64(conflict.GetValue(1))
 		if err != nil {
 			return nil, false, err
 		}
@@ -434,7 +434,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		return nil, false, err
 	}
 	for _, conflict := range schemaConflicts {
-		tableName := conflict[0].(string)
+		tableName := conflict.GetValue(0).(string)
 		if ok := mergeStats[tableName]; ok != nil {
 			mergeStats[tableName].SchemaConflicts = 1
 		} else {
@@ -447,9 +447,9 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		return nil, false, err
 	}
 	for _, conflict := range constraintViolations {
-		tableName := conflict[0].(string)
+		tableName := conflict.GetValue(0).(string)
 
-		cf, err := getInt64ColAsInt64(conflict[1])
+		cf, err := getInt64ColAsInt64(conflict.GetValue(1))
 		if err != nil {
 			return nil, false, err
 		}
@@ -680,8 +680,8 @@ func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, 
 		return 1
 	}
 	unmergedCnt := 0
-	if unmergedTables[0][0] != nil {
-		tableNames := unmergedTables[0][0].(string)
+	if unmergedTables[0].GetValue(0) != nil {
+		tableNames := unmergedTables[0].GetValue(0).(string)
 		unmergedCnt = len(strings.Split(tableNames, ", "))
 	}
 
@@ -727,16 +727,16 @@ func everythingUpToDate(row sql.Row) (bool, error) {
 	hashColumn := 0
 	msgColumn := 3
 
-	if hash, ok := row[hashColumn].(string); ok {
-		if msg, ok := row[msgColumn].(string); ok {
+	if hash, ok := row.GetValue(hashColumn).(string); ok {
+		if msg, ok := row.GetValue(msgColumn).(string); ok {
 			if hash == "" && msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
 				return true, nil
 			}
 		} else {
-			return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
+			return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row.GetValue(msgColumn))
 		}
 	} else {
-		return false, fmt.Errorf("Runtime error: merge operation returned unexpected hash column type: %v", row[hashColumn])
+		return false, fmt.Errorf("Runtime error: merge operation returned unexpected hash column type: %v", row.GetValue(hashColumn))
 	}
 
 	return false, nil

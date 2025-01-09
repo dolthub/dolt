@@ -258,7 +258,7 @@ func (nrr *NomsRangeReader) Close(ctx context.Context) error {
 // SqlRowFromTuples constructs a go-mysql-server/sql.Row from Noms tuples.
 func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) {
 	allCols := sch.GetAllCols()
-	colVals := make(sql.Row, allCols.Size())
+	colVals := make(sql.UntypedSqlRow, allCols.Size())
 
 	keySl, err := key.AsSlice()
 	if err != nil {

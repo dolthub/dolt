@@ -165,37 +165,37 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 }
 
 func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
-	if len(new) != len(old) || len(new) != len(sch) {
+	if new.Len() != old.Len() || new.Len() != len(sch) {
 		return false, nil
 	}
 
 	var err error
 	var cmp int
-	for i := range new {
+	for i := 0; i < new.Len(); i++ {
 
 		// special case string comparisons
-		if s, ok := old[i].(string); ok {
-			old[i] = strings.TrimRightFunc(s, unicode.IsSpace)
+		if s, ok := old.GetValue(i).(string); ok {
+			old.SetValue(i, strings.TrimRightFunc(s, unicode.IsSpace))
 		}
-		if s, ok := new[i].(string); ok {
-			new[i] = strings.TrimRightFunc(s, unicode.IsSpace)
+		if s, ok := new.GetValue(i).(string); ok {
+			new.SetValue(i, strings.TrimRightFunc(s, unicode.IsSpace))
 		}
 
 		// special case time comparison to account
 		// for precision changes between formats
-		if _, ok := old[i].(time.Time); ok {
+		if _, ok := old.GetValue(i).(time.Time); ok {
 			var o, n interface{}
-			if o, _, err = gmstypes.Int64.Convert(old[i]); err != nil {
+			if o, _, err = gmstypes.Int64.Convert(old.GetValue(i)); err != nil {
 				return false, err
 			}
-			if n, _, err = gmstypes.Int64.Convert(new[i]); err != nil {
+			if n, _, err = gmstypes.Int64.Convert(new.GetValue(i)); err != nil {
 				return false, err
 			}
 			if cmp, err = gmstypes.Int64.Compare(o, n); err != nil {
 				return false, err
 			}
 		} else {
-			if cmp, err = sch[i].Type.Compare(old[i], new[i]); err != nil {
+			if cmp, err = sch[i].Type.Compare(old.GetValue(i), new.GetValue(i)); err != nil {
 				return false, err
 			}
 		}

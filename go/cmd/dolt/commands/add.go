@@ -181,7 +181,7 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 		}
 
 		for _, r := range rows {
-			tbl := r[0].(string)
+			tbl := r.GetValue(0).(string)
 			tables = append(tables, tbl)
 		}
 	}
@@ -301,8 +301,8 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 
 		changeCounts[tableName] = &tablePatchInfo{}
 		for _, row := range rows {
-			diffType := row[0].(string)
-			count, err := coerceToInt(row[1])
+			diffType := row.GetValue(0).(string)
+			count, err := coerceToInt(row.GetValue(1))
 			if err != nil {
 				return nil, err
 			}
@@ -344,12 +344,12 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 		if len(rows) != 1 {
 			return nil, errors.New("Expected one row")
 		}
-		firstId, err := coerceToInt(rows[0][0])
+		firstId, err := coerceToInt(rows[0].GetValue(0))
 		if err != nil {
 			return nil, err
 		}
 		changeCounts[tableName].firstId = firstId
-		lastId, err := coerceToInt(rows[0][1])
+		lastId, err := coerceToInt(rows[0].GetValue(1))
 		if err != nil {
 			return nil, err
 		}
@@ -468,7 +468,7 @@ func (ps *patchState) skipRemainingInTable(c *ishell.Context) {
 // addRemainingInTable adds all changes in the current table. "a" command.
 func (ps *patchState) addRemainingInTable(c *ishell.Context) {
 	// grab the row id.
-	id, err := coerceToInt(ps.currentRow[0])
+	id, err := coerceToInt(ps.currentRow.GetValue(0))
 	if err != nil {
 		ps.err = err
 		c.Stop()
@@ -609,20 +609,20 @@ func newState(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) (*pat
 }
 
 func printSingleChange(sqlCtx *sql.Context, workspaceRow sql.Row, schema sql.Schema) (err error) {
-	writer := tabular.NewFixedWidthDiffTableWriter(schema, iohelp.NopWrCloser(cli.CliOut), len(workspaceRow)/2)
+	writer := tabular.NewFixedWidthDiffTableWriter(schema, iohelp.NopWrCloser(cli.CliOut), workspaceRow.Len()/2)
 	defer writer.Close(sqlCtx.Context)
 
-	toRow := workspaceRow[3 : 3+len(schema)]
-	fromRow := workspaceRow[3+len(schema):]
+	toRow := workspaceRow.Subslice(3, 3+len(schema))
+	fromRow := workspaceRow.Subslice(3+len(schema), workspaceRow.Len())
 
-	diffType := workspaceRow[2].(string)
+	diffType := workspaceRow.GetValue(2).(string)
 	switch diffType {
 	case "added":
-		err = writer.WriteRow(sqlCtx.Context, toRow, diff.Added, colDiffType(diff.Added, len(toRow)))
+		err = writer.WriteRow(sqlCtx.Context, toRow, diff.Added, colDiffType(diff.Added, toRow.Len()))
 	case "modified":
 		err = writer.WriteCombinedRow(sqlCtx.Context, fromRow, toRow, diff.ModeContext)
 	case "removed":
-		err = writer.WriteRow(sqlCtx.Context, fromRow, diff.Removed, colDiffType(diff.Removed, len(fromRow)))
+		err = writer.WriteRow(sqlCtx.Context, fromRow, diff.Removed, colDiffType(diff.Removed, fromRow.Len()))
 	default:
 		err = errors.New(fmt.Sprintf("Unexpected diff type: %s", diffType))
 	}

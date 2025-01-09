@@ -143,7 +143,7 @@ func toCsvString(colType sql.Type, val interface{}) (string, error) {
 
 func (csvw *CSVWriter) processRowWithSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
-	for i, val := range r {
+	for i, val := range r.Values() {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
@@ -160,7 +160,7 @@ func (csvw *CSVWriter) processRowWithSchema(r sql.Row) ([]*string, error) {
 
 func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, len(csvw.sqlSch))
-	for i, val := range r {
+	for i, val := range r.Values() {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {

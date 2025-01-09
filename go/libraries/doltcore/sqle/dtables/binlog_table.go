@@ -163,7 +163,7 @@ func (b BinlogTable) PartitionRows(context *sql.Context, partition sql.Partition
 		}
 
 		if b.IsAccess {
-			rows[i] = sql.Row{
+			rows[i] = sql.UntypedSqlRow{
 				int64(i),
 				operation,
 				logRow.Branch,
@@ -172,7 +172,7 @@ func (b BinlogTable) PartitionRows(context *sql.Context, partition sql.Partition
 				logRow.Permissions,
 			}
 		} else {
-			rows[i] = sql.Row{
+			rows[i] = sql.UntypedSqlRow{
 				int64(i),
 				operation,
 				logRow.Branch,

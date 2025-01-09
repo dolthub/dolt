@@ -92,7 +92,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	cli.Println(row[0][0].(string))
+	cli.Println(row[0].GetValue(0).(string))
 
 	return 0
 }

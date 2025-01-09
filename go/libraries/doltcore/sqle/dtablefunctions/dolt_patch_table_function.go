@@ -743,7 +743,7 @@ func (itr *patchTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		} else {
 			itr.statementIdx++
-			r := sql.Row{
+			r := sql.UntypedSqlRow{
 				itr.statementIdx,                  // statement_order
 				itr.fromRef,                       // from_commit_hash
 				itr.toRef,                         // to_commit_hash
@@ -798,7 +798,7 @@ func (p *patchStatementsRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		diffType = diffTypeData
 	}
 
-	return sql.Row{
+	return sql.UntypedSqlRow{
 		diffType, // diff_type
 		stmt,     // statement
 	}, nil

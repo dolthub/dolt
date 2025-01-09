@@ -144,7 +144,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		// side-specific filters are currently hoisted
 		if l.srcFilter != nil {
-			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret[:l.joiner.kvSplits[0]])
+			res, err := sql.EvaluateCondition(ctx, l.srcFilter, ret.Subslice(0, l.joiner.kvSplits[0]))
 			if err != nil {
 				return nil, err
 			}
@@ -155,7 +155,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		}
 		if l.dstFilter != nil && l.dstKey != nil {
-			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
+			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret.Subslice(l.joiner.kvSplits[0], ret.Len()))
 			if err != nil {
 				return nil, err
 			}

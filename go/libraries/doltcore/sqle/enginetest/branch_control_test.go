@@ -42,7 +42,7 @@ type BranchControlTestAssertion struct {
 	User           string
 	Host           string
 	Query          string
-	Expected       []sql.Row
+	Expected       []sql.UntypedSqlRow
 	ExpectedErr    *errors.Kind
 	ExpectedErrStr string
 }
@@ -612,13 +612,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('otherbranch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{ // Prefix "other" is now locked by root
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'other%', 'root', 'localhost');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -632,7 +632,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'other%', 'testuser', 'localhost');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -640,13 +640,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('otherbranch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{ // Create a longer match, which takes precedence over shorter matches
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'otherbranch%', 'root', 'localhost');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -660,13 +660,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('other3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'otherbranch%', 'testuser', 'localhost');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -674,7 +674,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('otherbranch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 		},
 	},
@@ -714,7 +714,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('%', 'prefix1%', 'b', 'localhost', 'write');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -740,7 +740,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "UPDATE dolt_branch_control SET permissions = 'admin' WHERE branch = 'prefix1%';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 				},
 			},
@@ -748,7 +748,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "b",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE branch = 'prefix1%';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -762,7 +762,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_namespace_control VALUES ('%', 'prefix___', 'a', 'localhost');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -776,7 +776,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "UPDATE dolt_branch_namespace_control SET branch = 'prefix%';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1}}},
 				},
 			},
@@ -821,7 +821,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "testuser", "localhost_1", "write"},
 					{"%", "%", "testuser", "localhost", "write"},
 					{"%", "%", "testuser", "localhost_4", "write"},
@@ -832,7 +832,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "INSERT INTO test VALUES (1);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -840,7 +840,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE host = 'localhost_5';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -848,7 +848,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "testuser", "localhost_1", "write"},
 					{"%", "%", "testuser", "localhost", "write"},
 					{"%", "%", "testuser", "localhost_4", "write"},
@@ -858,7 +858,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "INSERT INTO test VALUES (2);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -866,7 +866,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE host = 'localhost_1';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -874,7 +874,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "testuser", "localhost", "write"},
 					{"%", "%", "testuser", "localhost_4", "write"},
 				},
@@ -883,7 +883,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "INSERT INTO test VALUES (3);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -891,7 +891,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE host = 'localhost_4';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -899,7 +899,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "testuser", "localhost", "write"},
 				},
 			},
@@ -907,7 +907,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "INSERT INTO test VALUES (4);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -915,7 +915,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control WHERE user = 'testuser' AND host = 'localhost';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -923,7 +923,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:        "testuser",
@@ -935,7 +935,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "DELETE FROM dolt_branch_control;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -943,13 +943,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_branch_control;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', '%', 'admin');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -957,7 +957,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "root", "%", "admin"},
 				},
 			},
@@ -992,7 +992,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('%', 'prefix2%', 'testuser', 'localhost', 'admin');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -1000,7 +1000,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "prefix", "testuser", "localhost", "admin"},
 					{"%", "prefix1%", "testuser", "localhost", "admin"},
 					{"%", "prefix2_", "testuser", "localhost", "admin"},
@@ -1030,7 +1030,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'root';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "root", "localhost", "admin"},
 				},
 			},
@@ -1038,13 +1038,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "root",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('new_root_branch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "root",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'root';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "root", "localhost", "admin"},
 				},
 			},
@@ -1063,19 +1063,19 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('otherbranch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "otherbranch", "testuser", "localhost", "admin"},
 				},
 			},
@@ -1096,7 +1096,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "otherbranch", "testuser", "localhost", "write"},
 				},
 			},
@@ -1110,13 +1110,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('-m', 'otherbranch', 'newbranch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "otherbranch", "testuser", "localhost", "write"},  // Original entry remains
 					{"mydb", "newbranch", "testuser", "localhost", "admin"}, // New entry is scoped specifically to db
 				},
@@ -1137,7 +1137,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{
 				User:        "testuser",
@@ -1149,13 +1149,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('-c', 'otherbranch', 'newbranch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "newbranch", "testuser", "localhost", "admin"},
 				},
 			},
@@ -1181,13 +1181,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "USE dba;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{ // On "dba"."main", which we have permissions for
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "CREATE TABLE test (pk BIGINT PRIMARY KEY);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(0)},
 				},
 			},
@@ -1195,7 +1195,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "DROP TABLE test;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(0)},
 				},
 			},
@@ -1203,7 +1203,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_CHECKOUT('other');",
-				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other'"}},
 			},
 			{ // On "dba"."other", which we do not have permissions for
 				User:        "testuser",
@@ -1215,7 +1215,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "USE dbb;",
-				Expected: []sql.Row{},
+				Expected: []sql.UntypedSqlRow{},
 			},
 			{ // On "dbb"."main", which we do not have permissions for
 				User:        "testuser",
@@ -1227,13 +1227,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_CHECKOUT('other');",
-				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
+				Expected: []sql.UntypedSqlRow{{0, "Switched to branch 'other'"}},
 			},
 			{ // On "dbb"."other", which we do not have permissions for
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "CREATE TABLE test (pk BIGINT PRIMARY KEY);",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(0)},
 				},
 			},
@@ -1264,13 +1264,13 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_BRANCH('newbranch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.UntypedSqlRow{{0}},
 			},
 			{
 				User:  "testuser",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"mydb", "newbranch", "testuser", "localhost", "admin"},
 				},
 			},
@@ -1296,7 +1296,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('dba', 'dummy1', '%', '%', 'write');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -1328,7 +1328,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "b",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('dbb', 'dummy6', '%', '%', 'write');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -1336,7 +1336,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "GRANT SUPER ON *.* TO a@localhost WITH GRANT OPTION;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(0)},
 				},
 			},
@@ -1344,7 +1344,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "a",
 				Host:  "localhost",
 				Query: "INSERT INTO dolt_branch_control VALUES ('db_', 'dummy7', '%', '%', 'write');",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{types.NewOkResult(1)},
 				},
 			},
@@ -1352,7 +1352,7 @@ var BranchControlTests = []BranchControlTest{
 				User:  "root",
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control;",
-				Expected: []sql.Row{
+				Expected: []sql.UntypedSqlRow{
 					{"%", "%", "root", "localhost", "admin"},
 					{"dba", "dummy1", "%", "%", "write"},
 					{"dbb", "dummy6", "%", "%", "write"},
@@ -1449,7 +1449,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, nil, test.ExpectedErr)
 
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write'), ('%', 'other', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
+			addUserQueryResults := []sql.UntypedSqlRow{{types.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
 			_, iter, _, err := engine.Query(userCtx, test.Query)
@@ -1487,7 +1487,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			}
 
 			addUserQuery := "INSERT INTO dolt_branch_control VALUES ('%', 'main', 'testuser', 'localhost', 'write');"
-			addUserQueryResults := []sql.Row{{types.NewOkResult(1)}}
+			addUserQueryResults := []sql.UntypedSqlRow{{types.NewOkResult(1)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
 			userCtx := enginetest.NewContextWithClient(harness, sql.Client{
@@ -1497,7 +1497,7 @@ func TestBranchControlBlocks(t *testing.T) {
 			enginetest.AssertErrWithCtx(t, engine, harness, userCtx, test.Query, nil, test.ExpectedErr)
 
 			addUserQuery = "INSERT INTO dolt_branch_control VALUES ('%', 'other', 'testuser', 'localhost', 'write');"
-			addUserQueryResults = []sql.Row{{types.NewOkResult(1)}}
+			addUserQueryResults = []sql.UntypedSqlRow{{types.NewOkResult(1)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil, nil)
 
 			_, iter, _, err := engine.Query(userCtx, test.Query)
