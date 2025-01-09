@@ -49,7 +49,7 @@ type ChunkFetcher struct {
 	egCtx context.Context
 
 	toGetCh chan hash.HashSet
-	resCh   chan nbs.CompressedChunk
+	resCh   chan nbs.ToChunker
 
 	abortCh chan struct{}
 	stats   StatsRecorder
@@ -69,7 +69,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		egCtx: ctx,
 
 		toGetCh: make(chan hash.HashSet),
-		resCh:   make(chan nbs.CompressedChunk),
+		resCh:   make(chan nbs.ToChunker),
 
 		abortCh: make(chan struct{}),
 		stats:   StatsFactory(),
@@ -123,7 +123,7 @@ func (f *ChunkFetcher) CloseSend() error {
 // by |Get|. Returns |io.EOF| after |CloseSend| is called and all requested
 // chunks have been successfully received. Returns an error if this
 // |ChunkFetcher| is terminally failed or if the supplied |ctx| is |Done|.
-func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
+func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
 	select {
 	case <-ctx.Done():
 		return nbs.CompressedChunk{}, context.Cause(ctx)
@@ -219,7 +219,7 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 // delivered in |reqCh|, and they will be delivered in order.
 //
 // This function handles backoff and retries for the underlying streaming RPC.
-func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.CompressedChunk, host string) error {
+func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string) error {
 	stream, err := reliable.MakeCall[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse](
 		ctx,
 		reliable.CallOptions[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse]{
@@ -527,7 +527,7 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	cc := &ConcurrencyControl{
 		MaxConcurrency: params.MaximumConcurrentDownloads,
@@ -559,7 +559,7 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
 	respCh := make(chan fetchResp)
 	cancelCh := make(chan struct{})
 	for {

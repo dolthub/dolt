@@ -343,11 +343,11 @@ func (p *Puller) Pull(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if len(cChk.FullCompressedChunk) == 0 {
+			if cChk.FullCompressedChunkLen() == 0 {
 				return errors.New("failed to get all chunks.")
 			}
 
-			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(cChk.FullCompressedChunk)))
+			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(cChk.FullCompressedChunkLen()))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
 
 			chnk, err := cChk.ToChunk()
@@ -363,9 +363,13 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 			tracker.TickProcessed()
 
-			err = p.wr.AddCompressedChunk(ctx, cChk)
-			if err != nil {
-				return err
+			if compressedChunk, ok := cChk.(nbs.CompressedChunk); ok {
+				err = p.wr.AddCompressedChunk(ctx, compressedChunk)
+				if err != nil {
+					return err
+				}
+			} else {
+				panic("TODO: handle ZStd-CompressedChunk") // NM4.
 			}
 		}
 	})

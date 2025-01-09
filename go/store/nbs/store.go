@@ -86,7 +86,7 @@ func makeGlobalCaches() {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
+	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, ToChunker)) error
 }
 
 type NomsBlockStore struct {
@@ -889,7 +889,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	})
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker)) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
@@ -1708,7 +1708,7 @@ LOOP:
 			mu := new(sync.Mutex)
 			hashset := hash.NewHashSet(hs...)
 			found := 0
-			err := src.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
+			err := src.GetManyCompressed(ctx, hashset, func(ctx context.Context, c ToChunker) {
 				mu.Lock()
 				defer mu.Unlock()
 				if addErr != nil {
