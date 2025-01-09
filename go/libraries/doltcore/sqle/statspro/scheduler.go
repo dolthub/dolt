@@ -257,7 +257,7 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(sleep time.Duration, logger *logrus.Logger, threads *sql.BackgroundThreads) *StatsCoord {
+func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threads *sql.BackgroundThreads) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	return &StatsCoord{
@@ -276,6 +276,7 @@ func NewStatsCoord(sleep time.Duration, logger *logrus.Logger, threads *sql.Back
 		Stats:           make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:        make(map[string][]ref.DoltRef),
 		threads:         threads,
+		statsKv:         kv,
 	}
 }
 
@@ -297,6 +298,8 @@ type StatsCoord struct {
 	dbMu           *sync.Mutex
 	dbs            []sqle.Database
 	branchInterval time.Duration
+
+	statsKv StatsKv
 
 	readCounter atomic.Int32
 	doGc        atomic.Bool

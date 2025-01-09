@@ -71,24 +71,20 @@ const (
 func StatsTableSqlSchema(dbName string) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
 		Schema: sql.Schema{
-			&sql.Column{Name: StatsDbColName, Type: types.Text, PrimaryKey: true, DatabaseSource: dbName},
-			&sql.Column{Name: StatsTableColName, Type: types.Text, PrimaryKey: true, DatabaseSource: dbName},
-			&sql.Column{Name: StatsIndexColName, Type: types.Text, PrimaryKey: true, DatabaseSource: dbName},
+			&sql.Column{Name: StatsCommitHashColName, Type: types.Text, PrimaryKey: true, DatabaseSource: dbName},
+			&sql.Column{Name: StatsVersionColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsRowCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsDistinctCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsNullCountColName, Type: types.Int64, DatabaseSource: dbName},
-			&sql.Column{Name: StatsColumnsColName, Type: types.Text, DatabaseSource: dbName},
-			&sql.Column{Name: StatsTypesColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundCntColName, Type: types.Int64, DatabaseSource: dbName},
-			&sql.Column{Name: StatsCreatedAtColName, Type: types.Datetime, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv1ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv2ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv3ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv4ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcvCountsColName, Type: types.Text, DatabaseSource: dbName},
 		},
-		PkOrdinals: []int{0, 1},
+		PkOrdinals: []int{0},
 	}
 }
 
@@ -96,20 +92,13 @@ var StatsTableDoltSchema = StatsTableDoltSchemaGen()
 
 func StatsTableDoltSchemaGen() Schema {
 	colColl := NewColCollection(
-		NewColumn(StatsDbColName, StatsDbTag, stypes.StringKind, true, NotNullConstraint{}),
-		NewColumn(StatsTableColName, StatsTableTag, stypes.StringKind, true, NotNullConstraint{}),
-		NewColumn(StatsIndexColName, StatsIndexTag, stypes.StringKind, true, NotNullConstraint{}),
-		NewColumn(StatsPositionColName, StatsPositionTag, stypes.IntKind, true, NotNullConstraint{}),
+		NewColumn(StatsCommitHashColName, StatsCommitHashTag, stypes.StringKind, true, NotNullConstraint{}),
 		NewColumn(StatsVersionColName, StatsVersionTag, stypes.IntKind, false, NotNullConstraint{}),
-		NewColumn(StatsCommitHashColName, StatsCommitHashTag, stypes.StringKind, false, NotNullConstraint{}),
 		NewColumn(StatsRowCountColName, StatsRowCountTag, stypes.IntKind, false, NotNullConstraint{}),
 		NewColumn(StatsDistinctCountColName, StatsDistinctCountTag, stypes.IntKind, false, NotNullConstraint{}),
 		NewColumn(StatsNullCountColName, StatsNullCountTag, stypes.IntKind, false, NotNullConstraint{}),
-		NewColumn(StatsColumnsColName, StatsColumnsTag, stypes.StringKind, false, NotNullConstraint{}),
-		NewColumn(StatsTypesColName, StatsTypesTag, stypes.StringKind, false, NotNullConstraint{}),
 		NewColumn(StatsUpperBoundColName, StatsUpperBoundTag, stypes.StringKind, false, NotNullConstraint{}),
 		NewColumn(StatsUpperBoundCntColName, StatsUpperBoundCntTag, stypes.IntKind, false, NotNullConstraint{}),
-		NewColumn(StatsCreatedAtColName, StatsCreatedAtTag, stypes.TimestampKind, false, NotNullConstraint{}),
 		NewColumn(StatsMcv1ColName, StatsMcv1Tag, stypes.StringKind, false),
 		NewColumn(StatsMcv2ColName, StatsMcv2Tag, stypes.StringKind, false),
 		NewColumn(StatsMcv3ColName, StatsMcv3Tag, stypes.StringKind, false),
