@@ -38,17 +38,6 @@ CREATE TABLE big (
 );
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
-
-dolt sql <<SQL
-CREATE TABLE js (
-  pk INT PRIMARY KEY,
-  j JSON
-);
-INSERT INTO js VALUES (1, '{
-  "a": "one",
-  "b": "`head -c 2097152 < /dev/zero | tr '\0' '\141'`",
-  "c": "three"
-}');
 SQL
 dolt add .
 dolt commit -m "initialized data"

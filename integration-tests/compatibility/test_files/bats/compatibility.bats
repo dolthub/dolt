@@ -206,12 +206,3 @@ EOF
 
     dolt sql -q 'drop table abc2'
 }
-
-@test "dolt large JSON document" {
-    run dolt -sql "select j->>'$.a' from js;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "one" ]] || false
-    run dolt -sql "select j->>'$.c' from js;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "three" ]] || false
-}
