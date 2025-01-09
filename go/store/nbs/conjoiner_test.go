@@ -42,7 +42,7 @@ func (ts tableSpecsByAscendingCount) Len() int { return len(ts) }
 func (ts tableSpecsByAscendingCount) Less(i, j int) bool {
 	tsI, tsJ := ts[i], ts[j]
 	if tsI.chunkCount == tsJ.chunkCount {
-		return bytes.Compare(tsI.name[:], tsJ.name[:]) < 0
+		return bytes.Compare(tsI.hash[:], tsJ.hash[:]) < 0
 	}
 	return tsI.chunkCount < tsJ.chunkCount
 }
@@ -76,7 +76,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 // Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 	for _, src := range makeTestSrcs(t, tableSizes, p) {
-		specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
+		specs = append(specs, tableSpec{typeNoms, src.hash(), mustUint32(src.count())})
 		err := src.close()
 		require.NoError(t, err)
 	}
@@ -134,7 +134,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
-				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, stats)
+				cs, err := p.Open(context.Background(), sp.hash, sp.chunkCount, stats)
 				if err != nil {
 					require.NoError(t, err)
 				}
@@ -183,7 +183,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		src, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
-		return tableSpec{src.hash(), mustUint32(src.count())}
+		return tableSpec{typeNoms, src.hash(), mustUint32(src.count())}
 	}
 
 	tc := []struct {

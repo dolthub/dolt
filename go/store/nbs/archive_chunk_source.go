@@ -141,6 +141,10 @@ func (acs archiveChunkSource) hash() hash.Hash {
 	return acs.aRdr.footer.hash
 }
 
+func (acs archiveChunkSource) name() string {
+	return acs.hash().String() + ".darc" // NM4 - second time this const is defined. Fix!
+}
+
 func (acs archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
@@ -167,12 +171,37 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	return archiveChunkSource{acs.file, rdr}, nil
 }
 
-func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord, _ keeperF) (map[hash.Hash]Range, gcBehavior, error) {
-	return nil, gcBehavior_Continue, errors.New("Archive chunk source does not support getRecordRanges")
+func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, _ keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+	result := make(map[hash.Hash]Range, len(requests))
+	for _, req := range requests {
+		hAddr := *req.a
+		if acs.aRdr.has(hAddr) {
+			idx := acs.aRdr.search(hAddr)
+			if idx < 0 {
+				// Chunk not found.
+				continue
+			}
+
+			dictId, dataId := acs.aRdr.getChunkRef(idx)
+			dataSpan := acs.aRdr.getByteSpanByID(dataId)
+			dictSpan := acs.aRdr.getByteSpanByID(dictId)
+
+			rng := Range{
+				Offset:     dataSpan.offset,
+				Length:     uint32(dataSpan.length),
+				DictOffset: dictSpan.offset,
+				DictLength: uint32(dictSpan.length),
+			}
+
+			result[hAddr] = rng
+		}
+	}
+	return result, gcBehavior_Block, nil // NM4 - FIXME. Merging. This is wrong. Use the keeperF
 }
 
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk *chunks.Chunk) {
+		// NM4 - UPDATE. this is def wrong. Not sure why I did this!
 		found(ctx, ChunkToCompressedChunk(*chk))
 	}, keeper, stats)
 }

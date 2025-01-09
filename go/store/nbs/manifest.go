@@ -177,7 +177,7 @@ func (mc manifestContents) removeAppendixSpecs() (manifestContents, []tableSpec)
 	filtered := make([]tableSpec, 0)
 	removed := make([]tableSpec, 0)
 	for _, s := range mc.specs {
-		if _, ok := appendixSet[s.name]; ok {
+		if _, ok := appendixSet[s.hash]; ok {
 			removed = append(removed, s)
 		} else {
 			filtered = append(filtered, s)
@@ -204,7 +204,7 @@ func (mc manifestContents) getAppendixSet() (ss map[hash.Hash]struct{}) {
 func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 	ss = make(map[hash.Hash]struct{}, len(specs))
 	for _, ts := range specs {
-		ss[ts.name] = struct{}{}
+		ss[ts.hash] = struct{}{}
 	}
 	return ss
 }
@@ -212,7 +212,7 @@ func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
 func (mc manifestContents) size() (size uint64) {
 	size += uint64(len(mc.nbfVers)) + hash.ByteLen + hash.ByteLen
 	for _, sp := range mc.specs {
-		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
+		size += uint64(len(sp.hash)) + uint32Size // for sp.chunkCount
 	}
 	return
 }
@@ -439,17 +439,32 @@ func (mm manifestManager) Name() string {
 
 // TableSpecInfo is an interface for retrieving data from a tableSpec outside of this package
 type TableSpecInfo interface {
-	GetName() string
+	GetFileName() string
 	GetChunkCount() uint32
 }
 
+type tableFileType int
+
+const (
+	typeNoms tableFileType = iota
+	typeArchive
+)
+
 type tableSpec struct {
-	name       hash.Hash
+	fileType   tableFileType
+	hash       hash.Hash
 	chunkCount uint32
 }
 
-func (ts tableSpec) GetName() string {
-	return ts.name.String()
+func (ts tableSpec) GetFileName() string {
+	switch ts.fileType {
+	case typeNoms:
+		return ts.hash.String()
+	case typeArchive:
+		return ts.hash.String() + ".darc" // NM4 - common code for this???
+	default:
+		panic(fmt.Sprintf("runtime error: unknown table file type: %d", ts.fileType))
+	}
 }
 
 func (ts tableSpec) GetChunkCount() uint32 {
@@ -459,7 +474,7 @@ func (ts tableSpec) GetChunkCount() uint32 {
 func tableSpecsToMap(specs []tableSpec) map[string]int {
 	m := make(map[string]int)
 	for _, spec := range specs {
-		m[spec.name.String()] = int(spec.chunkCount)
+		m[spec.hash.String()] = int(spec.chunkCount)
 	}
 
 	return m
@@ -470,7 +485,7 @@ func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	for i := range specs {
 		var err error
 		var ok bool
-		specs[i].name, ok = hash.MaybeParse(tableInfo[2*i])
+		specs[i].hash, ok = hash.MaybeParse(tableInfo[2*i])
 		if !ok {
 			return nil, fmt.Errorf("invalid table file name: %s", tableInfo[2*i])
 		}
@@ -490,7 +505,7 @@ func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 func formatSpecs(specs []tableSpec, tableInfo []string) {
 	d.Chk.True(len(tableInfo) == 2*len(specs))
 	for i, t := range specs {
-		tableInfo[2*i] = t.name.String()
+		tableInfo[2*i] = t.hash.String()
 		tableInfo[2*i+1] = strconv.FormatUint(uint64(t.chunkCount), 10)
 	}
 }
@@ -505,11 +520,11 @@ func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec, e
 	blockHash := sha512.New()
 	blockHash.Write(root[:])
 	for _, spec := range appendix {
-		blockHash.Write(spec.name[:])
+		blockHash.Write(spec.hash[:])
 	}
 	blockHash.Write([]byte{0})
 	for _, spec := range specs {
-		blockHash.Write(spec.name[:])
+		blockHash.Write(spec.hash[:])
 	}
 	if len(extra) > 0 {
 		blockHash.Write([]byte{0})

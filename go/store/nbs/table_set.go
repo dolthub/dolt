@@ -497,10 +497,10 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSour
 	specs = make([]tableSpec, 0, len(orig))
 	seen := map[hash.Hash]struct{}{}
 	for _, spec := range orig {
-		if _, ok := seen[spec.name]; ok {
+		if _, ok := seen[spec.hash]; ok {
 			continue
 		}
-		seen[spec.name] = struct{}{}
+		seen[spec.hash] = struct{}{}
 		// keep specs in order to play nicely with
 		// manifest appendix optimization
 		specs = append(specs, spec)
@@ -583,7 +583,7 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 			return nil, err
 		} else if cnt > 0 {
 			h := src.hash()
-			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
+			tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
 		}
 	}
 	for _, src := range ts.upstream {
@@ -594,10 +594,10 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 			return nil, errors.New("no upstream chunks")
 		}
 		h := src.hash()
-		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
+		tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
 	}
 	sort.Slice(tableSpecs, func(i, j int) bool {
-		return bytes.Compare(tableSpecs[i].name[:], tableSpecs[j].name[:]) < 0
+		return bytes.Compare(tableSpecs[i].hash[:], tableSpecs[j].hash[:]) < 0
 	})
 	return tableSpecs, nil
 }

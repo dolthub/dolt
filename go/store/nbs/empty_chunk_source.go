@@ -66,6 +66,10 @@ func (ecs emptyChunkSource) hash() hash.Hash {
 	return hash.Hash{}
 }
 
+func (ecs emptyChunkSource) name() string {
+	return ecs.hash().String()
+}
+
 func (ecs emptyChunkSource) index() (tableIndex, error) {
 	return onHeapTableIndex{}, nil
 }

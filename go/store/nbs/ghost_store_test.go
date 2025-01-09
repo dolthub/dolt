@@ -74,8 +74,8 @@ func TestGhostBlockStore(t *testing.T) {
 		require.Equal(t, ghost, got[0].Hash())
 	})
 	t.Run("GetManyCompressed", func(t *testing.T) {
-		var got []CompressedChunk
-		err := bs.GetManyCompressed(ctx, hash.NewHashSet(absent, ghost), func(_ context.Context, c CompressedChunk) {
+		var got []ToChunker
+		err := bs.GetManyCompressed(ctx, hash.NewHashSet(absent, ghost), func(_ context.Context, c ToChunker) {
 			got = append(got, c)
 		})
 		require.NoError(t, err)
