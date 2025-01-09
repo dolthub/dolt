@@ -135,7 +135,7 @@ func (j *JsonCursor) NextValue(ctx context.Context) (result []byte, err error) {
 		if err != nil {
 			return
 		}
-		if cmp < 0 {
+		if cmp >= 0 {
 			break
 		}
 		parseChunk()
