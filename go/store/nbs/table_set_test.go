@@ -238,7 +238,7 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 			p.sourcesToFail[a] = true
 		}
 		once = false
-		specs = append(specs, tableSpec{a, 1})
+		specs = append(specs, tableSpec{typeNoms, a, 1})
 	}
 
 	ts := newTableSet(p, q)

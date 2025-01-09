@@ -295,7 +295,12 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			var ranges []*remotesapi.RangeChunk
 			for h, r := range hashToRange {
 				hCpy := h
-				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
+				ranges = append(ranges, &remotesapi.RangeChunk{
+					Hash:             hCpy[:],
+					Offset:           r.Offset,
+					Length:           r.Length,
+					DictionaryOffset: r.DictOffset,
+					DictionaryLength: r.DictLength})
 			}
 
 			url := rs.getDownloadUrl(md, prefix+"/"+loc)

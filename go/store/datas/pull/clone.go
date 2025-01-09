@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
@@ -81,9 +82,14 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 	fileIDtoNumChunks := make(map[string]int)
 
 	for i, tblFile := range tblFiles {
-		fileIDtoTblFile[tblFile.FileID()] = tblFile
-		fileIds[i] = tblFile.FileID()
-		fileIDtoNumChunks[tblFile.FileID()] = tblFile.NumChunks()
+		fileId := tblFile.FileID()
+		if strings.HasSuffix(fileId, ".darc") {
+			fileId = fileId[:len(fileId)-5] // NM4.
+		}
+
+		fileIDtoTblFile[fileId] = tblFile
+		fileIds[i] = fileId
+		fileIDtoNumChunks[fileId] = tblFile.NumChunks()
 	}
 
 	return fileIds, fileIDtoTblFile, fileIDtoNumChunks

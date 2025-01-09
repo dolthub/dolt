@@ -696,6 +696,10 @@ func (tcs *testChunkSource) hash() hash.Hash {
 	panic("never used")
 }
 
+func (tcs *testChunkSource) name() string {
+	panic("never used")
+}
+
 func (tcs *testChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
 	panic("never used")
 }

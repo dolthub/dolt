@@ -73,7 +73,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	assert.Equal(jerk, upstream.lock)
 	assert.Equal(newRoot, upstream.root)
 	if assert.Len(upstream.specs, 1) {
-		assert.Equal(tableName.String(), upstream.specs[0].name.String())
+		assert.Equal(tableName.String(), upstream.specs[0].hash.String())
 		assert.Equal(uint32(0), upstream.specs[0].chunkCount)
 	}
 }
@@ -134,7 +134,7 @@ func TestFileManifestUpdate(t *testing.T) {
 		nbfVers: constants.FormatLD1String,
 		lock:    computeAddr([]byte("locker")),
 		root:    hash.Of([]byte("new root")),
-		specs:   []tableSpec{{computeAddr([]byte("a")), 3}},
+		specs:   []tableSpec{{typeNoms, computeAddr([]byte("a")), 3}},
 	}
 	upstream, err := fm.Update(context.Background(), hash.Hash{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
@@ -177,7 +177,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
-	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)
+	assert.Equal([]tableSpec{{typeNoms, tableName, 1}}, upstream.specs)
 }
 
 // tryClobberManifest simulates another process trying to access dir/manifestFileName concurrently. To avoid deadlock, it does a non-blocking lock of dir/lockFileName. If it can get the lock, it clobbers the manifest.

@@ -94,12 +94,18 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		_, ok := hash.MaybeParse(path[i+1:])
+
+		fileName := path[i+1:]
+		if strings.HasSuffix(fileName, ".darc") {
+			fileName = fileName[:len(fileName)-5]
+		}
+		_, ok := hash.MaybeParse(fileName)
 		if !ok {
-			logger.WithField("last_path_component", path[i+1:]).Warn("bad request with unparseable last path component")
+			logger.WithField("last_path_component", fileName).Warn("bad request with unparseable last path component")
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
 		abs, err := fh.fs.Abs(path)
 		if err != nil {
 			logger.WithError(err).Error("could not get absolute path")
