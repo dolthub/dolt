@@ -129,12 +129,15 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	resolvedRefs := make([]string, 0, len(opts.specRefs))
 	for _, specRef := range opts.specRefs {
-		if !hashRegex.MatchString(specRef) && !strings.EqualFold(specRef, "HEAD") {
+		if !hashRegex.MatchString(specRef) &&
+			!strings.EqualFold(specRef, "HEAD") &&
+			!strings.EqualFold(specRef, "WORKING") &&
+			!strings.EqualFold(specRef, "STAGED") {
 			// Call "dolt_hashof" to resolve the ref to a hash. the --no-pretty flag gets around the commit requirement, but
 			// requires the full object name so it will match the hashRegex and never hit this code block.
 			h, err2 := getHashOf(queryist, sqlCtx, specRef)
 			if err2 != nil {
-				cli.PrintErrln("error: failed to resolve ref to commit: %s ", specRef)
+				cli.PrintErrln(fmt.Sprintf("branch not found: %s", specRef))
 				return 1
 			}
 			resolvedRefs = append(resolvedRefs, h)
