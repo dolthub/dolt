@@ -127,6 +127,25 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		defer closeFunc()
 	}
 
+	resolvedRefs := make([]string, 0, len(opts.specRefs))
+	for _, specRef := range opts.specRefs {
+		if !hashRegex.MatchString(specRef) && !strings.EqualFold(specRef, "HEAD") {
+			// Call "dolt_hashof" to resolve the ref to a hash. the --no-pretty flag gets around the commit requirement, but
+			// requires the full object name so it will match the hashRegex and never his this code block.
+			h, err2 := getHashOf(queryist, sqlCtx, specRef)
+			if err2 != nil {
+				cli.PrintErrln("error: failed to resolve ref to commit: %s ", specRef)
+				return 1
+			}
+			resolvedRefs = append(resolvedRefs, h)
+		} else {
+			resolvedRefs = append(resolvedRefs, specRef)
+		}
+	}
+	if len(resolvedRefs) == 0 {
+		resolvedRefs = []string{"HEAD"}
+	}
+
 	// There are two response formats:
 	//  - "pretty", which shows commits in a human-readable fashion
 	//  - "raw", which shows the underlying SerialMessage
@@ -134,19 +153,14 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	// The pretty format is preferred unless the --no-pretty flag is provided.
 	// But only commits are supported in the "pretty" format.
 	// Thus, if the --no-pretty flag is not set, then we require that either all the references are commits, or none of them are.
-
-	isDEnvRequired := false
-
 	if !opts.pretty {
-		isDEnvRequired = true
-	}
-	for _, specRef := range opts.specRefs {
-		if !hashRegex.MatchString(specRef) && !strings.EqualFold(specRef, "HEAD") {
-			isDEnvRequired = true
+		if dEnv == nil {
+			// Logic below requires a non-nil dEnv when --no-pretty is set.
+			// TODO: remove all usage of dEnv entirely from this command.
+			cli.PrintErrln("`\\show` is not fully supported in the SQL shell.")
+			return 1
 		}
-	}
 
-	if isDEnvRequired {
 		// use dEnv instead of the SQL engine
 		_, ok := queryist.(*engine.SqlEngine)
 		if !ok {
@@ -160,12 +174,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	specRefs := opts.specRefs
-	if len(specRefs) == 0 {
-		specRefs = []string{"HEAD"}
-	}
-
-	for _, specRef := range specRefs {
+	for _, specRef := range resolvedRefs {
 		// If --no-pretty was supplied, always display the raw contents of the referenced object.
 		if !opts.pretty {
 			err := printRawValue(ctx, dEnv, specRef)
@@ -176,8 +185,9 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		// If the argument is a commit, display it in the "pretty" format.
-		// But if it's a hash, we don't know whether it's a commit until we query the engine.
-		commitInfo, err := getCommitSpecPretty(queryist, sqlCtx, opts, specRef)
+		// But if it's a hash, we don't know whether it's a commit until we query the engine. If a non-commit was specified
+		// by the user, we are forced to display the raw contents of the object - which required a dEnv
+		commitInfo, err := getCommitSpecPretty(queryist, sqlCtx, specRef)
 		if commitInfo == nil {
 			// Hash is not a commit
 			_, ok := queryist.(*engine.SqlEngine)
@@ -185,11 +195,15 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` only supported in local mode.")
 				return 1
 			}
-
-			if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+			if dEnv == nil {
+				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended to common use.")
+				return 1
+			}
+			if !dEnv.DoltDB.Format().UsesFlatbuffers() {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` is not supported when using old LD_1 storage format.")
 				return 1
 			}
+
 			value, err := getValueFromRefSpec(ctx, dEnv, specRef)
 			if err != nil {
 				err = fmt.Errorf("error resolving spec ref '%s': %w", specRef, err)
@@ -211,6 +225,8 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return 0
 }
 
+// printRawValue prints the raw value of the object referenced by specRef. This function works directly on storage, and
+// requires a non-nil dEnv.
 func printRawValue(ctx context.Context, dEnv *env.DoltEnv, specRef string) error {
 	value, err := getValueFromRefSpec(ctx, dEnv, specRef)
 	if err != nil {
@@ -220,6 +236,8 @@ func printRawValue(ctx context.Context, dEnv *env.DoltEnv, specRef string) error
 	return nil
 }
 
+// getValueFromRefSpec returns the value of the object referenced by specRef. This
+// function works directly on storage, and requires a non-nil dEnv.
 func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string) (types.Value, error) {
 	var refHash hash.Hash
 	var err error
@@ -303,7 +321,7 @@ func parseHashString(hashStr string) (hash.Hash, error) {
 	return parsedHash, nil
 }
 
-func getCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) (commit *CommitInfo, err error) {
+func getCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string) (commit *CommitInfo, err error) {
 	if strings.HasPrefix(commitRef, "#") {
 		commitRef = strings.TrimPrefix(commitRef, "#")
 	}
