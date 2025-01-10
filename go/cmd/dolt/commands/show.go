@@ -131,7 +131,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	for _, specRef := range opts.specRefs {
 		if !hashRegex.MatchString(specRef) && !strings.EqualFold(specRef, "HEAD") {
 			// Call "dolt_hashof" to resolve the ref to a hash. the --no-pretty flag gets around the commit requirement, but
-			// requires the full object name so it will match the hashRegex and never his this code block.
+			// requires the full object name so it will match the hashRegex and never hit this code block.
 			h, err2 := getHashOf(queryist, sqlCtx, specRef)
 			if err2 != nil {
 				cli.PrintErrln("error: failed to resolve ref to commit: %s ", specRef)
