@@ -200,6 +200,10 @@ type ServerConfig interface {
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() ServerConfig {
+	return defaultServerConfigYAML()
+}
+
+func defaultServerConfigYAML() *YAMLConfig {
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(DefaultLogLevel)),
 		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),
@@ -265,10 +269,39 @@ func ValidateConfig(config ServerConfig) error {
 }
 
 const (
-	MaxConnectionsKey = "max_connections"
-	ReadTimeoutKey    = "net_read_timeout"
-	WriteTimeoutKey   = "net_write_timeout"
-	EventSchedulerKey = "event_scheduler"
+	HostKey                         = "host"
+	PortKey                         = "port"
+	UserKey                         = "user"
+	PasswordKey                     = "password"
+	ReadTimeoutKey                  = "net_read_timeout"
+	WriteTimeoutKey                 = "net_write_timeout"
+	ReadOnlyKey                     = "read_only"
+	LogLevelKey                     = "log_level"
+	AutoCommitKey                   = "autocommit"
+	DoltTransactionCommitKey        = "dolt_transaction_commit"
+	DataDirKey                      = "data_dir"
+	CfgDirKey                       = "cfg_dir"
+	MaxConnectionsKey               = "max_connections"
+	TLSKeyKey                       = "tls_key"
+	TLSCertKey                      = "tls_cert"
+	RequireSecureTransportKey       = "require_secure_transport"
+	MaxLoggedQueryLenKey            = "max_logged_query_len"
+	ShouldEncodeLoggedQueryKey      = "should_encode_logged_query"
+	DisableClientMultiStatementsKey = "disable_client_multi_statements"
+	MetricsLabelsKey                = "metrics_labels"
+	MetricsHostKey                  = "metrics_host"
+	MetricsPortKey                  = "metrics_port"
+	PrivilegeFilePathKey            = "privilege_file_path"
+	BranchControlFilePathKey        = "branch_control_file_path"
+	UserVarsKey                     = "user_vars"
+	SystemVarsKey                   = "system_vars"
+	JwksConfigKey                   = "jwks_config"
+	AllowCleartextPasswordsKey      = "allow_cleartext_passwords"
+	SocketKey                       = "socket"
+	RemotesapiPortKey               = "remotesapi_port"
+	RemotesapiReadOnlyKey           = "remotesapi_read_only"
+	ClusterConfigKey                = "cluster_config"
+	EventSchedulerKey               = "event_scheduler"
 )
 
 type SystemVariableTarget interface {

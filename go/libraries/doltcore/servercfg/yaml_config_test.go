@@ -95,7 +95,7 @@ jwks:
 	expected.MetricsConfig = MetricsYAMLConfig{
 		Host: ptr("123.45.67.89"),
 		Port: ptr(9091),
-		Labels: map[string]string{
+		Labels: &map[string]string{
 			"label1": "value1",
 			"label2": "2",
 			"label3": "true",
@@ -121,7 +121,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = []JwksConfig{
+	expected.Jwks = &[]JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",
@@ -426,4 +426,129 @@ metrics:
 
 	assert.Equal(t, "localhost", cfg.MetricsHost())
 	assert.Equal(t, -1, cfg.MetricsPort())
+}
+
+// Tests that YAMLConfig.String() and YAMLConfig.VerboseString() produce equivalent YAML.
+func TestYAMLConfigVerboseStringEquivalent(t *testing.T) {
+	yamlEquivalent := func(a, b string) bool {
+		var unmarshaled1 any
+		err := yaml.Unmarshal([]byte(a), &unmarshaled1)
+		require.NoError(t, err)
+
+		var unmarshaled2 any
+		err = yaml.Unmarshal([]byte(a), &unmarshaled2)
+		require.NoError(t, err)
+
+		remarshaled1, err := yaml.Marshal(unmarshaled1)
+		require.NoError(t, err)
+
+		remarshaled2, err := yaml.Marshal(unmarshaled1)
+		require.NoError(t, err)
+
+		return string(remarshaled1) == string(remarshaled2)
+	}
+
+	configs := []YAMLConfig{
+		YAMLConfig{
+			LogLevelStr:       ptr("warn"),
+			MaxQueryLenInLogs: ptr(1234),
+			ListenerConfig: ListenerYAMLConfig{
+				HostStr:    ptr("XXYYZZ"),
+				PortNumber: ptr(33333),
+			},
+			DataDirStr:      ptr("abcdef"),
+			GoldenMysqlConn: ptr("abc123"),
+		},
+		YAMLConfig{
+			MetricsConfig: MetricsYAMLConfig{
+				Labels: &map[string]string{
+					"xyz": "123",
+					"0":   "AAABBB",
+				},
+				Host: ptr("!!!!!!!!"),
+			},
+		},
+		YAMLConfig{
+			MetricsConfig: MetricsYAMLConfig{
+				Port: ptr(0),
+			},
+			RemotesapiConfig: RemotesapiYAMLConfig{
+				Port_:     ptr(111),
+				ReadOnly_: ptr(false),
+			},
+		},
+	}
+
+	for _, config := range configs {
+		assert.True(t, yamlEquivalent(config.String(), config.VerboseString()))
+	}
+}
+
+func TestCommentYAMLDiffs(t *testing.T) {
+	a := `abc: 100
+dddddd: "1234"
+fire: water
+
+a:
+  b:
+	c: 1001011
+
+	t: g
+
+x:
+- we
+- se
+- ll`
+
+	b := `abc: 100
+dddddd: "1234"
+
+fire: water
+extra1: 12345
+
+a:
+  b:
+	c: 1001011
+	extra2: iiiii
+
+	t: g
+
+x:
+- we
+- extra3
+- extra4
+- se
+- extra5
+- ll
+
+extra6:
+  extra7:
+    extra8: 999`
+
+	expected := `abc: 100
+dddddd: "1234"
+
+fire: water
+# extra1: 12345
+
+a:
+  b:
+	c: 1001011
+	# extra2: iiiii
+
+	t: g
+
+x:
+- we
+# - extra3
+# - extra4
+- se
+# - extra5
+- ll
+
+# extra6:
+  # extra7:
+    # extra8: 999`
+
+	assert.Equal(t, expected, commentYAMLDiffs(a, b))
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -240,6 +241,11 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv, cwd)
+	if err != nil {
+		return err
+	}
+
+	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
 		return err
 	}
@@ -476,8 +482,17 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 
+	if cfgDirSpecified {
+		serverConfig.valuesSet[servercfg.CfgDirKey] = struct{}{}
+	}
+
+	if dataDirSpecified {
+		serverConfig.valuesSet[servercfg.DataDirKey] = struct{}{}
+	}
+
 	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privsFp)
+		serverConfig.valuesSet[servercfg.PrivilegeFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
 		if err != nil {
@@ -488,6 +503,7 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 
 	if branchControlFilePath, ok := apr.GetValue(commands.BranchCtrlPathFlag); ok {
 		serverConfig.withBranchControlFilePath(branchControlFilePath)
+		serverConfig.valuesSet[servercfg.BranchControlFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultBranchCtrlName))
 		if err != nil {
@@ -497,4 +513,50 @@ func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgP
 	}
 
 	return nil
+}
+
+// generateYamlConfigIfNone creates a YAML config file in the database directory if one is not specified in the args
+// and one doesn't already exist in the database directory. The fields of the YAML file are generated using the values
+// in serverConfig that were explicitly set by the command line args.
+func generateYamlConfigIfNone(
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	serverConfig servercfg.ServerConfig) error {
+	const yamlConfigName = "config.yaml"
+
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if apr.Contains(configFileFlag) {
+		return nil
+	}
+
+	path := filepath.Join(serverConfig.DataDir(), yamlConfigName)
+	exists, _ := dEnv.FS.Exists(path)
+	if exists {
+		return nil
+	}
+
+	generatedYaml := generateYamlConfig(serverConfig)
+
+	err := dEnv.FS.WriteFile(path, []byte(generatedYaml), os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateYamlConfig returns a YAML string containing the fields in serverConfig that
+// were explicitly set by the command line args, along with commented-out placeholders for any
+// fields that were not explicitly set by the command line args.
+func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
+	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
+
+	return `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#` + "\n\n" + yamlConfig.VerboseString()
 }

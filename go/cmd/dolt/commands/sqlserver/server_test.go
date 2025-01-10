@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -509,4 +511,115 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})
+}
+
+func TestGenerateYamlConfig(t *testing.T) {
+	args := []string{
+		"--user", "my_name",
+		"--timeout", "11",
+		"--branch-control-file", "dir1/dir2/abc.db",
+	}
+
+	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
+	require.NoError(t, err)
+
+	expected := `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#
+
+# log_level: info
+
+# max_logged_query_len: 0
+
+# encode_logged_query: false
+
+# behavior:
+  # read_only: false
+  # autocommit: true
+  # disable_client_multi_statements: false
+  # dolt_transaction_commit: false
+  # event_scheduler: "OFF"
+
+user:
+  name: my_name
+  # password: ""
+
+listener:
+  # host: localhost
+  # port: 3306
+  # max_connections: 100
+  read_timeout_millis: 11000
+  write_timeout_millis: 11000
+  # tls_key: key.pem
+  # tls_cert: cert.pem
+  # require_secure_transport: false
+  # allow_cleartext_passwords: false
+  # socket: /tmp/mysql.sock
+
+# data_dir: .
+
+# cfg_dir: .doltcfg
+
+# remotesapi:
+  # port: 8000
+  # read_only: false
+
+# privilege_file: ` + privilegeFilePath +
+		`
+
+branch_control_file: dir1/dir2/abc.db
+
+# user_session_vars:
+# - name: root
+  # vars:
+    # dolt_log_level: warn
+    # dolt_show_system_tables: 1
+
+# system_variables:
+  # dolt_log_level: info
+  # dolt_transaction_commit: 1
+
+# jwks: []
+
+# metrics:
+  # labels: {}
+  # host: localhost
+  # port: 9091
+
+# cluster:
+  # standby_remotes:
+  # - name: standby_replica_one
+    # remote_url_template: https://standby_replica_one.svc.cluster.local:50051/{database}
+  # - name: standby_replica_two
+    # remote_url_template: https://standby_replica_two.svc.cluster.local:50051/{database}
+  # bootstrap_role: primary
+  # bootstrap_epoch: 1
+  # remotesapi:
+    # address: 127.0.0.1
+    # port: 50051
+    # tls_key: remotesapi_key.pem
+    # tls_cert: remotesapi_chain.pem
+    # tls_ca: standby_cas.pem
+    # server_name_urls:
+    # - https://standby_replica_one.svc.cluster.local
+    # - https://standby_replica_two.svc.cluster.local
+    # server_name_dns:
+    # - standby_replica_one.svc.cluster.local
+    # - standby_replica_two.svc.cluster.local`
+
+	ap := SqlServerCmd{}.ArgParser()
+
+	dEnv := sqle.CreateTestEnv()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	cwdFs, err := filesys.LocalFilesysWithWorkingDir(cwd)
+	require.NoError(t, err)
+
+	serverConfig, err := ServerConfigFromArgs(ap, nil, args, dEnv, cwdFs)
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, generateYamlConfig(serverConfig))
 }
