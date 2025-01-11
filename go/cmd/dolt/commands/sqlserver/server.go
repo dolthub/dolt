@@ -82,13 +82,14 @@ func Serve(
 	serverConfig servercfg.ServerConfig,
 	controller *svcs.Controller,
 	dEnv *env.DoltEnv,
+	skipRootUserInitialization bool,
 ) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
 	if controller == nil {
 		controller = svcs.NewController()
 	}
 
-	ConfigureServices(serverConfig, controller, version, dEnv)
+	ConfigureServices(serverConfig, controller, version, dEnv, skipRootUserInitialization)
 
 	go controller.Start(ctx)
 	err := controller.WaitForStart()
@@ -103,6 +104,7 @@ func ConfigureServices(
 	controller *svcs.Controller,
 	version string,
 	dEnv *env.DoltEnv,
+	skipRootUserInitialization bool,
 ) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
@@ -234,7 +236,7 @@ func ConfigureServices(
 				SystemVariables:            serverConfig.SystemVars(),
 				ClusterController:          clusterController,
 				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
-				SkipRootUserInitialization: serverConfig.SkipRootUserInitialization(),
+				SkipRootUserInitialization: skipRootUserInitialization,
 			}
 			return nil
 		},
