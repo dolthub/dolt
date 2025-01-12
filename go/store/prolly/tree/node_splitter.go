@@ -266,6 +266,8 @@ func saltFromLevel(level uint8) (salt uint64) {
 	return binary.LittleEndian.Uint64(full[:8])
 }
 
+// DeterministicHashLevel takes a key and counts the number of leading zeros in the key's hash.
+// This is used for computing the level that a key appears in, in a ProximityMap
 func DeterministicHashLevel(leadingZerosPerLevel uint8, key Item) uint8 {
 	h := xxHash32(key, levelSalt[1])
 	return uint8(bits.LeadingZeros32(h)) / leadingZerosPerLevel

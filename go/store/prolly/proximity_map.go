@@ -167,7 +167,7 @@ func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, v
 	}
 }
 
-var levelMapKeyDesc = val.NewTupleDescriptor(
+var proximitylevelMapKeyDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Uint8Enc, Nullable: false},
 	val.Type{Enc: val.ByteStringEnc, Nullable: false},
 )
@@ -175,7 +175,7 @@ var levelMapKeyDesc = val.NewTupleDescriptor(
 // NewProximityMapBuilder creates a new ProximityMap from a given list of key-value pairs.
 func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, logChunkSize uint8) (ProximityMapBuilder, error) {
 
-	emptyLevelMap, err := NewMapFromTuples(ctx, ns, levelMapKeyDesc, valDesc)
+	emptyLevelMap, err := NewMapFromTuples(ctx, ns, proximitylevelMapKeyDesc, valDesc)
 	if err != nil {
 		return ProximityMapBuilder{}, err
 	}
@@ -193,7 +193,41 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 }
 
 // ProximityMapBuilder is used to create a ProximityMap.
+//
 // Each node has an average of 2^|logChunkSize| key-value pairs.
+//
+// The algorithm for building a ProximityMap's tree requires us to start at the root and build out to the leaf nodes.
+// Given that our trees are Merkle Trees, this presents an obvious problem.
+// Our solution is to create the final tree by applying a series of transformations to intermediate trees.
+//
+// Note: when talking about tree levels, we use "level" when counting from the leaves, and "depth" when counting
+// from the root. In a tree with 5 levels, the root is level 4 (and depth 0), while the leaves are level 0 (and depth 4)
+//
+// The process looks like this:
+// Step 1: Create `levelMap`, a map from (indexLevel, keyBytes) -> values
+//   - indexLevel: the minimum level in which the vector appears
+//   - keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
+//   - values: the ProximityMap value tuple
+//
+// Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
+//
+//	The pathMap at depth `i` has the schema (vectorAddrs[1]...vectorAddr[i], keyBytes) -> value
+//	and contains a row for every vector whose maximum depth is i.
+//	- vectorAddrs: the path of vectors visited when walking from the root to the maximum depth where the vector appears.
+//	- keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
+//	- values: the ProximityMap value tuple
+//
+//	These maps must be built in order, from shallowest to deepest.
+//
+// Step 3: Create an iter over each `pathMap` created in the previous step, and walk the shape of the final ProximityMap,
+// generating Nodes as we go.
+//
+// Step 1 is accomplished via repeated calls to the Insert method. Steps 2 and 3 are performed when Flush is called.
+//
+// Currently, the intermediate trees are created using the standard NodeStore. This means that the nodes of these
+// trees will inevitably be written out to disk when the NodeStore flushes, despite the fact that we know they
+// won't be needed once we finish building the ProximityMap. This could potentially be avoided by creating a
+// separate in-memory NodeStore for these values.
 type ProximityMapBuilder struct {
 	ns                    tree.NodeStore
 	vectorIndexSerializer message.VectorIndexSerializer
@@ -206,32 +240,40 @@ type ProximityMapBuilder struct {
 }
 
 // Insert adds a new key-value pair to the ProximityMap under construction.
+// It computes the key's level in the proximity map and adds an entry to the |levelMap|.
 func (b *ProximityMapBuilder) Insert(ctx context.Context, key, value []byte) error {
 	keyLevel := tree.DeterministicHashLevel(b.logChunkSize, key)
 	if keyLevel > b.maxLevel {
 		b.maxLevel = keyLevel
 	}
 
-	levelMapKeyBuilder := val.NewTupleBuilder(levelMapKeyDesc)
+	// We want the index to be sorted by level (descending), so currently we store the level in the map as
+	// 255 - the actual level.
+
+	// In the future, if MutableMap supports a ReverseIter function, we can use that instead.
+	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
 	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
 }
 
+// When set to true, enables an additional check in ProximityMapBuilder.InsertAtLevel.
+// This should always be false in production.
+const assertProximityMapLevels = false
+
 // InsertAtLevel inserts into a proximity map when the level for a key is already known
 // This is called when an existing tree is being modified, and can skip the level calculation.
 func (b *ProximityMapBuilder) InsertAtLevel(ctx context.Context, key, value []byte, keyLevel uint8) error {
-	/*
-		// Uncomment this check when debugging
-		if uint8(level) != tree.DeterministicHashLevel(b.logChunkSize, key) {
+	if assertProximityMapLevels {
+		if keyLevel != tree.DeterministicHashLevel(b.logChunkSize, key) {
 			panic("wrong level")
 		}
-	*/
+	}
 
 	if keyLevel > b.maxLevel {
 		b.maxLevel = keyLevel
 	}
-	levelMapKeyBuilder := val.NewTupleBuilder(levelMapKeyDesc)
+	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
 	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
@@ -252,36 +294,8 @@ func (b *ProximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize), nil
 }
 
+// Flush finishes constructing a ProximityMap. Call this after all calls to Insert.
 func (b *ProximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
-	// The algorithm for building a ProximityMap's tree requires us to start at the root and build out to the leaf nodes.
-	// Given that our trees are Merkle Trees, this presents an obvious problem.
-	// Our solution is to create the final tree by applying a series of transformations to intermediate trees.
-
-	// Note: when talking about tree levels, we use "level" when counting from the leaves, and "depth" when counting
-	// from the root. In a tree with 5 levels, the root is level 4 (and depth 0), while the leaves are level 0 (and depth 4)
-
-	// The process looks like this:
-	// Step 1: Create `levelMap`, a map from (indexLevel, keyBytes) -> values
-	//   - indexLevel: the minimum level in which the vector appears
-	//   - keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
-	//   - values: the ProximityMap value tuple
-	//
-	// Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
-	//   The pathMap at depth `i` has the schema (vectorAddrs[1]...vectorAddr[i], keyBytes) -> value
-	//   and contains a row for every vector whose maximum depth is i.
-	//   - vectorAddrs: the path of vectors visited when walking from the root to the maximum depth where the vector appears.
-	//   - keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
-	//   - values: the ProximityMap value tuple
-	//
-	//   These maps must be built in order, from shallowest to deepest.
-	//
-	// Step 3: Create an iter over each `pathMap` created in the previous step, and walk the shape of the final ProximityMap,
-	// generating Nodes as we go.
-	//
-	// Currently, the intermediate trees are created using the standard NodeStore. This means that the nodes of these
-	// trees will inevitably be written out to disk when the NodeStore flushes, despite the fact that we know they
-	// won't be needed once we finish building the ProximityMap. This could potentially be avoided by creating a
-	// separate in-memory NodeStore for these values.
 
 	flushedLevelMap, err := b.levelMap.Map(ctx)
 	if err != nil {
@@ -298,12 +312,6 @@ func (b *ProximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
 		return b.makeRootNode(ctx, nil, nil, nil, 0)
 	}
 
-	// Step 1: Create `levelMap`, a map from (indexLevel, keyBytes) -> values
-	// We want the index to be sorted by level (descending), so currently we store the level in the map as
-	// 255 - the actual level.
-
-	// In the future, if MutableMap supports a ReverseIter function, we can use that instead.
-
 	if b.maxLevel == 0 {
 		// index is a single node.
 		// assuming that the keys are already sorted, we can return them unmodified.
@@ -317,7 +325,7 @@ func (b *ProximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
 			if err == io.EOF {
 				break
 			}
-			originalKey, _ := levelMapKeyDesc.GetBytes(1, key)
+			originalKey, _ := proximitylevelMapKeyDesc.GetBytes(1, key)
 			if err != nil {
 				return ProximityMap{}, err
 			}
@@ -327,13 +335,13 @@ func (b *ProximityMapBuilder) Flush(ctx context.Context) (ProximityMap, error) {
 		return b.makeRootNode(ctx, keys, values, nil, 0)
 	}
 
-	// Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
+	// Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
 	pathMaps, err := b.makePathMaps(ctx, b.levelMap)
 	if err != nil {
 		return ProximityMap{}, err
 	}
 
-	// Step 3: Create an iter over each `pathMap` created in the previous step, and walk the shape of the final ProximityMap,
+	// Create an iter over each `pathMap` created in the previous step, and walk the shape of the final ProximityMap,
 	// generating Nodes as we go.
 	return b.makeProximityMapFromPathMaps(ctx, pathMaps)
 }
@@ -568,98 +576,7 @@ func (b *ProximityMapBuilder) makeProximityMapFromPathMaps(ctx context.Context, 
 	return b.makeRootNode(ctx, topLevelKeys, topLevelValues, topLevelSubtrees, maxLevel)
 }
 
-// vectorIndexChunker is a stateful chunker that iterates over |pathMap|, a map that contains an element
-// for every key-value pair for a given level of a ProximityMap, and provides the path of keys to reach
-// that pair from the root. It uses this iterator to build each of the ProximityMap nodes for that level.
-type vectorIndexChunker struct {
-	pathMap          *MutableMap
-	pathMapIter      MapIter
-	lastPathSegment  hash.Hash
-	lastKey          []byte
-	lastValue        []byte
-	lastSubtreeCount uint64
-	childChunker     *vectorIndexChunker
-	atEnd            bool
-}
-
-func newVectorIndexChunker(ctx context.Context, pathMap *MutableMap, childChunker *vectorIndexChunker) (*vectorIndexChunker, error) {
-	pathMapIter, err := pathMap.IterAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	firstKey, firstValue, err := pathMapIter.Next(ctx)
-	if err == io.EOF {
-		// In rare situations, there aren't any vectors at a given level.
-		return &vectorIndexChunker{
-			pathMap:      pathMap,
-			pathMapIter:  pathMapIter,
-			childChunker: childChunker,
-			atEnd:        true,
-		}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	path, _ := pathMap.keyDesc.GetBytes(0, firstKey)
-	lastPathSegment := hash.New(path[len(path)-20:])
-	originalKey, _ := pathMap.keyDesc.GetBytes(1, firstKey)
-	return &vectorIndexChunker{
-		pathMap:         pathMap,
-		pathMapIter:     pathMapIter,
-		childChunker:    childChunker,
-		lastKey:         originalKey,
-		lastValue:       firstValue,
-		lastPathSegment: lastPathSegment,
-		atEnd:           false,
-	}, nil
-}
-
-func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment hash.Hash, level, depth int, originalKeyDesc val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
-	var indexMapKeys [][]byte
-	var indexMapValues [][]byte
-	var indexMapSubtrees []uint64
-	subtreeSum := uint64(0)
-
-	for {
-		if c.atEnd || c.lastPathSegment != parentPathSegment {
-			msg := serializer.Serialize(indexMapKeys, indexMapValues, indexMapSubtrees, level)
-			node, _, err := tree.NodeFromBytes(msg)
-			if err != nil {
-				return tree.Node{}, 0, hash.Hash{}, err
-			}
-			nodeHash, err := ns.Write(ctx, node)
-			return node, subtreeSum, nodeHash, err
-		}
-		vectorHash, _ := originalKeyDesc.GetJSONAddr(0, c.lastKey)
-		if c.childChunker != nil {
-			_, childCount, nodeHash, err := c.childChunker.Next(ctx, ns, serializer, vectorHash, level-1, depth+1, originalKeyDesc)
-			if err != nil {
-				return tree.Node{}, 0, hash.Hash{}, err
-			}
-			c.lastValue = nodeHash[:]
-			indexMapSubtrees = append(indexMapSubtrees, childCount)
-			subtreeSum += childCount
-		} else {
-			subtreeSum++
-		}
-		indexMapKeys = append(indexMapKeys, c.lastKey)
-		indexMapValues = append(indexMapValues, c.lastValue)
-
-		nextKey, nextValue, err := c.pathMapIter.Next(ctx)
-		if err == io.EOF {
-			c.atEnd = true
-		} else if err != nil {
-			return tree.Node{}, 0, hash.Hash{}, err
-		} else {
-			lastPath, _ := c.pathMap.keyDesc.GetBytes(0, nextKey)
-			c.lastPathSegment = hash.New(lastPath[len(lastPath)-20:])
-			c.lastKey, _ = c.pathMap.keyDesc.GetBytes(1, nextKey)
-			c.lastValue = nextValue
-		}
-	}
-}
-
-func getJsonValueFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) (interface{}, error) {
+func getJsonValueFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) (sql.JSONWrapper, error) {
 	return tree.NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
 }
 
