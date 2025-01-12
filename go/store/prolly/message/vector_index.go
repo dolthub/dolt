@@ -205,9 +205,10 @@ func estimateVectorIndexSize(keys, values [][]byte, subtrees []uint64) (int, int
 		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, math.MaxUint32))
 	}
 
+	// The following estimates the final size of the message based on the expected size of the flatbuffer components.
 	bufSz += keySz + valSz               // tuples
 	bufSz += subtreesSz                  // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offStart
+	bufSz += len(keys)*4 + len(values)*4 // offStart
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
 	bufSz += 100                         // padding?
