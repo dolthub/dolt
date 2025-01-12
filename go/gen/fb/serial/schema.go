@@ -17,8 +17,34 @@
 package serial
 
 import (
+	"strconv"
+
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 )
+
+type DistanceType byte
+
+const (
+	DistanceTypeNull       DistanceType = 0
+	DistanceTypeL2_Squared DistanceType = 1
+)
+
+var EnumNamesDistanceType = map[DistanceType]string{
+	DistanceTypeNull:       "Null",
+	DistanceTypeL2_Squared: "L2_Squared",
+}
+
+var EnumValuesDistanceType = map[string]DistanceType{
+	"Null":       DistanceTypeNull,
+	"L2_Squared": DistanceTypeL2_Squared,
+}
+
+func (v DistanceType) String() string {
+	if s, ok := EnumNamesDistanceType[v]; ok {
+		return s
+	}
+	return "DistanceType(" + strconv.FormatInt(int64(v), 10) + ")"
+}
 
 type TableSchema struct {
 	_tab flatbuffers.Table
@@ -667,7 +693,35 @@ func (rcv *Index) TryFulltextInfo(obj *FulltextInfo) (*FulltextInfo, error) {
 	return nil, nil
 }
 
-const IndexNumFields = 12
+func (rcv *Index) VectorKey() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateVectorKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(28, n)
+}
+
+func (rcv *Index) TryVectorInfo(obj *VectorInfo) (*VectorInfo, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(VectorInfo)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		if VectorInfoNumFields < obj.Table().NumFields() {
+			return nil, flatbuffers.ErrTableHasUnknownFields
+		}
+		return obj, nil
+	}
+	return nil, nil
+}
+
+const IndexNumFields = 14
 
 func IndexStart(builder *flatbuffers.Builder) {
 	builder.StartObject(IndexNumFields)
@@ -719,6 +773,12 @@ func IndexAddFulltextKey(builder *flatbuffers.Builder, fulltextKey bool) {
 }
 func IndexAddFulltextInfo(builder *flatbuffers.Builder, fulltextInfo flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(11, flatbuffers.UOffsetT(fulltextInfo), 0)
+}
+func IndexAddVectorKey(builder *flatbuffers.Builder, vectorKey bool) {
+	builder.PrependBoolSlot(12, vectorKey, false)
+}
+func IndexAddVectorInfo(builder *flatbuffers.Builder, vectorInfo flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(vectorInfo), 0)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -875,6 +935,62 @@ func FulltextInfoStartKeyPositionsVector(builder *flatbuffers.Builder, numElems 
 	return builder.StartVector(2, numElems, 2)
 }
 func FulltextInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type VectorInfo struct {
+	_tab flatbuffers.Table
+}
+
+func InitVectorInfoRoot(o *VectorInfo, buf []byte, offset flatbuffers.UOffsetT) error {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	return o.Init(buf, n+offset)
+}
+
+func TryGetRootAsVectorInfo(buf []byte, offset flatbuffers.UOffsetT) (*VectorInfo, error) {
+	x := &VectorInfo{}
+	return x, InitVectorInfoRoot(x, buf, offset)
+}
+
+func TryGetSizePrefixedRootAsVectorInfo(buf []byte, offset flatbuffers.UOffsetT) (*VectorInfo, error) {
+	x := &VectorInfo{}
+	return x, InitVectorInfoRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func (rcv *VectorInfo) Init(buf []byte, i flatbuffers.UOffsetT) error {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+	if VectorInfoNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func (rcv *VectorInfo) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *VectorInfo) DistanceType() DistanceType {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return DistanceType(rcv._tab.GetByte(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *VectorInfo) MutateDistanceType(n DistanceType) bool {
+	return rcv._tab.MutateByteSlot(4, byte(n))
+}
+
+const VectorInfoNumFields = 1
+
+func VectorInfoStart(builder *flatbuffers.Builder) {
+	builder.StartObject(VectorInfoNumFields)
+}
+func VectorInfoAddDistanceType(builder *flatbuffers.Builder, distanceType DistanceType) {
+	builder.PrependByteSlot(0, byte(distanceType), 0)
+}
+func VectorInfoEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -394,6 +395,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		unique:                        idx.IsUnique(),
 		spatial:                       idx.IsSpatial(),
 		fulltext:                      idx.IsFullText(),
+		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           vrw,
@@ -404,6 +406,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 		prefixLengths:                 idx.PrefixLengths(),
 		fullTextProps:                 idx.FullTextProperties(),
+		vectorProps:                   idx.VectorProperties(),
 	}, nil
 }
 
@@ -425,6 +428,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		unique:                        idx.IsUnique(),
 		spatial:                       idx.IsSpatial(),
 		fulltext:                      idx.IsFullText(),
+		vector:                        idx.IsVector(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           nil,
@@ -435,6 +439,7 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 		doltBinFormat:                 true,
 		prefixLengths:                 idx.PrefixLengths(),
 		fullTextProps:                 idx.FullTextProperties(),
+		vectorProps:                   idx.VectorProperties(),
 	}, nil
 }
 
@@ -556,6 +561,7 @@ type doltIndex struct {
 	unique   bool
 	spatial  bool
 	fulltext bool
+	vector   bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -571,6 +577,7 @@ type doltIndex struct {
 
 	prefixLengths []uint16
 	fullTextProps schema.FullTextProperties
+	vectorProps   schema.VectorProperties
 }
 
 type LookupMeta struct {
@@ -619,8 +626,12 @@ func (di *doltIndex) CanSupport(...sql.Range) bool {
 }
 
 // CanSupportOrderBy implements the interface sql.Index.
-func (di *doltIndex) CanSupportOrderBy(_ sql.Expression) bool {
-	return false
+func (di *doltIndex) CanSupportOrderBy(expr sql.Expression) bool {
+	distance, ok := expr.(*vector.Distance)
+	if !ok {
+		return false
+	}
+	return di.vector && di.vectorProps.DistanceType.CanEval(distance.DistanceType)
 }
 
 // ColumnExpressionTypes implements the interface sql.Index.
@@ -994,7 +1005,7 @@ func (di *doltIndex) IsFullText() bool {
 
 // IsVector implements sql.Index
 func (di *doltIndex) IsVector() bool {
-	return false
+	return di.vector
 }
 
 // IsPrimaryKey implements DoltIndex.

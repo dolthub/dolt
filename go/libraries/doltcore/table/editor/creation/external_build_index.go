@@ -41,26 +41,29 @@ const (
 // single prolly tree materialization by presorting the index keys in an
 // intermediate file format.
 func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
-	empty, err := durable.NewEmptyIndexFromTableSchema(ctx, vrw, ns, idx, sch)
-	if err != nil {
-		return nil, err
-	}
-	secondary := durable.ProllyMapFromIndex(empty)
-
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 	p := primary.Pool()
 
-	prefixDesc := secondary.KeyDesc().PrefixDesc(idx.Count())
-	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
+	keyDesc, _ := idx.Schema().GetMapDescriptors()
+	if schema.IsKeyless(sch) {
+		keyDesc = prolly.AddHashToSchema(keyDesc)
+	}
+
+	prefixDesc := keyDesc.PrefixDesc(idx.Count())
+	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, idx, keyDesc, p, ns)
 	if err != nil {
 		return nil, err
 	}
 
+	if idx.IsVector() {
+		return BuildProximityIndex(ctx, ns, idx, keyDesc, prefixDesc, iter, secondaryBld, uniqCb)
+	}
+
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
-		return secondary.KeyDesc().Compare(t1, t2) < 0
+		return keyDesc.Compare(t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
 
@@ -98,6 +101,9 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 	defer it.Close()
 
+	empty, err := durable.NewEmptyIndexFromTableSchema(ctx, vrw, ns, idx, sch)
+	secondary := durable.ProllyMapFromIndex(empty)
+
 	tupIter := &tupleIterWithCb{iter: it, prefixDesc: prefixDesc, uniqCb: uniqCb}
 	ret, err := prolly.MutateMapWithTupleIter(ctx, secondary, tupIter)
 	if err != nil {
@@ -108,6 +114,48 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	return durable.IndexFromProllyMap(ret), nil
+}
+
+// func BuildProximityIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
+func BuildProximityIndex(
+	ctx *sql.Context,
+	ns tree.NodeStore,
+	idx schema.Index,
+	keyDesc val.TupleDesc,
+	prefixDesc val.TupleDesc,
+	iter prolly.MapIter,
+	secondaryBld index.SecondaryKeyBuilder,
+	uniqCb DupEntryCb,
+) (durable.Index, error) {
+	// Secondary indexes have no non-key columns
+	valDesc := val.NewTupleDescriptor()
+	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, idx.VectorProperties().DistanceType, keyDesc, valDesc, prolly.DefaultLogChunkSize)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
+
+		if uniqCb != nil && prefixDesc.HasNulls(idxKey) {
+			continue
+		}
+
+		if err := proximityMapBuilder.Insert(ctx, idxKey, val.EmptyTuple); err != nil {
+			return nil, err
+		}
+	}
+	proximityMap, err := proximityMapBuilder.Flush(ctx)
+	return durable.IndexFromProximityMap(proximityMap), nil
 }
 
 type tupleIterWithCb struct {
