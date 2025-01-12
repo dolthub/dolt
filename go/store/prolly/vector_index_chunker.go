@@ -16,11 +16,12 @@ package prolly
 
 import (
 	"context"
+	"io"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"io"
 )
 
 // vectorIndexChunker is a stateful chunker that iterates over |pathMap|, a map that contains an element
