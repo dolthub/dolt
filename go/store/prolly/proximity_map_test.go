@@ -18,7 +18,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -55,39 +59,35 @@ var testValDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, keys [][]interface{}, valueDesc val.TupleDesc, values [][]interface{}, logChunkSize uint8) (ProximityMap, [][]byte, [][]byte) {
-	bp := pool.NewBuffPool()
+func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, row []interface{}) val.Tuple {
+	builder := val.NewTupleBuilder(desc)
+	for i, column := range row {
+		err := tree.PutField(ctx, ns, builder, i, column)
+		require.NoError(t, err)
+	}
+	return builder.Build(pool)
+}
 
-	count := len(keys)
-	require.Equal(t, count, len(values))
+func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, rows [][]interface{}) [][]byte {
+	result := make([][]byte, len(rows))
+	for i, row := range rows {
+		result[i] = buildTuple(t, ctx, ns, pool, desc, row)
+	}
+	return result
+}
+
+func createAndValidateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, keyBytes [][]byte, valueDesc val.TupleDesc, valueBytes [][]byte, logChunkSize uint8, validate bool) ProximityMap {
+	count := len(keyBytes)
+	require.Equal(t, count, len(valueBytes))
 
 	distanceType := vector.DistanceL2Squared{}
 
 	builder, err := NewProximityMapBuilder(ctx, ns, distanceType, keyDesc, valueDesc, logChunkSize)
 	require.NoError(t, err)
 
-	keyBytes := make([][]byte, count)
-	valueBytes := make([][]byte, count)
-	keyBuilder := val.NewTupleBuilder(keyDesc)
-	valueBuilder := val.NewTupleBuilder(valueDesc)
-	for i, key := range keys {
-		for j, keyColumn := range key {
-			err = tree.PutField(ctx, ns, keyBuilder, j, keyColumn)
-			require.NoError(t, err)
-		}
-
-		nextKey := keyBuilder.Build(bp)
-		keyBytes[i] = nextKey
-
-		for j, valueColumn := range values[i] {
-			err = tree.PutField(ctx, ns, valueBuilder, j, valueColumn)
-			require.NoError(t, err)
-		}
-
-		nextValue := valueBuilder.Build(bp)
-		valueBytes[i] = nextValue
-
-		err = builder.Insert(ctx, nextKey, nextValue)
+	for i, key := range keyBytes {
+		value := valueBytes[i]
+		err = builder.Insert(ctx, key, value)
 		require.NoError(t, err)
 	}
 
@@ -98,34 +98,112 @@ func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, ke
 	require.NoError(t, err)
 	require.Equal(t, count, mapCount)
 
-	return m, keyBytes, valueBytes
+	if validate {
+		validateProximityMap(t, ctx, ns, &m, testKeyDesc, testValDesc, keyBytes, valueBytes, count)
+	}
+	return m
+}
+
+func validateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc val.TupleDesc, keys, values [][]byte, expectedSize int) {
+	actualSize, err := m.Count()
+	require.NoError(t, err)
+	require.Equal(t, expectedSize, actualSize)
+	// Check that every key and value appears in the map exactly once.
+	matches := 0
+	for i := 0; i < len(keys); i++ {
+		err = m.Get(ctx, keys[i], func(foundKey val.Tuple, foundValue val.Tuple) error {
+			require.Equal(t, val.Tuple(keys[i]), foundKey)
+			require.Equal(t, val.Tuple(values[i]), foundValue)
+			matches++
+			return nil
+		})
+		require.NoError(t, err)
+	}
+	require.Equal(t, expectedSize, matches)
+
+	// Check that the invariant holds: each vector is closer to its parent than any of its uncles.
+	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd tree.Node) error {
+		validateProximityMapNode(t, ctx, ns, nd, vector.DistanceL2Squared{}, keyDesc, valDesc)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func vectorFromKey(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, key []byte) []float64 {
+	vectorHash, _ := keyDesc.GetJSONAddr(0, key)
+	jsonWrapper, err := getJsonValueFromHash(ctx, ns, vectorHash)
+	require.NoError(t, err)
+	floats, err := sql.ConvertToVector(jsonWrapper)
+	require.NoError(t, err)
+	return floats
+}
+
+func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd tree.Node, distanceType vector.DistanceType, keyDesc val.TupleDesc, desc val.TupleDesc) {
+	// For each node, the node's grandchildren should be closer to their parent than the other children.
+	if nd.Level() == 0 {
+		// Leaf node
+		return
+	}
+	if nd.Count() <= 1 {
+		// A node with only one child is trivially valid.
+		return
+	}
+	// Get the vector in each key
+	vectors := make([][]float64, nd.Count())
+	for vectorIdx := 0; vectorIdx < nd.Count(); vectorIdx++ {
+		vectorKey := nd.GetKey(vectorIdx)
+		vectors[vectorIdx] = vectorFromKey(t, ctx, ns, keyDesc, vectorKey)
+	}
+	for childIdx := 0; childIdx < nd.Count(); childIdx++ {
+		// Get the child node
+		childHash := hash.New(nd.GetValue(childIdx))
+		childNode, err := ns.Read(ctx, childHash)
+		require.NoError(t, err)
+		for childKeyIdx := 0; childKeyIdx < childNode.Count(); childKeyIdx++ {
+			childVectorKey := childNode.GetKey(childKeyIdx)
+			childVector := vectorFromKey(t, ctx, ns, keyDesc, childVectorKey)
+			minDistance := math.MaxFloat64
+			closestKeyIdx := -1
+			for otherChildIdx := 0; otherChildIdx < nd.Count(); otherChildIdx++ {
+				distance, err := distanceType.Eval(childVector, vectors[otherChildIdx])
+				require.NoError(t, err)
+				if distance < minDistance {
+					minDistance = distance
+					closestKeyIdx = otherChildIdx
+				}
+			}
+			require.Equal(t, closestKeyIdx, childIdx)
+		}
+	}
 }
 
 func TestEmptyProximityMap(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	createProximityMap(t, ctx, ns, testKeyDesc, nil, testValDesc, nil, 10)
+	createAndValidateProximityMap(t, ctx, ns, testKeyDesc, nil, testValDesc, nil, 10, true)
 }
 
 func TestSingleEntryProximityMap(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, [][]interface{}{{"[1.0]"}}, testValDesc, [][]interface{}{{int64(1)}}, 10)
-	matches := 0
-	err := m.Get(ctx, keys[0], func(foundKey val.Tuple, foundValue val.Tuple) error {
-		require.Equal(t, val.Tuple(keys[0]), foundKey)
-		require.Equal(t, val.Tuple(values[0]), foundValue)
-		matches++
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, matches, 1)
+	pb := pool.NewBuffPool()
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, [][]interface{}{{"[1.0]"}})
+	values := buildTuples(t, ctx, ns, pb, testValDesc, [][]interface{}{{int64(1)}})
+	createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 10, true)
 }
 
 func TestDoubleEntryProximityMapGetExact(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, [][]interface{}{{"[0.0, 6.0]"}, {"[3.0, 4.0]"}}, testValDesc, [][]interface{}{{int64(1)}, {int64(2)}}, 10)
+	pb := pool.NewBuffPool()
+
+	keyRows := [][]interface{}{{"[0.0, 6.0]"}, {"[3.0, 4.0]"}}
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+
+	valueRows := [][]interface{}{{int64(1)}, {int64(2)}}
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 10, true)
 	matches := 0
 	for i, key := range keys {
 		err := m.Get(ctx, key, func(foundKey val.Tuple, foundValue val.Tuple) error {
@@ -142,7 +220,16 @@ func TestDoubleEntryProximityMapGetExact(t *testing.T) {
 func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, [][]interface{}{{"[0.0, 6.0]"}, {"[3.0, 4.0]"}}, testValDesc, [][]interface{}{{int64(1)}, {int64(2)}}, 10)
+	pb := pool.NewBuffPool()
+
+	keyRows := [][]interface{}{{"[0.0, 6.0]"}, {"[3.0, 4.0]"}}
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+
+	valueRows := [][]interface{}{{int64(1)}, {int64(2)}}
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 10, true)
+
 	matches := 0
 
 	mapIter, err := m.GetClosest(ctx, newJsonValue(t, "[0.0, 0.0]"), 1)
@@ -155,7 +242,6 @@ func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, val.Tuple(keys[1]), k)
 		require.Equal(t, val.Tuple(values[1]), v)
-		// require.InDelta(t, distance, 25.0, 0.1)
 		matches++
 	}
 
@@ -166,16 +252,23 @@ func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 func TestProximityMapGetManyClosest(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	vectors := [][]interface{}{
+	pb := pool.NewBuffPool()
+
+	keyRows := [][]interface{}{
 		{"[0.0, 0.0]"},
 		{"[0.0, 10.0]"},
 		{"[10.0, 10.0]"},
 		{"[10.0, 0.0]"},
 	}
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+
+	valueRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 10, true)
+
 	queryVector := "[3.0, 1.0]"
 	sortOrder := []int{0, 3, 1, 2} // indexes in sorted order: [0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0]
-	// distances := []float64{10.0, 50.0, 90.0, 130.0}
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, vectors, testValDesc, [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}, 2)
 
 	for limit := 0; limit <= 4; limit++ {
 		t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
@@ -191,7 +284,6 @@ func TestProximityMapGetManyClosest(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, val.Tuple(keys[sortOrder[matches]]), k)
 				require.Equal(t, val.Tuple(values[sortOrder[matches]]), v)
-				// require.InDelta(t, distance, distances[matches], 0.1)
 				matches++
 			}
 			require.NoError(t, err)
@@ -200,27 +292,25 @@ func TestProximityMapGetManyClosest(t *testing.T) {
 	}
 }
 
-func getInt64(t *testing.T, tuple val.Tuple, idx int) int64 {
-	res, ok := testValDesc.GetInt64(0, tuple)
-	require.True(t, ok)
-	return res
-}
-
 func TestProximityMapWithOverflowNode(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
+	pb := pool.NewBuffPool()
 
 	// Create an index with enough rows that it can't fit in a single physical chunk
-	vectors := make([][]interface{}, 0, 4000)
-	pks := make([][]interface{}, 0, 4000)
+	keyRows := make([][]interface{}, 0, 4000)
+	valueRows := make([][]interface{}, 0, 4000)
 
 	for i := int64(0); i < 4000; i++ {
-		vectors = append(vectors, []interface{}{fmt.Sprintf("[%d]", i)})
-		pks = append(pks, []interface{}{i})
+		keyRows = append(keyRows, []interface{}{fmt.Sprintf("[%d]", i)})
+		valueRows = append(valueRows, []interface{}{i})
 	}
 
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
 	// Set logChunkSize to a high enough value that everything goes in a single chunk
-	m, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors, testValDesc, pks, 16)
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 16, true)
 
 	count, err := m.Count()
 	require.NoError(t, err)
@@ -230,14 +320,20 @@ func TestProximityMapWithOverflowNode(t *testing.T) {
 func TestMultilevelProximityMap(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	keyStrings := [][]interface{}{
+	pb := pool.NewBuffPool()
+
+	keyRows := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
 		{"[7.0, 8.0]"},
 	}
-	valueStrings := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, keyStrings, testValDesc, valueStrings, 1)
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+
+	valueRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 1, true)
 	matches := 0
 	for i, key := range keys {
 		err := m.Get(ctx, key, func(foundKey val.Tuple, foundValue val.Tuple) error {
@@ -254,7 +350,9 @@ func TestMultilevelProximityMap(t *testing.T) {
 func TestLargerMultilevelProximityMap(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	keyStrings := [][]interface{}{
+	pb := pool.NewBuffPool()
+
+	keyRows := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
@@ -264,8 +362,12 @@ func TestLargerMultilevelProximityMap(t *testing.T) {
 		{"[13.0, 14.0]"},
 		{"[15.0, 16.0]"},
 	}
-	valueStrings := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)}, {int64(7)}, {int64(8)}}
-	m, keys, values := createProximityMap(t, ctx, ns, testKeyDesc, keyStrings, testValDesc, valueStrings, 1)
+	keys := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows)
+
+	valueRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)}, {int64(7)}, {int64(8)}}
+	values := buildTuples(t, ctx, ns, pb, testValDesc, valueRows)
+
+	m := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys, testValDesc, values, 1, true)
 	matches := 0
 	for i, key := range keys {
 		err := m.Get(ctx, key, func(foundKey val.Tuple, foundValue val.Tuple) error {
@@ -282,22 +384,32 @@ func TestLargerMultilevelProximityMap(t *testing.T) {
 func TestInsertOrderIndependence(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	keyStrings1 := [][]interface{}{
+	pb := pool.NewBuffPool()
+
+	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
 		{"[7.0, 8.0]"},
 	}
-	valueStrings1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
-	keyStrings2 := [][]interface{}{
+	keys1 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows1)
+
+	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
+
+	keyRows2 := [][]interface{}{
 		{"[7.0, 8.0]"},
 		{"[5.0, 6.0]"},
 		{"[3.0, 4.0]"},
 		{"[0.0, 1.0]"},
 	}
-	valueStrings2 := [][]interface{}{{int64(4)}, {int64(3)}, {int64(2)}, {int64(1)}}
-	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, keyStrings1, testValDesc, valueStrings1, 1)
-	m2, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, keyStrings2, testValDesc, valueStrings2, 1)
+	keys2 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows2)
+
+	valueRows2 := [][]interface{}{{int64(4)}, {int64(3)}, {int64(2)}, {int64(1)}}
+	values2 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows2)
+
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, 1, true)
+	m2 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys2, testValDesc, values2, 1, true)
 
 	if !assert.Equal(t, m1.tuples.Root.HashOf(), m2.tuples.Root.HashOf(), "trees have different hashes") {
 		require.NoError(t, tree.OutputProllyNodeBytes(os.Stdout, m1.tuples.Root))
@@ -308,38 +420,36 @@ func TestInsertOrderIndependence(t *testing.T) {
 func TestIncrementalInserts(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	vectors1 := [][]interface{}{
+	pb := pool.NewBuffPool()
+
+	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
 		{"[7.0, 8.0]"},
 	}
-	pks1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	keys1 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows1)
 
-	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors1, testValDesc, pks1, 1)
+	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
+
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, 1, true)
 
 	mutableMap := newProximityMutableMap(m1)
 
-	vectors2 := []interface{}{
-		"[9.0, 10.0]",
-		"[11.0, 12.0]",
-		"[13.0, 14.0]",
-		"[15.0, 16.0]",
+	keyRows2 := [][]interface{}{
+		{"[9.0, 10.0]"},
+		{"[11.0, 12.0]"},
+		{"[13.0, 14.0]"},
+		{"[15.0, 16.0]"},
 	}
-	pks2 := []int64{5, 6, 7, 8}
+	keys2 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows2)
 
-	bp := pool.NewBuffPool()
+	valueRows2 := [][]interface{}{{int64(5)}, {int64(6)}, {int64(7)}, {int64(8)}}
+	values2 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows2)
 
-	keyBuilder := val.NewTupleBuilder(testKeyDesc)
-	valueBuilder := val.NewTupleBuilder(testValDesc)
-	for i, keyString := range vectors2 {
-		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, keyString))
-		nextKey := keyBuilder.Build(bp)
-
-		valueBuilder.PutInt64(0, pks2[i])
-		nextValue := valueBuilder.Build(bp)
-
-		err := mutableMap.Put(ctx, nextKey, nextValue)
+	for i, key := range keys2 {
+		err := mutableMap.Put(ctx, key, values2[i])
 		require.NoError(t, err)
 	}
 
@@ -347,24 +457,40 @@ func TestIncrementalInserts(t *testing.T) {
 	newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
 	require.NoError(t, err)
 
-	newCount, err := newMap.Count()
-	require.NoError(t, err)
+	combinedKeyRows := [][]interface{}{
+		{"[0.0, 1.0]"},
+		{"[3.0, 4.0]"},
+		{"[5.0, 6.0]"},
+		{"[7.0, 8.0]"},
+		{"[9.0, 10.0]"},
+		{"[11.0, 12.0]"},
+		{"[13.0, 14.0]"},
+		{"[15.0, 16.0]"},
+	}
+	combinedKeys := buildTuples(t, ctx, ns, pb, testKeyDesc, combinedKeyRows)
 
-	require.Equal(t, 8, newCount)
+	combinedValueRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)}, {int64(7)}, {int64(8)}}
+	combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
+
+	validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 8)
 }
 
 func TestIncrementalUpdates(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	vectors1 := [][]interface{}{
+	pb := pool.NewBuffPool()
+	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
 		{"[7.0, 8.0]"},
 	}
-	pks1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	keys1 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows1)
 
-	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors1, testValDesc, pks1, 1)
+	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
+
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, 1, true)
 
 	mutableMap := newProximityMutableMap(m1)
 
@@ -391,6 +517,20 @@ func TestIncrementalUpdates(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, 4, newCount)
+
+		// validate
+
+		combinedKeyRows := [][]interface{}{
+			{"[0.0, 1.0]"},
+			{"[3.0, 4.0]"},
+			{"[5.0, 6.0]"},
+			{"[7.0, 8.0]"},
+		}
+		combinedKeys := buildTuples(t, ctx, ns, pb, testKeyDesc, combinedKeyRows)
+		combinedValueRows := [][]interface{}{{int64(5)}, {int64(2)}, {int64(3)}, {int64(4)}}
+		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
+
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 4)
 	}
 
 	// update root node
@@ -407,26 +547,38 @@ func TestIncrementalUpdates(t *testing.T) {
 		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
-		newCount, err := newMap.Count()
-		require.NoError(t, err)
+		combinedKeyRows := [][]interface{}{
+			{"[0.0, 1.0]"},
+			{"[3.0, 4.0]"},
+			{"[5.0, 6.0]"},
+			{"[7.0, 8.0]"},
+		}
+		combinedKeys := buildTuples(t, ctx, ns, pb, testKeyDesc, combinedKeyRows)
+		combinedValueRows := [][]interface{}{{int64(5)}, {int64(2)}, {int64(6)}, {int64(4)}}
+		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		require.Equal(t, 4, newCount)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 4)
+
 	}
 }
 
 func TestIncrementalDeletes(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	vectors1 := [][]interface{}{
+	pb := pool.NewBuffPool()
+	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
 		{"[5.0, 6.0]"},
 		{"[7.0, 8.0]"},
 	}
-	pks1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	keys1 := buildTuples(t, ctx, ns, pb, testKeyDesc, keyRows1)
+
+	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
 
 	logChunkSize := uint8(1)
-	m1, _, _ := createProximityMap(t, ctx, ns, testKeyDesc, vectors1, testValDesc, pks1, logChunkSize)
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, logChunkSize, true)
 
 	mutableMap := newProximityMutableMap(m1)
 
@@ -434,7 +586,7 @@ func TestIncrementalDeletes(t *testing.T) {
 
 	keyBuilder := val.NewTupleBuilder(testKeyDesc)
 
-	// update leaf node
+	// delete leaf node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[0.0, 1.0]"))
 		nextKey := keyBuilder.Build(bp)
@@ -445,13 +597,20 @@ func TestIncrementalDeletes(t *testing.T) {
 		newMap, err := ProximityFlusher{logChunkSize: logChunkSize}.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
-		newCount, err := newMap.Count()
-		require.NoError(t, err)
+		combinedKeyRows := [][]interface{}{
+			{"[3.0, 4.0]"},
+			{"[5.0, 6.0]"},
+			{"[7.0, 8.0]"},
+		}
+		combinedKeys := buildTuples(t, ctx, ns, pb, testKeyDesc, combinedKeyRows)
+		combinedValueRows := [][]interface{}{{int64(2)}, {int64(3)}, {int64(4)}}
+		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		require.Equal(t, 3, newCount)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 3)
+
 	}
 
-	// update root node
+	// delete root node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[5.0, 6.0]"))
 		nextKey := keyBuilder.Build(bp)
@@ -462,10 +621,16 @@ func TestIncrementalDeletes(t *testing.T) {
 		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
-		newCount, err := newMap.Count()
-		require.NoError(t, err)
+		combinedKeyRows := [][]interface{}{
+			{"[3.0, 4.0]"},
+			{"[7.0, 8.0]"},
+		}
+		combinedKeys := buildTuples(t, ctx, ns, pb, testKeyDesc, combinedKeyRows)
+		combinedValueRows := [][]interface{}{{int64(2)}, {int64(4)}}
+		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		require.Equal(t, 2, newCount)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 2)
+
 	}
 }
 
@@ -475,14 +640,7 @@ func TestIncrementalDeletes(t *testing.T) {
 func TestNonlexographicKey(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	vectors1 := [][]interface{}{
-		{"[0.0, 0.0]", int64(4 + 0*256)},
-		{"[0.0, 0.0]", int64(3 + 1*256)},
-		{"[0.0, 0.0]", int64(2 + 2*256)},
-		{"[0.0, 0.0]", int64(1 + 3*256)},
-		{"[0.0, 0.0]", int64(0 + 4*256)},
-	}
-	pks1 := [][]interface{}{{}, {}, {}, {}, {}}
+	pb := pool.NewBuffPool()
 
 	keyDesc := val.NewTupleDescriptor(
 		val.Type{Enc: val.JSONAddrEnc, Nullable: true},
@@ -491,5 +649,67 @@ func TestNonlexographicKey(t *testing.T) {
 
 	valDesc := val.NewTupleDescriptor()
 
-	_, _, _ = createProximityMap(t, ctx, ns, keyDesc, vectors1, valDesc, pks1, 1)
+	keyRows := [][]interface{}{
+		{"[0.0, 0.0]", int64(4 + 0*256)},
+		{"[0.0, 0.0]", int64(3 + 1*256)},
+		{"[0.0, 0.0]", int64(2 + 2*256)},
+		{"[0.0, 0.0]", int64(1 + 3*256)},
+		{"[0.0, 0.0]", int64(0 + 4*256)},
+	}
+	keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+
+	valueRows := [][]interface{}{{}, {}, {}, {}, {}}
+	values := buildTuples(t, ctx, ns, pb, valDesc, valueRows)
+
+	// The way the validation test is currently written it assumes that all vectors are unique, but this is not a
+	// requirement. Skip validation for now.
+	_ = createAndValidateProximityMap(t, ctx, ns, keyDesc, keys, valDesc, values, 1, false)
+}
+
+func TestManyDimensions(t *testing.T) {
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+	numRows := 50
+	dimensions := 50
+	testManyDimensions(ctx, t, ns, numRows, dimensions)
+}
+
+func testManyDimensions(ctx context.Context, t *testing.T, ns tree.NodeStore, numRows int, dimensions int) {
+	pb := pool.NewBuffPool()
+	keyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.JSONAddrEnc, Nullable: true},
+		val.Type{Enc: val.Int64Enc, Nullable: true},
+	)
+
+	valDesc := val.NewTupleDescriptor()
+
+	t.Run(fmt.Sprintf("numRows = %d, dimensions = %d", numRows, dimensions), func(t *testing.T) {
+		keyRows := make([][]interface{}, numRows)
+		valueRows := make([][]interface{}, numRows)
+		for i := 0; i < numRows; i++ {
+			keyRows[i] = []interface{}{makeManyDimensionalVector(dimensions, int64(i)), i}
+			valueRows[i] = []interface{}{}
+		}
+		keys := buildTuples(t, ctx, ns, pb, keyDesc, keyRows)
+		values := buildTuples(t, ctx, ns, pb, keyDesc, valueRows)
+
+		_ = createAndValidateProximityMap(t, ctx, ns, keyDesc, keys, valDesc, values, 3, true)
+	})
+}
+
+func makeManyDimensionalVector(dimensions int, seed int64) interface{} {
+	var builder strings.Builder
+	rng := rand.New(rand.NewSource(seed))
+
+	builder.WriteRune('[')
+	if dimensions > 0 {
+
+		builder.WriteString(strconv.Itoa(rng.Int()))
+		for d := 1; d < dimensions; d++ {
+			builder.WriteRune(',')
+			builder.WriteString(strconv.Itoa(rng.Int()))
+		}
+	}
+	builder.WriteRune(']')
+	return builder.String()
 }
