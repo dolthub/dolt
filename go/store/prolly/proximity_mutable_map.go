@@ -81,14 +81,24 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		key, value = editIter.NextMutation(ctx)
 	}
 	// TODO: Set correct distance type.
-	newRoot, _, err := f.visitNode(ctx, serializer, ns, mutableMap.tuples.Static.Root, mutableMap.tuples.Edits, edits, convert, vector.DistanceL2Squared{}, keyDesc, valDesc, f.logChunkSize)
+	var newRoot tree.Node
+	var err error
+	root := mutableMap.tuples.Static.Root
+	distanceType := vector.DistanceL2Squared{}
+	if root.Count() == 0 {
+		// Original index was empty. We need to make a new index based on the edits.
+		newRoot, err = makeNewProximityMap(ctx, ns, edits, distanceType, keyDesc, valDesc, f.logChunkSize)
+	} else {
+		newRoot, _, err = f.visitNode(ctx, serializer, ns, root, edits, convert, distanceType, keyDesc, valDesc)
+
+	}
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
 	return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         newRoot,
 		NodeStore:    ns,
-		DistanceType: vector.DistanceL2Squared{},
+		DistanceType: distanceType,
 		Convert:      convert,
 		Order:        keyDesc,
 	}, nil
@@ -104,98 +114,56 @@ type childEditList struct {
 	mustRebuild bool
 }
 
+func makeNewProximityMap(
+	ctx context.Context,
+	ns tree.NodeStore,
+	edits []VectorIndexKV,
+	distanceType vector.DistanceType,
+	keyDesc val.TupleDesc,
+	valDesc val.TupleDesc,
+	logChunkSize uint8,
+) (newNode tree.Node, err error) {
+	proximityMapBuilder, err := NewProximityMapBuilder(ctx, ns, distanceType, keyDesc, valDesc, logChunkSize)
+	if err != nil {
+		return tree.Node{}, err
+	}
+	for _, edit := range edits {
+		// If the original index was empty, then all edits are inserts.
+		if edit.key != nil {
+			err = proximityMapBuilder.InsertAtLevel(ctx, edit.key, edit.value, uint8(edit.level))
+			if err != nil {
+				return tree.Node{}, err
+			}
+		}
+	}
+	proximityMap, err := proximityMapBuilder.Flush(ctx)
+	if err != nil {
+		return tree.Node{}, err
+	}
+
+	return proximityMap.Node(), nil
+}
+
 func (f ProximityFlusher) visitNode(
 	ctx context.Context,
 	serializer message.Serializer,
 	ns tree.NodeStore,
 	node tree.Node,
-	fullEdits *skip.List,
 	edits []VectorIndexKV,
 	convert func(context.Context, []byte) []float64,
 	distanceType vector.DistanceType,
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,
-	logChunkSize uint8,
 ) (newNode tree.Node, subtrees int, err error) {
-	if node.Count() == 0 {
-		// Original index was empty. We need to make a new index based on the edits.
-		proximityMapBuilder, err := NewProximityMapBuilder(ctx, ns, distanceType, keyDesc, valDesc, logChunkSize)
-		if err != nil {
-			return tree.Node{}, 0, err
-		}
-		for _, edit := range edits {
-			// If the original index was empty, then all edits are inserts.
-			if edit.key != nil {
-				err = proximityMapBuilder.InsertAtLevel(ctx, edit.key, edit.value, uint8(edit.level))
-				if err != nil {
-					return tree.Node{}, 0, err
-				}
-			}
-		}
-		proximityMap, err := proximityMapBuilder.Flush(ctx)
-		if err != nil {
-			return tree.Node{}, 0, err
-		}
 
-		return proximityMap.Node(), len(edits), nil
-	}
 	var keys [][]byte
 	var values [][]byte
 	var nodeSubtrees []uint64
-	if node.IsLeaf() {
-		// combine edits with node keys. Use merge sort.
 
-		editIdx := 0
-		nodeIdx := 0
-		for editIdx < len(edits) || nodeIdx < node.Count() {
-			// Edit doesn't match an existing key: it must be an insert.
-			if editIdx >= len(edits) {
-				keys = append(keys, node.GetKey(nodeIdx))
-				values = append(values, node.GetValue(nodeIdx))
-				nodeSubtrees = append(nodeSubtrees, 0)
-				nodeIdx++
-				continue
-			}
-			if nodeIdx >= node.Count() {
-				keys = append(keys, edits[editIdx].key)
-				values = append(values, edits[editIdx].value)
-				nodeSubtrees = append(nodeSubtrees, 0)
-				editIdx++
-				continue
-			}
-			editKey := val.Tuple(edits[editIdx].key)
-			nodeKey := val.Tuple(node.GetKey(nodeIdx))
-			cmp := keyDesc.Compare(editKey, nodeKey)
-			if cmp < 0 {
-				//edit comes first
-				// Edit doesn't match an existing key: it must be an insert.
-				keys = append(keys, edits[editIdx].key)
-				values = append(values, edits[editIdx].value)
-				nodeSubtrees = append(nodeSubtrees, 0)
-				editIdx++
-				continue
-			}
-			if cmp > 0 {
-				// node comes first
-				keys = append(keys, node.GetKey(nodeIdx))
-				values = append(values, node.GetValue(nodeIdx))
-				nodeSubtrees = append(nodeSubtrees, 0)
-				nodeIdx++
-				continue
-			}
-			// edit to an existing key.
-			newValue := edits[editIdx].value
-			editIdx++
-			nodeIdx++
-			if newValue == nil {
-				// This is a delete. We simply skip to the next key, excluding this key from the new node.
-				continue
-			}
-			keys = append(keys, editKey)
-			values = append(values, newValue)
-			nodeSubtrees = append(nodeSubtrees, 0)
-		}
+	if node.IsLeaf() {
+		keys, values, nodeSubtrees = f.rebuildLeafNodeWithEdits(node, edits, keyDesc)
 	} else {
+		// sort the list of edits based on which child node contains them.
 		childEdits := make(map[int]childEditList)
 		for _, edit := range edits {
 			key := edit.key
@@ -248,7 +216,7 @@ func (f ProximityFlusher) visitNode(
 				if childEditList.mustRebuild {
 					newChildNode, childSubtrees, err = f.rebuildNode(ctx, ns, childNode, childEditList.edits, distanceType, keyDesc, valDesc)
 				} else {
-					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, childNode, fullEdits, childEditList.edits, convert, distanceType, keyDesc, valDesc, logChunkSize)
+					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, childNode, childEditList.edits, convert, distanceType, keyDesc, valDesc)
 				}
 
 				if err != nil {
@@ -261,8 +229,7 @@ func (f ProximityFlusher) visitNode(
 			}
 		}
 	}
-	msg := serializer.Serialize(keys, values, nodeSubtrees, node.Level())
-	newNode, fileId, err := tree.NodeFromBytes(msg)
+	newNode, err = serializeVectorIndexNode(ctx, serializer, ns, keys, values, nodeSubtrees, node.Level())
 	if err != nil {
 		return tree.Node{}, 0, err
 	}
@@ -270,11 +237,90 @@ func (f ProximityFlusher) visitNode(
 	if err != nil {
 		return tree.Node{}, 0, err
 	}
+	return newNode, subtrees, err
+}
+
+func serializeVectorIndexNode(
+	ctx context.Context,
+	serializer message.Serializer,
+	ns tree.NodeStore,
+	keys [][]byte,
+	values [][]byte,
+	nodeSubtrees []uint64,
+	level int,
+) (tree.Node, error) {
+	msg := serializer.Serialize(keys, values, nodeSubtrees, level)
+	newNode, fileId, err := tree.NodeFromBytes(msg)
+	if err != nil {
+		return tree.Node{}, err
+	}
+
 	if fileId != serial.VectorIndexNodeFileID {
-		return tree.Node{}, 0, fmt.Errorf("expected file id %s, received %s", serial.VectorIndexNodeFileID, fileId)
+		return tree.Node{}, fmt.Errorf("expected file id %s, received %s", serial.VectorIndexNodeFileID, fileId)
 	}
 	_, err = ns.Write(ctx, newNode)
-	return newNode, subtrees, err
+	return newNode, err
+}
+
+// rebuildLeafNodeWithEdits creates a new leaf node by applying a list of edits to an existing node.
+func (f ProximityFlusher) rebuildLeafNodeWithEdits(
+	originalNode tree.Node,
+	edits []VectorIndexKV,
+	keyDesc val.TupleDesc,
+) (keys [][]byte, values [][]byte, nodeSubtrees []uint64) {
+	// combine edits with node keys. Use merge sort.
+
+	editIdx := 0
+	nodeIdx := 0
+	for editIdx < len(edits) || nodeIdx < originalNode.Count() {
+		// Edit doesn't match an existing key: it must be an insert.
+		if editIdx >= len(edits) {
+			keys = append(keys, originalNode.GetKey(nodeIdx))
+			values = append(values, originalNode.GetValue(nodeIdx))
+			nodeSubtrees = append(nodeSubtrees, 0)
+			nodeIdx++
+			continue
+		}
+		if nodeIdx >= originalNode.Count() {
+			keys = append(keys, edits[editIdx].key)
+			values = append(values, edits[editIdx].value)
+			nodeSubtrees = append(nodeSubtrees, 0)
+			editIdx++
+			continue
+		}
+		editKey := val.Tuple(edits[editIdx].key)
+		nodeKey := val.Tuple(originalNode.GetKey(nodeIdx))
+		cmp := keyDesc.Compare(editKey, nodeKey)
+		if cmp < 0 {
+			//edit comes first
+			// Edit doesn't match an existing key: it must be an insert.
+			keys = append(keys, edits[editIdx].key)
+			values = append(values, edits[editIdx].value)
+			nodeSubtrees = append(nodeSubtrees, 0)
+			editIdx++
+			continue
+		}
+		if cmp > 0 {
+			// node comes first
+			keys = append(keys, originalNode.GetKey(nodeIdx))
+			values = append(values, originalNode.GetValue(nodeIdx))
+			nodeSubtrees = append(nodeSubtrees, 0)
+			nodeIdx++
+			continue
+		}
+		// edit to an existing key.
+		newValue := edits[editIdx].value
+		editIdx++
+		nodeIdx++
+		if newValue == nil {
+			// This is a delete. We simply skip to the next key, excluding this key from the new node.
+			continue
+		}
+		keys = append(keys, editKey)
+		values = append(values, newValue)
+		nodeSubtrees = append(nodeSubtrees, 0)
+	}
+	return
 }
 
 var DefaultLogChunkSize = uint8(8)
