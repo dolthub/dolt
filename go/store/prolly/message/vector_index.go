@@ -18,10 +18,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"math"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
