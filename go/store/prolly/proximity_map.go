@@ -182,7 +182,7 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 	mutableLevelMap := newMutableMap(emptyLevelMap)
 	return ProximityMapBuilder{
 		ns:                    ns,
-		vectorIndexSerializer: message.NewVectorIndexSerializer(ns.Pool(), logChunkSize),
+		vectorIndexSerializer: message.NewVectorIndexSerializer(ns.Pool(), logChunkSize, distanceType),
 		distanceType:          distanceType,
 		keyDesc:               keyDesc,
 		valDesc:               valDesc,

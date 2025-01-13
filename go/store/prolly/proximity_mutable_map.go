@@ -33,6 +33,7 @@ type ProximityMutableMap = GenericMutableMap[ProximityMap, tree.ProximityMap[val
 
 type ProximityFlusher struct {
 	logChunkSize uint8
+	distanceType vector.DistanceType
 }
 
 var _ MutableMapFlusher[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProximityFlusher{}
@@ -410,7 +411,7 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 }
 
 func (f ProximityFlusher) GetDefaultSerializer(ctx context.Context, mutableMap *GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
-	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool(), f.logChunkSize)
+	return message.NewVectorIndexSerializer(mutableMap.NodeStore().Pool(), f.logChunkSize, f.distanceType)
 }
 
 // newMutableMap returns a new MutableMap.
@@ -420,7 +421,7 @@ func newProximityMutableMap(m ProximityMap) *ProximityMutableMap {
 		keyDesc:    m.keyDesc,
 		valDesc:    m.valDesc,
 		maxPending: defaultMaxPending,
-		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize},
+		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize, distanceType: m.tuples.DistanceType},
 	}
 }
 
@@ -442,7 +443,7 @@ func (f ProximityFlusher) MapInterface(ctx context.Context, mut *ProximityMutabl
 
 // TreeMap materializes all pending and applied mutations in the MutableMap.
 func (f ProximityFlusher) TreeMap(ctx context.Context, mut *ProximityMutableMap) (tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
-	s := message.NewVectorIndexSerializer(mut.NodeStore().Pool(), f.logChunkSize)
+	s := message.NewVectorIndexSerializer(mut.NodeStore().Pool(), f.logChunkSize, f.distanceType)
 	return mut.flushWithSerializer(ctx, s)
 }
 
@@ -453,8 +454,9 @@ func (f ProximityFlusher) Map(ctx context.Context, mut *ProximityMutableMap) (Pr
 		return ProximityMap{}, err
 	}
 	return ProximityMap{
-		tuples:  treeMap,
-		keyDesc: mut.keyDesc,
-		valDesc: mut.valDesc,
+		tuples:       treeMap,
+		keyDesc:      mut.keyDesc,
+		valDesc:      mut.valDesc,
+		logChunkSize: f.logChunkSize,
 	}, nil
 }

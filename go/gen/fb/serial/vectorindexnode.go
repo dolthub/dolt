@@ -276,7 +276,19 @@ func (rcv *VectorIndexNode) MutateLogChunkSize(n byte) bool {
 	return rcv._tab.MutateByteSlot(20, n)
 }
 
-const VectorIndexNodeNumFields = 9
+func (rcv *VectorIndexNode) DistanceType() DistanceType {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return DistanceType(rcv._tab.GetByte(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *VectorIndexNode) MutateDistanceType(n DistanceType) bool {
+	return rcv._tab.MutateByteSlot(22, byte(n))
+}
+
+const VectorIndexNodeNumFields = 10
 
 func VectorIndexNodeStart(builder *flatbuffers.Builder) {
 	builder.StartObject(VectorIndexNodeNumFields)
@@ -325,6 +337,9 @@ func VectorIndexNodeAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
 }
 func VectorIndexNodeAddLogChunkSize(builder *flatbuffers.Builder, logChunkSize byte) {
 	builder.PrependByteSlot(8, logChunkSize, 0)
+}
+func VectorIndexNodeAddDistanceType(builder *flatbuffers.Builder, distanceType DistanceType) {
+	builder.PrependByteSlot(9, byte(distanceType), 0)
 }
 func VectorIndexNodeEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

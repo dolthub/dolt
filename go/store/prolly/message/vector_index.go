@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 	"math"
 
 	fb "github.com/dolthub/flatbuffers/v23/go"
@@ -39,13 +40,22 @@ const (
 
 var vectorIvfFileID = []byte(serial.VectorIndexNodeFileID)
 
-func NewVectorIndexSerializer(pool pool.BuffPool, logChunkSize uint8) VectorIndexSerializer {
-	return VectorIndexSerializer{pool: pool, logChunkSize: logChunkSize}
+func distanceTypeToEnum(distanceType vector.DistanceType) serial.DistanceType {
+	switch distanceType.(type) {
+	case vector.DistanceL2Squared:
+		return serial.DistanceTypeL2_Squared
+	}
+	return serial.DistanceTypeNull
+}
+
+func NewVectorIndexSerializer(pool pool.BuffPool, logChunkSize uint8, distanceType vector.DistanceType) VectorIndexSerializer {
+	return VectorIndexSerializer{pool: pool, logChunkSize: logChunkSize, distanceType: distanceType}
 }
 
 type VectorIndexSerializer struct {
 	pool         pool.BuffPool
 	logChunkSize uint8
+	distanceType vector.DistanceType
 }
 
 var _ Serializer = VectorIndexSerializer{}
@@ -91,6 +101,7 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	}
 	serial.VectorIndexNodeAddTreeLevel(b, uint8(level))
 	serial.VectorIndexNodeAddLogChunkSize(b, s.logChunkSize)
+	serial.VectorIndexNodeAddDistanceType(b, distanceTypeToEnum(s.distanceType))
 
 	return serial.FinishMessage(b, serial.VectorIndexNodeEnd(b), vectorIvfFileID)
 }

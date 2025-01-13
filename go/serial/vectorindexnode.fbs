@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "schema.fbs";
+
 namespace serial;
 
 // VectorIndexNode is a node that makes up a vector index. Every key contains a vector value,
@@ -49,6 +51,10 @@ table VectorIndexNode {
   // may choose to use a different size, or even select the best size for each index.
   // all nodes in an index must use the same size, and when modifying an existing index, we must use this value.
   log_chunk_size:uint8;
+
+  // each node encodes the distance function used for the index. This allows lookups without needing to retrieve the
+  // distance function from the schema.
+  distance_type:DistanceType;
 }
 
 

@@ -438,7 +438,9 @@ func TestIncrementalInserts(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	pb := pool.NewBuffPool()
-
+	logChunkSize := uint8(1)
+	distanceType := vector.DistanceL2Squared{}
+	flusher := ProximityFlusher{logChunkSize: logChunkSize, distanceType: distanceType}
 	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
@@ -450,7 +452,7 @@ func TestIncrementalInserts(t *testing.T) {
 	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
 	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
 
-	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, 1)
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, logChunkSize)
 
 	l1 := m1.tuples.Root.Level()
 	_ = l1
@@ -473,7 +475,7 @@ func TestIncrementalInserts(t *testing.T) {
 	}
 
 	// Check that map looks how we expect.
-	newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
+	newMap, err := flusher.Map(ctx, mutableMap)
 	require.NoError(t, err)
 
 	l2 := m1.tuples.Root.Level()
@@ -494,13 +496,16 @@ func TestIncrementalInserts(t *testing.T) {
 	combinedValueRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)}, {int64(7)}, {int64(8)}}
 	combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-	validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 8)
+	validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, logChunkSize)
 }
 
 func TestIncrementalUpdates(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	pb := pool.NewBuffPool()
+	logChunkSize := uint8(1)
+	distanceType := vector.DistanceL2Squared{}
+	flusher := ProximityFlusher{logChunkSize: logChunkSize, distanceType: distanceType}
 	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
@@ -512,7 +517,7 @@ func TestIncrementalUpdates(t *testing.T) {
 	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
 	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
 
-	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, 1)
+	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, logChunkSize)
 
 	mutableMap := newProximityMutableMap(m1)
 
@@ -532,7 +537,7 @@ func TestIncrementalUpdates(t *testing.T) {
 		err := mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
-		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
+		newMap, err := flusher.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
 		newCount, err := newMap.Count()
@@ -552,7 +557,7 @@ func TestIncrementalUpdates(t *testing.T) {
 		combinedValueRows := [][]interface{}{{int64(5)}, {int64(2)}, {int64(3)}, {int64(4)}}
 		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 4)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, logChunkSize)
 	}
 
 	// update root node
@@ -566,7 +571,7 @@ func TestIncrementalUpdates(t *testing.T) {
 		err := mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
-		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
+		newMap, err := flusher.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
 		combinedKeyRows := [][]interface{}{
@@ -579,7 +584,7 @@ func TestIncrementalUpdates(t *testing.T) {
 		combinedValueRows := [][]interface{}{{int64(5)}, {int64(2)}, {int64(6)}, {int64(4)}}
 		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 4)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, logChunkSize)
 
 	}
 }
@@ -588,6 +593,9 @@ func TestIncrementalDeletes(t *testing.T) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	pb := pool.NewBuffPool()
+	logChunkSize := uint8(1)
+	distanceType := vector.DistanceL2Squared{}
+	flusher := ProximityFlusher{logChunkSize: logChunkSize, distanceType: distanceType}
 	keyRows1 := [][]interface{}{
 		{"[0.0, 1.0]"},
 		{"[3.0, 4.0]"},
@@ -599,7 +607,6 @@ func TestIncrementalDeletes(t *testing.T) {
 	valueRows1 := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
 	values1 := buildTuples(t, ctx, ns, pb, testValDesc, valueRows1)
 
-	logChunkSize := uint8(1)
 	m1 := createAndValidateProximityMap(t, ctx, ns, testKeyDesc, keys1, testValDesc, values1, logChunkSize)
 
 	mutableMap := newProximityMutableMap(m1)
@@ -616,7 +623,7 @@ func TestIncrementalDeletes(t *testing.T) {
 		err := mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
-		newMap, err := ProximityFlusher{logChunkSize: logChunkSize}.Map(ctx, mutableMap)
+		newMap, err := flusher.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
 		combinedKeyRows := [][]interface{}{
@@ -628,7 +635,7 @@ func TestIncrementalDeletes(t *testing.T) {
 		combinedValueRows := [][]interface{}{{int64(2)}, {int64(3)}, {int64(4)}}
 		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 3)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, logChunkSize)
 
 	}
 
@@ -640,7 +647,7 @@ func TestIncrementalDeletes(t *testing.T) {
 		err := mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
-		newMap, err := ProximityFlusher{}.Map(ctx, mutableMap)
+		newMap, err := flusher.Map(ctx, mutableMap)
 		require.NoError(t, err)
 
 		combinedKeyRows := [][]interface{}{
@@ -651,7 +658,7 @@ func TestIncrementalDeletes(t *testing.T) {
 		combinedValueRows := [][]interface{}{{int64(2)}, {int64(4)}}
 		combinedValues := buildTuples(t, ctx, ns, pb, testValDesc, combinedValueRows)
 
-		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, 2)
+		validateProximityMap(t, ctx, ns, &newMap, testKeyDesc, testValDesc, combinedKeys, combinedValues, logChunkSize)
 
 	}
 }
