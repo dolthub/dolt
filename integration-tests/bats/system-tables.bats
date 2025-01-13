@@ -36,6 +36,7 @@ teardown() {
     [[ "$output" =~ "dolt_remote_branches" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
+    [[ "$output" =~ "dolt_help" ]] || false
     [[ "$output" =~ "test" ]] || false
 
     dolt add test
@@ -619,4 +620,24 @@ SQL
       run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag2');"
       [ "$status" -eq 0 ]
       [ "$output" = "" ]
+}
+
+@test "system-tables: query dolt_help system table" {
+    run dolt sql -q "select type from dolt_help where target='dolt_rebase'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "procedure" ]] || false
+
+    run dolt sql -q "select short_description from dolt_help where target='dolt_commit'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Record changes to the database" ]] || false
+
+    run dolt sql -q "select long_description from dolt_help where target='dolt_add'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "This command updates the list of tables using the current content found in the working root" ]] || false
+    [[ "$output" =~ "This command can be performed multiple times before a commit." ]] || false
+
+    run dolt sql -q "select arguments from dolt_help where target='dolt_pull'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remote".*"The name of the remote to pull from." ]] || false
+    [[ "$output" =~ "remoteBranch".*"The name of a branch on the specified remote to be merged into the current working set." ]] || false
 }
