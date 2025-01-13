@@ -325,6 +325,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, DefaultHost, cfg.Host())
 	assert.Equal(t, DefaultPort, cfg.Port())
 	assert.Equal(t, DefaultUser, cfg.User())
+	assert.False(t, cfg.UserIsSpecified())
 	assert.Equal(t, DefaultPass, cfg.Password())
 	assert.Equal(t, uint64(DefaultTimeout), cfg.WriteTimeout())
 	assert.Equal(t, uint64(DefaultTimeout), cfg.ReadTimeout())

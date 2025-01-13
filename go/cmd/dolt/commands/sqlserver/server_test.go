@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -189,7 +190,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(servercfg.ConfigInfo(test), func(t *testing.T) {
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
-				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
+				_, _ = Serve(context.Background(), "0.0.0", config, sc, env, false)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -216,7 +217,7 @@ func TestServerSelect(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env, false)
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -315,7 +316,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv, false)
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -479,7 +480,7 @@ func TestReadReplica(t *testing.T) {
 
 	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 	go func() {
-		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
+		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName), false)
 		require.NoError(t, err)
 	}()
 	require.NoError(t, sc.WaitForStart())
@@ -618,7 +619,8 @@ branch_control_file: dir1/dir2/abc.db
 	cwdFs, err := filesys.LocalFilesysWithWorkingDir(cwd)
 	require.NoError(t, err)
 
-	serverConfig, err := ServerConfigFromArgs(ap, nil, args, dEnv, cwdFs)
+	apr := cli.ParseArgsOrDie(ap, args, nil)
+	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwdFs)
 	require.NoError(t, err)
 
 	assert.Equal(t, expected, generateYamlConfig(serverConfig))

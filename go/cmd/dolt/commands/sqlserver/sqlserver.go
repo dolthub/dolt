@@ -38,6 +38,7 @@ import (
 const (
 	hostFlag                    = "host"
 	portFlag                    = "port"
+	skipRootUserInitialization  = "skip-root-user-initialization"
 	passwordFlag                = "password"
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
@@ -83,7 +84,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}log_level{{.EmphasisRight}}: Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
 
-{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created as needed.
+{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created automatically if it doesn't exist.
 
 {{.EmphasisLeft}}branch_control_file{{.EmphasisRight}}: Path to a file to load and store branch control permissions. Defaults to {{.EmphasisLeft}}$doltcfg-dir/branch_control.db{{.EmphasisRight}}. Will be created as needed.
 
@@ -95,9 +96,9 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
 
-{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username that connections should use for authentication
+{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database. 
 
-{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password that connections should use for authentication.
+{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database.
 
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
@@ -163,6 +164,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
 	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
+	ap.SupportsFlag(skipRootUserInitialization, "", "Skips the automatic creation of a default root super user on the first launch of a SQL server.")
 	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
@@ -240,7 +242,8 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv, cwd)
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwd)
 	if err != nil {
 		return err
 	}
@@ -257,7 +260,8 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	cli.PrintErrf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
-	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
+	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
+	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv, skipRootUserInitialization)
 	if startError != nil {
 		return startError
 	}
@@ -323,20 +327,17 @@ func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
 }
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
-func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys) (servercfg.ServerConfig, error) {
-	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, cwd, DoltServerConfigReader{})
+func ServerConfigFromArgs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cwd filesys.Filesys) (servercfg.ServerConfig, error) {
+	return ServerConfigFromArgsWithReader(apr, dEnv, cwd, DoltServerConfigReader{})
 }
 
 // ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
 func ServerConfigFromArgsWithReader(
-	ap *argparser.ArgParser,
-	help cli.UsagePrinter,
-	args []string,
+	apr *argparser.ArgParseResults,
 	dEnv *env.DoltEnv,
 	cwd filesys.Filesys,
 	reader ServerConfigReader,
 ) (servercfg.ServerConfig, error) {
-	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return nil, err

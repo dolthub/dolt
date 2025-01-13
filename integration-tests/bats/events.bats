@@ -263,7 +263,7 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
 
-    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it executed
+    # Sleep for a few seconds to give the scheduler time to run this event and verify that it executed
     sleep 2
     run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
@@ -286,7 +286,7 @@ SQL
     run dolt sql -q "SHOW EVENTS;"
     [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
 
-    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it is still enabled
+    # Sleep for a few seconds to give the scheduler time to run this event and verify that it is still enabled
     sleep 2
     run dolt sql -q "SHOW EVENTS"
     [ $status -eq 0 ]

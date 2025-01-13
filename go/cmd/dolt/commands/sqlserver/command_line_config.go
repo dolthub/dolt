@@ -202,6 +202,11 @@ func (cfg *commandLineServerConfig) User() string {
 	return cfg.user
 }
 
+// UserIsSpecified returns true if the configuration explicitly specified a user.
+func (cfg *commandLineServerConfig) UserIsSpecified() bool {
+	return cfg.user != ""
+}
+
 // Password returns the password that connecting clients must use.
 func (cfg *commandLineServerConfig) Password() string {
 	return cfg.password
