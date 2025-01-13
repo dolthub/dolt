@@ -172,13 +172,11 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 			}
 			rows = append(rows, newRows...)
 		} else {
-			nameFormatted := fmt.Sprintf("%s_%s", cmdStr, curr.Name())
-
-			nameComparable := strings.ReplaceAll(nameFormatted, "-", "_")
+			nameFormatted := fmt.Sprintf("%s_%s", cmdStr, strings.ReplaceAll(curr.Name(), "-", "_"))
 
 			hasProcedure := false
 			for _, procedure := range dprocedures.DoltProcedures {
-				if procedure.Name == nameComparable {
+				if procedure.Name == nameFormatted {
 					hasProcedure = true
 					break
 				}
