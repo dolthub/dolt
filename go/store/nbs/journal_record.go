@@ -21,8 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"os"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -101,14 +104,23 @@ var journalRecordTimestampGenerator = func() uint64 {
 }
 
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
-	recordSz += journalRecLenSz
-	recordSz += journalRecTagSz + journalRecKindSz
-	recordSz += journalRecTagSz + journalRecAddrSz
-	recordSz += journalRecTagSz // payload tag
-	payloadOff = recordSz
+	payloadOff += journalRecLenSz
+	payloadOff += journalRecTagSz + journalRecKindSz
+	payloadOff += journalRecTagSz + journalRecAddrSz
+	payloadOff += journalRecTagSz // payload tag
+
+	// Make sure the size of the chunk wouldn't overflow the uint32 record length
+	maxCompressedChunkSize := math.MaxUint32 - int(payloadOff+journalRecChecksumSz)
+	if len(c.FullCompressedChunk) > maxCompressedChunkSize {
+		panic(fmt.Sprintf("compressed chunk size (%d) is larger than max size allowed "+
+			"for chunk record (%d)", len(c.FullCompressedChunk), maxCompressedChunkSize))
+	}
+
+	recordSz = payloadOff
 	recordSz += uint32(len(c.FullCompressedChunk))
 	recordSz += journalRecChecksumSz
-	return
+
+	return recordSz, payloadOff
 }
 
 func rootHashRecordSize() (recordSz int) {
@@ -121,7 +133,9 @@ func rootHashRecordSize() (recordSz int) {
 }
 
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
-	// length
+	// length – comes back as an unsigned 32 bit int, which aligns with the four bytes used
+	// in the journal storage protocol to store the total record length, assuring that we can't
+	// read a length that is too large to safely write.
 	l, _ := chunkRecordSize(c)
 	writeUint32(buf[:journalRecLenSz], l)
 	n += journalRecLenSz
@@ -211,16 +225,27 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	return
 }
 
-func validateJournalRecord(buf []byte) bool {
+// validateJournalRecord performs some sanity checks on the buffer |buf| containing a journal
+// record, such as checking that the length of the record is not too short, and checking the
+// checksum. If any problems are detected, an erorr is returned, otherwise nil is returned.
+func validateJournalRecord(buf []byte) error {
 	if len(buf) < (journalRecLenSz + journalRecChecksumSz) {
-		return false
+		return fmt.Errorf("invalid journal record: buffer length too small (%d < %d)", len(buf), (journalRecLenSz + journalRecChecksumSz))
 	}
+
 	off := readUint32(buf)
 	if int(off) > len(buf) {
-		return false
+		return fmt.Errorf("invalid journal record: offset is greater than length of buffer (%d > %d)",
+			off, len(buf))
 	}
+
 	off -= indexRecChecksumSz
-	return crc(buf[:off]) == readUint32(buf[off:])
+	crcMatches := crc(buf[:off]) == readUint32(buf[off:])
+	if !crcMatches {
+		return fmt.Errorf("invalid journal record: CRC checksum does not match")
+	}
+
+	return nil
 }
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
@@ -241,36 +266,54 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	for {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
-			break
+			if err == io.EOF {
+				break
+			} else {
+				return 0, err
+			}
 		}
 
+		// The first 4 bytes in the journal record are the total length of the record (including
+		// these first four bytes)
 		l := readUint32(buf)
-		if buf, err = rdr.Peek(int(l)); err != nil {
+
+		// The journal file data is initialized to a block of zero bytes, so if we read a record
+		// length of 0, we know we've reached the end of the journal records and are starting to
+		// read the zero padding.
+		if l == 0 {
 			break
 		}
 
-		if !validateJournalRecord(buf) {
-			// We read the journal file until we run into an invalid record.
-			break // stop if we can't validate |rec|
+		if buf, err = rdr.Peek(int(l)); err != nil {
+			return 0, err
+		}
+
+		if err = validateJournalRecord(buf); err != nil {
+			// If the DOLT_SKIP_INVALID_JOURNAL_RECORDS env var is set, then we stop reading the journal
+			// as soon as we hit an invalid record. This allows users to opt-in to the previous behavior
+			// where we process as many journal records we can, but stop once we hit an invalid record.
+			if os.Getenv(dconfig.EnvSkipInvalidJournalRecords) != "" {
+				break
+			} else {
+				return 0, err
+			}
 		}
 
 		var rec journalRec
 		if rec, err = readJournalRecord(buf); err != nil {
-			break // failed to read valid record
+			return 0, err
 		}
 		if err = cb(off, rec); err != nil {
-			break
+			return 0, err
 		}
 
 		// advance |rdr| state by |l| bytes
 		if _, err = io.ReadFull(rdr, buf); err != nil {
-			break
+			return 0, err
 		}
 		off += int64(len(buf))
 	}
-	if err != nil && err != io.EOF {
-		return 0, err
-	}
+
 	// reset the file pointer to end of the last
 	// successfully processed journal record
 	if _, err = r.Seek(off, 0); err != nil {
