@@ -60,6 +60,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -226,6 +227,8 @@ func init() {
 	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
 		eventFlushDisabled = true
 	}
+
+	dtables.DoltCommand = doltCommand
 }
 
 const pprofServerFlag = "--pprof-server"
