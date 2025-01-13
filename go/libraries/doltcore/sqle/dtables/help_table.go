@@ -126,14 +126,15 @@ func NewHelpRowIter() HelpRowIter {
 var DoltCommand cli.SubCommandHandler
 
 func (itr HelpRowIter) Next(_ *sql.Context) (sql.Row, error) {
-	helpRows := *itr.rows
-	if helpRows == nil {
+	if *itr.rows == nil {
 		var err error
-		helpRows, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand.Subcommands)
+		*itr.rows, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand.Subcommands)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	helpRows := *itr.rows
 
 	if *itr.idx >= len(helpRows) {
 		return nil, io.EOF
