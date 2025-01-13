@@ -45,6 +45,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -397,8 +398,25 @@ func ConfigureServices(
 			// If no ephemeral superuser has been configured and root user initialization wasn't skipped,
 			// then create a root@localhost superuser.
 			if !serverConfig.UserIsSpecified() && !config.SkipRootUserInitialization {
-				logrus.Info("Creating root@localhost superuser")
-				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, "localhost", servercfg.DefaultPass)
+				// Allow the user to override the default root host (localhost) and password ("").
+				// This is particularly useful in a Docker container, where you need to connect
+				// to the sql-server from outside the container and can't rely on localhost.
+				rootHost := "localhost"
+				doltRootHost := os.Getenv(dconfig.EnvDoltRootHost)
+				if doltRootHost != "" {
+					logrus.Infof("Overriding root user host with value from DOLT_ROOT_HOST: %s", doltRootHost)
+					rootHost = doltRootHost
+				}
+
+				rootPassword := servercfg.DefaultPass
+				doltRootPassword := os.Getenv(dconfig.EnvDoltRootPassword)
+				if doltRootPassword != "" {
+					logrus.Info("Overriding root user password with value from DOLT_ROOT_PASSWORD")
+					rootPassword = doltRootPassword
+				}
+
+				logrus.Infof("Creating root@%s superuser", rootHost)
+				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, rootHost, rootPassword)
 			}
 
 			// TODO: The in-memory filesystem doesn't work with the GMS API

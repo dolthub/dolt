@@ -53,9 +53,9 @@ teardown() {
     teardown_common
 }
 
-# Asserts that the root@% superuser is automatically created when a sql-server is started
+# Asserts that the root@localhost superuser is automatically created when a sql-server is started
 # for the first time and no users are defined yet. As additional users are created, the
-# root@% superuser remains and can be manually removed without coming back.
+# root@localhost superuser remains and can be manually removed without coming back.
 @test "sql-privs: implicit root superuser doesn't disappear after adding users" {
     PORT=$( definePORT )
     dolt sql-server --port $PORT &
@@ -98,6 +98,40 @@ teardown() {
     [[ $output =~ "| user1 | localhost |" ]] || false
 }
 
+# Asserts that the root superuser host and password can be overridden through the DOLT_ROOT_HOST
+# and DOLT_ROOT_PASSWORD environment variables, analogues to MySQL's MYSQL_ROOT_HOST and
+# MYSQL_ROOT_PASSWORD environment variables. This is primarily provided for use during
+# development when running a Dolt sql-server in a Docker container.
+@test "sql-privs: root superuser honors DOLT_ROOT_HOST and DOLT_ROOT_PASSWORD" {
+    PORT=$( definePORT )
+    export DOLT_ROOT_HOST='%'
+    export DOLT_ROOT_PASSWORD='Pass1'
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user can log in with the overridden password and run a query
+    run dolt -u root -p Pass1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "localhost" ]] || false
+    [[ $output =~ "| root | % " ]] || false
+
+    # Restart the SQL server. Changing DOLT_ROOT_HOST and DOLT_ROOT_PASSWORD here is a no-op,
+    # since the root superuser was already initialized the previous time sql-server was started.
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    export DOLT_ROOT_HOST='localhost'
+    export DOLT_ROOT_PASSWORD='donotuse'
+    sleep 1
+
+    # Assert that root is still configured for any host
+    run dolt -u root -p Pass1 sql -q "select user, host from mysql.user where user = 'root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "localhost" ]] || false
+    [[ $output =~ "| root | % " ]] || false
+}
+
 # Asserts that creating users via 'dolt sql' before starting a sql-server causes the privileges.db to be
 # initialized and prevents the root superuser from being created, since the customer has already started
 # manually managing user accounts.
@@ -117,8 +151,8 @@ teardown() {
     [[ $output =~ "| user1 | localhost |" ]] || false
 }
 
-# Asserts that the root@% superuser does not get created when a temporary superuser is specified the
-# first time a sql-server is started and privileges.db is initialized.
+# Asserts that the root@localhost superuser does not get created when a temporary superuser is
+# specified the first time a sql-server is started and privileges.db is initialized.
 @test "sql-privs: implicit root superuser doesn't get created when specifying a temporary superuser" {
     PORT=$( definePORT )
     dolt sql-server --port $PORT -u temp1 &
@@ -131,8 +165,8 @@ teardown() {
     ! [[ $output =~ "root" ]] || false
 }
 
-# Asserts that the root@% superuser is not created when the --skip-default-root-user flag is specified
-# when first running sql-server and initializing privileges.db.
+# Asserts that the root@localhost superuser is not created when the --skip-default-root-user flag
+# is specified when first running sql-server and initializing privileges.db.
 @test "sql-privs: implicit root superuser doesn't get created when skipped" {
     PORT=$( definePORT )
     dolt sql-server --port $PORT --skip-root-user-initialization &
