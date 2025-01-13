@@ -72,8 +72,12 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	edits := make([]VectorIndexKV, 0, mutableMap.tuples.Edits.Count())
 	editIter := mutableMap.tuples.Mutations()
 	key, value := editIter.NextMutation(ctx)
+	maxEditLevel := uint8(0)
 	for key != nil {
 		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)
+		if keyLevel > maxEditLevel {
+			maxEditLevel = keyLevel
+		}
 		edits = append(edits, VectorIndexKV{
 			key:   key,
 			value: value,
@@ -89,6 +93,9 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	if root.Count() == 0 {
 		// Original index was empty. We need to make a new index based on the edits.
 		newRoot, err = makeNewProximityMap(ctx, ns, edits, distanceType, keyDesc, valDesc, f.logChunkSize)
+	} else if maxEditLevel >= uint8(root.Level()) {
+		// The root node has changed, or there may be a new level to the tree. We need to rebuild the tree.
+		newRoot, _, err = f.rebuildNode(ctx, ns, root, edits, distanceType, keyDesc, valDesc, maxEditLevel)
 	} else {
 		newRoot, _, err = f.visitNode(ctx, serializer, ns, root, edits, convert, distanceType, keyDesc, valDesc)
 
@@ -215,7 +222,7 @@ func (f ProximityFlusher) visitNode(
 				var newChildNode tree.Node
 				var childSubtrees int
 				if childEditList.mustRebuild {
-					newChildNode, childSubtrees, err = f.rebuildNode(ctx, ns, childNode, childEditList.edits, distanceType, keyDesc, valDesc)
+					newChildNode, childSubtrees, err = f.rebuildNode(ctx, ns, childNode, childEditList.edits, distanceType, keyDesc, valDesc, uint8(childNode.Level()))
 				} else {
 					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, childNode, childEditList.edits, convert, distanceType, keyDesc, valDesc)
 				}
@@ -326,7 +333,8 @@ func (f ProximityFlusher) rebuildLeafNodeWithEdits(
 
 var DefaultLogChunkSize = uint8(8)
 
-func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, node tree.Node, edits []VectorIndexKV, distanceType vector.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc) (newNode tree.Node, subtrees int, err error) {
+func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, node tree.Node, edits []VectorIndexKV, distanceType vector.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, maxLevel uint8) (newNode tree.Node, subtrees int, err error) {
+
 	proximityMapBuilder, err := NewProximityMapBuilder(ctx, ns, distanceType, keyDesc, valDesc, f.logChunkSize)
 	if err != nil {
 		return tree.Node{}, 0, err
@@ -337,10 +345,6 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 	for _, edit := range edits {
 		editSkipList.Put(edit.key, edit.value)
 	}
-	// When rebuilding a subtree, we need to make sure that the vector inherited from the parent is still in position 0.
-	// Walk through the existing keys
-	// The easiest way to do that is just to construct a tree and call Iterall
-	// But we also need to get the level. And remove keys that have been deleted / updated in edits
 
 	insertFromNode := func(nd tree.Node, i int) error {
 		key := nd.GetKey(i)
@@ -348,7 +352,11 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 		_, hasNewVal := editSkipList.Get(key)
 		if !hasNewVal {
 			// TODO: Is it faster if we fetch the level from the current tree?
-			err = proximityMapBuilder.Insert(ctx, key, value)
+			keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)
+			if keyLevel > maxLevel {
+				keyLevel = maxLevel
+			}
+			err = proximityMapBuilder.InsertAtLevel(ctx, key, value, keyLevel)
 			if err != nil {
 				return err
 			}
@@ -422,18 +430,6 @@ func newProximityMutableMap(m ProximityMap) *ProximityMutableMap {
 		valDesc:    m.valDesc,
 		maxPending: defaultMaxPending,
 		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize, distanceType: m.tuples.DistanceType},
-	}
-}
-
-// newMutableMapWithDescriptors returns a new MutableMap with the key and value TupleDescriptors overridden to the
-// values specified in |kd| and |vd|. This is useful if you are rewriting the data in a map to change its schema.
-func newProximityMutableMapWithDescriptors(m ProximityMap, kd, vd val.TupleDesc) *ProximityMutableMap {
-	return &ProximityMutableMap{
-		tuples:     m.tuples.Mutate(),
-		keyDesc:    kd,
-		valDesc:    vd,
-		maxPending: defaultMaxPending,
-		flusher:    ProximityFlusher{logChunkSize: m.logChunkSize},
 	}
 }
 
