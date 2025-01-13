@@ -160,7 +160,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if dEnv == nil {
 			// Logic below requires a non-nil dEnv when --no-pretty is set.
 			// TODO: remove all usage of dEnv entirely from this command.
-			cli.PrintErrln("`\\show` is not fully supported in the SQL shell.")
+			cli.PrintErrln("`\\show --no-pretty` is not supported in the SQL shell.")
 			return 1
 		}
 
@@ -199,7 +199,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return 1
 			}
 			if dEnv == nil {
-				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended to common use.")
+				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended for common use.")
 				return 1
 			}
 			if !dEnv.DoltDB.Format().UsesFlatbuffers() {
