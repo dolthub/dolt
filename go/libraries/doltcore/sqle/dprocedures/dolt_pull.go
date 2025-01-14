@@ -137,12 +137,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 		return noConflictsOrViolations, threeWayMerge, "", err
 	}
 
-	// Fetch all references
-	branchRefs, err := srcDB.GetHeadRefs(ctx)
-	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
-	}
-
+	// Assert the branch exists
 	_, hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", err
@@ -152,7 +147,13 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
-	mode := ref.UpdateMode{Force: true, Prune: false}
+	// Fetch all references
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
+	}
+	prune := apr.Contains(cli.PruneFlag)
+	mode := ref.UpdateMode{Force: true, Prune: prune}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, false, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)

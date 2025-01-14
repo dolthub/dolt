@@ -21,7 +21,6 @@ setup() {
     cd $TESTDIRS
     dolt clone file://rem1 repo2
     cd $TESTDIRS/repo2
-    dolt log
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
@@ -541,4 +540,44 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "testTable" ]] || false
+}
+
+@test "pull: clean up branches with --prune" {
+    cd repo1
+    dolt checkout -b other
+    dolt commit --allow-empty -m "new commit on other"
+    dolt push origin HEAD:new-branch
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/main" ]] || false
+    [[ "$output" =~ "origin/new-branch" ]] || false
+
+    cd ../repo2
+    dolt pull origin
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/main" ]] || false
+    [[ "$output" =~ "origin/new-branch" ]] || false
+
+    dolt merge origin/new-branch
+    dolt push origin HEAD:main
+    # Delete the remote branch.
+    dolt push origin :new-branch
+
+    cd ../repo1
+    dolt branch -d main
+    dolt checkout -b main origin/main # Ensure we are tracking the remote branch.
+
+    dolt branch
+    run dolt pull origin --prune
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/main" ]] || false
+    # Verify that the remote branch was deleted.
+    [[ ! "$output" =~ "origin/new-branch" ]] || false
 }
