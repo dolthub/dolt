@@ -412,7 +412,8 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 			if rerr != nil {
 				return rerr
 			}
-			return r.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
+
+			return r.IterTables(egCtx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
 				if !schema.HasAutoIncrement(sch) {
 					return false, nil
 				}
