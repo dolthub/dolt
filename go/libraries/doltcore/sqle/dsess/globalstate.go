@@ -55,6 +55,10 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		wg.Add(1)
 		eg.Go(func() error {
 			defer wg.Done()
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
+
 			switch b.GetType() {
 			case ref.BranchRefType:
 				wsRef, err := ref.WorkingSetRefForHead(b)
