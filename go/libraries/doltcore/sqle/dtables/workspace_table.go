@@ -64,7 +64,7 @@ type WorkspaceTable struct {
 	headSchema schema.Schema
 
 	// modifiable is true if the schemas before and after the update are identical. Used to reject updates that would
-	// be impossible perform - such as only stage one row when the entire schema of the table is being modified.
+	// be impossible to perform - such as only stage one row when the entire schema of the table is being modified.
 	modifiable bool
 }
 
