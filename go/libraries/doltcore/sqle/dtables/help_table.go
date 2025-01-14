@@ -117,41 +117,38 @@ func (ht *HelpTable) PartitionRows(_ *sql.Context, _ sql.Partition) (sql.RowIter
 	return NewHelpRowIter(), nil
 }
 
-type HelpRowIter struct {
-	idx  *int
-	rows *[]sql.Row
-}
+type HelpRowIter []sql.Row
 
-func NewHelpRowIter() HelpRowIter {
-	idx := 0
-	var nilRows []sql.Row
-	return HelpRowIter{idx: &idx, rows: &nilRows}
+func NewHelpRowIter() *HelpRowIter {
+	var nilIter HelpRowIter
+	return &nilIter
 }
 
 // DoltCommand is set in cmd/dolt/dolt.go to avoid circular dependency.
 var DoltCommand cli.SubCommandHandler
 
-func (itr HelpRowIter) Next(_ *sql.Context) (sql.Row, error) {
-	if *itr.rows == nil {
+func (itr *HelpRowIter) Next(_ *sql.Context) (sql.Row, error) {
+	if *itr == nil {
 		var err error
-		*itr.rows, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand.Subcommands)
+		*itr, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand.Subcommands)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	helpRows := *itr.rows
+	helpRows := *itr
 
-	if *itr.idx >= len(helpRows) {
+	if len(helpRows) == 0 {
 		return nil, io.EOF
 	}
 
-	row := helpRows[*itr.idx]
-	(*itr.idx)++
+	row := helpRows[0]
+	*itr = helpRows[1:]
+
 	return row, nil
 }
 
-func (itr HelpRowIter) Close(_ *sql.Context) error {
+func (itr *HelpRowIter) Close(_ *sql.Context) error {
 	return nil
 }
 
