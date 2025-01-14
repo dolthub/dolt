@@ -16,9 +16,12 @@ package dsess
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -26,13 +29,16 @@ import (
 )
 
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
+	start := time.Now()
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
+		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: get branches error: elapsed: %v\n", time.Since(start))
 		return GlobalStateImpl{}, err
 	}
 
 	remotes, err := db.GetRemoteRefs(ctx)
 	if err != nil {
+		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: get remote refs error: elapsed: %v\n", time.Since(start))
 		return GlobalStateImpl{}, err
 	}
 
@@ -46,6 +52,7 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		case ref.BranchRefType:
 			wsRef, err := ref.WorkingSetRefForHead(b)
 			if err != nil {
+				fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: working set error: elapsed: %v\n", time.Since(start))
 				return GlobalStateImpl{}, err
 			}
 
@@ -54,10 +61,12 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 				// use the branch head if there isn't a working set for it
 				cm, err := db.ResolveCommitRef(ctx, b)
 				if err != nil {
+					fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve commit error: elapsed: %v\n", time.Since(start))
 					return GlobalStateImpl{}, err
 				}
 				roots = append(roots, cm)
 			} else if err != nil {
+				fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve working set error: elapsed: %v\n", time.Since(start))
 				return GlobalStateImpl{}, err
 			} else {
 				roots = append(roots, ws)
@@ -65,11 +74,14 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		case ref.RemoteRefType:
 			cm, err := db.ResolveCommitRef(ctx, b)
 			if err != nil {
+				fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve commit remote ref error: elapsed: %v\n", time.Since(start))
 				return GlobalStateImpl{}, err
 			}
 			roots = append(roots, cm)
 		}
 	}
+
+	fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: success: elapsed: %v\n", time.Since(start))
 
 	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
 	if err != nil {
