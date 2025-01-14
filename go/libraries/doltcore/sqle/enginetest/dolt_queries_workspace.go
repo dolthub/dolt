@@ -370,7 +370,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			*/
 		},
 	},
-
 	{
 		Name: "dolt_workspace_* prevent illegal updates",
 		SetUpScript: []string{
