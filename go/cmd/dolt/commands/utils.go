@@ -287,20 +287,9 @@ func newLateBindingEngine(
 			}
 
 		} else {
+			// Ensure a root user exists, with superuser privs
 			dbUser = DefaultUser
 			ed := rawDb.Editor()
-			user := rawDb.GetUser(ed, dbUser, config.ServerHost, false)
-			ed.Close()
-			if user != nil {
-				// Want to ensure that the user has an empty password. If it has a password, we'll error
-				err := passwordValidate(rawDb, salt, dbUser, nil)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			}
-
-			// If the user doesn't exist, we'll create it with superuser privs.
-			ed = rawDb.Editor()
 			defer ed.Close()
 			rawDb.AddSuperUser(ed, dbUser, config.ServerHost, "")
 		}

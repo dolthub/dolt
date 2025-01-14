@@ -84,6 +84,19 @@ teardown() {
     [ $status -ne 0 ]
 }
 
+# Asserts that `dolt sql` can always be used to access the database as a superuser. For example, if the root
+# user is assigned a password, `dolt sql` should still be able to log in as a superuser, since the user
+# already has access to the host and data directory.
+@test "sql-privs: superuser access is always available from dolt sql" {
+    # Create a root@% user with a password set
+    dolt sql -q "CREATE USER root@'%' identified by 'pass1'; grant all on *.* to root@'%' with grant option;"
+
+    # Make sure dolt sql can still log in as root, even though root has a password set now
+    run dolt sql -q "select user();"
+    [ $status -eq 0 ]
+    [[ $output =~ "root@localhost" ]] || false
+}
+
 @test "sql-privs: starting server with empty config works" {
     make_test_repo
     touch server.yaml
