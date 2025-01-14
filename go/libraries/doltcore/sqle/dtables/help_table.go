@@ -192,9 +192,12 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 			docs := curr.Docs()
 
 			if hasProcedure && docs != nil {
+				optionsUsage := cli.OptionsUsageList(docs.ArgParser)
+
 				argsMap := map[string]string{}
-				for _, argHelp := range curr.Docs().ArgParser.ArgListHelp {
-					argsMap[argHelp[0]] = argHelp[1]
+
+				for _, usage := range optionsUsage {
+					argsMap[usage[0]] = usage[1]
 				}
 
 				argsJson, err := json.Marshal(argsMap)
