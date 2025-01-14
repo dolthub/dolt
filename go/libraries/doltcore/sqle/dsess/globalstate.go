@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -36,39 +37,78 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		return GlobalStateImpl{}, err
 	}
 
+	eg2, egCtx := errgroup.WithContext(ctx)
+	eg2.SetLimit(128)
+
 	rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
 	rootRefs = append(rootRefs, branches...)
 	rootRefs = append(rootRefs, remotes...)
 
-	var roots []doltdb.Rootish
+	rootChan := make(chan doltdb.Rootish, len(rootRefs))
+
+	wg := sync.WaitGroup{}
+
+	eg, _ := errgroup.WithContext(egCtx)
+	eg.Go(func() error {
+		wg.Wait()
+		close(rootChan)
+		return nil
+	})
+
 	for _, b := range rootRefs {
-		switch b.GetType() {
-		case ref.BranchRefType:
-			wsRef, err := ref.WorkingSetRefForHead(b)
-			if err != nil {
-				return GlobalStateImpl{}, err
+		wg.Add(1)
+
+		eg2.Go(func() error {
+			defer wg.Done()
+
+			if egCtx.Err() != nil {
+				return egCtx.Err()
 			}
 
-			ws, err := db.ResolveWorkingSet(ctx, wsRef)
-			if err == doltdb.ErrWorkingSetNotFound {
-				// use the branch head if there isn't a working set for it
-				cm, err := db.ResolveCommitRef(ctx, b)
-				if err != nil {
-					return GlobalStateImpl{}, err
+			switch b.GetType() {
+			case ref.BranchRefType:
+				wsRef, rerr := ref.WorkingSetRefForHead(b)
+				if rerr != nil {
+					return rerr
 				}
-				roots = append(roots, cm)
-			} else if err != nil {
-				return GlobalStateImpl{}, err
-			} else {
-				roots = append(roots, ws)
+
+				ws, rerr := db.ResolveWorkingSet(egCtx, wsRef)
+				if rerr == doltdb.ErrWorkingSetNotFound {
+					// use the branch head if there isn't a working set for it
+					cm, rerr := db.ResolveCommitRef(egCtx, b)
+					if rerr != nil {
+						return rerr
+					}
+					rootChan <- cm
+				} else if err != nil {
+					return rerr
+				} else {
+					rootChan <- ws
+				}
+			case ref.RemoteRefType:
+				cm, rerr := db.ResolveCommitRef(egCtx, b)
+				if rerr != nil {
+					return rerr
+				}
+				rootChan <- cm
 			}
-		case ref.RemoteRefType:
-			cm, err := db.ResolveCommitRef(ctx, b)
-			if err != nil {
-				return GlobalStateImpl{}, err
-			}
-			roots = append(roots, cm)
-		}
+			return nil
+		})
+	}
+
+	err = eg2.Wait()
+	if err != nil {
+		return GlobalStateImpl{}, err
+	}
+
+	err = eg.Wait()
+	if err != nil {
+		return GlobalStateImpl{}, err
+	}
+
+	var roots []doltdb.Rootish
+	for root := range rootChan {
+		roots = append(roots, root)
 	}
 
 	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
