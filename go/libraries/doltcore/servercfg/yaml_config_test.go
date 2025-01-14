@@ -95,7 +95,7 @@ jwks:
 	expected.MetricsConfig = MetricsYAMLConfig{
 		Host: ptr("123.45.67.89"),
 		Port: ptr(9091),
-		Labels: &map[string]string{
+		Labels: map[string]string{
 			"label1": "value1",
 			"label2": "2",
 			"label3": "true",
@@ -121,7 +121,7 @@ jwks:
 			},
 		},
 	}
-	expected.Jwks = &[]JwksConfig{
+	expected.Jwks = []JwksConfig{
 		{
 			Name:        "jwks_name",
 			LocationUrl: "https://website.com",
@@ -461,7 +461,7 @@ func TestYAMLConfigVerboseStringEquivalent(t *testing.T) {
 		},
 		YAMLConfig{
 			MetricsConfig: MetricsYAMLConfig{
-				Labels: &map[string]string{
+				Labels: map[string]string{
 					"xyz": "123",
 					"0":   "AAABBB",
 				},

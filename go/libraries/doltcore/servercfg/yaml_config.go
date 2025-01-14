@@ -47,20 +47,6 @@ func nillableIntPtr(n int) *int {
 	return &n
 }
 
-func nillableSlicePtr[T any](s []T) *[]T {
-	if len(s) == 0 {
-		return nil
-	}
-	return &s
-}
-
-func nillableMapPtr[K comparable, V any](m map[K]V) *map[K]V {
-	if len(m) == 0 {
-		return nil
-	}
-	return &m
-}
-
 // BehaviorYAMLConfig contains server configuration regarding how the server should behave
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only,omitempty"`
@@ -113,9 +99,9 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels *map[string]string `yaml:"labels,omitempty"`
-	Host   *string            `yaml:"host,omitempty"`
-	Port   *int               `yaml:"port,omitempty"`
+	Labels map[string]string `yaml:"labels"`
+	Host   *string           `yaml:"host,omitempty"`
+	Port   *int              `yaml:"port,omitempty"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -151,9 +137,9 @@ type YAMLConfig struct {
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
-	Vars            []UserSessionVars      `yaml:"user_session_vars,omitempty"`
+	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            *[]JwksConfig          `yaml:"jwks,omitempty"`
+	Jwks            []JwksConfig           `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
 	ClusterCfg      *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
@@ -220,7 +206,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: nillableMapPtr(cfg.MetricsLabels()),
+			Labels: cfg.MetricsLabels(),
 			Host:   nillableStrPtr(cfg.MetricsHost()),
 			Port:   ptr(cfg.MetricsPort()),
 		},
@@ -233,7 +219,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		BranchControlFile: ptr(cfg.BranchControlFilePath()),
 		SystemVars_:       systemVars,
 		Vars:              cfg.UserVars(),
-		Jwks:              nillableSlicePtr(cfg.JwksConfig()),
+		Jwks:              cfg.JwksConfig(),
 	}
 }
 
@@ -293,7 +279,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: zeroIf(ptr(cfg.MetricsLabels()), !cfg.ValueSet(MetricsLabelsKey)),
+			Labels: zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
 			Host:   zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
 			Port:   zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
 		},
@@ -306,7 +292,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		BranchControlFile: zeroIf(ptr(cfg.BranchControlFilePath()), !cfg.ValueSet(BranchControlFilePathKey)),
 		SystemVars_:       zeroIf(systemVars, !cfg.ValueSet(SystemVarsKey)),
 		Vars:              zeroIf(cfg.UserVars(), !cfg.ValueSet(UserVarsKey)),
-		Jwks:              zeroIf(ptr(cfg.JwksConfig()), !cfg.ValueSet(JwksConfigKey)),
+		Jwks:              zeroIf(cfg.JwksConfig(), !cfg.ValueSet(JwksConfigKey)),
 	}
 }
 
@@ -388,7 +374,7 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	}
 
 	if withPlaceholders.MetricsConfig.Labels == nil {
-		withPlaceholders.MetricsConfig.Labels = &map[string]string{}
+		withPlaceholders.MetricsConfig.Labels = map[string]string{}
 	}
 	if withPlaceholders.MetricsConfig.Host == nil {
 		withPlaceholders.MetricsConfig.Host = ptr("localhost")
@@ -407,11 +393,11 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	if withPlaceholders.ClusterCfg == nil {
 		withPlaceholders.ClusterCfg = &ClusterYAMLConfig{
 			StandbyRemotes_: []StandbyRemoteYAMLConfig{
-				StandbyRemoteYAMLConfig{
+				{
 					Name_:              "standby_replica_one",
 					RemoteURLTemplate_: "https://standby_replica_one.svc.cluster.local:50051/{database}",
 				},
-				StandbyRemoteYAMLConfig{
+				{
 					Name_:              "standby_replica_two",
 					RemoteURLTemplate_: "https://standby_replica_two.svc.cluster.local:50051/{database}",
 				},
@@ -438,7 +424,7 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 
 	if withPlaceholders.Vars == nil {
 		withPlaceholders.Vars = []UserSessionVars{
-			UserSessionVars{
+			{
 				Name: "root",
 				Vars: map[string]interface{}{
 					"dolt_show_system_tables": 1,
@@ -455,8 +441,8 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 		}
 	}
 
-	if withPlaceholders.Jwks == nil {
-		withPlaceholders.Jwks = &[]JwksConfig{}
+	if len(withPlaceholders.Jwks) == 0 {
+		withPlaceholders.Jwks = []JwksConfig{}
 	}
 
 	return withPlaceholders
@@ -675,7 +661,7 @@ func (cfg YAMLConfig) DisableClientMultiStatements() bool {
 // MetricsLabels returns labels that are applied to all prometheus metrics
 func (cfg YAMLConfig) MetricsLabels() map[string]string {
 	if cfg.MetricsConfig.Labels != nil {
-		return *cfg.MetricsConfig.Labels
+		return cfg.MetricsConfig.Labels
 	}
 	return nil
 }
@@ -744,7 +730,7 @@ func (cfg YAMLConfig) SystemVars() map[string]interface{} {
 // wksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
 func (cfg YAMLConfig) JwksConfig() []JwksConfig {
 	if cfg.Jwks != nil {
-		return *cfg.Jwks
+		return cfg.Jwks
 	}
 	return nil
 }
