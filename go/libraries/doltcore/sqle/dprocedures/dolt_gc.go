@@ -157,10 +157,15 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			params.MaxElapsedTime = 3 * time.Second
 			err := backoff.Retry(func() error {
 				processes := ctx.ProcessList.Processes()
+				allgood := true
 				for _, p := range processes {
 					if _, ok := killed[p.Connection]; ok {
-						return errors.New("unable to establish safepoint.")
+						allgood = false
+						ctx.ProcessList.Kill(p.Connection)
 					}
+				}
+				if !allgood {
+					return errors.New("unable to establish safepoint.")
 				}
 				return nil
 			}, params)
