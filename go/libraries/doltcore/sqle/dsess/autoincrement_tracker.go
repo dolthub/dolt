@@ -16,16 +16,13 @@ package dsess
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -402,20 +399,17 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 }
 
 func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
-	start := time.Now()
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 
 	for _, root := range roots {
 		eg.Go(func() error {
 			if egCtx.Err() != nil {
-				fmt.Fprintf(color.Output, "DUSTIN: InitWithRoots: ctx error: elapsed: %v\n", time.Since(start))
 				return egCtx.Err()
 			}
 
 			r, rerr := root.ResolveRootValue(egCtx)
 			if rerr != nil {
-				fmt.Fprintf(color.Output, "DUSTIN: InitWithRoots: resolve root error: elapsed: %v\n", time.Since(start))
 				return rerr
 			}
 
@@ -426,7 +420,6 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 
 				seq, iErr := table.GetAutoIncrementValue(egCtx)
 				if iErr != nil {
-					fmt.Fprintf(color.Output, "DUSTIN: InitWithRoots: IterTables: get autoincrement value error: elapsed: %v\n", time.Since(start))
 					return true, iErr
 				}
 
@@ -440,11 +433,5 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 		})
 	}
 
-	err := eg.Wait()
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(color.Output, "DUSTIN: InitWithRoots: success: elapsed: %v\n", time.Since(start))
-	return nil
+	return eg.Wait()
 }

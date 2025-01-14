@@ -16,12 +16,9 @@ package dsess
 
 import (
 	"context"
-	"fmt"
 	"sync"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -30,16 +27,13 @@ import (
 )
 
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalStateImpl, error) {
-	start := time.Now()
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
-		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: get branches error: elapsed: %v\n", time.Since(start))
 		return GlobalStateImpl{}, err
 	}
 
 	remotes, err := db.GetRemoteRefs(ctx)
 	if err != nil {
-		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: get remote refs error: elapsed: %v\n", time.Since(start))
 		return GlobalStateImpl{}, err
 	}
 
@@ -65,7 +59,6 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 			case ref.BranchRefType:
 				wsRef, err := ref.WorkingSetRefForHead(b)
 				if err != nil {
-					fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: working set error: elapsed: %v\n", time.Since(start))
 					return err
 				}
 
@@ -74,12 +67,10 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 					// use the branch head if there isn't a working set for it
 					cm, err := db.ResolveCommitRef(egCtx, b)
 					if err != nil {
-						fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve commit error: elapsed: %v\n", time.Since(start))
 						return err
 					}
 					rootRefsChan <- cm
 				} else if err != nil {
-					fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve working set error: elapsed: %v\n", time.Since(start))
 					return err
 				} else {
 					rootRefsChan <- ws
@@ -87,7 +78,6 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 			case ref.RemoteRefType:
 				cm, err := db.ResolveCommitRef(egCtx, b)
 				if err != nil {
-					fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: resolve commit remote ref error: elapsed: %v\n", time.Since(start))
 					return err
 				}
 				rootRefsChan <- cm
@@ -101,19 +91,9 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		return GlobalStateImpl{}, err
 	}
 
-	if len(rootRefsChan) != len(rootRefs) {
-		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: rootRefsChan does not equal rootRefs\n")
-	}
-
-	fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: success: elapsed: %v\n", time.Since(start))
-
 	var roots []doltdb.Rootish
 	for rootRef := range rootRefsChan {
 		roots = append(roots, rootRef)
-	}
-
-	if len(roots) != len(rootRefs) {
-		fmt.Fprintf(color.Output, "DUSTIN: NewGlobalStateStoreForDb: roots does not equal rootRefs\n")
 	}
 
 	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
