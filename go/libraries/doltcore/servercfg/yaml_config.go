@@ -100,8 +100,8 @@ type PerformanceYAMLConfig struct {
 
 type MetricsYAMLConfig struct {
 	Labels map[string]string `yaml:"labels"`
-	Host   *string            `yaml:"host,omitempty"`
-	Port   *int               `yaml:"port,omitempty"`
+	Host   *string           `yaml:"host,omitempty"`
+	Port   *int              `yaml:"port,omitempty"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -139,7 +139,7 @@ type YAMLConfig struct {
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars"`
 	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []JwksConfig          `yaml:"jwks"`
+	Jwks            []JwksConfig           `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
 	ClusterCfg      *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
