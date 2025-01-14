@@ -152,6 +152,10 @@ func makeNewProximityMap(
 	return proximityMap.Node(), nil
 }
 
+// visitNode produces a new tree.Node that incorporates the provided edits to the provided node.
+// As a precondition, we have confirmed that the keys in the provided node will not change, but the
+// keys in children nodes might. If the keys in a child node would change, we call rebuildNode on that child.
+// Otherwise, we recursively called visitNode on the children.
 func (f ProximityFlusher) visitNode(
 	ctx context.Context,
 	serializer message.Serializer,
@@ -163,7 +167,6 @@ func (f ProximityFlusher) visitNode(
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,
 ) (newNode tree.Node, subtrees int, err error) {
-
 	var keys [][]byte
 	var values [][]byte
 	var nodeSubtrees []uint64
