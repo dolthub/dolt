@@ -137,8 +137,8 @@ type YAMLConfig struct {
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
-	Vars            []UserSessionVars      `yaml:"user_session_vars,omitempty"`
-	SystemVars_     map[string]interface{} `yaml:"system_variables" minver:"1.11.1"`
+	Vars            []UserSessionVars      `yaml:"user_session_vars"`
+	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
 	Jwks            []JwksConfig          `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
