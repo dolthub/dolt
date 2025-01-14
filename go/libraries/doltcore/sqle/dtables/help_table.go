@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"strings"
 
@@ -179,11 +178,12 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 			}
 			rows = append(rows, newRows...)
 		} else {
-			nameFormatted := fmt.Sprintf("%s_%s", cmdStr, strings.ReplaceAll(curr.Name(), "-", "_"))
+			fullName := cmdStr + "_" + curr.Name()
+			procedureName := strings.ReplaceAll(fullName, "-", "_")
 
 			hasProcedure := false
 			for _, procedure := range dprocedures.DoltProcedures {
-				if procedure.Name == nameFormatted {
+				if procedure.Name == procedureName {
 					hasProcedure = true
 					break
 				}
@@ -192,11 +192,8 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 			docs := curr.Docs()
 
 			if hasProcedure && docs != nil {
-				optionsUsage := cli.OptionsUsageList(docs.ArgParser)
-
 				argsMap := map[string]string{}
-
-				for _, usage := range optionsUsage {
+				for _, usage := range cli.OptionsUsageList(docs.ArgParser) {
 					argsMap[usage[0]] = usage[1]
 				}
 
@@ -205,12 +202,29 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 					return nil, err
 				}
 
+				synopsis, err := docs.GetSynopsis(cli.CliFormat)
+				if err != nil {
+					return nil, err
+				}
+
+				cliName := strings.ReplaceAll(fullName, "_", " ")
+				for i := range synopsis {
+					synopsis[i] = cliName + " " + synopsis[i]
+				}
+
+				shortDesc := docs.GetShortDesc()
+
+				longDesc, err := docs.GetLongDesc(cli.CliFormat)
+				if err != nil {
+					return nil, err
+				}
+
 				rows = append(rows, sql.NewRow(
-					nameFormatted,
+					procedureName,
 					"procedure",
-					"",
-					curr.Docs().ShortDesc,
-					curr.Docs().LongDesc,
+					strings.Join(synopsis, "\n"),
+					shortDesc,
+					longDesc,
 					argsJson,
 				))
 			}
