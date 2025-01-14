@@ -623,21 +623,31 @@ SQL
 }
 
 @test "system-tables: query dolt_help system table" {
-    run dolt sql -q "select type from dolt_help where target='dolt_rebase'"
+    run dolt sql -q "select type from dolt_help where name='dolt_rebase'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "procedure" ]] || false
 
-    run dolt sql -q "select short_description from dolt_help where target='dolt_commit'"
+    run dolt sql -q "select synopsis from dolt_help where name='dolt_backup'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt backup [-v | --verbose]" ]] || false
+    [[ "$output" =~ "dolt backup restore [--force] <url> <name>" ]] || false
+
+    run dolt sql -q "select short_description from dolt_help where name='dolt_commit'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Record changes to the database" ]] || false
 
-    run dolt sql -q "select long_description from dolt_help where target='dolt_add'"
+    run dolt sql -q "select long_description from dolt_help where name='dolt_add'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "This command updates the list of tables using the current content found in the working root" ]] || false
     [[ "$output" =~ "This command can be performed multiple times before a commit." ]] || false
 
-    run dolt sql -q "select arguments from dolt_help where target='dolt_pull'"
+    run dolt sql -q "select arguments from dolt_help where name='dolt_pull'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "remote".*"The name of the remote to pull from." ]] || false
-    [[ "$output" =~ "remoteBranch".*"The name of a branch on the specified remote to be merged into the current working set." ]] || false
+    [[ "$output" =~ "<remote>".*"The name of the remote to pull from." ]] || false
+    [[ "$output" =~ "<remoteBranch>".*"The name of a branch on the specified remote to be merged into the current working set." ]] || false
+    [[ "$output" =~ "-f, --force".*"Update from the remote HEAD even if there are errors." ]] || false
+
+    run dolt sql -q "select arguments from dolt_help where name='dolt_tag'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-m <msg>, --message=<msg>".*"Use the given <msg> as the tag message." ]] || false
 }
