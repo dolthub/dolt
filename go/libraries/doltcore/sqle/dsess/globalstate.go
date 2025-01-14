@@ -41,14 +41,13 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 	rootRefs = append(rootRefs, branches...)
 	rootRefs = append(rootRefs, remotes...)
 
-	rootRefsChan := make(chan doltdb.Rootish, len(rootRefs))
+	roots := make([]doltdb.Rootish, len(rootRefs))
 	eg, egCtx := errgroup.WithContext(ctx)
-	wg := sync.WaitGroup{}
+	eg.SetLimit(128)
 
-	for _, b := range rootRefs {
-		wg.Add(1)
+	for idx, b := range rootRefs {
+		idx, b := idx, b
 		eg.Go(func() error {
-			defer wg.Done()
 			if egCtx.Err() != nil {
 				return egCtx.Err()
 			}
@@ -67,35 +66,26 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 					if err != nil {
 						return err
 					}
-					rootRefsChan <- cm
+					roots[idx] = cm
 				} else if err != nil {
 					return err
 				} else {
-					rootRefsChan <- ws
+					roots[idx] = ws
 				}
 			case ref.RemoteRefType:
 				cm, err := db.ResolveCommitRef(egCtx, b)
 				if err != nil {
 					return err
 				}
-				rootRefsChan <- cm
+				roots[idx] = cm
 			}
 			return nil
 		})
 	}
 
-	// prevent sending on closed channel
-	wg.Wait()
-	close(rootRefsChan)
-
 	err = eg.Wait()
 	if err != nil {
 		return GlobalStateImpl{}, err
-	}
-
-	var roots []doltdb.Rootish
-	for rootRef := range rootRefsChan {
-		roots = append(roots, rootRef)
 	}
 
 	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
