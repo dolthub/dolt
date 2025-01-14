@@ -99,7 +99,7 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels map[string]string `yaml:"labels,omitempty"`
+	Labels map[string]string `yaml:"labels"`
 	Host   *string            `yaml:"host,omitempty"`
 	Port   *int               `yaml:"port,omitempty"`
 }
@@ -138,8 +138,8 @@ type YAMLConfig struct {
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars      `yaml:"user_session_vars,omitempty"`
-	SystemVars_     map[string]interface{} `yaml:"system_variables,omitempty" minver:"1.11.1"`
-	Jwks            []JwksConfig          `yaml:"jwks,omitempty"`
+	SystemVars_     map[string]interface{} `yaml:"system_variables" minver:"1.11.1"`
+	Jwks            []JwksConfig          `yaml:"jwks"`
 	GoldenMysqlConn *string                `yaml:"golden_mysql_conn,omitempty"`
 	MetricsConfig   MetricsYAMLConfig      `yaml:"metrics,omitempty"`
 	ClusterCfg      *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
@@ -393,11 +393,11 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	if withPlaceholders.ClusterCfg == nil {
 		withPlaceholders.ClusterCfg = &ClusterYAMLConfig{
 			StandbyRemotes_: []StandbyRemoteYAMLConfig{
-				StandbyRemoteYAMLConfig{
+				{
 					Name_:              "standby_replica_one",
 					RemoteURLTemplate_: "https://standby_replica_one.svc.cluster.local:50051/{database}",
 				},
-				StandbyRemoteYAMLConfig{
+				{
 					Name_:              "standby_replica_two",
 					RemoteURLTemplate_: "https://standby_replica_two.svc.cluster.local:50051/{database}",
 				},
@@ -424,7 +424,7 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 
 	if withPlaceholders.Vars == nil {
 		withPlaceholders.Vars = []UserSessionVars{
-			UserSessionVars{
+			{
 				Name: "root",
 				Vars: map[string]interface{}{
 					"dolt_show_system_tables": 1,
@@ -441,7 +441,7 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 		}
 	}
 
-	if withPlaceholders.Jwks == nil {
+	if len(withPlaceholders.Jwks) == 0 {
 		withPlaceholders.Jwks = []JwksConfig{}
 	}
 
