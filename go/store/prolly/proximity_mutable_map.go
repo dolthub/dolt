@@ -85,11 +85,10 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		})
 		key, value = editIter.NextMutation(ctx)
 	}
-	// TODO: Set correct distance type.
 	var newRoot tree.Node
 	var err error
 	root := mutableMap.tuples.Static.Root
-	distanceType := vector.DistanceL2Squared{}
+	distanceType := mutableMap.tuples.Static.DistanceType
 	if root.Count() == 0 {
 		// Original index was empty. We need to make a new index based on the edits.
 		newRoot, err = makeNewProximityMap(ctx, ns, edits, distanceType, keyDesc, valDesc, f.logChunkSize)
