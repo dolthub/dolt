@@ -20,6 +20,7 @@ import (
 )
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
+
 	{
 		Name: "dolt_workspace_* empty table",
 		SetUpScript: []string{
@@ -269,7 +270,6 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		Name: "dolt_workspace_* keyless table",
 		SetUpScript: []string{
@@ -371,6 +371,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 			*/
 		},
 	},
+
 	{
 		Name: "dolt_workspace_* prevent illegal updates",
 		SetUpScript: []string{
@@ -1010,6 +1011,46 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 					{42, 42}, // 42 is unchanged.
 					{43, 86},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_workspace_* schema change partial staging unstaging",
+		SetUpScript: []string{
+			"create table tbl (x int primary key, y int)",
+			"insert into tbl values (42,42)",
+			"insert into tbl values (23,23)",
+			"call dolt_commit('-Am', 'creating table tbl')",
+			"alter table tbl add column why varchar(16)",
+			"update tbl set why = 'fourty two' where x = 42",
+			"update tbl set why = 'twenty three' where x = 23",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_workspace_tbl",
+				Expected: []sql.Row{
+					{0, false, "modified", 23, 23, "twenty three", 23, 23},
+					{1, false, "modified", 42, 42, "fourty two", 42, 42},
+				},
+			},
+			{
+				// TODO: This seems reasonable, but is difficult with current code structure. We'd need to intercept the
+				//       query earlier to determine that the user just wants to reset the table.
+				Query:          "delete from dolt_workspace_tbl",
+				ExpectedErrStr: "dolt_workspace_tbl table is not modifiable due to schema change",
+			},
+			{
+				// TODO: We could support this... see above. This is basically a `dolt add tbl`
+				Query:          "update dolt_workspace_tbl set staged = true",
+				ExpectedErrStr: "dolt_workspace_tbl table is not modifiable due to schema change",
+			},
+			{
+				Query:          "delete from dolt_workspace_tbl where id = 0",
+				ExpectedErrStr: "dolt_workspace_tbl table is not modifiable due to schema change",
+			},
+			{
+				Query:          "update dolt_workspace_tbl set staged = true where id = 0",
+				ExpectedErrStr: "dolt_workspace_tbl table is not modifiable due to schema change",
 			},
 		},
 	},
