@@ -45,12 +45,6 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 	eg, egCtx := errgroup.WithContext(ctx)
 	wg := sync.WaitGroup{}
 
-	//eg.Go(func() error {
-	//	defer close(rootRefsChan)
-	//	wg.Wait()
-	//	return nil
-	//})
-
 	for _, b := range rootRefs {
 		wg.Add(1)
 		eg.Go(func() error {
@@ -90,8 +84,10 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 		})
 	}
 
+	// prevent sending on closed channel
 	wg.Wait()
 	close(rootRefsChan)
+
 	err = eg.Wait()
 	if err != nil {
 		return GlobalStateImpl{}, err
