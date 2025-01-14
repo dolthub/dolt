@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -40,35 +41,51 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 	rootRefs = append(rootRefs, branches...)
 	rootRefs = append(rootRefs, remotes...)
 
-	var roots []doltdb.Rootish
-	for _, b := range rootRefs {
-		switch b.GetType() {
-		case ref.BranchRefType:
-			wsRef, err := ref.WorkingSetRefForHead(b)
-			if err != nil {
-				return GlobalStateImpl{}, err
+	roots := make([]doltdb.Rootish, len(rootRefs))
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+
+	for idx, b := range rootRefs {
+		idx, b := idx, b
+		eg.Go(func() error {
+			if egCtx.Err() != nil {
+				return egCtx.Err()
 			}
 
-			ws, err := db.ResolveWorkingSet(ctx, wsRef)
-			if err == doltdb.ErrWorkingSetNotFound {
-				// use the branch head if there isn't a working set for it
-				cm, err := db.ResolveCommitRef(ctx, b)
+			switch b.GetType() {
+			case ref.BranchRefType:
+				wsRef, err := ref.WorkingSetRefForHead(b)
 				if err != nil {
-					return GlobalStateImpl{}, err
+					return err
 				}
-				roots = append(roots, cm)
-			} else if err != nil {
-				return GlobalStateImpl{}, err
-			} else {
-				roots = append(roots, ws)
+
+				ws, err := db.ResolveWorkingSet(egCtx, wsRef)
+				if err == doltdb.ErrWorkingSetNotFound {
+					// use the branch head if there isn't a working set for it
+					cm, err := db.ResolveCommitRef(egCtx, b)
+					if err != nil {
+						return err
+					}
+					roots[idx] = cm
+				} else if err != nil {
+					return err
+				} else {
+					roots[idx] = ws
+				}
+			case ref.RemoteRefType:
+				cm, err := db.ResolveCommitRef(egCtx, b)
+				if err != nil {
+					return err
+				}
+				roots[idx] = cm
 			}
-		case ref.RemoteRefType:
-			cm, err := db.ResolveCommitRef(ctx, b)
-			if err != nil {
-				return GlobalStateImpl{}, err
-			}
-			roots = append(roots, cm)
-		}
+			return nil
+		})
+	}
+
+	err = eg.Wait()
+	if err != nil {
+		return GlobalStateImpl{}, err
 	}
 
 	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
