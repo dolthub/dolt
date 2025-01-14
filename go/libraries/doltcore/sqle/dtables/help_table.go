@@ -58,7 +58,7 @@ func (ht *HelpTable) String() string {
 func (ht *HelpTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{
-			Name:           "target",
+			Name:           "name",
 			Type:           sqlTypes.TinyText,
 			Source:         ht.tableName,
 			PrimaryKey:     true,
@@ -67,6 +67,13 @@ func (ht *HelpTable) Schema() sql.Schema {
 		{
 			Name:           "type",
 			Type:           sqlTypes.MustCreateEnumType(HelpTableTypes, sql.Collation_Default),
+			Source:         ht.tableName,
+			PrimaryKey:     false,
+			DatabaseSource: ht.dbName,
+		},
+		{
+			Name:           "synopsis",
+			Type:           sqlTypes.LongText,
 			Source:         ht.tableName,
 			PrimaryKey:     false,
 			DatabaseSource: ht.dbName,
@@ -198,6 +205,7 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 				rows = append(rows, sql.NewRow(
 					nameFormatted,
 					"procedure",
+					"",
 					curr.Docs().ShortDesc,
 					curr.Docs().LongDesc,
 					argsJson,
