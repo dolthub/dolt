@@ -82,9 +82,10 @@ func TestScheduleLoop(t *testing.T) {
 		})
 
 		// 4 old + 2*7 new xy
-		require.Equal(t, 18, len(sc.BucketCache))
-		require.Equal(t, 4, len(sc.LowerBoundCache))
-		require.Equal(t, 4, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 18, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.bounds))
+		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
 		require.Equal(t, 7, len(stat[0].Hist))
@@ -95,20 +96,17 @@ func TestScheduleLoop(t *testing.T) {
 	runAndPause(ctx, sc, &wg)
 	runAndPause(ctx, sc, &wg)
 
-	sc.gcInterval = time.Nanosecond
-	sc.JobInterval = time.Hour
+	doGcCycle(t, ctx, sc)
 
-	runAndPause(ctx, sc, &wg)
-
-	require.Equal(t, 14, len(sc.BucketCache))
-	require.Equal(t, 2, len(sc.LowerBoundCache))
-	require.Equal(t, 2, len(sc.TemplateCache))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 14, kv.buckets.Len())
+	require.Equal(t, 2, len(kv.bounds))
+	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats))
 	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
 	require.Equal(t, 2, len(stat))
 	require.Equal(t, 7, len(stat[0].Hist))
 	require.Equal(t, 7, len(stat[1].Hist))
-	require.False(t, sc.doGc.Load())
 }
 
 func TestAnalyze(t *testing.T) {
@@ -146,9 +144,10 @@ func TestAnalyze(t *testing.T) {
 
 	runAndPause(ctx, sc, &wg)
 	validateJobState(t, ctx, sc, []StatsJob{})
-	require.Equal(t, 6, len(sc.BucketCache))
-	require.Equal(t, 4, len(sc.LowerBoundCache))
-	require.Equal(t, 2, len(sc.TemplateCache))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 6, kv.buckets.Len())
+	require.Equal(t, 4, len(kv.bounds))
+	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats))
 	for _, tableStats := range sc.Stats {
 		require.Equal(t, 2, len(tableStats))
@@ -183,9 +182,10 @@ func TestModifyColumn(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		require.Equal(t, 10, len(sc.BucketCache))
-		require.Equal(t, 4, len(sc.LowerBoundCache))
-		require.Equal(t, 4, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 10, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.bounds))
+		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 4, len(stat[0].Hist))
@@ -219,9 +219,10 @@ func TestAddColumn(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		require.Equal(t, 4, len(sc.BucketCache))
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 4, len(sc.TemplateCache)) // +2 for new schema
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 4, len(kv.templates)) // +2 for new schema
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
@@ -254,28 +255,25 @@ func TestDropIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		require.Equal(t, 4, len(sc.BucketCache))
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.True(t, sc.doGc.Load())
 
-		sc.gcInterval = time.Nanosecond
-		sc.JobInterval = time.Hour
+		doGcCycle(t, ctx, sc)
 
-		runAndPause(ctx, sc, &wg)
-
-		require.Equal(t, 2, len(sc.BucketCache))
-		require.Equal(t, 1, len(sc.LowerBoundCache))
-		require.Equal(t, 1, len(sc.TemplateCache))
+		kv = sc.kv.(*memStats)
+		require.Equal(t, 2, kv.buckets.Len())
+		require.Equal(t, 1, len(kv.bounds))
+		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.False(t, sc.doGc.Load())
 	}
 }
 
@@ -308,28 +306,32 @@ func TestDropTable(t *testing.T) {
 
 		runAndPause(ctx, sc, &wg)
 
-		require.Equal(t, 5, len(sc.BucketCache))
-		require.Equal(t, 3, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 3, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.True(t, sc.doGc.Load())
 
-		sc.gcInterval = time.Nanosecond
-		sc.JobInterval = time.Hour
+		doGcCycle(t, ctx, sc)
 
-		runAndPause(ctx, sc, &wg)
+		select {
+		case <-sc.gcDone:
+			break
+		default:
+			require.Fail(t, "failed to finish GC")
+		}
 
-		require.Equal(t, 1, len(sc.BucketCache))
-		require.Equal(t, 1, len(sc.LowerBoundCache))
-		require.Equal(t, 1, len(sc.TemplateCache))
+		kv = sc.kv.(*memStats)
+		require.Equal(t, 1, kv.buckets.Len())
+		require.Equal(t, 1, len(kv.bounds))
+		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.False(t, sc.doGc.Load())
 	}
 }
 
@@ -347,9 +349,10 @@ func TestDeleteAboveBoundary(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // seed
 		runAndPause(ctx, sc, &wg) // finalize
 
-		require.Equal(t, 5, len(sc.BucketCache)) // +1 for new chunk
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache)) // +1 for schema change
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 5, kv.buckets.Len()) // 1 for new chunk
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates)) // +1 for schema change
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
@@ -370,9 +373,11 @@ func TestDeleteBelowBoundary(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // seed
 		runAndPause(ctx, sc, &wg) // finalize
 
-		require.Equal(t, 5, len(sc.BucketCache))     // +1 rewrite partial chunk
-		require.Equal(t, 3, len(sc.LowerBoundCache)) // +1 rewrite first chunk
-		require.Equal(t, 3, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+
+		require.Equal(t, 5, kv.buckets.Len()) // +1 rewrite partial chunk
+		require.Equal(t, 3, len(kv.bounds))   // +1 rewrite first chunk
+		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
@@ -394,9 +399,10 @@ func TestDeleteOnBoundary(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // seed
 		runAndPause(ctx, sc, &wg) // finalize
 
-		require.Equal(t, 4, len(sc.BucketCache))
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache)) // +1 schema change
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates)) // +1 schema change
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
@@ -443,9 +449,10 @@ func TestAddDropDatabases(t *testing.T) {
 		runAndPause(ctx, sc, &wg)
 
 		// xy and t
-		require.Equal(t, 5, len(sc.BucketCache))
-		require.Equal(t, 3, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 3, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "otherdb", branch: "main", table: "t"}]
 		require.Equal(t, 1, len(stat))
@@ -509,14 +516,13 @@ func TestGC(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // pick up table drop
 		runAndPause(ctx, sc, &wg) // finalize
 
-		sc.gcInterval = time.Nanosecond
-		sc.JobInterval = time.Hour
-		runAndPause(ctx, sc, &wg) // GC
+		doGcCycle(t, ctx, sc)
 
 		// test for cleanup
-		require.Equal(t, 5, len(sc.BucketCache))
-		require.Equal(t, 3, len(sc.LowerBoundCache))
-		require.Equal(t, 3, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 3, len(kv.bounds))
+		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
 	}
 }
@@ -526,6 +532,7 @@ func TestBranches(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
+	sc.disableGc.Store(true)
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
 
@@ -583,7 +590,7 @@ func TestBranches(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // pick up table changes
 		runAndPause(ctx, sc, &wg) // finalize
 
-		sc.branchInterval = time.Nanosecond
+		sc.doBranchCheck.Store(true)
 		runAndPause(ctx, sc, &wg) // new branches
 
 		require.Equal(t, 7, len(sc.dbs))
@@ -618,9 +625,10 @@ func TestBranches(t *testing.T) {
 		// mydb: 4 shared
 		// otherdb: 1 + 1
 		// thirddb: 2 + shared
-		require.Equal(t, 4+2+2, len(sc.BucketCache))
-		require.Equal(t, 2+(1+1)+2, len(sc.LowerBoundCache))
-		require.Equal(t, 2+1+(2+1), len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4+2+2, kv.buckets.Len())
+		require.Equal(t, 2+(1+1)+2, len(kv.bounds))
+		require.Equal(t, 2+1+(2+1), len(kv.templates))
 		require.Equal(t, 7-1, len(sc.Stats))
 
 		dropHook := NewStatsDropDatabaseHook2(sc)
@@ -639,8 +647,9 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('-D', 'feat1')"))
 
+		sc.doBranchCheck.Store(true)
 		runAndPause(ctx, sc, &wg) // detect deleted branch
-		runAndPause(ctx, sc, &wg) // process branch delete
+		runAndPause(ctx, sc, &wg) // finalize branch delete
 
 		require.Equal(t, 3, len(sc.dbs))
 		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy"}]
@@ -648,13 +657,13 @@ func TestBranches(t *testing.T) {
 		stat, ok = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.True(t, ok)
 
-		sc.gcInterval = time.Nanosecond
-		runAndPause(ctx, sc, &wg) // GC
+		doGcCycle(t, ctx, sc)
 
 		// 3 dbs remaining, mydb/main, thirddb/feat1, thirddb/main
-		require.Equal(t, 4+2, len(sc.BucketCache))
-		require.Equal(t, 4, len(sc.LowerBoundCache))
-		require.Equal(t, 5, len(sc.TemplateCache))
+		kv = sc.kv.(*memStats)
+		require.Equal(t, 4+2, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.bounds))
+		require.Equal(t, 5, len(kv.templates))
 		require.Equal(t, 3, len(sc.Stats))
 	}
 }
@@ -696,9 +705,13 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 	}
 	require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
-	sc := NewStatsCoord(time.Nanosecond, ctx.GetLogger().Logger, threads)
-
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
+
+	statsKv, err := NewMemStats()
+	require.NoError(t, err)
+	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads)
+	sc.disableGc.Store(true)
+
 	wg := sync.WaitGroup{}
 
 	var sqlDbs []sqle.Database
@@ -751,9 +764,10 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		require.Equal(t, 4, len(sc.BucketCache))
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 2, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 2, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		for _, tableStats := range sc.Stats {
 			require.Equal(t, 2, len(tableStats))
@@ -768,9 +782,10 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		require.Equal(t, 4, len(sc.BucketCache))
-		require.Equal(t, 2, len(sc.LowerBoundCache))
-		require.Equal(t, 2, len(sc.TemplateCache))
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.bounds))
+		require.Equal(t, 2, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		for _, tableStats := range sc.Stats {
 			require.Equal(t, 2, len(tableStats))
@@ -851,6 +866,31 @@ func waitOnJob(wg *sync.WaitGroup, done chan struct{}) {
 			wg.Add(-1)
 		}
 	}()
+}
+
+func doGcCycle(t *testing.T, ctx *sql.Context, sc *StatsCoord) {
+	sc.disableGc.Store(false)
+	sc.doGc.Store(true)
+	defer sc.disableGc.Store(true)
+
+	wg := sync.WaitGroup{}
+	runAndPause(ctx, sc, &wg) // do GC
+	runAndPause(ctx, sc, &wg) // pick up finish GC job
+
+	select {
+	case <-sc.gcDone:
+		break
+	default:
+		require.Fail(t, "failed to finish GC")
+	}
+
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+	require.False(t, sc.doGc.Load())
+	require.False(t, sc.activeGc.Load())
+	if sc.gcCancel != nil {
+		t.Errorf("gc cancel non-nil")
+	}
 }
 
 func runAndPause(ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {

@@ -32,7 +32,9 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 		}
 		offset += uint64(treeCnt)
 
-		if _, ok := sc.BucketCache[n.HashOf()]; ok {
+		if _, ok, err := sc.kv.GetHash(ctx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc())); err != nil {
+			return nil, err
+		} else if ok {
 			// skip redundant work
 			continue
 		}
@@ -52,14 +54,14 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, done: make(chan struct{})})
 	}
 
-	if len(jobs) > 0 {
+	if len(jobs) > 0 || sc.activeGc.Load() {
 		firstNodeHash := levelNodes[0].HashOf()
-		if _, ok := sc.LowerBoundCache[firstNodeHash]; !ok {
+		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
 			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()), prollyMap.KeyDesc().Count())
 			if err != nil {
 				return nil, err
 			}
-			sc.putFirstRow(firstNodeHash, firstRow)
+			sc.kv.PutBound(firstNodeHash, firstRow)
 		}
 	}
 	return jobs, nil

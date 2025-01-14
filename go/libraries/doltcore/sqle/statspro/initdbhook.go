@@ -39,7 +39,7 @@ func NewStatsInitDatabaseHook(
 	) error {
 		dbName := strings.ToLower(db.Name())
 		if statsDb, ok := statsProv.getStatDb(dbName); !ok {
-			statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
+			statsDb, err := statsProv.sf.Init(ctx, db, pro, denv.FS, env.GetCurrentUserHomeDir)
 			if err != nil {
 				ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
 				return nil

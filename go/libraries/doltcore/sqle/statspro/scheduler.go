@@ -18,19 +18,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/sirupsen/logrus"
 	"io"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -261,22 +268,20 @@ func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threa
 	done := make(chan struct{})
 	close(done)
 	return &StatsCoord{
-		dbMu:            &sync.Mutex{},
-		statsMu:         &sync.Mutex{},
-		logger:          logger,
-		Jobs:            make(chan StatsJob, 1024),
-		Done:            done,
-		Interrupts:      make(chan ControlJob),
-		JobInterval:     sleep,
-		gcInterval:      24 * time.Hour,
-		branchInterval:  24 * time.Hour,
-		BucketCache:     make(map[hash.Hash]*stats.Bucket),
-		LowerBoundCache: make(map[hash.Hash]sql.Row),
-		TemplateCache:   make(map[templateCacheKey]stats.Statistic),
-		Stats:           make(map[tableIndexesKey][]*stats.Statistic),
-		Branches:        make(map[string][]ref.DoltRef),
-		threads:         threads,
-		statsKv:         kv,
+		dbMu:           &sync.Mutex{},
+		statsMu:        &sync.Mutex{},
+		logger:         logger,
+		Jobs:           make(chan StatsJob, 1024),
+		Done:           done,
+		Interrupts:     make(chan ControlJob, 1),
+		JobInterval:    sleep,
+		gcInterval:     24 * time.Hour,
+		branchInterval: 24 * time.Hour,
+		capInterval:    1 * time.Minute,
+		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
+		Branches:       make(map[string][]ref.DoltRef),
+		threads:        threads,
+		kv:             kv,
 	}
 }
 
@@ -294,31 +299,39 @@ type StatsCoord struct {
 	logger      *logrus.Logger
 	JobInterval time.Duration
 	threads     *sql.BackgroundThreads
+	pro         *sqle.DoltDatabaseProvider
 
 	dbMu           *sync.Mutex
 	dbs            []sqle.Database
 	branchInterval time.Duration
+	capInterval    time.Duration
 
-	statsKv StatsKv
+	kv StatsKv
+
+	statsEncapsulatingDb string
+	cancelSwitch         context.CancelFunc
+	dialPro              dbfactory.GRPCDialProvider
+	urlPath              string
+	hdp                  env.HomeDirProvider
 
 	readCounter atomic.Int32
-	doGc        atomic.Bool
-	disableGc   atomic.Bool
-	gcInterval  time.Duration
+
+	activeGc   atomic.Bool
+	doGc       atomic.Bool
+	disableGc  atomic.Bool
+	gcInterval time.Duration
+	gcDone     chan struct{}
+	gcMu       sync.Mutex
+	gcCancel   context.CancelFunc
+
+	doBranchCheck atomic.Bool
+	doCapCheck    atomic.Bool
 
 	Jobs       chan StatsJob
 	Interrupts chan ControlJob
 	Done       chan struct{}
 
-	// BucketCache are in-memory stats buckets, always tracked
-	// on disk
-	BucketCache map[hash.Hash]*stats.Bucket
-	// LowerBoundCache saves lower bounds for first buckets
-	LowerBoundCache map[hash.Hash]sql.Row
-	// TemplateCache saves statistic templates based on table
-	// schema + index name
-	TemplateCache map[templateCacheKey]stats.Statistic
-	Branches      map[string][]ref.DoltRef
+	Branches map[string][]ref.DoltRef
 
 	statsMu *sync.Mutex
 	// Stats tracks table statistics accessible to sessions.
@@ -412,12 +425,8 @@ func (sc *StatsCoord) Info() StatsInfo {
 	}
 }
 
-func (sc *StatsCoord) putBucket(h hash.Hash, b *stats.Bucket) {
-	sc.BucketCache[h] = b
-}
-
-func (sc *StatsCoord) putFirstRow(h hash.Hash, r sql.Row) {
-	sc.LowerBoundCache[h] = r
+func (sc *StatsCoord) putBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+	return sc.kv.PutHash(ctx, h, b, tupB)
 }
 
 // event loop must be stopped
@@ -461,6 +470,23 @@ func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan
 	return j.done
 }
 
+func GcSweep(ctx *sql.Context) ControlJob {
+	return NewControl("finish GC", func(sc *StatsCoord) error {
+		sc.gcMu.Lock()
+		defer sc.gcMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		default:
+			sc.kv.FinishGc()
+			sc.activeGc.Store(false)
+			close(sc.gcDone)
+			sc.gcCancel = nil
+			return nil
+		}
+	})
+}
+
 func (sc *StatsCoord) error(j StatsJob, err error) {
 	fmt.Println(err.Error())
 	sc.logger.Debugf("stats error; job detail: %s; verbose: %s", j.String(), err)
@@ -471,8 +497,16 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 	jobTimer := time.NewTimer(0)
 	gcTicker := time.NewTicker(sc.gcInterval)
 	branchTicker := time.NewTicker(sc.branchInterval)
+	capTicker := time.NewTicker(sc.capInterval)
+	var bucketCap int
 
 	for {
+		// sequentially test:
+		// (1) ctx done/thread canceled
+		// (2) GC check
+		// (3) branch check
+		// (4) cap check
+		// (4) job and other tickers
 		select {
 		case <-sc.Done:
 			return nil
@@ -480,6 +514,50 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			return ctx.Err()
 		default:
 		}
+
+		if sc.doGc.Swap(false) {
+			sc.startGcMark(ctx, bucketCap, make(chan struct{}))
+			j := GcSweep(ctx)
+			err := sc.sendJobs(ctx, []StatsJob{j})
+			if err != nil {
+				sc.error(j, err)
+			}
+		}
+
+		if sc.doBranchCheck.Swap(false) {
+			j := ControlJob{desc: "branch update"}
+			newJobs, err := sc.updateBranches(ctx, j)
+			if err != nil {
+				sc.error(ControlJob{desc: "branches update"}, err)
+			}
+			err = sc.sendJobs(ctx, newJobs)
+			if err != nil {
+				sc.error(j, err)
+			}
+		}
+
+		if sc.doCapCheck.Swap(false) {
+			cnt := sc.countBuckets()
+			if cnt > bucketCap {
+				bucketCap = cnt * 2
+				sc.startGcMark(ctx, bucketCap, make(chan struct{}))
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case j, ok := <-sc.Interrupts:
+			if !ok {
+				return nil
+			}
+			if err := j.cb(sc); err != nil {
+				sc.error(j, err)
+				continue
+			}
+		default:
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -487,8 +565,6 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-sc.Done:
-				return nil
 			case j, ok := <-sc.Jobs:
 				if !ok {
 					return nil
@@ -505,32 +581,11 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			default:
 			}
 		case <-gcTicker.C:
-			if sc.doGc.Load() {
-				if err := sc.gc(ctx); err != nil {
-					sc.error(GCJob{}, err)
-				}
-				sc.doGc.Store(false)
-			}
-		case <-sc.Done:
-			return nil
-		case j, ok := <-sc.Interrupts:
-			if !ok {
-				return nil
-			}
-			if err := j.cb(sc); err != nil {
-				sc.error(j, err)
-				continue
-			}
+			sc.setGc()
 		case <-branchTicker.C:
-			j := ControlJob{desc: "branch update"}
-			newJobs, err := sc.updateBranches(ctx, j)
-			if err != nil {
-				sc.error(ControlJob{desc: "branches update"}, err)
-			}
-			err = sc.sendJobs(ctx, newJobs)
-			if err != nil {
-				sc.error(j, err)
-			}
+			sc.doBranchCheck.Store(true)
+		case <-capTicker.C:
+			sc.doCapCheck.Store(true)
 		}
 		jobTimer.Reset(sc.JobInterval)
 	}
@@ -583,6 +638,22 @@ func (sc *StatsCoord) doubleChannelSize(ctx *sql.Context) {
 	}
 	sc.Jobs = ch
 	sc.Restart(ctx)
+}
+
+func (sc *StatsCoord) runOneInterrupt(ctx *sql.Context) error {
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case j, ok := <-sc.Interrupts:
+		if !ok {
+			return nil
+		}
+		if err := j.cb(sc); err != nil {
+			return err
+		}
+	default:
+	}
+	return nil
 }
 
 func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
@@ -665,7 +736,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 
 	schemaChanged := !tableInfo.schHash.Equal(schHashKey.Hash)
 	if schemaChanged {
-		sc.doGc.Store(true)
+		sc.setGc()
 	}
 
 	var dataChanged bool
@@ -694,7 +765,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 
 		idxRoot := prollyMap.Node().HashOf()
 		newIdxRoots = append(newIdxRoots, idxRoot)
-		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged {
+		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
 			continue
 		}
 		dataChanged = true
@@ -794,7 +865,7 @@ func (k templateCacheKey) String() string {
 func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) error {
 	schHash, _, err := sqlTable.IndexCacheKey(ctx)
 	key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-	if _, ok := sc.TemplateCache[key]; ok {
+	if _, ok := sc.kv.GetTemplate(key); ok {
 		return nil
 	}
 	fds, colset, err := stats.IndexFds(sqlTable.Name(), sqlTable.Schema(), sqlIdx)
@@ -823,13 +894,13 @@ func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, 
 		cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 	}
 
-	sc.TemplateCache[key] = stats.Statistic{
+	sc.kv.PutTemplate(key, stats.Statistic{
 		Cols:     nil,
 		Typs:     types,
 		IdxClass: uint8(class),
 		Fds:      fds,
 		Colset:   colset,
-	}
+	})
 	return nil
 }
 
@@ -873,12 +944,15 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		if err != nil {
 			return nil, err
 		}
-		sc.putBucket(n.HashOf(), bucket)
+		err = sc.kv.PutHash(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc()))
+		if err != nil {
+			return nil, err
+		}
 	}
 	return nil, nil
 }
 
-func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJob, error) {
+func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]StatsJob, error) {
 	if len(j.indexes) == 0 {
 		// delete table
 		sc.statsMu.Lock()
@@ -889,23 +963,25 @@ func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJ
 
 	var newStats []*stats.Statistic
 	for key, bucketHashes := range j.indexes {
-		template, ok := sc.TemplateCache[key]
+		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
-			return nil, fmt.Errorf("failed to finalize update, missing template dependency for table: %s", key)
+			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
 		}
 		template.Qual = sql.NewStatQualifier(j.tableKey.db, "", j.tableKey.table, key.idxName)
 
 		for i, bh := range bucketHashes {
 			if i == 0 {
 				var ok bool
-				template.LowerBnd, ok = sc.LowerBoundCache[bh]
+				template.LowerBnd, ok = sc.kv.GetBound(bh)
 				if !ok {
-					return nil, fmt.Errorf("failed to finalize update, missing read job bucket dependency for chunk: %s", bh)
+					return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
 				}
 			}
 			// accumulate counts
-			if b, ok := sc.BucketCache[bh]; !ok {
-				return nil, fmt.Errorf("failed to finalize update, missing read job bucket dependency for chunk: %s", bh)
+			if b, ok, err := sc.kv.GetHash(ctx, bh, nil); err != nil {
+				return nil, err
+			} else if !ok {
+				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
 			} else {
 				template.RowCnt += b.RowCnt
 				template.DistinctCnt += b.DistinctCnt
@@ -926,70 +1002,15 @@ func (sc *StatsCoord) finalizeUpdate(_ context.Context, j FinalizeJob) ([]StatsJ
 
 // delete table, delete index
 func (sc *StatsCoord) gc(ctx *sql.Context) error {
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-
-	newBucketCache := make(map[hash.Hash]*stats.Bucket)
-	newLowerBoundCache := make(map[hash.Hash]sql.Row)
-	newTemplateCache := make(map[templateCacheKey]stats.Statistic)
-
-	for _, sqlDb := range sc.dbs {
-		tableNames, err := sqlDb.GetTableNames(ctx)
-		if err != nil {
-			return err
-		}
-		for _, table := range tableNames {
-			sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
-			if err != nil {
-				return err
-			}
-			indexes, err := sqlTable.GetIndexes(ctx)
-			if err != nil {
-				return err
-			}
-			for _, sqlIdx := range indexes {
-				var idx durable.Index
-				var err error
-				if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
-					idx, err = dTab.GetRowData(ctx)
-				} else {
-					idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
-				}
-				if err != nil {
-					return err
-				}
-
-				schHash, _, err := sqlTable.IndexCacheKey(ctx)
-				key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-				if t, ok := sc.TemplateCache[key]; ok {
-					newTemplateCache[key] = t
-				}
-
-				prollyMap := durable.ProllyMapFromIndex(idx)
-
-				levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-				if err != nil {
-					return err
-				}
-
-				if r, ok := sc.LowerBoundCache[levelNodes[0].HashOf()]; ok {
-					newLowerBoundCache[levelNodes[0].HashOf()] = r
-				}
-				for _, node := range levelNodes {
-					if b, ok := sc.BucketCache[node.HashOf()]; ok {
-						newBucketCache[node.HashOf()] = b
-					}
-				}
-
-			}
-		}
-	}
-
-	sc.BucketCache = newBucketCache
-	sc.TemplateCache = newTemplateCache
-	sc.LowerBoundCache = newLowerBoundCache
-
 	return nil
+	//sc.dbMu.Lock()
+	//newStorage := sc.statsEncapsulatingDb
+	//newKv, err := sc.kv.NewEmpty(ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//sc.dbMu.Unlock()
+	//return sc.gcWithStorageSwap(ctx, newStorage, newKv)
 }
 
 func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, error) {
@@ -1086,4 +1107,245 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 	sc.Branches = newBranches
 	sc.dbs = newDbs
 	return ret, nil
+}
+
+func (sc *StatsCoord) countBuckets() int {
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	var cnt int
+	for _, ss := range sc.Stats {
+		cnt += len(ss)
+	}
+	return cnt
+}
+
+func (sc *StatsCoord) initStorage(ctx *sql.Context, fs filesys.Filesys, defaultBranch string) (StatsKv, error) {
+	// assume access is protected by kvLock
+	// get reference to target database
+	params := make(map[string]interface{})
+	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
+
+	var urlPath string
+	u, err := earl.Parse(sc.urlPath)
+	if u.Scheme == dbfactory.MemScheme {
+		urlPath = path.Join(urlPath, dbfactory.DoltDataDir)
+	} else if u.Scheme == dbfactory.FileScheme {
+		urlPath = doltdb.LocalDirDoltDB
+	}
+
+	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var dEnv *env.DoltEnv
+	exists, isDir := statsFs.Exists("")
+	if !exists {
+		err := statsFs.MkDirs("")
+		if err != nil {
+			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
+		}
+
+		dEnv = env.Load(context.Background(), sc.hdp, statsFs, urlPath, "test")
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), defaultBranch)
+		if err != nil {
+			return nil, err
+		}
+	} else if !isDir {
+		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
+	} else {
+		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "")
+	}
+
+	if dEnv.DoltDB == nil {
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
+		if err != nil {
+			return nil, err
+		}
+
+		dEnv.DoltDB = ddb
+	}
+
+	deaf := dEnv.DbEaFactory()
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{
+		Deaf:    deaf,
+		Tempdir: tmpDir,
+	}
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	if err != nil {
+		return nil, err
+	}
+	return NewProllyStats(ctx, statsDb)
+}
+
+func (sc *StatsCoord) setGc() {
+	if !sc.disableGc.Load() {
+		sc.doGc.Store(true)
+	}
+}
+
+func (sc *StatsCoord) startGcMark(ctx *sql.Context, sz int, done chan struct{}) {
+	sc.doGc.Store(false)
+	if sc.disableGc.Load() {
+		close(done)
+		return
+	}
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+	if sc.activeGc.Swap(true) {
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sc.gcDone:
+				close(done)
+			}
+		}()
+		return
+	}
+
+	subCtx, cancel := context.WithCancel(ctx)
+	sc.gcCancel = cancel
+
+	sc.kv.StartGc(ctx, sz)
+
+	sc.gcDone = make(chan struct{})
+	go func(ctx context.Context) {
+		defer close(done)
+		select {
+		case <-ctx.Done():
+			close(sc.gcDone)
+			return
+		case <-sc.gcDone:
+		}
+	}(subCtx)
+	return
+}
+
+func (sc *StatsCoord) gcWithStorageSwap(ctx *sql.Context, newStorage string, newKv StatsKv) error {
+	// when we delete a database or GC, need to swap backing storage
+
+	// determine placement of new storage
+
+	return nil
+	//sc.dbMu.Lock()
+	//oldKv := sc.kv
+	//toTemplate := make(map[templateCacheKey]stats.Statistic)
+	//toBounds := make(map[hash.Hash]sql.Row)
+	//sc.dbMu.Unlock()
+
+	// execute copy, subject to interruption by concurrent db delete
+
+	//return sc.copyBetweenKv(ctx, newStorage, oldKv, newKv, sc.TemplateCache, toTemplate, sc.LowerBoundCache, toBounds)
+}
+
+func (sc *StatsCoord) copyBetweenKv(ctx *sql.Context, newStorage string, fromKv, toKv StatsKv, fromTemplate, toTemplate map[templateCacheKey]stats.Statistic, fromBound, toBound map[hash.Hash]sql.Row) error {
+	return nil
+	//var cancelCtx context.Context
+	//func() {
+	//	sc.cancelMu.Lock()
+	//	defer sc.cancelMu.Unlock()
+	//
+	//	if sc.cancelSwitch != nil {
+	//		sc.cancelSwitch()
+	//		sc.cancelSwitch = nil
+	//	}
+	//	cancelCtx, sc.cancelSwitch = context.WithCancel(ctx)
+	//}()
+	//
+	//// lock only after canceling conflicting GC
+	//sc.kvSwitchMu.Lock()
+	//defer sc.kvSwitchMu.Unlock()
+	//
+	//i := 0
+	//for {
+	//	var sqlDb sqle.Database
+	//	func() {
+	//		// if a database was dropped the context will be canceled, need to restart
+	//		sc.dbMu.Lock()
+	//		defer sc.dbMu.Unlock()
+	//		select {
+	//		case <-cancelCtx.Done():
+	//		default:
+	//			sqlDb = sc.dbs[i]
+	//		}
+	//	}()
+	//
+	//	select {
+	//	case <-cancelCtx.Done():
+	//		return context.Cause(cancelCtx)
+	//	default:
+	//	}
+	//
+	//	tableNames, err := sqlDb.GetTableNames(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	for _, table := range tableNames {
+	//		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		indexes, err := sqlTable.GetIndexes(ctx)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		for _, sqlIdx := range indexes {
+	//			var idx durable.Index
+	//			var err error
+	//			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
+	//				idx, err = dTab.GetRowData(cancelCtx)
+	//			} else {
+	//				idx, err = dTab.GetIndexRowData(cancelCtx, sqlIdx.ID())
+	//			}
+	//			if err != nil {
+	//				return err
+	//			}
+	//
+	//			schHash, _, err := sqlTable.IndexCacheKey(ctx)
+	//			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
+	//			if t, ok := fromTemplate[key]; ok {
+	//				toTemplate[key] = t
+	//			}
+	//
+	//			prollyMap := durable.ProllyMapFromIndex(idx)
+	//
+	//			levelNodes, err := tree.GetHistogramLevel(cancelCtx, prollyMap.Tuples(), bucketLowCnt)
+	//			if err != nil {
+	//				return err
+	//			}
+	//
+	//			if r, ok := fromBound[levelNodes[0].HashOf()]; ok {
+	//				toBound[levelNodes[0].HashOf()] = r
+	//			}
+	//			kb := val.NewTupleBuilder(prollyMap.KeyDesc())
+	//			for _, node := range levelNodes {
+	//				if b, ok, err := fromKv.Get(cancelCtx, node.HashOf(), kb); err != nil {
+	//					return err
+	//				} else if ok {
+	//					err := toKv.PutHash(cancelCtx, node.HashOf(), b, kb)
+	//					if err != nil {
+	//						return err
+	//					}
+	//				}
+	//			}
+	//
+	//		}
+	//	}
+	//}
+	//
+	//sc.dbMu.Lock()
+	//defer sc.dbMu.Unlock()
+	//sc.statsEncapsulatingDb = newStorage
+	//sc.kv = toKv
+	//sc.TemplateCache = toTemplate
+	//sc.LowerBoundCache = toBound
+	//
+	//return toKv.Flush(ctx)
 }

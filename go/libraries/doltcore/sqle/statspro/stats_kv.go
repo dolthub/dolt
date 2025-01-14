@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"strconv"
 	"strings"
 )
@@ -34,39 +35,124 @@ import (
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
 type StatsKv interface {
-	Put(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
-	Get(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
+	PutHash(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
+	GetHash(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
+	GetTemplate(key templateCacheKey) (stats.Statistic, bool)
+	PutTemplate(key templateCacheKey, stat stats.Statistic)
+	GetBound(h hash.Hash) (sql.Row, bool)
+	PutBound(h hash.Hash, r sql.Row)
 	Flush(ctx context.Context) error
-	NewEmpty(ctx *sql.Context) (StatsKv, error)
+	StartGc(ctx context.Context, sz int) error
+	FinishGc()
 }
 
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
 
-func NewMemStats() *memStats {
-	return &memStats{m: make(map[hash.Hash]*stats.Bucket)}
+func NewMemStats() (*memStats, error) {
+	buckets, err := lru.New[hash.Hash, *stats.Bucket](1000)
+	if err != nil {
+		return nil, err
+	}
+	return &memStats{
+		buckets:   buckets,
+		templates: make(map[templateCacheKey]stats.Statistic),
+		bounds:    make(map[hash.Hash]sql.Row),
+	}, nil
 }
 
 type memStats struct {
-	m map[hash.Hash]*stats.Bucket
+	doGc bool
+
+	buckets     *lru.Cache[hash.Hash, *stats.Bucket]
+	nextBuckets *lru.Cache[hash.Hash, *stats.Bucket]
+
+	templates     map[templateCacheKey]stats.Statistic
+	nextTemplates map[templateCacheKey]stats.Statistic
+
+	bounds     map[hash.Hash]sql.Row
+	nextBounds map[hash.Hash]sql.Row
 }
 
-func (m *memStats) Put(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
-	m.m[h] = b
+func (m *memStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
+	t, ok := m.templates[key]
+	if !ok {
+		return stats.Statistic{}, false
+	}
+	if m.doGc {
+		m.nextTemplates[key] = t
+	}
+	return t, true
+}
+
+func (m *memStats) PutTemplate(key templateCacheKey, stat stats.Statistic) {
+	m.templates[key] = stat
+	if m.doGc {
+		m.nextTemplates[key] = stat
+	}
+}
+
+func (m *memStats) GetBound(h hash.Hash) (sql.Row, bool) {
+	r, ok := m.bounds[h]
+	if !ok {
+		return nil, false
+	}
+	if m.doGc {
+		m.nextBounds[h] = r
+	}
+	return r, true
+}
+
+func (m *memStats) PutBound(h hash.Hash, r sql.Row) {
+	m.bounds[h] = r
+	if m.doGc {
+		m.nextBounds[h] = r
+	}
+}
+
+func (m *memStats) StartGc(ctx context.Context, sz int) error {
+	m.doGc = true
+	if sz == 0 {
+		sz = m.buckets.Len() * 2
+	}
+	var err error
+	m.nextBuckets, err = lru.New[hash.Hash, *stats.Bucket](sz)
+	if err != nil {
+		return err
+	}
+	m.nextBounds = make(map[hash.Hash]sql.Row)
+	m.nextTemplates = make(map[templateCacheKey]stats.Statistic)
 	return nil
 }
 
-func (m *memStats) Get(_ context.Context, h hash.Hash, _ *val.TupleBuilder) (*stats.Bucket, bool, error) {
-	b, ok := m.m[h]
+func (m *memStats) FinishGc() {
+	m.buckets = m.nextBuckets
+	m.templates = m.nextTemplates
+	m.bounds = m.nextBounds
+	m.nextBuckets = nil
+	m.nextTemplates = nil
+	m.nextBounds = nil
+	m.doGc = false
+}
+
+func (m *memStats) PutHash(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
+	m.buckets.Add(h, b)
+	return nil
+}
+
+func (m *memStats) GetHash(_ context.Context, h hash.Hash, _ *val.TupleBuilder) (*stats.Bucket, bool, error) {
+	if h.IsEmpty() {
+		return nil, false, nil
+	}
+	b, ok := m.buckets.Get(h)
+	if m.doGc {
+		m.nextBuckets.Add(h, b)
+	}
 	return b, ok, nil
 }
 
 func (m *memStats) Flush(_ context.Context) error {
 	return nil
-}
-
-func (m *memStats) NewEmpty(ctx *sql.Context) (StatsKv, error) {
-	return &memStats{m: make(map[hash.Hash]*stats.Bucket)}, nil
 }
 
 func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats, error) {
@@ -80,11 +166,17 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 		return nil, err
 	}
 
+	mem, err := NewMemStats()
+	if err != nil {
+		return nil, err
+	}
+
 	return &prollyStats{
 		destDb: destDb,
 		kb:     keyBuilder,
 		vb:     valueBuilder,
 		m:      newMap.Mutate(),
+		mem:    mem,
 	}, nil
 }
 
@@ -92,9 +184,32 @@ type prollyStats struct {
 	destDb dsess.SqlDatabase
 	kb, vb *val.TupleBuilder
 	m      *prolly.MutableMap
+	mem    *memStats
 }
 
-func (p *prollyStats) Put(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+func (p *prollyStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
+	return p.mem.GetTemplate(key)
+}
+
+func (p *prollyStats) PutTemplate(key templateCacheKey, stat stats.Statistic) {
+	p.mem.PutTemplate(key, stat)
+}
+
+func (p *prollyStats) GetBound(h hash.Hash) (sql.Row, bool) {
+	return p.mem.GetBound(h)
+
+}
+
+func (p *prollyStats) PutBound(h hash.Hash, r sql.Row) {
+	p.mem.PutBound(h, r)
+
+}
+
+func (p *prollyStats) PutHash(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+	if err := p.mem.PutHash(ctx, h, b, tupB); err != nil {
+		return err
+	}
+
 	k, err := p.encodeHash(h)
 	if err != nil {
 		return err
@@ -106,14 +221,32 @@ func (p *prollyStats) Put(ctx context.Context, h hash.Hash, b *stats.Bucket, tup
 	return p.m.Put(ctx, k, v)
 }
 
-func (p *prollyStats) Get(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
+func (p *prollyStats) GetHash(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
+	if h.IsEmpty() {
+		return nil, false, nil
+	}
+	b, ok, err := p.mem.GetHash(ctx, h, tupB)
+	if err != nil {
+		return nil, false, err
+	}
+	if ok {
+		if p.mem.doGc {
+			// transfer from old to new
+			err = p.PutHash(ctx, h, b, tupB)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		return b, true, nil
+	}
+
+	// missing bucket and not GC'ing, try disk
 	k, err := p.encodeHash(h)
 	if err != nil {
 		return nil, false, err
 	}
 
 	var v val.Tuple
-	var ok bool
 	err = p.m.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
 		if key != nil {
 			v = value
@@ -126,18 +259,44 @@ func (p *prollyStats) Get(ctx context.Context, h hash.Hash, tupB *val.TupleBuild
 		return nil, false, err
 	}
 
-	b, err := p.decodeBucketTuple(ctx, v, tupB)
+	if tupB == nil {
+		// still function if treating like memStats
+		return nil, true, nil
+	}
+
+	b, err = p.decodeBucketTuple(ctx, v, tupB)
 	if err != nil {
 		return nil, false, err
 	}
+
+	p.mem.PutHash(ctx, h, b, tupB)
 	return b, true, nil
+}
+
+func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
+	if err := p.mem.StartGc(ctx, sz); err != nil {
+		return err
+	}
+
+	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
+	newMap, err := prolly.NewMapFromTuples(ctx, p.destDb.DbData().Ddb.NodeStore(), kd, vd)
+	if err != nil {
+		return err
+	}
+	p.m = newMap.Mutate()
+
+	return nil
+}
+
+func (p *prollyStats) FinishGc() {
+	p.mem.FinishGc()
 }
 
 func (p *prollyStats) encodeHash(h hash.Hash) (val.Tuple, error) {
 	if err := p.kb.PutString(0, h.String()); err != nil {
 		return nil, err
 	}
-	return p.vb.Build(p.m.NodeStore().Pool()), nil
+	return p.kb.Build(p.m.NodeStore().Pool()), nil
 }
 
 func (p *prollyStats) decodeHashTuple(v val.Tuple) (hash.Hash, error) {

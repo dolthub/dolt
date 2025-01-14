@@ -134,19 +134,53 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-	for i := 0; i < len(sc.dbs); i++ {
-		db := sc.dbs[i]
-		if strings.EqualFold(db.AliasedName(), dbName) {
-			sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
-			i--
+	var doSwap bool
+	var newStorageTarget sqle.Database
+
+	func() {
+		sc.gcMu.Lock()
+		defer sc.gcMu.Unlock()
+		if sc.gcCancel != nil {
+			sc.gcCancel()
+			sc.gcCancel = nil
 		}
+	}()
+
+	func() {
+		sc.dbMu.Lock()
+		defer sc.dbMu.Unlock()
+		doSwap = strings.EqualFold(sc.statsEncapsulatingDb, dbName)
+		for i := 0; i < len(sc.dbs); i++ {
+			db := sc.dbs[i]
+			if strings.EqualFold(db.AliasedName(), dbName) {
+				sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
+				i--
+			}
+			if doSwap && newStorageTarget.Name() == "" {
+				newStorageTarget = db
+			}
+		}
+		delete(sc.Branches, dbName)
+	}()
+
+	if doSwap {
+		// synchronously replace?
+		// return early after swap and async the actual writes?
+		fs, err := sc.pro.FileSystemForDatabase(newStorageTarget.AliasedName())
+		if err != nil {
+			return err
+		}
+		newKv, err := sc.initStorage(ctx, fs, newStorageTarget.Revision())
+		if err != nil {
+			return err
+		}
+		err = sc.gcWithStorageSwap(ctx, newStorageTarget.AliasedName(), newKv)
+		if err != nil {
+			return err
+		}
+	} else {
+		sc.setGc()
 	}
-
-	delete(sc.Branches, dbName)
-
-	sc.doGc.Store(true)
 
 	// stats lock is more contentious, do last
 	sc.statsMu.Lock()
