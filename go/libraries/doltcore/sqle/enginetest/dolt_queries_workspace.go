@@ -20,7 +20,6 @@ import (
 )
 
 var DoltWorkspaceScriptTests = []queries.ScriptTest{
-
 	{
 		Name: "dolt_workspace_* empty table",
 		SetUpScript: []string{
