@@ -121,9 +121,8 @@ _main() {
 
     # If DOLT_ROOT_HOST has been specified – create a root user for that host with the specified password
     if [ -n "$DOLT_ROOT_HOST" ] && [ "$DOLT_ROOT_HOST" != 'localhost' ]; then
-       echo "Ensuring root@{$DOLT_ROOT_HOST} superuser exists (DOLT_ROOT_HOST was specified)"
-       dolt -u root -p ${DOLT_ROOT_PASSWORD} sql -q "
-                    CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+       echo "Ensuring root@${DOLT_ROOT_HOST} superuser exists (DOLT_ROOT_HOST was specified)"
+       dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
                     ALTER USER 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
                     GRANT ALL ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
     fi
