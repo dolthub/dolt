@@ -99,8 +99,14 @@ type NomsBlockStore struct {
 	tables   tableSet
 	upstream manifestContents
 
-	cond         *sync.Cond
+	cond *sync.Cond
+	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
+	// When unlocked read operations are occuring against the
+	// block store, and they started when |gcInProgress == true|,
+	// this variable is incremented. EndGC will not return until
+	// no outstanding reads are in progress.
+	gcOutstandingReads int
 	// keeperFunc is set when |gcInProgress| and appends to the GC sweep queue
 	// or blocks on GC finalize
 	keeperFunc func(hash.Hash) bool
@@ -703,7 +709,9 @@ func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
 	}
 }
 
-// Wait for GC to complete to continue with writes
+// Wait for GC to complete to continue with ongoing operations.
+// Called with nbs.mu held. When this function returns with a nil
+// error, gcInProgress will be false.
 func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 	stop := make(chan struct{})
 	defer close(stop)
@@ -1593,9 +1601,34 @@ func (nbs *NomsBlockStore) EndGC() {
 	if !nbs.gcInProgress {
 		panic("EndGC called when gc was not in progress")
 	}
+	for nbs.gcOutstandingReads > 0 {
+		nbs.cond.Wait()
+	}
 	nbs.gcInProgress = false
 	nbs.keeperFunc = nil
 	nbs.cond.Broadcast()
+}
+
+// beginRead() is called with |nbs.mu| held. It signals an ongoing
+// read operation which will be operating against the existing table
+// files without |nbs.mu| held. The read should be bracket with a call
+// to the returned |endRead|, which must be called with |nbs.mu| held
+// if it is non-|nil|, and should not be called otherwise.
+//
+// If there is an ongoing GC operation which this call is made, it is
+// guaranteed not to complete until the corresponding |endRead| call.
+func (nbs *NomsBlockStore) beginRead() (endRead func()) {
+	if nbs.gcInProgress {
+		nbs.gcOutstandingReads += 1
+		return func() {
+			nbs.gcOutstandingReads -= 1
+			if nbs.gcOutstandingReads < 0 {
+				panic("impossible")
+			}
+			nbs.cond.Broadcast()
+		}
+	}
+	return nil
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
