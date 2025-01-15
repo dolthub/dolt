@@ -23,8 +23,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 

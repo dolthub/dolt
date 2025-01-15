@@ -84,7 +84,8 @@ func TestPuller(t *testing.T) {
 
 		statsCh := make(chan Stats)
 		go func() {
-			for _ = range statsCh {}
+			for _ = range statsCh {
+			}
 		}()
 
 		dir := filepath.Join(os.TempDir(), uuid.New().String())
