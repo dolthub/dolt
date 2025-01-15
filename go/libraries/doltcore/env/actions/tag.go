@@ -103,14 +103,11 @@ func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string)
 
 // IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
 func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.Tag) (stop bool, err error)) error {
-	startGetTags := time.Now()
 	tagRefs, err := ddb.GetTags(ctx)
 
 	if err != nil {
-		fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ddb.GetTags: error: elapsed: %v\n", time.Since(startGetTags))
 		return err
 	}
-	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ddb.GetTags: success: elapsed: %v\n", time.Since(startGetTags))
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
@@ -126,17 +123,18 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 
 			tr, ok := r.(ref.TagRef)
 			if !ok {
-				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ref.TagRef conv: error: elapsed: %v\n", time.Since(startResolveTags))
 				return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
 			}
 
+			startResolveTag := time.Now()
 			tag, err := ddb.ResolveTag(egCtx, tr)
 			if err != nil {
-				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: elapsed: %v\n", time.Since(startResolveTags))
+				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: %s: elapsed: %v\n", err.Error(), time.Since(startResolveTag))
 				return err
 			}
 
 			resolved[idx] = tag
+			fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: success: ref: %s elapsed: %v\n", r.String(), time.Since(startResolveTag))
 			return nil
 		})
 	}
@@ -146,19 +144,19 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 		return err
 	}
 
-	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tags: success: elapsed: %v\n", time.Since(startResolveTags))
+	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve all tags: success: elapsed: %v\n", time.Since(startResolveTags))
 
 	// iterate newest to oldest
 	sort.Slice(resolved, func(i, j int) bool {
 		return resolved[i].Meta.Timestamp > resolved[j].Meta.Timestamp
 	})
 
-	startCB := time.Now()
+	//startCB := time.Now()
 	for _, tag := range resolved {
 		stop, err := cb(tag)
 
 		if err != nil {
-			fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: cb: error: elapsed: %v\n", time.Since(startCB))
+			//fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: cb: error: elapsed: %v\n", time.Since(startCB))
 			return err
 		}
 		if stop {
@@ -166,7 +164,7 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 		}
 	}
 
-	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: cb: success: elapsed: %v\n", time.Since(startCB))
+	//fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: cb: success: elapsed: %v\n", time.Since(startCB))
 
 	return nil
 }
