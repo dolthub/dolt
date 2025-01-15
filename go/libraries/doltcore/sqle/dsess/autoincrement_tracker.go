@@ -48,7 +48,6 @@ type AutoIncrementTracker struct {
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
 	lockMode  LockMode
-	init      sync.Once
 	wg        *sync.WaitGroup
 	initErr   error
 }
@@ -65,7 +64,6 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		sequences: &sync.Map{},
 		mm:        mutexmap.NewMutexMap(),
 		wg:        &sync.WaitGroup{},
-		init:      sync.Once{},
 	}
 	ait.runInitWithRootsAsync(ctx, roots...)
 	return &ait, nil
@@ -443,13 +441,11 @@ func (a *AutoIncrementTracker) waitForInit() error {
 }
 
 func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
-	a.init.Do(func() {
-		a.wg.Add(1)
-		go func() {
-			defer a.wg.Done()
-			a.initErr = a.initWithRoots(ctx, roots...)
-		}()
-	})
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		a.initErr = a.initWithRoots(ctx, roots...)
+	}()
 }
 
 func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
