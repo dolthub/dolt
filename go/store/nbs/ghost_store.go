@@ -32,8 +32,9 @@ type GhostBlockStore struct {
 	ghostObjectsFile string
 }
 
-// We use the Has, HasMany, Get, GetMany, and PersistGhostHashes methods from the ChunkStore interface. All other methods are not supported.
-var _ chunks.ChunkStore = &GhostBlockStore{}
+// We use the Has, HasMany, Get, GetMany, GetManyCompressed, and PersistGhostHashes methods from the ChunkStore interface. All other methods are not supported.
+var _ chunks.ChunkStore = (*GhostBlockStore)(nil)
+var _ NBSCompressedChunkStore = (*GenerationalNBS)(nil)
 
 // NewGhostBlockStore returns a new GhostBlockStore instance. Currently the only parameter is the path to the directory
 // where we will create a text file called ghostObjects.txt. This file will contain the hashes of the ghost objects. Creation
@@ -82,6 +83,15 @@ func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	for h := range hashes {
 		if g.skippedRefs.Has(h) {
 			found(ctx, chunks.NewGhostChunk(h))
+		}
+	}
+	return nil
+}
+
+func (g GhostBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	for h := range hashes {
+		if g.skippedRefs.Has(h) {
+			found(ctx, NewGhostCompressedChunk(h))
 		}
 	}
 	return nil
