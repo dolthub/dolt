@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -111,23 +112,40 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 	}
 	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ddb.GetTags: success: elapsed: %v\n", time.Since(startGetTags))
 
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+
 	startResolveTags := time.Now()
-	var resolved []*doltdb.Tag
-	for _, r := range tagRefs {
-		tr, ok := r.(ref.TagRef)
-		if !ok {
-			fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ref.TagRef conv: error: elapsed: %v\n", time.Since(startResolveTags))
-			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
-		}
+	resolved := make([]*doltdb.Tag, len(tagRefs))
+	for idx, r := range tagRefs {
+		idx, r := idx, r
+		eg.Go(func() error {
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
 
-		tag, err := ddb.ResolveTag(ctx, tr)
-		if err != nil {
-			fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: elapsed: %v\n", time.Since(startResolveTags))
-			return err
-		}
+			tr, ok := r.(ref.TagRef)
+			if !ok {
+				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: ref.TagRef conv: error: elapsed: %v\n", time.Since(startResolveTags))
+				return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+			}
 
-		resolved = append(resolved, tag)
+			tag, err := ddb.ResolveTag(egCtx, tr)
+			if err != nil {
+				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: elapsed: %v\n", time.Since(startResolveTags))
+				return err
+			}
+
+			resolved[idx] = tag
+			return nil
+		})
 	}
+
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
 	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tags: success: elapsed: %v\n", time.Since(startResolveTags))
 
 	// iterate newest to oldest
@@ -147,6 +165,7 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 			break
 		}
 	}
+
 	fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: cb: success: elapsed: %v\n", time.Since(startCB))
 
 	return nil
