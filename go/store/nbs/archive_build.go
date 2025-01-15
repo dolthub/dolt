@@ -425,7 +425,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 			return nil, nil, err
 		}
 
-		bytes, err := cs.get(ctx, h, stats)
+		bytes, _, err := cs.get(ctx, h, nil, stats)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -907,7 +907,7 @@ func (csc *simpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *
 		return chk, nil
 	}
 
-	bytes, err := csc.cs.get(ctx, h, stats)
+	bytes, _, err := csc.cs.get(ctx, h, nil, stats)
 	if bytes == nil || err != nil {
 		return nil, err
 	}
@@ -919,7 +919,8 @@ func (csc *simpleChunkSourceCache) get(ctx context.Context, h hash.Hash, stats *
 
 // has returns true if the chunk is in the ChunkSource. This is not related to what is cached, just a helper.
 func (csc *simpleChunkSourceCache) has(h hash.Hash) (bool, error) {
-	return csc.cs.has(h)
+	res, _, err := csc.cs.has(h, nil)
+	return res, err
 }
 
 // addresses get all chunk addresses of the ChunkSource as a hash.HashSet.

@@ -248,7 +248,8 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		if _, err := haver.hasMany(mt.order); err != nil {
+		// TODO: keeperF
+		if _, _, err := haver.hasMany(mt.order, nil); err != nil {
 			return nil, err
 		}
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write

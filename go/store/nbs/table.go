@@ -187,24 +187,41 @@ type extractRecord struct {
 	err  error
 }
 
+// Returned by read methods that take a |keeperFunc|, this lets a
+// caller know whether the operation was successful or if it needs to
+// be retried. It may need to be retried if a GC is in progress but
+// the dependencies indicated by the operation cannot be added to the
+// GC process. In that case, the caller needs to wait until the GC is
+// over and run the entire operation again.
+type gcBehavior bool
+
+const (
+	// Operation was successful, go forward with the result.
+	gcBehavior_Continue gcBehavior = false
+	// Operation needs to block until the GC is over and then retry.
+	gcBehavior_Block               = true
+)
+
+type keeperF func(hash.Hash) bool
+
 type chunkReader interface {
 	// has returns true if a chunk with addr |h| is present.
-	has(h hash.Hash) (bool, error)
+	has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error)
 
 	// hasMany sets hasRecord.has to true for each present hasRecord query, it returns
 	// true if any hasRecord query was not found in this chunkReader.
-	hasMany(addrs []hasRecord) (bool, error)
+	hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error)
 
 	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise.
-	get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error)
+	get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error)
 
 	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.
-	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error)
+	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.
-	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)
@@ -226,7 +243,7 @@ type chunkSource interface {
 	reader(context.Context) (io.ReadCloser, uint64, error)
 
 	// getRecordRanges sets getRecord.found to true, and returns a Range for each present getRecord query.
-	getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error)
+	getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error)
 
 	// index returns the tableIndex of this chunkSource.
 	index() (tableIndex, error)
