@@ -71,6 +71,39 @@ func TestChunkJournalPuller(t *testing.T) {
 	})
 }
 
+func TestPuller(t *testing.T) {
+	t.Run("GhostChunk", func(t *testing.T) {
+		ctx := context.Background()
+		gs, err := nbs.NewGhostBlockStore(t.TempDir())
+		waf, err := types.WalkAddrsForChunkStore(gs)
+		require.NoError(t, err)
+
+		ghost := hash.Parse("e6esqr35dkqnc7updhj6ap5v82sahm9r")
+
+		gs.PersistGhostHashes(ctx, hash.NewHashSet(ghost))
+
+		statsCh := make(chan Stats)
+		go func() {
+			for _ = range statsCh {}
+		}()
+
+		dir := filepath.Join(os.TempDir(), uuid.New().String())
+		err = os.MkdirAll(dir, os.ModePerm)
+		require.NoError(t, err)
+
+		nbf := types.Format_Default.VersionString()
+		q := nbs.NewUnlimitedMemQuotaProvider()
+
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q)
+		require.NoError(t, err)
+
+		plr, err := NewPuller(ctx, t.TempDir(), 128, gs, st, waf, []hash.Hash{ghost}, statsCh)
+		require.NoError(t, err)
+		err = plr.Pull(ctx)
+		require.ErrorIs(t, err, nbs.ErrGhostChunkRequested)
+	})
+}
+
 func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error) {
 	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
 

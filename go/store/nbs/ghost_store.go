@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -147,7 +148,8 @@ func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunk
 }
 
 func (g GhostBlockStore) Version() string {
-	panic("GhostBlockStore does not support Version")
+	// This should never be used, but it makes testing a bit more ergonomic in a few places.
+	return constants.FormatDefaultString
 }
 
 func (g GhostBlockStore) AccessMode() chunks.ExclusiveAccessMode {
