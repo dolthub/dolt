@@ -481,8 +481,8 @@ func (gcs *GenerationalNBS) EndGC() {
 	gcs.newGen.EndGC()
 }
 
-func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.GCFinalizer, error) {
-	return markAndSweepChunks(ctx, hashes, gcs.newGen, gcs, dest, mode)
+func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+	return markAndSweepChunks(ctx, gcs.newGen, gcs, dest, getAddrs, filter, mode)
 }
 
 func (gcs *GenerationalNBS) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {

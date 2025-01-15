@@ -222,6 +222,14 @@ func (hs HashSet) Empty() {
 	}
 }
 
+func (hs HashSet) ToSlice() HashSlice {
+	ret := make(HashSlice, 0, len(hs))
+	for h := range hs {
+		ret = append(ret, h)
+	}
+	return ret
+}
+
 func (hs HashSet) String() string {
 	var sb strings.Builder
 	sb.Grow(len(hs)*34 + 100)
