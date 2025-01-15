@@ -76,12 +76,10 @@ Learn more about Dolt use cases, configuration and guides to use dolt on our [do
 
 # How to use this image
 
-This image is for Dolt SQL Server, which is similar to MySQL Docker Image. Running this image without any arguments 
-is equivalent to running `dolt sql-server --host 0.0.0.0 --port 3306` command locally. The reason for persisted host
-and port is that it allows user to connect to the server inside the container from the local host system through
-port-mapping.
+This image is for Dolt SQL Server, which is similar to the MySQL Docker image. Running this image without any arguments 
+is equivalent to running `dolt sql-server --host 0.0.0.0 --port 3306` command inside a Docker container. 
 
-To check out supported options for `dolt sql-server`, you can run the image with `--help` flag.
+To see all supported options for `dolt sql-server`, you can run the image with `--help` flag.
 
 ```shell
 $ docker run dolthub/dolt-sql-server:latest --help
@@ -89,32 +87,33 @@ $ docker run dolthub/dolt-sql-server:latest --help
 
 ### Connect to the server in the container from the host system
 
-To be able to connect to the server running in the container, we need to set up a port to connect to locally that
-maps to the port in the container. The host is set to `0.0.0.0` for accepting connections to any available network 
-interface.
+From the host system, to connect to a server running in a container, we need to map a port on the host system to the port our sql-server is running on in the container.
 
-```shell
-$ docker run -p 3307:3306 dolthub/dolt-sql-server:latest
+We also need a user account that has permission to connect to the server
+from the host system's address. By default, as of Dolt version 1.46.0, the `root` superuser is configured to only allow connections from localhost. This is a security feature to prevent unauthorized access to the server. If you don't want to log in to the container and then connect to your sql-server, you can use the `DOLT_ROOT_HOST` and `DOLT_ROOT_PASSWORD` environment variables to control how the `root` superuser is initialized. When the Docker container is started, it will ensure the `root` superuser is configured according to those environment variables.
+
+In our example below, we're using `DOLT_ROOT_HOST` to override the host of the `root` superuser account to `%` in order to allow any host to connect to our server and log in as `root`. We're also using `DOLT_ROOT_PASSWORD` to override the default, empty password and specify a password for the `root` account. Setting a password is strongly advised for security when allowing the `root` account to connect from any host.
+
+```bash
+> docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolthub/dolt-sql-server:latest
 ```
 
-Now, you have a running server in the container, and we can connect to it by specifying our host, 3307 for the port, and root for the user, 
-since that's the default user and we didn't provide any configuration when running the server.
+If we run the command above with -d or switch to a separate window we can connect with MySQL:
 
-For example, you can run mysql client to connect to the server like this:
-```shell
-$ mysql --host 0.0.0.0 -P 3307 -u root
+```bash
+> mysql --host 0.0.0.0 -P 3307 -u root -p secret2
 ```
 
 ### Define configuration for the server
 
-You can either define server configuration as commandline arguments, or you can use yaml configuration file.
-For the commandline argument definition you can simply define arguments after whole docker command. 
+You can specify server configuration with commandline arguments, or you can use a YAML configuration file.
+For commandline arguments, you can simply add arguments at the end of the docker command, as shown below. 
 
 ```shell
 $ docker run -p 3307:3306 dolthub/dolt-sql-server:latest -l debug --no-auto-commit
 ```
 
-Or, we can mount a local directory to specific directories in the container.
+To use a configuration file, you can map a local directory to location in the container.
 The special directory for server configuration is `/etc/dolt/servercfg.d/`. You can only have one `.yaml` configuration
 file in this directory. If there are multiple, the default configuration will be used. If the location of
 configuration file was `/Users/jennifer/docker/server/config.yaml`, this is how to use `-v` flag which mounts
@@ -127,7 +126,7 @@ $ docker run -p 3307:3306 -v /Users/jennifer/docker/server/:/etc/dolt/servercfg.
 The Dolt configuration and data directories can be configured similarly: 
 
 - The dolt configuration directory is `/etc/dolt/doltcfg.d/`
-There should be one `.json` dolt configuration file. It will replace the global dolt configuration file in the 
+There should be one `.json` Dolt configuration file. It will replace the global Dolt configuration file in the 
 container.
 
 - We set the location of where data to be stored to default location at `/var/lib/dolt/` in the container. 

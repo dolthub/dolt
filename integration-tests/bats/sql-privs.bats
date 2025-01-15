@@ -53,35 +53,83 @@ teardown() {
     teardown_common
 }
 
-@test "sql-privs: default user is root. create new user destroys default user." {
-    make_test_repo
+# Asserts that the root@localhost superuser is automatically created when a sql-server is started
+# for the first time and no users are defined yet. As additional users are created, the
+# root@localhost superuser remains and can be manually removed without coming back.
+@test "sql-privs: implicit root superuser doesn't disappear after adding users" {
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT &
-    SERVER_PID=$! # will get killed by teardown_common
-    SQL_USER='root'
-    wait_for_connection $PORT 8500
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
 
-    run dolt sql -q "select user from mysql.user order by user"
+    # Assert that the root user can log in and run a query
+    run dolt -u root sql -q "select user, host from mysql.user where user='root';"
     [ $status -eq 0 ]
-    [[ $output =~ "root" ]] || false
+    [[ $output =~ "| root | localhost |" ]] || false
 
-    dolt sql -q "create user new_user"
-    run dolt sql -q "select user from mysql.user order by user"
+    # Create a new user
+    dolt -u root sql -q "CREATE USER user1@localhost; GRANT ALL PRIVILEGES on *.* to user1@localhost;"
+
+    # Restart the SQL server
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that both users are still present
+    run dolt -u root sql -q "select user, host from mysql.user where user in ('root', 'user1');"
     [ $status -eq 0 ]
-    [[ $output =~ "root" ]] || false
-    [[ $output =~ "new_user" ]] || false
+    [[ $output =~ "| root  | localhost |" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
 
-    stop_sql_server
+    # Delete the root user
+    dolt -u root sql -q "DROP USER root@localhost;"
 
-    # restarting server
+    # Restart the SQL server
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user is gone
+    run dolt -u user1 sql -q "select user, host from mysql.user where user in ('root', 'user1');"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
+}
+
+# Asserts that the root superuser host and password can be overridden through the DOLT_ROOT_HOST
+# and DOLT_ROOT_PASSWORD environment variables, analogues to MySQL's MYSQL_ROOT_HOST and
+# MYSQL_ROOT_PASSWORD environment variables. This is primarily provided for use during
+# development when running a Dolt sql-server in a Docker container.
+@test "sql-privs: root superuser honors DOLT_ROOT_HOST and DOLT_ROOT_PASSWORD" {
     PORT=$( definePORT )
-    dolt sql-server --host 0.0.0.0 --port=$PORT &
-    SERVER_PID=$! # will get killed by teardown_common
-    SQL_USER='new_user'
-    wait_for_connection $PORT 8500
+    export DOLT_ROOT_HOST='%'
+    export DOLT_ROOT_PASSWORD='Pass1'
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
 
-    run dolt -u root sql -q "select user from mysql.user order by user"
-    [ $status -ne 0 ]
+    # Assert that the root user can log in with the overridden password and run a query
+    run dolt -u root -p Pass1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "localhost" ]] || false
+    [[ $output =~ "| root | % " ]] || false
+
+    # Restart the SQL server. Changing DOLT_ROOT_HOST and DOLT_ROOT_PASSWORD here is a no-op,
+    # since the root superuser was already initialized the previous time sql-server was started.
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    export DOLT_ROOT_HOST='localhost'
+    export DOLT_ROOT_PASSWORD='donotuse'
+    sleep 1
+
+    # Assert that root is still configured for any host
+    run dolt -u root -p Pass1 sql -q "select user, host from mysql.user where user = 'root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "localhost" ]] || false
+    [[ $output =~ "| root | % " ]] || false
 }
 
 # Asserts that `dolt sql` can always be used to access the database as a superuser. For example, if the root
@@ -95,6 +143,63 @@ teardown() {
     run dolt sql -q "select user();"
     [ $status -eq 0 ]
     [[ $output =~ "root@localhost" ]] || false
+}
+
+# Asserts that creating users via 'dolt sql' before starting a sql-server causes the privileges.db to be
+# initialized and prevents the root superuser from being created, since the customer has already started
+# manually managing user accounts.
+@test "sql-privs: implicit root superuser doesn't get created when users are created before the server starts" {
+    dolt sql -q "CREATE USER user1@localhost; GRANT ALL PRIVILEGES on *.* to user1@localhost;"
+
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root superuser was not automatically created
+    run dolt -u user1 sql -q "select user, host from mysql.user where user in ('root', 'user1');"
+    echo "OUTPUT: $output"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+    [[ $output =~ "| user1 | localhost |" ]] || false
+}
+
+# Asserts that the root@localhost superuser does not get created when a temporary superuser is
+# specified the first time a sql-server is started and privileges.db is initialized.
+@test "sql-privs: implicit root superuser doesn't get created when specifying a temporary superuser" {
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT -u temp1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that there is no root user
+    run dolt -u temp1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
+}
+
+# Asserts that the root@localhost superuser is not created when the --skip-default-root-user flag
+# is specified when first running sql-server and initializing privileges.db.
+@test "sql-privs: implicit root superuser doesn't get created when skipped" {
+    PORT=$( definePORT )
+    dolt sql-server --port $PORT --skip-root-user-initialization &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that the root user cannot log in
+    run dolt -u root sql -q "select user, host from mysql.user where user='root';"
+    [ $status -ne 0 ]
+
+    # Restart the SQL server with a temporary superuser
+    stop_sql_server 1 && sleep 0.5
+    dolt sql-server --port $PORT --u user1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Assert that there is no root user
+    run dolt -u user1 sql -q "select user, host from mysql.user where user='root';"
+    [ $status -eq 0 ]
+    ! [[ $output =~ "root" ]] || false
 }
 
 @test "sql-privs: starting server with empty config works" {
@@ -258,6 +363,7 @@ behavior:
     [[ $output =~ dolt ]] || false
     [[ $output =~ new_user ]] || false
     [[ $output =~ privs_user ]] || false
+    [[ $output =~ __dolt_local_user__ ]] || false
 }
 
 @test "sql-privs: errors instead of panic when reading badly formatted privilege file" {
@@ -276,7 +382,7 @@ behavior:
     start_sql_server test_db
 
     run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -334,7 +440,7 @@ behavior:
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run ls -a db_dir
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
@@ -375,7 +481,7 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -402,8 +508,12 @@ behavior:
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
 
     run ls -a
-    ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
+
+    run ls .doltcfg
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -415,6 +525,7 @@ behavior:
     [ $status -eq 0 ]
     [[ $output =~ dolt ]] || false
     [[ $output =~ new_user ]] || false
+    ! [[ $output =~ root ]] || false
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -428,7 +539,7 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
     run ls -a db_dir
@@ -474,10 +585,10 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
 
     run ls -a db_dir
-    ! [[ "$output" =~ ".doltcfg" ]] || false
+    [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
@@ -518,8 +629,9 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ "privileges.db" ]] || false
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
@@ -549,9 +661,9 @@ behavior:
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
-    ! [[ "$output" =~ "doltcfgdir" ]] || false
+    [[ "$output" =~ "doltcfgdir" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
-    ! [[ "$output" =~ "privs.db" ]] || false
+    [[ "$output" =~ "privs.db" ]] || false
 
     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]

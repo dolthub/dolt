@@ -550,7 +550,7 @@ func makeDestinationSlice(t *testing.T, columnTypes []*gosql.ColumnType) []inter
 func startServerOnEnv(t *testing.T, serverConfig servercfg.ServerConfig, dEnv *env.DoltEnv) (*svcs.Controller, servercfg.ServerConfig) {
 	sc := svcs.NewController()
 	go func() {
-		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
+		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv, false)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
