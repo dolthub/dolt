@@ -71,10 +71,10 @@ func TestChunkJournalPersist(t *testing.T) {
 		assert.NoError(t, err)
 
 		for h, ch := range chunkMap {
-			ok, err := source.has(h)
+			ok, _, err := source.has(h, nil)
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			data, err := source.get(ctx, h, stats)
+			data, _, err := source.get(ctx, h, nil, stats)
 			assert.NoError(t, err)
 			assert.Equal(t, ch.Data(), data)
 		}
@@ -108,11 +108,11 @@ func TestReadRecordRanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int(sz), n)
 
-	ranges, err := jcs.getRecordRanges(ctx, gets)
+	ranges, _, err := jcs.getRecordRanges(ctx, gets, nil)
 	require.NoError(t, err)
 
 	for h, rng := range ranges {
-		b, err := jcs.get(ctx, h, &Stats{})
+		b, _, err := jcs.get(ctx, h, nil, &Stats{})
 		assert.NoError(t, err)
 		ch1 := chunks.NewChunkWithHash(h, b)
 		assert.Equal(t, data[h], ch1)

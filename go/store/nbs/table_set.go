@@ -58,58 +58,62 @@ type tableSet struct {
 	rl              chan struct{}
 }
 
-func (ts tableSet) has(h hash.Hash) (bool, error) {
-	f := func(css chunkSourceSet) (bool, error) {
+func (ts tableSet) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
+	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
-			has, err := haver.has(h)
-
+			has, gcb, err := haver.has(h, keeper)
 			if err != nil {
-				return false, err
+				return false, gcb, err
 			}
-
+			if gcb != gcBehavior_Continue {
+				return false, gcb, nil
+			}
 			if has {
-				return true, nil
+				return true, gcBehavior_Continue, nil
 			}
 		}
-		return false, nil
+		return false, gcBehavior_Continue, nil
 	}
 
-	novelHas, err := f(ts.novel)
-
+	novelHas, gcb, err := f(ts.novel)
 	if err != nil {
-		return false, err
+		return false, gcb, err
 	}
-
+	if gcb != gcBehavior_Continue {
+		return false, gcb, nil
+	}
 	if novelHas {
-		return true, nil
+		return true, gcBehavior_Continue, nil
 	}
 
 	return f(ts.upstream)
 }
 
-func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
-	f := func(css chunkSourceSet) (bool, error) {
+func (ts tableSet) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
-			has, err := haver.hasMany(addrs)
-
+			has, gcb, err := haver.hasMany(addrs, keeper)
 			if err != nil {
-				return false, err
+				return false, gcb, err
 			}
-
+			if gcb != gcBehavior_Continue {
+				return false, gcb, nil
+			}
 			if !has {
-				return false, nil
+				return false, gcBehavior_Continue, nil
 			}
 		}
-		return true, nil
+		return true, gcBehavior_Continue, nil
 	}
-	remaining, err := f(ts.novel)
-
+	remaining, gcb, err := f(ts.novel)
 	if err != nil {
-		return false, err
+		return false, gcb, err
 	}
-
+	if gcb != gcBehavior_Continue {
+		return remaining, gcb, err
+	}
 	if !remaining {
-		return false, nil
+		return false, gcBehavior_Continue, nil
 	}
 
 	return f(ts.upstream)
@@ -124,7 +128,10 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 // consulted. Only used for part of the GC workflow where we want to have
 // access to all chunks in the store but need to check for existing chunk
 // presence in only a subset of its files.
-func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord) (remaining bool, err error) {
+func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+	var remaining bool
+	var err error
+	var gcb gcBehavior
 	for _, rec := range addrs {
 		if !rec.has {
 			remaining = true
@@ -132,7 +139,7 @@ func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord) (remain
 		}
 	}
 	if !remaining {
-		return false, nil
+		return false, gcBehavior_Continue, nil
 	}
 	for _, srcAddr := range srcs {
 		src, ok := ts.novel[srcAddr]
@@ -142,83 +149,114 @@ func (ts tableSet) hasManyInSources(srcs []hash.Hash, addrs []hasRecord) (remain
 				continue
 			}
 		}
-		remaining, err = src.hasMany(addrs)
+		remaining, gcb, err = src.hasMany(addrs, keeper)
 		if err != nil {
-			return false, err
+			return false, gcb, err
+		}
+		if gcb != gcBehavior_Continue {
+			return false, gcb, nil
 		}
 		if !remaining {
 			break
 		}
 	}
-	return remaining, nil
+	return remaining, gcBehavior_Continue, nil
 }
 
-func (ts tableSet) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
+func (ts tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, gcBehavior_Continue, err
 	}
-	f := func(css chunkSourceSet) ([]byte, error) {
+	f := func(css chunkSourceSet) ([]byte, gcBehavior, error) {
 		for _, haver := range css {
-			data, err := haver.get(ctx, h, stats)
-
+			data, gcb, err := haver.get(ctx, h, keeper, stats)
 			if err != nil {
-				return nil, err
+				return nil, gcb, err
 			}
-
+			if gcb != gcBehavior_Continue {
+				return nil, gcb, nil
+			}
 			if data != nil {
-				return data, nil
+				return data, gcBehavior_Continue, nil
 			}
 		}
-
-		return nil, nil
+		return nil, gcBehavior_Continue, nil
 	}
 
-	data, err := f(ts.novel)
-
+	data, gcb, err := f(ts.novel)
 	if err != nil {
-		return nil, err
+		return nil, gcb, err
 	}
-
+	if gcb != gcBehavior_Continue {
+		return nil, gcb, nil
+	}
 	if data != nil {
-		return data, nil
+		return data, gcBehavior_Continue, nil
 	}
 
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (remaining bool, err error) {
-	f := func(css chunkSourceSet) bool {
+func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
-			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
+			remaining, gcb, err := haver.getMany(ctx, eg, reqs, found, keeper, stats)
 			if err != nil {
-				return true
+				return true, gcb, err
+			}
+			if gcb != gcBehavior_Continue {
+				return true, gcb, nil
 			}
 			if !remaining {
-				return false
+				return false, gcb, nil
 			}
 		}
-		return true
+		return true, gcBehavior_Continue, nil
 	}
 
-	return f(ts.novel) && err == nil && f(ts.upstream), err
+	remaining, gcb, err := f(ts.novel)
+	if err != nil {
+		return true, gcb, err
+	}
+	if gcb != gcBehavior_Continue {
+		return true, gcb, nil
+	}
+	if !remaining {
+		return false, gcBehavior_Continue, nil
+	}
+
+	return f(ts.upstream)
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (remaining bool, err error) {
-	f := func(css chunkSourceSet) bool {
+func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
-			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
+			remaining, gcb, err := haver.getManyCompressed(ctx, eg, reqs, found, keeper, stats)
 			if err != nil {
-				return true
+				return true, gcb, err
+			}
+			if gcb != gcBehavior_Continue {
+				return true, gcb, nil
 			}
 			if !remaining {
-				return false
+				return false, gcBehavior_Continue, nil
 			}
 		}
-
-		return true
+		return true, gcBehavior_Continue, nil
 	}
 
-	return f(ts.novel) && err == nil && f(ts.upstream), err
+	remaining, gcb, err := f(ts.novel)
+	if err != nil {
+		return true, gcb, err
+	}
+	if gcb != gcBehavior_Continue {
+		return remaining, gcb, nil
+	}
+	if !remaining {
+		return false, gcBehavior_Continue, nil
+	}
+
+	return f(ts.upstream)
 }
 
 func (ts tableSet) count() (uint32, error) {
@@ -500,11 +538,12 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 	return tableSpecs, nil
 }
 
-func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
+func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64, keeper keeperF) (reads int, split, remaining bool, gcb gcBehavior, err error) {
 	all := copyChunkSourceSet(ts.upstream)
 	for a, cs := range ts.novel {
 		all[a] = cs
 	}
+	gcb = gcBehavior_Continue
 	for _, tbl := range all {
 		rdr, ok := tbl.(*fileTableReader)
 		if !ok {
@@ -514,9 +553,12 @@ func tableSetCalcReads(ts tableSet, reqs []getRecord, blockSize uint64) (reads i
 
 		var n int
 		var more bool
-		n, more, err = rdr.calcReads(reqs, blockSize)
+		n, more, gcb, err = rdr.calcReads(reqs, blockSize, keeper)
 		if err != nil {
-			return 0, false, false, err
+			return 0, false, false, gcb, err
+		}
+		if gcb != gcBehavior_Continue {
+			return 0, false, false, gcb, nil
 		}
 
 		reads += n

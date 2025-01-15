@@ -661,7 +661,7 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 			return err
 		}
 
-		data, err := src.get(ctx, h, nil)
+		data, _, err := src.get(ctx, h, nil, nil)
 		if err != nil {
 			return err
 		}

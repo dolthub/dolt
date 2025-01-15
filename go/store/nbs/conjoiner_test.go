@@ -159,11 +159,11 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				var ok bool
 				for _, act := range actualSrcs {
 					var err error
-					ok, err = act.has(rec.a)
+					ok, _, err = act.has(rec.a, nil)
 					require.NoError(t, err)
 					var buf []byte
 					if ok {
-						buf, err = act.get(ctx, rec.a, stats)
+						buf, _, err = act.get(ctx, rec.a, nil, stats)
 						require.NoError(t, err)
 						assert.Equal(t, rec.data, buf)
 						break

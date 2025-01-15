@@ -97,14 +97,14 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	assertChunksInReader(chunks, mt, assert)
 
 	for _, c := range chunks {
-		data, err := mt.get(context.Background(), computeAddr(c), &Stats{})
+		data, _, err := mt.get(context.Background(), computeAddr(c), nil, &Stats{})
 		require.NoError(t, err)
 		assert.Equal(bytes.Compare(c, data), 0)
 	}
 
 	notPresent := []byte("nope")
-	assert.False(mt.has(computeAddr(notPresent)))
-	assert.Nil(mt.get(context.Background(), computeAddr(notPresent), &Stats{}))
+	assert.False(mt.has(computeAddr(notPresent), nil))
+	assert.Nil(mt.get(context.Background(), computeAddr(notPresent), nil, &Stats{}))
 }
 
 func TestMemTableAddOverflowChunk(t *testing.T) {
@@ -117,9 +117,9 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
 		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
-		assert.True(mt.has(bigAddr))
+		assert.True(mt.has(bigAddr, nil))
 		assert.Equal(mt.addChunk(computeAddr(little), little), chunkNotAdded)
-		assert.False(mt.has(computeAddr(little)))
+		assert.False(mt.has(computeAddr(little), nil))
 	}
 
 	{
@@ -127,12 +127,12 @@ func TestMemTableAddOverflowChunk(t *testing.T) {
 		bigAddr := computeAddr(big)
 		mt := newMemTable(memTableSize)
 		assert.Equal(mt.addChunk(bigAddr, big), chunkAdded)
-		assert.True(mt.has(bigAddr))
+		assert.True(mt.has(bigAddr, nil))
 		assert.Equal(mt.addChunk(computeAddr(little), little), chunkAdded)
-		assert.True(mt.has(computeAddr(little)))
+		assert.True(mt.has(computeAddr(little), nil))
 		other := []byte("o")
 		assert.Equal(mt.addChunk(computeAddr(other), other), chunkNotAdded)
-		assert.False(mt.has(computeAddr(other)))
+		assert.False(mt.has(computeAddr(other), nil))
 	}
 }
 
@@ -158,7 +158,7 @@ func TestMemTableWrite(t *testing.T) {
 	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	require.NoError(t, err)
 	defer tr1.close()
-	assert.True(tr1.has(computeAddr(chunks[1])))
+	assert.True(tr1.has(computeAddr(chunks[1]), nil))
 
 	td2, _, err := buildTable(chunks[2:])
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestMemTableWrite(t *testing.T) {
 	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	require.NoError(t, err)
 	defer tr2.close()
-	assert.True(tr2.has(computeAddr(chunks[2])))
+	assert.True(tr2.has(computeAddr(chunks[2]), nil))
 
 	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	require.NoError(t, err)
@@ -178,9 +178,9 @@ func TestMemTableWrite(t *testing.T) {
 	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)
 	defer outReader.close()
-	assert.True(outReader.has(computeAddr(chunks[0])))
-	assert.False(outReader.has(computeAddr(chunks[1])))
-	assert.False(outReader.has(computeAddr(chunks[2])))
+	assert.True(outReader.has(computeAddr(chunks[0]), nil))
+	assert.False(outReader.has(computeAddr(chunks[1]), nil))
+	assert.False(outReader.has(computeAddr(chunks[2]), nil))
 }
 
 type tableReaderAtAdapter struct {
@@ -244,72 +244,82 @@ func (o *outOfLineSnappy) Encode(dst, src []byte) []byte {
 
 type chunkReaderGroup []chunkReader
 
-func (crg chunkReaderGroup) has(h hash.Hash) (bool, error) {
+func (crg chunkReaderGroup) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	for _, haver := range crg {
-		ok, err := haver.has(h)
-
+		ok, gcb, err := haver.has(h, keeper)
 		if err != nil {
-			return false, err
+			return false, gcb, err
+		}
+		if gcb != gcBehavior_Continue {
+			return true, gcb, nil
 		}
 		if ok {
-			return true, nil
+			return true, gcb, nil
 		}
 	}
-
-	return false, nil
+	return false, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
+func (crg chunkReaderGroup) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
 	for _, haver := range crg {
-		if data, err := haver.get(ctx, h, stats); err != nil {
-			return nil, err
+		if data, gcb, err := haver.get(ctx, h, keeper, stats); err != nil {
+			return nil, gcb, err
+		} else if gcb != gcBehavior_Continue {
+			return nil, gcb, nil
 		} else if data != nil {
-			return data, nil
+			return data, gcb, nil
 		}
 	}
 
-	return nil, nil
+	return nil, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
+func (crg chunkReaderGroup) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	for _, haver := range crg {
-		remaining, err := haver.hasMany(addrs)
-
+		remaining, gcb, err := haver.hasMany(addrs, keeper)
 		if err != nil {
-			return false, err
+			return false, gcb, err
 		}
-
+		if gcb != gcBehavior_Continue {
+			return false, gcb, nil
+		}
 		if !remaining {
-			return false, nil
+			return false, gcb, nil
 		}
 	}
-	return true, nil
+	return true, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	for _, haver := range crg {
-		remaining, err := haver.getMany(ctx, eg, reqs, found, stats)
+		remaining, gcb, err := haver.getMany(ctx, eg, reqs, found, keeper, stats)
 		if err != nil {
-			return true, err
+			return true, gcb, err
+		}
+		if gcb != gcBehavior_Continue {
+			return true, gcb, nil
 		}
 		if !remaining {
-			return false, nil
+			return false, gcb, nil
 		}
 	}
-	return true, nil
+	return true, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	for _, haver := range crg {
-		remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
+		remaining, gcb, err := haver.getManyCompressed(ctx, eg, reqs, found, keeper, stats)
 		if err != nil {
-			return true, err
+			return true, gcb, err
+		}
+		if gcb != gcBehavior_Continue {
+			return true, gcb, nil
 		}
 		if !remaining {
-			return false, nil
+			return false, gcb, nil
 		}
 	}
-	return true, nil
+	return true, gcBehavior_Continue, nil
 }
 
 func (crg chunkReaderGroup) count() (count uint32, err error) {

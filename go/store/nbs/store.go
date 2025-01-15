@@ -163,7 +163,8 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 
 	fn := func(css chunkSourceSet) error {
 		for _, cs := range css {
-			rng, err := cs.getRecordRanges(ctx, gr)
+			// TODO: keeperF
+			rng, _, err := cs.getRecordRanges(ctx, gr, nil)
 			if err != nil {
 				return err
 			}
@@ -859,7 +860,8 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
 			var err error
-			data, err = nbs.mt.get(ctx, h, nbs.stats)
+			// TODO: keeperF
+			data, _, err = nbs.mt.get(ctx, h, nil, nbs.stats)
 
 			if err != nil {
 				return nil, nil, err
@@ -876,7 +878,8 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		return chunks.NewChunkWithHash(h, data), nil
 	}
 
-	data, err = tables.get(ctx, h, nbs.stats)
+	// TODO: keeperF
+	data, _, err = tables.get(ctx, h, nil, nbs.stats)
 
 	if err != nil {
 		return chunks.EmptyChunk, err
@@ -893,7 +896,9 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
-		return cr.getMany(ctx, eg, reqs, found, nbs.stats)
+		// TODO: keeperF
+		res, _, err := cr.getMany(ctx, eg, reqs, found, nil, nbs.stats)
+		return res, err
 	})
 }
 
@@ -901,7 +906,9 @@ func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
-		return cr.getManyCompressed(ctx, eg, reqs, found, nbs.stats)
+		// TODO: keeperF
+		res, _, err := cr.getManyCompressed(ctx, eg, reqs, found, nil, nbs.stats)
+		return res, err
 	})
 }
 
@@ -1005,7 +1012,8 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		defer nbs.mu.RUnlock()
 
 		if nbs.mt != nil {
-			has, err := nbs.mt.has(h)
+			// TODO: keeperF
+			has, _, err := nbs.mt.has(h, nil)
 
 			if err != nil {
 				return false, nil, err
@@ -1022,7 +1030,8 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	}
 
 	if !has {
-		has, err = tables.has(h)
+		// TODO: keeperF
+		has, _, err = tables.has(h, nil)
 
 		if err != nil {
 			return false, err
@@ -1060,7 +1069,8 @@ func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSe
 
 	records := toHasRecords(hashes)
 
-	_, err := nbs.tables.hasManyInSources(srcs, records)
+	// TODO: keeperF
+	_, _, err := nbs.tables.hasManyInSources(srcs, records, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1080,7 +1090,8 @@ func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 
 		remaining = true
 		if nbs.mt != nil {
-			remaining, err = nbs.mt.hasMany(reqs)
+			// TODO: keeperF
+			remaining, _, err = nbs.mt.hasMany(reqs, nil)
 
 			if err != nil {
 				return nil, false, err
@@ -1095,7 +1106,8 @@ func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 	}
 
 	if remaining {
-		_, err := tables.hasMany(reqs)
+		// TODO: keeperF
+		_, _, err := tables.hasMany(reqs, nil)
 
 		if err != nil {
 			return nil, err
@@ -1957,7 +1969,7 @@ func (nbs *NomsBlockStore) setRootChunk(ctx context.Context, root, previous hash
 }
 
 // CalcReads computes the number of IO operations necessary to fetch |hashes|.
-func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
+func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keeper keeperF) (int, bool, gcBehavior, error) {
 	reqs := toGetRecords(hashes)
 	tables := func() (tables tableSet) {
 		nbs.mu.RLock()
@@ -1967,15 +1979,17 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64) (read
 		return
 	}()
 
-	reads, split, remaining, err := tableSetCalcReads(tables, reqs, blockSize)
-
+	reads, split, remaining, gcb, err := tableSetCalcReads(tables, reqs, blockSize, keeper)
 	if err != nil {
-		return 0, false, err
+		return 0, false, gcb, err
+	}
+	if gcb != gcBehavior_Continue {
+		return 0, false, gcb, nil
 	}
 
 	if remaining {
-		return 0, false, errors.New("failed to find all chunks")
+		return 0, false, gcBehavior_Continue, errors.New("failed to find all chunks")
 	}
 
-	return
+	return reads, split, gcb, err
 }
