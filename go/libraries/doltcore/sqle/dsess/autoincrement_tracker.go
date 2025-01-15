@@ -48,6 +48,9 @@ type AutoIncrementTracker struct {
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
 	lockMode  LockMode
+	init      sync.Once
+	wg        *sync.WaitGroup
+	initErr   error
 }
 
 var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}
@@ -61,8 +64,10 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		dbName:    dbName,
 		sequences: &sync.Map{},
 		mm:        mutexmap.NewMutexMap(),
+		wg:        &sync.WaitGroup{},
+		init:      sync.Once{},
 	}
-	ait.InitWithRoots(ctx, roots...)
+	ait.runInitWithRootsAsync(ctx, roots...)
 	return &ait, nil
 }
 
@@ -76,13 +81,22 @@ func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
 }
 
 // Current returns the next value to be generated in the auto increment sequence for the table named
-func (a *AutoIncrementTracker) Current(tableName string) uint64 {
-	return loadAutoIncValue(a.sequences, tableName)
+func (a *AutoIncrementTracker) Current(tableName string) (uint64, error) {
+	err := a.waitForInit()
+	if err != nil {
+		return 0, err
+	}
+	return loadAutoIncValue(a.sequences, tableName), nil
 }
 
 // Next returns the next auto increment value for the table named using the provided value from an insert (which may
 // be null or 0, in which case it will be generated from the sequence).
 func (a *AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
+	err := a.waitForInit()
+	if err != nil {
+		return 0, err
+	}
+
 	tbl = strings.ToLower(tbl)
 
 	given, err := CoerceAutoIncrementValue(insertVal)
@@ -113,6 +127,10 @@ func (a *AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, 
 }
 
 func (a *AutoIncrementTracker) CoerceAutoIncrementValue(val interface{}) (uint64, error) {
+	err := a.waitForInit()
+	if err != nil {
+		return 0, err
+	}
 	return CoerceAutoIncrementValue(val)
 }
 
@@ -140,6 +158,11 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 // table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
 // maximum value for this table across all branches.
 func (a *AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error) {
+	err := a.waitForInit()
+	if err != nil {
+		return nil, err
+	}
+
 	tableName = strings.ToLower(tableName)
 
 	release := a.mm.Lock(tableName)
@@ -338,16 +361,27 @@ func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, err
 }
 
 // AddNewTable initializes a new table with an auto increment column to the tracker, as necessary
-func (a *AutoIncrementTracker) AddNewTable(tableName string) {
+func (a *AutoIncrementTracker) AddNewTable(tableName string) error {
+	err := a.waitForInit()
+	if err != nil {
+		return err
+	}
+
 	tableName = strings.ToLower(tableName)
 	// only initialize the sequence for this table if no other branch has such a table
 	a.sequences.LoadOrStore(tableName, uint64(1))
+	return nil
 }
 
 // DropTable drops the table with the name given.
 // To establish the new auto increment value, callers must also pass all other working sets in scope that may include
 // a table with the same name, omitting the working set that just deleted the table named.
 func (a *AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error {
+	err := a.waitForInit()
+	if err != nil {
+		return err
+	}
+
 	tableName = strings.ToLower(tableName)
 
 	release := a.mm.Lock(tableName)
@@ -389,6 +423,11 @@ func (a *AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wse
 }
 
 func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName string) (func(), error) {
+	err := a.waitForInit()
+	if err != nil {
+		return nil, err
+	}
+
 	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
 	lockMode := LockMode(i.(int64))
 	if lockMode == LockMode_Interleaved {
@@ -398,7 +437,22 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 	return a.mm.Lock(tableName), nil
 }
 
-func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+func (a *AutoIncrementTracker) waitForInit() error {
+	a.wg.Wait()
+	return a.initErr
+}
+
+func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
+	a.init.Do(func() {
+		a.wg.Add(1)
+		go func() {
+			defer a.wg.Done()
+			a.initErr = a.initWithRoots(ctx, roots...)
+		}()
+	})
+}
+
+func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 
@@ -434,4 +488,9 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 	}
 
 	return eg.Wait()
+}
+
+func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	a.runInitWithRootsAsync(ctx, roots...)
+	return a.waitForInit()
 }
