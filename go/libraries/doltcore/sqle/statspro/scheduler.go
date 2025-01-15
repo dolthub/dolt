@@ -90,9 +90,10 @@ func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
 }
 
 type tableStatsInfo struct {
-	name     string
-	schHash  hash.Hash
-	idxRoots []hash.Hash
+	name        string
+	schHash     hash.Hash
+	idxRoots    []hash.Hash
+	bucketCount int
 }
 
 type SeedDbTablesJob struct {
@@ -278,6 +279,7 @@ func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threa
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		capInterval:    1 * time.Minute,
+		bucketCap:      defaultBucketSize,
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
 		threads:        threads,
@@ -326,6 +328,8 @@ type StatsCoord struct {
 
 	doBranchCheck atomic.Bool
 	doCapCheck    atomic.Bool
+	bucketCnt     atomic.Uint64
+	bucketCap     uint64
 
 	Jobs       chan StatsJob
 	Interrupts chan ControlJob
@@ -426,7 +430,7 @@ func (sc *StatsCoord) Info() StatsInfo {
 }
 
 func (sc *StatsCoord) putBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
-	return sc.kv.PutHash(ctx, h, b, tupB)
+	return sc.kv.PutBucket(ctx, h, b, tupB)
 }
 
 // event loop must be stopped
@@ -498,7 +502,6 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 	gcTicker := time.NewTicker(sc.gcInterval)
 	branchTicker := time.NewTicker(sc.branchInterval)
 	capTicker := time.NewTicker(sc.capInterval)
-	var bucketCap int
 
 	for {
 		// sequentially test:
@@ -516,11 +519,10 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		}
 
 		if sc.doGc.Swap(false) {
-			sc.startGcMark(ctx, bucketCap, make(chan struct{}))
-			j := GcSweep(ctx)
-			err := sc.sendJobs(ctx, []StatsJob{j})
+			j := sc.startGcMark(ctx, make(chan struct{}))
+			err := sc.sendJobs(ctx, j)
 			if err != nil {
-				sc.error(j, err)
+				sc.error(j[0], err)
 			}
 		}
 
@@ -533,14 +535,6 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			err = sc.sendJobs(ctx, newJobs)
 			if err != nil {
 				sc.error(j, err)
-			}
-		}
-
-		if sc.doCapCheck.Swap(false) {
-			cnt := sc.countBuckets()
-			if cnt > bucketCap {
-				bucketCap = cnt * 2
-				sc.startGcMark(ctx, bucketCap, make(chan struct{}))
 			}
 		}
 
@@ -631,13 +625,22 @@ func (sc *StatsCoord) executeJob(ctx *sql.Context, j StatsJob) ([]StatsJob, erro
 }
 
 func (sc *StatsCoord) doubleChannelSize(ctx *sql.Context) {
-	sc.Stop()
+	var restart bool
+	select {
+	case <-sc.Done:
+	default:
+		sc.Stop()
+		restart = true
+	}
+	close(sc.Jobs)
 	ch := make(chan StatsJob, cap(sc.Jobs)*2)
 	for j := range sc.Jobs {
 		ch <- j
 	}
 	sc.Jobs = ch
-	sc.Restart(ctx)
+	if restart {
+		sc.Restart(ctx)
+	}
 }
 
 func (sc *StatsCoord) runOneInterrupt(ctx *sql.Context) error {
@@ -656,7 +659,7 @@ func (sc *StatsCoord) runOneInterrupt(ctx *sql.Context) error {
 	return nil
 }
 
-func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
+func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
 	// get list of tables, get list of indexes, partition index ranges into ordinal blocks
 	// return list of IO jobs for table/index/ordinal blocks
 	tableNames, err := j.sqlDb.GetTableNames(j.ctx)
@@ -670,6 +673,8 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	var newTableInfo []tableStatsInfo
 	var ret []StatsJob
 
+	var bucketDiff int
+
 	i := 0
 	k := 0
 	for i < len(tableNames) && k < len(j.tables) {
@@ -679,15 +684,18 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 		case 0:
 			// continue
 			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, j.tables[k])
+			bucketDiff += ti.bucketCount - j.tables[k].bucketCount
 			i++
 			k++
 		case -1:
 			// new table
 			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableNames[i]})
+			bucketDiff += ti.bucketCount
 			i++
 		case +1:
 			// dropped table
 			jobs = append(jobs, sc.dropTableJob(j.sqlDb, j.tables[k].name))
+			bucketDiff -= j.tables[k].bucketCount
 			k++
 		}
 		if err != nil {
@@ -703,6 +711,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 		if err != nil {
 			return nil, err
 		}
+		bucketDiff += ti.bucketCount
 		newTableInfo = append(newTableInfo, ti)
 		ret = append(ret, jobs...)
 		i++
@@ -710,7 +719,14 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 
 	for k < len(j.tables) {
 		ret = append(ret, sc.dropTableJob(j.sqlDb, j.tables[k].name))
+		bucketDiff -= j.tables[k].bucketCount
 		k++
+	}
+
+	sc.bucketCnt.Add(uint64(bucketDiff))
+	for sc.bucketCnt.Load() > sc.bucketCap {
+		sc.bucketCap *= 2
+		sc.doGc.Store(true)
 	}
 
 	// retry again after finishing planned work
@@ -720,6 +736,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 
 func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, tableInfo tableStatsInfo) ([]StatsJob, tableStatsInfo, error) {
 	var ret []StatsJob
+	var bucketCnt int
 	sqlTable, dTab, err := GetLatestTable(ctx, tableInfo.name, sqlDb)
 	if err != nil {
 		return nil, tableStatsInfo{}, err
@@ -765,15 +782,18 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 
 		idxRoot := prollyMap.Node().HashOf()
 		newIdxRoots = append(newIdxRoots, idxRoot)
-		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
-			continue
-		}
-		dataChanged = true
 
 		levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 		if err != nil {
 			return nil, tableStatsInfo{}, err
 		}
+
+		bucketCnt += len(levelNodes)
+
+		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
+			continue
+		}
+		dataChanged = true
 
 		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
 		for _, n := range levelNodes {
@@ -800,7 +820,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 		})
 	}
 
-	return ret, tableStatsInfo{name: tableInfo.name, schHash: schHashKey.Hash, idxRoots: newIdxRoots}, nil
+	return ret, tableStatsInfo{name: tableInfo.name, schHash: schHashKey.Hash, idxRoots: newIdxRoots, bucketCount: bucketCnt}, nil
 }
 
 func (sc *StatsCoord) dropTableJob(sqlDb sqle.Database, tableName string) StatsJob {
@@ -944,7 +964,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		if err != nil {
 			return nil, err
 		}
-		err = sc.kv.PutHash(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc()))
+		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc()))
 		if err != nil {
 			return nil, err
 		}
@@ -978,7 +998,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 				}
 			}
 			// accumulate counts
-			if b, ok, err := sc.kv.GetHash(ctx, bh, nil); err != nil {
+			if b, ok, err := sc.kv.GetBucket(ctx, bh, nil); err != nil {
 				return nil, err
 			} else if !ok {
 				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
@@ -1190,11 +1210,11 @@ func (sc *StatsCoord) setGc() {
 	}
 }
 
-func (sc *StatsCoord) startGcMark(ctx *sql.Context, sz int, done chan struct{}) {
+func (sc *StatsCoord) startGcMark(ctx *sql.Context, done chan struct{}) []StatsJob {
 	sc.doGc.Store(false)
 	if sc.disableGc.Load() {
 		close(done)
-		return
+		return nil
 	}
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()
@@ -1207,13 +1227,13 @@ func (sc *StatsCoord) startGcMark(ctx *sql.Context, sz int, done chan struct{}) 
 				close(done)
 			}
 		}()
-		return
+		return nil
 	}
 
 	subCtx, cancel := context.WithCancel(ctx)
 	sc.gcCancel = cancel
 
-	sc.kv.StartGc(ctx, sz)
+	sc.kv.StartGc(ctx, int(sc.bucketCap))
 
 	sc.gcDone = make(chan struct{})
 	go func(ctx context.Context) {
@@ -1225,7 +1245,7 @@ func (sc *StatsCoord) startGcMark(ctx *sql.Context, sz int, done chan struct{}) 
 		case <-sc.gcDone:
 		}
 	}(subCtx)
-	return
+	return []StatsJob{GcSweep(ctx)}
 }
 
 func (sc *StatsCoord) gcWithStorageSwap(ctx *sql.Context, newStorage string, newKv StatsKv) error {

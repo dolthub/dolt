@@ -32,7 +32,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 		}
 		offset += uint64(treeCnt)
 
-		if _, ok, err := sc.kv.GetHash(ctx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc())); err != nil {
+		if _, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc())); err != nil {
 			return nil, err
 		} else if ok {
 			// skip redundant work

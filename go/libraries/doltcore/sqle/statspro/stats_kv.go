@@ -34,9 +34,11 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
+const defaultBucketSize = 1024
+
 type StatsKv interface {
-	PutHash(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
-	GetHash(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
+	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
+	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
 	GetTemplate(key templateCacheKey) (stats.Statistic, bool)
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash) (sql.Row, bool)
@@ -49,8 +51,8 @@ type StatsKv interface {
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
 
-func NewMemStats() (*memStats, error) {
-	buckets, err := lru.New[hash.Hash, *stats.Bucket](1000)
+func NewMemStats(size int) (*memStats, error) {
+	buckets, err := lru.New[hash.Hash, *stats.Bucket](size)
 	if err != nil {
 		return nil, err
 	}
@@ -135,17 +137,27 @@ func (m *memStats) FinishGc() {
 	m.doGc = false
 }
 
-func (m *memStats) PutHash(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
-	m.buckets.Add(h, b)
+func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
+	if m.doGc {
+		m.nextBuckets.Add(h, b)
+	} else {
+		m.buckets.Add(h, b)
+	}
 	return nil
 }
 
-func (m *memStats) GetHash(_ context.Context, h hash.Hash, _ *val.TupleBuilder) (*stats.Bucket, bool, error) {
+func (m *memStats) GetBucket(_ context.Context, h hash.Hash, _ *val.TupleBuilder) (*stats.Bucket, bool, error) {
 	if h.IsEmpty() {
 		return nil, false, nil
 	}
 	b, ok := m.buckets.Get(h)
 	if m.doGc {
+		if !ok {
+			b, ok = m.nextBuckets.Get(h)
+			if ok {
+				return b, true, nil
+			}
+		}
 		m.nextBuckets.Add(h, b)
 	}
 	return b, ok, nil
@@ -166,7 +178,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 		return nil, err
 	}
 
-	mem, err := NewMemStats()
+	mem, err := NewMemStats(defaultBucketSize)
 	if err != nil {
 		return nil, err
 	}
@@ -205,8 +217,8 @@ func (p *prollyStats) PutBound(h hash.Hash, r sql.Row) {
 
 }
 
-func (p *prollyStats) PutHash(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
-	if err := p.mem.PutHash(ctx, h, b, tupB); err != nil {
+func (p *prollyStats) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+	if err := p.mem.PutBucket(ctx, h, b, tupB); err != nil {
 		return err
 	}
 
@@ -221,18 +233,18 @@ func (p *prollyStats) PutHash(ctx context.Context, h hash.Hash, b *stats.Bucket,
 	return p.m.Put(ctx, k, v)
 }
 
-func (p *prollyStats) GetHash(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
+func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
 	if h.IsEmpty() {
 		return nil, false, nil
 	}
-	b, ok, err := p.mem.GetHash(ctx, h, tupB)
+	b, ok, err := p.mem.GetBucket(ctx, h, tupB)
 	if err != nil {
 		return nil, false, err
 	}
 	if ok {
 		if p.mem.doGc {
 			// transfer from old to new
-			err = p.PutHash(ctx, h, b, tupB)
+			err = p.PutBucket(ctx, h, b, tupB)
 			if err != nil {
 				return nil, false, err
 			}
@@ -269,7 +281,7 @@ func (p *prollyStats) GetHash(ctx context.Context, h hash.Hash, tupB *val.TupleB
 		return nil, false, err
 	}
 
-	p.mem.PutHash(ctx, h, b, tupB)
+	p.mem.PutBucket(ctx, h, b, tupB)
 	return b, true, nil
 }
 

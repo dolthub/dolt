@@ -28,6 +28,8 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/stats"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/require"
 	"io"
 	"strings"
@@ -81,7 +83,7 @@ func TestScheduleLoop(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
-		// 4 old + 2*7 new xy
+		// 4 old + 2*7 new ab
 		kv := sc.kv.(*memStats)
 		require.Equal(t, 18, kv.buckets.Len())
 		require.Equal(t, 4, len(kv.bounds))
@@ -668,6 +670,50 @@ func TestBranches(t *testing.T) {
 	}
 }
 
+func TestBucketDoubling(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
+
+	cur := sc.kv.(*memStats).buckets
+	newB, _ := lru.New[hash.Hash, *stats.Bucket](4)
+	for _, k := range cur.Keys() {
+		v, _ := cur.Get(k)
+		newB.Add(k, v)
+	}
+	sc.kv.(*memStats).buckets = newB
+	sc.bucketCap = 4
+
+	// add more data
+	b := strings.Repeat("b", 100)
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(100), key (b,a))"))
+	abIns := strings.Builder{}
+	abIns.WriteString("insert into ab values")
+	for i := range 200 {
+		if i > 0 {
+			abIns.WriteString(", ")
+		}
+		abIns.WriteString(fmt.Sprintf("(%d, '%s')", i, b))
+	}
+	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
+
+	sc.disableGc.Store(false)
+
+	runAndPause(ctx, sc, &wg) // track ab
+	runAndPause(ctx, sc, &wg) // finalize ab
+
+	// 4 old + 2*7 new ab
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 4, len(kv.bounds))
+	require.Equal(t, 4, len(kv.templates))
+	require.Equal(t, 2, len(sc.Stats))
+	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+	require.Equal(t, 7, len(stat[0].Hist))
+	require.Equal(t, 7, len(stat[1].Hist))
+}
+
 func TestReadCounter(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -682,6 +728,28 @@ func TestReadCounter(t *testing.T) {
 
 		require.Equal(t, 2, sc.Info().ReadCnt)
 	}
+}
+
+func TestJobQueueDoubling(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	dEnv := dtestutils.CreateTestEnv()
+	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
+	defer sqlEng.Close()
+
+	statsKv, err := NewMemStats(defaultBucketSize)
+	require.NoError(t, err)
+	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads)
+
+	sc.Jobs = make(chan StatsJob, 1)
+
+	var jobs []StatsJob
+	for _ = range 1025 {
+		jobs = append(jobs, ControlJob{})
+	}
+	require.NoError(t, sc.sendJobs(ctx, jobs))
+	require.Equal(t, 1025, len(sc.Jobs))
+	require.Equal(t, 2048, cap(sc.Jobs))
 }
 
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
@@ -707,7 +775,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
-	statsKv, err := NewMemStats()
+	statsKv, err := NewMemStats(defaultBucketSize)
 	require.NoError(t, err)
 	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads)
 	sc.disableGc.Store(true)
