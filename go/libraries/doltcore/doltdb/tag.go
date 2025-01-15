@@ -16,6 +16,10 @@ package doltdb
 
 import (
 	"context"
+	"fmt"
+	"time"
+
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -34,23 +38,30 @@ type Tag struct {
 
 // NewTag creates a new Tag object.
 func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore) (*Tag, error) {
+	startHT := time.Now()
 	meta, commitAddr, err := ds.HeadTag()
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(color.Output, "DUSTIN: NewTag: head tag: success: elapsed: %v\n", time.Since(startHT))
+
+	startLoad := time.Now()
 	dc, err := datas.LoadCommitAddr(ctx, vrw, commitAddr)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(color.Output, "DUSTIN: NewTag: load addr: success: elapsed: %v\n", time.Since(startLoad))
 
 	if dc.IsGhost() {
 		return nil, ErrGhostCommitEncountered
 	}
 
+	startCommit := time.Now()
 	commit, err := NewCommit(ctx, vrw, ns, dc)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(color.Output, "DUSTIN: NewTag: startCommit: success: elapsed: %v\n", time.Since(startCommit))
 
 	addr, _ := ds.MaybeHeadAddr()
 

@@ -126,15 +126,15 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 				return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
 			}
 
-			startResolveTag := time.Now()
+			//startResolveTag := time.Now()
 			tag, err := ddb.ResolveTag(egCtx, tr)
 			if err != nil {
-				fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: %s: elapsed: %v\n", err.Error(), time.Since(startResolveTag))
+				//fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: error: %s: elapsed: %v\n", err.Error(), time.Since(startResolveTag))
 				return err
 			}
 
 			resolved[idx] = tag
-			fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: success: ref: %s elapsed: %v\n", r.String(), time.Since(startResolveTag))
+			//fmt.Fprintf(color.Output, "DUSTIN: IterResolvedTags: resolve tag: success: ref: %s elapsed: %v\n", r.String(), time.Since(startResolveTag))
 			return nil
 		})
 	}

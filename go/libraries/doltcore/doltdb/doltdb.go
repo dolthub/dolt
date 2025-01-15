@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -578,10 +579,12 @@ func (ddb *DoltDB) ResolveBranchRoots(ctx context.Context, branch ref.BranchRef)
 
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
 func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {
+	start := time.Now()
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
 	if err != nil {
 		return nil, ErrTagNotFound
 	}
+	fmt.Fprintf(color.Output, "DUSTIN: ResolveTag: get dataset: success: tagref: %s elapsed: %v\n", tagRef.String(), time.Since(start))
 
 	if !ds.HasHead() {
 		return nil, ErrTagNotFound
