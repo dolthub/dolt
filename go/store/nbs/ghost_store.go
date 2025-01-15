@@ -54,6 +54,7 @@ func NewGhostBlockStore(nomsPath string) (*GhostBlockStore, error) {
 		// Other error, permission denied, etc, we want to hear about.
 		return nil, err
 	}
+	defer f.Close()
 	scanner := bufio.NewScanner(f)
 	skiplist := &hash.HashSet{}
 	for scanner.Scan() {
@@ -107,6 +108,7 @@ func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.Ha
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	for h := range hashes {
 		if _, err := f.WriteString(h.String() + "\n"); err != nil {
