@@ -711,13 +711,19 @@ func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r pr
 
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	rangeIter, err := ib.rangeIter(ctx, part)
+	var indexIter prolly.MapIter
+	var err error
+	if proximityPartition, ok := part.(vectorPartitionIter); ok {
+		indexIter, err = ib.proximityIter(ctx, proximityPartition)
+	} else {
+		indexIter, err = ib.rangeIter(ctx, part)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return prollyIndexIter{
 		idx:         ib.idx,
-		indexIter:   rangeIter,
+		indexIter:   indexIter,
 		primary:     ib.pri,
 		pkBld:       ib.pkBld,
 		pkMap:       ib.pkMap,
