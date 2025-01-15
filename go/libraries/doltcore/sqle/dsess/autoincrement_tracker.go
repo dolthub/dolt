@@ -16,10 +16,12 @@ package dsess
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -436,8 +438,19 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 }
 
 func (a *AutoIncrementTracker) waitForInit() error {
-	a.wg.Wait()
-	return a.initErr
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		a.wg.Wait()
+	}()
+
+	select {
+	case <-done:
+		return a.initErr
+	case <-time.After(5 * time.Minute):
+		return errors.New("failed to initialize autoincrement tracker")
+	}
 }
 
 func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
