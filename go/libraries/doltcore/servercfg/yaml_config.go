@@ -584,6 +584,11 @@ func (cfg YAMLConfig) User() string {
 	return *cfg.UserConfig.Name
 }
 
+// UserIsSpecified returns true if the configuration explicitly specified a user.
+func (cfg YAMLConfig) UserIsSpecified() bool {
+	return cfg.UserConfig.Name != nil
+}
+
 func (cfg *YAMLConfig) SetUserName(s string) {
 	cfg.UserConfig.Name = &s
 }
