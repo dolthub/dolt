@@ -1,0 +1,65 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "schema.fbs";
+
+namespace serial;
+
+// VectorIndexNode is a node that makes up a vector index. Every key contains a vector value,
+// and keys are organized according to their proximity to their parent node.
+table VectorIndexNode {
+  // sorted array of key items
+  key_items:[ubyte] (required);
+  // item offsets for |key_items|
+  // first offset is 0, last offset is len(key_items)
+  key_offsets:[uint32] (required);
+
+  // array of values items, ordered by paired key
+  value_items:[ubyte];
+  // item offsets for |value_items|
+  // first offset is 0, last offset is len(value_items)
+  value_offsets:[uint32];
+
+  // array of chunk addresses
+  //  - subtree addresses for internal prolly tree nodes
+  //  - value addresses for AddressMap leaf nodes
+  // note that while the keys in this index are addresses to JSON chunks, we don't store those in the address_array
+  // because we are guaranteed to have other references to those chunks in the primary index.
+  address_array:[ubyte] (required);
+
+  // array of varint encoded subtree counts
+  // see: go/store/prolly/message/varint.go
+  subtree_counts:[ubyte];
+  // total count of prolly tree
+  tree_count:uint64;
+  // prolly tree level, 0 for leaf nodes
+  tree_level:uint8;
+
+  // the base-2 log of the average (geometric mean) number of vectors stored in each node.
+  // currently this is always set to 8, but other numbers are used in testing, and future versions of dolt
+  // may choose to use a different size, or even select the best size for each index.
+  // all nodes in an index must use the same size, and when modifying an existing index, we must use this value.
+  log_chunk_size:uint8;
+
+  // each node encodes the distance function used for the index. This allows lookups without needing to retrieve the
+  // distance function from the schema.
+  distance_type:DistanceType;
+}
+
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "IVFF";
+
+root_type VectorIndexNode;
+
