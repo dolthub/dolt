@@ -89,6 +89,16 @@ type NBSCompressedChunkStore interface {
 	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
 }
 
+type gcDependencyMode int
+const (
+	gcDependencyMode_TakeDependency gcDependencyMode = iota
+	gcDependencyMode_NoDependency
+)
+
+type CompressedChunkStoreForGC interface {
+	getManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk), gcDependencyMode) error
+}
+
 type NomsBlockStore struct {
 	mm manifestManager
 	p  tablePersister
@@ -941,22 +951,31 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-		return cr.getMany(ctx, eg, reqs, found, keeper, nbs.stats)
-	})
+	return nbs.getManyWithFunc(ctx, hashes, gcDependencyMode_TakeDependency,
+		func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+			return cr.getMany(ctx, eg, reqs, found, keeper, nbs.stats)
+		},
+	)
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	return nbs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
+}
+
+func (nbs *NomsBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-		return cr.getManyCompressed(ctx, eg, reqs, found, keeper, nbs.stats)
-	})
+	return nbs.getManyWithFunc(ctx, hashes, gcDepMode,
+		func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+			return cr.getManyCompressed(ctx, eg, reqs, found, keeper, nbs.stats)
+		},
+	)
 }
 
 func (nbs *NomsBlockStore) getManyWithFunc(
 	ctx context.Context,
 	hashes hash.HashSet,
+	gcDepMode gcDependencyMode,
 	getManyFunc func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error),
 ) error {
 	if len(hashes) == 0 {
@@ -976,8 +995,12 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		eg.SetLimit(ioParallelism)
 
 		nbs.mu.Lock()
+		keeper := nbs.keeperFunc
+		if gcDepMode == gcDependencyMode_NoDependency {
+			keeper = nil
+		}
 		if nbs.mt != nil {
-			remaining, gcb, err := getManyFunc(ctx, nbs.mt, eg, reqs, nbs.keeperFunc, nbs.stats)
+			remaining, gcb, err := getManyFunc(ctx, nbs.mt, eg, reqs, keeper, nbs.stats)
 			if err != nil {
 				nbs.mu.Unlock()
 				return err
@@ -995,7 +1018,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 				return nil
 			}
 		}
-		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		tables, endRead := nbs.tables, nbs.beginRead()
 		nbs.mu.Unlock()
 
 		_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
@@ -1755,7 +1778,7 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chun
 	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode)
 }
 
-func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src NBSCompressedChunkStore, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -1823,7 +1846,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src NBSCompres
 }
 
 type markAndSweeper struct {
-	src      NBSCompressedChunkStore
+	src      CompressedChunkStoreForGC
 	dest     *NomsBlockStore
 	getAddrs chunks.GetAddrsCurry
 	filter   chunks.HasManyFunc
@@ -1869,7 +1892,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		found := 0
 		var addErr error
-		err = i.src.GetManyCompressed(ctx, toVisit, func(ctx context.Context, cc CompressedChunk) {
+		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, cc CompressedChunk) {
 			mu.Lock()
 			defer mu.Unlock()
 			if addErr != nil {
@@ -1893,7 +1916,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 				return
 			}
 			addErr = i.getAddrs(c)(ctx, nextToVisit, func(h hash.Hash) bool { return false })
-		})
+		}, gcDependencyMode_NoDependency)
 		if err != nil {
 			return err
 		}
