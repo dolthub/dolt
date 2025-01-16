@@ -90,6 +90,7 @@ type NBSCompressedChunkStore interface {
 }
 
 type gcDependencyMode int
+
 const (
 	gcDependencyMode_TakeDependency gcDependencyMode = iota
 	gcDependencyMode_NoDependency
