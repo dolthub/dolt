@@ -156,7 +156,26 @@ var ErrAddChunkMustBlock = errors.New("chunk keeper: add chunk must block")
 // GCFinalizer interface.
 type HasManyFunc func(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
 
-// A GCFinalizer is returned from MarkAndSweepChunks after the keep hashes channel is closed.
+// A MarkAndSweeper is returned from MarkAndSweepChunks and allows a caller
+// to save chunks, and all chunks reachable from them, from the source store
+// into the destination store. |SaveHashes| is called one or more times,
+// passing in hashes which should be saved. Then |Close| is called and the
+// |GCFinalizer| is used to complete the process.
+type MarkAndSweeper interface {
+	// Ensures that the chunks corresponding to the passed hashes, and all
+	// the chunks reachable from them, are copied into the destination
+	// store. Passed and reachable chunks are filtered by the |filter| that
+	// was supplied to |MarkAndSweepChunks|. It is safe to pass a given
+	// hash more than once; it will only ever be copied once.
+	//
+	// A call to this function blocks until the entire transitive set of
+	// chunks is accessed and copied.
+	SaveHashes(context.Context, []hash.Hash) error
+
+	Close(context.Context) (GCFinalizer, error)
+}
+
+// A GCFinalizer is returned from a MarkAndSweeper after it is closed.
 //
 // A GCFinalizer is a handle to one or more table files which has been
 // constructed as part of the GC process. It can be used to add the table files
@@ -210,17 +229,12 @@ type ChunkStoreGarbageCollector interface {
 	// addChunk function must not be called after this function.
 	EndGC()
 
-	// MarkAndSweepChunks is expected to read chunk addresses off of
-	// |hashes|, which represent chunks which should be copied into the
-	// provided |dest| store.  Once |hashes| is closed,
-	// MarkAndSweepChunks is expected to update the contents of the store
-	// to only include the chunk whose addresses which were sent along on
-	// |hashes|.
-	//
-	// This behavior is a little different for ValueStore.GC()'s
-	// interactions with generational stores. See ValueStore and
-	// NomsBlockStore/GenerationalNBS for details.
-	MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest ChunkStore, mode GCMode) (GCFinalizer, error)
+	// MarkAndSweepChunks returns a handle that can be used to supply
+	// hashes which should be saved into |dest|. The hashes are
+	// filtered through the |filter| and their references are walked with
+	// |getAddrs|, each of those addresses being filtered and copied as
+	// well.
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

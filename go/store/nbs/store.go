@@ -1598,11 +1598,11 @@ func (nbs *NomsBlockStore) EndGC() {
 	nbs.cond.Broadcast()
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.GCFinalizer, error) {
-	return markAndSweepChunks(ctx, hashes, nbs, nbs, dest, mode)
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode)
 }
 
-func markAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, nbs *NomsBlockStore, src NBSCompressedChunkStore, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.GCFinalizer, error) {
+func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src NBSCompressedChunkStore, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -1647,18 +1647,127 @@ func markAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, nbs *Nom
 		destNBS = nbs
 	}
 
-	specs, err := copyMarkedChunks(ctx, hashes, src, destNBS)
+	tfp, ok := destNBS.p.(tableFilePersister)
+	if !ok {
+		return nil, fmt.Errorf("NBS does not support copying garbage collection")
+	}
+
+	gcc, err := newGarbageCollectionCopier()
 	if err != nil {
 		return nil, err
 	}
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+
+	return &markAndSweeper{
+		src:      src,
+		dest:     destNBS,
+		getAddrs: getAddrs,
+		filter:   filter,
+		visited:  make(hash.HashSet),
+		tfp:      tfp,
+		gcc:      gcc,
+		mode:     mode,
+	}, nil
+}
+
+type markAndSweeper struct {
+	src      NBSCompressedChunkStore
+	dest     *NomsBlockStore
+	getAddrs chunks.GetAddrsCurry
+	filter   chunks.HasManyFunc
+
+	visited hash.HashSet
+
+	tfp  tableFilePersister
+	gcc  *gcCopier
+	mode chunks.GCMode
+}
+
+func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) error {
+	toVisit := make(hash.HashSet, len(hashes))
+	for _, h := range hashes {
+		if _, ok := i.visited[h]; !ok {
+			toVisit.Insert(h)
+		}
+	}
+	var err error
+	var mu sync.Mutex
+	first := true
+	for {
+		if !first {
+			copy := toVisit.Copy()
+			for h := range toVisit {
+				if _, ok := i.visited[h]; ok {
+					delete(copy, h)
+				}
+			}
+			toVisit = copy
+		}
+
+		toVisit, err = i.filter(ctx, toVisit)
+		if err != nil {
+			return err
+		}
+		if len(toVisit) == 0 {
+			break
+		}
+
+		first = false
+		nextToVisit := make(hash.HashSet)
+
+		found := 0
+		var addErr error
+		err = i.src.GetManyCompressed(ctx, toVisit, func(ctx context.Context, cc CompressedChunk) {
+			mu.Lock()
+			defer mu.Unlock()
+			if addErr != nil {
+				return
+			}
+			found += 1
+			if cc.IsGhost() {
+				// Ghost chunks encountered on the walk can be left alone --- they
+				// do not bring their dependencies, and because of how generational
+				// store works, they will still be ghost chunks
+				// in the store after the GC is finished.
+				return
+			}
+			addErr = i.gcc.addChunk(ctx, cc)
+			if addErr != nil {
+				return
+			}
+			c, err := cc.ToChunk()
+			if err != nil {
+				addErr = err
+				return
+			}
+			addErr = i.getAddrs(c)(ctx, nextToVisit, func(h hash.Hash) bool { return false })
+		})
+		if err != nil {
+			return err
+		}
+		if addErr != nil {
+			return addErr
+		}
+		if found != len(toVisit) {
+			return fmt.Errorf("dangling references requested during GC. GC not successful. %v", toVisit)
+		}
+
+		i.visited.InsertAll(toVisit)
+
+		toVisit = nextToVisit
+	}
+	return nil
+}
+
+func (i *markAndSweeper) Close(ctx context.Context) (chunks.GCFinalizer, error) {
+	specs, err := i.gcc.copyTablesToDir(ctx, i.tfp)
+	if err != nil {
+		return nil, err
 	}
 
 	return gcFinalizer{
-		nbs:   destNBS,
+		nbs:   i.dest,
 		specs: specs,
-		mode:  mode,
+		mode:  i.mode,
 	}, nil
 }
 
@@ -1682,55 +1791,6 @@ func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc
 
 func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
 	return gcf.nbs.swapTables(ctx, gcf.specs, gcf.mode)
-}
-
-func copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash, src NBSCompressedChunkStore, dest *NomsBlockStore) ([]tableSpec, error) {
-	tfp, ok := dest.p.(tableFilePersister)
-	if !ok {
-		return nil, fmt.Errorf("NBS does not support copying garbage collection")
-	}
-
-	gcc, err := newGarbageCollectionCopier()
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: We should clean up gcc on error.
-
-LOOP:
-	for {
-		select {
-		case hs, ok := <-keepChunks:
-			if !ok {
-				break LOOP
-			}
-			var addErr error
-			mu := new(sync.Mutex)
-			hashset := hash.NewHashSet(hs...)
-			found := 0
-			err := src.GetManyCompressed(ctx, hashset, func(ctx context.Context, c CompressedChunk) {
-				mu.Lock()
-				defer mu.Unlock()
-				if addErr != nil {
-					return
-				}
-				found += 1
-				addErr = gcc.addChunk(ctx, c)
-			})
-			if err != nil {
-				return nil, err
-			}
-			if addErr != nil {
-				return nil, addErr
-			}
-			if found != len(hashset) {
-				return nil, fmt.Errorf("dangling references requested during GC. GC not successful. %v", hashset)
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	return gcc.copyTablesToDir(ctx, tfp)
 }
 
 func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
