@@ -204,9 +204,10 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 					return nil, err
 				}
 
+				synopsisWithCommand := make([]string, len(synopsis))
 				cliName := strings.ReplaceAll(fullName, "_", " ")
 				for i := range synopsis {
-					synopsis[i] = cliName + " " + synopsis[i]
+					synopsisWithCommand[i] = cliName + " " + synopsis[i]
 				}
 
 				shortDesc := docs.GetShortDesc()
@@ -219,7 +220,7 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 				rows = append(rows, sql.NewRow(
 					procedureName,
 					"procedure",
-					strings.Join(synopsis, "\n"),
+					strings.Join(synopsisWithCommand, "\n"),
 					shortDesc,
 					longDesc,
 					string(argsJson),
