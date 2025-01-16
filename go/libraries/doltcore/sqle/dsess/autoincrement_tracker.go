@@ -50,7 +50,7 @@ type AutoIncrementTracker struct {
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
 	lockMode  LockMode
-	wg        *sync.WaitGroup
+	init      chan struct{}
 	initErr   error
 }
 
@@ -65,7 +65,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		dbName:    dbName,
 		sequences: &sync.Map{},
 		mm:        mutexmap.NewMutexMap(),
-		wg:        &sync.WaitGroup{},
+		init:      make(chan struct{}),
 	}
 	ait.runInitWithRootsAsync(ctx, roots...)
 	return &ait, nil
@@ -438,15 +438,8 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 }
 
 func (a *AutoIncrementTracker) waitForInit() error {
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		a.wg.Wait()
-	}()
-
 	select {
-	case <-done:
+	case <-a.init:
 		return a.initErr
 	case <-time.After(5 * time.Minute):
 		return errors.New("failed to initialize autoincrement tracker")
@@ -454,9 +447,8 @@ func (a *AutoIncrementTracker) waitForInit() error {
 }
 
 func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
-	a.wg.Add(1)
 	go func() {
-		defer a.wg.Done()
+		defer close(a.init)
 		a.initErr = a.initWithRoots(ctx, roots...)
 	}()
 }
