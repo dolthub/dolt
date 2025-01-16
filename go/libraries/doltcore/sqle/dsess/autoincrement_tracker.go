@@ -492,6 +492,11 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 }
 
 func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	err := a.waitForInit()
+	if err != nil {
+		return err
+	}
+	a.init = make(chan struct{})
 	a.runInitWithRootsAsync(ctx, roots...)
 	return a.waitForInit()
 }
