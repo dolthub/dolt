@@ -222,7 +222,7 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 					strings.Join(synopsis, "\n"),
 					shortDesc,
 					longDesc,
-					argsJson,
+					string(argsJson),
 				))
 			}
 		}
