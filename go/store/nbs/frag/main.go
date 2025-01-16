@@ -153,14 +153,14 @@ func main() {
 			if i+1 == numGroups { // last group
 				go func(i int) {
 					defer wg.Done()
-					reads[i], _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:].HashSet(), 0)
+					reads[i], _, _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:].HashSet(), 0, nil)
 					d.PanicIfError(err)
 				}(i)
 				continue
 			}
 			go func(i int) {
 				defer wg.Done()
-				reads[i], _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:(i+1)*branchFactor].HashSet(), 0)
+				reads[i], _, _, err = nbs.CalcReads(store, orderedChildren[i*branchFactor:(i+1)*branchFactor].HashSet(), 0, nil)
 				d.PanicIfError(err)
 			}(i)
 		}

@@ -91,6 +91,10 @@ func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 }
 
 func (g GhostBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	return g.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
+}
+
+func (g GhostBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
 	for h := range hashes {
 		if g.skippedRefs.Has(h) {
 			found(ctx, NewGhostCompressedChunk(h))

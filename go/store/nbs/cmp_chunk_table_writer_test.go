@@ -51,7 +51,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	found := make([]CompressedChunk, 0)
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c CompressedChunk) { found = append(found, c) }, &Stats{})
+	_, _, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c CompressedChunk) { found = append(found, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -146,7 +146,7 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 	reqs := toGetRecords(hashes)
 	found := make([]*chunks.Chunk, 0)
 	eg, ctx := errgroup.WithContext(ctx)
-	_, err := reader.getMany(ctx, eg, reqs, func(ctx context.Context, c *chunks.Chunk) { found = append(found, c) }, &Stats{})
+	_, _, err := reader.getMany(ctx, eg, reqs, func(ctx context.Context, c *chunks.Chunk) { found = append(found, c) }, nil, &Stats{})
 	if err != nil {
 		return nil, err
 	}

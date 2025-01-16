@@ -67,14 +67,14 @@ func TestChunkJournalPersist(t *testing.T) {
 	haver := emptyChunkSource{}
 	for i := 0; i < iters; i++ {
 		memTbl, chunkMap := randomMemTable(16)
-		source, err := j.Persist(ctx, memTbl, haver, stats)
+		source, _, err := j.Persist(ctx, memTbl, haver, nil, stats)
 		assert.NoError(t, err)
 
 		for h, ch := range chunkMap {
-			ok, err := source.has(h)
+			ok, _, err := source.has(h, nil)
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			data, err := source.get(ctx, h, stats)
+			data, _, err := source.get(ctx, h, nil, stats)
 			assert.NoError(t, err)
 			assert.Equal(t, ch.Data(), data)
 		}
@@ -96,7 +96,7 @@ func TestReadRecordRanges(t *testing.T) {
 		gets = append(gets, getRecord{a: &h, prefix: h.Prefix()})
 	}
 
-	jcs, err := j.Persist(ctx, mt, emptyChunkSource{}, &Stats{})
+	jcs, _, err := j.Persist(ctx, mt, emptyChunkSource{}, nil, &Stats{})
 	require.NoError(t, err)
 
 	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot(context.Background())
@@ -108,11 +108,11 @@ func TestReadRecordRanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int(sz), n)
 
-	ranges, err := jcs.getRecordRanges(ctx, gets)
+	ranges, _, err := jcs.getRecordRanges(ctx, gets, nil)
 	require.NoError(t, err)
 
 	for h, rng := range ranges {
-		b, err := jcs.get(ctx, h, &Stats{})
+		b, _, err := jcs.get(ctx, h, nil, &Stats{})
 		assert.NoError(t, err)
 		ch1 := chunks.NewChunkWithHash(h, b)
 		assert.Equal(t, data[h], ch1)

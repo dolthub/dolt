@@ -21,7 +21,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
@@ -40,27 +39,32 @@ var _ tableFilePersister = &noConjoinBlobstorePersister{}
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
-func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	address, data, chunkCount, err := mt.write(haver, stats)
+func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+	address, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	} else if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
 	} else if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 	name := address.String()
 
 	eg, ectx := errgroup.WithContext(ctx)
-	eg.Go(func() (err error) {
-		fmt.Fprintf(color.Output, "Persist: bs.Put: name: %s\n", name)
-		_, err = bsp.bs.Put(ectx, name, int64(len(data)), bytes.NewBuffer(data))
-		return
+	eg.Go(func() error {
+		_, err := bsp.bs.Put(ectx, name, int64(len(data)), bytes.NewBuffer(data))
+		return err
 	})
 	if err = eg.Wait(); err != nil {
-		return nil, err
+		return nil, gcBehavior_Continue, err
 	}
 
 	rdr := &bsTableReaderAt{name, bsp.bs}
-	return newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	if err != nil {
+		return nil, gcBehavior_Continue, err
+	}
+	return src, gcBehavior_Continue, nil
 }
 
 // ConjoinAll implements tablePersister.

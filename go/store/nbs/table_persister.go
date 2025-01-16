@@ -47,7 +47,7 @@ type cleanupFunc func()
 type tablePersister interface {
 	// Persist makes the contents of mt durable. Chunks already present in
 	// |haver| may be dropped in the process.
-	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error)
+	Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error)
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource. It returns a |cleanupFunc| which can be called to

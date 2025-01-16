@@ -61,7 +61,7 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 	}
 
 	var stats Stats
-	name, data, count, err := mt.write(nil, &stats)
+	name, data, count, _, err := mt.write(nil, nil, &stats)
 
 	if err != nil {
 		return "", nil, err
@@ -135,22 +135,27 @@ func (mt *memTable) uncompressedLen() (uint64, error) {
 	return mt.totalData, nil
 }
 
-func (mt *memTable) has(h hash.Hash) (bool, error) {
+func (mt *memTable) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	_, has := mt.chunks[h]
-	return has, nil
+	if has && keeper != nil && keeper(h) {
+		return false, gcBehavior_Block, nil
+	}
+	return has, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) hasMany(addrs []hasRecord) (bool, error) {
+func (mt *memTable) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	var remaining bool
 	for i, addr := range addrs {
 		if addr.has {
 			continue
 		}
 
-		ok, err := mt.has(*addr.a)
-
+		ok, gcb, err := mt.has(*addr.a, keeper)
 		if err != nil {
-			return false, err
+			return false, gcBehavior_Continue, err
+		}
+		if gcb != gcBehavior_Continue {
+			return ok, gcb, nil
 		}
 
 		if ok {
@@ -159,18 +164,25 @@ func (mt *memTable) hasMany(addrs []hasRecord) (bool, error) {
 			remaining = true
 		}
 	}
-	return remaining, nil
+	return remaining, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
-	return mt.chunks[h], nil
+func (mt *memTable) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
+	c, ok := mt.chunks[h]
+	if ok && keeper != nil && keeper(h) {
+		return nil, gcBehavior_Block, nil
+	}
+	return c, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	var remaining bool
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
+			if keeper != nil && keeper(*r.a) {
+				return true, gcBehavior_Block, nil
+			}
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
 			reqs[i].found = true
 			found(ctx, &c)
@@ -178,14 +190,17 @@ func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getR
 			remaining = true
 		}
 	}
-	return remaining, nil
+	return remaining, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	var remaining bool
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
+			if keeper != nil && keeper(*r.a) {
+				return true, gcBehavior_Block, nil
+			}
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
 			reqs[i].found = true
 			found(ctx, ChunkToCompressedChunk(c))
@@ -194,7 +209,7 @@ func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, r
 		}
 	}
 
-	return remaining, nil
+	return remaining, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {
@@ -205,10 +220,11 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data []byte, count uint32, err error) {
+func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, count uint32, gcb gcBehavior, err error) {
+	gcb = gcBehavior_Continue
 	numChunks := uint64(len(mt.order))
 	if numChunks == 0 {
-		return hash.Hash{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, fmt.Errorf("mem table cannot write with zero chunks")
 	}
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	// todo: memory quota
@@ -217,10 +233,12 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		_, err := haver.hasMany(mt.order)
-
+		_, gcb, err = haver.hasMany(mt.order, keeper)
 		if err != nil {
-			return hash.Hash{}, nil, 0, err
+			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+		}
+		if gcb != gcBehavior_Continue {
+			return hash.Hash{}, nil, 0, gcb, err
 		}
 
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
@@ -236,7 +254,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 	tableSize, name, err := tw.finish()
 
 	if err != nil {
-		return hash.Hash{}, nil, 0, err
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
 	}
 
 	if count > 0 {
@@ -246,7 +264,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 		stats.ChunksPerPersist.Sample(uint64(count))
 	}
 
-	return name, buff[:tableSize], count, nil
+	return name, buff[:tableSize], count, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) close() error {
