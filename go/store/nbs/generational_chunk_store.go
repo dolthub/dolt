@@ -145,14 +145,18 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	return gcs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
+}
+
+func (gcs *GenerationalNBS) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
 	var mu sync.Mutex
 	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
+	err := gcs.oldGen.getManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
 		mu.Lock()
 		delete(notInOldGen, chunk.Hash())
 		mu.Unlock()
 		found(ctx, chunk)
-	})
+	}, gcDepMode)
 	if err != nil {
 		return err
 	}
@@ -161,12 +165,12 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 	}
 
 	notFound := notInOldGen.Copy()
-	err = gcs.newGen.GetManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk CompressedChunk) {
+	err = gcs.newGen.getManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk CompressedChunk) {
 		mu.Lock()
 		delete(notFound, chunk.Hash())
 		mu.Unlock()
 		found(ctx, chunk)
-	})
+	}, gcDepMode)
 	if err != nil {
 		return err
 	}
@@ -176,7 +180,7 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 
 	// The missing chunks may be ghost chunks.
 	if gcs.ghostGen != nil {
-		return gcs.ghostGen.GetManyCompressed(ctx, notFound, found)
+		return gcs.ghostGen.getManyCompressed(ctx, notFound, found, gcDepMode)
 	}
 	return nil
 }
