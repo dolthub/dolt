@@ -377,7 +377,7 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 		require.True(t, ok)
 		tableFileMap[fileIDHash] = uint32(i + 1)
 		mapIds[i] = fileIDHash
-		cs, err := p.Persist(context.Background(), createMemTable(chunkData), nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), createMemTable(chunkData), nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 

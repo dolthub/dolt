@@ -61,7 +61,7 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 	}
 
 	var stats Stats
-	name, data, count, err := mt.write(nil, &stats)
+	name, data, count, _, err := mt.write(nil, nil, &stats)
 
 	if err != nil {
 		return "", nil, err
@@ -220,10 +220,11 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data []byte, count uint32, err error) {
+func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, count uint32, gcb gcBehavior, err error) {
+	gcb = gcBehavior_Continue
 	numChunks := uint64(len(mt.order))
 	if numChunks == 0 {
-		return hash.Hash{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, fmt.Errorf("mem table cannot write with zero chunks")
 	}
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	// todo: memory quota
@@ -232,10 +233,12 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		// TODO: keeperF
-		_, _, err := haver.hasMany(mt.order, nil)
+		_, gcb, err = haver.hasMany(mt.order, keeper)
 		if err != nil {
-			return hash.Hash{}, nil, 0, err
+			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+		}
+		if gcb != gcBehavior_Continue {
+			return hash.Hash{}, nil, 0, gcb, err
 		}
 
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
@@ -251,7 +254,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 	tableSize, name, err := tw.finish()
 
 	if err != nil {
-		return hash.Hash{}, nil, 0, err
+		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
 	}
 
 	if count > 0 {
@@ -261,7 +264,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data
 		stats.ChunksPerPersist.Sample(uint64(count))
 	}
 
-	return name, buff[:tableSize], count, nil
+	return name, buff[:tableSize], count, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) close() error {
