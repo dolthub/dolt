@@ -50,7 +50,10 @@ type ParquetReader struct {
 	fileData        map[string][]interface{}
 	// rLevels indicate whether a value in a column is a repeat of a repeated type.
 	// We only include these for repeated fields.
-	rLevels    map[string][]int32
+	rLevels map[string][]int32
+	// dLevels are used for interpreting null values by indicating the deepest level in
+	// a nested field that's defined.
+	dLevels    map[string][]int32
 	columnName []string
 }
 
@@ -82,6 +85,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 	// TODO : need to solve for getting single row data in readRow (storing all columns data in memory right now)
 	data := make(map[string][]interface{})
 	rLevels := make(map[string][]int32)
+	dLevels := make(map[string][]int32)
 	rowReadCounters := make(map[string]int)
 	var colName []string
 	for _, col := range columns {
@@ -96,7 +100,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 			}
 			return nil, fmt.Errorf("cannot read column: %s Column not found", col.Name)
 		}
-		colData, rLevel, _, cErr := pr.ReadColumnByPath(resolvedColumnName, num)
+		colData, rLevel, dLevel, cErr := pr.ReadColumnByPath(resolvedColumnName, num)
 		if cErr != nil {
 			return nil, fmt.Errorf("cannot read column: %s", cErr.Error())
 		}
@@ -104,6 +108,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 		if isRepeated {
 			rLevels[col.Name] = rLevel
 		}
+		dLevels[col.Name] = dLevel
 		rowReadCounters[col.Name] = 0
 		colName = append(colName, col.Name)
 	}
@@ -118,6 +123,7 @@ func NewParquetReader(vrw types.ValueReadWriter, fr source.ParquetFile, sche sch
 		rowReadCounters: rowReadCounters,
 		fileData:        data,
 		rLevels:         rLevels,
+		dLevels:         dLevels,
 		columnName:      colName,
 	}, nil
 }
@@ -229,19 +235,37 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		}
 		var val interface{}
 		rLevels, isRepeated := pr.rLevels[col.Name]
-		if !isRepeated {
-			val = readVal()
-		} else {
+		dLevels, _ := pr.dLevels[col.Name]
+		readVals := func() (val interface{}) {
 			var vals []interface{}
 			for {
+				dLevel := dLevels[rowReadCounter]
 				subVal := readVal()
+				if subVal == nil {
+					// dLevels tells us how to interpret this nil value:
+					// 0  -> the column value is NULL
+					// 1  -> the column exists but is empty
+					// 2  -> the column contains an empty value
+					// 3+ -> the column contains a non-empty value
+					switch dLevel {
+					case 0:
+						return nil
+					case 1:
+						return []interface{}{}
+					}
+				}
 				vals = append(vals, subVal)
 				// an rLevel of 0 marks the start of a new record.
 				if rowReadCounter >= len(rLevels) || rLevels[rowReadCounter] == 0 {
 					break
 				}
 			}
-			val = vals
+			return vals
+		}
+		if !isRepeated {
+			val = readVal()
+		} else {
+			val = readVals()
 		}
 
 		pr.rowReadCounters[col.Name] = rowReadCounter
