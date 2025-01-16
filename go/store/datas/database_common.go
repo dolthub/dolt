@@ -135,6 +135,11 @@ func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Has
 	return m.am.IterAll(ctx, cb)
 }
 
+// IterFromCount iterates over count entries in the map starting from startKey. If startKey is empty, iteration starts from the beginning.
+func (m refmapDatasetsMap) IterFromCount(ctx context.Context, startKey string, count uint64, cb func(string, hash.Hash) error) error {
+	return m.am.IterFromCount(ctx, startKey, count, cb)
+}
+
 type nomsDatasetsMap struct {
 	m types.Map
 }
@@ -148,6 +153,11 @@ func (m nomsDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash)
 		// TODO: very fast and loose with error checking here.
 		return cb(string(k.(types.String)), v.(types.Ref).TargetHash())
 	})
+}
+
+// IterFromCount iterates over count entries in the map starting from startKey. If startKey is empty, iteration starts from the beginning.
+func (m nomsDatasetsMap) IterFromCount(ctx context.Context, startKey string, count uint64, cb func(string, hash.Hash) error) error {
+	return m.m.IterFromCount(ctx, startKey, count, cb)
 }
 
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,

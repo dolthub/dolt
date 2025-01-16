@@ -471,6 +471,45 @@ func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) error {
 	return nil
 }
 
+// IterFromCount iterates over count entries in the map starting from startKey. If startKey is empty, iteration starts from the beginning.
+func (m Map) IterFromCount(ctx context.Context, startKey string, count uint64, cb func(id string, addr hash.Hash) error) error {
+	if count == 0 {
+		return nil
+	}
+
+	var startVal Value
+	if startKey != "" {
+		startVal = String(startKey)
+	}
+
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, startVal, false, false)
+	if err != nil {
+		return err
+	}
+
+	var processed uint64
+	for ; cur.valid() && processed < count; processed++ {
+		item, err := cur.current()
+		if err != nil {
+			return err
+		}
+
+		entry := item.(mapEntry)
+		key := string(entry.key.(String))
+		val := entry.value.(Ref)
+
+		if err := cb(key, val.TargetHash()); err != nil {
+			return err
+		}
+
+		if _, err := cur.advance(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m Map) IterRange(ctx context.Context, startIdx, endIdx uint64, cb mapIterAllCallback) error {
 	var k Value
 	_, err := iterRange(ctx, m, startIdx, endIdx, func(v Value) error {

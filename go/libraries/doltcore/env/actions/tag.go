@@ -142,23 +142,23 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 // IterResolvedTagsPage iterates over a page of tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
 // Returns a token for retrieving the next page. If pageToken is empty, returns the first page. Returns an empty string for nextPageToken
 // when there are no more pages.
-func IterResolvedTagsPage(ctx context.Context, ddb *doltdb.DoltDB, pageToken string, cb func(tag *doltdb.Tag) (stop bool, err error)) (nextPageToken string, err error) {
+func IterResolvedTagsPage(ctx context.Context, ddb *doltdb.DoltDB, pageToken *doltdb.RefPageToken, cb func(tag *doltdb.Tag) (stop bool, err error)) (nextPageToken *doltdb.RefPageToken, err error) {
 	tagRefs, nextToken, err := ddb.GetTagsPage(ctx, pageToken)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var resolved []*doltdb.Tag
 	for _, r := range tagRefs {
 		tr, ok := r.(ref.TagRef)
 		if !ok {
-			return "", fmt.Errorf("DoltDB.GetTagsPage() returned non-tag DoltRef")
+			return nil, fmt.Errorf("DoltDB.GetTagsPage() returned non-tag DoltRef")
 		}
 
 		tag, err := ddb.ResolveTag(ctx, tr)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		resolved = append(resolved, tag)
@@ -173,7 +173,7 @@ func IterResolvedTagsPage(ctx context.Context, ddb *doltdb.DoltDB, pageToken str
 		stop, err := cb(tag)
 
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if stop {
 			break

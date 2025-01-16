@@ -127,6 +127,32 @@ func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address ha
 	return nil
 }
 
+// IterFromCount iterates over count entries in the map starting from startKey. If startKey is empty, iteration starts from the beginning.
+func (c AddressMap) IterFromCount(ctx context.Context, startKey string, count uint64, cb func(id string, addr hash.Hash) error) error {
+	iter, err := c.addresses.IterFromCount(ctx, stringSlice(startKey), count)
+	if err != nil {
+		return err
+	}
+
+	var n stringSlice
+	var a address
+	for {
+		n, a, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		if err = cb(string(n), hash.New(a)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (c AddressMap) Editor() AddressMapEditor {
 	return AddressMapEditor{
 		addresses: c.addresses.Mutate(),

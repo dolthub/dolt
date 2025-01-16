@@ -37,6 +37,7 @@ type DatasetsMap interface {
 	Len() (uint64, error)
 
 	IterAll(ctx context.Context, cb func(id string, addr hash.Hash) error) error
+	IterFromCount(ctx context.Context, startKey string, count uint64, cb func(id string, addr hash.Hash) error) error
 }
 
 // Database provides versioned storage for noms values. While Values can be

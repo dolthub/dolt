@@ -334,6 +334,32 @@ func (t StaticMap[K, V, O]) IterAll(ctx context.Context) (*OrderedTreeIter[K, V]
 	return &OrderedTreeIter[K, V]{curr: c, stop: stop, step: c.advance}, nil
 }
 
+// IterFromCount iterates over count entries in the map starting from startKey. If startKey is empty, iteration starts from the beginning.
+func (t StaticMap[K, V, O]) IterFromCount(ctx context.Context, startKey K, count uint64) (*OrderedTreeIter[K, V], error) {
+	// Get cursor at start key
+	start, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, startKey, t.Order)
+	if err != nil {
+		return nil, err
+	}
+
+	// If start cursor is invalid, return empty iterator
+	if !start.Valid() {
+		return &OrderedTreeIter[K, V]{curr: nil}, nil
+	}
+
+	// Track number of items seen
+	var seen uint64
+	stop := func(curr *cursor) bool {
+		if seen >= count {
+			return true
+		}
+		seen++
+		return false
+	}
+
+	return &OrderedTreeIter[K, V]{curr: &start, stop: stop, step: start.advance}, nil
+}
+
 func (t StaticMap[K, V, O]) IterAllReverse(ctx context.Context) (*OrderedTreeIter[K, V], error) {
 	beginning, err := newCursorAtStart(ctx, t.NodeStore, t.Root)
 	if err != nil {

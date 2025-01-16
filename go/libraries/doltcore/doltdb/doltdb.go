@@ -74,6 +74,13 @@ var InMemDoltDB = "mem://"
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
+// RefPageToken is a token for a page of refs.
+type RefPageToken struct {
+	Key string
+}
+
+const DefaultRefPageSize = 25
+
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 type DoltDB struct {
 	db  hooksDatabase
@@ -1076,7 +1083,7 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 // GetTagsPage returns a page of tags in the database, along with a token for retrieving the next page.
 // If pageToken is empty, returns the first page. Returns an empty string for nextPageToken when there
 // are no more pages.
-func (ddb *DoltDB) GetTagsPage(ctx context.Context, pageToken string) ([]ref.DoltRef, string, error) {
+func (ddb *DoltDB) GetTagsPage(ctx context.Context, pageToken *RefPageToken) ([]ref.DoltRef, *RefPageToken, error) {
 	return ddb.GetRefsOfTypePage(ctx, tagsRefFilter, pageToken)
 }
 
@@ -1201,10 +1208,10 @@ func (ddb *DoltDB) VisitRefsOfTypeByNomsRoot(ctx context.Context, refTypeFilter 
 	return visitDatasets(ctx, refTypeFilter, visit, dss)
 }
 
-func (ddb *DoltDB) VisitRefsOfTypePage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, pageToken string, visit func(r ref.DoltRef, addr hash.Hash) error) (nextPageToken string, err error) {
+func (ddb *DoltDB) VisitRefsOfTypePage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, pageToken *RefPageToken, visit func(r ref.DoltRef, addr hash.Hash) error) (nextPageToken *RefPageToken, err error) {
 	dss, err := ddb.db.Datasets(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return visitDatasetsPage(ctx, refTypeFilter, visit, dss, pageToken)
@@ -1232,48 +1239,86 @@ func visitDatasets(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, 
 	})
 }
 
-func visitDatasetsPage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error, dss datas.DatasetsMap, pageToken string) (nextPageToken string, err error) {
-	// Since DatasetsMap interface doesn't have IterPage, we need to use IterAll and handle pagination ourselves
-	var lastProcessedKey string
-	var count int
-	const pageSize = 100
+func visitDatasetsPage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error, dss datas.DatasetsMap, pageToken *RefPageToken) (nextPageToken *RefPageToken, err error) {
+	var startKey string
+	if pageToken != nil {
+		startKey = pageToken.Key
+	}
 
-	err = dss.IterAll(ctx, func(key string, addr hash.Hash) error {
-		// Skip keys until we reach the page token
-		if pageToken != "" && key <= pageToken {
-			return nil
-		}
-
-		// Process pageSize number of items
-		if count >= pageSize {
-			nextPageToken = lastProcessedKey
-			return io.EOF // Use EOF to break out of iteration
-		}
-
-		if ref.IsRef(key) {
-			dref, err := ref.Parse(key)
-			if err != nil {
-				return err
-			}
-
-			if _, ok := refTypeFilter[dref.GetType()]; ok {
-				err = visit(dref, addr)
+	if refTypeFilter == nil || len(refTypeFilter) == 0 {
+		var count int
+		err = dss.IterFromCount(ctx, startKey, uint64(DefaultRefPageSize+1), func(key string, addr hash.Hash) error {
+			if ref.IsRef(key) {
+				dref, err := ref.Parse(key)
 				if err != nil {
 					return err
 				}
-				count++
-				lastProcessedKey = key
+
+				if count < DefaultRefPageSize {
+					err = visit(dref, addr)
+					if err != nil {
+						return err
+					}
+					count++
+				} else {
+					nextPageToken = &RefPageToken{Key: key}
+					return io.EOF
+				}
 			}
+			return nil
+		})
+
+		if err == io.EOF {
+			err = nil
 		}
-
-		return nil
-	})
-
-	if err == io.EOF {
-		err = nil
+		return nextPageToken, err
 	}
 
-	return nextPageToken, err
+	var lastProcessedKey string
+	var count int
+	var batchSize uint64 = 100 // Process in smaller batches
+
+	for count < DefaultRefPageSize {
+		var batchCount int
+		err = dss.IterFromCount(ctx, startKey, batchSize, func(key string, addr hash.Hash) error {
+			if ref.IsRef(key) {
+				dref, err := ref.Parse(key)
+				if err != nil {
+					return err
+				}
+
+				if _, ok := refTypeFilter[dref.GetType()]; ok {
+					if count < DefaultRefPageSize {
+						err = visit(dref, addr)
+						if err != nil {
+							return err
+						}
+						count++
+					} else {
+						nextPageToken = &RefPageToken{Key: key}
+						return io.EOF // Break out of iteration
+					}
+				}
+			}
+			lastProcessedKey = key
+			batchCount++
+			return nil
+		})
+
+		if err == io.EOF {
+			err = nil
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if batchCount < int(batchSize) {
+			break // No more data to process
+		}
+		startKey = lastProcessedKey
+	}
+
+	return nextPageToken, nil
 }
 
 // GetRefByNameInsensitive searches this Dolt database's branch, tag, and head refs for a case-insensitive
@@ -1321,7 +1366,7 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 	return refs, err
 }
 
-func (ddb *DoltDB) GetRefsOfTypePage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, pageToken string) ([]ref.DoltRef, string, error) {
+func (ddb *DoltDB) GetRefsOfTypePage(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, pageToken *RefPageToken) ([]ref.DoltRef, *RefPageToken, error) {
 	var refs []ref.DoltRef
 	nextPageToken, err := ddb.VisitRefsOfTypePage(ctx, refTypeFilter, pageToken, func(r ref.DoltRef, _ hash.Hash) error {
 		refs = append(refs, r)
