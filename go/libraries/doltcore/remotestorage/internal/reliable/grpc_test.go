@@ -328,6 +328,8 @@ func TestMakeCall(t *testing.T) {
 				Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
 					return newTestStream[int](ctx, rand.IntN(8)), nil
 				},
+				ReadRequestTimeout: 5 * time.Second,
+				DeliverRespTimeout: 5 * time.Second,
 			})
 		}
 		recvError := func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
@@ -345,6 +347,8 @@ func TestMakeCall(t *testing.T) {
 						err:    errors.New("an error after recving"),
 					}, nil
 				},
+				ReadRequestTimeout: 5 * time.Second,
+				DeliverRespTimeout: 5 * time.Second,
 			})
 		}
 		sendError := func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
@@ -362,13 +366,17 @@ func TestMakeCall(t *testing.T) {
 						err:    errors.New("an error after recving"),
 					}, nil
 				},
+				ReadRequestTimeout: 5 * time.Second,
+				DeliverRespTimeout: 5 * time.Second,
 			})
 		}
 
 		stream, err := MakeCall(context.Background(), CallOptions[int, int]{
-			ErrF:     errF,
-			BackOffF: backOffF,
-			Open:     sendError,
+			ErrF:               errF,
+			BackOffF:           backOffF,
+			Open:               sendError,
+			ReadRequestTimeout: 5 * time.Second,
+			DeliverRespTimeout: 5 * time.Second,
 		})
 		assert.NotNil(t, stream)
 		assert.NoError(t, err)

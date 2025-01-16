@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2024|2025|2019-2020|2019-2021|2019-2022|2019-2023|2019-2024|2020-2021|2020-2022|2020-2023|2020-2024|2021-2022|2021-2023|2021-2024|2022-2023|2022-2024|2023-2024) Dolthub, Inc.
+var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2024|2025|2019-2020|2019-2021|2019-2022|2019-2023|2019-2024|2019-2025|2020-2021|2020-2022|2020-2023|2020-2024|2020-2025|2021-2022|2021-2023|2021-2024|2021-2025|2022-2023|2022-2024|2022-2025|2023-2024|2023-2025|2024-2025) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -96,8 +96,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/chunks/chunk_test.go", NomsPath: "go/chunks/chunk_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/memory_store.go", NomsPath: "go/chunks/memory_store.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/memory_store_test.go", NomsPath: "go/chunks/memory_store_test.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/remote_requests.go", NomsPath: "go/chunks/remote_requests.go", HadCopyrightNotice: true},
-	{Path: "store/chunks/remote_requests_test.go", NomsPath: "go/chunks/remote_requests_test.go", HadCopyrightNotice: true},
 	{Path: "store/chunks/test_utils.go", NomsPath: "go/chunks/test_utils.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/commit_iterator.go", NomsPath: "cmd/noms/commit_iterator.go", HadCopyrightNotice: true},
 	{Path: "store/cmd/noms/noms.go", NomsPath: "cmd/noms/noms.go", HadCopyrightNotice: true},

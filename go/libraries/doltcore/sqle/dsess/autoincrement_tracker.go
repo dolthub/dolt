@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -398,34 +399,39 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 }
 
 func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(128)
+
 	for _, root := range roots {
-		r, err := root.ResolveRootValue(ctx)
-		if err != nil {
-			return err
-		}
+		eg.Go(func() error {
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
 
-		err = r.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
-			if !schema.HasAutoIncrement(sch) {
+			r, rerr := root.ResolveRootValue(egCtx)
+			if rerr != nil {
+				return rerr
+			}
+
+			return r.IterTables(egCtx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
+				if !schema.HasAutoIncrement(sch) {
+					return false, nil
+				}
+
+				seq, iErr := table.GetAutoIncrementValue(egCtx)
+				if iErr != nil {
+					return true, iErr
+				}
+
+				tableNameStr := tableName.ToLower().Name
+				if oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq); loaded && seq > oldValue.(uint64) {
+					a.sequences.Store(tableNameStr, seq)
+				}
+
 				return false, nil
-			}
-
-			seq, err := table.GetAutoIncrementValue(ctx)
-			if err != nil {
-				return true, err
-			}
-
-			tableNameStr := tableName.ToLower().Name
-			if oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq); loaded && seq > oldValue.(uint64) {
-				a.sequences.Store(tableNameStr, seq)
-			}
-
-			return false, nil
+			})
 		})
-
-		if err != nil {
-			return err
-		}
 	}
 
-	return nil
+	return eg.Wait()
 }

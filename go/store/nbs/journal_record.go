@@ -92,9 +92,6 @@ const (
 	journalRecAddrSz      = 20
 	journalRecChecksumSz  = 4
 	journalRecTimestampSz = 8
-
-	// todo(andy): less arbitrary
-	journalRecMaxSz = 128 * 1024
 )
 
 // journalRecordTimestampGenerator returns the current time in Unix epoch seconds. This function is stored in a
@@ -248,9 +245,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		}
 
 		l := readUint32(buf)
-		if l > journalRecMaxSz {
-			break
-		} else if buf, err = rdr.Peek(int(l)); err != nil {
+		if buf, err = rdr.Peek(int(l)); err != nil {
 			break
 		}
 

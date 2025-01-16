@@ -191,7 +191,7 @@ assert_has_key_value() {
     dolt add .
     dolt sql -q "create table table3 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (7), (8), (9)"
-    run dolt show WORKING
+    run dolt show --no-pretty WORKING
     [ $status -eq 0 ]
     [[ "$output" =~ "table1" ]] || false
     [[ "$output" =~ "table2" ]] || false
@@ -208,7 +208,7 @@ assert_has_key_value() {
     dolt add .
     dolt sql -q "create table table3 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (7), (8), (9)"
-    run dolt show STAGED
+    run dolt show --no-pretty STAGED
     [ $status -eq 0 ]
     [[ "$output" =~ "table1" ]] || false
     [[ "$output" =~ "table2" ]] || false
@@ -225,16 +225,15 @@ assert_has_key_value() {
     dolt add .
     dolt sql -q "create table table3 (pk int PRIMARY KEY)"
     dolt sql -q "insert into table1 values (7), (8), (9)"
-    workingRoot=$(dolt show WORKING)
+    workingRoot=$(dolt show --no-pretty WORKING)
     tableAddress=$(extract_value table1 "$workingRoot")
 
-    run dolt show $tableAddress
+    run dolt show --no-pretty $tableAddress
     assert_has_key Schema "$output"
     assert_has_key Violations "$output"
     assert_has_key Autoinc "$output"
     assert_has_key "Primary index" "$output"
     assert_has_key "Secondary indexes" "$output"
-
 }
 
 @test "show: pretty commit from hash" {

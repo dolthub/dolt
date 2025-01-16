@@ -95,6 +95,12 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	compareContentsOfTables(t, ctx, hashes, tr, outputTR)
 }
 
+func TestCmpChunkTableWriterGhostChunk(t *testing.T) {
+	tw, err := NewCmpChunkTableWriter("")
+	require.NoError(t, err)
+	require.Error(t, tw.AddCmpChunk(NewGhostCompressedChunk(hash.Parse("6af71afc2ea0hmp4olev0vp9q1q5gvb1"))))
+}
+
 func TestContainsDuplicates(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		require.False(t, containsDuplicates(prefixIndexSlice{}))
