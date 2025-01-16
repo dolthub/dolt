@@ -209,7 +209,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 			addrs.Insert(c.Hash())
 			return nil
 		}
-	}, st.hasMany)
+	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)

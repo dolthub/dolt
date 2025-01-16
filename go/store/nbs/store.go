@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -39,7 +40,6 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
-	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -158,15 +158,14 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 }
 
 func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
-	gr := toGetRecords(hashes)
-	ranges := make(map[hash.Hash]map[hash.Hash]Range)
-
-	fn := func(css chunkSourceSet) error {
+	fn := func(css chunkSourceSet, gr []getRecord, ranges map[hash.Hash]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
-			// TODO: keeperF
-			rng, _, err := cs.getRecordRanges(ctx, gr, nil)
+			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
 			if err != nil {
-				return err
+				return gcBehavior_Continue, err
+			}
+			if gcb != gcBehavior_Continue {
+				return gcb, nil
 			}
 
 			h := hash.Hash(cs.hash())
@@ -178,22 +177,60 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 				ranges[h] = rng
 			}
 		}
-		return nil
+		return gcBehavior_Continue, nil
 	}
 
-	tables := func() tableSet {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		return nbs.tables
-	}()
+	for {
+		nbs.mu.Lock()
+		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		nbs.mu.Unlock()
 
-	if err := fn(tables.upstream); err != nil {
-		return nil, err
+		gr := toGetRecords(hashes)
+		ranges := make(map[hash.Hash]map[hash.Hash]Range)
+
+		gcb, err := fn(tables.upstream, gr, ranges, keeper)
+		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
+			return nil, err
+		} else if needsContinue {
+			continue
+		}
+
+		gcb, err = fn(tables.novel, gr, ranges, keeper)
+		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
+			return nil, err
+		} else if needsContinue {
+			continue
+		}
+
+		return ranges, nil
 	}
-	if err := fn(tables.novel); err != nil {
-		return nil, err
+}
+
+func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endRead func(), err error) (bool, error) {
+	if err != nil {
+		if endRead != nil {
+			nbs.mu.Lock()
+			endRead()
+			nbs.mu.Unlock()
+		}
+		return false, err
 	}
-	return ranges, nil
+	if gcb == gcBehavior_Block {
+		nbs.mu.Lock()
+		if endRead != nil {
+			endRead()
+		}
+		err := nbs.waitForGC(ctx)
+		nbs.mu.Unlock()
+		return true, err
+	} else {
+		if endRead != nil {
+			nbs.mu.Lock()
+			endRead()
+			nbs.mu.Unlock()
+		}
+		return false, nil
+	}
 }
 
 func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) {
@@ -730,7 +767,7 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 }
 
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
-	return nbs.putChunk(ctx, c, getAddrs, nbs.hasMany)
+	return nbs.putChunk(ctx, c, getAddrs, nbs.refCheck)
 }
 
 func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry, checker refCheck) error {
@@ -854,106 +891,118 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		nbs.stats.ChunksPerGet.Sample(1)
 	}()
 
-	data, tables, err := func() ([]byte, chunkReader, error) {
-		var data []byte
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
+	for {
+		nbs.mu.Lock()
 		if nbs.mt != nil {
-			var err error
-			// TODO: keeperF
-			data, _, err = nbs.mt.get(ctx, h, nil, nbs.stats)
-
+			data, gcb, err := nbs.mt.get(ctx, h, nbs.keeperFunc, nbs.stats)
 			if err != nil {
-				return nil, nil, err
+				nbs.mu.Unlock()
+				return chunks.EmptyChunk, err
+			}
+			if gcb == gcBehavior_Block {
+				err = nbs.waitForGC(ctx)
+				nbs.mu.Unlock()
+				if err != nil {
+					return chunks.EmptyChunk, err
+				}
+				continue
+			}
+			if data != nil {
+				nbs.mu.Unlock()
+				return chunks.NewChunkWithHash(h, data), nil
 			}
 		}
-		return data, nbs.tables, nil
-	}()
+		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		nbs.mu.Unlock()
 
-	if err != nil {
-		return chunks.EmptyChunk, err
+		data, gcb, err := tables.get(ctx, h, keeper, nbs.stats)
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		if err != nil {
+			return chunks.EmptyChunk, err
+		}
+		if needContinue {
+			continue
+		}
+
+		if data != nil {
+			return chunks.NewChunkWithHash(h, data), nil
+		}
+		return chunks.EmptyChunk, nil
 	}
-
-	if data != nil {
-		return chunks.NewChunkWithHash(h, data), nil
-	}
-
-	// TODO: keeperF
-	data, _, err = tables.get(ctx, h, nil, nbs.stats)
-
-	if err != nil {
-		return chunks.EmptyChunk, err
-	}
-
-	if data != nil {
-		return chunks.NewChunkWithHash(h, data), nil
-	}
-
-	return chunks.EmptyChunk, nil
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetMany", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
-	span.End()
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
-		// TODO: keeperF
-		res, _, err := cr.getMany(ctx, eg, reqs, found, nil, nbs.stats)
-		return res, err
+	defer span.End()
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+		return cr.getMany(ctx, eg, reqs, found, keeper, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
-		// TODO: keeperF
-		res, _, err := cr.getManyCompressed(ctx, eg, reqs, found, nil, nbs.stats)
-		return res, err
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+		return cr.getManyCompressed(ctx, eg, reqs, found, keeper, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) getManyWithFunc(
 	ctx context.Context,
 	hashes hash.HashSet,
-	getManyFunc func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error),
+	getManyFunc func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error),
 ) error {
+	if len(hashes) == 0 {
+		return nil
+	}
+
 	t1 := time.Now()
-	reqs := toGetRecords(hashes)
-
 	defer func() {
-		if len(hashes) > 0 {
-			nbs.stats.GetLatency.SampleTimeSince(t1)
-			nbs.stats.ChunksPerGet.Sample(uint64(len(reqs)))
-		}
+		nbs.stats.GetLatency.SampleTimeSince(t1)
+		nbs.stats.ChunksPerGet.Sample(uint64(len(hashes)))
 	}()
 
-	eg, ctx := errgroup.WithContext(ctx)
-	const ioParallelism = 16
-	eg.SetLimit(ioParallelism)
+	for {
+		reqs := toGetRecords(hashes)
+		eg, ctx := errgroup.WithContext(ctx)
+		const ioParallelism = 16
+		eg.SetLimit(ioParallelism)
 
-	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		tables = nbs.tables
-		remaining = true
+		nbs.mu.Lock()
 		if nbs.mt != nil {
-			remaining, err = getManyFunc(ctx, nbs.mt, eg, reqs, nbs.stats)
+			remaining, gcb, err := getManyFunc(ctx, nbs.mt, eg, reqs, nbs.keeperFunc, nbs.stats)
+			if err != nil {
+				nbs.mu.Unlock()
+				return err
+			}
+			if gcb == gcBehavior_Block {
+				err = nbs.waitForGC(ctx)
+				nbs.mu.Unlock()
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if !remaining {
+				nbs.mu.Unlock()
+				return nil
+			}
 		}
-		return
-	}()
-	if err != nil {
-		return err
-	}
+		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		nbs.mu.Unlock()
 
-	if remaining {
-		_, err = getManyFunc(ctx, tables, eg, reqs, nbs.stats)
-	}
+		_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
+		err = errors.Join(err, eg.Wait())
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		if err != nil {
+			return err
+		}
+		if needContinue {
+			continue
+		}
 
-	if err != nil {
-		eg.Wait()
-		return err
+		return nil
 	}
-	return eg.Wait()
 }
 
 func toGetRecords(hashes hash.HashSet) []getRecord {
@@ -1007,38 +1056,41 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		nbs.stats.AddressesPerHas.Sample(1)
 	}()
 
-	has, tables, err := func() (bool, chunkReader, error) {
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-
+	for {
+		nbs.mu.Lock()
 		if nbs.mt != nil {
-			// TODO: keeperF
-			has, _, err := nbs.mt.has(h, nil)
-
+			has, gcb, err := nbs.mt.has(h, nbs.keeperFunc)
 			if err != nil {
-				return false, nil, err
+				nbs.mu.Unlock()
+				return false, err
 			}
-
-			return has, nbs.tables, nil
+			if gcb == gcBehavior_Block {
+				err = nbs.waitForGC(ctx)
+				nbs.mu.Unlock()
+				if err != nil {
+					return false, err
+				}
+				continue
+			}
+			if has {
+				nbs.mu.Unlock()
+				return true, nil
+			}
 		}
+		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		nbs.mu.Unlock()
 
-		return false, nbs.tables, nil
-	}()
-
-	if err != nil {
-		return false, err
-	}
-
-	if !has {
-		// TODO: keeperF
-		has, _, err = tables.has(h, nil)
-
+		has, gcb, err := tables.has(h, keeper)
+		needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
 		if err != nil {
 			return false, err
 		}
-	}
+		if needsContinue {
+			continue
+		}
 
-	return has, nil
+		return has, nil
+	}
 }
 
 func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
@@ -1047,14 +1099,96 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	}
 
 	t1 := time.Now()
-	defer nbs.stats.HasLatency.SampleTimeSince(t1)
-	nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
+	defer func() {
+		nbs.stats.HasLatency.SampleTimeSince(t1)
+		nbs.stats.AddressesPerHas.SampleLen(hashes.Size())
+	}()
 
-	nbs.mu.RLock()
-	defer nbs.mu.RUnlock()
-	return nbs.hasMany(toHasRecords(hashes))
+	for {
+		reqs := toHasRecords(hashes)
+
+		nbs.mu.Lock()
+		if nbs.mt != nil {
+			remaining, gcb, err := nbs.mt.hasMany(reqs, nbs.keeperFunc)
+			if err != nil {
+				nbs.mu.Unlock()
+				return nil, err
+			}
+			if gcb == gcBehavior_Block {
+				err = nbs.waitForGC(ctx)
+				nbs.mu.Unlock()
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if !remaining {
+				nbs.mu.Unlock()
+				return hash.HashSet{}, nil
+			}
+		}
+		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		nbs.mu.Unlock()
+
+		remaining, gcb, err := tables.hasMany(reqs, keeper)
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		if err != nil {
+			return nil, err
+		}
+		if needContinue {
+			continue
+		}
+
+		if !remaining {
+			return hash.HashSet{}, nil
+		}
+
+		absent := hash.HashSet{}
+		for _, r := range reqs {
+			if !r.has {
+				absent.Insert(*r.a)
+			}
+		}
+		return absent, nil
+	}
 }
 
+// Operates a lot like |hasMany|, but without locking and without
+// taking read dependencies on the checked references. Should only be
+// used for the sanity checking on references for written chunks.
+func (nbs *NomsBlockStore) refCheck(reqs []hasRecord) (hash.HashSet, error) {
+	if nbs.mt != nil {
+		remaining, _, err := nbs.mt.hasMany(reqs, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !remaining {
+			return hash.HashSet{}, nil
+		}
+	}
+
+	remaining, _, err := nbs.tables.hasMany(reqs, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !remaining {
+		return hash.HashSet{}, nil
+	}
+
+	absent := hash.HashSet{}
+	for _, r := range reqs {
+		if !r.has {
+			absent.Insert(*r.a)
+		}
+	}
+	return absent, nil
+}
+
+// Only used for a generational full GC, where the table files are
+// added to the store and are then used to filter which chunks need to
+// make it to the new generation. In this context, we do not need to
+// worry about taking read dependencies on the requested chunks. Hence
+// our handling of keeperFunc and gcBehavior below.
 func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSet) (hash.HashSet, error) {
 	if hashes.Size() == 0 {
 		return nil, nil
@@ -1069,7 +1203,6 @@ func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSe
 
 	records := toHasRecords(hashes)
 
-	// TODO: keeperF
 	_, _, err := nbs.tables.hasManyInSources(srcs, records, nil)
 	if err != nil {
 		return nil, err
@@ -1077,45 +1210,6 @@ func (nbs *NomsBlockStore) hasManyInSources(srcs []hash.Hash, hashes hash.HashSe
 
 	absent := hash.HashSet{}
 	for _, r := range records {
-		if !r.has {
-			absent.Insert(*r.a)
-		}
-	}
-	return absent, nil
-}
-
-func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
-	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
-		tables = nbs.tables
-
-		remaining = true
-		if nbs.mt != nil {
-			// TODO: keeperF
-			remaining, _, err = nbs.mt.hasMany(reqs, nil)
-
-			if err != nil {
-				return nil, false, err
-			}
-		}
-
-		return tables, remaining, nil
-	}()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if remaining {
-		// TODO: keeperF
-		_, _, err := tables.hasMany(reqs, nil)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	absent := hash.HashSet{}
-	for _, r := range reqs {
 		if !r.has {
 			absent.Insert(*r.a)
 		}
@@ -1182,7 +1276,7 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
-	return nbs.commit(ctx, current, last, nbs.hasMany)
+	return nbs.commit(ctx, current, last, nbs.refCheck)
 }
 
 func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, checker refCheck) (success bool, err error) {
@@ -1575,12 +1669,11 @@ func (nbs *NomsBlockStore) AddTableFilesToManifest(ctx context.Context, fileIdTo
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
-	return nbs.pruneTableFiles(ctx, nbs.hasMany)
+	return nbs.pruneTableFiles(ctx)
 }
 
-func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck) (err error) {
+func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	mtime := time.Now()
-
 	return nbs.p.PruneTableFiles(ctx, func() []hash.Hash {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
@@ -1942,7 +2035,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return nbs.setRootChunk(ctx, root, previous, nbs.hasMany)
+	return nbs.setRootChunk(ctx, root, previous, nbs.refCheck)
 }
 
 func (nbs *NomsBlockStore) setRootChunk(ctx context.Context, root, previous hash.Hash, checker refCheck) error {

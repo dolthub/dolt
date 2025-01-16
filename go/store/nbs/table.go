@@ -199,7 +199,7 @@ const (
 	// Operation was successful, go forward with the result.
 	gcBehavior_Continue gcBehavior = false
 	// Operation needs to block until the GC is over and then retry.
-	gcBehavior_Block               = true
+	gcBehavior_Block = true
 )
 
 type keeperF func(hash.Hash) bool

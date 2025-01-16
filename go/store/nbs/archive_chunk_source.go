@@ -106,7 +106,10 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 	for i, req := range reqs {
 		h := *req.a
 		data, err := acs.aRdr.get(h)
-		if err != nil || data == nil {
+		if err != nil {
+			return true, gcBehavior_Continue, err
+		}
+		if data == nil {
 			foundAll = false
 		} else {
 			if keeper != nil && keeper(h) {
