@@ -67,7 +67,7 @@ func TestChunkJournalPersist(t *testing.T) {
 	haver := emptyChunkSource{}
 	for i := 0; i < iters; i++ {
 		memTbl, chunkMap := randomMemTable(16)
-		source, err := j.Persist(ctx, memTbl, haver, stats)
+		source, _, err := j.Persist(ctx, memTbl, haver, nil, stats)
 		assert.NoError(t, err)
 
 		for h, ch := range chunkMap {
@@ -96,7 +96,7 @@ func TestReadRecordRanges(t *testing.T) {
 		gets = append(gets, getRecord{a: &h, prefix: h.Prefix()})
 	}
 
-	jcs, err := j.Persist(ctx, mt, emptyChunkSource{}, &Stats{})
+	jcs, _, err := j.Persist(ctx, mt, emptyChunkSource{}, nil, &Stats{})
 	require.NoError(t, err)
 
 	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot(context.Background())

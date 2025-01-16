@@ -45,12 +45,16 @@ var _ tableFilePersister = &blobstorePersister{}
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
-func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	address, data, chunkCount, err := mt.write(haver, stats)
+func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+	address, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
-	} else if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
+	}
+	if chunkCount == 0 {
+		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 	name := address.String()
 
@@ -59,24 +63,28 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
-	eg.Go(func() (err error) {
-		_, err = bsp.bs.Put(ectx, name+tableRecordsExt, int64(len(records)), bytes.NewBuffer(records))
-		return
+	eg.Go(func() error {
+		_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(len(records)), bytes.NewBuffer(records))
+		return err
 	})
-	eg.Go(func() (err error) {
-		_, err = bsp.bs.Put(ectx, name+tableTailExt, int64(len(tail)), bytes.NewBuffer(tail))
-		return
+	eg.Go(func() error {
+		_, err := bsp.bs.Put(ectx, name+tableTailExt, int64(len(tail)), bytes.NewBuffer(tail))
+		return err
 	})
 	if err = eg.Wait(); err != nil {
-		return nil, err
+		return nil, gcBehavior_Continue, err
 	}
 
 	// then concatenate into a final blob
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 	rdr := &bsTableReaderAt{name, bsp.bs}
-	return newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	return src, gcBehavior_Continue, nil
 }
 
 // ConjoinAll implements tablePersister.

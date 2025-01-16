@@ -63,7 +63,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 			c := nextChunk()
 			mt.addChunk(computeAddr(c), c)
 		}
-		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		c, err := cs.clone()
 		require.NoError(t, err)
@@ -180,7 +180,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		mt := newMemTable(testMemTableSize)
 		data := []byte{0xde, 0xad}
 		mt.addChunk(computeAddr(data), data)
-		src, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		src, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		return tableSpec{src.hash(), mustUint32(src.count())}

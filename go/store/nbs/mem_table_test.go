@@ -164,7 +164,7 @@ func TestMemTableWrite(t *testing.T) {
 	defer tr2.close()
 	assert.True(tr2.has(computeAddr(chunks[2]), nil))
 
-	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
+	_, data, count, _, err := mt.write(chunkReaderGroup{tr1, tr2}, nil, &Stats{})
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
@@ -218,7 +218,7 @@ func TestMemTableSnappyWriteOutOfLine(t *testing.T) {
 	}
 	mt.snapper = &outOfLineSnappy{[]bool{false, true, false}} // chunks[1] should trigger a panic
 
-	assert.Panics(func() { mt.write(nil, &Stats{}) })
+	assert.Panics(func() { mt.write(nil, nil, &Stats{}) })
 }
 
 type outOfLineSnappy struct {

@@ -239,18 +239,19 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 }
 
 // Persist implements tablePersister.
-func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
+func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if j.backing.readOnly() {
-		return nil, errReadOnlyManifest
+		return nil, gcBehavior_Continue, errReadOnlyManifest
 	} else if err := j.maybeInit(ctx); err != nil {
-		return nil, err
+		return nil, gcBehavior_Continue, err
 	}
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		// TODO: keeperF
-		if _, _, err := haver.hasMany(mt.order, nil); err != nil {
-			return nil, err
+		if _, gcb, err := haver.hasMany(mt.order, keeper); err != nil {
+			return nil, gcBehavior_Continue, err
+		} else if gcb != gcBehavior_Continue {
+			return nil, gcb, nil
 		}
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
 	}
@@ -262,10 +263,10 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
 		err := j.wr.writeCompressedChunk(ctx, ChunkToCompressedChunk(c))
 		if err != nil {
-			return nil, err
+			return nil, gcBehavior_Continue, err
 		}
 	}
-	return journalChunkSource{journal: j.wr}, nil
+	return journalChunkSource{journal: j.wr}, gcBehavior_Continue, nil
 }
 
 // ConjoinAll implements tablePersister.

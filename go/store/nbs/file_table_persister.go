@@ -86,16 +86,23 @@ func (ftp *fsTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCo
 	return archiveFileExists(ctx, ftp.dir, name)
 }
 
-func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
+func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
-	name, data, chunkCount, err := mt.write(haver, stats)
+	name, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
 	}
 
-	return ftp.persistTable(ctx, name, data, chunkCount, stats)
+	src, err := ftp.persistTable(ctx, name, data, chunkCount, stats)
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	return src, gcBehavior_Continue, nil
 }
 
 func (ftp *fsTablePersister) Path() string {

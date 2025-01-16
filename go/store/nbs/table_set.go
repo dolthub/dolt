@@ -385,7 +385,8 @@ func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, h
 		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
-	cs, err := ts.p.Persist(ctx, mt, ts, stats)
+	// TODO: keeperF
+	cs, _, err := ts.p.Persist(ctx, mt, ts, nil, stats)
 	if err != nil {
 		return tableSet{}, err
 	}

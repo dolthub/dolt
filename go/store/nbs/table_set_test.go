@@ -146,7 +146,7 @@ func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
 	for _, c := range chunks {
 		mt := newMemTable(testMemTableSize)
 		mt.addChunk(computeAddr(c), c)
-		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 	}
