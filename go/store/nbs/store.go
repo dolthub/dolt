@@ -833,10 +833,17 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAdd
 
 		addChunkRes = nbs.mt.addChunk(ch.Hash(), ch.Data())
 		if addChunkRes == chunkNotAdded {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
+			ts, gcb, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
 			if err != nil {
 				nbs.handlePossibleDanglingRefError(err)
 				return false, err
+			}
+			if gcb == gcBehavior_Block {
+				retry = true
+				if err := nbs.waitForGC(ctx); err != nil {
+					return false, err
+				}
+				continue
 			}
 			nbs.addPendingRefsToHasCache()
 			nbs.tables = ts
@@ -1365,22 +1372,30 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(cached)
 	}
 
-	if nbs.mt != nil {
-		cnt, err := nbs.mt.count()
-
-		if err != nil {
-			return err
-		}
-
-		if cnt > 0 {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
+	for {
+		if nbs.mt != nil {
+			cnt, err := nbs.mt.count()
 			if err != nil {
-				nbs.handlePossibleDanglingRefError(err)
 				return err
 			}
-			nbs.addPendingRefsToHasCache()
-			nbs.tables, nbs.mt = ts, nil
+			if cnt > 0 {
+				ts, gcb, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.keeperFunc, nbs.hasCache, nbs.stats)
+				if err != nil {
+					nbs.handlePossibleDanglingRefError(err)
+					return err
+				}
+				if gcb == gcBehavior_Block {
+					err = nbs.waitForGC(ctx)
+					if err != nil {
+						return err
+					}
+					continue
+				}
+				nbs.addPendingRefsToHasCache()
+				nbs.tables, nbs.mt = ts, nil
+			}
 		}
+		break
 	}
 
 	didConjoin, err := nbs.conjoinIfRequired(ctx)

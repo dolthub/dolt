@@ -364,7 +364,7 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, error) {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, keeper keeperF, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, gcBehavior, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
 		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
@@ -380,15 +380,17 @@ func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, h
 	sort.Sort(hasRecordByPrefix(mt.pendingRefs))
 	absent, err := checker(mt.pendingRefs)
 	if err != nil {
-		return tableSet{}, err
+		return tableSet{}, gcBehavior_Continue, err
 	} else if absent.Size() > 0 {
-		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
+		return tableSet{}, gcBehavior_Continue, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
-	// TODO: keeperF
-	cs, _, err := ts.p.Persist(ctx, mt, ts, nil, stats)
+	cs, gcb, err := ts.p.Persist(ctx, mt, ts, keeper, stats)
 	if err != nil {
-		return tableSet{}, err
+		return tableSet{}, gcBehavior_Continue, err
+	}
+	if gcb != gcBehavior_Continue {
+		return tableSet{}, gcb, nil
 	}
 
 	newTs := tableSet{
@@ -399,7 +401,7 @@ func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, h
 		rl:       ts.rl,
 	}
 	newTs.novel[cs.hash()] = cs
-	return newTs, nil
+	return newTs, gcBehavior_Continue, nil
 }
 
 // flatten returns a new tableSet with |upstream| set to the union of ts.novel
