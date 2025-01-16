@@ -78,7 +78,7 @@ func (acs archiveChunkSource) hasMany(addrs []hasRecord) (bool, error) {
 			foundAll = false
 		}
 	}
-	return foundAll, nil
+	return !foundAll, nil
 }
 
 func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
