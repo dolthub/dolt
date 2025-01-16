@@ -17,7 +17,6 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"github.com/xitongsys/parquet-go/parquet"
 	"io"
 	"math/big"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/common"
+	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/source"
 
