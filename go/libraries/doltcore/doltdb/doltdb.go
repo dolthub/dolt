@@ -594,6 +594,56 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
+// TagResolver is used to late load tag metadata resolution. There are situations where we need to list all the tags, but
+// don't necessarily need to load their metadata. See GetTagResolvers
+type TagResolver struct {
+	ddb *DoltDB
+	ref ref.TagRef
+	h   hash.Hash
+}
+
+// Addr returns the hash of the object storing the Tag data. It is loaded and deserialize by the Resolve method.
+func (tr *TagResolver) Addr() hash.Hash {
+	return tr.h
+}
+
+// Resolve resolves the tag reference to a *Tag, complete with its metadata.
+func (tr *TagResolver) Resolve(ctx context.Context) (*Tag, error) {
+	return tr.ddb.ResolveTag(ctx, tr.ref)
+}
+
+// GetTagResolvers takes a slice of TagRefs and returns the corresponding Tag objects.
+func (ddb *DoltDB) GetTagResolvers(ctx context.Context, tagRefs []ref.DoltRef) ([]TagResolver, error) {
+	datasets, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]ref.TagRef)
+	for _, tagRef := range tagRefs {
+		if tr, ok := tagRef.(ref.TagRef); ok {
+			tagMap[tagRef.String()] = tr
+		} else {
+			panic(fmt.Sprintf("runtime error: expected TagRef, got %T", tagRef))
+		}
+	}
+
+	results := make([]TagResolver, 0, len(tagRefs))
+
+	err = datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+		if val, ok := tagMap[id]; ok {
+			tr := TagResolver{ddb: ddb, ref: val, h: addr}
+			results = append(results, tr)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
 func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
