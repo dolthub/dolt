@@ -19,11 +19,12 @@ import (
 	"fmt"
 	"sort"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
-	"golang.org/x/sync/errgroup"
 )
 
 type TagProps struct {
