@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"golang.org/x/sync/errgroup"
 )
 
 type TagProps struct {
@@ -149,18 +150,37 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag
 		return "", err
 	}
 
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(5)
+
 	// for each tag, get the meta
-	tagMetas := make([]*doltdb.TagRefWithMeta, 0, len(tagRefs))
-	for _, r := range tagRefs {
-		tr, ok := r.(ref.TagRef)
-		if !ok {
-			return "", fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
-		}
-		tm, err := ddb.ResolveTagMeta(ctx, tr)
-		if err != nil {
-			return "", err
-		}
-		tagMetas = append(tagMetas, tm)
+	tagMetas := make([]*doltdb.TagRefWithMeta, len(tagRefs))
+	for idx, r := range tagRefs {
+		idx, r := idx, r
+
+		eg.Go(func() error {
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
+
+			tr, ok := r.(ref.TagRef)
+			if !ok {
+				return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+			}
+
+			tm, err := ddb.ResolveTagMeta(ctx, tr)
+			if err != nil {
+				return err
+			}
+
+			tagMetas[idx] = tm
+			return nil
+		})
+
+	}
+
+	if err := eg.Wait(); err != nil {
+		return "", err
 	}
 
 	// sort by meta timestamp
