@@ -594,6 +594,29 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
+// ResolveTagMeta takes a TagRef and returns the corresponding TagMeta object.
+func (ddb *DoltDB) ResolveTagMeta(ctx context.Context, tagRef ref.TagRef) (*datas.TagMeta, error) {
+	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
+	if err != nil {
+		return nil, ErrTagNotFound
+	}
+
+	if !ds.HasHead() {
+		return nil, ErrTagNotFound
+	}
+
+	if !ds.IsTag() {
+		return nil, fmt.Errorf("tagRef head is not a tag")
+	}
+
+	meta, _, err := ds.HeadTag()
+	if err != nil {
+		return nil, err
+	}
+
+	return meta, nil
+}
+
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
 func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())

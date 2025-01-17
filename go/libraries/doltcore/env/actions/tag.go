@@ -138,3 +138,113 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 
 	return nil
 }
+
+type TagRefWithMeta struct {
+	TagRef ref.TagRef
+	Meta   *datas.TagMeta
+}
+
+type RefPageToken struct {
+	TagName string
+}
+
+const DefaultPageSize = 100
+
+// IterResolvedTagsPaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+// Returns a next page token if there are more results available.
+func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, pageToken *RefPageToken, cb func(tag *doltdb.Tag) (stop bool, err error)) (*RefPageToken, error) {
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// for each tag, get the meta
+	tagMetas := make([]*TagRefWithMeta, 0, len(tagRefs))
+	for _, r := range tagRefs {
+		tr, ok := r.(ref.TagRef)
+		if !ok {
+			return nil, fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+		}
+		meta, err := ddb.ResolveTagMeta(ctx, tr)
+		if err != nil {
+			return nil, err
+		}
+		tagMetas = append(tagMetas, &TagRefWithMeta{TagRef: tr, Meta: meta})
+	}
+
+	// sort by meta timestamp
+	sort.Slice(tagMetas, func(i, j int) bool {
+		return tagMetas[i].Meta.Timestamp > tagMetas[j].Meta.Timestamp
+	})
+
+	// find starting index based on page token
+	startIdx := 0
+	if pageToken != nil && pageToken.TagName != "" {
+		for i, tm := range tagMetas {
+			if tm.TagRef.GetPath() == pageToken.TagName {
+				startIdx = i + 1 // start after the token
+				break
+			}
+		}
+	}
+
+	// get page of results
+	endIdx := startIdx + DefaultPageSize
+	if endIdx > len(tagMetas) {
+		endIdx = len(tagMetas)
+	}
+
+	pageTagMetas := tagMetas[startIdx:endIdx]
+
+	// resolve tags for this page
+	for _, tm := range pageTagMetas {
+		tag, err := ddb.ResolveTag(ctx, tm.TagRef)
+		if err != nil {
+			return nil, err
+		}
+
+		stop, err := cb(tag)
+		if err != nil {
+			return nil, err
+		}
+		if stop {
+			break
+		}
+	}
+
+	// return next page token if there are more results
+	var nextPageToken *RefPageToken
+	if endIdx < len(tagMetas) {
+		lastTag := pageTagMetas[len(pageTagMetas)-1]
+		nextPageToken = &RefPageToken{
+			TagName: lastTag.TagRef.GetPath(),
+		}
+	}
+
+	return nextPageToken, nil
+}
+
+// VisitResolvedTag iterates over tags in ddb until the given tag name is found, then calls cb() with the resolved tag.
+func VisitResolvedTag(ctx context.Context, ddb *doltdb.DoltDB, tagName string, cb func(tag *doltdb.Tag) error) error {
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range tagRefs {
+		tr, ok := r.(ref.TagRef)
+		if !ok {
+			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+		}
+
+		if tr.GetPath() == tagName {
+			tag, err := ddb.ResolveTag(ctx, tr)
+			if err != nil {
+				return err
+			}
+			return cb(tag)
+		}
+	}
+
+	return doltdb.ErrTagNotFound
+}
