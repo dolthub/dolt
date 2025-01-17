@@ -32,6 +32,31 @@ type Tag struct {
 	Commit *Commit
 }
 
+// NewTagFromTagRefWithMeta creates a new Tag object from a TagRefWithMeta.
+func NewTagFromTagRefWithMeta(ctx context.Context, name string, tagRefWithMeta *TagRefWithMeta, vrw types.ValueReadWriter, ns tree.NodeStore) (*Tag, error) {
+	dc, err := datas.LoadCommitAddr(ctx, vrw, tagRefWithMeta.CommitAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if dc.IsGhost() {
+		return nil, ErrGhostCommitEncountered
+	}
+
+	commit, err := NewCommit(ctx, vrw, ns, dc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Tag{
+		Name:   name,
+		vrw:    vrw,
+		addr:   tagRefWithMeta.MaybeHeadAddr,
+		Meta:   tagRefWithMeta.Meta,
+		Commit: commit,
+	}, nil
+}
+
 // NewTag creates a new Tag object.
 func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore) (*Tag, error) {
 	meta, commitAddr, err := ds.HeadTag()

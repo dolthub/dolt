@@ -139,11 +139,6 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 	return nil
 }
 
-type TagRefWithMeta struct {
-	TagRef ref.TagRef
-	Meta   *datas.TagMeta
-}
-
 const DefaultPageSize = 100
 
 // IterResolvedTagsPaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
@@ -155,17 +150,17 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag
 	}
 
 	// for each tag, get the meta
-	tagMetas := make([]*TagRefWithMeta, 0, len(tagRefs))
+	tagMetas := make([]*doltdb.TagRefWithMeta, 0, len(tagRefs))
 	for _, r := range tagRefs {
 		tr, ok := r.(ref.TagRef)
 		if !ok {
 			return "", fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
 		}
-		meta, err := ddb.ResolveTagMeta(ctx, tr)
+		tm, err := ddb.ResolveTagMeta(ctx, tr)
 		if err != nil {
 			return "", err
 		}
-		tagMetas = append(tagMetas, &TagRefWithMeta{TagRef: tr, Meta: meta})
+		tagMetas = append(tagMetas, tm)
 	}
 
 	// sort by meta timestamp
@@ -194,7 +189,7 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag
 
 	// resolve tags for this page
 	for _, tm := range pageTagMetas {
-		tag, err := ddb.ResolveTag(ctx, tm.TagRef)
+		tag, err := ddb.ResolveTagFromTagRefWithMeta(ctx, tm)
 		if err != nil {
 			return "", err
 		}

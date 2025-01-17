@@ -68,7 +68,6 @@ func TestVisitResolvedTag(t *testing.T) {
 	})
 	require.Equal(t, doltdb.ErrTagNotFound, err)
 }
-
 func TestIterResolvedTagsPaginated(t *testing.T) {
 	dEnv, _ := createTestEnv()
 	ctx := context.Background()
