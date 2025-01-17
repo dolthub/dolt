@@ -594,6 +594,54 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
+// TagResolver is used to late bind tag resolution
+type TagResolver struct {
+	ddb *DoltDB
+	ref ref.TagRef
+	h   hash.Hash
+}
+
+func (tr *TagResolver) Addr() hash.Hash {
+	return tr.h
+}
+
+// Resolve resolves the tag reference to a *Tag
+func (tr *TagResolver) Resolve(ctx context.Context) (*Tag, error) {
+	return tr.ddb.ResolveTag(ctx, tr.ref)
+}
+
+// ResolveTags takes a slice of TagRefs and returns the corresponding Tag objects.
+func (ddb *DoltDB) ResolveTags(ctx context.Context, tagRefs []ref.DoltRef) ([]TagResolver, error) {
+	datasets, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]ref.TagRef)
+	for _, tagRef := range tagRefs {
+		if tr, ok := tagRef.(ref.TagRef); ok {
+			tagMap[tagRef.String()] = tr
+		} else {
+			panic(fmt.Sprintf("runtime error: expected TagRef, got %T", tagRef))
+		}
+	}
+
+	results := make([]TagResolver, 0, len(tagRefs))
+
+	err = datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+		if val, ok := tagMap[id]; ok {
+			tr := TagResolver{ddb: ddb, ref: val, h: addr}
+			results = append(results, tr)
+		}
+		return nil // NM4 - is it an error if we don't find it???? Probably need to delete it on --prune.
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
 func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
