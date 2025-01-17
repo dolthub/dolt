@@ -144,18 +144,14 @@ type TagRefWithMeta struct {
 	Meta   *datas.TagMeta
 }
 
-type RefPageToken struct {
-	TagName string
-}
-
 const DefaultPageSize = 100
 
 // IterResolvedTagsPaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
-// Returns a next page token if there are more results available.
-func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, pageToken *RefPageToken, cb func(tag *doltdb.Tag) (stop bool, err error)) (*RefPageToken, error) {
+// Returns the next tag name if there are more results available.
+func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag string, cb func(tag *doltdb.Tag) (stop bool, err error)) (string, error) {
 	tagRefs, err := ddb.GetTags(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// for each tag, get the meta
@@ -163,11 +159,11 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, pageToke
 	for _, r := range tagRefs {
 		tr, ok := r.(ref.TagRef)
 		if !ok {
-			return nil, fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+			return "", fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
 		}
 		meta, err := ddb.ResolveTagMeta(ctx, tr)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		tagMetas = append(tagMetas, &TagRefWithMeta{TagRef: tr, Meta: meta})
 	}
@@ -177,12 +173,12 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, pageToke
 		return tagMetas[i].Meta.Timestamp > tagMetas[j].Meta.Timestamp
 	})
 
-	// find starting index based on page token
+	// find starting index based on start tag
 	startIdx := 0
-	if pageToken != nil && pageToken.TagName != "" {
+	if startTag != "" {
 		for i, tm := range tagMetas {
-			if tm.TagRef.GetPath() == pageToken.TagName {
-				startIdx = i + 1 // start after the token
+			if tm.TagRef.GetPath() == startTag {
+				startIdx = i + 1 // start after the given tag
 				break
 			}
 		}
@@ -200,28 +196,25 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, pageToke
 	for _, tm := range pageTagMetas {
 		tag, err := ddb.ResolveTag(ctx, tm.TagRef)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		stop, err := cb(tag)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		if stop {
 			break
 		}
 	}
 
-	// return next page token if there are more results
-	var nextPageToken *RefPageToken
+	// return next tag name if there are more results
 	if endIdx < len(tagMetas) {
 		lastTag := pageTagMetas[len(pageTagMetas)-1]
-		nextPageToken = &RefPageToken{
-			TagName: lastTag.TagRef.GetPath(),
-		}
+		return lastTag.TagRef.GetPath(), nil
 	}
 
-	return nextPageToken, nil
+	return "", nil
 }
 
 // VisitResolvedTag iterates over tags in ddb until the given tag name is found, then calls cb() with the resolved tag.

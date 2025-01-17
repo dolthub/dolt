@@ -95,12 +95,12 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 
 	// Test first page
 	var foundTags []string
-	pageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB, nil, func(tag *doltdb.Tag) (bool, error) {
+	pageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB, "", func(tag *doltdb.Tag) (bool, error) {
 		foundTags = append(foundTags, tag.Name)
 		return false, nil
 	})
 	require.NoError(t, err)
-	require.NotNil(t, pageToken)                      // Should have next page
+	require.NotEmpty(t, pageToken)                    // Should have next page
 	require.Equal(t, DefaultPageSize, len(foundTags)) // Default page size tags returned
 
 	// Test second page
@@ -110,7 +110,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 		return false, nil
 	})
 	require.NoError(t, err)
-	require.Nil(t, nextPageToken)                          // Should be no more pages
+	require.Empty(t, nextPageToken)                        // Should be no more pages
 	require.Equal(t, DefaultPageSize, len(secondPageTags)) // Remaining tags
 
 	// Verify all tags were found
@@ -120,7 +120,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 
 	// Test early termination
 	var earlyTermTags []string
-	_, err = IterResolvedTagsPaginated(ctx, dEnv.DoltDB, nil, func(tag *doltdb.Tag) (bool, error) {
+	_, err = IterResolvedTagsPaginated(ctx, dEnv.DoltDB, "", func(tag *doltdb.Tag) (bool, error) {
 		earlyTermTags = append(earlyTermTags, tag.Name)
 		return true, nil // Stop after first tag
 	})
