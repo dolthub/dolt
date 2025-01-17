@@ -95,16 +95,14 @@ func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string)
 	return nil
 }
 
-// IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
-func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.TagResolver) (stop bool, err error)) error {
+// IterUnresolvedTags iterates over tags in dEnv.DoltDB, and calls cb() for each with an unresovled Tag.
+func IterUnresolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.TagResolver) (stop bool, err error)) error {
 	tagRefs, err := ddb.GetTags(ctx)
-
 	if err != nil {
 		return err
 	}
 
-	tagResolvers, err := ddb.ResolveTags(ctx, tagRefs)
-	_ = tagResolvers
+	tagResolvers, err := ddb.GetTagResolvers(ctx, tagRefs)
 	if err != nil {
 		return err
 	}

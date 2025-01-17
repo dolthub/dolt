@@ -338,7 +338,7 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pul
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
 func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
-	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.TagResolver) (stop bool, err error) {
+	err := IterUnresolvedTags(ctx, srcDB, func(tag *doltdb.TagResolver) (stop bool, err error) {
 		tagHash := tag.Addr()
 
 		has, err := destDB.Has(ctx, tagHash)
