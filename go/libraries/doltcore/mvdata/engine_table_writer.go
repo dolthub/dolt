@@ -187,8 +187,13 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 	}()
 
-	line := 1
+	// If there were create table statements, they are automatically committed, so we need to start a new transaction
+	_, _, _, err = s.se.Query(s.sqlCtx, "START TRANSACTION")
+	if err != nil {
+		return err
+	}
 
+	line := 1
 	for {
 		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
 			atomic.StoreInt32(&s.statOps, 0)
