@@ -88,6 +88,13 @@ type DoltDB struct {
 	databaseName string
 }
 
+type TagRefWithMeta struct {
+	TagRef        ref.TagRef
+	Meta          *datas.TagMeta
+	CommitAddr    hash.Hash
+	MaybeHeadAddr hash.Hash
+}
+
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
 	vrw := types.NewValueStore(cs)
@@ -592,6 +599,35 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	}
 
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
+}
+
+// ResolveTag takes a TagRef and returns the corresponding Tag object.
+func (ddb *DoltDB) ResolveTagFromTagRefWithMeta(ctx context.Context, tagRefWithMeta *TagRefWithMeta) (*Tag, error) {
+	return NewTagFromTagRefWithMeta(ctx, tagRefWithMeta.TagRef.GetPath(), tagRefWithMeta, ddb.vrw, ddb.ns)
+}
+
+// ResolveTagMeta takes a TagRef and returns the corresponding TagMeta object.
+func (ddb *DoltDB) ResolveTagMeta(ctx context.Context, tagRef ref.TagRef) (*TagRefWithMeta, error) {
+	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
+	if err != nil {
+		return nil, ErrTagNotFound
+	}
+
+	if !ds.HasHead() {
+		return nil, ErrTagNotFound
+	}
+
+	if !ds.IsTag() {
+		return nil, fmt.Errorf("tagRef head is not a tag")
+	}
+
+	meta, commitAddr, err := ds.HeadTag()
+	if err != nil {
+		return nil, err
+	}
+
+	addr, _ := ds.MaybeHeadAddr()
+	return &TagRefWithMeta{TagRef: tagRef, Meta: meta, CommitAddr: commitAddr, MaybeHeadAddr: addr}, nil
 }
 
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.

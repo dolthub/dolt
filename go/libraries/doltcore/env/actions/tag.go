@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sort"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -137,4 +139,174 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 	}
 
 	return nil
+}
+
+const DefaultPageSize = 100
+
+// IterResolvedTagsPaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+// Returns the next tag name if there are more results available.
+func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag string, cb func(tag *doltdb.Tag) (stop bool, err error)) (string, error) {
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(5)
+
+	// for each tag, get the meta
+	tagMetas := make([]*doltdb.TagRefWithMeta, len(tagRefs))
+	for idx, r := range tagRefs {
+		idx, r := idx, r
+
+		eg.Go(func() error {
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
+
+			tr, ok := r.(ref.TagRef)
+			if !ok {
+				return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+			}
+
+			tm, err := ddb.ResolveTagMeta(ctx, tr)
+			if err != nil {
+				return err
+			}
+
+			tagMetas[idx] = tm
+			return nil
+		})
+
+	}
+
+	if err := eg.Wait(); err != nil {
+		return "", err
+	}
+
+	// sort by meta timestamp
+	sort.Slice(tagMetas, func(i, j int) bool {
+		return tagMetas[i].Meta.Timestamp > tagMetas[j].Meta.Timestamp
+	})
+
+	// find starting index based on start tag
+	startIdx := 0
+	if startTag != "" {
+		for i, tm := range tagMetas {
+			if tm.TagRef.GetPath() == startTag {
+				startIdx = i + 1 // start after the given tag
+				break
+			}
+		}
+	}
+
+	// get page of results
+	endIdx := startIdx + DefaultPageSize
+	if endIdx > len(tagMetas) {
+		endIdx = len(tagMetas)
+	}
+
+	pageTagMetas := tagMetas[startIdx:endIdx]
+
+	// resolve tags for this page
+	for _, tm := range pageTagMetas {
+		tag, err := ddb.ResolveTagFromTagRefWithMeta(ctx, tm)
+		if err != nil {
+			return "", err
+		}
+
+		stop, err := cb(tag)
+		if err != nil {
+			return "", err
+		}
+		if stop {
+			break
+		}
+	}
+
+	// return next tag name if there are more results
+	if endIdx < len(tagMetas) {
+		lastTag := pageTagMetas[len(pageTagMetas)-1]
+		return lastTag.TagRef.GetPath(), nil
+	}
+
+	return "", nil
+}
+
+// IterResolvedTagsByNamePaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+// Returns the next tag name if there are more results available.
+func IterResolvedTagsByNamePaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag string, cb func(tag *doltdb.Tag) (stop bool, err error)) (string, error) {
+	// tags returned here are sorted lexicographically
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	// find starting index based on start tag
+	startIdx := 0
+	if startTag != "" {
+		for i, tr := range tagRefs {
+			if tr.GetPath() == startTag {
+				startIdx = i + 1 // start after the given tag
+				break
+			}
+		}
+	}
+
+	// get page of results
+	endIdx := startIdx + DefaultPageSize
+	if endIdx > len(tagRefs) {
+		endIdx = len(tagRefs)
+	}
+
+	pageTagRefs := tagRefs[startIdx:endIdx]
+
+	// resolve tags for this page
+	for _, tr := range pageTagRefs {
+		tag, err := ddb.ResolveTag(ctx, tr.(ref.TagRef))
+		if err != nil {
+			return "", err
+		}
+
+		stop, err := cb(tag)
+		if err != nil {
+			return "", err
+		}
+		if stop {
+			break
+		}
+	}
+
+	// return next tag name if there are more results
+	if endIdx < len(tagRefs) {
+		lastTag := pageTagRefs[len(pageTagRefs)-1]
+		return lastTag.GetPath(), nil
+	}
+
+	return "", nil
+}
+
+// VisitResolvedTag iterates over tags in ddb until the given tag name is found, then calls cb() with the resolved tag.
+func VisitResolvedTag(ctx context.Context, ddb *doltdb.DoltDB, tagName string, cb func(tag *doltdb.Tag) error) error {
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range tagRefs {
+		tr, ok := r.(ref.TagRef)
+		if !ok {
+			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+		}
+
+		if tr.GetPath() == tagName {
+			tag, err := ddb.ResolveTag(ctx, tr)
+			if err != nil {
+				return err
+			}
+			return cb(tag)
+		}
+	}
+
+	return doltdb.ErrTagNotFound
 }
