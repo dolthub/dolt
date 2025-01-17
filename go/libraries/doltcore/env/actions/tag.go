@@ -16,6 +16,8 @@ package actions
 
 import (
 	"context"
+	"fmt"
+	"sort"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -90,6 +92,47 @@ func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string)
 
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.Tag) (stop bool, err error)) error {
+	tagRefs, err := ddb.GetTags(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	var resolved []*doltdb.Tag
+	for _, r := range tagRefs {
+		tr, ok := r.(ref.TagRef)
+		if !ok {
+			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+		}
+
+		tag, err := ddb.ResolveTag(ctx, tr)
+		if err != nil {
+			return err
+		}
+
+		resolved = append(resolved, tag)
+	}
+
+	// iterate newest to oldest
+	sort.Slice(resolved, func(i, j int) bool {
+		return resolved[i].Meta.Timestamp > resolved[j].Meta.Timestamp
+	})
+
+	for _, tag := range resolved {
+		stop, err := cb(tag)
+
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
 		}
 	}
 	return nil
