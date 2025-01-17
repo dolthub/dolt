@@ -57,7 +57,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	return &Tag{
 		Name:   name,
 		vrw:    vrw,
-		addr:   addr,
+		addr:   addr, // NM4 - object address which is what we actually care about.
 		Meta:   meta,
 		Commit: commit,
 	}, nil

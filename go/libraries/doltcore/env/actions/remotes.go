@@ -338,11 +338,8 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pul
 // been fetched into the destination DB.
 // todo: potentially too expensive to iterate over all srcDB tags
 func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
-	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
-		tagHash, err := tag.GetAddr()
-		if err != nil {
-			return true, err
-		}
+	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.TagResolver) (stop bool, err error) {
+		tagHash := tag.Addr()
 
 		has, err := destDB.Has(ctx, tagHash)
 		if err != nil {
@@ -353,7 +350,12 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return false, nil
 		}
 
-		cmHash, err := tag.Commit.HashOf()
+		t, err := tag.Resolve(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		cmHash, err := t.Commit.HashOf()
 		if err != nil {
 			return true, err
 		}
@@ -378,7 +380,7 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 
 		newCtx, cancelFunc := context.WithCancel(ctx)
 		wg, statsCh := progStarter(newCtx)
-		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, statsCh)
+		err = FetchTag(ctx, tempTableDir, srcDB, destDB, t, statsCh)
 		progStopper(cancelFunc, wg, statsCh)
 		if err == nil {
 			cli.Println()
@@ -390,7 +392,7 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return true, err
 		}
 
-		err = destDB.SetHead(ctx, tag.GetDoltRef(), tagHash)
+		err = destDB.SetHead(ctx, t.GetDoltRef(), tagHash)
 
 		return false, err
 	})
