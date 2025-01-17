@@ -212,6 +212,59 @@ func IterResolvedTagsPaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag
 	return "", nil
 }
 
+// IterResolvedTagsByNamePaginated iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+// Returns the next tag name if there are more results available.
+func IterResolvedTagsByNamePaginated(ctx context.Context, ddb *doltdb.DoltDB, startTag string, cb func(tag *doltdb.Tag) (stop bool, err error)) (string, error) {
+	// tags returned here are sorted lexicographically
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	// find starting index based on start tag
+	startIdx := 0
+	if startTag != "" {
+		for i, tr := range tagRefs {
+			if tr.GetPath() == startTag {
+				startIdx = i + 1 // start after the given tag
+				break
+			}
+		}
+	}
+
+	// get page of results
+	endIdx := startIdx + DefaultPageSize
+	if endIdx > len(tagRefs) {
+		endIdx = len(tagRefs)
+	}
+
+	pageTagRefs := tagRefs[startIdx:endIdx]
+
+	// resolve tags for this page
+	for _, tr := range pageTagRefs {
+		tag, err := ddb.ResolveTag(ctx, tr.(ref.TagRef))
+		if err != nil {
+			return "", err
+		}
+
+		stop, err := cb(tag)
+		if err != nil {
+			return "", err
+		}
+		if stop {
+			break
+		}
+	}
+
+	// return next tag name if there are more results
+	if endIdx < len(tagRefs) {
+		lastTag := pageTagRefs[len(pageTagRefs)-1]
+		return lastTag.GetPath(), nil
+	}
+
+	return "", nil
+}
+
 // VisitResolvedTag iterates over tags in ddb until the given tag name is found, then calls cb() with the resolved tag.
 func VisitResolvedTag(ctx context.Context, ddb *doltdb.DoltDB, tagName string, cb func(tag *doltdb.Tag) error) error {
 	tagRefs, err := ddb.GetTags(ctx)
