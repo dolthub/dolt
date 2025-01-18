@@ -1682,7 +1682,7 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
 		if types.IsFormat_DOLT(t.Format()) {
 			// This is overly broad, we could narrow this down a bit
-			return true
+			return typeinfo.RequiresRewrite(existingCol.TypeInfo, newCol.TypeInfo)
 		}
 		if existingCol.Kind != newCol.Kind {
 			return true
