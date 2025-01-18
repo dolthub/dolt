@@ -7565,6 +7565,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_constraint_violations"},
 					{"dolt_constraint_violations_test"},
 					{"dolt_diff_test"},
+					{"dolt_help"},
 					{"dolt_history_test"},
 					{"dolt_log"},
 					{"dolt_remote_branches"},

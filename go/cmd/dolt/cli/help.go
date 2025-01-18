@@ -166,19 +166,33 @@ func terminalSize() (width, height int) {
 func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 	var lines []string
 
-	for _, kvTuple := range ap.ArgListHelp {
-		k, v := kvTuple[0], kvTuple[1]
-		lines = append(lines, "<"+k+">")
-		l, err := templateDocStringHelper(v, CliFormat)
-		if err != nil {
-			panic(err)
-		}
-		l = embolden(l)
-		descLines := toParagraphLines(l, lineLen)
+	for _, usage := range OptionsUsageList(ap) {
+		name, description := usage[0], usage[1]
+
+		lines = append(lines, name)
+
+		descLines := toParagraphLines(description, lineLen)
 		descLines = indentLines(descLines, "  ")
 		descLines = append(descLines, "")
 
 		lines = append(lines, descLines...)
+	}
+
+	lines = indentLines(lines, indent)
+	return strings.Join(lines, "\n")
+}
+
+// OptionsUsageList returns a pair of strings for each option/argument in |ap|, where the first string
+// is the name of the option/argument and the second string is the description of the option/argument.
+func OptionsUsageList(ap *argparser.ArgParser) [][2]string {
+	res := [][2]string{}
+
+	for _, help := range ap.ArgListHelp {
+		name, description := help[0], help[1]
+
+		nameFormatted := "<" + name + ">"
+
+		res = append(res, [2]string{nameFormatted, description})
 	}
 
 	for _, supOpt := range ap.Supported {
@@ -192,22 +206,22 @@ func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 			argHelpFmt = "--%[2]s=<%[3]s>"
 		}
 
-		lines = append(lines, fmt.Sprintf(argHelpFmt, supOpt.Abbrev, supOpt.Name, supOpt.ValDesc))
+		nameFormatted := fmt.Sprintf(argHelpFmt, supOpt.Abbrev, supOpt.Name, supOpt.ValDesc)
 
-		l, err := templateDocStringHelper(supOpt.Desc, CliFormat)
+		res = append(res, [2]string{nameFormatted, supOpt.Desc})
+	}
+
+	for i := range res {
+		descriptionFormatted, err := templateDocStringHelper(res[i][1], CliFormat)
 		if err != nil {
 			panic(err)
 		}
-		l = embolden(l)
-		descLines := toParagraphLines(l, lineLen)
-		descLines = indentLines(descLines, "  ")
-		descLines = append(descLines, "")
+		descriptionFormatted = embolden(descriptionFormatted)
 
-		lines = append(lines, descLines...)
+		res[i][1] = descriptionFormatted
 	}
 
-	lines = indentLines(lines, indent)
-	return strings.Join(lines, "\n")
+	return res
 }
 
 func ToIndentedParagraph(inStr, indent string, lineLen int) string {
