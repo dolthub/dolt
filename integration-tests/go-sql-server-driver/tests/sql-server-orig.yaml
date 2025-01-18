@@ -105,7 +105,7 @@ tests:
     - query: 'show tables'
       result:
         columns: ["Tables_in_repo1"]
-        rows: []
+        rows: [["t"]]
   - on: repo1
     queries:
     - exec: 'create table t(c0 int)'
