@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -173,6 +174,33 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 	}
 
 	return nomsDatasetsMap{m}, nil
+}
+
+func (db *database) DatasetsWithPrefix(ctx context.Context, prefix string) ([]string, error) {
+	rootHash, err := db.rt.Root(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if db.Format().UsesFlatbuffers() {
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+		if err != nil {
+			return nil, err
+		}
+		var results []string
+		err = rm.IterAll(ctx, func(name string, address hash.Hash) error {
+			if strings.HasPrefix(name, prefix) {
+				cut, _ := strings.CutPrefix(name, prefix)
+				lastIndex := strings.IndexRune(cut, '/')
+				if lastIndex != -1 {
+					results = append(results, cut[:lastIndex])
+				}
+			}
+			return nil
+		})
+		return results, err
+	}
+	panic("old format")
 }
 
 var ErrInvalidDatasetID = errors.New("Invalid dataset ID")

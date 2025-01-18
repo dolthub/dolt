@@ -15,21 +15,15 @@
 package commands
 
 import (
-	"context"
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
-	"os"
-	"syscall"
-
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	_ "bazil.org/fuse/fs/fstestutil"
+	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/mount"
 )
 
 type mountOpts struct{}
@@ -94,7 +88,7 @@ func (cmd MountCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	defer c.Close()
 
-	err = fs.Serve(c, FS{db: dEnv.DoltDB})
+	err = fs.Serve(c, mount.NewFileSystem(dEnv))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -102,92 +96,32 @@ func (cmd MountCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
+// TODO: An extra layer on top for selecting the db
+// TODO: should we be getting the root set for a branch?
 // Different handlers for different message types, which specify different paths.
 // Examples:
-// / is a StoreRoot
+// Top level can be:
+// - head / working / staged
+// - a branch
+// - a tag
+// - an address
+// - a remote
+// - a fully qualified ref
+// - root? for the root store? Kinda redundant
 // /workingSets/heads/main/ is a WorkingSet
 // /workingSets/heads/main/working is a RootValue
 // /refs/heads/main/ is a rootvalue
 // /addresses/rt9gl00583v5ulof6qkhun355q6kcpbq is whatever the address resolves to.
 // /working, /staged, and /head give you currently checked-out branch
-
-// FS implements the hello world file system.
-type FS struct {
-	db *doltdb.DoltDB
-}
-
-func (f FS) Root() (fs.Node, error) {
-	return AddressesDir{
-		db: f.db,
-	}, nil
-}
-
-type Directory interface {
-	fs.Node
-	fs.NodeStringLookuper
-}
-
-type ListableDirectory interface {
-	Directory
-	fs.HandleReadDirAller
-}
-
-type File interface {
-	fs.Node
-	fs.HandleReadAller
-}
-
-type AddressesDir struct {
-	db *doltdb.DoltDB
-}
-
-var _ Directory = AddressesDir{}
-
-func (AddressesDir) Attr(ctx context.Context, a *fuse.Attr) error {
-	a.Mode = os.ModeDir | 0o555
-	return nil
-}
-
-func (d AddressesDir) Lookup(ctx context.Context, specRef string) (fs.Node, error) {
-	// if it's a correct hash, read the node as a blob.
-	if !hashRegex.MatchString(specRef) {
-		return nil, syscall.ENOENT
-	}
-	refHash, err := parseHashString(specRef)
-	if err != nil {
-		return nil, err
-	}
-	value, err := d.db.ValueReadWriter().ReadValue(ctx, refHash)
-	if err != nil {
-		return nil, err
-	}
-
-	switch v := value.(type) {
-	case types.SerialMessage:
-		node, fileId, err := tree.NodeFromBytes(v)
-		switch fileId {
-		case serial.BlobFileID:
-			return &Blob{
-				ns:   d.db.NodeStore(),
-				node: node,
-			}, err
-		}
-	}
-	return nil, syscall.ENOENT
-}
-
-type CommitDir struct {
-	db *doltdb.DoltDB
-}
-
-var _ Directory = CommitDir{}
-
-type IndexDir struct {
-	db   *doltdb.DoltDB
-	keys []interface{}
-}
-
-var _ Directory = IndexDir{}
+/*
+1)       { key: refs/heads/main ref: #h673mspupgcuisrbomql5ve84oeci9ae - commit -> root value
+2)       { key: refs/heads/otherBranch ref: #h673mspupgcuisrbomql5ve84oeci9ae - commit
+3)       { key: refs/internal/create ref: #h673mspupgcuisrbomql5ve84oeci9ae - commit
+4)       { key: refs/remotes/origin/main ref: #h673mspupgcuisrbomql5ve84oeci9ae - commit
+5)       { key: refs/tags/aTag ref: #solo3k07o2dc3u4veq0nhklc9il24huk - tag -> commit
+6)       { key: workingSets/heads/main ref: #vqthnij64k14fbmgppschunnk5vi4v2b - working set
+7)       { key: workingSets/heads/otherBranch ref: #578h6hjd4h0ovp9i1n4hcuts1d2ujp52 - working set
+*/
 
 /*
 var dirDirs = []fuse.Dirent{
@@ -197,34 +131,3 @@ var dirDirs = []fuse.Dirent{
 func (Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	return dirDirs, nil
 }*/
-
-type Blob struct {
-	ns   tree.NodeStore
-	node tree.Node
-}
-
-var _ File = Blob{}
-
-func (b Blob) Attr(ctx context.Context, a *fuse.Attr) (err error) {
-	a.Mode = 0o444
-	// TODO: Report size just from the tree
-	size := uint64(0)
-	err = tree.WalkNodes(ctx, b.node, b.ns, func(ctx context.Context, n tree.Node) error {
-		if n.IsLeaf() {
-			size += uint64(len(n.GetValue(0)))
-		}
-		return nil
-	})
-	a.Size = size
-	return err
-}
-
-func (b Blob) ReadAll(ctx context.Context) (result []byte, err error) {
-	err = tree.WalkNodes(ctx, b.node, b.ns, func(ctx context.Context, n tree.Node) error {
-		if n.IsLeaf() {
-			result = append(result, n.GetValue(0)...)
-		}
-		return nil
-	})
-	return result, err
-}

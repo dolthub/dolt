@@ -56,6 +56,8 @@ type Database interface {
 	// Map<String, Ref<Commit>> where string is a datasetID.
 	Datasets(ctx context.Context) (DatasetsMap, error)
 
+	DatasetsWithPrefix(ctx context.Context, prefix string) ([]string, error)
+
 	// GetDataset returns a Dataset struct containing the current mapping of
 	// datasetID in the above Datasets Map.
 	GetDataset(ctx context.Context, datasetID string) (Dataset, error)
