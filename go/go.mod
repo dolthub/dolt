@@ -39,7 +39,7 @@ require (
 	github.com/tealeg/xlsx v1.0.5
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.25.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/api v0.126.0
