@@ -188,9 +188,11 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 	}()
 
 	// If there were create table statements, they are automatically committed, so we need to start a new transaction
-	_, _, _, err = s.se.Query(s.sqlCtx, "START TRANSACTION")
-	if err != nil {
-		return err
+	if s.importOption == CreateOp {
+		_, _, _, err = s.se.Query(s.sqlCtx, "START TRANSACTION")
+		if err != nil {
+			return err
+		}
 	}
 
 	line := 1
@@ -226,6 +228,10 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 			quit := badRowCb(offendingRow, s.tableSchema, s.tableName, line, err)
 			if quit {
+				// quitting import that created table, should drop table
+				if s.importOption == CreateOp {
+					s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", s.tableName))
+				}
 				return err
 			}
 		}
