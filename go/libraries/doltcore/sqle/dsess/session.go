@@ -448,6 +448,11 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 		return nil
 	}
 
+	// There is no transaction to commit
+	if tx == nil {
+		return nil
+	}
+
 	dirties := d.dirtyWorkingSets()
 	if len(dirties) == 0 {
 		return nil
