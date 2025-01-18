@@ -231,6 +231,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 				// quitting import that created table, should drop table
 				if s.importOption == CreateOp {
 					s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", s.tableName))
+					s.se.Query(s.sqlCtx, "COMMIT")
 				}
 				return err
 			}
