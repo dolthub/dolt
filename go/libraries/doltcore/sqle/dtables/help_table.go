@@ -117,33 +117,33 @@ func (ht *HelpTable) PartitionRows(_ *sql.Context, _ sql.Partition) (sql.RowIter
 	return NewHelpRowIter(), nil
 }
 
-type HelpRowIter []sql.Row
+type HelpRowIter struct {
+	idx  int
+	rows []sql.Row
+}
 
 func NewHelpRowIter() *HelpRowIter {
-	var nilIter HelpRowIter
-	return &nilIter
+	return &HelpRowIter{}
 }
 
 // DoltCommand is set in cmd/dolt/dolt.go to avoid circular dependency.
 var DoltCommand cli.SubCommandHandler
 
 func (itr *HelpRowIter) Next(_ *sql.Context) (sql.Row, error) {
-	if *itr == nil {
+	if itr.rows == nil {
 		var err error
-		*itr, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand)
+		itr.rows, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	helpRows := *itr
-
-	if len(helpRows) == 0 {
+	if itr.idx >= len(itr.rows) {
 		return nil, io.EOF
 	}
 
-	row := helpRows[0]
-	*itr = helpRows[1:]
+	row := itr.rows[itr.idx]
+	itr.idx++
 
 	return row, nil
 }
