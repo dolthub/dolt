@@ -649,5 +649,5 @@ SQL
 
     run dolt sql -q "select arguments from dolt_help where name='dolt_tag'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-m <msg>, --message=<msg>".*"Use the given <msg> as the tag message." ]] || false
+    [[ "$output" =~ "-m <msg>, --message=<msg>".*"Use the given msg as the tag message." ]] || false
 }
