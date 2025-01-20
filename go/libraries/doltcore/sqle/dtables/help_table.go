@@ -130,7 +130,7 @@ var DoltCommand cli.SubCommandHandler
 func (itr *HelpRowIter) Next(_ *sql.Context) (sql.Row, error) {
 	if *itr == nil {
 		var err error
-		*itr, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand.Subcommands)
+		*itr, err = generateProcedureHelpRows(DoltCommand.Name(), DoltCommand)
 		if err != nil {
 			return nil, err
 		}
@@ -153,81 +153,73 @@ func (itr *HelpRowIter) Close(_ *sql.Context) error {
 }
 
 // generateProcedureHelpRows generates a sql row for each procedure that has an equivalent CLI command.
-func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.Row, error) {
+func generateProcedureHelpRows(cmdStr string, cmd cli.Command) ([]sql.Row, error) {
+	if hidCmd, ok := cmd.(cli.HiddenCommand); ok && hidCmd.Hidden() {
+		return []sql.Row{}, nil
+	}
+
 	rows := []sql.Row{}
 
-	for _, curr := range subCommands {
-		if hidCmd, ok := curr.(cli.HiddenCommand); ok && hidCmd.Hidden() {
-			continue
+	procedureName := strings.ReplaceAll(cmdStr, "-", "_")
+	docs := cmd.Docs()
+	if procedureExists(procedureName) && docs != nil {
+		argsMap := map[string]string{}
+		for _, usage := range cli.OptionsUsageList(docs.ArgParser, cli.EmptyFormat) {
+			argsMap[usage[0]] = usage[1]
 		}
 
-		if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-			if subCmdHandler.Unspecified != nil {
-				newRows, err := generateProcedureHelpRows(cmdStr, []cli.Command{subCmdHandler.Unspecified})
-				if err != nil {
-					return nil, err
-				}
-				rows = append(rows, newRows...)
-			}
-			newRows, err := generateProcedureHelpRows(cmdStr+"_"+subCmdHandler.Name(), subCmdHandler.Subcommands)
+		argsJson, err := json.Marshal(argsMap)
+		if err != nil {
+			return nil, err
+		}
+
+		synopsis, err := docs.GetSynopsis(cli.CliFormat)
+		if err != nil {
+			return nil, err
+		}
+
+		synopsisWithCommand := make([]string, len(synopsis))
+		cliName := strings.ReplaceAll(cmdStr, "_", " ")
+		for i := range synopsis {
+			synopsisWithCommand[i] = cliName + " " + synopsis[i]
+		}
+
+		shortDesc := docs.GetShortDesc()
+
+		longDesc, err := docs.GetLongDesc(cli.CliFormat)
+		if err != nil {
+			return nil, err
+		}
+
+		rows = append(rows, sql.NewRow(
+			procedureName,
+			"procedure",
+			strings.Join(synopsisWithCommand, "\n"),
+			shortDesc,
+			longDesc,
+			string(argsJson),
+		))
+	}
+
+	if subCmdHandler, ok := cmd.(cli.SubCommandHandler); ok {
+		for _, subCmd := range subCmdHandler.Subcommands {
+			newRows, err := generateProcedureHelpRows(cmdStr+"_"+subCmd.Name(), subCmd)
 			if err != nil {
 				return nil, err
 			}
 			rows = append(rows, newRows...)
-		} else {
-			fullName := cmdStr + "_" + curr.Name()
-			procedureName := strings.ReplaceAll(fullName, "-", "_")
-
-			hasProcedure := false
-			for _, procedure := range dprocedures.DoltProcedures {
-				if procedure.Name == procedureName {
-					hasProcedure = true
-					break
-				}
-			}
-
-			docs := curr.Docs()
-
-			if hasProcedure && docs != nil {
-				argsMap := map[string]string{}
-				for _, usage := range cli.OptionsUsageList(docs.ArgParser, cli.EmptyFormat) {
-					argsMap[usage[0]] = usage[1]
-				}
-
-				argsJson, err := json.Marshal(argsMap)
-				if err != nil {
-					return nil, err
-				}
-
-				synopsis, err := docs.GetSynopsis(cli.CliFormat)
-				if err != nil {
-					return nil, err
-				}
-
-				synopsisWithCommand := make([]string, len(synopsis))
-				cliName := strings.ReplaceAll(fullName, "_", " ")
-				for i := range synopsis {
-					synopsisWithCommand[i] = cliName + " " + synopsis[i]
-				}
-
-				shortDesc := docs.GetShortDesc()
-
-				longDesc, err := docs.GetLongDesc(cli.CliFormat)
-				if err != nil {
-					return nil, err
-				}
-
-				rows = append(rows, sql.NewRow(
-					procedureName,
-					"procedure",
-					strings.Join(synopsisWithCommand, "\n"),
-					shortDesc,
-					longDesc,
-					string(argsJson),
-				))
-			}
 		}
 	}
 
 	return rows, nil
+}
+
+// procedureExists returns whether |procedureName| is the name of a dolt procedure.
+func procedureExists(procedureName string) bool {
+	for _, procedure := range dprocedures.DoltProcedures {
+		if procedure.Name == procedureName {
+			return true
+		}
+	}
+	return false
 }
