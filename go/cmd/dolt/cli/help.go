@@ -166,7 +166,7 @@ func terminalSize() (width, height int) {
 func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 	var lines []string
 
-	for _, usage := range OptionsUsageList(ap) {
+	for _, usage := range OptionsUsageList(ap, CliFormat) {
 		name, description := usage[0], usage[1]
 
 		lines = append(lines, name)
@@ -184,7 +184,7 @@ func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 
 // OptionsUsageList returns a pair of strings for each option/argument in |ap|, where the first string
 // is the name of the option/argument and the second string is the description of the option/argument.
-func OptionsUsageList(ap *argparser.ArgParser) [][2]string {
+func OptionsUsageList(ap *argparser.ArgParser, docFormat docFormat) [][2]string {
 	res := [][2]string{}
 
 	for _, help := range ap.ArgListHelp {
@@ -212,7 +212,7 @@ func OptionsUsageList(ap *argparser.ArgParser) [][2]string {
 	}
 
 	for i := range res {
-		descriptionFormatted, err := templateDocStringHelper(res[i][1], CliFormat)
+		descriptionFormatted, err := templateDocStringHelper(res[i][1], docFormat)
 		if err != nil {
 			panic(err)
 		}

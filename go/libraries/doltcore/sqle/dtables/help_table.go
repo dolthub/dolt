@@ -190,7 +190,7 @@ func generateProcedureHelpRows(cmdStr string, subCommands []cli.Command) ([]sql.
 
 			if hasProcedure && docs != nil {
 				argsMap := map[string]string{}
-				for _, usage := range cli.OptionsUsageList(docs.ArgParser) {
+				for _, usage := range cli.OptionsUsageList(docs.ArgParser, cli.EmptyFormat) {
 					argsMap[usage[0]] = usage[1]
 				}
 
