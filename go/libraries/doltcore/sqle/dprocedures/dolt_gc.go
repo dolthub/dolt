@@ -45,12 +45,23 @@ func init() {
 
 var DoltGCFeatureFlag = true
 
+func NewDoltGCProcedure() sql.ExternalStoredProcedureDetails {
+	impl := &DoltGCProcedure{}
+	return sql.ExternalStoredProcedureDetails{
+		Name: "dolt_gc",
+		Schema: int64Schema("status"),
+		Function: impl.Run,
+		ReadOnly: true,
+		AdminOnly: true,
+}
+}
+
 // doltGC is the stored procedure to run online garbage collection on a database.
-func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+func (p *DoltGCProcedure) Run(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if !DoltGCFeatureFlag {
 		return nil, errors.New("DOLT_GC() stored procedure disabled")
 	}
-	res, err := doDoltGC(ctx, args)
+	res, err := p.doGC(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +93,10 @@ func (sc safepointController) CancelSafepoint() {
 	sc.cancel()
 }
 
-func doDoltGC(ctx *sql.Context, args []string) (int, error) {
+type DoltGCProcedure struct {
+}
+
+func (*DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {

@@ -40,6 +40,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
@@ -130,6 +131,7 @@ func NewSqlEngine(
 		return nil, err
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
+	pro.RegisterProcedure(dprocedures.NewDoltGCProcedure())
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	if config.ClusterController != nil {
