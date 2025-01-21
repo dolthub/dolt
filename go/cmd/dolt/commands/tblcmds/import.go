@@ -583,7 +583,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 
 		// only log info for the --continue option
 		if !options.contOnErr {
-			rowErr = wr.DropCreatedTable()
+			_ = wr.DropCreatedTable()
 			return true
 		}
 
