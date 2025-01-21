@@ -72,9 +72,9 @@ EOF
 
     run dolt sql -r csv -q "select
       c0,
-      min(pk) = firstId,
+      min(pk) = firstId - rowCount + 1,
       rowCount = 1024,
-      max(pk) = firstId + rowCount -1
+      max(pk) = firstId
     from test1 join ranges on test1.c0 = ranges.pk group by c0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0,true,true,true" ]] || false
