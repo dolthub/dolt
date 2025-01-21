@@ -104,7 +104,7 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, exp.BoundCnt, cmp.BoundCnt)
 	})
 
-	t.Run("test GC", func(t *testing.T) {
+	t.Run("test bucket GC", func(t *testing.T) {
 		prollyKv.StartGc(context.Background(), 10)
 
 		// if we delete from memory, no more fallback to disk
@@ -131,8 +131,40 @@ func TestProllyKv(t *testing.T) {
 		prollyKv.FinishGc()
 		// only tagged one bucket
 		require.Equal(t, 1, prollyKv.Len())
-
 	})
+
+	t.Run("test bounds GC", func(t *testing.T) {
+		exp := sql.Row{1, 1}
+		prollyKv.PutBound(h, exp)
+		prollyKv.PutBound(h2, exp)
+
+		prollyKv.StartGc(context.Background(), 10)
+		prollyKv.GetBound(h2)
+		prollyKv.FinishGc()
+
+		require.Equal(t, 1, len(prollyKv.mem.bounds))
+	})
+
+	t.Run("test templates GC", func(t *testing.T) {
+		exp := stats.Statistic{RowCnt: 50, Qual: sql.StatQualifier{Database: "mydb", Tab: "xy"}}
+		key := templateCacheKey{
+			h:       h,
+			idxName: "PRIMARY",
+		}
+		key2 := templateCacheKey{
+			h:       h2,
+			idxName: "PRIMARY",
+		}
+		prollyKv.PutTemplate(key, exp)
+		prollyKv.PutTemplate(key2, exp)
+
+		prollyKv.StartGc(context.Background(), 10)
+		prollyKv.GetTemplate(key2)
+		prollyKv.FinishGc()
+
+		require.Equal(t, 1, len(prollyKv.mem.templates))
+	})
+
 }
 
 func newTestProllyKv(t *testing.T) *prollyStats {
