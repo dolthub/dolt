@@ -228,11 +228,6 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 
 			quit := badRowCb(offendingRow, s.tableSchema, s.tableName, line, err)
 			if quit {
-				// quitting import that created table, should drop table
-				if s.importOption == CreateOp {
-					s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", s.tableName))
-					s.se.Query(s.sqlCtx, "COMMIT")
-				}
 				return err
 			}
 		}
@@ -250,6 +245,22 @@ func (s *SqlEngineTableWriter) RowOperationSchema() sql.PrimaryKeySchema {
 
 func (s *SqlEngineTableWriter) TableSchema() sql.PrimaryKeySchema {
 	return s.tableSchema
+}
+
+func (s *SqlEngineTableWriter) DropCreatedTable() error {
+	// quitting import that created table, should drop table
+	if s.importOption == CreateOp {
+		var err error
+		_, _, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", s.tableName))
+		if err != nil {
+			return err
+		}
+		_, _, _, err = s.se.Query(s.sqlCtx, "COMMIT")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // forceDropTableIfNeeded drop the given table in case the -f parameter is passed.
