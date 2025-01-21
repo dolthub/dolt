@@ -102,7 +102,7 @@ var doc = cli.CommandDocumentationContent{
 	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
 
 	Synopsis: []string{
-		"<--data-dir=<path>> subcommand <subcommand arguments>",
+		"[global flags] subcommand [subcommand arguments]",
 	},
 }
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
