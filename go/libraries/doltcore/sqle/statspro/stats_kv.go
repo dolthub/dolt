@@ -270,9 +270,8 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 	var v val.Tuple
 	err = p.m.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
 		if key != nil {
+			ok = true
 			v = value
-		} else {
-			ok = false
 		}
 		return nil
 	})
@@ -346,7 +345,7 @@ func (p *prollyStats) decodeBucketTuple(ctx context.Context, v val.Tuple, tupB *
 	distinctCount := row[2].(int64)
 	nullCount := row[3].(int64)
 	boundRowStr := row[4].(string)
-	upperBoundCnt := row[5].(uint64)
+	upperBoundCnt := row[5].(int64)
 	mcvCountsStr := row[10].(string)
 
 	boundRow, err := DecodeRow(ctx, p.m.NodeStore(), boundRowStr, tupB)
@@ -379,7 +378,7 @@ func (p *prollyStats) decodeBucketTuple(ctx context.Context, v val.Tuple, tupB *
 		DistinctCnt: uint64(distinctCount),
 		NullCnt:     uint64(nullCount),
 		McvsCnt:     mcvCnts,
-		BoundCnt:    upperBoundCnt,
+		BoundCnt:    uint64(upperBoundCnt),
 		BoundVal:    boundRow,
 		McvVals:     mcvs,
 	}, nil
