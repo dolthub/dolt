@@ -46,6 +46,7 @@ type StatsKv interface {
 	Flush(ctx context.Context) error
 	StartGc(ctx context.Context, sz int) error
 	FinishGc()
+	Len() int
 }
 
 var _ StatsKv = (*prollyStats)(nil)
@@ -137,6 +138,10 @@ func (m *memStats) FinishGc() {
 	m.doGc = false
 }
 
+func (m *memStats) Len() int {
+	return m.buckets.Len()
+}
+
 func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
 	if m.doGc {
 		m.nextBuckets.Add(h, b)
@@ -197,6 +202,10 @@ type prollyStats struct {
 	kb, vb *val.TupleBuilder
 	m      *prolly.MutableMap
 	mem    *memStats
+}
+
+func (p *prollyStats) Len() int {
+	return p.mem.Len()
 }
 
 func (p *prollyStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {

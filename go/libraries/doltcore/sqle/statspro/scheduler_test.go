@@ -192,6 +192,11 @@ func TestModifyColumn(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 4, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
+		require.Equal(t, int64(6), sc.bucketCnt.Load())
+
+		doGcCycle(t, ctx, sc)
+		require.Equal(t, int64(6), sc.bucketCnt.Load())
+		require.Equal(t, 6, kv.buckets.Len())
 	}
 }
 
@@ -229,6 +234,7 @@ func TestAddColumn(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
+		require.Equal(t, int64(4), sc.bucketCnt.Load())
 	}
 }
 
@@ -265,6 +271,7 @@ func TestDropIndex(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
+		require.Equal(t, int64(2), sc.bucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 
@@ -276,6 +283,7 @@ func TestDropIndex(t *testing.T) {
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
+		require.Equal(t, int64(2), sc.bucketCnt.Load())
 	}
 }
 
@@ -334,6 +342,7 @@ func TestDropTable(t *testing.T) {
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
+		require.Equal(t, int64(1), sc.bucketCnt.Load())
 	}
 }
 
@@ -358,6 +367,11 @@ func TestDeleteAboveBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
+		require.Equal(t, int64(2), sc.bucketCnt.Load())
+
+		doGcCycle(t, ctx, sc)
+		require.Equal(t, 2, kv.buckets.Len())
+		require.Equal(t, int64(2), sc.bucketCnt.Load())
 	}
 }
 
@@ -383,6 +397,11 @@ func TestDeleteBelowBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
+		require.Equal(t, int64(1), sc.bucketCnt.Load())
+
+		doGcCycle(t, ctx, sc)
+		require.Equal(t, 1, kv.buckets.Len())
+		require.Equal(t, int64(1), sc.bucketCnt.Load())
 	}
 }
 
@@ -408,6 +427,11 @@ func TestDeleteOnBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
+		require.Equal(t, int64(1), sc.bucketCnt.Load())
+
+		doGcCycle(t, ctx, sc)
+		require.Equal(t, 1, kv.buckets.Len())
+		require.Equal(t, int64(1), sc.bucketCnt.Load())
 	}
 }
 
@@ -714,6 +738,47 @@ func TestBucketDoubling(t *testing.T) {
 	require.Equal(t, 7, len(stat[1].Hist))
 }
 
+func TestBucketCounting(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
+
+	// add more data
+	b := strings.Repeat("b", 100)
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(100), key (b,a))"))
+	abIns := strings.Builder{}
+	abIns.WriteString("insert into ab values")
+	for i := range 200 {
+		if i > 0 {
+			abIns.WriteString(", ")
+		}
+		abIns.WriteString(fmt.Sprintf("(%d, '%s')", i, b))
+	}
+	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
+
+	sc.disableGc.Store(false)
+
+	runAndPause(ctx, sc, &wg) // track ab
+	runAndPause(ctx, sc, &wg) // finalize ab
+
+	// 4 old + 2*7 new ab
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 2, len(sc.Stats))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table cd (c int primary key, d varchar(200), key (d,c))"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into cd select a,b from ab"))
+
+	runAndPause(ctx, sc, &wg) // track ab
+	runAndPause(ctx, sc, &wg) // finalize ab
+
+	// no new buckets
+	kv = sc.kv.(*memStats)
+	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 3, len(sc.Stats))
+}
+
 func TestReadCounter(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -747,7 +812,7 @@ func TestJobQueueDoubling(t *testing.T) {
 	for _ = range 1025 {
 		jobs = append(jobs, ControlJob{})
 	}
-	require.NoError(t, sc.sendJobs(ctx, jobs))
+	require.NoError(t, sc.sendJobs(ctx, jobs...))
 	require.Equal(t, 1025, len(sc.Jobs))
 	require.Equal(t, 2048, cap(sc.Jobs))
 }

@@ -174,9 +174,8 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 		if err != nil {
 			return err
 		}
-		err = sc.gcWithStorageSwap(ctx, newStorageTarget.AliasedName(), newKv)
-		if err != nil {
-			return err
+		if pkv, ok := sc.kv.(*prollyStats); ok {
+			newKv.mem = pkv.mem
 		}
 	} else {
 		sc.setGc()

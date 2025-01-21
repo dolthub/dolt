@@ -328,8 +328,8 @@ type StatsCoord struct {
 
 	doBranchCheck atomic.Bool
 	doCapCheck    atomic.Bool
-	bucketCnt     atomic.Uint64
-	bucketCap     uint64
+	bucketCnt     atomic.Int64
+	bucketCap     int64
 
 	Jobs       chan StatsJob
 	Interrupts chan ControlJob
@@ -392,6 +392,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
 }
 
 func (sc *StatsCoord) Drop(dbName string) {
+	// deprecated
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
 	for i, db := range sc.dbs {
@@ -456,6 +457,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	return ret, nil
 }
 
+// TODO sendJobs
 func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb sqle.Database) chan struct{} {
 	j := NewSeedJob(ctx, sqlDb)
 	sc.Jobs <- j
@@ -483,6 +485,7 @@ func GcSweep(ctx *sql.Context) ControlJob {
 			return context.Cause(ctx)
 		default:
 			sc.kv.FinishGc()
+			sc.bucketCnt.Store(int64(sc.kv.Len()))
 			sc.activeGc.Store(false)
 			close(sc.gcDone)
 			sc.gcCancel = nil
@@ -501,7 +504,6 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 	jobTimer := time.NewTimer(0)
 	gcTicker := time.NewTicker(sc.gcInterval)
 	branchTicker := time.NewTicker(sc.branchInterval)
-	capTicker := time.NewTicker(sc.capInterval)
 
 	for {
 		// sequentially test:
@@ -522,7 +524,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			j := sc.startGcMark(ctx, make(chan struct{}))
 			err := sc.sendJobs(ctx, j)
 			if err != nil {
-				sc.error(j[0], err)
+				sc.error(j, err)
 			}
 		}
 
@@ -532,7 +534,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			if err != nil {
 				sc.error(ControlJob{desc: "branches update"}, err)
 			}
-			err = sc.sendJobs(ctx, newJobs)
+			err = sc.sendJobs(ctx, newJobs...)
 			if err != nil {
 				sc.error(j, err)
 			}
@@ -567,7 +569,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if err != nil {
 					sc.error(j, err)
 				}
-				err = sc.sendJobs(ctx, newJobs)
+				err = sc.sendJobs(ctx, newJobs...)
 				if err != nil {
 					sc.error(j, err)
 				}
@@ -578,14 +580,12 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 			sc.setGc()
 		case <-branchTicker.C:
 			sc.doBranchCheck.Store(true)
-		case <-capTicker.C:
-			sc.doCapCheck.Store(true)
 		}
 		jobTimer.Reset(sc.JobInterval)
 	}
 }
 
-func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs []StatsJob) error {
+func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs ...StatsJob) error {
 	for i := 0; i < len(jobs); i++ {
 		j := jobs[i]
 		select {
@@ -722,7 +722,8 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 		k++
 	}
 
-	sc.bucketCnt.Add(uint64(bucketDiff))
+	sc.bucketCnt.Add(int64(bucketDiff))
+
 	for sc.bucketCnt.Load() > sc.bucketCap {
 		sc.bucketCap *= 2
 		sc.doGc.Store(true)
@@ -1138,7 +1139,7 @@ func (sc *StatsCoord) countBuckets() int {
 	return cnt
 }
 
-func (sc *StatsCoord) initStorage(ctx *sql.Context, fs filesys.Filesys, defaultBranch string) (StatsKv, error) {
+func (sc *StatsCoord) initStorage(ctx *sql.Context, fs filesys.Filesys, defaultBranch string) (*prollyStats, error) {
 	// assume access is protected by kvLock
 	// get reference to target database
 	params := make(map[string]interface{})
@@ -1209,7 +1210,7 @@ func (sc *StatsCoord) setGc() {
 	}
 }
 
-func (sc *StatsCoord) startGcMark(ctx *sql.Context, done chan struct{}) []StatsJob {
+func (sc *StatsCoord) startGcMark(ctx *sql.Context, done chan struct{}) StatsJob {
 	sc.doGc.Store(false)
 	if sc.disableGc.Load() {
 		close(done)
@@ -1244,5 +1245,5 @@ func (sc *StatsCoord) startGcMark(ctx *sql.Context, done chan struct{}) []StatsJ
 		case <-sc.gcDone:
 		}
 	}(subCtx)
-	return []StatsJob{GcSweep(ctx)}
+	return GcSweep(ctx)
 }
