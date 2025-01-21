@@ -66,6 +66,12 @@ jobs:
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
+      - name: Install MySQL client LTS release (8.4)
+        run: |
+          brew update
+          brew install mysql-client@8.4
+          brew link mysql-client@8.4 --force
+          mysql --version
       - name: Install Dolt
         working-directory: ./go
         run: |
