@@ -2064,3 +2064,9 @@ func TestDoltWorkspace(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltWorkspaceTests(t, harness)
 }
+
+func TestDoltHelpSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	RunDoltHelpSystemTableTests(t, harness)
+}
