@@ -17,19 +17,10 @@ package statspro
 import (
 	"container/heap"
 	"context"
-	"errors"
-	"fmt"
-	"io"
-	"sort"
-	"strings"
-	"time"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"sort"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -39,151 +30,6 @@ const (
 	bucketLowCnt = 20
 	mcvCnt       = 3
 )
-
-// createNewStatsBuckets builds histograms for a list of index statistic metadata.
-// We only read chunk ranges indicated by |indexMeta.updateOrdinals|. If
-// the returned buckets are a subset of the index the caller is responsible
-// for reconciling the difference.
-func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
-	nameToIdx := make(map[string]sql.Index)
-	for _, idx := range indexes {
-		nameToIdx[strings.ToLower(idx.ID())] = idx
-	}
-
-	ret := make(map[sql.StatQualifier]*DoltStats)
-
-	for _, meta := range idxMetas {
-		var idx durable.Index
-		var err error
-		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
-			idx, err = dTab.GetRowData(ctx)
-		} else {
-			idx, err = dTab.GetIndexRowData(ctx, meta.qual.Index())
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		prollyMap := durable.ProllyMapFromIndex(idx)
-		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
-
-		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
-		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
-		if err != nil {
-			return nil, err
-		}
-
-		var types []sql.Type
-		for _, cet := range nameToIdx[strings.ToLower(meta.qual.Index())].ColumnExpressionTypes() {
-			types = append(types, cet.Type)
-		}
-
-		if cnt, err := prollyMap.Count(); err != nil {
-			return nil, err
-		} else if cnt == 0 {
-			// table is empty
-			ret[meta.qual] = NewDoltStats()
-			ret[meta.qual].Statistic.Created = time.Now()
-			ret[meta.qual].Statistic.Cols = meta.cols
-			ret[meta.qual].Statistic.Typs = types
-			ret[meta.qual].Statistic.Qual = meta.qual
-
-			ret[meta.qual].Statistic.Fds = fds
-			ret[meta.qual].Statistic.Colset = colSet
-			ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
-
-			continue
-		}
-
-		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
-		if err != nil {
-			return nil, err
-		}
-
-		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
-		ret[meta.qual] = NewDoltStats()
-		ret[meta.qual].Chunks = meta.allAddrs
-		ret[meta.qual].Statistic.Created = time.Now()
-		ret[meta.qual].Statistic.Cols = meta.cols
-		ret[meta.qual].Statistic.Typs = types
-		ret[meta.qual].Statistic.Qual = meta.qual
-		ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
-
-		var start, stop uint64
-		// read leaf rows for each bucket
-		for i, _ := range meta.newNodes {
-			// each node is a bucket
-			updater.newBucket()
-
-			// we read exclusive range [node first key, next node first key)
-			start, stop = meta.updateOrdinals[i].start, meta.updateOrdinals[i].stop
-			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
-			if err != nil {
-				return nil, err
-			}
-			for {
-				// stats key will be a prefix of the index key
-				keyBytes, _, err := iter.Next(ctx)
-				if errors.Is(err, io.EOF) {
-					break
-				} else if err != nil {
-					return nil, err
-				}
-				// build full key
-				for i := range keyBuilder.Desc.Types {
-					keyBuilder.PutRaw(i, keyBytes.GetField(i))
-				}
-
-				updater.add(keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
-				keyBuilder.Recycle()
-			}
-
-			// finalize the aggregation
-			bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
-			if err != nil {
-				return nil, err
-			}
-			ret[updater.qual].Hist = append(ret[updater.qual].Hist, bucket)
-		}
-
-		ret[updater.qual].Statistic.DistinctCnt = uint64(updater.globalDistinct)
-		ret[updater.qual].Statistic.RowCnt = uint64(updater.globalCount)
-		ret[updater.qual].Statistic.LowerBnd = firstRow
-		ret[updater.qual].Statistic.Fds = fds
-		ret[updater.qual].Statistic.Colset = colSet
-		ret[updater.qual].UpdateActive()
-	}
-	return ret, nil
-}
-
-// MergeNewChunks combines a set of old and new chunks to create
-// the desired target histogram. Undefined behavior if a |targetHash|
-// does not exist in either |oldChunks| or |newChunks|.
-func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []sql.HistogramBucket) ([]sql.HistogramBucket, error) {
-	hashToPos := make(map[hash.Hash]int, len(inputHashes))
-	for i, h := range inputHashes {
-		hashToPos[h] = i
-	}
-
-	var cnt int
-	targetBuckets := make([]sql.HistogramBucket, len(inputHashes))
-	for _, c := range oldChunks {
-		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok {
-			cnt++
-			targetBuckets[idx] = c
-		}
-	}
-	for _, c := range newChunks {
-		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok && targetBuckets[idx] == nil {
-			cnt++
-			targetBuckets[idx] = c
-		}
-	}
-	if cnt != len(inputHashes) {
-		return nil, fmt.Errorf("encountered invalid statistic chunks")
-	}
-	return targetBuckets, nil
-}
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
 	if cnt, err := prollyMap.Count(); err != nil {

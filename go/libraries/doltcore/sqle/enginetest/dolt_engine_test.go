@@ -15,7 +15,6 @@
 package enginetest
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -1668,11 +1667,6 @@ func TestStatsIO(t *testing.T) {
 	RunStatsIOTests(t, h)
 }
 
-func TestStatsIOWithoutReload(t *testing.T) {
-	h := newDoltEnginetestHarness(t)
-	RunStatsIOTestsWithoutReload(t, h)
-}
-
 func TestJoinStats(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunJoinStatsTests(t, h)
@@ -1958,22 +1952,18 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 
 	// Setting an interval of 0 and a threshold of 0 will result
 	// in the stats being updated after every operation
-	intervalSec := time.Duration(0)
-	thresholdf64 := 0.
-	bThreads := sql.NewBackgroundThreads()
-	branches := []string{"main"}
-	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.Provider)
+	//intervalSec := time.Duration(0)
+	//thresholdf64 := 0.
+	//bThreads := sql.NewBackgroundThreads()
+	//branches := []string{"main"}
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsCoord)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
 	refreshCtx := enginetest.NewSession(harness)
-	newCtx := func(context.Context) (*sql.Context, error) {
-		return refreshCtx, nil
-	}
 
-	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
-	require.NoError(t, err)
+	<-statsProv.Add(refreshCtx, sqlDb)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
 		_, iter, _, err := engine.Query(ctx, q)

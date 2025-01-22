@@ -71,9 +71,9 @@ func TestScheduleLoop(t *testing.T) {
 			},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "ab"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
-					templateCacheKey{idxName: "b"}:       nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
+					templateCacheKey{idxName: "b"}:       {},
 				}},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
@@ -89,7 +89,7 @@ func TestScheduleLoop(t *testing.T) {
 		require.Equal(t, 4, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
-		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 		require.Equal(t, 7, len(stat[0].Hist))
 		require.Equal(t, 7, len(stat[1].Hist))
 	}
@@ -105,7 +105,7 @@ func TestScheduleLoop(t *testing.T) {
 	require.Equal(t, 2, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats))
-	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 	require.Equal(t, 2, len(stat))
 	require.Equal(t, 7, len(stat[0].Hist))
 	require.Equal(t, 7, len(stat[1].Hist))
@@ -138,9 +138,9 @@ func TestAnalyze(t *testing.T) {
 		ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 241}}},
 		FinalizeJob{
 			tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-			indexes: map[templateCacheKey][]hash.Hash{
-				templateCacheKey{idxName: "PRIMARY"}: nil,
-				templateCacheKey{idxName: "y"}:       nil,
+			indexes: map[templateCacheKey]finalizeStruct{
+				templateCacheKey{idxName: "PRIMARY"}: {},
+				templateCacheKey{idxName: "y"}:       {},
 			}},
 	})
 
@@ -172,9 +172,9 @@ func TestModifyColumn(t *testing.T) {
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 267}, {267, 500}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
-					templateCacheKey{idxName: "y"}:       nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
+					templateCacheKey{idxName: "y"}:       {},
 				}},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
@@ -189,7 +189,7 @@ func TestModifyColumn(t *testing.T) {
 		require.Equal(t, 4, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
-		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 4, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
 		require.Equal(t, int64(6), sc.bucketCnt.Load())
@@ -214,8 +214,8 @@ func TestAddColumn(t *testing.T) {
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
@@ -231,7 +231,7 @@ func TestAddColumn(t *testing.T) {
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates)) // +2 for new schema
 		require.Equal(t, 1, len(sc.Stats))
-		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
 		require.Equal(t, int64(4), sc.bucketCnt.Load())
@@ -251,8 +251,8 @@ func TestDropIndex(t *testing.T) {
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
@@ -268,7 +268,7 @@ func TestDropIndex(t *testing.T) {
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
-		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, int64(2), sc.bucketCnt.Load())
@@ -280,7 +280,7 @@ func TestDropIndex(t *testing.T) {
 		require.Equal(t, 1, len(kv.bounds))
 		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
-		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, int64(2), sc.bucketCnt.Load())
@@ -303,8 +303,8 @@ func TestDropTable(t *testing.T) {
 			ReadJob{db: sqlDbs[0], table: "ab", ordinals: []updateOrdinal{{0, 1}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "ab"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
 			FinalizeJob{
@@ -321,7 +321,7 @@ func TestDropTable(t *testing.T) {
 		require.Equal(t, 3, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
-		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
 
@@ -339,7 +339,7 @@ func TestDropTable(t *testing.T) {
 		require.Equal(t, 1, len(kv.bounds))
 		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
-		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
 		require.Equal(t, int64(1), sc.bucketCnt.Load())
@@ -466,8 +466,8 @@ func TestAddDropDatabases(t *testing.T) {
 			ReadJob{db: otherDb, table: "t", ordinals: []updateOrdinal{{0, 2}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "otherdb", branch: "main", table: "t"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
 				}},
 			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsInfo{{name: "t"}}},
 		})
@@ -620,15 +620,15 @@ func TestBranches(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // new branches
 
 		require.Equal(t, 7, len(sc.dbs))
-		stat, ok := sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		stat, ok := sc.Stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s"}]
+		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t", ""}]
 		require.Equal(t, 1, len(stat))
-		stat = sc.Stats[tableIndexesKey{"thirddb", "main", "s"}]
+		stat = sc.Stats[tableIndexesKey{"thirddb", "main", "s", ""}]
 		require.Equal(t, 2, len(stat))
 
 		runAndPause(ctx, sc, &wg) // seed new branches
@@ -636,15 +636,15 @@ func TestBranches(t *testing.T) {
 
 		require.Equal(t, 7, len(sc.dbs))
 
-		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy"}]
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.True(t, ok)
 		require.Equal(t, 2, len(stat))
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.True(t, ok)
 		require.Equal(t, 1, len(stat))
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat3", "t", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s"}]
+		stat, ok = sc.Stats[tableIndexesKey{"thirddb", "feat1", "s", ""}]
 		require.True(t, ok)
 		require.Equal(t, 1, len(stat))
 
@@ -664,9 +664,9 @@ func TestBranches(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // finalize drop otherdb
 
 		require.Equal(t, 4, len(sc.dbs))
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t"}]
+		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "main", "t", ""}]
 		require.False(t, ok)
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
@@ -678,9 +678,9 @@ func TestBranches(t *testing.T) {
 		runAndPause(ctx, sc, &wg) // finalize branch delete
 
 		require.Equal(t, 3, len(sc.dbs))
-		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy"}]
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.False(t, ok)
-		stat, ok = sc.Stats[tableIndexesKey{"mydb", "main", "xy"}]
+		stat, ok = sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.True(t, ok)
 
 		doGcCycle(t, ctx, sc)
@@ -733,7 +733,7 @@ func TestBucketDoubling(t *testing.T) {
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 4, len(kv.templates))
 	require.Equal(t, 2, len(sc.Stats))
-	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab"}]
+	stat := sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 	require.Equal(t, 7, len(stat[0].Hist))
 	require.Equal(t, 7, len(stat[1].Hist))
 }
@@ -887,7 +887,7 @@ func TestJobQueueDoubling(t *testing.T) {
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
 	defer sqlEng.Close()
 
-	statsKv, err := NewMemStats(defaultBucketSize)
+	statsKv, err := NewMemStats()
 	require.NoError(t, err)
 	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
 
@@ -925,7 +925,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
-	statsKv, err := NewMemStats(defaultBucketSize)
+	statsKv, err := NewMemStats()
 	require.NoError(t, err)
 
 	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
@@ -959,7 +959,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 		})
 	}
 
-	statsKv, err = NewMemStats(defaultBucketSize)
+	statsKv, err = NewMemStats()
 	require.NoError(t, err)
 	sc.kv = statsKv
 
@@ -971,9 +971,9 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 240}, {240, 500}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey][]hash.Hash{
-					templateCacheKey{idxName: "PRIMARY"}: nil,
-					templateCacheKey{idxName: "y"}:       nil,
+				indexes: map[templateCacheKey]finalizeStruct{
+					templateCacheKey{idxName: "PRIMARY"}: {},
+					templateCacheKey{idxName: "y"}:       {},
 				}},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})

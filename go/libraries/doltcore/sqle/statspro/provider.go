@@ -16,10 +16,18 @@ package statspro
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -57,7 +65,7 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		branch = "main"
 	}
 
-	var sqlDb sqle.Database
+	var sqlDb dsess.SqlDatabase
 	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
@@ -69,7 +77,7 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		}
 	}()
 
-	if sqlDb.Name() == "" {
+	if sqlDb == nil {
 		return fmt.Errorf("qualified database not found: %s/%s", branch, dbName)
 	}
 
@@ -122,6 +130,18 @@ func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []
 	return nil, false
 }
 
+func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
+	key := tableIndexesKey{
+		db:     db,
+		branch: branch,
+		table:  table,
+		schema: schema,
+	}
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.Stats[key], nil
+}
+
 func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
 	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
 	if err != nil {
@@ -135,7 +155,6 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	var doSwap bool
-	var newStorageTarget sqle.Database
 
 	func() {
 		sc.gcMu.Lock()
@@ -155,47 +174,15 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 			if strings.EqualFold(db.AliasedName(), dbName) {
 				sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
 				i--
-			} else if doSwap && newStorageTarget.Name() == "" {
-				newStorageTarget = db
 			}
 		}
 		delete(sc.Branches, dbName)
 	}()
 
 	if doSwap {
-		// synchronously replace?
-		// return early after swap and async the actual writes?
-		var mem *memStats
-		switch kv := sc.kv.(type) {
-		case *prollyStats:
-			mem = kv.mem
-		case *memStats:
-			mem = kv
-		default:
-			var err error
-			mem, err = NewMemStats(defaultBucketSize)
-			if err != nil {
-				return err
-			}
-		}
-
-		if newStorageTarget.AliasedName() == "" {
-			sc.kv = mem
-			sc.statsBackingDb = ""
-			return nil
-		}
-
-		fs, err := sc.pro.FileSystemForDatabase(newStorageTarget.AliasedName())
-		if err != nil {
+		if err := sc.rotateStorage(ctx); err != nil {
 			return err
 		}
-		newKv, err := sc.initStorage(ctx, fs, newStorageTarget.Revision())
-		if err != nil {
-			return err
-		}
-		newKv.mem = mem
-		sc.kv = newKv
-		sc.statsBackingDb = newStorageTarget.AliasedName()
 	}
 
 	sc.setGc()
@@ -258,4 +245,168 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 		}
 	}
 	return 0, nil
+}
+
+func (sc *StatsCoord) CancelRefreshThread(dbName string) {
+	sc.Drop(dbName)
+}
+
+func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, _ dsess.DoltDatabaseProvider, _ string, _ *env.DoltEnv, sqlDb dsess.SqlDatabase) error {
+	<-sc.Add(ctx, sqlDb)
+	return nil
+}
+
+func (sc *StatsCoord) ThreadStatus(string) string {
+	return ""
+}
+
+func (sc *StatsCoord) Prune(ctx *sql.Context) error {
+	done := make(chan struct{})
+	sc.startGcMark(ctx, done)
+	<-done
+	return nil
+}
+
+func (sc *StatsCoord) Purge(ctx *sql.Context) error {
+	return sc.rotateStorage(ctx)
+}
+
+func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	if sc.statsBackingDb != "" {
+		if err := sc.rm(sc.statsBackingDb); err != nil {
+			return err
+		}
+	}
+
+	var mem *memStats
+	switch kv := sc.kv.(type) {
+	case *prollyStats:
+		mem = kv.mem
+	case *memStats:
+		mem = kv
+	default:
+		mem = NewMemStats()
+	}
+
+	if len(sc.dbs) == 0 {
+		sc.kv = mem
+		sc.statsBackingDb = ""
+		return nil
+	}
+
+	newStorageTarget := sc.dbs[0]
+	if err := sc.rm(newStorageTarget.AliasedName()); err != nil {
+		return err
+	}
+
+	newKv, err := sc.initStorage(ctx, newStorageTarget)
+	if err != nil {
+		return err
+	}
+
+	newKv.mem = mem
+	sc.kv = newKv
+	sc.statsBackingDb = newStorageTarget.AliasedName()
+	return nil
+}
+
+func (sc *StatsCoord) rm(db string) error {
+	fs, err := sc.pro.FileSystemForDatabase(db)
+	if err != nil {
+		return err
+	}
+
+	//remove from filesystem
+	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+	if err != nil {
+		return err
+	}
+
+	if ok, _ := statsFs.Exists(""); ok {
+		if err := statsFs.Delete("", true); err != nil {
+			return err
+		}
+	}
+
+	dropDbLoc, err := statsFs.Abs("")
+	if err != nil {
+		return err
+	}
+
+	if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms")); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase) (*prollyStats, error) {
+	fs, err := sc.pro.FileSystemForDatabase(storageTarget.AliasedName())
+	if err != nil {
+		return nil, err
+	}
+
+	// assume access is protected by kvLock
+	// get reference to target database
+	params := make(map[string]interface{})
+	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
+
+	var urlPath string
+	u, err := earl.Parse(sc.pro.DbFactoryUrl())
+	if u.Scheme == dbfactory.MemScheme {
+		urlPath = path.Join(sc.pro.DbFactoryUrl(), dbfactory.DoltDataDir)
+	} else if u.Scheme == dbfactory.FileScheme {
+		urlPath = doltdb.LocalDirDoltDB
+	}
+
+	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var dEnv *env.DoltEnv
+	exists, isDir := statsFs.Exists("")
+	if !exists {
+		err := statsFs.MkDirs("")
+		if err != nil {
+			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
+		}
+
+		dEnv = env.Load(ctx, sc.hdp, statsFs, urlPath, "test")
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), storageTarget.AliasedName())
+		if err != nil {
+			return nil, err
+		}
+	} else if !isDir {
+		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
+	} else {
+		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "")
+	}
+
+	if dEnv.DoltDB == nil {
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
+		if err != nil {
+			return nil, err
+		}
+
+		dEnv.DoltDB = ddb
+	}
+
+	deaf := dEnv.DbEaFactory()
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := editor.Options{
+		Deaf:    deaf,
+		Tempdir: tmpDir,
+	}
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	if err != nil {
+		return nil, err
+	}
+	return NewProllyStats(ctx, statsDb)
 }

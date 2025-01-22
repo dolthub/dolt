@@ -19,10 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -64,12 +60,4 @@ type Database interface {
 	// root is incompatible with the latest schema used to create a stored
 	// set of statistics.
 	SchemaChange(ctx *sql.Context, branch string) (bool, error)
-}
-
-// StatsFactory instances construct statistic databases.
-type StatsFactory interface {
-	// Init gets a reference to the stats database for a dolt database
-	// rooted at the given filesystem. It will create the database if
-	// it does not exist.
-	Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, prov *sqle.DoltDatabaseProvider, fs filesys.Filesys, hdp env.HomeDirProvider) (Database, error)
 }

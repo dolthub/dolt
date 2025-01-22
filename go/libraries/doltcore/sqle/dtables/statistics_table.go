@@ -68,7 +68,7 @@ func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 type BranchStatsProvider interface {
-	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]sql.Statistic, error)
+	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error)
 }
 
 // RowCount implements sql.StatisticsTable
@@ -126,7 +126,9 @@ func (st *StatisticsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql
 		if err != nil {
 			return nil, err
 		}
-		dStats = append(dStats, dbStats...)
+		for _, s := range dbStats {
+			dStats = append(dStats, s)
+		}
 	}
 	return stats.NewStatsIter(ctx, dStats...)
 }

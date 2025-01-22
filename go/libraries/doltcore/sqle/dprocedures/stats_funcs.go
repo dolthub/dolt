@@ -44,9 +44,9 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 	}
 }
 
-// AutoRefreshStatsProvider is a sql.StatsProvider that exposes hooks for
+// ToggableStats is a sql.StatsProvider that exposes hooks for
 // observing and manipulating background database auto refresh threads.
-type AutoRefreshStatsProvider interface {
+type ToggableStats interface {
 	sql.StatsProvider
 	CancelRefreshThread(string)
 	StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error
@@ -65,7 +65,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
-	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
+	if afp, ok := statsPro.(ToggableStats); ok {
 		pro := dSess.Provider()
 		newFs, err := pro.FileSystemForDatabase(dbName)
 		if err != nil {
@@ -87,7 +87,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 		}
 		return fmt.Sprintf("restarted stats collection: %s", ref.StatsRef{}.String()), nil
 	}
-	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
 // statsStatus returns the last update for a stats thread
@@ -95,10 +95,10 @@ func statsStatus(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(AutoRefreshStatsProvider); ok {
+	if afp, ok := pro.(ToggableStats); ok {
 		return afp.ThreadStatus(dbName), nil
 	}
-	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
 // statsStop cancels a refresh thread
@@ -107,11 +107,11 @@ func statsStop(ctx *sql.Context) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
-	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
+	if afp, ok := statsPro.(ToggableStats); ok {
 		afp.CancelRefreshThread(dbName)
 		return fmt.Sprintf("stopped thread: %s", dbName), nil
 	}
-	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
 // statsDrop deletes the stats ref
@@ -125,7 +125,7 @@ func statsDrop(ctx *sql.Context) (interface{}, error) {
 		return nil, fmt.Errorf("failed to drop stats: %w", err)
 	}
 
-	if afp, ok := pro.(AutoRefreshStatsProvider); ok {
+	if afp, ok := pro.(ToggableStats); ok {
 		// currently unsafe to drop stats while running refresh
 		afp.CancelRefreshThread(dbName)
 	}
@@ -143,7 +143,7 @@ func statsDrop(ctx *sql.Context) (interface{}, error) {
 // tracked in memory statistics.
 func statsPrune(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)
+	pro, ok := dSess.StatsProvider().(ToggableStats)
 	if !ok {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}
@@ -156,7 +156,7 @@ func statsPrune(ctx *sql.Context) (interface{}, error) {
 // statsPurge removes the stats database from disk
 func statsPurge(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	pro, ok := dSess.StatsProvider().(AutoRefreshStatsProvider)
+	pro, ok := dSess.StatsProvider().(ToggableStats)
 	if !ok {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}

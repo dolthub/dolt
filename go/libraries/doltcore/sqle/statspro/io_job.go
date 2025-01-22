@@ -1,14 +1,14 @@
 package statspro
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Database, tableName string, levelNodes []tree.Node, prollyMap prolly.Map) ([]StatsJob, error) {
+func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableName string, levelNodes []tree.Node, prollyMap prolly.Map, idxCnt int) ([]StatsJob, error) {
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
@@ -44,20 +44,20 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb sqle.Databas
 		nodes = append(nodes, n)
 
 		if curCnt > jobSize {
-			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, done: make(chan struct{})})
+			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
 			nodes = nodes[:0]
 		}
 	}
 	if curCnt > 0 {
-		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, done: make(chan struct{})})
+		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
 	}
 
 	if len(jobs) > 0 || sc.activeGc.Load() {
 		firstNodeHash := levelNodes[0].HashOf()
 		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
-			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()), prollyMap.KeyDesc().Count())
+			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()), idxCnt)
 			if err != nil {
 				return nil, err
 			}

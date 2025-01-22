@@ -1554,30 +1554,16 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
+	h.Setup(setup.MydbData)
 	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
-			defer h.Close()
 			e := mustNewEngine(t, h)
 			if enginetest.IsServerEngine(e) {
 				return
 			}
 			defer e.Close()
-			TestProviderReloadScriptWithEngine(t, e, h, script)
-		}()
-	}
-}
-
-func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
-		func() {
-			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
-			e := mustNewEngine(t, h)
-			if enginetest.IsServerEngine(e) {
-				return
-			}
-			defer e.Close()
 			enginetest.TestScriptWithEngine(t, e, h, script)
 		}()
 	}

@@ -71,13 +71,17 @@ const (
 func StatsTableSqlSchema(dbName string) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
 		Schema: sql.Schema{
-			&sql.Column{Name: StatsCommitHashColName, Type: types.Text, PrimaryKey: true, DatabaseSource: dbName},
-			&sql.Column{Name: StatsVersionColName, Type: types.Text, DatabaseSource: dbName},
+			&sql.Column{Name: StatsDbColName, Type: types.Text, DatabaseSource: dbName},
+			&sql.Column{Name: StatsTableColName, Type: types.Text, DatabaseSource: dbName},
+			&sql.Column{Name: StatsIndexColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsRowCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsDistinctCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsNullCountColName, Type: types.Int64, DatabaseSource: dbName},
+			&sql.Column{Name: StatsColumnsColName, Type: types.Int64, DatabaseSource: dbName},
+			&sql.Column{Name: StatsTypesColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundCntColName, Type: types.Int64, DatabaseSource: dbName},
+			&sql.Column{Name: StatsCreatedAtColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv1ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv2ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv3ColName, Type: types.Text, DatabaseSource: dbName},

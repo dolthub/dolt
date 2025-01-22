@@ -16,10 +16,11 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
@@ -43,7 +44,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -184,7 +184,8 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
+	sqlCtx, err := sqlEngine.NewLocalContext(ctx)
+	statsPro := statspro.NewStatsCoord(10*time.Millisecond, pro, sqlCtx.Session.GetLogger().Logger, bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
@@ -196,9 +197,15 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
-		fmt.Fprintln(cli.CliErr, err)
+	statsPro.Restart(sqlCtx)
+	eg := errgroup.Group{}
+	for _, db := range dbs {
+		eg.Go(func() error {
+			<-statsPro.Add(sqlCtx, db)
+			return nil
+		})
 	}
+	eg.Wait()
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

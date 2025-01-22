@@ -34,7 +34,7 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
-const defaultBucketSize = 1024
+const defaultBucketSize = 1024 // must be > 0 to avoid panic
 
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
@@ -52,16 +52,13 @@ type StatsKv interface {
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
 
-func NewMemStats(size int) (*memStats, error) {
-	buckets, err := lru.New[hash.Hash, *stats.Bucket](size)
-	if err != nil {
-		return nil, err
-	}
+func NewMemStats() *memStats {
+	buckets, _ := lru.New[hash.Hash, *stats.Bucket](defaultBucketSize)
 	return &memStats{
 		buckets:   buckets,
 		templates: make(map[templateCacheKey]stats.Statistic),
 		bounds:    make(map[hash.Hash]sql.Row),
-	}, nil
+	}
 }
 
 type memStats struct {
@@ -182,18 +179,13 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	if err != nil {
 		return nil, err
 	}
-
-	mem, err := NewMemStats(defaultBucketSize)
-	if err != nil {
-		return nil, err
-	}
-
+	
 	return &prollyStats{
 		destDb: destDb,
 		kb:     keyBuilder,
 		vb:     valueBuilder,
 		m:      newMap.Mutate(),
-		mem:    mem,
+		mem:    NewMemStats(),
 	}, nil
 }
 

@@ -16,18 +16,11 @@ package enginetest
 
 import (
 	"fmt"
-	"strings"
-	"testing"
-
-	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
+	"strings"
 )
 
 // fillerVarchar pushes the tree into level 3
@@ -925,90 +918,6 @@ var StatProcTests = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-// TestProviderReloadScriptWithEngine runs the test script given with the engine provided.
-func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, harness enginetest.Harness, script queries.ScriptTest) {
-	ctx := enginetest.NewContext(harness)
-	err := enginetest.CreateNewConnectionForServerEngine(ctx, e)
-	require.NoError(t, err, nil)
-
-	t.Run(script.Name, func(t *testing.T) {
-		for _, statement := range script.SetUpScript {
-			if sh, ok := harness.(enginetest.SkippingHarness); ok {
-				if sh.SkipQueryTest(statement) {
-					t.Skip()
-				}
-			}
-			ctx = ctx.WithQuery(statement)
-			enginetest.RunQueryWithContext(t, e, harness, ctx, statement)
-		}
-
-		assertions := script.Assertions
-		if len(assertions) == 0 {
-			assertions = []queries.ScriptTestAssertion{
-				{
-					Query:           script.Query,
-					Expected:        script.Expected,
-					ExpectedErr:     script.ExpectedErr,
-					ExpectedIndexes: script.ExpectedIndexes,
-				},
-			}
-		}
-
-		{
-			// reload provider, get disk stats
-			eng, ok := e.(*gms.Engine)
-			if !ok {
-				t.Errorf("expected *gms.Engine but found: %T", e)
-			}
-
-			err := eng.Analyzer.Catalog.StatsProvider.DropDbStats(ctx, "mydb", false)
-			require.NoError(t, err)
-
-			err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", "main")
-			require.NoError(t, err)
-		}
-
-		for _, assertion := range assertions {
-			t.Run(assertion.Query, func(t *testing.T) {
-				if assertion.NewSession {
-					th, ok := harness.(enginetest.TransactionHarness)
-					require.True(t, ok, "ScriptTestAssertion requested a NewSession, "+
-						"but harness doesn't implement TransactionHarness")
-					ctx = th.NewSession()
-				}
-
-				if sh, ok := harness.(enginetest.SkippingHarness); ok && sh.SkipQueryTest(assertion.Query) {
-					t.Skip()
-				}
-				if assertion.Skip {
-					t.Skip()
-				}
-
-				if assertion.ExpectedErr != nil {
-					enginetest.AssertErr(t, e, harness, assertion.Query, nil, assertion.ExpectedErr)
-				} else if assertion.ExpectedErrStr != "" {
-					enginetest.AssertErrWithCtx(t, e, harness, ctx, assertion.Query, nil, nil, assertion.ExpectedErrStr)
-				} else if assertion.ExpectedWarning != 0 {
-					enginetest.AssertWarningAndTestQuery(t, e, nil, harness, assertion.Query,
-						assertion.Expected, nil, assertion.ExpectedWarning, assertion.ExpectedWarningsCount,
-						assertion.ExpectedWarningMessageSubstring, assertion.SkipResultsCheck)
-				} else if assertion.SkipResultsCheck {
-					enginetest.RunQueryWithContext(t, e, harness, nil, assertion.Query)
-				} else if assertion.CheckIndexedAccess {
-					enginetest.TestQueryWithIndexCheck(t, ctx, e, harness, assertion.Query, assertion.Expected, assertion.ExpectedColumns, assertion.Bindings)
-				} else {
-					var expected = assertion.Expected
-					if enginetest.IsServerEngine(e) && assertion.SkipResultCheckOnServerEngine {
-						// TODO: remove this check in the future
-						expected = nil
-					}
-					enginetest.TestQueryWithContext(t, ctx, e, harness, assertion.Query, expected, assertion.ExpectedColumns, assertion.Bindings, nil)
-				}
-			})
-		}
-	})
 }
 
 func mustNewStatQual(s string) sql.StatQualifier {

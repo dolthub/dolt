@@ -25,19 +25,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/sirupsen/logrus"
 	"io"
-	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -80,7 +75,7 @@ var _ StatsJob = (*GCJob)(nil)
 var _ StatsJob = (*SeedDbTablesJob)(nil)
 var _ StatsJob = (*ControlJob)(nil)
 
-func NewSeedJob(ctx *sql.Context, sqlDb sqle.Database) SeedDbTablesJob {
+func NewSeedJob(ctx *sql.Context, sqlDb dsess.SqlDatabase) SeedDbTablesJob {
 	return SeedDbTablesJob{
 		ctx:    ctx,
 		sqlDb:  sqlDb,
@@ -98,7 +93,7 @@ type tableStatsInfo struct {
 
 type SeedDbTablesJob struct {
 	ctx    *sql.Context
-	sqlDb  sqle.Database
+	sqlDb  dsess.SqlDatabase
 	tables []tableStatsInfo
 	done   chan struct{}
 }
@@ -153,13 +148,13 @@ func (j GCJob) Finish() {
 	return
 }
 
-func NewAnalyzeJob(ctx *sql.Context, sqlDb sqle.Database, tables []string, after ControlJob) AnalyzeJob {
+func NewAnalyzeJob(ctx *sql.Context, sqlDb dsess.SqlDatabase, tables []string, after ControlJob) AnalyzeJob {
 	return AnalyzeJob{ctx: ctx, sqlDb: sqlDb, tables: tables, after: after, done: make(chan struct{})}
 }
 
 type AnalyzeJob struct {
 	ctx    *sql.Context
-	sqlDb  sqle.Database
+	sqlDb  dsess.SqlDatabase
 	tables []string
 	after  ControlJob
 	done   chan struct{}
@@ -182,11 +177,12 @@ func (j AnalyzeJob) Finish() {
 
 type ReadJob struct {
 	ctx      *sql.Context
-	db       sqle.Database
+	db       dsess.SqlDatabase
 	table    string
 	m        prolly.Map
 	nodes    []tree.Node
 	ordinals []updateOrdinal
+	colCnt   int
 	done     chan struct{}
 }
 
@@ -210,9 +206,14 @@ func (j ReadJob) String() string {
 	return b.String()
 }
 
+type finalizeStruct struct {
+	buckets []hash.Hash
+	tupB    *val.TupleBuilder
+}
+
 type FinalizeJob struct {
 	tableKey tableIndexesKey
-	indexes  map[templateCacheKey][]hash.Hash
+	indexes  map[templateCacheKey]finalizeStruct
 	done     chan struct{}
 }
 
@@ -230,10 +231,10 @@ func (j FinalizeJob) String() string {
 	b.WriteString("finalize " + j.tableKey.String())
 	b.WriteString(": ")
 	sep := ""
-	for idx, hashes := range j.indexes {
+	for idx, fs := range j.indexes {
 		b.WriteString(fmt.Sprintf("%s(%s: ", sep, idx.idxName))
 		sep = ""
-		for _, h := range hashes {
+		for _, h := range fs.buckets {
 			b.WriteString(fmt.Sprintf("%s%s", sep, h.String()[:5]))
 			sep = ", "
 		}
@@ -265,7 +266,7 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	return &StatsCoord{
@@ -283,7 +284,8 @@ func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threa
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
 		threads:        threads,
-		kv:             kv,
+		kv:             NewMemStats(),
+		pro:            pro,
 		hdp:            dEnv.GetUserHomeDir,
 		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
 	}
@@ -293,6 +295,7 @@ type tableIndexesKey struct {
 	db     string
 	branch string
 	table  string
+	schema string
 }
 
 func (k tableIndexesKey) String() string {
@@ -306,7 +309,7 @@ type StatsCoord struct {
 	pro         *sqle.DoltDatabaseProvider
 
 	dbMu           *sync.Mutex
-	dbs            []sqle.Database
+	dbs            []dsess.SqlDatabase
 	branchInterval time.Duration
 	capInterval    time.Duration
 
@@ -344,7 +347,11 @@ type StatsCoord struct {
 }
 
 func (sc *StatsCoord) Stop() {
-	close(sc.Done)
+	select {
+	case <-sc.Done:
+	default:
+		close(sc.Done)
+	}
 }
 
 func (sc *StatsCoord) Restart(ctx *sql.Context) error {
@@ -367,7 +374,7 @@ func (sc *StatsCoord) Close() {
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
+func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbd, ok := dSess.GetDbData(ctx, db.AliasedName())
 	if !ok {
@@ -399,14 +406,11 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
 		case *prollyStats:
 			mem = kv.mem
 		default:
-			mem, err = NewMemStats(defaultBucketSize)
-			if err != nil {
-				sc.error(ControlJob{desc: "add db"}, err)
-			}
+			mem = NewMemStats()
 			close(ret)
 			return ret
 		}
-		newKv, err := NewProllyStats(ctx, db)
+		newKv, err := sc.initStorage(ctx, db)
 		if err != nil {
 			sc.error(ControlJob{desc: "add db"}, err)
 			close(ret)
@@ -485,7 +489,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 }
 
 // TODO sendJobs
-func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb sqle.Database) chan struct{} {
+func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb dsess.SqlDatabase) chan struct{} {
 	j := NewSeedJob(ctx, sqlDb)
 	sc.Jobs <- j
 	return j.done
@@ -761,7 +765,47 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 	return ret, nil
 }
 
-func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, tableInfo tableStatsInfo) ([]StatsJob, tableStatsInfo, error) {
+// GetLatestTable will get the WORKING root table for the current database/branch
+func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (*sqle.DoltTable, *doltdb.Table, error) {
+	var db sqle.Database
+	switch d := sqlDb.(type) {
+	case sqle.Database:
+		db = d
+	case sqle.ReadReplicaDatabase:
+		db = d.Database
+	default:
+		return nil, nil, fmt.Errorf("expected sqle.Database, found %T", sqlDb)
+	}
+	sqlTable, ok, err := db.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("statistics refresh error: table not found %s", tableName)
+	}
+
+	var dTab *doltdb.Table
+	var sqleTable *sqle.DoltTable
+	switch t := sqlTable.(type) {
+	case *sqle.AlterableDoltTable:
+		sqleTable = t.DoltTable
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.WritableDoltTable:
+		sqleTable = t.DoltTable
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.DoltTable:
+		sqleTable = t
+		dTab, err = t.DoltTable(ctx)
+	default:
+		err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return sqleTable, dTab, nil
+}
+
+func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableInfo tableStatsInfo) ([]StatsJob, tableStatsInfo, error) {
 	var ret []StatsJob
 	var bucketCnt int
 	sqlTable, dTab, err := GetLatestTable(ctx, tableInfo.name, sqlDb)
@@ -787,7 +831,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 	var isNewData bool
 	var newIdxRoots []hash.Hash
 
-	fullIndexBuckets := make(map[templateCacheKey][]hash.Hash)
+	fullIndexBuckets := make(map[templateCacheKey]finalizeStruct)
 	for i, sqlIdx := range indexes {
 		var idx durable.Index
 		var err error
@@ -823,11 +867,16 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 		dataChanged = true
 
 		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
+		var buckets []hash.Hash
 		for _, n := range levelNodes {
-			fullIndexBuckets[indexKey] = append(fullIndexBuckets[indexKey], n.HashOf())
+			buckets = append(buckets, n.HashOf())
+		}
+		fullIndexBuckets[indexKey] = finalizeStruct{
+			buckets: buckets,
+			tupB:    val.NewTupleBuilder(prollyMap.KeyDesc()),
 		}
 
-		readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, tableInfo.name, levelNodes, prollyMap)
+		readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, tableInfo.name, levelNodes, prollyMap, len(sqlIdx.Expressions()))
 		if err != nil {
 			return nil, tableStatsInfo{}, err
 		}
@@ -850,7 +899,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb sqle.Database, ta
 	return ret, tableStatsInfo{name: tableInfo.name, schHash: schHashKey.Hash, idxRoots: newIdxRoots, bucketCount: bucketCnt}, nil
 }
 
-func (sc *StatsCoord) dropTableJob(sqlDb sqle.Database, tableName string) StatsJob {
+func (sc *StatsCoord) dropTableJob(sqlDb dsess.SqlDatabase, tableName string) StatsJob {
 	return FinalizeJob{
 		tableKey: tableIndexesKey{
 			db:     sqlDb.AliasedName(),
@@ -942,7 +991,7 @@ func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, 
 	}
 
 	sc.kv.PutTemplate(key, stats.Statistic{
-		Cols:     nil,
+		Cols:     cols,
 		Typs:     types,
 		IdxClass: uint8(class),
 		Fds:      fds,
@@ -951,12 +1000,16 @@ func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, 
 	return nil
 }
 
+type updateOrdinal struct {
+	start, stop uint64
+}
+
 func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, error) {
 	// check if chunk already in cache
 	// if no, see if on disk and we just need to load
 	// otherwise perform read to create the bucket, write to disk, update mem ref
 	prollyMap := j.m
-	updater := newBucketBuilder(sql.StatQualifier{}, prollyMap.KeyDesc().Count(), prollyMap.KeyDesc())
+	updater := newBucketBuilder(sql.StatQualifier{}, j.colCnt, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
 	for i, n := range j.nodes {
@@ -1009,14 +1062,14 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	}
 
 	var newStats []*stats.Statistic
-	for key, bucketHashes := range j.indexes {
+	for key, fs := range j.indexes {
 		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
 			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
 		}
 		template.Qual = sql.NewStatQualifier(j.tableKey.db, "", j.tableKey.table, key.idxName)
 
-		for i, bh := range bucketHashes {
+		for i, bh := range fs.buckets {
 			if i == 0 {
 				var ok bool
 				template.LowerBnd, ok = sc.kv.GetBound(bh)
@@ -1025,7 +1078,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 				}
 			}
 			// accumulate counts
-			if b, ok, err := sc.kv.GetBucket(ctx, bh, nil); err != nil {
+			if b, ok, err := sc.kv.GetBucket(ctx, bh, fs.tupB); err != nil {
 				return nil, err
 			} else if !ok {
 				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
@@ -1045,19 +1098,6 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	sc.statsMu.Unlock()
 
 	return nil, nil
-}
-
-// delete table, delete index
-func (sc *StatsCoord) gc(ctx *sql.Context) error {
-	return nil
-	//sc.dbMu.Lock()
-	//newStorage := sc.statsEncapsulatingDb
-	//newKv, err := sc.kv.NewEmpty(ctx)
-	//if err != nil {
-	//	return err
-	//}
-	//sc.dbMu.Unlock()
-	//return sc.gcWithStorageSwap(ctx, newStorage, newKv)
 }
 
 func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, error) {
@@ -1080,9 +1120,9 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 	defer sc.dbMu.Unlock()
 	var ret []StatsJob
 	newBranches := make(map[string][]ref.DoltRef)
-	var newDbs []sqle.Database
+	var newDbs []dsess.SqlDatabase
 	for dbName, branches := range sc.Branches {
-		var sqlDb sqle.Database
+		var sqlDb dsess.SqlDatabase
 		for _, db := range sc.dbs {
 			if strings.EqualFold(db.AliasedName(), dbName) {
 				sqlDb = db
@@ -1146,8 +1186,8 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 				continue
 			}
 
-			newDbs = append(newDbs, sqlDb.(sqle.Database))
-			ret = append(ret, NewSeedJob(ctx, sqlDb.(sqle.Database)))
+			newDbs = append(newDbs, sqlDb)
+			ret = append(ret, NewSeedJob(ctx, sqlDb))
 			k++
 		}
 	}
@@ -1164,71 +1204,6 @@ func (sc *StatsCoord) countBuckets() int {
 		cnt += len(ss)
 	}
 	return cnt
-}
-
-func (sc *StatsCoord) initStorage(ctx *sql.Context, fs filesys.Filesys, defaultBranch string) (*prollyStats, error) {
-	// assume access is protected by kvLock
-	// get reference to target database
-	params := make(map[string]interface{})
-	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
-
-	var urlPath string
-	u, err := earl.Parse(sc.pro.DbFactoryUrl())
-	if u.Scheme == dbfactory.MemScheme {
-		urlPath = path.Join(sc.pro.DbFactoryUrl(), dbfactory.DoltDataDir)
-	} else if u.Scheme == dbfactory.FileScheme {
-		urlPath = doltdb.LocalDirDoltDB
-	}
-
-	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
-	if err != nil {
-		return nil, err
-	}
-
-	var dEnv *env.DoltEnv
-	exists, isDir := statsFs.Exists("")
-	if !exists {
-		err := statsFs.MkDirs("")
-		if err != nil {
-			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
-		}
-
-		dEnv = env.Load(context.Background(), sc.hdp, statsFs, urlPath, "test")
-		sess := dsess.DSessFromSess(ctx.Session)
-		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), defaultBranch)
-		if err != nil {
-			return nil, err
-		}
-	} else if !isDir {
-		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
-	} else {
-		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "")
-	}
-
-	if dEnv.DoltDB == nil {
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
-		if err != nil {
-			return nil, err
-		}
-
-		dEnv.DoltDB = ddb
-	}
-
-	deaf := dEnv.DbEaFactory()
-
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{
-		Deaf:    deaf,
-		Tempdir: tmpDir,
-	}
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
-	if err != nil {
-		return nil, err
-	}
-	return NewProllyStats(ctx, statsDb)
 }
 
 func (sc *StatsCoord) setGc() {
