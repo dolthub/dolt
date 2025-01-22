@@ -217,6 +217,9 @@ var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
 // Synopsis is an mdx format, but already inside a code block
 var SynopsisMarkdownFormat = docFormat{"<", ">", "`", "`"}
 
+// Format that deletes all template options
+var EmptyFormat = docFormat{"", "", "", ""}
+
 func transformSynopsisToMarkdown(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
 		return ""
