@@ -779,6 +779,91 @@ func TestBucketCounting(t *testing.T) {
 	require.Equal(t, 3, len(sc.Stats))
 }
 
+func TestDropOnlyDb(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads)
+
+	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	dropHook := NewStatsDropDatabaseHook2(sc)
+
+	prollyKv, err := NewProllyStats(ctx, startDbs[0])
+	require.NoError(t, err)
+	prollyKv.mem = sc.kv.(*memStats)
+	sc.kv = prollyKv
+	sc.statsBackingDb = "mydb"
+
+	// what happens when we drop the only database? swap to memory?
+	// add first database, switch to prolly?
+	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
+	dropHook(ctx, "mydb")
+
+	// empty memory KV
+	_, ok := sc.kv.(*memStats)
+	require.True(t, ok)
+	require.Equal(t, "", sc.statsBackingDb)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
+
+	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
+		if db.Name() == "mydb" {
+			dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
+			require.NoError(t, err)
+			addHook(ctx, nil, "mydb", nil, dsessDb)
+		}
+	}
+
+	// empty prollyKv
+	prollyKv, ok = sc.kv.(*prollyStats)
+	require.True(t, ok)
+	require.Equal(t, "mydb", sc.statsBackingDb)
+}
+
+func TestRotateBackingDb(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads)
+	wg := sync.WaitGroup{}
+
+	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	dropHook := NewStatsDropDatabaseHook2(sc)
+
+	prollyKv, err := NewProllyStats(ctx, startDbs[0])
+	require.NoError(t, err)
+	prollyKv.mem = sc.kv.(*memStats)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create database backupdb"))
+	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
+		if db.Name() == "backupdb" {
+			dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
+			require.NoError(t, err)
+			addHook(ctx, nil, "backupdb", nil, dsessDb)
+		}
+	}
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "use backupdb"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0), (1,1), (2,2)"))
+
+	runAndPause(ctx, sc, &wg) // track xy
+	runAndPause(ctx, sc, &wg) // finalize xy
+
+	require.Equal(t, 5, sc.kv.Len())
+	require.Equal(t, 2, len(sc.Stats))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
+	dropHook(ctx, "mydb")
+
+	prollyKv, ok := sc.kv.(*prollyStats)
+	require.True(t, ok)
+	require.Equal(t, "backupdb", sc.statsBackingDb)
+
+	// lost the backing storage, in-memory switches to new kv
+	require.Equal(t, 5, sc.kv.Len())
+	require.Equal(t, 1, len(sc.Stats))
+
+}
+
 func TestReadCounter(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -804,7 +889,7 @@ func TestJobQueueDoubling(t *testing.T) {
 
 	statsKv, err := NewMemStats(defaultBucketSize)
 	require.NoError(t, err)
-	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads)
+	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
 
 	sc.Jobs = make(chan StatsJob, 1)
 
@@ -842,7 +927,9 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	statsKv, err := NewMemStats(defaultBucketSize)
 	require.NoError(t, err)
-	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads)
+
+	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
+	sc.pro = sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
 	sc.disableGc.Store(true)
 
 	wg := sync.WaitGroup{}
@@ -870,8 +957,11 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			// first job doesn't have tracked tables
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: nil},
 		})
-
 	}
+
+	statsKv, err = NewMemStats(defaultBucketSize)
+	require.NoError(t, err)
+	sc.kv = statsKv
 
 	{
 		// seed creates read jobs

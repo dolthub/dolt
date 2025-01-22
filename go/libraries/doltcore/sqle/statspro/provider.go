@@ -149,14 +149,13 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
-		doSwap = strings.EqualFold(sc.statsEncapsulatingDb, dbName)
+		doSwap = strings.EqualFold(sc.statsBackingDb, dbName)
 		for i := 0; i < len(sc.dbs); i++ {
 			db := sc.dbs[i]
 			if strings.EqualFold(db.AliasedName(), dbName) {
 				sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
 				i--
-			}
-			if doSwap && newStorageTarget.Name() == "" {
+			} else if doSwap && newStorageTarget.Name() == "" {
 				newStorageTarget = db
 			}
 		}
@@ -166,6 +165,26 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	if doSwap {
 		// synchronously replace?
 		// return early after swap and async the actual writes?
+		var mem *memStats
+		switch kv := sc.kv.(type) {
+		case *prollyStats:
+			mem = kv.mem
+		case *memStats:
+			mem = kv
+		default:
+			var err error
+			mem, err = NewMemStats(defaultBucketSize)
+			if err != nil {
+				return err
+			}
+		}
+
+		if newStorageTarget.AliasedName() == "" {
+			sc.kv = mem
+			sc.statsBackingDb = ""
+			return nil
+		}
+
 		fs, err := sc.pro.FileSystemForDatabase(newStorageTarget.AliasedName())
 		if err != nil {
 			return err
@@ -174,12 +193,12 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 		if err != nil {
 			return err
 		}
-		if pkv, ok := sc.kv.(*prollyStats); ok {
-			newKv.mem = pkv.mem
-		}
-	} else {
-		sc.setGc()
+		newKv.mem = mem
+		sc.kv = newKv
+		sc.statsBackingDb = newStorageTarget.AliasedName()
 	}
+
+	sc.setGc()
 
 	// stats lock is more contentious, do last
 	sc.statsMu.Lock()

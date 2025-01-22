@@ -265,7 +265,7 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threads *sql.BackgroundThreads) *StatsCoord {
+func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	return &StatsCoord{
@@ -284,6 +284,8 @@ func NewStatsCoord(sleep time.Duration, kv StatsKv, logger *logrus.Logger, threa
 		Branches:       make(map[string][]ref.DoltRef),
 		threads:        threads,
 		kv:             kv,
+		hdp:            dEnv.GetUserHomeDir,
+		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
 	}
 }
 
@@ -310,11 +312,10 @@ type StatsCoord struct {
 
 	kv StatsKv
 
-	statsEncapsulatingDb string
-	cancelSwitch         context.CancelFunc
-	dialPro              dbfactory.GRPCDialProvider
-	urlPath              string
-	hdp                  env.HomeDirProvider
+	statsBackingDb string
+	cancelSwitch   context.CancelFunc
+	dialPro        dbfactory.GRPCDialProvider
+	hdp            env.HomeDirProvider
 
 	readCounter atomic.Int32
 
@@ -383,12 +384,38 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db sqle.Database) chan struct{} {
 		return ret
 	}
 
+	ret := sc.Seed(ctx, db)
+
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
 	sc.dbs = append(sc.dbs, db)
 	sc.Branches[db.AliasedName()] = curBranches
-
-	return sc.Seed(ctx, db)
+	if len(sc.dbs) == 1 {
+		sc.statsBackingDb = db.AliasedName()
+		var mem *memStats
+		switch kv := sc.kv.(type) {
+		case *memStats:
+			mem = kv
+		case *prollyStats:
+			mem = kv.mem
+		default:
+			mem, err = NewMemStats(defaultBucketSize)
+			if err != nil {
+				sc.error(ControlJob{desc: "add db"}, err)
+			}
+			close(ret)
+			return ret
+		}
+		newKv, err := NewProllyStats(ctx, db)
+		if err != nil {
+			sc.error(ControlJob{desc: "add db"}, err)
+			close(ret)
+			return ret
+		}
+		newKv.mem = mem
+		sc.kv = newKv
+	}
+	return ret
 }
 
 func (sc *StatsCoord) Drop(dbName string) {
@@ -1146,9 +1173,9 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, fs filesys.Filesys, defaultB
 	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
 
 	var urlPath string
-	u, err := earl.Parse(sc.urlPath)
+	u, err := earl.Parse(sc.pro.DbFactoryUrl())
 	if u.Scheme == dbfactory.MemScheme {
-		urlPath = path.Join(urlPath, dbfactory.DoltDataDir)
+		urlPath = path.Join(sc.pro.DbFactoryUrl(), dbfactory.DoltDataDir)
 	} else if u.Scheme == dbfactory.FileScheme {
 		urlPath = doltdb.LocalDirDoltDB
 	}
