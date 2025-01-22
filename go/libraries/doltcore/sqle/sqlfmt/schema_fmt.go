@@ -473,7 +473,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, "", "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
 	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 
