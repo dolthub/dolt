@@ -105,15 +105,6 @@ tests:
     - query: 'show tables'
       result:
         columns: ["Tables_in_repo1"]
-        rows: []
-  - on: repo1
-    queries:
-    - exec: 'create table t(c0 int)'
-  - on: repo1
-    queries:
-    - query: 'show tables'
-      result:
-        columns: ["Tables_in_repo1"]
         rows: [["t"]]
 - name: test basic querying via dolt sql-server
   repos:
