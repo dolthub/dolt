@@ -116,7 +116,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (do
 }
 
 func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession)
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, nil)
 	if err != nil {
 		panic(err)
 	}

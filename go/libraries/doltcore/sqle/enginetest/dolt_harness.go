@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
@@ -246,7 +247,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		d.statsPro = statsProv
 
 		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
@@ -273,7 +274,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			}
 
 			// Get a fresh session after running setup scripts, since some setup scripts can change the session state
-			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 			require.NoError(t, err)
 		}
 
@@ -314,7 +315,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
-	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 	require.NoError(t, err)
 
 	return e, err
@@ -396,7 +397,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
-	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession)
+	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 	dSession.SetCurrentDatabase("mydb")
 	require.NoError(d.t, err)
 	return dSession
@@ -428,7 +429,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
-	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 	require.NoError(d.t, err)
 
 	// TODO: the engine tests should do this for us
@@ -486,7 +487,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 	}
 
 	// reset the session as well since we have swapped out the database provider, which invalidates caching assumptions
-	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 	require.NoError(d.t, err)
 
 	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
@@ -531,6 +532,8 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
 	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
+	gcSafepointController := dsess.NewGCSafepointController()
+	pro.Register(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	return pro
 }

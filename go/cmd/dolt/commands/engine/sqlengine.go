@@ -125,13 +125,15 @@ func NewSqlEngine(
 		locations = append(locations, nil)
 	}
 
+	gcSafepointController := dsess.NewGCSafepointController()
+
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
 	if err != nil {
 		return nil, err
 	}
 	pro = pro.WithRemoteDialer(mrEnv.RemoteDialProvider())
-	pro.RegisterProcedure(dprocedures.NewDoltGCProcedure())
+	pro.RegisterProcedure(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	if config.ClusterController != nil {
@@ -191,7 +193,7 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
@@ -415,9 +417,9 @@ func sqlContextFactory() contextFactory {
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *dsess.GCSafepointController, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController)
 		if err != nil {
 			return nil, err
 		}

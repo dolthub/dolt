@@ -50,19 +50,20 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	DoltgresSessObj  any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
-	username         string
-	email            string
-	dbStates         map[string]*DatabaseSessionState
-	dbCache          *DatabaseCache
-	provider         DoltDatabaseProvider
-	tempTables       map[string][]sql.Table
-	globalsConf      config.ReadWriteConfig
-	branchController *branch_control.Controller
-	statsProv        sql.StatsProvider
-	mu               *sync.Mutex
-	fs               filesys.Filesys
-	writeSessProv    WriteSessFunc
+	DoltgresSessObj       any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
+	username              string
+	email                 string
+	dbStates              map[string]*DatabaseSessionState
+	dbCache               *DatabaseCache
+	provider              DoltDatabaseProvider
+	tempTables            map[string][]sql.Table
+	globalsConf           config.ReadWriteConfig
+	branchController      *branch_control.Controller
+	statsProv             sql.StatsProvider
+	mu                    *sync.Mutex
+	fs                    filesys.Filesys
+	writeSessProv         WriteSessFunc
+	gcSafepointController *GCSafepointController
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -100,25 +101,27 @@ func NewDoltSession(
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
 	writeSessProv WriteSessFunc,
+	gcSafepointController *GCSafepointController,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
 
 	sess := &DoltSession{
-		Session:          sqlSess,
-		username:         username,
-		email:            email,
-		dbStates:         make(map[string]*DatabaseSessionState),
-		dbCache:          newDatabaseCache(),
-		provider:         pro,
-		tempTables:       make(map[string][]sql.Table),
-		globalsConf:      globals,
-		branchController: branchController,
-		statsProv:        statsProvider,
-		mu:               &sync.Mutex{},
-		fs:               pro.FileSystem(),
-		writeSessProv:    writeSessProv,
+		Session:               sqlSess,
+		username:              username,
+		email:                 email,
+		dbStates:              make(map[string]*DatabaseSessionState),
+		dbCache:               newDatabaseCache(),
+		provider:              pro,
+		tempTables:            make(map[string][]sql.Table),
+		globalsConf:           globals,
+		branchController:      branchController,
+		statsProv:             statsProvider,
+		mu:                    &sync.Mutex{},
+		fs:                    pro.FileSystem(),
+		writeSessProv:         writeSessProv,
+		gcSafepointController: gcSafepointController,
 	}
 
 	return sess, nil
@@ -1626,6 +1629,27 @@ func (d *DoltSession) GetHost() string {
 // GetController implements the interface branch_control.Context.
 func (d *DoltSession) GetController() *branch_control.Controller {
 	return d.branchController
+}
+
+// Implement sql.LifecycleAwareSession, allowing for GC safepoints to be aware of
+// outstanding SQL operations.
+func (d *DoltSession) CommandBegin() error {
+	if d.gcSafepointController != nil {
+		return d.gcSafepointController.SessionCommandBegin(d)
+	}
+	return nil
+}
+
+func (d *DoltSession) CommandEnd() {
+	if d.gcSafepointController != nil {
+		d.gcSafepointController.SessionCommandEnd(d)
+	}
+}
+
+func (d *DoltSession) SessionEnd() {
+	if d.gcSafepointController != nil {
+		d.gcSafepointController.SessionEnd(d)
+	}
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic

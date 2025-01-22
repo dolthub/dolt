@@ -16,3 +16,6 @@ SysbenchDockerfile.dockerignore
 sysbench-runner-tests-entrypoint.sh
 config.json
 integration-tests/bats/batsee_results
+
+*~
+.dir-locals.el

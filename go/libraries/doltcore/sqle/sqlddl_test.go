@@ -1113,7 +1113,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 		panic(err)
 	}
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), nil, nil, writer.NewWriteSession)
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), nil, nil, writer.NewWriteSession, nil)
 	if err != nil {
 		panic(err)
 	}
