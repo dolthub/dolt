@@ -19,11 +19,12 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/go-mysql-server/sql"
-	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type HelpTable struct {
