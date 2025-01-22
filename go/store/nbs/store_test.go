@@ -345,8 +345,9 @@ func TestNBSCopyGC(t *testing.T) {
 		keepersSlice = append(keepersSlice, h)
 	}
 	require.NoError(t, sweeper.SaveHashes(ctx, keepersSlice))
-	finalizer, err := sweeper.Close(ctx)
+	finalizer, err := sweeper.Finalize(ctx)
 	require.NoError(t, err)
+	require.NoError(t, sweeper.Close(ctx))
 	require.NoError(t, finalizer.SwapChunksInStore(ctx))
 	st.EndGC()
 
