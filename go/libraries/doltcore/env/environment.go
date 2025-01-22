@@ -170,7 +170,21 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, v
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	dEnv := LoadWithoutDB(ctx, hdp, fs, version)
+	LoadDoltDB(ctx, fs, urlStr, dEnv)
+	return dEnv
+}
 
+func LoadWithDeferredDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+	dEnv := LoadWithoutDB(ctx, hdp, fs, version)
+	dEnv.urlStr = urlStr
+	return dEnv
+}
+
+func (dEnv *DoltEnv) ReloadDB(ctx context.Context) {
+	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+}
+
+func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
 
 	dEnv.DoltDB = ddb
@@ -218,8 +232,6 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 			dEnv.RSLoadErr = err
 		}
 	}
-
-	return dEnv
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {

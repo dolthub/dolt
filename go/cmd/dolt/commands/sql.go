@@ -218,12 +218,24 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
+			dEnv.ReloadDB(ctx)
+			if HandleDEnvErrorsAndExitCode(nil, dEnv, usage) {
+				return 1
+			}
 			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage)
 		}
 		return queryMode(sqlCtx, queryist, apr, query, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
+		dEnv.ReloadDB(ctx)
+		if HandleDEnvErrorsAndExitCode(nil, dEnv, usage) {
+			return 1
+		}
 		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage)
 	} else if apr.Contains(listSavedFlag) {
+		dEnv.ReloadDB(ctx)
+		if HandleDEnvErrorsAndExitCode(nil, dEnv, usage) {
+			return 1
+		}
 		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive

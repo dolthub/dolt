@@ -154,6 +154,32 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ProfileCmd{},
 	commands.ArchiveCmd{},
 	commands.FsckCmd{},
+	commands.ConfigCmd{},
+}
+
+// These commands have one of the following properties:
+// - They require that the database does not exist
+// - They never access the database
+// - They only ever access the database through a CliContext.
+// - They always call dEnv.ReloadDB() before accessing the database for the first time.
+// In these cases, we can defer loading the database until it's actually needed.
+var commandsWithoutDBLoad = []cli.Command{
+	commands.InitCmd{},
+	commands.CloneCmd{},
+	commands.StatusCmd{},
+	commands.LsCmd{},
+	commands.AddCmd{},
+	commands.DiffCmd{},
+	commands.ResetCmd{},
+	commands.CleanCmd{},
+	commands.SqlCmd{VersionStr: doltversion.Version},
+	commands.LogCmd{},
+	commands.BranchCmd{},
+	commands.MergeCmd{},
+	commands.ShowCmd{},
+	commands.CherryPickCmd{},
+	commands.ConfigCmd{},
+	credcmds.Commands,
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -179,6 +205,15 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func eagerlyLoadDB(commandName string) bool {
+	for _, command := range commandsWithoutDBLoad {
 		if command.Name() == commandName {
 			return false
 		}
@@ -474,7 +509,13 @@ func runMain() int {
 	args = nil
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	var dEnv *env.DoltEnv
+	if eagerlyLoadDB(cfg.subCommand) {
+		dEnv = env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	} else {
+		dEnv = env.LoadWithDeferredDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	}
+
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
@@ -535,6 +576,9 @@ func runMain() int {
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
+	}
+	if eagerlyLoadDB(cfg.subCommand) {
+		mrEnv.ReloadDBs(ctx)
 	}
 	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
 		dsess.DefineSystemVariablesForDB(dbName)
