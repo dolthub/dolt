@@ -152,6 +152,8 @@ jobs:
           cwd: "."
           pull: "--ff"
       - name: Check generated protobufs
+        env:
+          USE_BAZEL_VERSION: 7.4.0
         working-directory: ./proto
         env:
           USE_BAZEL_VERSION: 7.4.0
