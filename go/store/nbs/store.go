@@ -989,11 +989,9 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		nbs.stats.ChunksPerGet.Sample(uint64(len(hashes)))
 	}()
 
+	const ioParallelism = 16
 	for {
 		reqs := toGetRecords(hashes)
-		eg, ctx := errgroup.WithContext(ctx)
-		const ioParallelism = 16
-		eg.SetLimit(ioParallelism)
 
 		nbs.mu.Lock()
 		keeper := nbs.keeperFunc
@@ -1001,7 +999,8 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			keeper = nil
 		}
 		if nbs.mt != nil {
-			remaining, gcb, err := getManyFunc(ctx, nbs.mt, eg, reqs, keeper, nbs.stats)
+			// nbs.mt does not use the errgroup parameter, which we pass at |nil| here.
+			remaining, gcb, err := getManyFunc(ctx, nbs.mt, nil, reqs, keeper, nbs.stats)
 			if err != nil {
 				nbs.mu.Unlock()
 				return err
@@ -1022,8 +1021,12 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		tables, endRead := nbs.tables, nbs.beginRead()
 		nbs.mu.Unlock()
 
-		_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
-		err = errors.Join(err, eg.Wait())
+		gcb, err := func() (gcBehavior, error) {
+			eg, ctx := errgroup.WithContext(ctx)
+			eg.SetLimit(ioParallelism)
+			_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
+			return gcb, errors.Join(err, eg.Wait())
+		}()
 		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
 		if err != nil {
 			return err
