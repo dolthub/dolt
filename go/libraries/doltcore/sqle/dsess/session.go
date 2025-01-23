@@ -871,7 +871,7 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 	return nil
 }
 
-// GetDoltDB returns the *doltDB for a given database by name
+// GetDoltDB returns the *DoltDB for a given database by name
 func (d *DoltSession) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
