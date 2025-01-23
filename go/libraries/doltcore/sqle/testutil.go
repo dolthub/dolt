@@ -103,9 +103,13 @@ func ExecuteSql(dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (do
 		}
 	}
 
-	err = dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
-	if err != nil {
-		return nil, err
+	// commit leftover transaction
+	trx := ctx.GetTransaction()
+	if trx != nil {
+		err = dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return db.GetRoot(ctx)

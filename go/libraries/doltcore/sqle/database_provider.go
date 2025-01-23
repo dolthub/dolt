@@ -419,6 +419,7 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 }
 
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
+	// there is no current transaction to commit
 	currentTx := ctx.GetTransaction()
 	if currentTx != nil {
 		err := dSess.CommitTransaction(ctx, currentTx)
