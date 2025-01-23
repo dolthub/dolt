@@ -88,9 +88,9 @@ func (sc killConnectionsSafepointController) EstablishPreFinalizeSafepoint(ctx c
 	return nil
 }
 
-func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
+func checkEpochSame(origEpoch int) error {
 	// Here we need to sanity check role and epoch.
-	if sc.origEpoch != -1 {
+	if origEpoch != -1 {
 		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			if role.(string) != "primary" {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
@@ -99,12 +99,20 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 			if !ok {
 				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
 			}
-			if sc.origEpoch != epoch.(int) {
-				return fmt.Errorf("dolt_gc failed: when we began we were primary in the cluster at epoch %d, but now we are at epoch %d. for gc to safely finalize, our role and epoch must not change throughout the gc.", sc.origEpoch, epoch.(int))
+			if origEpoch != epoch.(int) {
+				return fmt.Errorf("dolt_gc failed: when we began we were primary in the cluster at epoch %d, but now we are at epoch %d. for gc to safely finalize, our role and epoch must not change throughout the gc.", origEpoch, epoch.(int))
 			}
 		} else {
 			return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role.")
 		}
+	}
+	return nil
+}
+
+func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
+	err := checkEpochSame(sc.origEpoch)
+	if err != nil {
+		return err
 	}
 
 	killed := make(map[uint32]struct{})
@@ -124,7 +132,7 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	params.InitialInterval = 1 * time.Millisecond
 	params.MaxInterval = 25 * time.Millisecond
 	params.MaxElapsedTime = 3 * time.Second
-	err := backoff.Retry(func() error {
+	err = backoff.Retry(func() error {
 		processes := sc.callCtx.ProcessList.Processes()
 		allgood := true
 		for _, p := range processes {
@@ -149,6 +157,41 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 func (sc killConnectionsSafepointController) CancelSafepoint() {
 }
 
+type sessionAwareSafepointController struct {
+	controller *dsess.GCSafepointController
+	callCtx    *sql.Context
+	origEpoch  int
+
+	waiter     *dsess.GCSafepointWaiter
+	keeper     func(hash.Hash) bool
+}
+
+func (sc *sessionAwareSafepointController) visit(sess *dsess.DoltSession) {
+	// TODO: Give branch heads/dbState to sc.keeper. Clear VRW and any NodeStore caches.
+}
+
+func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.keeper = keeper
+	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
+	sc.waiter = sc.controller.Waiter(thisSess, sc.visit)
+	sc.visit(thisSess)
+	return nil
+}
+
+func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	return sc.waiter.Wait(ctx)
+}
+
+func (sc *sessionAwareSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
+	return checkEpochSame(sc.origEpoch)
+}
+
+func (sc *sessionAwareSafepointController) CancelSafepoint() {
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sc.waiter.Wait(canceledCtx)
+}
+
 type DoltGCProcedure struct {
 	// Used by the implementation to visit existing sessions, find them
 	// at a quiesced state and ensure that their in-memory state makes
@@ -156,7 +199,7 @@ type DoltGCProcedure struct {
 	gcSafepointController *dsess.GCSafepointController
 }
 
-func (*DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) {
+func (impl *DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -214,9 +257,15 @@ func (*DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		sc := killConnectionsSafepointController{
+		var sc types.GCSafepointController
+		sc = killConnectionsSafepointController{
 			origEpoch: origepoch,
 			callCtx:   ctx,
+		}
+		sc = &sessionAwareSafepointController{
+			origEpoch:  origepoch,
+			callCtx:    ctx,
+			controller: impl.gcSafepointController,
 		}
 		err = ddb.GC(ctx, mode, sc)
 		if err != nil {
