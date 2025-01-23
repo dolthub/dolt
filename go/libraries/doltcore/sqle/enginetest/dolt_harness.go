@@ -498,7 +498,9 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 
 func (d *DoltHarness) Close() {
 	d.closeProvider()
-	d.statsPro.Close()
+	if d.statsPro != nil {
+		d.statsPro.Close()
+	}
 	sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, int8(0))
 }
 
