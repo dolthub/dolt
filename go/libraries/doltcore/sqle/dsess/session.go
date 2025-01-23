@@ -450,6 +450,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 	// There is no transaction to commit
 	if tx == nil {
+		panic("why have you done this?")
 		return nil
 	}
 
