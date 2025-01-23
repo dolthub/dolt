@@ -11,6 +11,12 @@ setup() {
 }
 
 teardown() {
+    if [ -n "$remotesrv_pid" ]; then
+        kill "$remotesrv_pid"
+        wait "$remotesrv_pid" || :
+        remotesrv_pid=""
+    fi
+
     assert_feature_version
     teardown_common
 }
@@ -109,19 +115,6 @@ mutations_and_gc_statement() {
   [ "$files" -eq "2" ]
 }
 
-@test "archive: archive with remotesrv no go" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt archive
-
-  run dolt sql-server --remotesapi-port=12321
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "archive files present" ]] || false
-
-  run remotesrv --repo-mode
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "archive files present" ]] || false
-}
-
 @test "archive: archive --revert (fast)" {
   dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
@@ -143,19 +136,80 @@ mutations_and_gc_statement() {
   [ "$commits" -eq "66" ]
 }
 
-@test "archive: archive backup no go" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt archive
+@test "archive: can clone archived repository" {
+    mkdir -p remote/.dolt
+    mkdir cloned
 
-  dolt backup add bac1 file://../bac1
-  run dolt backup sync bac1
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cd remote
 
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "archive files present" ]] || false
+    port=$( definePORT )
 
-  # currently the cli and stored procedures are different code paths.
-  run dolt sql -q "call dolt_backup('sync', 'bac1')"
-  [ "$status" -eq 1 ]
-  # NM4 - TODO. This message is cryptic, but plumbing the error through is awkward.
-  [[ "$output" =~ "Archive chunk source" ]] || false
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned
+    run dolt clone http://localhost:$port/test-org/test-repo repo1
+    [ "$status" -eq 0 ]
+    cd repo1
+
+    # Verify we can read data
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+    kill $remotesrv_pid
+    wait $remotesrv_pid || :
+    remotesrv_pid=""
+
+    ## The above test is the setup for the next test - so we'll stick both in here.
+    ## This tests cloning from a clone. Archive files are generally in oldgen, but not the case with a fresh clone.
+    cd ../../
+    mkdir clone2
+
+    cd cloned/repo1 # start the server using the clone from above.
+    port=$( definePORT )
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../../clone2
+    run dolt clone http://localhost:$port/test-org/test-repo repo2
+    [ "$status" -eq 0 ]
+    cd repo2
+
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+}
+
+@test "archive: can clone respiratory with mixed types" {
+    mkdir -p remote/.dolt
+    mkdir cloned
+
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cd remote
+
+    # Insert data (commits automatically), but don't gc/archive yet. Want to make sure we can still clone it.
+    dolt sql -q "$(insert_statement)"
+
+    port=$( definePORT )
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned
+    run dolt clone http://localhost:$port/test-org/test-repo repo1
+    [ "$status" -eq 0 ]
+    cd repo1
+
+    # verify new data is there.
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+
+    [[ "$output" =~ "151525" ]] || false # i = 1 - 550, sum is 151525
 }
