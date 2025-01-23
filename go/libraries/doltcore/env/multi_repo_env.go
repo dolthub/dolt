@@ -187,7 +187,7 @@ func MultiEnvForDirectory(
 			version = dEnv.Version
 		}
 
-		newEnv := LoadWithDeferredDB(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		newEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 		} else {

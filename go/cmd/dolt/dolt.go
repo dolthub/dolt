@@ -475,7 +475,7 @@ func runMain() int {
 	args = nil
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
-	dEnv := env.LoadWithDeferredDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -850,7 +850,7 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
 		return false, 0
 	}
-	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "", doltversion.Version)
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
@@ -895,7 +895,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return nil, true, 1
 	}
 
-	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, doltversion.Version)
+	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
 	var globalConfig config.ReadWriteConfig
 
 	homeDir, err := env.GetCurrentUserHomeDir()

@@ -84,7 +84,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "")
+		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "", "")
 	}
 
 	dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
