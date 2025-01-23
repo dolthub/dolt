@@ -514,11 +514,11 @@ func TestAddColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
 			defer dEnv.DoltDB(ctx).Close()
 
-			ctx := context.Background()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 

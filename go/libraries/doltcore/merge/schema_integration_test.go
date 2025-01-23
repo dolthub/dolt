@@ -541,12 +541,12 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 	return c
 }
 
-func fkCollection(fks ...DoltDB(ctx).ForeignKey) *doltdb.ForeignKeyCollection {
-fkc, err := doltdb.NewForeignKeyCollection(fks...)
-if err != nil {
-panic(err)
-}
-return fkc
+func fkCollection(fks ...doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
+	fkc, err := doltdb.NewForeignKeyCollection(fks...)
+	if err != nil {
+		panic(err)
+	}
+	return fkc
 }
 
 func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
@@ -555,9 +555,9 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 		return
 	}
 
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 
 	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
