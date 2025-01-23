@@ -639,8 +639,8 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	if csMetrics && dEnv.DoltDB != nil {
-		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+	if csMetrics && dEnv.DoltDB(ctx) != nil {
+		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
 	}
@@ -778,18 +778,18 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
-		// If the loaded target environment has a DoltDB and we do not
+	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly() {
+		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true
-	} else if targetEnv.DoltDB == nil {
-		// If the loaded environment itself does not have a DoltDB, we
+	} else if targetEnv.DoltDB(ctx) == nil {
+		// If the loaded environment itself does not have a doltDB, we
 		// may want to look for a server. We do so if all of the
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
 		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv.DoltDB != nil {
+			if dEnv.DoltDB(ctx) != nil {
 				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
 			}
 			return !allReposAreReadOnly, nil

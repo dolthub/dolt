@@ -73,15 +73,13 @@ func NewEnvironment(ctx context.Context, existing *env.DoltEnv) (Environment, er
 		return Environment{}, err
 	}
 
-	migration := &env.DoltEnv{
-		Version:   existing.Version,
-		Config:    config,
-		RepoState: existing.RepoState,
-		DoltDB:    mdb,
-		FS:        mfs,
-		//urlStr:      urlStr,
-		//hdp:         hdp,
-	}
+	migration := env.NewDoltEnv(
+		existing.Version,
+		config,
+		existing.RepoState,
+		mdb,
+		mfs,
+	)
 
 	return Environment{
 		Migration: migration,

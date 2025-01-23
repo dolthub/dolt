@@ -1788,23 +1788,23 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
-	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB.ValueReadWriter()))
-	anc = makeRootWithTable(t, denv.DoltDB, eo, test.ancestor)
+	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB(ctx).ValueReadWriter()))
+	anc = makeRootWithTable(t, denv.DoltDB(ctx), eo, test.ancestor)
 	assert.NotNil(t, anc)
 	if test.left != nil {
-		left = makeRootWithTable(t, denv.DoltDB, eo, *test.left)
+		left = makeRootWithTable(t, denv.DoltDB(ctx), eo, *test.left)
 		assert.NotNil(t, left)
 	} else {
-		left = makeEmptyRoot(t, denv.DoltDB, eo)
+		left = makeEmptyRoot(t, denv.DoltDB(ctx), eo)
 	}
 	if test.right != nil {
-		right = makeRootWithTable(t, denv.DoltDB, eo, *test.right)
+		right = makeRootWithTable(t, denv.DoltDB(ctx), eo, *test.right)
 		assert.NotNil(t, right)
 	} else {
-		right = makeEmptyRoot(t, denv.DoltDB, eo)
+		right = makeEmptyRoot(t, denv.DoltDB(ctx), eo)
 	}
 	if !test.conflict {
-		merged = makeRootWithTable(t, denv.DoltDB, eo, test.merged)
+		merged = makeRootWithTable(t, denv.DoltDB(ctx), eo, test.merged)
 		assert.NotNil(t, merged)
 	}
 	return
@@ -1828,8 +1828,8 @@ func tbl(ns namedSchema, rows ...sql.Row) *table {
 
 func sch(definition string) namedSchema {
 	denv := dtestutils.CreateTestEnv()
-	vrw := denv.DoltDB.ValueReadWriter()
-	ns := denv.DoltDB.NodeStore()
+	vrw := denv.DoltDB(ctx).ValueReadWriter()
+	ns := denv.DoltDB(ctx).NodeStore()
 	ctx := context.Background()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
 	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)

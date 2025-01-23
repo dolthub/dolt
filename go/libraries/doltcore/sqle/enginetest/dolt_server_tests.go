@@ -482,7 +482,7 @@ func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig = serverConfig.WithPort(port)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -629,7 +629,7 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 			dEnv, sc, serverConfig := startServer(t, true, "", "")
 			err := sc.WaitForStart()
 			require.NoError(t, err)
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			conn1, sess1 := newConnection(t, serverConfig)
 			conn2, sess2 := newConnection(t, serverConfig)

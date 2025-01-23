@@ -213,9 +213,9 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	// Retrieve existing working set, delete if it exists
-	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
+	ws, err := dEnv.DoltDB(ctx).ResolveWorkingSet(ctx, wsRef)
 	if ws != nil {
-		dEnv.DoltDB.DeleteWorkingSet(ctx, wsRef)
+		dEnv.DoltDB(ctx).DeleteWorkingSet(ctx, wsRef)
 	}
 	ws = doltdb.EmptyWorkingSet(wsRef)
 
@@ -263,7 +263,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 		clonePrint(eventCh)
 	}()
 
-	err := srcDB.Clone(ctx, dEnv.DoltDB, eventCh)
+	err := srcDB.Clone(ctx, dEnv.DoltDB(ctx), eventCh)
 
 	close(eventCh)
 	wg.Wait()
@@ -273,7 +273,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 	}
 
 	cs, _ := doltdb.NewCommitSpec(branch)
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
-	err = dEnv.DoltDB.DeleteAllRefs(ctx)
+	err = dEnv.DoltDB(ctx).DeleteAllRefs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 			br := refHash.Ref.(ref.BranchRef)
 			if !singleBranch || br.GetPath() == branch {
 				remoteRef := ref.NewRemoteRef(remoteName, br.GetPath())
-				err = dEnv.DoltDB.SetHead(ctx, remoteRef, refHash.Hash)
+				err = dEnv.DoltDB(ctx).SetHead(ctx, remoteRef, refHash.Hash)
 				if err != nil {
 					return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRemoteRef, remoteRef.String(), err.Error())
 
@@ -301,14 +301,14 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 			}
 			if br.GetPath() == branch {
 				// This is the only local branch after the clone is complete.
-				err = dEnv.DoltDB.SetHead(ctx, br, refHash.Hash)
+				err = dEnv.DoltDB(ctx).SetHead(ctx, br, refHash.Hash)
 				if err != nil {
 					return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateLocalBranch, br.String(), err.Error())
 				}
 			}
 		} else if refHash.Ref.GetType() == ref.TagRefType {
 			tr := refHash.Ref.(ref.TagRef)
-			err = dEnv.DoltDB.SetHead(ctx, tr, refHash.Hash)
+			err = dEnv.DoltDB(ctx).SetHead(ctx, tr, refHash.Hash)
 			if err != nil {
 				return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateTagRef, tr.String(), err.Error())
 			}

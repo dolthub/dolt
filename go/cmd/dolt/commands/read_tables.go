@@ -190,7 +190,7 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	cli.Println("Retrieving", tblName)
 	runProgFunc := buildProgStarter(language)
 	wg, pullerEventCh := runProgFunc(newCtx)
-	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, pullerEventCh, nil)
+	err = dEnv.DoltDB(ctx).PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, pullerEventCh, nil)
 	stopProgFuncs(cancelFunc, wg, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()

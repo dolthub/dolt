@@ -52,7 +52,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	// Running unix socket server
 	dEnv, sc, serverConfig := startServer(t, false, "", defaultUnixSocketPath)
 	sc.WaitForStart()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	require.True(t, strings.Contains(servercfg.ConnectionString(serverConfig, "dolt"), "unix"))
 
 	// default unix socket connection works
@@ -100,7 +100,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	// Running TCP socket server
 	dEnv, tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
 	tcpSc.WaitForStart()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	require.False(t, strings.Contains(servercfg.ConnectionString(tcpServerConfig, "dolt"), "unix"))
 
 	t.Run("host and port specified, there should not be unix socket created", func(t *testing.T) {

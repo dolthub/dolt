@@ -85,7 +85,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
+	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
 		cli.PrintErrln("archive command requires a GenerationalNBS")
@@ -130,7 +130,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 
 		groupings := nbs.NewChunkRelations()
 		if apr.Contains(groupChunksFlag) {
-			err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB)
+			err = historicalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB(ctx))
 			if err != nil {
 				cli.PrintErrln(err)
 				return 1

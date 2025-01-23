@@ -154,7 +154,7 @@ func TestFeatureVersion(t *testing.T) {
 
 			doltdb.DoltFeatureVersion = oldVersion
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 			doltdb.DoltFeatureVersion = DoltFeatureVersionCopy
 
 			for _, cmd := range test.setup {

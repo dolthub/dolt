@@ -263,7 +263,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, err
 	}

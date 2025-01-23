@@ -154,7 +154,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return 1
 		}
 
-		if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+		if !opts.pretty && !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` is not supported when using old LD_1 storage format.")
 			return 1
 		}
@@ -190,7 +190,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return 1
 			}
 
-			if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+			if !opts.pretty && !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` is not supported when using old LD_1 storage format.")
 				return 1
 			}
@@ -240,7 +240,7 @@ func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string)
 			return nil, err
 		}
 		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		optionalCommit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, headRef)
+		optionalCommit, err := dEnv.DoltDB(ctx).Resolve(ctx, commitSpec, headRef)
 		if err != nil {
 			return nil, err
 		}
@@ -253,7 +253,7 @@ func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string)
 	if err != nil {
 		return nil, err
 	}
-	value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
+	value, err := dEnv.DoltDB(ctx).ValueReadWriter().ReadValue(ctx, refHash)
 	if err != nil {
 		return nil, err
 	}

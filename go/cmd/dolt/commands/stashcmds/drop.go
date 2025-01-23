@@ -67,7 +67,7 @@ func (cmd StashDropCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
 	}
@@ -95,12 +95,12 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func dropStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, idx int) error {
-	stashHash, err := dEnv.DoltDB.GetStashHashAtIdx(ctx, idx)
+	stashHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.RemoveStashAtIdx(ctx, idx)
+	err = dEnv.DoltDB(ctx).RemoveStashAtIdx(ctx, idx)
 	if err != nil {
 		return err
 	}

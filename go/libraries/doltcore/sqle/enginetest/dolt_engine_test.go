@@ -1610,7 +1610,7 @@ func TestPersist(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)

@@ -216,7 +216,7 @@ func setupFilterBranchTests(t *testing.T) *env.DoltEnv {
 func testFilterBranch(t *testing.T, test filterBranchTest) {
 	ctx := context.Background()
 	dEnv := setupFilterBranchTests(t)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
@@ -235,7 +235,7 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
+			actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, a.query)
 			require.NoError(t, err)
 			require.Equal(t, a.rows, actRows)
 		})

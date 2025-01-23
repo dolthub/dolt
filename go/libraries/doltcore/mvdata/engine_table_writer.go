@@ -61,7 +61,7 @@ type SqlEngineTableWriter struct {
 }
 
 func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
-	// TODO: Assert that dEnv.DoltDB.AccessMode() != ReadOnly?
+	// TODO: Assert that dEnv.DoltDB(ctx).AccessMode() != ReadOnly?
 
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	if err != nil {

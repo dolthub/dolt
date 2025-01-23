@@ -150,7 +150,7 @@ func TestDbRevision(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			cliCtx, _ := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
@@ -188,7 +188,7 @@ func TestDbRevision(t *testing.T) {
 
 func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue) (cm1, cm2, cm3 hash.Hash) {
 	q := "SELECT commit_hash FROM dolt_log;"
-	rows, err := sqle.ExecuteSelect(dEnv, root, q)
+	rows, err := sqle.ExecuteSelect(ctx, dEnv, root, q)
 	require.NoError(t, err)
 	assert.Len(t, rows, 4)
 	cm3 = hash.Parse(rows[0][0].(string))
@@ -198,7 +198,7 @@ func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue
 }
 
 func makeTestAssertion(t *testing.T, a testAssert, dEnv *env.DoltEnv, root doltdb.RootValue) {
-	actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
+	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, a.query)
 	require.NoError(t, err)
 	assert.Equal(t, a.rows, actRows)
 }

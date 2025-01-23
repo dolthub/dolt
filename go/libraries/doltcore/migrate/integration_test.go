@@ -153,7 +153,7 @@ func TestMigration(t *testing.T) {
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(postEnv, root, a.query)
+				actual, err := sqle.ExecuteSelect(ctx, postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}
@@ -217,41 +217,41 @@ func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postE
 		Config:    preEnv.Config,
 		RepoState: preEnv.RepoState,
 		FS:        preEnv.FS,
-		DoltDB:    ddb,
+		doltDB:    ddb,
 	}
 
-	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB, postEnv.DoltDB)
+	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB(ctx), postEnv.DoltDB(ctx))
 	assert.NoError(t, err)
 	return
 }
 
 func initTestMigrationDB(ctx context.Context) (*doltdb.DoltDB, error) {
-	var db datas.Database
-	storage := &chunks.MemoryStorage{}
-	cs := storage.NewViewWithFormat("__DOLT__")
-	vrw := types.NewValueStore(cs)
-	ns := tree.NewNodeStore(cs)
-	db = datas.NewTypesDatabase(vrw, ns)
+var db datas.Database
+storage := &chunks.MemoryStorage{}
+cs := storage.NewViewWithFormat("__DOLT__")
+vrw := types.NewValueStore(cs)
+ns := tree.NewNodeStore(cs)
+db = datas.NewTypesDatabase(vrw, ns)
 
-	name, email := "user", "user@fake.horse"
-	meta, err := datas.NewCommitMeta(name, email, "test migration")
-	if err != nil {
-		return nil, err
-	}
+name, email := "user", "user@fake.horse"
+meta, err := datas.NewCommitMeta(name, email, "test migration")
+if err != nil {
+return nil, err
+}
 
-	rv, err := doltdb.EmptyRootValue(ctx, vrw, ns)
-	if err != nil {
-		return nil, err
-	}
+rv, err := doltdb.EmptyRootValue(ctx, vrw, ns)
+if err != nil {
+return nil, err
+}
 
-	ds, err := db.GetDataset(ctx, ref.NewInternalRef("migration").String())
-	if err != nil {
-		return nil, err
-	}
+ds, err := db.GetDataset(ctx, ref.NewInternalRef("migration").String())
+if err != nil {
+return nil, err
+}
 
-	_, err = db.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
-	if err != nil {
-		return nil, err
-	}
-	return doltdb.DoltDBFromCS(cs, ""), nil
+_, err = db.Commit(ctx, ds, rv.NomsValue(), datas.CommitOptions{Meta: meta})
+if err != nil {
+return nil, err
+}
+return doltdb.DoltDB(ctx)FromCS(cs, ""), nil
 }

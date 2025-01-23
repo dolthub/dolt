@@ -230,7 +230,7 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
 
-		if dEnv.DoltDB == nil {
+		if dEnv.DoltDB(ctx) == nil {
 			dEnv.ReloadDB(ctx)
 		}
 		if !dEnv.Valid() {
@@ -354,7 +354,7 @@ func enforceSingleFormat(envSet []NamedEnv) []NamedEnv {
 	formats := set.NewEmptyStrSet()
 	for _, namedEnv := range envSet {
 		dEnv := namedEnv.env
-		formats.Add(dEnv.DoltDB.Format().VersionString())
+		formats.Add(dEnv.DoltDB(ctx).Format().VersionString())
 	}
 
 	var nbf string
@@ -365,7 +365,7 @@ func enforceSingleFormat(envSet []NamedEnv) []NamedEnv {
 		// otherwise, pick an arbitrary format
 		for _, namedEnv := range envSet {
 			dEnv := namedEnv.env
-			nbf = dEnv.DoltDB.Format().VersionString()
+			nbf = dEnv.DoltDB(ctx).Format().VersionString()
 			break
 		}
 	}
@@ -375,7 +375,7 @@ func enforceSingleFormat(envSet []NamedEnv) []NamedEnv {
 	for _, namedEnv := range envSet {
 		name := namedEnv.name
 		dEnv := namedEnv.env
-		found := dEnv.DoltDB.Format().VersionString()
+		found := dEnv.DoltDB(ctx).Format().VersionString()
 		if found != nbf {
 			logrus.Infof(template, name, nbf, found)
 		} else {

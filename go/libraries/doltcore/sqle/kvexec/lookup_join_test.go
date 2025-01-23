@@ -150,7 +150,7 @@ func TestLookupJoin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)

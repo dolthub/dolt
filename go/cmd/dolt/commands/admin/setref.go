@@ -88,7 +88,7 @@ func (cmd SetRefCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	h := hash.Parse(apr.MustGetValue("to"))
 
-	err := dEnv.DoltDB.SetHead(ctx, r, h)
+	err := dEnv.DoltDB(ctx).SetHead(ctx, r, h)
 	if err != nil {
 		verr := errhand.BuildDError("error setting %s to %s", r.String(), h.String()).AddCause(err).Build()
 		commands.HandleVErrAndExitCode(verr, usage)

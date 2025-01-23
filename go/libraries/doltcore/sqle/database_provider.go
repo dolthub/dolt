@@ -633,7 +633,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
-	err := r.Prepare(ctx, newEnv.DoltDB.Format(), p.remoteDialer)
+	err := r.Prepare(ctx, newEnv.DoltDB(ctx).Format(), p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -649,11 +649,11 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 		return err
 	}
 
-	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
+	newEnv.DoltDB(ctx).SetCommitHooks(ctx, commitHooks)
 
 	// After setting hooks on the newly created DB, we need to do the first push manually
 	branchRef := ref.NewBranchRef(p.defaultBranch)
-	return newEnv.DoltDB.ExecuteCommitHooks(ctx, branchRef.String())
+	return newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String())
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface

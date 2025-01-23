@@ -68,7 +68,7 @@ func TestServerArgs(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 	go func() {
 		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
@@ -112,7 +112,7 @@ listener:
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 	controller := svcs.NewController()
 	go func() {
@@ -137,7 +137,7 @@ func TestServerBadArgs(t *testing.T) {
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	tests := [][]string{
@@ -166,7 +166,7 @@ func TestServerGoodParams(t *testing.T) {
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	tests := []servercfg.ServerConfig{
@@ -208,7 +208,7 @@ func TestServerSelect(t *testing.T) {
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15300)
@@ -270,7 +270,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 
 	var wg sync.WaitGroup
@@ -307,7 +307,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)

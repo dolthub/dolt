@@ -156,7 +156,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			// HEAD and check out the branch again.
 			//
 			// TODO: This is all quite racey, but so is the
-			// handling in DoltDB, etc.
+			// handling in doltDB, etc.
 			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
 			if err != nil {
 				return 1, "", err
@@ -266,7 +266,7 @@ func isReadOnlyDatabase(ctx *sql.Context, dbName string) (bool, error) {
 // working set gets created in the new case are different, since the CLI takes
 // the working set with it.
 //
-// TODO: This is cribbed heavily from doltdb.*DoltDB.NewBranchAtCommit.
+// TODO: This is cribbed heavily from doltdb.*doltDB.NewBranchAtCommit.
 func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string) error {
 	branchRef := ref.NewBranchRef(branchName)
 	commit, err := ddb.ResolveCommitRef(ctx, branchRef)

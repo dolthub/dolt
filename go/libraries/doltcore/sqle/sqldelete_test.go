@@ -227,7 +227,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

@@ -73,11 +73,11 @@ type CommitReplayer interface {
 
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
 func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	branches, err := dEnv.DoltDB(ctx).GetBranches(ctx)
 	if err != nil {
 		return err
 	}
-	tags, err := dEnv.DoltDB.GetTags(ctx)
+	tags, err := dEnv.DoltDB(ctx).GetTags(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted
 
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
 func AllBranches(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	branches, err := dEnv.DoltDB(ctx).GetBranches(ctx)
 	if err != nil {
 		return err
 	}

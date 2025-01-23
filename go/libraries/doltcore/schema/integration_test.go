@@ -185,5 +185,5 @@ func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.Dolt
 	}
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	return dEnv.DoltDB, root
+	return dEnv.DoltDB(ctx), root
 }

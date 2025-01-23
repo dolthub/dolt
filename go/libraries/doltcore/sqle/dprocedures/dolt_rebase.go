@@ -344,7 +344,7 @@ func validateRebaseBranchHasntChanged(ctx *sql.Context, branch string, rebaseSta
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	doltDb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		return fmt.Errorf("unable to access DoltDB for database %s", ctx.GetCurrentDatabase())
+		return fmt.Errorf("unable to access doltDB for database %s", ctx.GetCurrentDatabase())
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))

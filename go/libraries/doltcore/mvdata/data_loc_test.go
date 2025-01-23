@@ -195,7 +195,7 @@ func TestCreateRdWr(t *testing.T) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema), os.ModePerm)

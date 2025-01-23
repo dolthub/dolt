@@ -178,8 +178,8 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	ctx := context.Background()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	ns := dEnv.DoltDB.NodeStore()
+	vrw := dEnv.DoltDB(ctx).ValueReadWriter()
+	ns := dEnv.DoltDB(ctx).NodeStore()
 
 	rows, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
-	root, err = ExecuteSql(dEnv, root, queries)
+	root, err = ExecuteSql(ctx, dEnv, root, queries)
 	require.NoError(t, err)
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func ExecuteSetupSQL(ctx context.Context, queries string) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = ExecuteSql(dEnv, root, queries)
+		root, err = ExecuteSql(ctx, dEnv, root, queries)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)

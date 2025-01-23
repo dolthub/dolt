@@ -97,7 +97,7 @@ func TestExecutePersist(t *testing.T) {
 func testPersistQuery(t *testing.T, test PersistTest) {
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)

@@ -96,7 +96,8 @@ func NewTempTable(
 	}
 
 	// NOTE: We don't support setting a schema name to qualify the table name here, so this code will not work
-	//       correctly with Doltgres yet.
+	//
+	//	correctly with Doltgres yet.
 	tags, err := doltdb.GenerateTagsForNewColumns(ctx, ws.WorkingRoot(), doltdb.TableName{Name: name}, colNames, colKinds, ws.WorkingRoot())
 	if err != nil {
 		return nil, err

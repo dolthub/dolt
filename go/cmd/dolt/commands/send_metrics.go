@@ -82,8 +82,8 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 
 // Exec is the implementation of the command that flushes the events to the grpc service
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if dEnv.DoltDB != nil { // see go/cmd/dolt/dolt.go:interceptSendMetrics()
-		cli.PrintErrln("expected DoltEnv without DoltDB")
+	if dEnv.DoltDB(ctx) != nil { // see go/cmd/dolt/dolt.go:interceptSendMetrics()
+		cli.PrintErrln("expected DoltEnv without doltDB")
 		return 1
 	}
 

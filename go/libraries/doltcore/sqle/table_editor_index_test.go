@@ -36,7 +36,7 @@ func setupEditorIndexTest(t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
 	root, err := index_dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 
-	index_initialRoot, err := ExecuteSql(index_dEnv, root, `
+	index_initialRoot, err := ExecuteSql(ctx, index_dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -120,7 +120,7 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorIndexTest(t)
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			root := initialRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
@@ -283,7 +283,7 @@ UPDATE oneuni SET v1 = v1 + pk1;
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
 			dEnv, initialRoot := setupEditorIndexTest(t)
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			root := initialRoot
 			var err error

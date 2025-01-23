@@ -127,7 +127,7 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 		if err != nil {
 			return nil, err
 		}
-		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
+		dEnv.DoltDB(ctx).SetCommitHooks(ctx, postCommitHooks)
 
 		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 			remoteName, ok := remote.(string)

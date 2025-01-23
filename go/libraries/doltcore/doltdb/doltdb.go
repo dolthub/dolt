@@ -1837,7 +1837,7 @@ func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
 func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
 	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
 	if !ok {
-		return false, errors.New("unsupported operation, DoltDB.TableFileStoreHasManifest on non-TableFileStore")
+		return false, errors.New("unsupported operation, doltDB.TableFileStoreHasManifest on non-TableFileStore")
 	}
 	_, tableFiles, _, err := tableFileStore.Sources(ctx)
 	if err != nil {

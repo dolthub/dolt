@@ -28,16 +28,17 @@ import (
 func TestCommitHookStartsNotCaughtUp(t *testing.T) {
 	srcEnv := dtestutils.CreateTestEnv()
 	t.Cleanup(func() {
-		srcEnv.DoltDB.Close()
+		srcEnv.DoltDB(ctx).Close()
 	})
 	destEnv := dtestutils.CreateTestEnv()
 	t.Cleanup(func() {
-		destEnv.DoltDB.Close()
+		destEnv.DoltDB(ctx).Close()
 	})
 
-	hook := newCommitHook(logrus.StandardLogger(), "origin", "https://localhost:50051/mydb", "mydb", RolePrimary, func(context.Context) (*doltdb.DoltDB, error) {
-		return destEnv.DoltDB, nil
-	}, srcEnv.DoltDB, t.TempDir())
+	hook := newCommitHook(logrus.StandardLogger(), "origin", "https://localhost:50051/mydb", "mydb", RolePrimary, func(context.Context) (*doltdb.DoltDB, error)
+	{
+		return destEnv.DoltDB(ctx), nil
+	}, srcEnv.DoltDB(ctx), t.TempDir())
 
 	require.False(t, hook.isCaughtUp())
 }

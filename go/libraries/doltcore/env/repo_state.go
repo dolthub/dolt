@@ -56,7 +56,6 @@ type RepoStateReadWriter interface {
 type RemoteDbProvider interface {
 	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)
 }
-
 type DbData struct {
 	Ddb *doltdb.DoltDB
 	Rsw RepoStateWriter

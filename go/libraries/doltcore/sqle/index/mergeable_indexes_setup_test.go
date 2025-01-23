@@ -180,7 +180,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.Initial
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, headSpec, headRef)
 	require.NoError(t, err)
 
 	headCommit, ok := optCmt.ToCommit()

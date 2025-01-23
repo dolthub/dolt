@@ -87,14 +87,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "")
 	}
 
-	if dEnv.DoltDB == nil {
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
-		if err != nil {
-			return nil, err
-		}
-
-		dEnv.DoltDB = ddb
-	}
+	dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
 
 	deaf := dEnv.DbEaFactory()
 

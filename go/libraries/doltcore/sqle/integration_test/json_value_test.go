@@ -139,7 +139,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
+	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))

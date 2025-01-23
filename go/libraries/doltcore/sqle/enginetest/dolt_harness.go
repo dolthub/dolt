@@ -519,9 +519,9 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	} else {
 		dEnv = dtestutils.CreateTestEnv()
 	}
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
-	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
+	store := dEnv.DoltDB(ctx).ValueReadWriter().(*types.ValueStore)
 	store.SetValidateContentAddresses(true)
 
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)

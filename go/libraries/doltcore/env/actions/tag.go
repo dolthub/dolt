@@ -36,7 +36,7 @@ func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint strin
 	if err != nil {
 		return err
 	}
-	return CreateTagOnDB(ctx, dEnv.DoltDB, tagName, startPoint, props, headRef)
+	return CreateTagOnDB(ctx, dEnv.DoltDB(ctx), tagName, startPoint, props, headRef)
 }
 
 func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint string, props TagProps, headRef ref.DoltRef) error {
@@ -97,7 +97,7 @@ func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string)
 	return nil
 }
 
-// IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
+// IterResolvedTags iterates over tags in dEnv.DoltDB(ctx) from newest to oldest, resolving the tag to a commit and calling cb().
 func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.Tag) (stop bool, err error)) error {
 	tagRefs, err := ddb.GetTags(ctx)
 
@@ -109,7 +109,7 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 	for _, r := range tagRefs {
 		tr, ok := r.(ref.TagRef)
 		if !ok {
-			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
+			return fmt.Errorf("doltDB.GetTags() returned non-tag DoltRef")
 		}
 
 		tag, err := ddb.ResolveTag(ctx, tr)
