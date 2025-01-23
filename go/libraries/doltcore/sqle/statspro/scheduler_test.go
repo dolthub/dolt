@@ -887,9 +887,7 @@ func TestJobQueueDoubling(t *testing.T) {
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
 	defer sqlEng.Close()
 
-	statsKv, err := NewMemStats()
-	require.NoError(t, err)
-	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
+	sc := NewStatsCoord(time.Nanosecond, sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
 
 	sc.Jobs = make(chan StatsJob, 1)
 
@@ -925,10 +923,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
-	statsKv, err := NewMemStats()
-	require.NoError(t, err)
-
-	sc := NewStatsCoord(time.Nanosecond, statsKv, ctx.GetLogger().Logger, threads, dEnv)
+	sc := NewStatsCoord(time.Nanosecond, sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
 	sc.pro = sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
 	sc.disableGc.Store(true)
 
@@ -959,8 +954,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 		})
 	}
 
-	statsKv, err = NewMemStats()
-	require.NoError(t, err)
+	statsKv := NewMemStats()
 	sc.kv = statsKv
 
 	{

@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/stretchr/testify/require"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -131,6 +132,31 @@ func TestProllyKv(t *testing.T) {
 		prollyKv.FinishGc()
 		// only tagged one bucket
 		require.Equal(t, 1, prollyKv.Len())
+	})
+
+	t.Run("test GC overflow", func(t *testing.T) {
+		prollyKv.StartGc(context.Background(), 8)
+		expLen := 1024
+		var expected []hash.Hash
+		for i := range expLen {
+			exp := stats.NewHistogramBucket(uint64(i), 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
+			nh := strconv.AppendInt(nil, int64(i), 10)
+			nh = append(nh, h[:hash.ByteLen-len(nh)]...)
+			newH := hash.New(nh)
+			expected = append(expected, newH)
+			err := prollyKv.PutBucket(context.Background(), newH, exp, tupB)
+			require.NoError(t, err)
+		}
+		prollyKv.FinishGc()
+
+		for _, h := range expected {
+			_, ok, err := prollyKv.GetBucket(context.Background(), h, tupB)
+			require.NoError(t, err)
+			require.True(t, ok)
+		}
+
+		require.Equal(t, 1024, prollyKv.Len())
+		require.Equal(t, int64(2048), prollyKv.Cap())
 	})
 
 	t.Run("test bounds GC", func(t *testing.T) {

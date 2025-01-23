@@ -155,8 +155,7 @@ func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ 
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
 		if m.nextBuckets.Len() >= gcCap {
-			// overflow
-			m.gcCap.Store(int64(gcCap * 2))
+			m.gcCap.Store(int64(gcCap) * 2)
 			m.nextBuckets.Resize(gcCap * 2)
 		}
 	} else {
