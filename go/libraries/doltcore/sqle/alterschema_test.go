@@ -440,8 +440,8 @@ func TestDropPks(t *testing.T) {
 			defer dEnv.DoltDB(ctx).Close()
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
 			root, _ := dEnv.WorkingRoot(ctx)

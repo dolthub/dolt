@@ -50,8 +50,8 @@ func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, s
 		return nil, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func ExecuteSelect(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue
 		return nil, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 	db, err := NewDatabase(context.Background(), "dolt", dbData, opts)
 	if err != nil {
 		return nil, err

@@ -159,8 +159,8 @@ func TestTableEditor(t *testing.T) {
 
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
 			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)

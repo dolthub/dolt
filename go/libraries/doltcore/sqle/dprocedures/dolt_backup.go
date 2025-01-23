@@ -199,7 +199,7 @@ func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResult
 			return err
 		}
 
-		if err = syncRootsFromBackup(ctx, clonedEnv.DbData(), sess, r); err != nil {
+		if err = syncRootsFromBackup(ctx, clonedEnv.DbData(ctx), sess, r); err != nil {
 			// If we're cloning into a directory that already exists do not erase it.
 			// Otherwise, make a best effort to delete any directory we created.
 			if userDirExisted {

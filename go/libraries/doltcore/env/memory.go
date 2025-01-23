@@ -145,7 +145,7 @@ func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot doltdb.Ro
 		wsRef = ws.Ref()
 	}
 
-	return m.DoltDB(ctx).UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, m.workingSetMeta(), nil)
+	return m.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, m.workingSetMeta(), nil)
 }
 
 func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.RootValue) error {
@@ -175,7 +175,7 @@ func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.R
 		wsRef = ws.Ref()
 	}
 
-	return m.DoltDB(ctx).UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, m.workingSetMeta(), nil)
+	return m.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, m.workingSetMeta(), nil)
 }
 
 func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
@@ -188,7 +188,7 @@ func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, er
 		return nil, err
 	}
 
-	workingSet, err := m.DoltDB(ctx).ResolveWorkingSet(ctx, workingSetRef)
+	workingSet, err := m.DoltDB.ResolveWorkingSet(ctx, workingSetRef)
 	if err != nil {
 		return nil, err
 	}

@@ -91,7 +91,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if err != nil {
 		return HandleErr(errhand.BuildDError("error: ").AddCause(err).Build(), nil)
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("could not get table schema").AddCause(err).Build(), nil)

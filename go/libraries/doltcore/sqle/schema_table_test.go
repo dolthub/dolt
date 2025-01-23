@@ -33,8 +33,8 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
 	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
@@ -94,8 +94,8 @@ func TestV1SchemasTable(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
 	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)

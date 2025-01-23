@@ -93,10 +93,10 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (ReadReplicaDatabase, error) {
 	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
+		Deaf: dEnv.DbEaFactory(ctx),
 	}
 
-	db, err := NewDatabase(ctx, name, dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, dEnv.DbData(ctx), opts)
 	if err != nil {
 		return ReadReplicaDatabase{}, err
 	}

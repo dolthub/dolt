@@ -137,7 +137,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 		if err != nil {
 			return errhand.BuildDError("error: ").AddCause(err).Build()
 		}
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root, opts))
 
 		var notFound []string

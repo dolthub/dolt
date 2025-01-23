@@ -38,8 +38,8 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *s
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	db, err := dsqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
 	engine, sqlCtx, err := dsqle.NewTestEngine(dEnv, context.Background(), db)
@@ -193,7 +193,7 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.Initial
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
-		DbData:     dEnv.DbData(),
+		DbData:     dEnv.DbData(ctx),
 		Remotes:    dEnv.RepoState.Remotes,
 	}, nil
 }

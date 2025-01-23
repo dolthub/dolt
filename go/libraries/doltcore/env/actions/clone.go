@@ -186,7 +186,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	if depth <= 0 {
 		checkedOutCommit, err = fullClone(ctx, srcDB, dEnv, srcRefHashes, branch, remoteName, singleBranch)
 	} else {
-		checkedOutCommit, err = shallowCloneDataPull(ctx, dEnv.DbData(), srcDB, remoteName, branch, depth)
+		checkedOutCommit, err = shallowCloneDataPull(ctx, dEnv.DbData(ctx), srcDB, remoteName, branch, depth)
 	}
 
 	if err != nil {

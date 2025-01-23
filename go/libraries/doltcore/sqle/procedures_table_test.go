@@ -37,7 +37,7 @@ func TestProceduresMigration(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
@@ -113,7 +113,7 @@ func TestProceduresMigration(t *testing.T) {
 }
 
 func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
 	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)

@@ -89,7 +89,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 
 	dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
 
-	deaf := dEnv.DbEaFactory()
+	deaf := dEnv.DbEaFactory(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -99,7 +99,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, err
 	}

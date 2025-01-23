@@ -833,7 +833,7 @@ func (dEnv *DoltEnv) HeadCommit(ctx context.Context) (*doltdb.Commit, error) {
 	return dEnv.DoltDB(ctx).ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 }
 
-func (dEnv *DoltEnv) DbData() DbData {
+func (dEnv *DoltEnv) DbData(ctx context.Context) DbData {
 	return DbData{
 		Ddb: dEnv.DoltDB(ctx),
 		Rsw: dEnv.RepoStateWriter(),
@@ -1257,7 +1257,7 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
+func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil
@@ -1265,7 +1265,7 @@ func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB(ctx).ValueReadWriter())
 }
 
-func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
+func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil
@@ -1273,6 +1273,6 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
 }
 
-func (dEnv *DoltEnv) IsAccessModeReadOnly() bool {
+func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
 	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }

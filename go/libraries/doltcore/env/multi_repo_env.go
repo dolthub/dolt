@@ -246,7 +246,7 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 			}
 		}
 	}
-	mrEnv.envs = enforceSingleFormat(mrEnv.envs)
+	mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -350,7 +350,7 @@ func getRepoRootDir(path, pathSeparator string) string {
 // enforceSingleFormat enforces that constraint that all databases in
 // a multi-database environment have the same NomsBinFormat.
 // Databases are removed from the MultiRepoEnv to ensure this is true.
-func enforceSingleFormat(envSet []NamedEnv) []NamedEnv {
+func enforceSingleFormat(ctx context.Context, envSet []NamedEnv) []NamedEnv {
 	formats := set.NewEmptyStrSet()
 	for _, namedEnv := range envSet {
 		dEnv := namedEnv.env

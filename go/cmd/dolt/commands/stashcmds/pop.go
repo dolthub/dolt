@@ -163,7 +163,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 		return false, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(ctx), Tempdir: tmpDir}
 	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return false, err

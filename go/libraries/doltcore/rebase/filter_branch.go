@@ -81,7 +81,7 @@ func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted
 	if err != nil {
 		return err
 	}
-	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, append(branches, tags...)...)
+	return rebaseRefs(ctx, dEnv.DbData(ctx), applyUncommitted, commitReplayer, rootReplayer, nerf, append(branches, tags...)...)
 }
 
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
@@ -90,7 +90,7 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, 
 	if err != nil {
 		return err
 	}
-	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, branches...)
+	return rebaseRefs(ctx, dEnv.DbData(ctx), applyUncommitted, commitReplayer, rootReplayer, nerf, branches...)
 }
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
@@ -99,7 +99,7 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool
 	if err != nil {
 		return nil
 	}
-	return rebaseRefs(ctx, dEnv.DbData(), applyUncommitted, commitReplayer, rootReplayer, nerf, headRef)
+	return rebaseRefs(ctx, dEnv.DbData(ctx), applyUncommitted, commitReplayer, rootReplayer, nerf, headRef)
 }
 
 func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {

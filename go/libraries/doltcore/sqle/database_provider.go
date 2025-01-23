@@ -847,12 +847,12 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	}
 
 	opts := editor.Options{
-		Deaf: newEnv.DbEaFactory(),
+		Deaf: newEnv.DbEaFactory(ctx),
 		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), opts)
 	if err != nil {
 		return err
 	}

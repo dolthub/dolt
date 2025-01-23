@@ -778,7 +778,7 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly() {
+	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
 		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true
@@ -790,7 +790,7 @@ If you're interested in running this command against a remote host, hit us up on
 		var allReposAreReadOnly bool = true
 		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 			if dEnv.DoltDB(ctx) != nil {
-				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly(ctx)
 			}
 			return !allReposAreReadOnly, nil
 		})
