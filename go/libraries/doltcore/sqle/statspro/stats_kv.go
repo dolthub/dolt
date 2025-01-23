@@ -30,6 +30,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
@@ -47,6 +48,7 @@ type StatsKv interface {
 	StartGc(ctx context.Context, sz int) error
 	FinishGc()
 	Len() int
+	Cap() int64
 }
 
 var _ StatsKv = (*prollyStats)(nil)
@@ -54,15 +56,19 @@ var _ StatsKv = (*memStats)(nil)
 
 func NewMemStats() *memStats {
 	buckets, _ := lru.New[hash.Hash, *stats.Bucket](defaultBucketSize)
+	gcCap := atomic.Int64{}
+	gcCap.Store(defaultBucketSize)
 	return &memStats{
 		buckets:   buckets,
 		templates: make(map[templateCacheKey]stats.Statistic),
 		bounds:    make(map[hash.Hash]sql.Row),
+		gcCap:     gcCap,
 	}
 }
 
 type memStats struct {
-	doGc bool
+	doGc  bool
+	gcCap atomic.Int64
 
 	buckets     *lru.Cache[hash.Hash, *stats.Bucket]
 	nextBuckets *lru.Cache[hash.Hash, *stats.Bucket]
@@ -112,6 +118,7 @@ func (m *memStats) PutBound(h hash.Hash, r sql.Row) {
 
 func (m *memStats) StartGc(ctx context.Context, sz int) error {
 	m.doGc = true
+	m.gcCap.Store(int64(sz))
 	if sz == 0 {
 		sz = m.buckets.Len() * 2
 	}
@@ -139,9 +146,19 @@ func (m *memStats) Len() int {
 	return m.buckets.Len()
 }
 
+func (m *memStats) Cap() int64 {
+	return m.gcCap.Load()
+}
+
 func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
 	if m.doGc {
 		m.nextBuckets.Add(h, b)
+		gcCap := int(m.gcCap.Load())
+		if m.nextBuckets.Len() >= gcCap {
+			// overflow
+			m.gcCap.Store(int64(gcCap * 2))
+			m.nextBuckets.Resize(gcCap * 2)
+		}
 	} else {
 		m.buckets.Add(h, b)
 	}
@@ -156,9 +173,7 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, _ *val.TupleBuilder
 	if m.doGc {
 		if !ok {
 			b, ok = m.nextBuckets.Get(h)
-			if ok {
-				return b, true, nil
-			}
+			return b, ok, nil
 		}
 		m.nextBuckets.Add(h, b)
 	}
@@ -179,7 +194,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &prollyStats{
 		destDb: destDb,
 		kb:     keyBuilder,
@@ -198,6 +213,10 @@ type prollyStats struct {
 
 func (p *prollyStats) Len() int {
 	return p.mem.Len()
+}
+
+func (p *prollyStats) Cap() int64 {
+	return p.mem.Cap()
 }
 
 func (p *prollyStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {

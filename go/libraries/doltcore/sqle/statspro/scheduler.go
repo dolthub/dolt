@@ -269,6 +269,7 @@ func (j ControlJob) String() string {
 func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
+	kv := NewMemStats()
 	return &StatsCoord{
 		dbMu:           &sync.Mutex{},
 		statsMu:        &sync.Mutex{},
@@ -280,11 +281,11 @@ func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		capInterval:    1 * time.Minute,
-		bucketCap:      defaultBucketSize,
+		bucketCap:      kv.Cap(),
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
 		threads:        threads,
-		kv:             NewMemStats(),
+		kv:             kv,
 		pro:            pro,
 		hdp:            dEnv.GetUserHomeDir,
 		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
@@ -461,10 +462,6 @@ func (sc *StatsCoord) Info() StatsInfo {
 	}
 }
 
-func (sc *StatsCoord) putBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
-	return sc.kv.PutBucket(ctx, h, b, tupB)
-}
-
 // event loop must be stopped
 func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
@@ -515,8 +512,9 @@ func GcSweep(ctx *sql.Context) ControlJob {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		default:
-			sc.kv.FinishGc()
 			sc.bucketCnt.Store(int64(sc.kv.Len()))
+			sc.bucketCap = sc.kv.Cap()
+			sc.kv.FinishGc()
 			sc.activeGc.Store(false)
 			close(sc.gcDone)
 			sc.gcCancel = nil
@@ -1044,6 +1042,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		if err != nil {
 			return nil, err
 		}
+		// TODO check for capacity error during GC
 		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc()))
 		if err != nil {
 			return nil, err
