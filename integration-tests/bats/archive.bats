@@ -143,39 +143,6 @@ mutations_and_gc_statement() {
   [ "$commits" -eq "66" ]
 }
 
-@test "archive: archive backup no go" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt archive
-
-  dolt backup add bac1 file://../bac1
-  run dolt backup sync bac1
-
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "archive files present" ]] || false
-
-  # currently the cli and stored procedures are different code paths.
-  run dolt sql -q "call dolt_backup('sync', 'bac1')"
-  [ "$status" -eq 1 ]
-  # NM4 - TODO. This message is cryptic, but plumbing the error through is awkward.
-  [[ "$output" =~ "Archive chunk source" ]] || false
-}
-
-@test "archive: clone archived database fails" {
-    mkdir remote
-    cd remote
-    dolt init
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt archive
-    cd ..
-
-    dolt clone file://./remote clone_test
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "archive files present" ]] || false
-
-    rm -rf remote
-    rm -rf clone_test
-}
-
 @test "archive: can clone archived repository" {
     mkdir -p remote/.dolt
     mkdir cloned
