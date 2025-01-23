@@ -128,7 +128,6 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
-	mrEnv.ReloadDBs(ctx)
 
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
 	// create the DoltEnv. This is a little messy.
@@ -248,6 +247,11 @@ func newLateBindingEngine(
 	}
 
 	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		// We've deferred loading the database as long as we can.
+		// If we're binding the Queryist, that means that engine is actually
+		// going to be used.
+		mrEnv.ReloadDBs(ctx2)
+
 		se, err := engine.NewSqlEngine(
 			ctx2,
 			mrEnv,
