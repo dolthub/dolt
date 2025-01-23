@@ -139,10 +139,6 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Contains(showCurrentFlag):
 		return printCurrentBranch(sqlCtx, queryEngine)
 	case apr.Contains(datasetsFlag):
-		dEnv.ReloadDB(ctx)
-		if HandleDEnvErrorsAndExitCode(errorBuilder, dEnv, usage) {
-			return 1
-		}
 		return printAllDatasets(ctx, dEnv)
 	case apr.NArg() > 0:
 		return createBranch(sqlCtx, queryEngine, apr, args, usage)

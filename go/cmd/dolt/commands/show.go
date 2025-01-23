@@ -158,10 +158,6 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` is not supported when using old LD_1 storage format.")
 			return 1
 		}
-		dEnv.ReloadDB(ctx)
-		if HandleDEnvErrorsAndExitCode(nil, dEnv, usage) {
-			return 1
-		}
 	}
 
 	specRefs := opts.specRefs
