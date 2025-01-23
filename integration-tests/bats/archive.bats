@@ -159,3 +159,74 @@ mutations_and_gc_statement() {
   # NM4 - TODO. This message is cryptic, but plumbing the error through is awkward.
   [[ "$output" =~ "Archive chunk source" ]] || false
 }
+
+@test "archive: clone archived database fails" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt archive
+    cd ..
+
+    dolt clone file://./remote clone_test
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "archive files present" ]] || false
+
+    rm -rf remote
+    rm -rf clone_test
+}
+
+@test "archive: can clone archived repository" {
+    mkdir -p remote/.dolt
+    mkdir cloned
+
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cd remote
+
+    port=$( definePORT )
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned
+    run dolt clone http://localhost:$port/test-org/test-repo repo1
+    [ "$status" -eq 0 ]
+    cd repo1
+
+    # Verify we can read data
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+    kill $remotesrv_pid
+    wait $remotesrv_pid || :
+    remotesrv_pid=""
+
+    ## The above test is the setup for the next test - so we'll stick both in here.
+    ## This tests cloning from a clone. Archive files are generally in oldgen, but not the case with a fresh clone.
+    cd ../../
+    mkdir clone2
+
+    cd cloned/repo1 # start the server using the clone from above.
+    port=$( definePORT )
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../../clone2
+    run dolt clone http://localhost:$port/test-org/test-repo repo2
+    [ "$status" -eq 0 ]
+    cd repo2
+
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+    teardown_common
+    kill $remotesrv_pid
+    wait $remotesrv_pid || :
+    remotesrv_pid=""
+
+}

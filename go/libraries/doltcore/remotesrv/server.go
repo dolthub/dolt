@@ -17,7 +17,6 @@ package remotesrv
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -78,14 +76,6 @@ type ServerArgs struct {
 func NewServer(args ServerArgs) (*Server, error) {
 	if args.Logger == nil {
 		args.Logger = logrus.NewEntry(logrus.StandardLogger())
-	}
-
-	storageMetadata, err := env.GetMultiEnvStorageMetadata(args.FS)
-	if err != nil {
-		return nil, err
-	}
-	if storageMetadata.ArchiveFilesPresent() {
-		return nil, errors.New("archive files present. Please run `dolt archive --revert` before running the server.")
 	}
 
 	s := new(Server)
