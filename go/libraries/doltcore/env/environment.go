@@ -111,7 +111,7 @@ func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	if dEnv.doltDB == nil {
 		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
 	}
-	return dEnv.DoltDB(ctx)
+	return dEnv.doltDB
 }
 
 func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
