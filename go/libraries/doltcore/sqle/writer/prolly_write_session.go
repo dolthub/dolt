@@ -165,7 +165,10 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
 				// TODO: need schema name for auto increment
-				autoIncVal := s.aiTracker.Current(name.Name)
+				autoIncVal, err := s.aiTracker.Current(name.Name)
+				if err != nil {
+					return err
+				}
 				override, hasManuallySetAi := manualAutoIncrementsSettings[name.Name]
 				if hasManuallySetAi {
 					autoIncVal = override

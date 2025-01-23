@@ -334,14 +334,18 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	keepChan := make(chan []hash.Hash, numChunks)
-	for h := range keepers {
-		keepChan <- []hash.Hash{h}
-	}
-	close(keepChan)
-
 	require.NoError(t, st.BeginGC(nil))
-	finalizer, err := st.MarkAndSweepChunks(ctx, keepChan, nil, chunks.GCMode_Full)
+	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return hashes, nil
+	}
+	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full)
+	require.NoError(t, err)
+	keepersSlice := make([]hash.Hash, 0, len(keepers))
+	for h := range keepers {
+		keepersSlice = append(keepersSlice, h)
+	}
+	require.NoError(t, sweeper.SaveHashes(ctx, keepersSlice))
+	finalizer, err := sweeper.Close(ctx)
 	require.NoError(t, err)
 	require.NoError(t, finalizer.SwapChunksInStore(ctx))
 	st.EndGC()

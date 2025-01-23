@@ -152,7 +152,11 @@ jobs:
           cwd: "."
           pull: "--ff"
       - name: Check generated protobufs
+        env:
+          USE_BAZEL_VERSION: 7.4.0
         working-directory: ./proto
+        env:
+          USE_BAZEL_VERSION: 7.4.0
         run: |
           (cd third_party/protobuf && bazel build //:protoc)
           (cd third_party/protobuf-go && go build -o ._protoc-gen-go ./cmd/protoc-gen-go)

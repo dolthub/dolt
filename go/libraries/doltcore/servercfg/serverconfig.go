@@ -125,6 +125,8 @@ type ServerConfig interface {
 	Port() int
 	// User returns the username that connecting clients must use.
 	User() string
+	// UserIsSpecified returns true if a user was explicitly provided in the configuration.
+	UserIsSpecified() bool
 	// Password returns the password that connecting clients must use.
 	Password() string
 	// ReadTimeout returns the read timeout in milliseconds

@@ -76,6 +76,12 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 
 // AddCmpChunk adds a compressed chunk
 func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
+	if c.IsGhost() {
+		// Ghost chunks cannot be written to a table file. They should
+		// always be filtered by the write processes before landing
+		// here.
+		return ErrGhostChunkRequested
+	}
 	if len(c.CompressedData) == 0 {
 		panic("NBS blocks cannot be zero length")
 	}

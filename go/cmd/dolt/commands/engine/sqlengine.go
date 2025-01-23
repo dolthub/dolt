@@ -63,22 +63,23 @@ type contextFactory func(ctx context.Context, session sql.Session) (*sql.Context
 type SystemVariables map[string]interface{}
 
 type SqlEngineConfig struct {
-	IsReadOnly              bool
-	IsServerLocked          bool
-	DoltCfgDirPath          string
-	PrivFilePath            string
-	BranchCtrlFilePath      string
-	ServerUser              string
-	ServerPass              string
-	ServerHost              string
-	Autocommit              bool
-	DoltTransactionCommit   bool
-	Bulk                    bool
-	JwksConfig              []servercfg.JwksConfig
-	SystemVariables         SystemVariables
-	ClusterController       *cluster.Controller
-	BinlogReplicaController binlogreplication.BinlogReplicaController
-	EventSchedulerStatus    eventscheduler.SchedulerStatus
+	IsReadOnly                 bool
+	IsServerLocked             bool
+	DoltCfgDirPath             string
+	PrivFilePath               string
+	BranchCtrlFilePath         string
+	ServerUser                 string
+	ServerPass                 string
+	ServerHost                 string
+	SkipRootUserInitialization bool
+	Autocommit                 bool
+	DoltTransactionCommit      bool
+	Bulk                       bool
+	JwksConfig                 []servercfg.JwksConfig
+	SystemVariables            SystemVariables
+	ClusterController          *cluster.Controller
+	BinlogReplicaController    binlogreplication.BinlogReplicaController
+	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
 
 // NewSqlEngine returns a SqlEngine

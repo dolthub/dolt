@@ -299,7 +299,8 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 	ret, err := creation.CreateIndex(ctx, t.table, t.Name(), idx.Name, cols, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
 		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
 		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsFullText:    false,
+		IsVector:      false,
 		IsUserDefined: true,
 		Comment:       idx.Comment,
 	}, t.opts)

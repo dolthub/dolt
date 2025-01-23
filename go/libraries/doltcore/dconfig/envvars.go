@@ -43,4 +43,6 @@ const (
 	EnvDoltAuthorDate                = "DOLT_AUTHOR_DATE"
 	EnvDoltCommitterDate             = "DOLT_COMMITTER_DATE"
 	EnvDbNameReplace                 = "DOLT_DBNAME_REPLACE"
+	EnvDoltRootHost                  = "DOLT_ROOT_HOST"
+	EnvDoltRootPassword              = "DOLT_ROOT_PASSWORD"
 )

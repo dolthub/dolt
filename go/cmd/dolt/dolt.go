@@ -44,15 +44,13 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/ci"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/doltcmd"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -60,6 +58,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -70,65 +69,6 @@ import (
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
-
-var doltSubCommands = []cli.Command{
-	commands.InitCmd{},
-	commands.StatusCmd{},
-	commands.AddCmd{},
-	commands.DiffCmd{},
-	commands.ResetCmd{},
-	commands.CleanCmd{},
-	commands.CommitCmd{},
-	commands.SqlCmd{VersionStr: doltversion.Version},
-	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
-	commands.LogCmd{},
-	commands.ShowCmd{},
-	commands.BranchCmd{},
-	commands.CheckoutCmd{},
-	commands.MergeCmd{},
-	cnfcmds.Commands,
-	commands.CherryPickCmd{},
-	commands.RevertCmd{},
-	commands.CloneCmd{},
-	commands.FetchCmd{},
-	commands.PullCmd{},
-	commands.PushCmd{},
-	commands.ConfigCmd{},
-	commands.RemoteCmd{},
-	commands.BackupCmd{},
-	commands.LoginCmd{},
-	credcmds.Commands,
-	commands.LsCmd{},
-	schcmds.Commands,
-	tblcmds.Commands,
-	commands.TagCmd{},
-	commands.BlameCmd{},
-	cvcmds.Commands,
-	commands.SendMetricsCmd{},
-	commands.MigrateCmd{},
-	indexcmds.Commands,
-	commands.ReadTablesCmd{},
-	commands.GarbageCollectionCmd{},
-	commands.FsckCmd{},
-	commands.FilterBranchCmd{},
-	commands.MergeBaseCmd{},
-	commands.RootsCmd{},
-	commands.VersionCmd{VersionStr: doltversion.Version},
-	commands.DumpCmd{},
-	commands.InspectCmd{},
-	dumpDocsCommand,
-	dumpZshCommand,
-	docscmds.Commands,
-	stashcmds.StashCommands,
-	&commands.Assist{},
-	commands.ProfileCmd{},
-	commands.QueryDiff{},
-	commands.ReflogCmd{},
-	commands.RebaseCmd{},
-	commands.ArchiveCmd{},
-	ci.Commands,
-}
 
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
@@ -205,7 +145,7 @@ func needsWriteAccess(commandName string) bool {
 	return true
 }
 
-var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
+var doltCommand = doltcmd.DoltCommand
 var globalArgParser = cli.CreateGlobalArgParser("dolt")
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
 
@@ -227,6 +167,8 @@ func init() {
 	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
 		eventFlushDisabled = true
 	}
+
+	dtables.DoltCommand = doltCommand
 }
 
 const pprofServerFlag = "--pprof-server"

@@ -48,6 +48,9 @@ type CompressedChunk struct {
 
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
 	CompressedData []byte
+
+	// true if the chunk is a ghost chunk.
+	ghost bool
 }
 
 // NewCompressedChunk creates a CompressedChunk
@@ -64,14 +67,20 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
 }
 
+func NewGhostCompressedChunk(h hash.Hash) CompressedChunk {
+	return CompressedChunk{H: h, ghost: true}
+}
+
 // ToChunk snappy decodes the compressed data and returns a chunks.Chunk
 func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
-	data, err := snappy.Decode(nil, cmp.CompressedData)
+	if cmp.IsGhost() {
+		return *chunks.NewGhostChunk(cmp.H), nil
+	}
 
+	data, err := snappy.Decode(nil, cmp.CompressedData)
 	if err != nil {
 		return chunks.Chunk{}, err
 	}
-
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
@@ -94,6 +103,10 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
 	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
+}
+
+func (cmp CompressedChunk) IsGhost() bool {
+	return cmp.ghost
 }
 
 // CompressedSize returns the size of this CompressedChunk.

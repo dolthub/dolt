@@ -62,12 +62,17 @@ type WorkspaceTable struct {
 
 	// headSchema is the schema of the table that is being modified.
 	headSchema schema.Schema
+
+	// modifiable is true if the schemas before and after the update are identical. Used to reject updates that would
+	// be impossible to perform - such as only stage one row when the entire schema of the table is being modified.
+	modifiable bool
 }
 
 type WorkspaceTableModifier struct {
-	tableName doltdb.TableName
-	ws        *doltdb.WorkingSet
-	head      doltdb.RootValue
+	tableName          doltdb.TableName
+	workspaceTableName string
+	ws                 *doltdb.WorkingSet
+	head               doltdb.RootValue
 
 	headSch   schema.Schema
 	schemaLen int
@@ -75,6 +80,9 @@ type WorkspaceTableModifier struct {
 	// tableWriter and sessionWriter are only set during StatementBegin
 	tableWriter   *dsess.TableWriter
 	sessionWriter *dsess.WriteSession
+
+	// modifiable carried through from the main table.
+	modifiable bool
 
 	err *error
 }
@@ -151,6 +159,10 @@ func (wtu *WorkspaceTableUpdater) Update(ctx *sql.Context, old sql.Row, new sql.
 		return fmt.Errorf("Runtime error: expected non-nil inputs to WorkspaceTableUpdater.Update")
 	}
 
+	if !wtu.modifiable {
+		return errors.New(fmt.Sprintf("%s table is not modifiable due to schema change", wtu.workspaceTableName))
+	}
+
 	valid, isStaged := validateWorkspaceUpdate(old, new)
 	if !valid {
 		return errors.New("only update of column 'staged' is allowed")
@@ -205,6 +217,10 @@ func (wtd *WorkspaceTableDeleter) StatementBegin(ctx *sql.Context) {
 }
 
 func (wtd *WorkspaceTableDeleter) Delete(c *sql.Context, row sql.Row) error {
+	if !wtd.modifiable {
+		return errors.New(fmt.Sprintf("%s table is not modifiable due to schema change", wtd.workspaceTableName))
+	}
+
 	isStaged := isTrue(row[stagedColumnIdx])
 	if isStaged {
 		return fmt.Errorf("cannot delete staged rows from workspace")
@@ -313,11 +329,13 @@ func validateWorkspaceUpdate(old, new sql.Row) (valid, staged bool) {
 func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
-		tableName: wt.userTblName,
-		headSch:   wt.headSchema,
-		schemaLen: cols,
-		ws:        wt.ws,
-		head:      wt.head,
+		tableName:          wt.userTblName,
+		workspaceTableName: wt.Name(),
+		headSch:            wt.headSchema,
+		schemaLen:          cols,
+		ws:                 wt.ws,
+		head:               wt.head,
+		modifiable:         wt.modifiable,
 	}
 
 	return &WorkspaceTableDeleter{
@@ -328,11 +346,13 @@ func (wt *WorkspaceTable) Deleter(_ *sql.Context) sql.RowDeleter {
 func (wt *WorkspaceTable) Updater(_ *sql.Context) sql.RowUpdater {
 	cols := wt.headSchema.GetAllCols().Size()
 	modifier := WorkspaceTableModifier{
-		tableName: wt.userTblName,
-		headSch:   wt.headSchema,
-		schemaLen: cols,
-		ws:        wt.ws,
-		head:      wt.head,
+		tableName:          wt.userTblName,
+		workspaceTableName: wt.Name(),
+		headSch:            wt.headSchema,
+		schemaLen:          cols,
+		ws:                 wt.ws,
+		head:               wt.head,
+		modifiable:         wt.modifiable,
 	}
 
 	return &WorkspaceTableUpdater{
@@ -407,6 +427,12 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		fromSch = toSch
 	}
 
+	modifiable := false
+	if fromSch != nil && toSch != nil {
+		// TODO: be more intelligent about schema migrations. This is pretty strict, but it's also correct.
+		modifiable = schema.ColCollsAreEqual(fromSch.GetAllCols(), toSch.GetAllCols())
+	}
+
 	sch := sql.NewPrimaryKeySchema(GetDoltWorkspaceBaseSqlSchema())
 	baseDoltSch, err := sqlutil.ToDoltSchema(ctx, head, tableName, sch, head, sql.Collation_Default)
 	if err != nil {
@@ -430,6 +456,7 @@ func NewWorkspaceTable(ctx *sql.Context, workspaceTableName string, tableName do
 		stagedDeltas:  stgDel,
 		workingDeltas: wkDel,
 		headSchema:    fromSch,
+		modifiable:    modifiable,
 	}, nil
 }
 

@@ -79,8 +79,8 @@ func (nbsMW *NBSMetricWrapper) EndGC() {
 	nbsMW.nbs.EndGC()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, hashes <-chan []hash.Hash, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.GCFinalizer, error) {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, hashes, dest, mode)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, getAddrs, filter, dest, mode)
 }
 
 func (nbsMW *NBSMetricWrapper) Count() (uint32, error) {

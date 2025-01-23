@@ -217,6 +217,7 @@ var getGeneratedSystemTables = func() []string {
 		GetCommitAncestorsTableName(),
 		GetStatusTableName(),
 		GetRemotesTableName(),
+		GetHelpTableName(),
 	}
 }
 
@@ -378,6 +379,11 @@ var GetStatusTableName = func() string {
 // GetTagsTableName returns the tags table name
 var GetTagsTableName = func() string {
 	return TagsTableName
+}
+
+// GetHelpTableName returns the help table name
+var GetHelpTableName = func() string {
+	return HelpTableName
 }
 
 const (
@@ -584,4 +590,8 @@ const (
 	// ProceduresTableSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	ProceduresTableSqlModeCol = "sql_mode"
+)
+
+const (
+	HelpTableName = "dolt_help"
 )

@@ -27,11 +27,11 @@ import (
 // interface here because implementations need to reach into session state, requiring a dependency on this package.
 type AutoIncrementTracker interface {
 	// Current returns the current auto increment value for the given table.
-	Current(tableName string) uint64
+	Current(tableName string) (uint64, error)
 	// Next returns the next auto increment value for the given table, and increments the current value.
 	Next(tbl string, insertVal interface{}) (uint64, error)
 	// AddNewTable adds a new table to the tracker, initializing the auto increment value to 1.
-	AddNewTable(tableName string)
+	AddNewTable(tableName string) error
 	// DropTable removes a table from the tracker.
 	DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error
 	// CoerceAutoIncrementValue coerces the given value to a uint64, returning an error if it can't be done.

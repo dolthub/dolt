@@ -221,7 +221,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableIndexDefinition(index schema.Index) string {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), false, index.Name(),
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.IsVector(), index.Name(),
 		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 
@@ -473,7 +473,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 	}
 
 	coll := sql.CollationID(sch.GetCollation())
-	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, "", "", coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
 	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 

@@ -17,6 +17,10 @@ include "collation.fbs";
 
 namespace serial;
 
+enum DistanceType : uint8 {
+  Null       = 0,
+  L2_Squared = 1,
+}
 
 table TableSchema {
   columns:[Column] (required);
@@ -104,6 +108,11 @@ table Index {
   // fulltext information
   fulltext_key:bool;
   fulltext_info:FulltextInfo;
+
+  // vector information
+  // these fields should be set for vector indexes and otherwise omitted, for backwards compatibility
+  vector_key:bool;
+  vector_info:VectorInfo;
 }
 
 table FulltextInfo {
@@ -115,6 +124,10 @@ table FulltextInfo {
   key_type:uint8;
   key_name:string;
   key_positions:[uint16];
+}
+
+table VectorInfo {
+    distance_type:DistanceType;
 }
 
 table CheckConstraint {

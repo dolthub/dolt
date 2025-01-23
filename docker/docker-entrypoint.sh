@@ -119,12 +119,27 @@ _main() {
         set -- "$@" --config=$CONFIG_PROVIDED
     fi
 
+    # If DOLT_ROOT_HOST has been specified – create a root user for that host with the specified password
+    if [ -n "$DOLT_ROOT_HOST" ] && [ "$DOLT_ROOT_HOST" != 'localhost' ]; then
+       echo "Ensuring root@${DOLT_ROOT_HOST} superuser exists (DOLT_ROOT_HOST was specified)"
+       dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+                    ALTER USER 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+                    GRANT ALL ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
+    fi
+
+     # Ensure the root@localhost user exists, with the requested password
+     echo "Ensuring root@localhost user exists"
+     dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+                  ALTER USER 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+                  GRANT ALL ON *.* TO 'root'@'localhost' WITH GRANT OPTION;"
+
     if [[ ! -f $INIT_COMPLETED ]]; then
         # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
         docker_process_init_files /docker-entrypoint-initdb.d/*
         touch $INIT_COMPLETED
     fi
 
+    # switch this process over to executing dolt sql-server
     exec dolt sql-server --host=0.0.0.0 --port=3306 "$@"
 }
 

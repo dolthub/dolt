@@ -135,6 +135,29 @@ func IterResolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *dolt
 			break
 		}
 	}
+	return nil
+}
 
+// IterUnresolvedTags iterates over tags in dEnv.DoltDB, and calls cb() for each with an unresovled Tag.
+func IterUnresolvedTags(ctx context.Context, ddb *doltdb.DoltDB, cb func(tag *doltdb.TagResolver) (stop bool, err error)) error {
+	tagRefs, err := ddb.GetTags(ctx)
+	if err != nil {
+		return err
+	}
+
+	tagResolvers, err := ddb.GetTagResolvers(ctx, tagRefs)
+	if err != nil {
+		return err
+	}
+
+	for _, tagResolver := range tagResolvers {
+		stop, err := cb(&tagResolver)
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
 	return nil
 }

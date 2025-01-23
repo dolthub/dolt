@@ -133,10 +133,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return fmt.Errorf("no execution context set for the replica controller")
 	}
 
-	err = d.configureReplicationUser(ctx)
-	if err != nil {
-		return err
-	}
+	d.configureReplicationUser(ctx)
 
 	// Set execution context's user to the binlog replication user
 	d.ctx.SetClient(sql.Client{
@@ -156,34 +153,15 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	return nil
 }
 
-// configureReplicationUser creates or configures the super user account needed to apply replication
+// configureReplicationUser creates or configures the superuser account needed to apply replication
 // changes and execute DDL statements on the running server. If the account doesn't exist, it will be
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
-// locked, it will be given super user privs and locked.
-func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) error {
+// locked, it will be given superuser privs and locked.
+func (d *doltBinlogReplicaController) configureReplicationUser(_ *sql.Context) {
 	mySQLDb := d.engine.Analyzer.Catalog.MySQLDb
 	ed := mySQLDb.Editor()
 	defer ed.Close()
-
-	replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
-	if replicationUser == nil {
-		// If the replication user doesn't exist yet, create it and lock it
-		mySQLDb.AddSuperUser(ed, binlogApplierUser, "localhost", "")
-		replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
-		if replicationUser == nil {
-			return fmt.Errorf("unable to load replication user")
-		}
-		// Make sure this account is locked so that it cannot be used to log in
-		replicationUser.Locked = true
-		ed.PutUser(replicationUser)
-	} else if replicationUser.IsSuperUser == false || replicationUser.Locked == false {
-		// Fix the replication user if it has been modified
-		replicationUser.IsSuperUser = true
-		replicationUser.Locked = true
-		ed.PutUser(replicationUser)
-	}
-
-	return nil
+	mySQLDb.AddLockedSuperUser(ed, binlogApplierUser, "localhost", "")
 }
 
 // SetExecutionContext sets the unique |ctx| for the replica's applier to use when applying changes from binlog events

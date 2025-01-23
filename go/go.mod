@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20241231200706-18992bb25fdc
+	github.com/dolthub/vitess v0.0.0-20250123002143-3b45b8cacbfa
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -39,7 +39,7 @@ require (
 	github.com/tealeg/xlsx v1.0.5
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.25.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/api v0.126.0
@@ -56,9 +56,10 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250110212422-29e26f9e54ea
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250123004221-f5a5bcea7eed
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
+	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/btree v1.1.2
 	github.com/google/go-github/v57 v57.0.0
