@@ -74,7 +74,8 @@ func main() {
 
 	var dbCache remotesrv.DBCache
 	if *repoModeParam {
-		dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "remotesrv")
+		ctx := context.Background()
+		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, "remotesrv")
 		if !dEnv.Valid() {
 			log.Fatalln("repo-mode failed to load repository")
 		}
