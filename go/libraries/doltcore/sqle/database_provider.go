@@ -420,11 +420,13 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
 	currentTx := ctx.GetTransaction()
-
-	err := dSess.CommitTransaction(ctx, currentTx)
-	if err != nil {
-		return err
+	if currentTx != nil {
+		err := dSess.CommitTransaction(ctx, currentTx)
+		if err != nil {
+			return err
+		}
 	}
+
 	newTx, err := dSess.StartTransaction(ctx, sql.ReadWrite)
 	if err != nil {
 		return err
