@@ -173,6 +173,21 @@ func (tw *CmpChunkTableWriter) Remove() error {
 	return os.Remove(tw.path)
 }
 
+// Cancel the inprogress write and attempt to cleanup any
+// resources associated with it. It is an error to call
+// Flush{,ToFile} or Reader after canceling the writer.
+func (tw *CmpChunkTableWriter) Cancel() error {
+	closer, err := tw.sink.Reader()
+	if err != nil {
+		return err
+	}
+	err = closer.Close()
+	if err != nil {
+		return err
+	}
+	return tw.Remove()
+}
+
 func containsDuplicates(prefixes prefixIndexSlice) bool {
 	if len(prefixes) == 0 {
 		return false

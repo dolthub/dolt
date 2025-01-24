@@ -172,7 +172,9 @@ type MarkAndSweeper interface {
 	// chunks is accessed and copied.
 	SaveHashes(context.Context, []hash.Hash) error
 
-	Close(context.Context) (GCFinalizer, error)
+	Finalize(context.Context) (GCFinalizer, error)
+
+	Close(context.Context) error
 }
 
 // A GCFinalizer is returned from a MarkAndSweeper after it is closed.
