@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupEditorIndexTest(t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
+func setupEditorIndexTest(ctx context.Context, t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
 	index_dEnv := dtestutils.CreateTestEnv()
 	root, err := index_dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -119,7 +119,8 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
-			dEnv, initialRoot := setupEditorIndexTest(t)
+			ctx := context.Background()
+			dEnv, initialRoot := setupEditorIndexTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
 			root := initialRoot
@@ -282,7 +283,8 @@ UPDATE oneuni SET v1 = v1 + pk1;
 
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
-			dEnv, initialRoot := setupEditorIndexTest(t)
+			ctx := context.Background()
+			dEnv, initialRoot := setupEditorIndexTest(ctx, t)
 			defer dEnv.DoltDB(ctx).Close()
 
 			root := initialRoot

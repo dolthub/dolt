@@ -99,6 +99,7 @@ func TestDoltHarness(t *testing.T) {
 	}
 
 	fs := filesys.NewInMemFS([]string{}, nil, tmp)
+	ctx := context.Background()
 	dEnv := createTestEnvWithFS(fs, wd)
 	defer dEnv.DoltDB(ctx).Close()
 

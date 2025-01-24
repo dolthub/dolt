@@ -35,6 +35,7 @@ import (
 )
 
 func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *sql.Context, []*indexTuple) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)

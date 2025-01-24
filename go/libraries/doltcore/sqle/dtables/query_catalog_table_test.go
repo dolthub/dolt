@@ -29,10 +29,10 @@ import (
 )
 
 func TestInsertIntoQueryCatalogTable(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
 
-	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	_, ok, err := root.GetTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})

@@ -636,11 +636,11 @@ func TestRenameColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
 			defer dEnv.DoltDB(ctx).Close()
 
-			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
 			updatedRoot, err := ExecuteSql(ctx, dEnv, root, tt.query)
@@ -752,11 +752,11 @@ func TestRenameTableStatements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv, err := CreateTestDatabase()
 			require.NoError(t, err)
 			defer dEnv.DoltDB(ctx).Close()
 
-			ctx := context.Background()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
@@ -809,6 +809,7 @@ func TestAlterSystemTables(t *testing.T) {
 	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people", "dolt_schemas"}
 	reservedTableNames := []string{"dolt_query_catalog", "dolt_docs", "dolt_procedures", "dolt_ignore"}
 
+	ctx := context.Background()
 	var dEnv *env.DoltEnv
 	var err error
 	setup := func() {
@@ -1074,9 +1075,9 @@ func TestParseCreateTableStatement(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 			defer dEnv.DoltDB(ctx).Close()
-			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 			//eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, dEnv)
 			eng, sqlCtx := newTestEngine(ctx, dEnv)
@@ -1345,6 +1346,7 @@ func TestDropIndex(t *testing.T) {
 }
 
 func TestCreateIndexUnique(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
 	root, err := dEnv.WorkingRoot(context.Background())

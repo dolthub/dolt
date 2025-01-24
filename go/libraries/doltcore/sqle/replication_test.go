@@ -29,6 +29,7 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
+	ctx := context.Background()
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()

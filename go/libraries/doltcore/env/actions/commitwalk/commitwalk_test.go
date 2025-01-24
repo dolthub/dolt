@@ -62,6 +62,7 @@ func createUninitializedEnv() *env.DoltEnv {
 }
 
 func TestGetDotDotRevisions(t *testing.T) {
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
@@ -188,7 +189,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assertEqualHashes(t, featureCommits[1], res[3])
 
 	// Create a similar branch to "feature" on a forked repository and GetDotDotRevisions using that as well.
-	forkEnv := mustForkDB(t, dEnv.DoltDB(ctx), "feature", featureCommits[4])
+	forkEnv := mustForkDB(ctx, t, dEnv.DoltDB(ctx), "feature", featureCommits[4])
 
 	// Create 3 commits on feature branch.
 	for i := 5; i < 8; i++ {
@@ -275,7 +276,7 @@ func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash
 	return commit
 }
 
-func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commit) *env.DoltEnv {
+func mustForkDB(ctx context.Context, t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commit) *env.DoltEnv {
 	h, err := cm.HashOf()
 	require.NoError(t, err)
 	forkEnv := createUninitializedEnv()

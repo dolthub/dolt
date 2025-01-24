@@ -591,8 +591,8 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 }
 
 func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
+	ctx := context.Background()
 	getSchema := func(t *testing.T, dEnv *env.DoltEnv) schema.Schema {
-		ctx := context.Background()
 		wr, err := dEnv.WorkingRoot(ctx)
 		assert.NoError(t, err)
 		tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
@@ -605,7 +605,6 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 	for _, c := range setupCommon {
 		exit := c.exec(t, ctx, dEnv)
 		require.Equal(t, 0, exit)
@@ -664,9 +663,9 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 }
 
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 	for _, c := range setupForeignKeyTests {
 		exit := c.exec(t, ctx, dEnv)
 		require.Equal(t, 0, exit)

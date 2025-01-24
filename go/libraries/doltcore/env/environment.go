@@ -180,7 +180,7 @@ func (dEnv *DoltEnv) ReloadRepoState() error {
 }
 
 // LoadWithoutDB creates a DoltEnv without eagerly loading the DB.
-// If urlStr is non-empty, then the DB can be loaded later by calling DoltEnv.ReloadDB.
+// If urlStr is non-empty, then the DB can be loaded later by calling LoadDoltDB.
 func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 
@@ -201,12 +201,8 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, u
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
-	dEnv.ReloadDB(ctx)
-	return dEnv
-}
-
-func (dEnv *DoltEnv) ReloadDB(ctx context.Context) {
 	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+	return dEnv
 }
 
 func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {

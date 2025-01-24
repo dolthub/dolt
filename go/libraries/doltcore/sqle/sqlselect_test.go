@@ -1357,6 +1357,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
+	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()
@@ -1365,8 +1366,8 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.Query)
+	root, _ := dEnv.WorkingRoot(ctx)
+	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.

@@ -123,6 +123,7 @@ func (h *DoltHarness) GetTimeout() int64 {
 }
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
+	ctx := context.Background()
 	if !dEnv.HasDoltDir() {
 		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
 		if err != nil {
@@ -137,16 +138,16 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 
 	var err error
 	var pro dsess.DoltDatabaseProvider
-	h.engine, pro, err = sqlNewEngine(dEnv)
+	h.engine, pro, err = sqlNewEngine(ctx, dEnv)
 
 	if err != nil {
 		return err
 	}
 
-	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro, statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv))))
-	h.sess = ctx.Session.(*dsess.DoltSession)
+	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv))))
+	h.sess = sqlCtx.Session.(*dsess.DoltSession)
 
-	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)
+	dbs := h.engine.Analyzer.Catalog.AllDatabases(sqlCtx)
 	var dbName string
 	for _, db := range dbs {
 		dsqlDB, ok := db.(dsql.Database)
@@ -282,7 +283,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
+func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, nil, err

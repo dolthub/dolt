@@ -145,6 +145,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 }
 
 func TestInitRepo(t *testing.T) {
+	ctx := context.Background()
 	dEnv, _ := createTestEnv(false, false)
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
@@ -168,6 +169,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	homeDir, err := os.MkdirTemp("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
+	ctx := context.Background()
 	dEnv := createFileTestEnv(t, working, homeDir)
 	assert.NoError(t, dEnv.CfgLoadErr)
 

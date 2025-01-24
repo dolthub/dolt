@@ -225,6 +225,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
 	}
 
+	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()

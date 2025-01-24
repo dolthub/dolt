@@ -232,12 +232,12 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
 	if initializeEngine {
-		// We can't use enginetest.NewContext(d) until d's session is set
-		d.branchControl = branch_control.CreateDefaultController(context.Background())
+		ctx := context.Background()
+		d.branchControl = branch_control.CreateDefaultController(ctx)
 
-		pro := d.newProvider(context.Background())
+		pro := d.newProvider(ctx)
 		if d.setupTestProcedures {
-			pro = d.newProviderWithProcedures()
+			pro = d.newProviderWithProcedures(ctx)
 		}
 		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 		require.True(t, ok)
@@ -536,8 +536,7 @@ func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvid
 	return pro
 }
 
-func (d *DoltHarness) newProviderWithProcedures() sql.MutableDatabaseProvider {
-	ctx := enginetest.NewContext(d)
+func (d *DoltHarness) newProviderWithProcedures(ctx context.Context) sql.MutableDatabaseProvider {
 	pro := d.newProvider(ctx)
 	provider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)

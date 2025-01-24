@@ -1631,9 +1631,9 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 
 		t.Run(test.name, func(t *testing.T) {
 			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool, expConstraintViolations []constraintViolation) {
-				a, l, r, m := setupSchemaMergeTest(t, test)
-
 				ctx := context.Background()
+				a, l, r, m := setupSchemaMergeTest(ctx, t, test)
+
 				var mo merge.MergeOpts
 				var eo editor.Options
 				eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
@@ -1785,7 +1785,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 	}
 }
 
-func setupSchemaMergeTest(t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
+func setupSchemaMergeTest(ctx context.Context, t *testing.T, test schemaMergeTest) (anc, left, right, merged doltdb.RootValue) {
 	denv := dtestutils.CreateTestEnv()
 	var eo editor.Options
 	eo = eo.WithDeaf(editor.NewInMemDeaf(denv.DoltDB(ctx).ValueReadWriter()))
@@ -1827,10 +1827,10 @@ func tbl(ns namedSchema, rows ...sql.Row) *table {
 }
 
 func sch(definition string) namedSchema {
+	ctx := context.Background()
 	denv := dtestutils.CreateTestEnv()
 	vrw := denv.DoltDB(ctx).ValueReadWriter()
 	ns := denv.DoltDB(ctx).NodeStore()
-	ctx := context.Background()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
 	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)
 	sqlCtx, _ := eng.NewDefaultContext(ctx)

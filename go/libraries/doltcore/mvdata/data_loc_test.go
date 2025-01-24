@@ -194,6 +194,7 @@ func TestCreateRdWr(t *testing.T) {
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
 	root, err := dEnv.WorkingRoot(context.Background())

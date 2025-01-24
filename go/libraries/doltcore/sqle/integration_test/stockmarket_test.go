@@ -20126,10 +20126,12 @@ INSERT INTO join_result VALUES ('stock','ZYNE','us','2017-11-01',9.7,9.93,9.41,9
 `
 
 func TestCreateTables(t *testing.T) {
+	ctx := context.Background()
+
 	SkipByDefaultInCI(t)
+
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
@@ -20149,10 +20151,12 @@ func TestInserts(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
+
+	ctx := context.Background()
+
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
@@ -20179,10 +20183,12 @@ func TestInsertsWithIndexes(t *testing.T) {
 	if types.Format_Default != types.Format_LD_1 {
 		t.Skip() // todo: convert to enginetests
 	}
+
+	ctx := context.Background()
+
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
@@ -20215,10 +20221,11 @@ func TestInsertsWithIndexes(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
+	ctx := context.Background()
+
 	SkipByDefaultInCI(t)
 	dEnv := dtestutils.CreateTestEnv()
 	defer dEnv.DoltDB(ctx).Close()
-	ctx := context.Background()
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error

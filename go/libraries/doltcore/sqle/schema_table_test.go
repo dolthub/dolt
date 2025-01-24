@@ -30,6 +30,7 @@ import (
 )
 
 func TestAncientSchemaTableMigration(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -37,17 +38,17 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
-	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	_, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
+	err = db.createSqlTable(sqlCtx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
-	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	sqlTbl, found, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 	require.True(t, found)
 
@@ -57,23 +58,23 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 	// unmodified dolt_schemas table.
 	require.Equal(t, 3, len(wrapper.backingTable.Schema()))
 
-	inserter := wrapper.backingTable.Inserter(ctx)
-	err = inserter.Insert(ctx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
+	inserter := wrapper.backingTable.Inserter(sqlCtx)
+	err = inserter.Insert(sqlCtx, sql.Row{"view", "view1", "SELECT v1 FROM test;"})
 	require.NoError(t, err)
-	err = inserter.Insert(ctx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
+	err = inserter.Insert(sqlCtx, sql.Row{"view", "view2", "SELECT v2 FROM test;"})
 	require.NoError(t, err)
-	err = inserter.Close(ctx)
-	require.NoError(t, err)
-
-	tbl, err := getOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
+	err = inserter.Close(sqlCtx)
 	require.NoError(t, err)
 
-	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
+	tbl, err := getOrCreateDoltSchemasTable(sqlCtx, db) // removes the old table and recreates it with the new schema
+	require.NoError(t, err)
+
+	iter, err := SqlTableToRowIter(sqlCtx, tbl.DoltTable, nil)
 	require.NoError(t, err)
 
 	var rows []sql.Row
 	for {
-		row, err := iter.Next(ctx)
+		row, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}
@@ -82,7 +83,7 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 		rows = append(rows, row)
 	}
 
-	require.NoError(t, iter.Close(ctx))
+	require.NoError(t, iter.Close(sqlCtx))
 	expectedRows := []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
 		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
@@ -91,6 +92,7 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 }
 
 func TestV1SchemasTable(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -98,10 +100,10 @@ func TestV1SchemasTable(t *testing.T) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
-	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	_, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
+	err = db.createSqlTable(sqlCtx, doltdb.SchemasTableName, "", sql.NewPrimaryKeySchema(sql.Schema{ // original schema of dolt_schemas table
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
@@ -109,7 +111,7 @@ func TestV1SchemasTable(t *testing.T) {
 	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 
 	wrapper, ok := tbl.(*SchemaTable)
@@ -119,14 +121,14 @@ func TestV1SchemasTable(t *testing.T) {
 	// unmodified dolt_schemas table.
 	require.Equal(t, 4, len(wrapper.backingTable.Schema()))
 
-	tbl, err = getOrCreateDoltSchemasTable(ctx, db)
+	tbl, err = getOrCreateDoltSchemasTable(sqlCtx, db)
 	require.NoError(t, err)
 	require.NotNil(t, tbl)
 
 	// modified dolt_schemas table.
 	require.Equal(t, 5, len(tbl.Schema()))
 
-	tbl, _, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err = db.GetTableInsensitive(sqlCtx, doltdb.SchemasTableName)
 	require.NoError(t, err)
 	wrapper, ok = tbl.(*SchemaTable)
 	require.True(t, ok)

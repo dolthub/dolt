@@ -34,6 +34,7 @@ import (
 // Tests the codepath for migrating the dolt_procedures system table from an older schema
 // to the latest schema
 func TestProceduresMigration(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
@@ -41,15 +42,15 @@ func TestProceduresMigration(t *testing.T) {
 
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
-	ctx, db := newDatabaseWithProcedures(t, dEnv, opts, timestamp)
+	sqlCtx, db := newDatabaseWithProcedures(ctx, t, dEnv, opts, timestamp)
 
 	t.Run("test migration logic", func(t *testing.T) {
 		// Call the logic to migrate it to the latest schema
-		tbl, err := DoltProceduresGetTable(ctx, *db)
+		tbl, err := DoltProceduresGetTable(sqlCtx, *db)
 		require.NoError(t, err)
 
 		// Assert that the data was migrated correctly
-		rows := readAllRows(ctx, t, tbl)
+		rows := readAllRows(sqlCtx, t, tbl)
 		expectedRows := []sql.Row{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
@@ -59,12 +60,12 @@ func TestProceduresMigration(t *testing.T) {
 
 	t.Run("test that fetching stored procedure triggers the migration logic", func(t *testing.T) {
 		// Call the logic to migrate it to the latest schema
-		_, found, err := db.GetStoredProcedure(ctx, "proc1")
+		_, found, err := db.GetStoredProcedure(sqlCtx, "proc1")
 		require.NoError(t, err)
 		require.True(t, found)
 
 		// Assert that the data was migrated correctly
-		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+		tbl, found, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 		require.NoError(t, err)
 		require.True(t, found)
 
@@ -72,7 +73,7 @@ func TestProceduresMigration(t *testing.T) {
 		require.True(t, ok)
 		require.NotNil(t, wrapper.backingTable)
 
-		rows := readAllRows(ctx, t, wrapper.backingTable)
+		rows := readAllRows(sqlCtx, t, wrapper.backingTable)
 		expectedRows := []sql.Row{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
@@ -89,11 +90,11 @@ func TestProceduresMigration(t *testing.T) {
 			ModifiedAt:      timestamp,
 			SqlMode:         "NO_ENGINE_SUBSTITUTION",
 		}
-		err := db.SaveStoredProcedure(ctx, proc3)
+		err := db.SaveStoredProcedure(sqlCtx, proc3)
 		require.NoError(t, err)
 
 		// Assert that the data was migrated correctly
-		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+		tbl, found, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 		require.NoError(t, err)
 		require.True(t, found)
 
@@ -101,7 +102,7 @@ func TestProceduresMigration(t *testing.T) {
 		require.True(t, ok)
 		require.NotNil(t, wrapper.backingTable)
 
-		rows := readAllRows(ctx, t, wrapper.backingTable)
+		rows := readAllRows(sqlCtx, t, wrapper.backingTable)
 		expectedRows := []sql.Row{
 			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
 			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
@@ -112,15 +113,15 @@ func TestProceduresMigration(t *testing.T) {
 
 }
 
-func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
+func newDatabaseWithProcedures(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
-	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	_, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
 	require.NoError(t, err)
 
 	// Create the dolt_procedures table with its original schema
-	err = db.createSqlTable(ctx, doltdb.ProceduresTableName, "", sql.NewPrimaryKeySchema(sql.Schema{
+	err = db.createSqlTable(sqlCtx, doltdb.ProceduresTableName, "", sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: doltdb.ProceduresTableNameCol, Type: gmstypes.Text, Source: doltdb.ProceduresTableName, PrimaryKey: true},
 		{Name: doltdb.ProceduresTableCreateStmtCol, Type: gmstypes.Text, Source: doltdb.ProceduresTableName, PrimaryKey: false},
 		{Name: doltdb.ProceduresTableCreatedAtCol, Type: gmstypes.Timestamp, Source: doltdb.ProceduresTableName, PrimaryKey: false},
@@ -128,7 +129,7 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
-	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	sqlTbl, found, err := db.GetTableInsensitive(sqlCtx, doltdb.ProceduresTableName)
 	require.NoError(t, err)
 	require.True(t, found)
 
@@ -137,12 +138,12 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 	require.NotNil(t, wrapper.backingTable)
 
 	// Insert some test data for procedures
-	inserter := wrapper.backingTable.Inserter(ctx)
-	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
-	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
-	require.NoError(t, inserter.Close(ctx))
+	inserter := wrapper.backingTable.Inserter(sqlCtx)
+	require.NoError(t, inserter.Insert(sqlCtx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
+	require.NoError(t, inserter.Insert(sqlCtx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
+	require.NoError(t, inserter.Close(sqlCtx))
 
-	return ctx, &db
+	return sqlCtx, &db
 }
 
 func readAllRows(ctx *sql.Context, t *testing.T, tbl *WritableDoltTable) []sql.Row {

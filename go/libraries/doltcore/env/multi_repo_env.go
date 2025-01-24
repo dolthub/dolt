@@ -230,7 +230,9 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 	for _, namedEnv := range mrEnv.envs {
 		dEnv := namedEnv.env
 
-		dEnv.ReloadDB(ctx)
+		if dEnv.doltDB == nil {
+			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		}
 		if !dEnv.Valid() {
 			dbErr := dEnv.DBLoadError
 			if dbErr != nil {

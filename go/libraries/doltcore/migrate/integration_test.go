@@ -212,13 +212,13 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postEnv *env.DoltEnv) {
 	ddb, err := initTestMigrationDB(ctx)
 	require.NoError(t, err)
-	postEnv = &env.DoltEnv{
-		Version:   preEnv.Version,
-		Config:    preEnv.Config,
-		RepoState: preEnv.RepoState,
-		FS:        preEnv.FS,
-		doltDB:    ddb,
-	}
+	postEnv = env.NewDoltEnv(
+		preEnv.Version,
+		preEnv.Config,
+		preEnv.RepoState,
+		ddb,
+		preEnv.FS,
+	)
 
 	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB(ctx), postEnv.DoltDB(ctx))
 	assert.NoError(t, err)
