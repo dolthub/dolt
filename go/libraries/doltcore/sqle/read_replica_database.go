@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -509,9 +510,20 @@ func getReplicationRefs(ctx *sql.Context, rrd ReadReplicaDatabase) (
 func refsToDelete(remRefs, localRefs []doltdb.RefWithHash) []doltdb.RefWithHash {
 	toDelete := make([]doltdb.RefWithHash, 0, len(localRefs))
 	var i, j int
+
+	// Before we map remote refs to local refs to determine which refs to delete, we need to sort them
+	// by Ref.String() – this ensures a unique identifier that does not conflict with other refs, unlike
+	// Ref.GetPath(), which can conflict if a branch or tag has the same name.
+	sort.Slice(remRefs, func(i, j int) bool {
+		return remRefs[i].Ref.String() < remRefs[j].Ref.String()
+	})
+	sort.Slice(localRefs, func(i, j int) bool {
+		return localRefs[i].Ref.String() < localRefs[j].Ref.String()
+	})
+
 	for i < len(remRefs) && j < len(localRefs) {
-		rem := remRefs[i].Ref.GetPath()
-		local := localRefs[j].Ref.GetPath()
+		rem := remRefs[i].Ref.String()
+		local := localRefs[j].Ref.String()
 		if rem == local {
 			i++
 			j++
