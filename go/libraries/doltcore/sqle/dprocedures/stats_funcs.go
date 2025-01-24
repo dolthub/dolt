@@ -53,6 +53,7 @@ type ToggableStats interface {
 	ThreadStatus(string) string
 	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
+	WaitForDbSync(ctx *sql.Context)
 }
 
 type BranchStatsProvider interface {
@@ -97,6 +98,17 @@ func statsStatus(ctx *sql.Context) (interface{}, error) {
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
 		return afp.ThreadStatus(dbName), nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+// statsStatus returns the last update for a stats thread
+func statsWait(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		afp.WaitForDbSync(ctx)
+		return nil, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }

@@ -16,12 +16,6 @@ package engine
 
 import (
 	"context"
-	"golang.org/x/sync/errgroup"
-	"os"
-	"strconv"
-	"strings"
-	"time"
-
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -32,6 +26,10 @@ import (
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -184,8 +182,13 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	sqlCtx, err := sqlEngine.NewLocalContext(ctx)
-	statsPro := statspro.NewStatsCoord(10*time.Millisecond, pro, sqlCtx.Session.GetLogger().Logger, bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	var statsPro sql.StatsProvider
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(uint8) == 1 {
+		statsPro = statspro.NewStatsCoord(pro, logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		statsPro = statspro.StatsNoop{}
+	}
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
@@ -195,17 +198,34 @@ func NewSqlEngine(
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 
+	sqlCtx, err := sqlEngine.NewLocalContext(ctx)
+
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	statsPro.Restart(sqlCtx)
-	eg := errgroup.Group{}
-	for _, db := range dbs {
-		eg.Go(func() error {
-			<-statsPro.Add(sqlCtx, db)
-			return nil
-		})
+	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(uint8) == 1)
+
+		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+		_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
+
+		jobInterval, _, _ := typ.GetType().Convert(jobI)
+		gcInterval, _, _ := typ.GetType().Convert(gcI)
+		brInterval, _, _ := typ.GetType().Convert(brI)
+
+		sc.SetTimers(jobInterval.(int64), gcInterval.(int64), brInterval.(int64))
+
+		sc.Restart(sqlCtx)
+		eg := errgroup.Group{}
+		for _, db := range dbs {
+			eg.Go(func() error {
+				<-sc.Add(sqlCtx, db)
+				return nil
+			})
+		}
+		eg.Wait()
 	}
-	eg.Wait()
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"net"
 	"net/http"
 	"os"
@@ -271,23 +272,29 @@ func ConfigureServices(
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			if statsOn, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsAutoRefreshEnabled); err != nil {
-				// Auto-stats is off by default for every command except
-				// sql-server. Unless the config specifies a specific
-				// behavior, enable server stats collection.
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, 1)
-			} else if statsOn != "0" {
-				// do not bootstrap if auto-stats enabled
-			} else if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsBootstrapEnabled); err != nil {
-				// If we've disabled stats collection and config does not
-				// specify bootstrap behavior, enable bootstrapping.
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 1)
-			}
+			//if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsEnabled); err != nil {
+			//	// Auto-stats is off by default for every command except
+			//	// sql-server. Unless the config specifies a specific
+			//	// behavior, enable server stats collection.
+			//	sql.SystemVariables.SetGlobal(dsess.DoltStatsEnabled, 1)
+			//}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,
 				config,
 			)
+			if sc, ok := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsCoord); ok {
+				sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+				if err != nil {
+					return err
+				}
+				if sc == nil {
+					return fmt.Errorf("unexpected nil stats coord")
+				}
+				if err = sc.Restart(sqlCtx); err != nil {
+					return err
+				}
+			}
 			return err
 		},
 		StopF: func() error {

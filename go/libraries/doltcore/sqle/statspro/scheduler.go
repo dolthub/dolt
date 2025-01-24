@@ -100,9 +100,9 @@ func (j SeedDbTablesJob) String() string {
 	for _, ti := range j.tables {
 		b.WriteString(sep)
 		b.WriteString("(" + ti.name + ": " + ti.schHash.String()[:5] + ")")
-
-		b.WriteString("]")
 	}
+	b.WriteString("]")
+
 	return b.String()
 }
 
@@ -204,7 +204,7 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	kv := NewMemStats()
@@ -215,10 +215,9 @@ func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *
 		Jobs:           make(chan StatsJob, 1024),
 		Done:           done,
 		Interrupts:     make(chan ControlJob, 1),
-		JobInterval:    sleep,
+		JobInterval:    10 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
-		capInterval:    1 * time.Minute,
 		bucketCap:      kv.Cap(),
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
@@ -228,6 +227,16 @@ func NewStatsCoord(sleep time.Duration, pro *sqle.DoltDatabaseProvider, logger *
 		hdp:            dEnv.GetUserHomeDir,
 		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
 	}
+}
+
+func (sc *StatsCoord) SetMemOnly(v bool) {
+	sc.memOnly = v
+}
+
+func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
+	sc.JobInterval = time.Duration(job)
+	sc.gcInterval = time.Duration(gc)
+	sc.branchInterval = time.Duration(branch)
 }
 
 type tableIndexesKey struct {
@@ -246,11 +255,11 @@ type StatsCoord struct {
 	JobInterval time.Duration
 	threads     *sql.BackgroundThreads
 	pro         *sqle.DoltDatabaseProvider
+	memOnly     bool
 
 	dbMu           *sync.Mutex
 	dbs            []dsess.SqlDatabase
 	branchInterval time.Duration
-	capInterval    time.Duration
 
 	kv StatsKv
 
@@ -532,6 +541,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if !ok {
 					return nil
 				}
+				fmt.Println("execute: ", j.String())
 				newJobs, err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
@@ -680,7 +690,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 	// if no, see if on disk and we just need to load
 	// otherwise perform read to create the bucket, write to disk, update mem ref
 	prollyMap := j.m
-	updater := newBucketBuilder(sql.StatQualifier{}, j.colCnt, prollyMap.KeyDesc())
+	updater := newBucketBuilder(sql.StatQualifier{}, j.colCnt, prollyMap.KeyDesc().PrefixDesc(j.colCnt))
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
 	for i, n := range j.nodes {
@@ -716,7 +726,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			return nil, err
 		}
 		// TODO check for capacity error during GC
-		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc()))
+		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(j.colCnt)))
 		if err != nil {
 			return nil, err
 		}
@@ -758,11 +768,11 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 
 		for i, bh := range fs.buckets {
 			if i == 0 {
-				var ok bool
-				template.LowerBnd, ok = sc.kv.GetBound(bh)
+				bnd, ok := sc.kv.GetBound(bh)
 				if !ok {
-					return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
+					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s", key, bh)
 				}
+				template.LowerBnd = bnd[:fs.tupB.Desc.Count()]
 			}
 			// accumulate counts
 			if b, ok, err := sc.kv.GetBucket(ctx, bh, fs.tupB); err != nil {

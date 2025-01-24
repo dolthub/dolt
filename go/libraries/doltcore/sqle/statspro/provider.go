@@ -410,3 +410,17 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	}
 	return NewProllyStats(ctx, statsDb)
 }
+
+func (sc *StatsCoord) waitForSync(ctx *sql.Context, storageTarget dsess.SqlDatabase) error {
+	// make a control job
+	// wait until the control job done before returning
+	j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
+	if err := sc.sendJobs(ctx, j); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+	case <-j.done:
+	}
+	return nil
+}

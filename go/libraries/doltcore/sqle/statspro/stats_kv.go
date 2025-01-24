@@ -30,6 +30,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -59,6 +60,7 @@ func NewMemStats() *memStats {
 	gcCap := atomic.Int64{}
 	gcCap.Store(defaultBucketSize)
 	return &memStats{
+		mu:        sync.Mutex{},
 		buckets:   buckets,
 		templates: make(map[templateCacheKey]stats.Statistic),
 		bounds:    make(map[hash.Hash]sql.Row),
@@ -67,6 +69,7 @@ func NewMemStats() *memStats {
 }
 
 type memStats struct {
+	mu    sync.Mutex
 	doGc  bool
 	gcCap atomic.Int64
 
@@ -92,6 +95,8 @@ func (m *memStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
 }
 
 func (m *memStats) PutTemplate(key templateCacheKey, stat stats.Statistic) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.templates[key] = stat
 	if m.doGc {
 		m.nextTemplates[key] = stat
@@ -99,6 +104,8 @@ func (m *memStats) PutTemplate(key templateCacheKey, stat stats.Statistic) {
 }
 
 func (m *memStats) GetBound(h hash.Hash) (sql.Row, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	r, ok := m.bounds[h]
 	if !ok {
 		return nil, false
@@ -110,6 +117,8 @@ func (m *memStats) GetBound(h hash.Hash) (sql.Row, bool) {
 }
 
 func (m *memStats) PutBound(h hash.Hash, r sql.Row) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.bounds[h] = r
 	if m.doGc {
 		m.nextBounds[h] = r
@@ -117,6 +126,8 @@ func (m *memStats) PutBound(h hash.Hash, r sql.Row) {
 }
 
 func (m *memStats) StartGc(ctx context.Context, sz int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.doGc = true
 	m.gcCap.Store(int64(sz))
 	if sz == 0 {
@@ -133,6 +144,8 @@ func (m *memStats) StartGc(ctx context.Context, sz int) error {
 }
 
 func (m *memStats) FinishGc() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.buckets = m.nextBuckets
 	m.templates = m.nextTemplates
 	m.bounds = m.nextBounds
@@ -143,6 +156,8 @@ func (m *memStats) FinishGc() {
 }
 
 func (m *memStats) Len() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.buckets.Len()
 }
 
@@ -151,6 +166,9 @@ func (m *memStats) Cap() int64 {
 }
 
 func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.doGc {
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
@@ -165,6 +183,8 @@ func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ 
 }
 
 func (m *memStats) GetBucket(_ context.Context, h hash.Hash, _ *val.TupleBuilder) (*stats.Bucket, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if h.IsEmpty() {
 		return nil, false, nil
 	}
@@ -195,6 +215,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	}
 
 	return &prollyStats{
+		mu:     sync.Mutex{},
 		destDb: destDb,
 		kb:     keyBuilder,
 		vb:     valueBuilder,
@@ -204,6 +225,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 }
 
 type prollyStats struct {
+	mu     sync.Mutex
 	destDb dsess.SqlDatabase
 	kb, vb *val.TupleBuilder
 	m      *prolly.MutableMap
@@ -228,12 +250,10 @@ func (p *prollyStats) PutTemplate(key templateCacheKey, stat stats.Statistic) {
 
 func (p *prollyStats) GetBound(h hash.Hash) (sql.Row, bool) {
 	return p.mem.GetBound(h)
-
 }
 
 func (p *prollyStats) PutBound(h hash.Hash, r sql.Row) {
 	p.mem.PutBound(h, r)
-
 }
 
 func (p *prollyStats) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
@@ -249,6 +269,9 @@ func (p *prollyStats) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucke
 	if err != nil {
 		return err
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return p.m.Put(ctx, k, v)
 }
 
@@ -257,6 +280,7 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 		return nil, false, nil
 	}
 	b, ok, err := p.mem.GetBucket(ctx, h, tupB)
+
 	if err != nil {
 		return nil, false, err
 	}
@@ -304,10 +328,11 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 }
 
 func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if err := p.mem.StartGc(ctx, sz); err != nil {
 		return err
 	}
-
 	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 	newMap, err := prolly.NewMapFromTuples(ctx, p.destDb.DbData().Ddb.NodeStore(), kd, vd)
 	if err != nil {
@@ -319,6 +344,8 @@ func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
 }
 
 func (p *prollyStats) FinishGc() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.mem.FinishGc()
 }
 
@@ -442,7 +469,8 @@ func (p *prollyStats) NewEmpty(ctx *sql.Context) (StatsKv, error) {
 }
 
 func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleBuilder) ([]byte, error) {
-	for i, v := range r {
+	for i := range tb.Desc.Count() {
+		v := r[i]
 		if v == nil {
 			continue
 		}

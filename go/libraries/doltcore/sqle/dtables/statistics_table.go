@@ -119,7 +119,10 @@ func (st *StatisticsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (st *StatisticsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	statsPro := dSess.StatsProvider().(BranchStatsProvider)
+	statsPro, ok := dSess.StatsProvider().(BranchStatsProvider)
+	if !ok {
+		return sql.RowsToRowIter(), nil
+	}
 	var dStats []sql.Statistic
 	for _, table := range st.tableNames {
 		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)

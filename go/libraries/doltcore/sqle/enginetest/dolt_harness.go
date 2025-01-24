@@ -17,11 +17,6 @@ package enginetest
 import (
 	"context"
 	"fmt"
-	"runtime"
-	"strings"
-	"testing"
-	"time"
-
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -30,6 +25,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/stretchr/testify/require"
+	"runtime"
+	"strings"
+	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -248,7 +246,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		ctx := enginetest.NewContext(d)
 		bThreads := sql.NewBackgroundThreads()
 
-		statsPro := statspro.NewStatsCoord(10*time.Millisecond, doltProvider, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		statsPro := statspro.NewStatsCoord(doltProvider, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		err = statsPro.Restart(ctx)
 		if err != nil {
 			return nil, err
@@ -307,7 +305,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
 	bThreads := sql.NewBackgroundThreads()
-	statsPro := statspro.NewStatsCoord(10*time.Millisecond, d.provider.(*sqle.DoltDatabaseProvider), ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 	statsPro.Restart(ctx)
 	d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
@@ -501,7 +499,7 @@ func (d *DoltHarness) Close() {
 	if d.statsPro != nil {
 		d.statsPro.Close()
 	}
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, int8(0))
+	sql.SystemVariables.SetGlobal(dsess.DoltStatsEnabled, int8(0))
 }
 
 func (d *DoltHarness) closeProvider() {
