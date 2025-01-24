@@ -7591,7 +7591,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7606,7 +7606,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7629,7 +7629,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7667,6 +7667,64 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{types.NewOkResult(0)},
 				},
+			},
+		},
+	},
+	{
+		Name: "drop temporary table behavior",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table t (i int);",
+			"create temporary table tmp (i int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create table tmp;",
+				Expected: []sql.Row{
+					{"tmp", "CREATE TEMPORARY TABLE `tmp` (\n" +
+						"  `i` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query: "drop temporary table tmp;",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+
+			{
+				Query: "create temporary table t (i int, j int);",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
+						"  `i` int,\n" +
+						"  `j` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query: "drop temporary table t;",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{
+					{"t", "CREATE TABLE `t` (\n" +
+						"  `i` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query: "drop temporary table t;",
+				ExpectedErr: sql.ErrUnknownTable,
 			},
 		},
 	},

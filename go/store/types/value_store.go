@@ -764,7 +764,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 
 	err = sweeper.SaveHashes(ctx, toVisit.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 	toVisit = nil
@@ -772,7 +772,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	if safepointController != nil {
 		err = safepointController.EstablishPreFinalizeSafepoint(ctx)
 		if err != nil {
-			_, cErr := sweeper.Close(ctx)
+			cErr := sweeper.Close(ctx)
 			return nil, errors.Join(err, cErr)
 		}
 	}
@@ -783,7 +783,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	next := lvs.readAndResetNewGenToVisit()
 	err = sweeper.SaveHashes(ctx, next.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 	next = nil
@@ -791,19 +791,22 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	final := finalize()
 	err = sweeper.SaveHashes(ctx, final.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 
 	if safepointController != nil {
 		err = safepointController.EstablishPostFinalizeSafepoint(ctx)
 		if err != nil {
-			_, cErr := sweeper.Close(ctx)
+			cErr := sweeper.Close(ctx)
 			return nil, errors.Join(err, cErr)
 		}
 	}
-
-	return sweeper.Close(ctx)
+	finalizer, err := sweeper.Finalize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return finalizer, sweeper.Close(ctx)
 }
 
 // Close closes the underlying ChunkStore
