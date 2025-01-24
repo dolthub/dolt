@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 )
@@ -47,6 +48,8 @@ type GCSafepointSessionState struct {
 type GCSafepointWaiter struct {
 	controller *GCSafepointController
 	wg         sync.WaitGroup
+	mu         sync.Mutex
+	err        error
 }
 
 func NewGCSafepointController() *GCSafepointController {
@@ -65,7 +68,7 @@ func NewGCSafepointController() *GCSafepointController {
 //
 // After creating a Waiter, it is an error to create a new Waiter before the |Wait| method of the
 // original watier has returned. This error is not guaranteed to always be detected.
-func (c *GCSafepointController) Waiter(thisSession *DoltSession, visitQuiescedSession func(*DoltSession)) *GCSafepointWaiter {
+func (c *GCSafepointController) Waiter(ctx context.Context, thisSession *DoltSession, visitQuiescedSession func(context.Context, *DoltSession) error) *GCSafepointWaiter {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ret := &GCSafepointWaiter{controller: c}
@@ -81,7 +84,8 @@ func (c *GCSafepointController) Waiter(thisSession *DoltSession, visitQuiescedSe
 			state.CommandEndCallback = func() {
 				state.QuiesceCallbackDone.Store(make(chan struct{}))
 				go func() {
-					visitQuiescedSession(sess)
+					err := visitQuiescedSession(ctx, sess)
+					ret.accumulateErrors(err)
 					ret.wg.Done()
 					toClose := state.QuiesceCallbackDone.Load().(chan struct{})
 					close(toClose)
@@ -91,7 +95,8 @@ func (c *GCSafepointController) Waiter(thisSession *DoltSession, visitQuiescedSe
 			ret.wg.Add(1)
 			state.QuiesceCallbackDone.Store(make(chan struct{}))
 			go func() {
-				visitQuiescedSession(sess)
+				err := visitQuiescedSession(ctx, sess)
+				ret.accumulateErrors(err)
 				ret.wg.Done()
 				toClose := state.QuiesceCallbackDone.Load().(chan struct{})
 				close(toClose)
@@ -99,6 +104,14 @@ func (c *GCSafepointController) Waiter(thisSession *DoltSession, visitQuiescedSe
 		}
 	}
 	return ret
+}
+
+func (w *GCSafepointWaiter) accumulateErrors(err error) {
+	if err != nil {
+		w.mu.Lock()
+		w.err = errors.Join(w.err, err)
+		w.mu.Unlock()
+	}
 }
 
 func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
@@ -109,7 +122,7 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
-		return nil
+		return w.err
 	case <-ctx.Done():
 		w.controller.mu.Lock()
 		for _, state := range w.controller.sessions {
@@ -126,7 +139,7 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 		// cannot cancel it. So we wait for all the inflight
 		// callbacks to be completed here, before returning.
 		<-done
-		return context.Cause(ctx)
+		return errors.Join(context.Cause(ctx), w.err)
 	}
 }
 

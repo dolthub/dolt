@@ -95,23 +95,25 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("Empty", func(t *testing.T) {
 			t.Parallel()
 			var nilCh chan struct{}
-			block := func(*DoltSession) {
+			block := func(context.Context, *DoltSession) error {
 				<-nilCh
+				return nil
 			}
 			controller := NewGCSafepointController()
-			waiter := controller.Waiter(nil, block)
+			waiter := controller.Waiter(context.Background(), nil, block)
 			waiter.Wait(context.Background())
 		})
 		t.Run("OnlyThisSession", func(t *testing.T) {
 			t.Parallel()
 			var nilCh chan struct{}
-			block := func(*DoltSession) {
+			block := func(context.Context, *DoltSession) error {
 				<-nilCh
+				return nil
 			}
 			sess := &DoltSession{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(sess)
-			waiter := controller.Waiter(sess, block)
+			waiter := controller.Waiter(context.Background(), sess, block)
 			waiter.Wait(context.Background())
 			controller.SessionCommandEnd(sess)
 			controller.SessionEnd(sess)
@@ -129,7 +131,7 @@ func TestGCSafepointController(t *testing.T) {
 			controller.SessionCommandBegin(running)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			wait := func(s *DoltSession) {
+			wait := func(_ context.Context, s *DoltSession) error {
 				if s == quiesced {
 					close(sawQuiesced)
 				} else if s == running {
@@ -137,8 +139,9 @@ func TestGCSafepointController(t *testing.T) {
 				} else {
 					panic("saw unexpected session")
 				}
+				return nil
 			}
-			waiter := controller.Waiter(nil, wait)
+			waiter := controller.Waiter(context.Background(), nil, wait)
 			go func() {
 				waiter.Wait(context.Background())
 				close(waitDone)
@@ -169,7 +172,7 @@ func TestGCSafepointController(t *testing.T) {
 			controller.SessionCommandBegin(running)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			wait := func(s *DoltSession) {
+			wait := func(_ context.Context, s *DoltSession) error {
 				if s == quiesced {
 					close(sawQuiesced)
 				} else if s == running {
@@ -177,8 +180,9 @@ func TestGCSafepointController(t *testing.T) {
 				} else {
 					panic("saw unexpected session")
 				}
+				return nil
 			}
-			waiter := controller.Waiter(nil, wait)
+			waiter := controller.Waiter(context.Background(), nil, wait)
 			var waitErr error
 			go func() {
 				ctx, cancel := context.WithCancel(context.Background())
@@ -216,7 +220,7 @@ func TestGCSafepointController(t *testing.T) {
 			controller.SessionCommandBegin(running)
 			finishQuiesced, finishRunning := make(chan struct{}), make(chan struct{})
 			sawQuiesced, sawRunning := make(chan struct{}), make(chan struct{})
-			wait := func(s *DoltSession) {
+			wait := func(_ context.Context, s *DoltSession) error {
 				if s == quiesced {
 					close(sawQuiesced)
 					<-finishQuiesced
@@ -226,8 +230,9 @@ func TestGCSafepointController(t *testing.T) {
 				} else {
 					panic("saw unexpected session")
 				}
+				return nil
 			}
-			waiter := controller.Waiter(nil, wait)
+			waiter := controller.Waiter(context.Background(), nil, wait)
 			waitDone := make(chan struct{})
 			go func() {
 				waiter.Wait(context.Background())
@@ -278,7 +283,7 @@ func TestGCSafepointController(t *testing.T) {
 
 			controller.SessionEnd(quiesced)
 			controller.SessionEnd(running)
-			err := controller.Waiter(nil, func(*DoltSession) {
+			err := controller.Waiter(context.Background(), nil, func(context.Context, *DoltSession) error {
 				panic("unexpected registered session")
 			}).Wait(context.Background())
 			require.NoError(t, err)

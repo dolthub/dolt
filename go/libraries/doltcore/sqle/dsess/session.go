@@ -793,6 +793,94 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 	return nil
 }
 
+// As part of GC, ongoing *DoltSessions are asked to make their roots available to the GC process.
+// A *DoltSession has the following roots:
+// 1) All of the branchStates for the database.
+// 2) If there is an active transaction, the initial root for that transaction and any roots for any savepoints of that transaction.
+// 3) Working set roots in any writeSession.
+func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash) bool) error {
+	dbName = strings.ToLower(dbName)
+	dbName, _ = SplitRevisionDbName(dbName)
+
+	d.mu.Lock()
+	dbState, dbStateFound := d.dbStates[dbName]
+	d.mu.Unlock()
+
+	if dbStateFound {
+		for _, head := range dbState.heads {
+			if head.headRoot != nil {
+				h, err := head.headRoot.HashOf()
+				if err != nil {
+					return err
+				}
+				if keep(h) {
+					panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+				}
+			} else if head.headCommit != nil {
+				h, err := head.headCommit.HashOf()
+				if err != nil {
+					return err
+				}
+				if keep(h) {
+					panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+				}
+			} else if head.workingSet != nil {
+				hashes, err := head.dbData.Ddb.WorkingSetHashes(ctx, head.workingSet)
+				if err != nil {
+					return err
+				}
+				for _, h := range hashes {
+					if keep(h) {
+						panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+					}
+				}
+			}
+			if head.writeSession != nil {
+				ws := head.writeSession.GetWorkingSet()
+				hashes, err := head.dbData.Ddb.WorkingSetHashes(ctx, ws)
+				if err != nil {
+					return err
+				}
+				for _, h := range hashes {
+					if keep(h) {
+						panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+					}
+				}
+			}
+		}
+	}
+
+	tx := d.GetTransaction()
+	if tx == nil {
+		return nil
+	}
+
+	dtx, ok := tx.(*DoltTransaction)
+	if !ok {
+		// weird...
+		return nil
+	}
+
+	h, has := dtx.GetInitialRoot(dbName)
+	if has && keep(h) {
+		panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+	}
+	for _, savepoint := range dtx.savepoints {
+		rv, ok := savepoint.roots[dbName]
+		if ok {
+			h, err := rv.HashOf()
+			if err != nil {
+				return err
+			}
+			if keep(h) {
+				panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+			}
+		}
+	}
+
+	return nil
+}
+
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {

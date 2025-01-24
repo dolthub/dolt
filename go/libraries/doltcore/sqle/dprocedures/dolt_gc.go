@@ -166,15 +166,18 @@ type sessionAwareSafepointController struct {
 	keeper     func(hash.Hash) bool
 }
 
-func (sc *sessionAwareSafepointController) visit(sess *dsess.DoltSession) {
-	// TODO: Give branch heads/dbState to sc.keeper. Clear VRW and any NodeStore caches.
+func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
+	return sess.VisitGCRoots(ctx, sc.callCtx.GetCurrentDatabase(), sc.keeper)
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
 	sc.keeper = keeper
 	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
-	sc.waiter = sc.controller.Waiter(thisSess, sc.visit)
-	sc.visit(thisSess)
+	err := sc.visit(ctx, thisSess)
+	if err != nil {
+		return err
+	}
+	sc.waiter = sc.controller.Waiter(ctx, thisSess, sc.visit)
 	return nil
 }
 
