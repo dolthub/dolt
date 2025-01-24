@@ -608,6 +608,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCommitHooksNoErrors(t *testing.T) {
+	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()

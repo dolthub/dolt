@@ -32,8 +32,9 @@ import (
 )
 
 func TestLog(t *testing.T) {
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 	defer dEnv.DoltDB(ctx).Close()
 
 	if err != nil {
@@ -53,8 +54,9 @@ func TestLogSigterm(t *testing.T) {
 		t.Skip("Skipping test as function used is not supported on Windows")
 	}
 
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 	defer dEnv.DoltDB(ctx).Close()
 
 	if err != nil {

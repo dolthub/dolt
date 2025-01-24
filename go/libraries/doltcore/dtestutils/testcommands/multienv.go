@@ -92,7 +92,7 @@ func (mr *MultiRepoTestSetup) homeProv() (string, error) {
 }
 
 func (mr *MultiRepoTestSetup) Close() {
-	for _, db := range mr.DoltDB(ctx)s {
+	for _, db := range mr.DoltDBs {
 		err := db.Close()
 		if err != nil {
 			mr.Errhand(err)
@@ -138,7 +138,7 @@ func (mr *MultiRepoTestSetup) NewDB(dbName string) {
 	dEnv = env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 
 	mr.envs[dbName] = dEnv
-	mr.DoltDB(ctx)s[dbName] = ddb
+	mr.DoltDBs[dbName] = ddb
 	mr.DbNames = append(mr.DbNames, dbName)
 	mr.DbPaths[dbName] = repo
 }
@@ -158,7 +158,7 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	mr.Remotes[remoteName] = rem
 }
 
-func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
+func (mr *MultiRepoTestSetup) NewBranch(ctx context.Context, dbName, branchName string) {
 	dEnv := mr.envs[dbName]
 	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(ctx), branchName, "head", false, nil)
 	if err != nil {
@@ -214,7 +214,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	ddb := dEnv.DoltDB(ctx)
 
 	mr.envs[dbName] = dEnv
-	mr.DoltDB(ctx)s[dbName] = ddb
+	mr.DoltDBs[dbName] = ddb
 	mr.DbNames = append(mr.DbNames, dbName)
 	mr.DbPaths[dbName] = cloneDir
 }
@@ -228,7 +228,7 @@ func (mr *MultiRepoTestSetup) GetRemote(remoteName string) env.Remote {
 }
 
 func (mr *MultiRepoTestSetup) GetDB(dbName string) *doltdb.DoltDB {
-	db, ok := mr.DoltDB(ctx)s[dbName]
+	db, ok := mr.DoltDBs[dbName]
 	if !ok {
 		mr.Errhand("db not found")
 	}

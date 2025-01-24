@@ -65,6 +65,7 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
+	ctx := context.Background()
 	controller := svcs.NewController()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
@@ -110,6 +111,7 @@ listener:
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
+	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -135,6 +137,7 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -164,6 +167,7 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -206,6 +210,7 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -263,6 +268,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
+	ctx := context.Background()
 	controller := svcs.NewController()
 	server := &http.Server{
 		Addr:    ":15200",
@@ -305,6 +311,7 @@ type defaultBranchTest struct {
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
+	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -498,7 +505,7 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 		sess := conn.NewSession(nil)
 
-		multiSetup.NewBranch(sourceDbName, "feature")
+		multiSetup.NewBranch(ctx, sourceDbName, "feature")
 		multiSetup.CheckoutBranch(sourceDbName, "feature")
 		multiSetup.PushToRemote(sourceDbName, "remote1", "feature")
 

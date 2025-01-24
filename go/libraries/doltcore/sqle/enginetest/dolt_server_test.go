@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"context"
 	"runtime"
 	"strings"
 	"testing"
@@ -51,7 +52,9 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 
 	// Running unix socket server
 	dEnv, sc, serverConfig := startServer(t, false, "", defaultUnixSocketPath)
-	sc.WaitForStart()
+	ctx := context.Background()
+	err := sc.WaitForStart()
+	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()
 	require.True(t, strings.Contains(servercfg.ConnectionString(serverConfig, "dolt"), "unix"))
 
@@ -99,7 +102,8 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 
 	// Running TCP socket server
 	dEnv, tcpSc, tcpServerConfig := startServer(t, true, "0.0.0.0", "")
-	tcpSc.WaitForStart()
+	err = tcpSc.WaitForStart()
+	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()
 	require.False(t, strings.Contains(servercfg.ConnectionString(tcpServerConfig, "dolt"), "unix"))
 

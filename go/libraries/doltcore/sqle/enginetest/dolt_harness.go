@@ -232,9 +232,10 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
 	if initializeEngine {
+		// We can't use enginetest.NewContext(d) until d's session is set
 		d.branchControl = branch_control.CreateDefaultController(context.Background())
 
-		pro := d.newProvider()
+		pro := d.newProvider(context.Background())
 		if d.setupTestProcedures {
 			pro = d.newProviderWithProcedures()
 		}
@@ -256,8 +257,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 		d.engine = e
 
-		ctx := enginetest.NewContext(d)
-		databases := pro.AllDatabases(ctx)
+		sqlCtx := enginetest.NewContext(d)
+		databases := pro.AllDatabases(sqlCtx)
 		d.setupDbs = make(map[string]struct{})
 		var dbs []string
 		for _, db := range databases {
@@ -267,7 +268,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		}
 
 		if !d.skipSetupCommit {
-			e, err = enginetest.RunSetupScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
+			e, err = enginetest.RunSetupScripts(sqlCtx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 			if err != nil {
 				return nil, err
 			}
@@ -281,8 +282,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			bThreads := sql.NewBackgroundThreads()
 			e = e.WithBackgroundThreads(bThreads)
 
-			dSess := dsess.DSessFromSess(ctx.Session)
-			dbCache := dSess.DatabaseCache(ctx)
+			dSess := dsess.DSessFromSess(sqlCtx.Session)
+			dbCache := dSess.DatabaseCache(sqlCtx)
 
 			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
 			for i, dbName := range dbs {
@@ -293,12 +294,12 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 				sess := d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
 				return sql.NewContext(context.Background(), sql.WithSession(sess)), nil
 			}
-			if err = statsProv.Configure(ctx, ctxFact, bThreads, dsessDbs); err != nil {
+			if err = statsProv.Configure(sqlCtx, ctxFact, bThreads, dsessDbs); err != nil {
 				return nil, err
 			}
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)
-			e, err = enginetest.RunSetupScripts(ctx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
+			e, err = enginetest.RunSetupScripts(sqlCtx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
 		}
 
 		return e, nil
@@ -310,8 +311,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
-	ctx := enginetest.NewContext(d)
-	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	sqlCtx := enginetest.NewContext(d)
+	e, err := enginetest.RunSetupScripts(sqlCtx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
@@ -415,13 +416,14 @@ func (d *DoltHarness) SupportsKeylessTables() bool {
 }
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
+	ctx := enginetest.NewContext(d)
 	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
 
 	d.branchControl = branch_control.CreateDefaultController(context.Background())
 
-	pro := d.newProvider()
+	pro := d.newProvider(ctx)
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
@@ -443,7 +445,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		require.NoError(d.t, err)
 	}
 
-	ctx := enginetest.NewContext(d)
 	databases := pro.AllDatabases(ctx)
 
 	// It's important that we return the databases in the same order as the names argument
@@ -510,7 +511,7 @@ func (d *DoltHarness) closeProvider() {
 	}
 }
 
-func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
+func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvider {
 	d.closeProvider()
 
 	var dEnv *env.DoltEnv
@@ -536,7 +537,8 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 }
 
 func (d *DoltHarness) newProviderWithProcedures() sql.MutableDatabaseProvider {
-	pro := d.newProvider()
+	ctx := enginetest.NewContext(d)
+	pro := d.newProvider(ctx)
 	provider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	for _, esp := range memory.ExternalStoredProcedures {

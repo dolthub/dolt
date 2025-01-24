@@ -1619,6 +1619,7 @@ func TestNullRanges(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
+	ctx := context.Background()
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()

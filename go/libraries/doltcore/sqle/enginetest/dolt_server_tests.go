@@ -477,6 +477,7 @@ var PersistVariableTests = []queries.ScriptTest{
 // stopping the server in between scripts. Unlike other script test executors, scripts may influence later scripts in
 // the block.
 func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	serverConfig := sqlserver.DefaultCommandLineServerConfig()
 	rand.Seed(time.Now().UnixNano())
@@ -626,6 +627,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv, sc, serverConfig := startServer(t, true, "", "")
 			err := sc.WaitForStart()
 			require.NoError(t, err)
