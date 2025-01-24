@@ -565,8 +565,15 @@ const (
 	GCModeFull
 )
 
+type GCSafepointController interface {
+	BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error
+	EstablishPreFinalizeSafepoint(context.Context) error
+	EstablishPostFinalizeSafepoint(context.Context) error
+	CancelSafepoint()
+}
+
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRefs hash.HashSet, safepointF func() error) error {
+func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -599,6 +606,20 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 				return err
 			}
 			defer collector.EndGC()
+
+			var callCancelSafepoint bool
+			if safepoint != nil {
+				err = safepoint.BeginGC(ctx, lvs.gcAddChunk)
+				if err != nil {
+					return err
+				}
+				callCancelSafepoint = true
+				defer func() {
+					if callCancelSafepoint {
+						safepoint.CancelSafepoint()
+					}
+				}()
+			}
 
 			root, err := lvs.Root(ctx)
 			if err != nil {
@@ -634,10 +655,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, collector, newGen, safepointF, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
+			callCancelSafepoint = false
 
 			err = newGenFinalizer.SwapChunksInStore(ctx)
 			if err != nil {
@@ -669,6 +691,20 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			}
 			defer collector.EndGC()
 
+			var callCancelSafepoint bool
+			if safepoint != nil {
+				err = safepoint.BeginGC(ctx, lvs.gcAddChunk)
+				if err != nil {
+					return err
+				}
+				callCancelSafepoint = true
+				defer func() {
+					if callCancelSafepoint {
+						safepoint.CancelSafepoint()
+					}
+				}()
+			}
+
 			root, err := lvs.Root(ctx)
 			if err != nil {
 				return err
@@ -682,10 +718,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, collector, collector, safepointF, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, collector, collector, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
+			callCancelSafepoint = false
 
 			err = finalizer.SwapChunksInStore(ctx)
 			if err != nil {
@@ -718,7 +755,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	hashFilter chunks.HasManyFunc,
 	chksMode chunks.GCMode,
 	src, dest chunks.ChunkStoreGarbageCollector,
-	safepointF func() error,
+	safepointController GCSafepointController,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
 	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.getAddrs, hashFilter, dest, chksMode)
 	if err != nil {
@@ -727,10 +764,18 @@ func (lvs *ValueStore) gc(ctx context.Context,
 
 	err = sweeper.SaveHashes(ctx, toVisit.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 	toVisit = nil
+
+	if safepointController != nil {
+		err = safepointController.EstablishPreFinalizeSafepoint(ctx)
+		if err != nil {
+			cErr := sweeper.Close(ctx)
+			return nil, errors.Join(err, cErr)
+		}
+	}
 
 	// Before we call finalize(), we can process the current set of
 	// NewGenToVisit. NewGen -> Finalize is going to block writes until
@@ -738,7 +783,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	next := lvs.readAndResetNewGenToVisit()
 	err = sweeper.SaveHashes(ctx, next.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 	next = nil
@@ -746,18 +791,22 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	final := finalize()
 	err = sweeper.SaveHashes(ctx, final.ToSlice())
 	if err != nil {
-		_, cErr := sweeper.Close(ctx)
+		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
 
-	if safepointF != nil {
-		err = safepointF()
+	if safepointController != nil {
+		err = safepointController.EstablishPostFinalizeSafepoint(ctx)
 		if err != nil {
-			_, cErr := sweeper.Close(ctx)
+			cErr := sweeper.Close(ctx)
 			return nil, errors.Join(err, cErr)
 		}
 	}
-	return sweeper.Close(ctx)
+	finalizer, err := sweeper.Finalize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return finalizer, sweeper.Close(ctx)
 }
 
 // Close closes the underlying ChunkStore

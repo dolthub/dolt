@@ -81,12 +81,17 @@ func TestReplicationBranches(t *testing.T) {
 			local:       []string{"feature4", "feature5", "feature6", "feature7", "feature8", "feature9"},
 			expToDelete: []string{"feature4", "feature5", "feature6", "feature7", "feature8", "feature9"},
 		},
+		{
+			remote:      []string{"main", "new1", "a1"},
+			local:       []string{"main", "a1"},
+			expToDelete: []string{},
+		},
 	}
 
 	for _, tt := range tests {
 		remoteRefs := make([]doltdb.RefWithHash, len(tt.remote))
 		for i := range tt.remote {
-			remoteRefs[i] = doltdb.RefWithHash{Ref: ref.NewRemoteRef("", tt.remote[i])}
+			remoteRefs[i] = doltdb.RefWithHash{Ref: ref.NewBranchRef(tt.remote[i])}
 		}
 		localRefs := make([]doltdb.RefWithHash, len(tt.local))
 		for i := range tt.local {
@@ -97,6 +102,6 @@ func TestReplicationBranches(t *testing.T) {
 		for i := range diff {
 			diffNames[i] = diff[i].Ref.GetPath()
 		}
-		assert.Equal(t, diffNames, tt.expToDelete)
+		assert.Equal(t, tt.expToDelete, diffNames)
 	}
 }

@@ -398,8 +398,12 @@ func (i *msvMarkAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) 
 	return nil
 }
 
-func (i *msvMarkAndSweeper) Close(context.Context) (GCFinalizer, error) {
+func (i *msvMarkAndSweeper) Finalize(context.Context) (GCFinalizer, error) {
 	return msvGcFinalizer{i.ms, i.keepers}, nil
+}
+
+func (i *msvMarkAndSweeper) Close(context.Context) error {
+	return nil
 }
 
 func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode) (MarkAndSweeper, error) {

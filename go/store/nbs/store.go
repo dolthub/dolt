@@ -1652,7 +1652,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src NBSCompres
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier()
+	gcc, err := newGarbageCollectionCopier(tfp)
 	if err != nil {
 		return nil, err
 	}
@@ -1758,17 +1758,25 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	return nil
 }
 
-func (i *markAndSweeper) Close(ctx context.Context) (chunks.GCFinalizer, error) {
-	specs, err := i.gcc.copyTablesToDir(ctx, i.tfp)
+func (i *markAndSweeper) Finalize(ctx context.Context) (chunks.GCFinalizer, error) {
+	specs, err := i.gcc.copyTablesToDir(ctx)
 	if err != nil {
 		return nil, err
 	}
+	i.gcc = nil
 
 	return gcFinalizer{
 		nbs:   i.dest,
 		specs: specs,
 		mode:  i.mode,
 	}, nil
+}
+
+func (i *markAndSweeper) Close(ctx context.Context) error {
+	if i.gcc != nil {
+		return i.gcc.cancel(ctx)
+	}
+	return nil
 }
 
 type gcFinalizer struct {
