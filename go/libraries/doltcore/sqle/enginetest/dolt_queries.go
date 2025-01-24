@@ -7671,7 +7671,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "drop temporary table behavior",
+		Name:    "drop temporary table behavior",
 		Dialect: "mysql",
 		SetUpScript: []string{
 			"create table t (i int);",
@@ -7723,7 +7723,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "drop temporary table t;",
+				Query:       "drop temporary table t;",
 				ExpectedErr: sql.ErrUnknownTable,
 			},
 		},
