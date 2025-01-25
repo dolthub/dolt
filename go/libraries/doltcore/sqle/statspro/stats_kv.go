@@ -84,6 +84,8 @@ type memStats struct {
 }
 
 func (m *memStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	t, ok := m.templates[key]
 	if !ok {
 		return stats.Statistic{}, false
@@ -350,6 +352,8 @@ func (p *prollyStats) FinishGc() {
 }
 
 func (p *prollyStats) encodeHash(h hash.Hash) (val.Tuple, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if err := p.kb.PutString(0, h.String()); err != nil {
 		return nil, err
 	}
@@ -424,6 +428,9 @@ func (p *prollyStats) decodeBucketTuple(ctx context.Context, v val.Tuple, tupB *
 var mcvTypes = []sql.Type{types.Int16, types.Int16, types.Int16, types.Int16}
 
 func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *val.TupleBuilder) (val.Tuple, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.vb.PutInt64(0, schema.StatsVersion)
 	p.vb.PutInt64(1, int64(b.RowCount()))
 	p.vb.PutInt64(2, int64(b.DistinctCount()))

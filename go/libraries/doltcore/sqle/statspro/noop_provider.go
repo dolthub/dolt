@@ -1,6 +1,10 @@
 package statspro
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
+)
 
 type StatsNoop struct{}
 
@@ -34,6 +38,30 @@ func (s StatsNoop) RowCount(ctx *sql.Context, db string, table sql.Table) (uint6
 
 func (s StatsNoop) DataLength(ctx *sql.Context, db string, table sql.Table) (uint64, error) {
 	return 0, nil
+}
+
+func (s StatsNoop) CancelRefreshThread(string) {
+	return
+}
+
+func (s StatsNoop) StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error {
+	return nil
+}
+
+func (s StatsNoop) ThreadStatus(string) string {
+	return "stats disabled"
+}
+
+func (s StatsNoop) Prune(ctx *sql.Context) error {
+	return nil
+}
+
+func (s StatsNoop) Purge(ctx *sql.Context) error {
+	return nil
+}
+
+func (s StatsNoop) WaitForDbSync(ctx *sql.Context) error {
+	return nil
 }
 
 var _ sql.StatsProvider = StatsNoop{}

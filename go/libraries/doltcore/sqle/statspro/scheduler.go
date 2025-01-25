@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/sirupsen/logrus"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -159,9 +160,10 @@ type finalizeStruct struct {
 }
 
 type FinalizeJob struct {
-	tableKey tableIndexesKey
-	indexes  map[templateCacheKey]finalizeStruct
-	done     chan struct{}
+	tableKey    tableIndexesKey
+	keepIndexes map[sql.StatQualifier]bool
+	editIndexes map[templateCacheKey]finalizeStruct
+	done        chan struct{}
 }
 
 func (j FinalizeJob) Finish() {
@@ -173,7 +175,7 @@ func (j FinalizeJob) String() string {
 	b.WriteString("finalize " + j.tableKey.String())
 	b.WriteString(": ")
 	sep := ""
-	for idx, fs := range j.indexes {
+	for idx, fs := range j.editIndexes {
 		b.WriteString(fmt.Sprintf("%s(%s: ", sep, idx.idxName))
 		sep = ""
 		for _, h := range fs.buckets {
@@ -215,7 +217,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, thread
 		Jobs:           make(chan StatsJob, 1024),
 		Done:           done,
 		Interrupts:     make(chan ControlJob, 1),
-		JobInterval:    10 * time.Millisecond,
+		JobInterval:    50 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		bucketCap:      kv.Cap(),
@@ -565,6 +567,9 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs ...StatsJob) error {
 	for i := 0; i < len(jobs); i++ {
 		j := jobs[i]
+		if j == nil {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -642,8 +647,8 @@ func (sc *StatsCoord) dropTableJob(sqlDb dsess.SqlDatabase, tableName string) St
 			branch: sqlDb.Revision(),
 			table:  tableName,
 		},
-		indexes: nil,
-		done:    make(chan struct{}),
+		editIndexes: nil,
+		done:        make(chan struct{}),
 	}
 }
 
@@ -750,7 +755,7 @@ func (sc *StatsCoord) runAnalyze(_ context.Context, j AnalyzeJob) ([]StatsJob, e
 }
 
 func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]StatsJob, error) {
-	if len(j.indexes) == 0 {
+	if len(j.editIndexes) == 0 {
 		// delete table
 		sc.statsMu.Lock()
 		delete(sc.Stats, j.tableKey)
@@ -759,7 +764,13 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	}
 
 	var newStats []*stats.Statistic
-	for key, fs := range j.indexes {
+	for _, s := range sc.Stats[j.tableKey] {
+		if ok := j.keepIndexes[s.Qual]; ok {
+			newStats = append(newStats, s)
+		}
+	}
+	for key, fs := range j.editIndexes {
+		log.Println("finalize " + key.String())
 		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
 			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
@@ -792,6 +803,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	// protected swap
 	sc.statsMu.Lock()
 	sc.Stats[j.tableKey] = newStats
+	log.Println("stat cnt: ", len(sc.Stats), len(newStats))
 	sc.statsMu.Unlock()
 
 	return nil, nil

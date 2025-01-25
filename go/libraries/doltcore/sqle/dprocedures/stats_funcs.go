@@ -53,7 +53,7 @@ type ToggableStats interface {
 	ThreadStatus(string) string
 	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
-	WaitForDbSync(ctx *sql.Context)
+	WaitForDbSync(ctx *sql.Context) error
 }
 
 type BranchStatsProvider interface {

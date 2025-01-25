@@ -184,7 +184,7 @@ func NewSqlEngine(
 
 	var statsPro sql.StatsProvider
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
-	if enabled.(uint8) == 1 {
+	if enabled.(int8) == 1 {
 		statsPro = statspro.NewStatsCoord(pro, logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
 		statsPro = statspro.StatsNoop{}
@@ -204,7 +204,7 @@ func NewSqlEngine(
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-		sc.SetMemOnly(memOnly.(uint8) == 1)
+		sc.SetMemOnly(memOnly.(int8) == 1)
 
 		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
 		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
@@ -219,10 +219,20 @@ func NewSqlEngine(
 		sc.Restart(sqlCtx)
 		eg := errgroup.Group{}
 		for _, db := range dbs {
-			eg.Go(func() error {
-				<-sc.Add(sqlCtx, db)
-				return nil
-			})
+			br, err := db.DbData().Ddb.GetBranches(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, b := range br {
+				sqlDb, err := dsqle.RevisionDbForBranch(ctx, db, b.GetPath(), b.GetPath()+"/"+db.AliasedName())
+				if err != nil {
+					return nil, err
+				}
+				eg.Go(func() error {
+					<-sc.Add(sqlCtx, sqlDb)
+					return nil
+				})
+			}
 		}
 		eg.Wait()
 	}

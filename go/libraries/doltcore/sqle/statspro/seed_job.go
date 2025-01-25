@@ -173,6 +173,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 	var isNewData bool
 	var newIdxRoots []hash.Hash
 
+	keepIndexes := make(map[sql.StatQualifier]bool)
 	fullIndexBuckets := make(map[templateCacheKey]finalizeStruct)
 	for i, sqlIdx := range indexes {
 		var idx durable.Index
@@ -203,12 +204,19 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 
 		bucketCnt += len(levelNodes)
 
+		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
+
 		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
+			qual := sql.StatQualifier{
+				Tab:      tableInfo.name,
+				Database: strings.ToLower(sqlDb.AliasedName()),
+				Idx:      strings.ToLower(sqlIdx.ID()),
+			}
+			keepIndexes[qual] = true
 			continue
 		}
 		dataChanged = true
 
-		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
 		var buckets []hash.Hash
 		for _, n := range levelNodes {
 			buckets = append(buckets, n.HashOf())
@@ -233,8 +241,9 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 				branch: sqlDb.Revision(),
 				table:  tableInfo.name,
 			},
-			indexes: fullIndexBuckets,
-			done:    make(chan struct{}),
+			keepIndexes: keepIndexes,
+			editIndexes: fullIndexBuckets,
+			done:        make(chan struct{}),
 		})
 	}
 

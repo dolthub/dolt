@@ -35,7 +35,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestScheduleLoop(t *testing.T) {
@@ -71,7 +70,7 @@ func TestScheduleLoop(t *testing.T) {
 			},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "ab"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "b"}:       {},
 				}},
@@ -138,7 +137,7 @@ func TestAnalyze(t *testing.T) {
 		ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 241}}},
 		FinalizeJob{
 			tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-			indexes: map[templateCacheKey]finalizeStruct{
+			editIndexes: map[templateCacheKey]finalizeStruct{
 				templateCacheKey{idxName: "PRIMARY"}: {},
 				templateCacheKey{idxName: "y"}:       {},
 			}},
@@ -172,7 +171,7 @@ func TestModifyColumn(t *testing.T) {
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 267}, {267, 500}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "y"}:       {},
 				}},
@@ -214,7 +213,7 @@ func TestAddColumn(t *testing.T) {
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
@@ -251,7 +250,7 @@ func TestDropIndex(t *testing.T) {
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
@@ -303,13 +302,13 @@ func TestDropTable(t *testing.T) {
 			ReadJob{db: sqlDbs[0], table: "ab", ordinals: []updateOrdinal{{0, 1}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "ab"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				},
 			},
 			FinalizeJob{
-				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes:  nil,
+				tableKey:    tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
+				editIndexes: nil,
 			},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}}},
 		})
@@ -466,7 +465,7 @@ func TestAddDropDatabases(t *testing.T) {
 			ReadJob{db: otherDb, table: "t", ordinals: []updateOrdinal{{0, 2}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "otherdb", branch: "main", table: "t"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				}},
 			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsInfo{{name: "t"}}},
@@ -887,7 +886,7 @@ func TestJobQueueDoubling(t *testing.T) {
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
 	defer sqlEng.Close()
 
-	sc := NewStatsCoord(time.Nanosecond, sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
+	sc := NewStatsCoord(sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
 
 	sc.Jobs = make(chan StatsJob, 1)
 
@@ -923,7 +922,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
-	sc := NewStatsCoord(time.Nanosecond, sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
+	sc := NewStatsCoord(sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
 	sc.pro = sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
 	sc.disableGc.Store(true)
 
@@ -965,7 +964,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 240}, {240, 500}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
-				indexes: map[templateCacheKey]finalizeStruct{
+				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "y"}:       {},
 				}},
@@ -1040,10 +1039,10 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 			require.True(t, ok)
 			require.Equal(t, ej.tableKey, j.tableKey)
 			idx := make(map[string]bool)
-			for k, _ := range j.indexes {
+			for k, _ := range j.editIndexes {
 				idx[k.idxName] = true
 			}
-			for k, _ := range ej.indexes {
+			for k, _ := range ej.editIndexes {
 				if _, ok := idx[k.idxName]; !ok {
 					require.Fail(t, "missing index: "+k.idxName)
 				}

@@ -26,8 +26,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"log"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -104,6 +106,8 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 }
 
 func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
 	ss, ok := s.(*stats.Statistic)
 	if !ok {
 		return fmt.Errorf("expected *stats.Statistics, found %T", s)
@@ -118,6 +122,8 @@ func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
 }
 
 func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
 	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
 	if err != nil {
 		return nil, false
@@ -131,14 +137,18 @@ func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []
 }
 
 func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	log.Printf("get stat: %s/%s/%s\n", branch, db, table)
 	key := tableIndexesKey{
 		db:     db,
 		branch: branch,
 		table:  table,
 		schema: schema,
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	for key, ss := range sc.Stats {
+		log.Println("  stats exist " + key.String() + " " + strconv.Itoa(len(ss)))
+	}
 	return sc.Stats[key], nil
 }
 
@@ -411,7 +421,7 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	return NewProllyStats(ctx, statsDb)
 }
 
-func (sc *StatsCoord) waitForSync(ctx *sql.Context, storageTarget dsess.SqlDatabase) error {
+func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 	// make a control job
 	// wait until the control job done before returning
 	j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
