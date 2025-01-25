@@ -76,13 +76,9 @@ type DoltUser struct {
 var _ DoltCmdable = DoltUser{}
 var _ DoltDebuggable = DoltUser{}
 
-func NewDoltUser() (DoltUser, error) {
-	tmpdir, err := os.MkdirTemp("", "go-sql-server-driver-")
-	if err != nil {
-		return DoltUser{}, err
-	}
+func NewDoltUser(tmpdir string) (DoltUser, error) {
 	res := DoltUser{tmpdir}
-	err = res.DoltExec("config", "--global", "--add", "metrics.disabled", "true")
+	err := res.DoltExec("config", "--global", "--add", "metrics.disabled", "true")
 	if err != nil {
 		return DoltUser{}, err
 	}

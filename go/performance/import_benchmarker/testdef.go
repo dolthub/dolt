@@ -214,7 +214,7 @@ func (test *ImportTest) Run(t *testing.T) {
 		test.InitWithTmpDir(tmp)
 	}
 
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(t.TempDir())
 	for _, r := range test.Repos {
 		if r.ExternalServer != nil {
 			err := test.RunExternalServerTests(r.Name, r.ExternalServer)

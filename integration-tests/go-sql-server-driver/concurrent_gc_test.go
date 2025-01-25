@@ -172,7 +172,7 @@ func (gct gcTest) finalize(t *testing.T, ctx context.Context, db *sql.DB) {
 }
 
 func (gct gcTest) run(t *testing.T) {
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		u.Cleanup()

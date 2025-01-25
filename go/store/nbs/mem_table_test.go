@@ -69,12 +69,7 @@ func TestWriteChunks(t *testing.T) {
 		t.Error(err)
 	}
 
-	dir, err := os.MkdirTemp("", "write_chunks_test")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = os.WriteFile(dir+name, data, os.ModePerm)
+	err = os.WriteFile(t.TempDir()+name, data, os.ModePerm)
 	if err != nil {
 		t.Error(err)
 	}

@@ -27,7 +27,7 @@ import (
 )
 
 func TestBlockBufferTableSink(t *testing.T) {
-	createSink := func() ByteSink {
+	createSink := func(*testing.T) ByteSink {
 		return NewBlockBufferByteSink(128)
 	}
 
@@ -35,7 +35,7 @@ func TestBlockBufferTableSink(t *testing.T) {
 }
 
 func TestFixedBufferTableSink(t *testing.T) {
-	createSink := func() ByteSink {
+	createSink := func(*testing.T) ByteSink {
 		return NewFixedBufferByteSink(make([]byte, 32*1024))
 	}
 
@@ -43,8 +43,8 @@ func TestFixedBufferTableSink(t *testing.T) {
 }
 
 func TestBufferedFileByteSink(t *testing.T) {
-	createSink := func() ByteSink {
-		sink, err := NewBufferedFileByteSink("", 4*1024, 16)
+	createSink := func(t *testing.T) ByteSink {
+		sink, err := NewBufferedFileByteSink(t.TempDir(), 4*1024, 16)
 		require.NoError(t, err)
 
 		return sink
@@ -53,7 +53,7 @@ func TestBufferedFileByteSink(t *testing.T) {
 	suite.Run(t, &TableSinkSuite{createSink, t})
 
 	t.Run("ReaderTwice", func(t *testing.T) {
-		sink, err := NewBufferedFileByteSink("", 4*1024, 16)
+		sink, err := NewBufferedFileByteSink(t.TempDir(), 4*1024, 16)
 		require.NoError(t, err)
 		_, err = sink.Write([]byte{1, 2, 3, 4})
 		require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestBufferedFileByteSink(t *testing.T) {
 }
 
 type TableSinkSuite struct {
-	sinkFactory func() ByteSink
+	sinkFactory func(*testing.T) ByteSink
 	t           *testing.T
 }
 
@@ -116,7 +116,7 @@ func verifyContents(t *testing.T, bytes []byte) {
 }
 
 func (suite *TableSinkSuite) TestWriteAndFlush() {
-	sink := suite.sinkFactory()
+	sink := suite.sinkFactory(suite.t)
 	err := writeToSink(sink)
 	require.NoError(suite.t, err)
 
@@ -128,7 +128,7 @@ func (suite *TableSinkSuite) TestWriteAndFlush() {
 }
 
 func (suite *TableSinkSuite) TestWriteAndFlushToFile() {
-	sink := suite.sinkFactory()
+	sink := suite.sinkFactory(suite.t)
 	err := writeToSink(sink)
 	require.NoError(suite.t, err)
 

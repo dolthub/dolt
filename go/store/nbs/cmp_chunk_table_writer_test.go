@@ -56,7 +56,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// for all the chunks we find, write them using the compressed writer
-	tw, err := NewCmpChunkTableWriter("")
+	tw, err := NewCmpChunkTableWriter(t.TempDir())
 	require.NoError(t, err)
 	for _, cmpChnk := range found {
 		err = tw.AddCmpChunk(cmpChnk)
@@ -67,7 +67,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("ErrDuplicateChunkWritten", func(t *testing.T) {
-		tw, err := NewCmpChunkTableWriter("")
+		tw, err := NewCmpChunkTableWriter(t.TempDir())
 		require.NoError(t, err)
 		for _, cmpChnk := range found {
 			err = tw.AddCmpChunk(cmpChnk)
@@ -96,7 +96,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 }
 
 func TestCmpChunkTableWriterGhostChunk(t *testing.T) {
-	tw, err := NewCmpChunkTableWriter("")
+	tw, err := NewCmpChunkTableWriter(t.TempDir())
 	require.NoError(t, err)
 	require.Error(t, tw.AddCmpChunk(NewGhostCompressedChunk(hash.Parse("6af71afc2ea0hmp4olev0vp9q1q5gvb1"))))
 }

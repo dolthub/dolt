@@ -105,7 +105,7 @@ func TestEventFlushing(t *testing.T) {
 						fs := filesys.LocalFS
 
 						path := filepath.Join(dPath, evtPath)
-						dDir := testLib.TestDir(path)
+						dDir := testLib.TestDir(t.TempDir(), path)
 
 						ft = createFlushTester(fs, "", dDir)
 					}

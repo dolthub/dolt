@@ -43,7 +43,7 @@ func TestPushOnWriteHook(t *testing.T) {
 	ctx := context.Background()
 
 	// destination repo
-	testDir, err := test.ChangeToTestDir("TestReplicationDest")
+	testDir, err := test.ChangeToTestDir(t.TempDir(), "TestReplicationDest")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -62,7 +62,7 @@ func TestPushOnWriteHook(t *testing.T) {
 	destDB, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
-	testDir, err = test.ChangeToTestDir("TestReplicationSource")
+	testDir, err = test.ChangeToTestDir(t.TempDir(), "TestReplicationSource")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -183,7 +183,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	ctx := context.Background()
 
 	// destination repo
-	testDir, err := test.ChangeToTestDir("TestReplicationDest")
+	testDir, err := test.ChangeToTestDir(t.TempDir(), "TestReplicationDest")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -202,7 +202,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	destDB, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
-	testDir, err = test.ChangeToTestDir("TestReplicationSource")
+	testDir, err = test.ChangeToTestDir(t.TempDir(), "TestReplicationSource")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")

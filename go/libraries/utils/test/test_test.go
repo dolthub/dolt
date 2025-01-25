@@ -24,7 +24,7 @@ import (
 // test your tests so you can test while you test
 
 func TestLDTestUtils(t *testing.T) {
-	dir, err := ChangeToTestDir("TestLDTestUtils")
+	dir, err := ChangeToTestDir(t.TempDir(), "TestLDTestUtils")
 
 	if err != nil {
 		t.Fatal("Couldn't change to test dir")

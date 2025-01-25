@@ -279,9 +279,7 @@ func TestJournalWriterSyncClose(t *testing.T) {
 }
 
 func newTestFilePath(t *testing.T) string {
-	path, err := os.MkdirTemp("", "")
-	require.NoError(t, err)
-	return filepath.Join(path, "journal.log")
+	return filepath.Join(t.TempDir(), "journal.log")
 }
 
 func TestJournalIndexBootstrap(t *testing.T) {
@@ -398,6 +396,8 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			require.True(t, ok)
 			_, err = jnl.bootstrapJournal(ctx, nil)
 			assert.Error(t, err)
+			err = jnl.Close()
+			require.NoError(t, err)
 		})
 	}
 }

@@ -45,10 +45,9 @@ func importKey(t *testing.T, ctx context.Context) {
 }
 
 func setupTestDB(t *testing.T, ctx context.Context, fs filesys.Filesys) string {
-	dir, err := os.MkdirTemp(os.TempDir(), "signed_commits")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	dbDir := filepath.Join(dir, "db")
-	err = filesys.CopyDir("testdata/signed_commits/db/", dbDir, fs)
+	err := filesys.CopyDir("testdata/signed_commits/db/", dbDir, fs)
 	require.NoError(t, err)
 
 	log.Println(dbDir)
@@ -90,7 +89,7 @@ func TestSignAndVerifyCommit(t *testing.T) {
 			apr, err := cli.CreateCommitArgParser().Parse(test.commitArgs)
 			require.NoError(t, err)
 
-			_, err = execCommand(ctx, dbDir, CommitCmd{}, test.commitArgs, apr, map[string]string{}, global)
+			_, err = execCommand(ctx, t, dbDir, CommitCmd{}, test.commitArgs, apr, map[string]string{}, global)
 
 			if test.expectErr {
 				require.Error(t, err)
@@ -103,14 +102,14 @@ func TestSignAndVerifyCommit(t *testing.T) {
 			apr, err = cli.CreateLogArgParser(false).Parse(args)
 			require.NoError(t, err)
 
-			logOutput, err := execCommand(ctx, dbDir, LogCmd{}, args, apr, map[string]string{}, global)
+			logOutput, err := execCommand(ctx, t, dbDir, LogCmd{}, args, apr, map[string]string{}, global)
 			require.NoError(t, err)
 			require.Contains(t, logOutput, "Good signature from \"Test User <test@dolthub.com>\"")
 		})
 	}
 }
 
-func execCommand(ctx context.Context, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string, err error) {
+func execCommand(ctx context.Context, t *testing.T, wd string, cmd cli.Command, args []string, apr *argparser.ArgParseResults, local, global map[string]string) (output string, err error) {
 	err = os.Chdir(wd)
 	if err != nil {
 		err = fmt.Errorf("error changing directory to %s: %w", wd, err)
@@ -157,7 +156,7 @@ func execCommand(ctx context.Context, wd string, cmd cli.Command, args []string,
 
 	initialOut := os.Stdout
 	initialErr := os.Stderr
-	f, err := os.CreateTemp(os.TempDir(), "signed-commit-test-*")
+	f, err := os.CreateTemp(t.TempDir(), "signed-commit-test-*")
 	if err != nil {
 		err = fmt.Errorf("error creating temp file: %w", err)
 		return

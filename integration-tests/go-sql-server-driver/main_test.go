@@ -30,26 +30,29 @@ import (
 // It's good enough for now, and it keeps us from checking in certificates or
 // JWT which will expire at some point in the future.
 func TestMain(m *testing.M) {
-	old := os.Getenv("TESTGENDIR")
-	defer func() {
-		os.Setenv("TESTGENDIR", old)
+	res := func() int {
+		old := os.Getenv("TESTGENDIR")
+		defer func() {
+			os.Setenv("TESTGENDIR", old)
+		}()
+		gendir, err := os.MkdirTemp(os.TempDir(), "go-sql-server-driver-gen-*")
+		if err != nil {
+			log.Fatalf("could not create temp dir: %v", err)
+		}
+		defer os.RemoveAll(gendir)
+		err = GenerateTestJWTs(gendir)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		err = GenerateX509Certs(gendir)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		os.Setenv("TESTGENDIR", gendir)
+		flag.Parse()
+		return m.Run()
 	}()
-	gendir, err := os.MkdirTemp(os.TempDir(), "go-sql-server-driver-gen-*")
-	if err != nil {
-		log.Fatalf("could not create temp dir: %v", err)
-	}
-	defer os.RemoveAll(gendir)
-	err = GenerateTestJWTs(gendir)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	err = GenerateX509Certs(gendir)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	os.Setenv("TESTGENDIR", gendir)
-	flag.Parse()
-	os.Exit(m.Run())
+	os.Exit(res)
 }
 
 func TestConfig(t *testing.T) {

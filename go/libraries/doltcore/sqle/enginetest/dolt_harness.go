@@ -515,7 +515,7 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 
 	var dEnv *env.DoltEnv
 	if d.useLocalFilesystem {
-		dEnv = dtestutils.CreateTestEnvForLocalFilesystem()
+		dEnv = dtestutils.CreateTestEnvForLocalFilesystem(d.t.TempDir())
 	} else {
 		dEnv = dtestutils.CreateTestEnv()
 	}

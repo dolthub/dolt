@@ -30,7 +30,7 @@ import (
 
 func TestSQLServerInfoFile(t *testing.T) {
 	t.Run("With Two Repos", func(t *testing.T) {
-		u, err := driver.NewDoltUser()
+		u, err := driver.NewDoltUser(t.TempDir())
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			u.Cleanup()
@@ -298,7 +298,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 		})
 	})
 	t.Run("With Empty RepoStore", func(t *testing.T) {
-		u, err := driver.NewDoltUser()
+		u, err := driver.NewDoltUser(t.TempDir())
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			u.Cleanup()

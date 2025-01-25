@@ -219,7 +219,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 }
 
 func TestLoadNonExistentLocalFSRepo(t *testing.T) {
-	_, err := test.ChangeToTestDir("TestLoadRepo")
+	_, err := test.ChangeToTestDir(t.TempDir(), "TestLoadRepo")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -231,7 +231,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 }
 
 func TestLoadBadLocalFSRepo(t *testing.T) {
-	testDir, err := test.ChangeToTestDir("TestLoadRepo")
+	testDir, err := test.ChangeToTestDir(t.TempDir(), "TestLoadRepo")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")
@@ -246,7 +246,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 }
 
 func TestLDNoms(t *testing.T) {
-	testDir, err := test.ChangeToTestDir("TestLoadRepo")
+	testDir, err := test.ChangeToTestDir(t.TempDir(), "TestLoadRepo")
 
 	if err != nil {
 		panic("Couldn't change the working directory to the test directory.")

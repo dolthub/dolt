@@ -42,9 +42,16 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer os.RemoveAll(tmpdir)
+
+	userdir, err := os.MkdirTemp("", "import-benchmarker-")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer os.RemoveAll(userdir)
 
 	results := new(ib.ImportResults)
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(userdir)
 	for _, test := range def.Tests {
 		test.Results = results
 		test.InitWithTmpDir(tmpdir)
@@ -73,5 +80,4 @@ func main() {
 	} else {
 		fmt.Println(results.SqlDump())
 	}
-	os.Exit(0)
 }

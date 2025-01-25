@@ -53,7 +53,7 @@ func TestReadWriteValueFile(t *testing.T) {
 		values = append(values, m)
 	}
 
-	path := filepath.Join(os.TempDir(), "file.nvf")
+	path := filepath.Join(t.TempDir(), "file.nvf")
 	err = WriteValueFile(ctx, path, store, values...)
 	require.NoError(t, err)
 

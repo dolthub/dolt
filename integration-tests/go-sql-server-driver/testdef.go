@@ -129,7 +129,7 @@ func (test Test) Run(t *testing.T) {
 		t.Skip(test.Skip)
 	}
 
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		u.Cleanup()
@@ -153,7 +153,7 @@ func (test Test) Run(t *testing.T) {
 	}
 	for _, mr := range test.MultiRepos {
 		// Each MultiRepo gets its own dolt config --global.
-		u, err := driver.NewDoltUser()
+		u, err := driver.NewDoltUser(t.TempDir())
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			u.Cleanup()

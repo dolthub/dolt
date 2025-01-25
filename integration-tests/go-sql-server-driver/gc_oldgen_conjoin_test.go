@@ -29,7 +29,7 @@ import (
 )
 
 func TestGCConjoinsOldgen(t *testing.T) {
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(t.TempDir() )
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		u.Cleanup()

@@ -44,6 +44,9 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
 	err := os.MkdirAll(nomsDir, os.ModePerm)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(nomsDir)
+	})
 
 	// create a v5 manifest
 	fm, err := getFileManifest(ctx, nomsDir, asyncFlush)

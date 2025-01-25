@@ -41,8 +41,8 @@ var filesysetmsToTest = map[string]Filesys{
 }
 
 func TestFilesystems(t *testing.T) {
-	dir := test.TestDir("filesys_test")
-	newLocation := test.TestDir("newLocation")
+	dir := test.TestDir(t.TempDir(), "filesys_test")
+	newLocation := test.TestDir(t.TempDir(), "newLocation")
 	subdir := filepath.Join(dir, "subdir")
 	subdirFile := filepath.Join(subdir, testSubdirFilename)
 	fp := filepath.Join(dir, testFilename)
@@ -186,7 +186,7 @@ func TestNewInMemFS(t *testing.T) {
 }
 
 func TestRecursiveFSIteration(t *testing.T) {
-	dir := test.TestDir("TestRecursiveFSIteration")
+	dir := test.TestDir(t.TempDir(), "TestRecursiveFSIteration")
 
 	for fsName, fs := range filesysetmsToTest {
 		var expectedDirs []string
@@ -215,7 +215,7 @@ func TestRecursiveFSIteration(t *testing.T) {
 }
 
 func TestFSIteration(t *testing.T) {
-	dir := test.TestDir("TestFSIteration")
+	dir := test.TestDir(t.TempDir(), "TestFSIteration")
 
 	for fsName, fs := range filesysetmsToTest {
 		var expectedDirs []string
@@ -249,7 +249,7 @@ func TestFSIteration(t *testing.T) {
 }
 
 func TestDeletes(t *testing.T) {
-	dir := test.TestDir("TestDeletes")
+	dir := test.TestDir(t.TempDir(), "TestDeletes")
 
 	for fsName, fs := range filesysetmsToTest {
 		var ignored []string

@@ -440,7 +440,7 @@ func (test *Script) Run(t *testing.T) {
 	}
 
 	results := new(Results)
-	u, err := driver.NewDoltUser()
+	u, err := driver.NewDoltUser(t.TempDir())
 	test.Results = results
 	test.InitWithTmpDir(tmpdir)
 	for _, r := range test.Repos {

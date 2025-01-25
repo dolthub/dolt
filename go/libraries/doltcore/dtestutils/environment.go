@@ -16,7 +16,6 @@ package dtestutils
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -41,12 +40,7 @@ func CreateTestEnv() *env.DoltEnv {
 // CreateTestEnvForLocalFilesystem creates a new DoltEnv for testing, using a local FS, instead of an in-memory
 // filesystem, for persisting files. This is useful for tests that require a disk-based filesystem and will not
 // work correctly with an in-memory filesystem and in-memory blob store (e.g. dolt_undrop() tests).
-func CreateTestEnvForLocalFilesystem() *env.DoltEnv {
-	tempDir, err := os.MkdirTemp(os.TempDir(), "dolt-*")
-	if err != nil {
-		panic(err)
-	}
-
+func CreateTestEnvForLocalFilesystem(tempDir string) *env.DoltEnv {
 	fs, err := filesys.LocalFilesysWithWorkingDir(tempDir)
 	if err != nil {
 		panic(err)

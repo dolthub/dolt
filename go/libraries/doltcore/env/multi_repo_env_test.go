@@ -115,7 +115,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 }
 
 func TestMultiEnvForDirectory(t *testing.T) {
-	rootPath, err := test.ChangeToTestDir("TestDoltEnvAsMultiEnv")
+	rootPath, err := test.ChangeToTestDir(t.TempDir(), "TestDoltEnvAsMultiEnv")
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
@@ -150,7 +150,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 }
 
 func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
-	rootPath, err := test.ChangeToTestDir("TestDoltEnvAsMultiEnvWithMultipleRepos")
+	rootPath, err := test.ChangeToTestDir(t.TempDir(), "TestDoltEnvAsMultiEnvWithMultipleRepos")
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
@@ -177,7 +177,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 }
 
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {
-	rootPath, err := test.ChangeToTestDir(testName)
+	rootPath, err := test.ChangeToTestDir(t.TempDir(), testName)
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
