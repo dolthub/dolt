@@ -300,17 +300,18 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
 	}
 
-	if len(jobs) > 0 || sc.activeGc.Load() {
-		firstNodeHash := levelNodes[0].HashOf()
-		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
-			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("%s bound %s: %v\n", tableName, firstNodeHash.String(), firstRow)
-			sc.kv.PutBound(firstNodeHash, firstRow)
+	// always check, jobs can be empty on startup but
+	// we still need to load the bound hash
+	firstNodeHash := levelNodes[0].HashOf()
+	if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
+		firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
+		if err != nil {
+			return nil, err
 		}
+		fmt.Printf("%s bound %s: %v\n", tableName, firstNodeHash.String(), firstRow)
+		sc.kv.PutBound(firstNodeHash, firstRow)
 	}
+	
 	return jobs, nil
 }
 

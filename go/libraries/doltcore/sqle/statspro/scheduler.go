@@ -474,7 +474,7 @@ func GcSweep(ctx *sql.Context) ControlJob {
 
 func (sc *StatsCoord) error(j StatsJob, err error) {
 	fmt.Println(err.Error())
-	sc.logger.Debugf("stats error; job detail: %s; verbose: %s", j.String(), err)
+	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", j.String(), err)
 }
 
 // statsRunner operates on stats jobs
@@ -781,6 +781,10 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 			if i == 0 {
 				bnd, ok := sc.kv.GetBound(bh)
 				if !ok {
+					log.Println("chunks: ", fs.buckets)
+					for k, v := range sc.kv.(*prollyStats).mem.bounds {
+						log.Println("bound: ", k, v)
+					}
 					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s", key, bh)
 				}
 				template.LowerBnd = bnd[:fs.tupB.Desc.Count()]
