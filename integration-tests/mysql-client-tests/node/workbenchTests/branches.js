@@ -58,6 +58,7 @@ export const branchTests = [
         latest_commit_message: "Initialize data repository",
         remote: "",
         branch: "",
+        dirty: 0,
       },
       {
         name: "mybranch",
@@ -68,6 +69,7 @@ export const branchTests = [
         latest_commit_message: "Create table test",
         remote: "",
         branch: "",
+        dirty: 0,
       },
     ],
     matcher: branchesMatcher,
