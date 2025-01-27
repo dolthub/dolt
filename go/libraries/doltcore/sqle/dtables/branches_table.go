@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -237,6 +238,10 @@ func isDirty(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, branch
 	}
 	ws, err := ddb.ResolveWorkingSetAtRoot(ctx, wsRef, txRoot)
 	if err != nil {
+		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			// If there is no working set for this branch, then it is never dirty. This happens on servers commonly.
+			return false, nil
+		}
 		return false, err
 	}
 
