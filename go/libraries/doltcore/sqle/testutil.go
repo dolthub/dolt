@@ -452,7 +452,7 @@ func CreateEmptyTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema
 	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
-// CreateTestDatabase creates a test database with the test data set in it.
+// CreateTestDatabase creates a test database with the test data set in it. Has a dirty workspace as well.
 func CreateTestDatabase() (*env.DoltEnv, error) {
 	ctx := context.Background()
 	dEnv, err := CreateEmptyTestDatabase()

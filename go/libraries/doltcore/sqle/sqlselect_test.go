@@ -784,6 +784,7 @@ func BasicSelectTests() []SelectTest {
 					"Initialize data repository",
 					"",
 					"",
+					true, // Test setup has a dirty workspace.
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
@@ -795,6 +796,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "latest_commit_message", Type: gmstypes.Text},
 				&sql.Column{Name: "remote", Type: gmstypes.Text},
 				&sql.Column{Name: "branch", Type: gmstypes.Text},
+				&sql.Column{Name: "dirty", Type: gmstypes.Boolean},
 			},
 		},
 	}
