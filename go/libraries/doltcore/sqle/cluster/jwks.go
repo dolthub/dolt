@@ -46,16 +46,21 @@ func (h JWKSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func JWKSHandlerInterceptor(keyID string, pub ed25519.PublicKey) func(http.Handler) http.Handler {
+func JWKSHandlerInterceptor(existing func(http.Handler) http.Handler, keyID string, pub ed25519.PublicKey) func(http.Handler) http.Handler {
 	jh := JWKSHandler{KeyID: keyID, PublicKey: pub}
 	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		this := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.EscapedPath() == "/.well-known/jwks.json" {
 				jh.ServeHTTP(w, r)
 				return
 			}
 			h.ServeHTTP(w, r)
 		})
+		if existing != nil {
+			return existing(this)
+		} else {
+			return this
+		}
 	}
 }
 

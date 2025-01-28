@@ -559,22 +559,27 @@ func ConfigureServices(
 			}
 
 			listenaddr := fmt.Sprintf(":%d", port)
+			sqlContextInterceptor := sqle.SqlContextServerInterceptor{
+				Factory: sqlEngine.NewDefaultContext,
+			}
 			args := remotesrv.ServerArgs{
 				Logger:             logrus.NewEntry(lgr),
 				ReadOnly:           apiReadOnly || serverConfig.ReadOnly(),
 				HttpListenAddr:     listenaddr,
 				GrpcListenAddr:     listenaddr,
 				ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET,
+				Options:            sqlContextInterceptor.Options(),
+				HttpInterceptor:    sqlContextInterceptor.HTTP(nil),
 			}
 			var err error
 			args.FS = sqlEngine.FileSystem()
-			args.DBCache, err = sqle.RemoteSrvDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)
+			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
 			}
 
-			authenticator := newAccessController(sqlEngine.NewDefaultContext, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			authenticator := newAccessController(sqle.GetInterceptorSqlContext, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			args = sqle.WithUserPasswordAuth(args, authenticator)
 			args.TLSConfig = serverConf.TLSConfig
 
@@ -636,7 +641,7 @@ func ConfigureServices(
 				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
 				return err
 			}
-			clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.srv.GrpcServer())
+			clusterController.RegisterGrpcServices(sqle.GetInterceptorSqlContext, clusterRemoteSrv.srv.GrpcServer())
 
 			clusterRemoteSrv.lis, err = clusterRemoteSrv.srv.Listeners()
 			if err != nil {
