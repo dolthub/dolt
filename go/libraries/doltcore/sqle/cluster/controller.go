@@ -688,9 +688,14 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	listenaddr := c.RemoteSrvListenAddr()
 	args.HttpListenAddr = listenaddr
 	args.GrpcListenAddr = listenaddr
-	args.Options = c.ServerOptions()
+	ctxInterceptor := sqle.SqlContextServerInterceptor{
+		Factory: ctxFactory,
+	}
+	args.Options = append(args.Options, ctxInterceptor.Options()...)
+	args.Options = append(args.Options, c.ServerOptions()...)
+	args.HttpInterceptor = ctxInterceptor.HTTP(args.HttpInterceptor)
 	var err error
-	args.DBCache, err = sqle.RemoteSrvDBCache(ctxFactory, sqle.CreateUnknownDatabases)
+	args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.CreateUnknownDatabases)
 	if err != nil {
 		return remotesrv.ServerArgs{}, err
 	}
@@ -699,7 +704,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 
 	keyID := creds.PubKeyToKID(c.pub)
 	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
-	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, c.pub)
+	args.HttpInterceptor = JWKSHandlerInterceptor(args.HttpInterceptor, keyIDStr, c.pub)
 
 	return args, nil
 }
