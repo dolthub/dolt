@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -81,17 +80,12 @@ type CreateUnknownDatabasesSetting bool
 const CreateUnknownDatabases CreateUnknownDatabasesSetting = true
 const DoNotCreateUnknownDatabases CreateUnknownDatabasesSetting = false
 
-// Considers |args| and returns a new |remotesrv.ServerArgs| instance which
-// will serve databases accessible through |ctxFactory|.
-func RemoteSrvFSAndDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (filesys.Filesys, remotesrv.DBCache, error) {
-	sqlCtx, err := ctxFactory(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	fs := sess.Provider().FileSystem()
+// Returns a remotesrv.DBCache instance which will use the *sql.Context
+// returned from |ctxFactory| to access a database in the session
+// DatabaseProvider.
+func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (remotesrv.DBCache, error) {
 	dbcache := remotesrvStore{ctxFactory, bool(createSetting)}
-	return fs, dbcache, nil
+	return dbcache, nil
 }
 
 func WithUserPasswordAuth(args remotesrv.ServerArgs, authnz remotesrv.AccessControl) remotesrv.ServerArgs {

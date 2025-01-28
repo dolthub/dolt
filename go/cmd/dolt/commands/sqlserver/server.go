@@ -567,7 +567,8 @@ func ConfigureServices(
 				ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET,
 			}
 			var err error
-			args.FS, args.DBCache, err = sqle.RemoteSrvFSAndDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)
+			args.FS = sqlEngine.FileSystem()
+			args.DBCache, err = sqle.RemoteSrvDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
@@ -621,6 +622,7 @@ func ConfigureServices(
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
 			}
+			args.FS = sqlEngine.FileSystem()
 
 			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
 			if err != nil {

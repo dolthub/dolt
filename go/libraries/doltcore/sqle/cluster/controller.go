@@ -690,7 +690,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	args.GrpcListenAddr = listenaddr
 	args.Options = c.ServerOptions()
 	var err error
-	args.FS, args.DBCache, err = sqle.RemoteSrvFSAndDBCache(ctxFactory, sqle.CreateUnknownDatabases)
+	args.DBCache, err = sqle.RemoteSrvDBCache(ctxFactory, sqle.CreateUnknownDatabases)
 	if err != nil {
 		return remotesrv.ServerArgs{}, err
 	}
