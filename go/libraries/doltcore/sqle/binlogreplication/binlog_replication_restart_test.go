@@ -49,7 +49,7 @@ func TestBinlogReplicationServerRestart(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 
 	var err error
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
 	require.NoError(t, err)
 
 	// Check replication status on the replica and assert configuration persisted
