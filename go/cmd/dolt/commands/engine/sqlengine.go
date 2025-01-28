@@ -316,6 +316,9 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 
 func (se *SqlEngine) Close() error {
 	if se.engine != nil {
+		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
+			dblr.DoltBinlogReplicaController.Close()
+		}
 		return se.engine.Close()
 	}
 	return nil
