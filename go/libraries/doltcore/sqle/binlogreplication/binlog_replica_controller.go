@@ -157,7 +157,9 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 // changes and execute DDL statements on the running server. If the account doesn't exist, it will be
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
 // locked, it will be given superuser privs and locked.
-func (d *doltBinlogReplicaController) configureReplicationUser(_ *sql.Context) {
+func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) {
+	sql.SessionCommandBegin(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
 	mySQLDb := d.engine.Analyzer.Catalog.MySQLDb
 	ed := mySQLDb.Editor()
 	defer ed.Close()
@@ -180,12 +182,15 @@ func (d *doltBinlogReplicaController) SetEngine(engine *sqle.Engine) {
 
 // StopReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StopReplica(ctx *sql.Context) error {
+	d.operationMutex.Lock()
+	defer d.operationMutex.Unlock()
+
 	if d.applier.IsRunning() == false {
 		ctx.Warn(3084, "Replication thread(s) for channel '' are already stopped.")
 		return nil
 	}
 
-	d.applier.stopReplicationChan <- struct{}{}
+	d.applier.Stop()
 
 	d.updateStatus(func(status *binlogreplication.ReplicaStatus) {
 		status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
@@ -426,6 +431,17 @@ func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
 
 	logrus.Info("auto-starting binlog replication from source...")
 	return d.StartReplica(d.ctx)
+}
+
+// Release all resources, such as replication threads, associated with the replication.
+// This can only be done once in the lifecycle of the instance. Because DoltBinlogReplicaController
+// is currently a global singleton, this should only be done once in the lifecycle of the
+// application.
+func (d *doltBinlogReplicaController) Close() {
+	d.applier.Stop()
+	if d.ctx != nil {
+		sql.SessionEnd(d.ctx.Session)
+	}
 }
 
 //
