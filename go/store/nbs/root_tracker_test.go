@@ -399,7 +399,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 	persisted = append(chunks, rootChunk)
 
 	var src chunkSource
-	src, err = p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
+	src, _, err = p.Persist(context.Background(), createMemTable(persisted), nil, nil, &Stats{})
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
@@ -505,16 +505,18 @@ type fakeTablePersister struct {
 
 var _ tablePersister = fakeTablePersister{}
 
-func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
+func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if mustUint32(mt.count()) == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 
-	name, data, chunkCount, err := mt.write(haver, stats)
+	name, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	} else if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
 	} else if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 
 	ftp.mu.Lock()
@@ -523,14 +525,14 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 
 	ti, err := parseTableIndexByCopy(ctx, data, ftp.q)
 	if err != nil {
-		return nil, err
+		return nil, gcBehavior_Continue, err
 	}
 
 	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
-	return chunkSourceAdapter{cs, name}, nil
+	return chunkSourceAdapter{cs, name}, gcBehavior_Continue, nil
 }
 
 func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
@@ -661,7 +663,7 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 			return err
 		}
 
-		data, err := src.get(ctx, h, nil)
+		data, _, err := src.get(ctx, h, nil, nil)
 		if err != nil {
 			return err
 		}

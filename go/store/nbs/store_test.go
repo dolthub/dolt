@@ -209,7 +209,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 			addrs.Insert(c.Hash())
 			return nil
 		}
-	}, st.hasMany)
+	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
@@ -378,7 +378,7 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 		require.True(t, ok)
 		tableFileMap[fileIDHash] = uint32(i + 1)
 		mapIds[i] = fileIDHash
-		cs, err := p.Persist(context.Background(), createMemTable(chunkData), nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), createMemTable(chunkData), nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 

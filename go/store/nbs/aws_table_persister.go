@@ -115,25 +115,31 @@ func (s3p awsTablePersister) key(k string) string {
 	return k
 }
 
-func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := mt.write(haver, stats)
-
+func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
+	name, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	if gcb != gcBehavior_Continue {
+		return emptyChunkSource{}, gcb, nil
 	}
 
 	if chunkCount == 0 {
-		return emptyChunkSource{}, nil
+		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 
 	err = s3p.multipartUpload(ctx, bytes.NewReader(data), uint64(len(data)), name.String())
 
 	if err != nil {
-		return emptyChunkSource{}, err
+		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
-	return newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
+	src, err := newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
+	if err != nil {
+		return emptyChunkSource{}, gcBehavior_Continue, err
+	}
+	return src, gcBehavior_Continue, nil
 }
 
 func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, sz uint64, key string) error {

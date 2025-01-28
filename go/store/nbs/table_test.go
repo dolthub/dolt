@@ -62,7 +62,7 @@ func buildTable(chunks [][]byte) ([]byte, hash.Hash, error) {
 }
 
 func mustGetString(assert *assert.Assertions, ctx context.Context, tr tableReader, data []byte) string {
-	bytes, err := tr.get(ctx, computeAddr(data), &Stats{})
+	bytes, _, err := tr.get(ctx, computeAddr(data), nil, &Stats{})
 	assert.NoError(err)
 	return string(bytes)
 }
@@ -106,13 +106,13 @@ func TestSimple(t *testing.T) {
 
 func assertChunksInReader(chunks [][]byte, r chunkReader, assert *assert.Assertions) {
 	for _, c := range chunks {
-		assert.True(r.has(computeAddr(c)))
+		assert.True(r.has(computeAddr(c), nil))
 	}
 }
 
 func assertChunksNotInReader(chunks [][]byte, r chunkReader, assert *assert.Assertions) {
 	for _, c := range chunks {
-		assert.False(r.has(computeAddr(c)))
+		assert.False(r.has(computeAddr(c), nil))
 	}
 }
 
@@ -142,7 +142,7 @@ func TestHasMany(t *testing.T) {
 	}
 	sort.Sort(hasRecordByPrefix(hasAddrs))
 
-	_, err = tr.hasMany(hasAddrs)
+	_, _, err = tr.hasMany(hasAddrs, nil)
 	require.NoError(t, err)
 	for _, ha := range hasAddrs {
 		assert.True(ha.has, "Nothing for prefix %d", ha.prefix)
@@ -192,7 +192,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	hasAddrs[0] = hasRecord{&addrs[1], addrs[1].Prefix(), 1, false}
 	hasAddrs[1] = hasRecord{&addrs[2], addrs[2].Prefix(), 2, false}
 
-	_, err = tr.hasMany(hasAddrs)
+	_, _, err = tr.hasMany(hasAddrs, nil)
 	require.NoError(t, err)
 
 	for _, ha := range hasAddrs {
@@ -246,7 +246,7 @@ func BenchmarkHasMany(b *testing.B) {
 	b.Run("dense has many", func(b *testing.B) {
 		var ok bool
 		for i := 0; i < b.N; i++ {
-			ok, err = tr.hasMany(hrecs)
+			ok, _, err = tr.hasMany(hrecs, nil)
 		}
 		assert.False(b, ok)
 		assert.NoError(b, err)
@@ -254,7 +254,7 @@ func BenchmarkHasMany(b *testing.B) {
 	b.Run("sparse has many", func(b *testing.B) {
 		var ok bool
 		for i := 0; i < b.N; i++ {
-			ok, err = tr.hasMany(sparse)
+			ok, _, err = tr.hasMany(sparse, nil)
 		}
 		assert.True(b, ok)
 		assert.NoError(b, err)
@@ -290,7 +290,7 @@ func TestGetMany(t *testing.T) {
 	eg, ctx := errgroup.WithContext(context.Background())
 
 	got := make([]*chunks.Chunk, 0)
-	_, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, &Stats{})
+	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -324,13 +324,13 @@ func TestCalcReads(t *testing.T) {
 	gb2 := []getRecord{getBatch[0], getBatch[2]}
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	reads, remaining, err := tr.calcReads(getBatch, 0)
+	reads, remaining, _, err := tr.calcReads(getBatch, 0, nil)
 	require.NoError(t, err)
 	assert.False(remaining)
 	assert.Equal(1, reads)
 
 	sort.Sort(getRecordByPrefix(gb2))
-	reads, remaining, err = tr.calcReads(gb2, 0)
+	reads, remaining, _, err = tr.calcReads(gb2, 0, nil)
 	require.NoError(t, err)
 	assert.False(remaining)
 	assert.Equal(2, reads)
@@ -398,8 +398,8 @@ func Test65k(t *testing.T) {
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
 		h := computeAddr(data)
-		assert.True(tr.has(computeAddr(data)))
-		bytes, err := tr.get(context.Background(), h, &Stats{})
+		assert.True(tr.has(computeAddr(data), nil))
+		bytes, _, err := tr.get(context.Background(), h, nil, &Stats{})
 		require.NoError(t, err)
 		assert.Equal(string(data), string(bytes))
 	}
@@ -407,8 +407,8 @@ func Test65k(t *testing.T) {
 	for i := count; i < count*2; i++ {
 		data := dataFn(i)
 		h := computeAddr(data)
-		assert.False(tr.has(computeAddr(data)))
-		bytes, err := tr.get(context.Background(), h, &Stats{})
+		assert.False(tr.has(computeAddr(data), nil))
+		bytes, _, err := tr.get(context.Background(), h, nil, &Stats{})
 		require.NoError(t, err)
 		assert.NotEqual(string(data), string(bytes))
 	}
@@ -461,7 +461,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	eg, ctx := errgroup.WithContext(context.Background())
 
 	got := make([]*chunks.Chunk, 0)
-	_, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, &Stats{})
+	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
