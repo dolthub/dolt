@@ -337,7 +337,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.NoError(t, st.BeginGC(nil))
+	require.NoError(t, st.BeginGC(nil, chunks.GCMode_Full))
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}
@@ -352,7 +352,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, sweeper.Close(ctx))
 	require.NoError(t, finalizer.SwapChunksInStore(ctx))
-	st.EndGC()
+	st.EndGC(chunks.GCMode_Full)
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)

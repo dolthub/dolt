@@ -335,11 +335,11 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) bool) error {
+func (ms *MemoryStoreView) BeginGC(keeper func(hash.Hash) bool, _ GCMode) error {
 	return ms.transitionToGC(keeper)
 }
 
-func (ms *MemoryStoreView) EndGC() {
+func (ms *MemoryStoreView) EndGC(_ GCMode) {
 	ms.transitionToNoGC()
 }
 

@@ -31,15 +31,41 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
-	var gct gcTest
-	gct.numThreads = 8
-	gct.duration = 10 * time.Second
 	t.Run("NoCommits", func(t *testing.T) {
-		gct.run(t)
+		t.Run("Normal", func(t *testing.T) {
+			var gct = gcTest{
+				numThreads: 8,
+				duration:   10 * time.Second,
+			}
+			gct.run(t)
+		})
+		t.Run("Full", func(t *testing.T) {
+			var gct = gcTest{
+				numThreads: 8,
+				duration:   10 * time.Second,
+				full:       true,
+			}
+			gct.run(t)
+		})
 	})
-	gct.commit = true
 	t.Run("WithCommits", func(t *testing.T) {
-		gct.run(t)
+		t.Run("Normal", func(t *testing.T) {
+			var gct = gcTest{
+				numThreads: 8,
+				duration:   10 * time.Second,
+				commit:     true,
+			}
+			gct.run(t)
+		})
+		t.Run("Full", func(t *testing.T) {
+			var gct = gcTest{
+				numThreads: 8,
+				duration:   10 * time.Second,
+				commit:     true,
+				full:       true,
+			}
+			gct.run(t)
+		})
 	})
 }
 
@@ -47,6 +73,7 @@ type gcTest struct {
 	numThreads int
 	duration   time.Duration
 	commit     bool
+	full       bool
 }
 
 func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -118,19 +145,12 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 		})
 	}()
 	b := time.Now()
-	_, err = conn.ExecContext(ctx, "call dolt_gc()")
-	if err != nil {
-		if !assert.NotContains(t, err.Error(), "dangling ref") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
-			return err
-		}
-		t.Logf("err in Exec dolt_gc: %v", err)
+	if !gct.full {
+		_, err = conn.ExecContext(ctx, "call dolt_gc()")
 	} else {
+		_, err = conn.ExecContext(ctx, `call dolt_gc("--full")`)
+	}
+	if assert.NoError(t, err) {
 		t.Logf("successful dolt_gc took %v", time.Since(b))
 	}
 	return nil

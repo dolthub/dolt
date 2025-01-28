@@ -225,11 +225,11 @@ type ChunkStoreGarbageCollector interface {
 	//
 	// This function should not block indefinitely and should return an
 	// error if a GC is already in progress.
-	BeginGC(addChunk func(hash.Hash) bool) error
+	BeginGC(addChunk func(hash.Hash) bool, mode GCMode) error
 
 	// EndGC indicates that the GC is over. The previously provided
 	// addChunk function must not be called after this function.
-	EndGC()
+	EndGC(mode GCMode)
 
 	// MarkAndSweepChunks returns a handle that can be used to supply
 	// hashes which should be saved into |dest|. The hashes are
@@ -257,6 +257,12 @@ type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
 	OldGen() ChunkStoreGarbageCollector
 	GhostGen() ChunkStore
+
+	// Has the same return values as OldGen().HasMany, but should be used by a
+	// generational GC process as the filter function instead of
+	// OldGen().HasMany. This function never takes read dependencies on the
+	// chunks that it queries.
+	OldGenGCFilter() HasManyFunc
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")
