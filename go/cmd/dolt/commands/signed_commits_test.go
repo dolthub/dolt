@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -78,6 +79,9 @@ func TestSignAndVerifyCommit(t *testing.T) {
 	ctx := context.Background()
 	importKey(t, ctx)
 	dbDir := setupTestDB(t, ctx, filesys.LocalFS)
+	t.Cleanup(func() {
+		dbfactory.CloseAllLocalDatabases()
+	})
 
 	global := map[string]string{
 		"user.name":  "First Last",
@@ -141,12 +145,6 @@ func execCommand(ctx context.Context, t *testing.T, wd string, cmd cli.Command, 
 		err = fmt.Errorf("error creating multi repo: %w", err)
 		return
 	}
-	t.Cleanup(func() {
-		mr.Iter(func(_ string, env *env.DoltEnv) (bool, error) {
-			env.DoltDB.Close()
-			return false, nil
-		})
-	})
 
 	latebind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mr, &cli.UserPassword{}, apr)
 	if verr != nil {
