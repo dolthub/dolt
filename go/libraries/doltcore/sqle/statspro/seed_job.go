@@ -28,16 +28,26 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"log"
 	"strings"
 )
 
-func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
+func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
 	// get list of tables, get list of indexes, partition index ranges into ordinal blocks
 	// return list of IO jobs for table/index/ordinal blocks
-	tableNames, err := j.sqlDb.GetTableNames(j.ctx)
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	db, err := dSess.Provider().Database(sqlCtx, j.sqlDb.AliasedName())
+
+	sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, db.(dsess.SqlDatabase), j.sqlDb.Revision(), j.sqlDb.Revision()+"/"+j.sqlDb.AliasedName())
+
+	tableNames, err := sqlDb.GetTableNames(sqlCtx)
 	if err != nil {
 		if errors.Is(err, doltdb.ErrBranchNotFound) {
-			return []StatsJob{sc.dropBranchJob(j.sqlDb.AliasedName(), j.sqlDb.Revision())}, nil
+			return []StatsJob{sc.dropBranchJob(sqlDb.AliasedName(), sqlDb.Revision())}, nil
 		}
 		return nil, err
 	}
@@ -55,18 +65,18 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 		switch strings.Compare(tableNames[i], j.tables[k].name) {
 		case 0:
 			// continue
-			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, j.tables[k])
+			jobs, ti, err = sc.readJobsForTable(sqlCtx, sqlDb, j.tables[k])
 			bucketDiff += ti.bucketCount - j.tables[k].bucketCount
 			i++
 			k++
 		case -1:
 			// new table
-			jobs, ti, err = sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableNames[i]})
+			jobs, ti, err = sc.readJobsForTable(sqlCtx, sqlDb, tableStatsInfo{name: tableNames[i]})
 			bucketDiff += ti.bucketCount
 			i++
 		case +1:
 			// dropped table
-			jobs = append(jobs, sc.dropTableJob(j.sqlDb, j.tables[k].name))
+			jobs = append(jobs, sc.dropTableJob(sqlDb, j.tables[k].name))
 			bucketDiff -= j.tables[k].bucketCount
 			k++
 		}
@@ -79,7 +89,7 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 		ret = append(ret, jobs...)
 	}
 	for i < len(tableNames) {
-		jobs, ti, err := sc.readJobsForTable(j.ctx, j.sqlDb, tableStatsInfo{name: tableNames[i]})
+		jobs, ti, err := sc.readJobsForTable(sqlCtx, sqlDb, tableStatsInfo{name: tableNames[i]})
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +100,7 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 	}
 
 	for k < len(j.tables) {
-		ret = append(ret, sc.dropTableJob(j.sqlDb, j.tables[k].name))
+		ret = append(ret, sc.dropTableJob(sqlDb, j.tables[k].name))
 		bucketDiff -= j.tables[k].bucketCount
 		k++
 	}
@@ -104,7 +114,7 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 	}
 
 	// retry again after finishing planned work
-	ret = append(ret, SeedDbTablesJob{tables: newTableInfo, sqlDb: j.sqlDb, ctx: j.ctx, done: make(chan struct{})})
+	ret = append(ret, SeedDbTablesJob{tables: newTableInfo, sqlDb: sqlDb, done: make(chan struct{})})
 	return ret, nil
 }
 
@@ -207,12 +217,14 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 
 		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
 
+		log.Println("index root: ", tableInfo.name, indexKey.idxName, idxRoot.String()[:5])
 		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
 			qual := sql.StatQualifier{
 				Tab:      tableInfo.name,
 				Database: strings.ToLower(sqlDb.AliasedName()),
 				Idx:      strings.ToLower(sqlIdx.ID()),
 			}
+			log.Println("keep ", qual.String())
 			keepIndexes[qual] = true
 			continue
 		}

@@ -185,7 +185,7 @@ func NewSqlEngine(
 	var statsPro sql.StatsProvider
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
-		statsPro = statspro.NewStatsCoord(pro, logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+		statsPro = statspro.NewStatsCoord(pro, sqlEngine.NewDefaultContext, logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
 		statsPro = statspro.StatsNoop{}
 	}
@@ -237,7 +237,7 @@ func NewSqlEngine(
 		eg.Wait()
 		eg.Go(func() error {
 			<-sc.Control("enable gc", func(sc *statspro.StatsCoord) error {
-				sc.SetEnableGc(true)
+				sc.SetEnableGc(false)
 				return nil
 			})
 			return nil

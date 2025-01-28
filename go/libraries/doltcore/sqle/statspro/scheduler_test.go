@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io"
 	"strings"
@@ -40,7 +41,7 @@ import (
 func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	{
@@ -113,7 +114,7 @@ func TestScheduleLoop(t *testing.T) {
 func TestAnalyze(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 
 	sc.flushQueue(ctx)
 
@@ -158,7 +159,7 @@ func TestAnalyze(t *testing.T) {
 func TestModifyColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	{
@@ -202,7 +203,7 @@ func TestModifyColumn(t *testing.T) {
 func TestAddColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	{
@@ -240,7 +241,7 @@ func TestAddColumn(t *testing.T) {
 func TestDropIndex(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	{
@@ -289,7 +290,7 @@ func TestDropIndex(t *testing.T) {
 func TestDropTable(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b int)"))
@@ -341,7 +342,7 @@ func TestDropTable(t *testing.T) {
 func TestDeleteAboveBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -370,7 +371,7 @@ func TestDeleteAboveBoundary(t *testing.T) {
 func TestDeleteBelowBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -400,7 +401,7 @@ func TestDeleteBelowBoundary(t *testing.T) {
 func TestDeleteOnBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -430,7 +431,7 @@ func TestDeleteOnBoundary(t *testing.T) {
 func TestAddDropDatabases(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
@@ -489,7 +490,7 @@ func TestAddDropDatabases(t *testing.T) {
 func TestGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
@@ -548,7 +549,7 @@ func TestGC(t *testing.T) {
 func TestBranches(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 	sc.enableGc.Store(true)
 
@@ -689,7 +690,7 @@ func TestBranches(t *testing.T) {
 func TestBucketDoubling(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	cur := sc.kv.(*memStats).buckets
@@ -733,7 +734,7 @@ func TestBucketDoubling(t *testing.T) {
 func TestBucketCounting(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	// add more data
@@ -774,7 +775,7 @@ func TestBucketCounting(t *testing.T) {
 func TestDropOnlyDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
 	dropHook := NewStatsDropDatabaseHook2(sc)
@@ -814,7 +815,7 @@ func TestDropOnlyDb(t *testing.T) {
 func TestRotateBackingDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads)
+	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
@@ -859,7 +860,7 @@ func TestRotateBackingDb(t *testing.T) {
 func TestReadCounter(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
 	{
@@ -876,11 +877,10 @@ func TestJobQueueDoubling(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	dEnv := dtestutils.CreateTestEnv()
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
+	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
 	defer sqlEng.Close()
 
-	sc := NewStatsCoord(sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
-
+	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.Jobs = make(chan StatsJob, 1)
 
 	var jobs []StatsJob
@@ -892,31 +892,71 @@ func TestJobQueueDoubling(t *testing.T) {
 	require.Equal(t, 2048, cap(sc.Jobs))
 }
 
-func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
+func TestEmptyTable(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, sqlDbs := emptySetup(t, threads, false)
+	wg := sync.WaitGroup{}
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(10), key (y,x))"))
+
+	runAndPause(ctx, sc, &wg)
+	validateJobState(t, ctx, sc, []StatsJob{
+		FinalizeJob{
+			tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
+			editIndexes: map[templateCacheKey]finalizeStruct{
+				templateCacheKey{idxName: "PRIMARY"}: {},
+				templateCacheKey{idxName: "y"}:       {},
+			}},
+		SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
+	})
+}
+
+func TestProllyKvUpdate(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(16), key (y,x))"))
+
+	require.NoError(t, sc.Restart(ctx))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,'zero'), (1, 'one')"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	rows, err := executeQueryResults(ctx, sqlEng, "select database_name, table_name, index_name  from dolt_statistics order by index_name")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y"}}, rows)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy select x, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	rows, err = executeQueryResults(ctx, sqlEng, "select count(*) from dolt_statistics")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{int64(9)}}, rows)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "update xy set y = 2 where x between 100 and 800"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	rows, err = executeQueryResults(ctx, sqlEng, "select count(*) from dolt_statistics")
+	require.NoError(t, err)
+	require.Equal(t, []sql.Row{{int64(9)}}, rows)
+}
+
+func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
 	dEnv := dtestutils.CreateTestEnv()
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
+	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",
 	})
 	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int, key (y,x))"))
-
-	xyIns := strings.Builder{}
-	xyIns.WriteString("insert into xy values")
-	for i := range 500 {
-		if i > 0 {
-			xyIns.WriteString(", ")
-		}
-		xyIns.WriteString(fmt.Sprintf("(%d, %d)", i, i%25))
-	}
-	require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
 	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
-	sc := NewStatsCoord(sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
-	sc.pro = sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
+	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.SetEnableGc(false)
 
 	wg := sync.WaitGroup{}
@@ -946,8 +986,30 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 		})
 	}
 
-	statsKv := NewMemStats()
-	sc.kv = statsKv
+	if memOnly {
+		statsKv := NewMemStats()
+		sc.kv = statsKv
+	}
+
+	return ctx, sqlEng, sc, sqlDbs
+}
+
+func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
+	ctx, sqlEng, sc, sqlDbs := emptySetup(t, threads, memOnly)
+
+	wg := sync.WaitGroup{}
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int, key (y,x))"))
+
+	xyIns := strings.Builder{}
+	xyIns.WriteString("insert into xy values")
+	for i := range 500 {
+		if i > 0 {
+			xyIns.WriteString(", ")
+		}
+		xyIns.WriteString(fmt.Sprintf("(%d, %d)", i, i%25))
+	}
+	require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
 
 	{
 		// seed creates read jobs
@@ -973,7 +1035,13 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		kv := sc.kv.(*memStats)
+		var kv *memStats
+		switch s := sc.kv.(type) {
+		case *memStats:
+			kv = s
+		case *prollyStats:
+			kv = s.mem
+		}
 		require.Equal(t, 4, kv.buckets.Len())
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 2, len(kv.templates))
@@ -991,7 +1059,13 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		kv := sc.kv.(*memStats)
+		var kv *memStats
+		switch s := sc.kv.(type) {
+		case *memStats:
+			kv = s
+		case *prollyStats:
+			kv = s.mem
+		}
 		require.Equal(t, 4, kv.buckets.Len())
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 2, len(kv.templates))
@@ -1128,7 +1202,26 @@ func executeQuery(ctx *sql.Context, eng *gms.Engine, query string) error {
 	return iter.Close(ctx) // tx commit
 }
 
-func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Context) {
+func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql.Row, error) {
+	_, iter, _, err := eng.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	var ret []sql.Row
+	for {
+		r, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, r)
+	}
+	return ret, iter.Close(ctx) // tx commit
+}
+
+func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
 	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
 	if err != nil {
 		panic(err)
@@ -1139,7 +1232,9 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 		panic(err)
 	}
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), nil, writer.NewWriteSession)
+	sc := NewStatsCoord(pro, nil, logrus.StandardLogger(), threads, dEnv)
+
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession)
 	if err != nil {
 		panic(err)
 	}
@@ -1147,8 +1242,14 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	return gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
+	sc.ctxGen = func(ctx context.Context) (*sql.Context, error) {
+		return sql.NewContext(ctx, sql.WithSession(doltSession)), nil
+	}
+
+	sqlEng := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     false,
 		IsServerLocked: false,
-	}), sqlCtx
+	})
+	sqlEng.Analyzer.Catalog.StatsProvider = sc
+	return sqlEng, sqlCtx
 }

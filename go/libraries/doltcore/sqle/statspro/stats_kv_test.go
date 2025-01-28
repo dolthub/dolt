@@ -29,7 +29,8 @@ import (
 )
 
 func TestProllyKv(t *testing.T) {
-	prollyKv := newTestProllyKv(t)
+	threads := sql.NewBackgroundThreads()
+	prollyKv := newTestProllyKv(t, threads)
 
 	h := hash.Parse(strings.Repeat("a", hash.StringLen))
 	h2 := hash.Parse(strings.Repeat("b", hash.StringLen))
@@ -193,9 +194,10 @@ func TestProllyKv(t *testing.T) {
 
 }
 
-func newTestProllyKv(t *testing.T) *prollyStats {
+func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats {
 	dEnv := dtestutils.CreateTestEnv()
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv)
+
+	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",

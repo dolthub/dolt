@@ -246,7 +246,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		ctx := enginetest.NewContext(d)
 		bThreads := sql.NewBackgroundThreads()
 
-		statsPro := statspro.NewStatsCoord(doltProvider, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		ctxGen := func(ctx context.Context) (*sql.Context, error) {
+			return d.NewContext(), nil
+		}
+		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		err = statsPro.Restart(ctx)
 		if err != nil {
 			return nil, err
@@ -304,8 +307,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
+	ctxGen := func(ctx context.Context) (*sql.Context, error) {
+		return d.NewContext(), nil
+	}
 	bThreads := sql.NewBackgroundThreads()
-	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 	statsPro.Restart(ctx)
 	d.engine.Analyzer.Catalog.StatsProvider = statsPro
 

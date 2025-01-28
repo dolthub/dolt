@@ -424,13 +424,16 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 	// make a control job
 	// wait until the control job done before returning
-	j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
-	if err := sc.sendJobs(ctx, j); err != nil {
-		return err
-	}
-	select {
-	case <-ctx.Done():
-	case <-j.done:
+	for _ = range 2 {
+		j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
+		if err := sc.sendJobs(ctx, j); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+		case <-sc.Done:
+		case <-j.done:
+		}
 	}
 	return nil
 }

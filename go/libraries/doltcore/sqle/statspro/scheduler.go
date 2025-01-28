@@ -64,9 +64,8 @@ var _ StatsJob = (*SeedDbTablesJob)(nil)
 var _ StatsJob = (*ControlJob)(nil)
 var _ StatsJob = (*FinalizeJob)(nil)
 
-func NewSeedJob(ctx *sql.Context, sqlDb dsess.SqlDatabase) SeedDbTablesJob {
+func NewSeedJob(sqlDb dsess.SqlDatabase) SeedDbTablesJob {
 	return SeedDbTablesJob{
-		ctx:    ctx,
 		sqlDb:  sqlDb,
 		tables: nil,
 		done:   make(chan struct{}),
@@ -81,7 +80,6 @@ type tableStatsInfo struct {
 }
 
 type SeedDbTablesJob struct {
-	ctx    *sql.Context
 	sqlDb  dsess.SqlDatabase
 	tables []tableStatsInfo
 	done   chan struct{}
@@ -206,7 +204,9 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
-func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+type ctxFactory func(ctx context.Context) (*sql.Context, error)
+
+func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	kv := NewMemStats()
@@ -229,6 +229,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, thread
 		pro:            pro,
 		hdp:            dEnv.GetUserHomeDir,
 		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
+		ctxGen:         ctxGen,
 	}
 }
 
@@ -265,6 +266,7 @@ type StatsCoord struct {
 	threads     *sql.BackgroundThreads
 	pro         *sqle.DoltDatabaseProvider
 	memOnly     bool
+	ctxGen      ctxFactory
 
 	dbMu           *sync.Mutex
 	dbs            []dsess.SqlDatabase
@@ -364,11 +366,9 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} 
 			mem = kv.mem
 		default:
 			mem = NewMemStats()
-			close(ret)
 			return ret
 		}
 		if sc.memOnly {
-			close(ret)
 			return ret
 		}
 		newKv, err := sc.initStorage(ctx, db)
@@ -447,7 +447,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 
 // TODO sendJobs
 func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb dsess.SqlDatabase) chan struct{} {
-	j := NewSeedJob(ctx, sqlDb)
+	j := NewSeedJob(sqlDb)
 	sc.Jobs <- j
 	return j.done
 }
@@ -535,7 +535,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if !ok {
 					return nil
 				}
-				//log.Println("execute: ", j.String())
+				log.Println("execute: ", j.String())
 				newJobs, err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
@@ -724,6 +724,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			return nil, err
 		}
 		// TODO check for capacity error during GC
+		log.Println("read ", n.HashOf().String()[:5])
 		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(j.colCnt)))
 		if err != nil {
 			return nil, err
@@ -783,6 +784,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 			if b, ok, err := sc.kv.GetBucket(ctx, bh, fs.tupB); err != nil {
 				return nil, err
 			} else if !ok {
+				log.Println("need chunks: ", fs.buckets)
 				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
 			} else {
 				template.RowCnt += b.RowCnt
@@ -862,7 +864,7 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 				}
 
 				newDbs = append(newDbs, sqlDb.(sqle.Database))
-				ret = append(ret, NewSeedJob(ctx, sqlDb.(sqle.Database)))
+				ret = append(ret, NewSeedJob(sqlDb.(sqle.Database)))
 				k++
 			}
 		}
@@ -875,7 +877,7 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 			}
 
 			newDbs = append(newDbs, sqlDb)
-			ret = append(ret, NewSeedJob(ctx, sqlDb))
+			ret = append(ret, NewSeedJob(sqlDb))
 			k++
 		}
 	}
