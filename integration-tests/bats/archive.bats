@@ -11,6 +11,12 @@ setup() {
 }
 
 teardown() {
+    if [ -n "$remotesrv_pid" ]; then
+        kill "$remotesrv_pid"
+        wait "$remotesrv_pid" || :
+        remotesrv_pid=""
+    fi
+
     assert_feature_version
     teardown_common
 }
@@ -190,10 +196,40 @@ mutations_and_gc_statement() {
     run dolt sql -q 'select sum(i) from tbl;'
     [[ "$status" -eq 0 ]] || false
     [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+}
 
-    teardown_common
+@test "archive: can clone respiratory with mixed types" {
+    mkdir -p remote/.dolt
+    mkdir cloned
+
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cd remote
+
+    # Insert data (commits automatically), but don't gc/archive yet. Want to make sure we can still clone it.
+    dolt sql -q "$(insert_statement)"
+
+    port=$( definePORT )
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned
+    run dolt clone http://localhost:$port/test-org/test-repo repo1
+    [ "$status" -eq 0 ]
+    cd repo1
+
+    # verify new data is there.
+    run dolt sql -q 'select sum(i) from tbl;'
+    [[ "$status" -eq 0 ]] || false
+
+    [[ "$output" =~ "151525" ]] || false # i = 1 - 550, sum is 151525
+}
+
     kill $remotesrv_pid
     wait $remotesrv_pid || :
     remotesrv_pid=""
 
 }
+
