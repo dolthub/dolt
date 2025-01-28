@@ -144,6 +144,7 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 }
 
 var closedCh = make(chan struct{})
+
 func init() {
 	close(closedCh)
 }

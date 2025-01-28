@@ -37,9 +37,18 @@ const (
 	cmdSuccess = 0
 )
 
+var useSessionAwareSafepointController bool
+
 func init() {
 	if os.Getenv(dconfig.EnvDisableGcProcedure) != "" {
 		DoltGCFeatureFlag = false
+	}
+	if choice := os.Getenv(dconfig.EnvGCSafepointControllerChoice); choice != "" {
+		if choice == "session_aware" {
+			useSessionAwareSafepointController = true
+		} else if choice != "kill_connections" {
+			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
+		}
 	}
 }
 
@@ -162,8 +171,8 @@ type sessionAwareSafepointController struct {
 	callCtx    *sql.Context
 	origEpoch  int
 
-	waiter     *dsess.GCSafepointWaiter
-	keeper     func(hash.Hash) bool
+	waiter *dsess.GCSafepointWaiter
+	keeper func(hash.Hash) bool
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
@@ -261,14 +270,17 @@ func (impl *DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) 
 		}
 
 		var sc types.GCSafepointController
-		sc = killConnectionsSafepointController{
-			origEpoch: origepoch,
-			callCtx:   ctx,
-		}
-		sc = &sessionAwareSafepointController{
-			origEpoch:  origepoch,
-			callCtx:    ctx,
-			controller: impl.gcSafepointController,
+		if useSessionAwareSafepointController {
+			sc = &sessionAwareSafepointController{
+				origEpoch:  origepoch,
+				callCtx:    ctx,
+				controller: impl.gcSafepointController,
+			}
+		} else {
+			sc = killConnectionsSafepointController{
+				origEpoch: origepoch,
+				callCtx:   ctx,
+			}
 		}
 		err = ddb.GC(ctx, mode, sc)
 		if err != nil {

@@ -45,4 +45,8 @@ const (
 	EnvDbNameReplace                 = "DOLT_DBNAME_REPLACE"
 	EnvDoltRootHost                  = "DOLT_ROOT_HOST"
 	EnvDoltRootPassword              = "DOLT_ROOT_PASSWORD"
+
+	// If set, must be "kill_connections" or "session_aware"
+	// Will go away after session_aware is made default-and-only.
+	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
 )
