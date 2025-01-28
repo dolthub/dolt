@@ -220,6 +220,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, thread
 		JobInterval:    50 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
+		enableGc:       atomic.Bool{},
 		bucketCap:      kv.Cap(),
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
@@ -232,13 +233,19 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, logger *logrus.Logger, thread
 }
 
 func (sc *StatsCoord) SetMemOnly(v bool) {
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
 	sc.memOnly = v
 }
 
+func (sc *StatsCoord) SetEnableGc(v bool) {
+	sc.enableGc.Store(v)
+}
+
 func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
-	sc.JobInterval = time.Duration(job)
-	sc.gcInterval = time.Duration(gc)
-	sc.branchInterval = time.Duration(branch)
+	sc.JobInterval = time.Duration(job) * time.Millisecond
+	sc.gcInterval = time.Duration(gc) * time.Millisecond
+	sc.branchInterval = time.Duration(branch) * time.Millisecond
 }
 
 type tableIndexesKey struct {
@@ -274,7 +281,7 @@ type StatsCoord struct {
 
 	activeGc   atomic.Bool
 	doGc       atomic.Bool
-	disableGc  atomic.Bool
+	enableGc   atomic.Bool
 	gcInterval time.Duration
 	gcDone     chan struct{}
 	gcMu       sync.Mutex
@@ -357,6 +364,10 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} 
 			mem = kv.mem
 		default:
 			mem = NewMemStats()
+			close(ret)
+			return ret
+		}
+		if sc.memOnly {
 			close(ret)
 			return ret
 		}
@@ -453,25 +464,6 @@ func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan
 	return j.done
 }
 
-func GcSweep(ctx *sql.Context) ControlJob {
-	return NewControl("finish GC", func(sc *StatsCoord) error {
-		sc.gcMu.Lock()
-		defer sc.gcMu.Unlock()
-		select {
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		default:
-			sc.bucketCnt.Store(int64(sc.kv.Len()))
-			sc.bucketCap = sc.kv.Cap()
-			sc.kv.FinishGc()
-			sc.activeGc.Store(false)
-			close(sc.gcDone)
-			sc.gcCancel = nil
-			return nil
-		}
-	})
-}
-
 func (sc *StatsCoord) error(j StatsJob, err error) {
 	fmt.Println(err.Error())
 	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", j.String(), err)
@@ -499,10 +491,10 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		}
 
 		if sc.doGc.Swap(false) {
-			j := sc.startGcMark(ctx, make(chan struct{}))
-			err := sc.sendJobs(ctx, j)
-			if err != nil {
-				sc.error(j, err)
+			if err := sc.runGc(ctx, make(chan struct{})); err != nil {
+				if err != nil {
+					sc.error(ControlJob{desc: "gc"}, err)
+				}
 			}
 		}
 
@@ -543,7 +535,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if !ok {
 					return nil
 				}
-				fmt.Println("execute: ", j.String())
+				//log.Println("execute: ", j.String())
 				newJobs, err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
@@ -574,6 +566,7 @@ func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs ...StatsJob) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case sc.Jobs <- j:
+			//log.Println("send ", j.String())
 			if _, ok := j.(ReadJob); ok {
 				sc.readCounter.Add(1)
 			}
@@ -782,9 +775,6 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 				bnd, ok := sc.kv.GetBound(bh)
 				if !ok {
 					log.Println("chunks: ", fs.buckets)
-					for k, v := range sc.kv.(*prollyStats).mem.bounds {
-						log.Println("bound: ", k, v)
-					}
 					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s", key, bh)
 				}
 				template.LowerBnd = bnd[:fs.tupB.Desc.Count()]
@@ -905,45 +895,41 @@ func (sc *StatsCoord) countBuckets() int {
 }
 
 func (sc *StatsCoord) setGc() {
-	if !sc.disableGc.Load() {
+	if sc.enableGc.Load() {
 		sc.doGc.Store(true)
 	}
 }
 
-func (sc *StatsCoord) startGcMark(ctx *sql.Context, done chan struct{}) StatsJob {
+func (sc *StatsCoord) runGc(ctx *sql.Context, done chan struct{}) error {
 	sc.doGc.Store(false)
-	if sc.disableGc.Load() {
+	if !sc.enableGc.Load() {
 		close(done)
 		return nil
 	}
+
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()
-	if sc.activeGc.Swap(true) {
-		go func() {
-			select {
-			case <-ctx.Done():
-				return
-			case <-sc.gcDone:
-				close(done)
-			}
-		}()
-		return nil
+
+	if err := sc.kv.StartGc(ctx, int(sc.bucketCap)); err != nil {
+		return err
 	}
 
-	subCtx, cancel := context.WithCancel(ctx)
-	sc.gcCancel = cancel
-
-	sc.kv.StartGc(ctx, int(sc.bucketCap))
-
-	sc.gcDone = make(chan struct{})
-	go func(ctx context.Context) {
-		defer close(done)
-		select {
-		case <-ctx.Done():
-			close(sc.gcDone)
-			return
-		case <-sc.gcDone:
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	var bucketCnt int
+	for _, db := range sc.dbs {
+		j := NewGcMarkJob(ctx, db)
+		cnt, err := sc.gcMark(ctx, j)
+		if err != nil {
+			return err
 		}
-	}(subCtx)
-	return GcSweep(ctx)
+		bucketCnt += cnt
+	}
+
+	sc.bucketCnt.Store(int64(bucketCnt))
+	sc.bucketCap = sc.kv.Cap()
+	sc.kv.FinishGc()
+	sc.activeGc.Store(false)
+
+	return nil
 }

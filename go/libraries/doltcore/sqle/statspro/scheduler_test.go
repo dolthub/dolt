@@ -326,13 +326,6 @@ func TestDropTable(t *testing.T) {
 
 		doGcCycle(t, ctx, sc)
 
-		select {
-		case <-sc.gcDone:
-			break
-		default:
-			require.Fail(t, "failed to finish GC")
-		}
-
 		kv = sc.kv.(*memStats)
 		require.Equal(t, 1, kv.buckets.Len())
 		require.Equal(t, 1, len(kv.bounds))
@@ -557,7 +550,7 @@ func TestBranches(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads)
 	wg := sync.WaitGroup{}
-	sc.disableGc.Store(true)
+	sc.enableGc.Store(true)
 
 	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
 
@@ -721,7 +714,7 @@ func TestBucketDoubling(t *testing.T) {
 	}
 	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
 
-	sc.disableGc.Store(false)
+	sc.enableGc.Store(true)
 
 	runAndPause(ctx, sc, &wg) // track ab
 	runAndPause(ctx, sc, &wg) // finalize ab
@@ -756,7 +749,7 @@ func TestBucketCounting(t *testing.T) {
 	}
 	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
 
-	sc.disableGc.Store(false)
+	sc.enableGc.Store(false)
 
 	runAndPause(ctx, sc, &wg) // track ab
 	runAndPause(ctx, sc, &wg) // finalize ab
@@ -924,7 +917,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads) (*sql.Context, *
 
 	sc := NewStatsCoord(sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider), ctx.GetLogger().Logger, threads, dEnv)
 	sc.pro = sqlEng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
-	sc.disableGc.Store(true)
+	sc.SetEnableGc(false)
 
 	wg := sync.WaitGroup{}
 
@@ -1085,20 +1078,13 @@ func waitOnJob(wg *sync.WaitGroup, done chan struct{}) {
 }
 
 func doGcCycle(t *testing.T, ctx *sql.Context, sc *StatsCoord) {
-	sc.disableGc.Store(false)
+	sc.enableGc.Store(true)
 	sc.doGc.Store(true)
-	defer sc.disableGc.Store(true)
+	defer sc.enableGc.Store(false)
 
 	wg := sync.WaitGroup{}
 	runAndPause(ctx, sc, &wg) // do GC
 	runAndPause(ctx, sc, &wg) // pick up finish GC job
-
-	select {
-	case <-sc.gcDone:
-		break
-	default:
-		require.Fail(t, "failed to finish GC")
-	}
 
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()

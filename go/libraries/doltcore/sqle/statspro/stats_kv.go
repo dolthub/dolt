@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,7 @@ const defaultBucketSize = 1024 // must be > 0 to avoid panic
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
 	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
+	MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
 	GetTemplate(key templateCacheKey) (stats.Statistic, bool)
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash) (sql.Row, bool)
@@ -151,6 +153,24 @@ func (m *memStats) FinishGc() {
 	m.buckets = m.nextBuckets
 	m.templates = m.nextTemplates
 	m.bounds = m.nextBounds
+
+	var hashes []string
+	for _, k := range m.buckets.Keys() {
+		hashes = append(hashes, k.String()[:5])
+	}
+	log.Println("hashes after GC: ", strings.Join(hashes, ", "))
+	var templates []string
+	for k, _ := range m.templates {
+		templates = append(templates, k.String())
+	}
+	log.Println("templates after GC: ", strings.Join(templates, ", "))
+
+	var bounds []string
+	for k, _ := range m.bounds {
+		bounds = append(bounds, k.String())
+	}
+	log.Println("bounds after GC: ", strings.Join(templates, ", "))
+
 	m.nextBuckets = nil
 	m.nextTemplates = nil
 	m.nextBounds = nil
@@ -170,16 +190,23 @@ func (m *memStats) Cap() int64 {
 func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.buckets.Add(h, b)
+	//log.Println("put ", h.String()[:5], m.buckets.Len())
+	return nil
+}
 
-	if m.doGc {
+func (m *memStats) MarkBucket(ctx context.Context, h hash.Hash, _ *val.TupleBuilder) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.buckets.Get(h)
+	log.Printf("mark %s, %t\n", h.String()[:5], ok)
+	if ok {
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
 		if m.nextBuckets.Len() >= gcCap {
 			m.gcCap.Store(int64(gcCap) * 2)
 			m.nextBuckets.Resize(gcCap * 2)
 		}
-	} else {
-		m.buckets.Add(h, b)
 	}
 	return nil
 }
@@ -191,13 +218,6 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, _ *val.TupleBuilder
 		return nil, false, nil
 	}
 	b, ok := m.buckets.Get(h)
-	if m.doGc {
-		if !ok {
-			b, ok = m.nextBuckets.Get(h)
-			return b, ok, nil
-		}
-		m.nextBuckets.Add(h, b)
-	}
 	return b, ok, nil
 }
 
@@ -231,6 +251,7 @@ type prollyStats struct {
 	destDb dsess.SqlDatabase
 	kb, vb *val.TupleBuilder
 	m      *prolly.MutableMap
+	newM   *prolly.MutableMap
 	mem    *memStats
 }
 
@@ -287,13 +308,6 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 		return nil, false, err
 	}
 	if ok {
-		if p.mem.doGc {
-			// transfer from old to new
-			err = p.PutBucket(ctx, h, b, tupB)
-			if err != nil {
-				return nil, false, err
-			}
-		}
 		return b, true, nil
 	}
 
@@ -340,15 +354,48 @@ func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
 	if err != nil {
 		return err
 	}
-	p.m = newMap.Mutate()
+	p.newM = newMap.Mutate()
 
 	return nil
+}
+
+func (p *prollyStats) MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error {
+	p.mem.MarkBucket(ctx, h, tupB)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// missing bucket and not GC'ing, try disk
+	k, err := p.encodeHash(h)
+	if err != nil {
+		return err
+	}
+
+	var v val.Tuple
+	var ok bool
+	err = p.m.Get(ctx, k, func(key val.Tuple, value val.Tuple) error {
+		if key != nil {
+			ok = true
+			v = value
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	return p.newM.Put(ctx, k, v)
 }
 
 func (p *prollyStats) FinishGc() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.mem.FinishGc()
+	p.m = p.newM
+	p.newM = nil
 }
 
 func (p *prollyStats) encodeHash(h hash.Hash) (val.Tuple, error) {
@@ -395,12 +442,14 @@ func (p *prollyStats) decodeBucketTuple(ctx context.Context, v val.Tuple, tupB *
 	}
 
 	var mcvCnts []uint64
-	for _, c := range strings.Split(mcvCountsStr, ",") {
-		cnt, err := strconv.ParseInt(c, 10, 64)
-		if err != nil {
-			return nil, err
+	if len(mcvCountsStr) > 0 {
+		for _, c := range strings.Split(mcvCountsStr, ",") {
+			cnt, err := strconv.ParseInt(c, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			mcvCnts = append(mcvCnts, uint64(cnt))
 		}
-		mcvCnts = append(mcvCnts, uint64(cnt))
 	}
 
 	mcvs := make([]sql.Row, 4)

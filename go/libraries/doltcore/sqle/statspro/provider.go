@@ -272,7 +272,7 @@ func (sc *StatsCoord) ThreadStatus(string) string {
 
 func (sc *StatsCoord) Prune(ctx *sql.Context) error {
 	done := make(chan struct{})
-	sc.startGcMark(ctx, done)
+	sc.runGc(ctx, done)
 	<-done
 	return nil
 }

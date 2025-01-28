@@ -235,6 +235,14 @@ func NewSqlEngine(
 			}
 		}
 		eg.Wait()
+		eg.Go(func() error {
+			<-sc.Control("enable gc", func(sc *statspro.StatsCoord) error {
+				sc.SetEnableGc(true)
+				return nil
+			})
+			return nil
+		})
+		eg.Wait()
 	}
 
 	// Load MySQL Db information

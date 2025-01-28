@@ -95,6 +95,7 @@ func (sc *StatsCoord) seedDbTables(_ context.Context, j SeedDbTablesJob) ([]Stat
 		k++
 	}
 
+	//log.Println("new buckets ", bucketDiff)
 	sc.bucketCnt.Add(int64(bucketDiff))
 
 	for sc.bucketCnt.Load() > sc.bucketCap {
@@ -165,7 +166,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 	}
 
 	schemaChanged := !tableInfo.schHash.Equal(schHashKey.Hash)
-	if schemaChanged {
+	if !tableInfo.schHash.IsEmpty() && schemaChanged {
 		sc.setGc()
 	}
 
@@ -188,7 +189,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 		}
 
 		if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
-			sc.logger.Debugf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableInfo.name, sqlIdx, sqlIdx, err)
+			sc.logger.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableInfo.name, sqlIdx, sqlIdx, err)
 			continue
 		}
 
@@ -231,9 +232,9 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 			return nil, tableStatsInfo{}, err
 		}
 		ret = append(ret, readJobs...)
-		isNewData = isNewData || len(readJobs) > 0
+		isNewData = isNewData || dataChanged
 	}
-	if len(ret) > 0 && (isNewData || schemaChanged || dataChanged) {
+	if len(ret) > 0 || isNewData || schemaChanged {
 		// if there are any reads to perform, we follow those reads with a table finalize
 		ret = append(ret, FinalizeJob{
 			tableKey: tableIndexesKey{
@@ -311,7 +312,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 		fmt.Printf("%s bound %s: %v\n", tableName, firstNodeHash.String(), firstRow)
 		sc.kv.PutBound(firstNodeHash, firstRow)
 	}
-	
+
 	return jobs, nil
 }
 
@@ -330,7 +331,7 @@ func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, 
 	if _, ok := sc.kv.GetTemplate(key); ok {
 		return nil
 	}
-	fds, colset, err := stats.IndexFds(sqlTable.Name(), sqlTable.Schema(), sqlIdx)
+	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
 	if err != nil {
 		return err
 	}

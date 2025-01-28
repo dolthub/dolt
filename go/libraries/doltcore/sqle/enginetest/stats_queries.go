@@ -528,8 +528,6 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		// https://github.com/dolthub/dolt/issues/8504
 		Name: "alter index column type",
 		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
-			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
 			"CREATE table xy (x bigint primary key, y varchar(16))",
 			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
 			"analyze table xy",
