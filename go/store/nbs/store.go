@@ -273,11 +273,6 @@ func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	err = nbs.waitForGC(ctx)
-	if err != nil {
-		return
-	}
-
 	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
 	if err != nil {
 		return
@@ -361,11 +356,6 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	err = nbs.waitForGC(ctx)
-	if err != nil {
-		return
-	}
-
 	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
 	if err != nil {
 		return
@@ -517,11 +507,6 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	err = store.waitForGC(ctx)
-	if err != nil {
-		return
-	}
-
 	contents := manifestContents{
 		root:    root,
 		nbfVers: store.upstream.nbfVers,
@@ -1128,6 +1113,10 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 }
 
 func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	return nbs.hasManyDep(ctx, hashes, gcDependencyMode_TakeDependency)
+}
+
+func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, gcDepMode gcDependencyMode) (hash.HashSet, error) {
 	if hashes.Size() == 0 {
 		return nil, nil
 	}
@@ -1143,7 +1132,11 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 
 		nbs.mu.Lock()
 		if nbs.mt != nil {
-			remaining, gcb, err := nbs.mt.hasMany(reqs, nbs.keeperFunc)
+			keeper := nbs.keeperFunc
+			if gcDepMode == gcDependencyMode_NoDependency {
+				keeper = nil
+			}
+			remaining, gcb, err := nbs.mt.hasMany(reqs, keeper)
 			if err != nil {
 				nbs.mu.Unlock()
 				return nil, err
@@ -1162,6 +1155,9 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 			}
 		}
 		tables, keeper, endRead := nbs.tables, nbs.keeperFunc, nbs.beginRead()
+		if gcDepMode == gcDependencyMode_NoDependency {
+			keeper = nil
+		}
 		nbs.mu.Unlock()
 
 		remaining, gcb, err := tables.hasMany(reqs, keeper)
@@ -1730,7 +1726,7 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 	}, mtime)
 }
 
-func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool) error {
+func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
 	nbs.cond.L.Lock()
 	defer nbs.cond.L.Unlock()
 	if nbs.gcInProgress {
@@ -1742,7 +1738,7 @@ func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool) error {
 	return nil
 }
 
-func (nbs *NomsBlockStore) EndGC() {
+func (nbs *NomsBlockStore) EndGC(_ chunks.GCMode) {
 	nbs.cond.L.Lock()
 	defer nbs.cond.L.Unlock()
 	if !nbs.gcInProgress {
