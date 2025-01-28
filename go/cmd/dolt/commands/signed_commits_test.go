@@ -141,6 +141,12 @@ func execCommand(ctx context.Context, t *testing.T, wd string, cmd cli.Command, 
 		err = fmt.Errorf("error creating multi repo: %w", err)
 		return
 	}
+	t.Cleanup(func() {
+		mr.Iter(func(_ string, env *env.DoltEnv) (bool, error) {
+			env.DoltDB.Close()
+			return false, nil
+		})
+	})
 
 	latebind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mr, &cli.UserPassword{}, apr)
 	if verr != nil {
