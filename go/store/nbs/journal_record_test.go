@@ -18,14 +18,12 @@ import (
 	"bytes"
 	"context"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -120,20 +118,8 @@ func TestProcessJournalRecords(t *testing.T) {
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
-	// write a bogus record to the end and verify that we get an error
+	// write a bogus record to the end and verify that we don't get an error
 	i, sum = 0, 0
-	writeCorruptJournalRecord(journal[off:])
-	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "CRC checksum does not match")
-	assert.Equal(t, cnt, i)
-	// Since an error was encountered, the returned offset is 0
-	assert.Equal(t, 0, int(n))
-
-	// Turn on the env setting to stop processing journal records once we hit an invalid record
-	require.NoError(t, os.Setenv(dconfig.EnvSkipInvalidJournalRecords, "1"))
-	i, sum = 0, 0
-	// write a bogus record to the end and process again
 	writeCorruptJournalRecord(journal[off:])
 	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
 	require.NoError(t, err)
