@@ -711,7 +711,13 @@ func ConfigureServices(
 	AutoStartBinlogReplica := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
 			// If we're unable to restart replication, log an error, but don't prevent the server from starting up
-			if err := binlogreplication.DoltBinlogReplicaController.AutoStart(ctx); err != nil {
+			sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+			if err != nil {
+				logrus.Errorf("unable to restart replication, could not create session: %s", err.Error())
+				return nil
+			}
+			defer sql.SessionEnd(sqlCtx.Session)
+			if err := binlogreplication.DoltBinlogReplicaController.AutoStart(sqlCtx); err != nil {
 				logrus.Errorf("unable to restart replication: %s", err.Error())
 			}
 			return nil

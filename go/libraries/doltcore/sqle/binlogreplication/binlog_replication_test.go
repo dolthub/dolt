@@ -819,7 +819,12 @@ func stopDoltSqlServer(t *testing.T) {
 }
 
 // startReplication configures the replication source on the replica and runs the START REPLICA statement.
-func startReplication(_ *testing.T, port int) {
+func startReplication(t *testing.T, port int) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("failed to start replication and caught a panic: %v", r)
+		}
+	}()
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
 			"SOURCE_USER='replicator', SOURCE_PASSWORD='Zqr8_blrGm1!', "+
