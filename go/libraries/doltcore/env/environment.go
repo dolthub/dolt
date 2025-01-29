@@ -88,7 +88,7 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	loadDBOnce  *sync.Once
+	loadDBOnce  sync.Once
 	doltDB      *doltdb.DoltDB
 	DBLoadError error
 
