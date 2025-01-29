@@ -485,6 +485,8 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 	if err != nil {
 		return nil, err
 	}
+	gcSafepointController := dsess.NewGCSafepointController()
+	readOnlyProvider.RegisterProcedure(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	// reset the session as well since we have swapped out the database provider, which invalidates caching assumptions
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)

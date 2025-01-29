@@ -217,6 +217,11 @@ func generateProcedureHelpRows(cmdStr string, cmd cli.Command) ([]sql.Row, error
 
 // procedureExists returns whether |procedureName| is the name of a dolt procedure.
 func procedureExists(procedureName string) bool {
+	// "dolt_gc" is dynamically registered because it has state (a safepoint controller).
+	// For now, special case it here.
+	if procedureName == "dolt_gc" {
+		return true
+	}
 	for _, procedure := range dprocedures.DoltProcedures {
 		if procedure.Name == procedureName {
 			return true
