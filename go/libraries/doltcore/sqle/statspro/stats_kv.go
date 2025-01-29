@@ -199,7 +199,7 @@ func (m *memStats) MarkBucket(ctx context.Context, h hash.Hash, _ *val.TupleBuil
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	b, ok := m.buckets.Get(h)
-	log.Printf("mark %s, %t\n", h.String()[:5], ok)
+	//log.Printf("mark %s, %t\n", h.String()[:5], ok)
 	if ok {
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
@@ -362,14 +362,14 @@ func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
 func (p *prollyStats) MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error {
 	p.mem.MarkBucket(ctx, h, tupB)
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	// missing bucket and not GC'ing, try disk
 	k, err := p.encodeHash(h)
 	if err != nil {
 		return err
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	var v val.Tuple
 	var ok bool

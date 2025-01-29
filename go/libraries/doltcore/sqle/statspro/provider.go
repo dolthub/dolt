@@ -19,10 +19,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
@@ -167,15 +169,6 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	var doSwap bool
 
 	func() {
-		sc.gcMu.Lock()
-		defer sc.gcMu.Unlock()
-		if sc.gcCancel != nil {
-			sc.gcCancel()
-			sc.gcCancel = nil
-		}
-	}()
-
-	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
 		doSwap = strings.EqualFold(sc.statsBackingDb, dbName)
@@ -261,8 +254,13 @@ func (sc *StatsCoord) CancelRefreshThread(dbName string) {
 	sc.Drop(dbName)
 }
 
-func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, _ dsess.DoltDatabaseProvider, _ string, _ *env.DoltEnv, sqlDb dsess.SqlDatabase) error {
-	<-sc.Add(ctx, sqlDb)
+func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, sqlDb dsess.SqlDatabase, branch ref.DoltRef) error {
+	fs, err := sc.pro.FileSystemForDatabase(sqlDb.AliasedName())
+	if err != nil {
+		return err
+	}
+
+	<-sc.Add(ctx, sqlDb, branch, fs)
 	return nil
 }
 
@@ -311,7 +309,12 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 		return err
 	}
 
-	newKv, err := sc.initStorage(ctx, newStorageTarget)
+	fs, err := sc.pro.FileSystemForDatabase(newStorageTarget.AliasedName())
+	if err != nil {
+		return err
+	}
+
+	newKv, err := sc.initStorage(ctx, newStorageTarget, fs)
 	if err != nil {
 		return err
 	}
@@ -351,12 +354,7 @@ func (sc *StatsCoord) rm(db string) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase) (*prollyStats, error) {
-	fs, err := sc.pro.FileSystemForDatabase(storageTarget.AliasedName())
-	if err != nil {
-		return nil, err
-	}
-
+func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase, fs filesys.Filesys) (*prollyStats, error) {
 	// assume access is protected by kvLock
 	// get reference to target database
 	params := make(map[string]interface{})

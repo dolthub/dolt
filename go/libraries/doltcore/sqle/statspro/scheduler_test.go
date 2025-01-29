@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -33,9 +34,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io"
+	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestScheduleLoop(t *testing.T) {
@@ -434,7 +438,7 @@ func TestAddDropDatabases(t *testing.T) {
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	addHook := NewStatsInitDatabaseHook2(sc)
 	var otherDb sqle.Database
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
@@ -493,7 +497,7 @@ func TestGC(t *testing.T) {
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	addHook := NewStatsInitDatabaseHook2(sc)
 
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
@@ -553,7 +557,7 @@ func TestBranches(t *testing.T) {
 	wg := sync.WaitGroup{}
 	sc.enableGc.Store(true)
 
-	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	addHook := NewStatsInitDatabaseHook2(sc)
 
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy')"))
@@ -777,7 +781,7 @@ func TestDropOnlyDb(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
 
-	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	addHook := NewStatsInitDatabaseHook2(sc)
 	dropHook := NewStatsDropDatabaseHook2(sc)
 
 	prollyKv, err := NewProllyStats(ctx, startDbs[0])
@@ -818,7 +822,7 @@ func TestRotateBackingDb(t *testing.T) {
 	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc, nil, threads)
+	addHook := NewStatsInitDatabaseHook2(sc)
 	dropHook := NewStatsDropDatabaseHook2(sc)
 
 	prollyKv, err := NewProllyStats(ctx, startDbs[0])
@@ -951,35 +955,31 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",
 	})
-	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-
-	startDbs := sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx)
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.SetEnableGc(false)
+	require.NoError(t, sc.Restart(ctx))
 
-	wg := sync.WaitGroup{}
+	ctx, _ = sc.ctxGen(ctx)
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	sc.Stop()
 
 	var sqlDbs []sqle.Database
+	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
+		if sqlDb, ok := db.(sqle.Database); ok {
+			branch := ref.NewBranchRef("main")
+			db, err := sqle.RevisionDbForBranch(ctx, sqlDb, branch.GetPath(), branch.GetPath()+"/"+sqlDb.AliasedName())
+			require.NoError(t, err)
+			sqlDbs = append(sqlDbs, db.(sqle.Database))
+		}
+	}
 
 	{
 		// initialize seed jobs
-
-		for _, db := range startDbs {
-			if sqlDb, ok := db.(sqle.Database); ok {
-				br, err := sqlDb.DbData().Ddb.GetBranches(ctx)
-				require.NoError(t, err)
-				for _, b := range br {
-					sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, b.GetPath(), b.GetPath()+"/"+sqlDb.AliasedName())
-					require.NoError(t, err)
-					sqlDbs = append(sqlDbs, sqlDb.(sqle.Database))
-					done := sc.Add(ctx, sqlDb.(sqle.Database))
-					waitOnJob(&wg, done)
-				}
-			}
-		}
-
 		validateJobState(t, ctx, sc, []StatsJob{
 			// first job doesn't have tracked tables
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: nil},
@@ -1092,7 +1092,7 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 			for i := range ej.tables {
 				require.Equal(t, ej.tables[i].name, j.tables[i].name)
 			}
-			require.Equal(t, ej.sqlDb.Name(), j.sqlDb.Name())
+			require.Equal(t, ej.sqlDb.AliasedName(), j.sqlDb.AliasedName())
 			require.Equal(t, ej.sqlDb.Revision(), j.sqlDb.Revision())
 		case ReadJob:
 			ej, ok := expected[i].(ReadJob)
@@ -1243,8 +1243,15 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	sc.ctxGen = func(ctx context.Context) (*sql.Context, error) {
+		doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession)
+		if err != nil {
+			return nil, err
+		}
 		return sql.NewContext(ctx, sql.WithSession(doltSession)), nil
 	}
+
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, NewStatsInitDatabaseHook2(sc))
+	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, NewStatsDropDatabaseHook2(sc))
 
 	sqlEng := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     false,
@@ -1252,4 +1259,155 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	})
 	sqlEng.Analyzer.Catalog.StatsProvider = sc
 	return sqlEng, sqlCtx
+}
+
+func TestStatsGcConcurrency(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
+
+	require.NoError(t, sc.Restart(ctx))
+
+	addDb := func(ctx *sql.Context, i int) {
+		dbName := "db" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "create database "+dbName))
+	}
+
+	addData := func(ctx *sql.Context, i int) {
+		dbName := "db" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use "+dbName))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
+	}
+
+	dropDb := func(dropCtx *sql.Context, i int) {
+		require.NoError(t, executeQuery(ctx, sqlEng, fmt.Sprintf("drop database db%d", i)))
+	}
+
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	addCtx, _ := sc.ctxGen(context.Background())
+	writeCtx, _ := sc.ctxGen(context.Background())
+	dropCtx, _ := sc.ctxGen(context.Background())
+	gcCtx, _ := sc.ctxGen(context.Background())
+
+	iters := 500
+	{
+		wg1 := sync.WaitGroup{}
+		wg1.Add(1)
+
+		wg2 := sync.WaitGroup{}
+		wg2.Add(2)
+
+		go func() {
+			for i := range iters {
+				addDb(addCtx, i)
+				time.Sleep(10 * time.Millisecond)
+				addData(writeCtx, i)
+				if i == iters/2 {
+					wg1.Done()
+				}
+			}
+		}()
+
+		go func() {
+			for _ = range iters / 2 {
+				require.NoError(t, sc.runGc(gcCtx, make(chan struct{})))
+				time.Sleep(100 * time.Millisecond)
+			}
+			wg2.Done()
+		}()
+
+		go func() {
+			wg1.Wait()
+			for i := range iters / 2 {
+				time.Sleep(30 * time.Millisecond)
+				dropDb(dropCtx, i)
+			}
+			wg2.Done()
+		}()
+
+		wg2.Wait()
+	}
+}
+
+func TestStatsBranchConcurrency(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
+
+	sc.SetTimers(1, 100, 50)
+	require.NoError(t, sc.Restart(ctx))
+
+	addBranch := func(ctx *sql.Context, i int) {
+		branchName := "branch" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', '"+branchName+"')"))
+	}
+
+	addData := func(ctx *sql.Context, i int) {
+		branchName := "branch" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	}
+
+	dropBranch := func(dropCtx *sql.Context, branchName string) {
+		log.Println("delete branch: ", branchName)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		del := "call dolt_branch('-d', '" + branchName + "')"
+		require.NoError(t, executeQuery(ctx, sqlEng, del))
+	}
+
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	addCtx, _ := sc.ctxGen(context.Background())
+	//writeCtx, _ := sc.ctxGen(context.Background())
+	dropCtx, _ := sc.ctxGen(context.Background())
+
+	iters := 50
+	{
+		branches := make(chan string, iters)
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		go func() {
+			for i := range iters {
+				addBranch(addCtx, i)
+				addData(addCtx, i)
+				branches <- "branch" + strconv.Itoa(i)
+			}
+			close(branches)
+			wg.Done()
+		}()
+
+		go func() {
+			i := 0
+			for br := range branches {
+				if i%2 == 0 {
+					dropBranch(dropCtx, br)
+					time.Sleep(50 * time.Millisecond)
+				}
+				i++
+			}
+			wg.Done()
+		}()
+
+		wg.Wait()
+
+		sc.doBranchCheck.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.doGc.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.Stop()
+
+		// at the end we should still have |iters/2| databases
+		require.Equal(t, iters/2, len(sc.Stats))
+		require.Equal(t, iters/2, sc.kv.Len())
+	}
 }

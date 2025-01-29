@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"os"
 	"runtime"
 	"sync"
@@ -1963,7 +1964,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	writeCtx := enginetest.NewSession(harness)
 	refreshCtx := enginetest.NewSession(harness)
 
-	<-statsProv.Add(refreshCtx, sqlDb)
+	<-statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"))
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
 		_, iter, _, err := engine.Query(ctx, q)

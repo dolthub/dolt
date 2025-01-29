@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -49,7 +48,7 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 type ToggableStats interface {
 	sql.StatsProvider
 	CancelRefreshThread(string)
-	StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error
+	StartRefreshThread(*sql.Context, dsess.SqlDatabase, ref.DoltRef) error
 	ThreadStatus(string) string
 	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
@@ -68,12 +67,6 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 
 	if afp, ok := statsPro.(ToggableStats); ok {
 		pro := dSess.Provider()
-		newFs, err := pro.FileSystemForDatabase(dbName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to restart stats collection: %w", err)
-		}
-
-		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, pro.DbFactoryUrl(), "TODO")
 
 		sqlDb, ok := pro.BaseDatabase(ctx, dbName)
 		if !ok {
@@ -82,7 +75,21 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 
 		afp.CancelRefreshThread(dbName)
 
-		err = afp.StartRefreshThread(ctx, pro, dbName, dEnv, sqlDb)
+		ddb, _ := dSess.GetDoltDB(ctx, dbName)
+
+		branch, err := ddb.GetRefByNameInsensitive(ctx, "main")
+		if err != nil {
+			branches, err := ddb.GetBranches(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to restart collection: %w", err)
+			}
+			if len(branches) == 0 {
+				return nil, fmt.Errorf("failed to restart collection: no branches found")
+			}
+			branch = branches[0]
+		}
+
+		err = afp.StartRefreshThread(ctx, sqlDb, branch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restart collection: %w", err)
 		}

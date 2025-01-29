@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -291,7 +292,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
-				<-statsPro.Add(ctx, dsessDbs[i])
+				<-statsPro.Add(ctx, dsessDbs[i], ref.NewBranchRef("main"))
 			}
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)

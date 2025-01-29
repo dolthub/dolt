@@ -16,7 +16,6 @@ package statspro
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
-	"log"
 	"strings"
 )
 
@@ -41,14 +39,15 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	}
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
 	db, err := dSess.Provider().Database(sqlCtx, j.sqlDb.AliasedName())
-
+	if err != nil {
+		return nil, err
+	}
 	sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, db.(dsess.SqlDatabase), j.sqlDb.Revision(), j.sqlDb.Revision()+"/"+j.sqlDb.AliasedName())
-
+	if err != nil {
+		return nil, err
+	}
 	tableNames, err := sqlDb.GetTableNames(sqlCtx)
 	if err != nil {
-		if errors.Is(err, doltdb.ErrBranchNotFound) {
-			return []StatsJob{sc.dropBranchJob(sqlDb.AliasedName(), sqlDb.Revision())}, nil
-		}
 		return nil, err
 	}
 
@@ -105,7 +104,6 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 		k++
 	}
 
-	//log.Println("new buckets ", bucketDiff)
 	sc.bucketCnt.Add(int64(bucketDiff))
 
 	for sc.bucketCnt.Load() > sc.bucketCap {
@@ -217,14 +215,12 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 
 		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
 
-		log.Println("index root: ", tableInfo.name, indexKey.idxName, idxRoot.String()[:5])
 		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
 			qual := sql.StatQualifier{
 				Tab:      tableInfo.name,
 				Database: strings.ToLower(sqlDb.AliasedName()),
 				Idx:      strings.ToLower(sqlIdx.ID()),
 			}
-			log.Println("keep ", qual.String())
 			keepIndexes[qual] = true
 			continue
 		}

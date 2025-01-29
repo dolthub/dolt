@@ -2,25 +2,21 @@ package statspro
 
 import (
 	"context"
-	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 )
 
 type GcMarkJob struct {
-	ctx   *sql.Context
 	sqlDb dsess.SqlDatabase
 	done  chan struct{}
 }
 
-func NewGcMarkJob(ctx *sql.Context, sqlDb dsess.SqlDatabase) GcMarkJob {
+func NewGcMarkJob(sqlDb dsess.SqlDatabase) GcMarkJob {
 	return GcMarkJob{
-		ctx:   ctx,
 		sqlDb: sqlDb,
 		done:  make(chan struct{}),
 	}
@@ -38,21 +34,31 @@ func (j GcMarkJob) String() string {
 }
 
 func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
-	tableNames, err := j.sqlDb.GetTableNames(j.ctx)
+	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
-		if errors.Is(err, doltdb.ErrBranchNotFound) {
-			return 0, nil
-		}
+		return 0, err
+	}
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	db, err := dSess.Provider().Database(sqlCtx, j.sqlDb.AliasedName())
+	if err != nil {
+		return 0, err
+	}
+	sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, db.(dsess.SqlDatabase), j.sqlDb.Revision(), j.sqlDb.Revision()+"/"+j.sqlDb.AliasedName())
+	if err != nil {
+		return 0, err
+	}
+	tableNames, err := sqlDb.GetTableNames(sqlCtx)
+	if err != nil {
 		return 0, err
 	}
 
 	var bucketCnt int
 	for _, tableName := range tableNames {
-		sqlTable, dTab, err := GetLatestTable(j.ctx, tableName, j.sqlDb)
+		sqlTable, dTab, err := GetLatestTable(sqlCtx, tableName, j.sqlDb)
 		if err != nil {
 			return 0, err
 		}
-		indexes, err := sqlTable.GetIndexes(j.ctx)
+		indexes, err := sqlTable.GetIndexes(sqlCtx)
 		if err != nil {
 			return 0, err
 		}
@@ -69,7 +75,7 @@ func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
 				return 0, err
 			}
 
-			schHash, _, err := sqlTable.IndexCacheKey(j.ctx)
+			schHash, _, err := sqlTable.IndexCacheKey(sqlCtx)
 			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 			sc.kv.GetTemplate(key)
 
@@ -79,6 +85,10 @@ func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
 			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				return 0, err
+			}
+
+			if len(levelNodes) == 0 {
+				continue
 			}
 
 			bucketCnt += len(levelNodes)

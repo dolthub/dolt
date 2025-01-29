@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -127,6 +128,7 @@ func (j AnalyzeJob) Finish() {
 }
 
 type ReadJob struct {
+	// |ctx|/|db| track a specific working set
 	ctx      *sql.Context
 	db       dsess.SqlDatabase
 	table    string
@@ -145,8 +147,8 @@ func (j ReadJob) String() string {
 	b := strings.Builder{}
 	b.WriteString("read: " + j.db.RevisionQualifiedName() + "/" + j.table + ": ")
 	sep := ""
-	for _, o := range j.ordinals {
-		b.WriteString(fmt.Sprintf("%s[%d-%d]", sep, o.start, o.stop))
+	for i, o := range j.ordinals {
+		b.WriteString(fmt.Sprintf("%s[%s:%d-%d]", sep, j.nodes[i].HashOf().String()[:5], o.start, o.stop))
 		sep = ", "
 	}
 	return b.String()
@@ -266,7 +268,8 @@ type StatsCoord struct {
 	threads     *sql.BackgroundThreads
 	pro         *sqle.DoltDatabaseProvider
 	memOnly     bool
-	ctxGen      ctxFactory
+	// ctxGen lets us fetch the most recent working root
+	ctxGen ctxFactory
 
 	dbMu           *sync.Mutex
 	dbs            []dsess.SqlDatabase
@@ -313,7 +316,7 @@ func (sc *StatsCoord) Stop() {
 	}
 }
 
-func (sc *StatsCoord) Restart(ctx *sql.Context) error {
+func (sc *StatsCoord) Restart(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -323,8 +326,8 @@ func (sc *StatsCoord) Restart(ctx *sql.Context) error {
 	}
 
 	sc.Done = make(chan struct{})
-	return sc.threads.Add("stats", func(subCtx context.Context) {
-		sc.run(ctx.WithContext(subCtx))
+	return sc.threads.Add("stats", func(ctx context.Context) {
+		sc.run(ctx)
 	})
 }
 
@@ -333,16 +336,16 @@ func (sc *StatsCoord) Close() {
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	dbd, ok := dSess.GetDbData(ctx, db.AliasedName())
-	if !ok {
-		sc.error(ControlJob{desc: "add db"}, fmt.Errorf("database in branches list does not exist: %s", db.AliasedName()))
-		ret := make(chan struct{})
-		close(ret)
-		return ret
+func (sc *StatsCoord) cancelGc() {
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+	if sc.gcCancel != nil {
+		sc.gcCancel()
 	}
-	curBranches, err := dbd.Ddb.GetBranches(ctx)
+}
+
+func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys) chan struct{} {
+	db, err := sqle.RevisionDbForBranch(ctx, db, branch.GetPath(), branch.GetPath()+"/"+db.AliasedName())
 	if err != nil {
 		sc.error(ControlJob{desc: "add db"}, err)
 		ret := make(chan struct{})
@@ -350,12 +353,13 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} 
 		return ret
 	}
 
-	ret := sc.Seed(ctx, db)
-
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
+
+	sc.Branches[db.AliasedName()] = append(sc.Branches[db.AliasedName()], ref.NewBranchRef(db.Revision()))
 	sc.dbs = append(sc.dbs, db)
-	sc.Branches[db.AliasedName()] = curBranches
+	ret := sc.Seed(ctx, db)
+
 	if len(sc.dbs) == 1 {
 		sc.statsBackingDb = db.AliasedName()
 		var mem *memStats
@@ -371,7 +375,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} 
 		if sc.memOnly {
 			return ret
 		}
-		newKv, err := sc.initStorage(ctx, db)
+		newKv, err := sc.initStorage(ctx, db, fs)
 		if err != nil {
 			sc.error(ControlJob{desc: "add db"}, err)
 			close(ret)
@@ -380,6 +384,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase) chan struct{} 
 		newKv.mem = mem
 		sc.kv = newKv
 	}
+
 	return ret
 }
 
@@ -445,7 +450,6 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	return ret, nil
 }
 
-// TODO sendJobs
 func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb dsess.SqlDatabase) chan struct{} {
 	j := NewSeedJob(sqlDb)
 	sc.Jobs <- j
@@ -470,7 +474,7 @@ func (sc *StatsCoord) error(j StatsJob, err error) {
 }
 
 // statsRunner operates on stats jobs
-func (sc *StatsCoord) run(ctx *sql.Context) error {
+func (sc *StatsCoord) run(ctx context.Context) error {
 	jobTimer := time.NewTimer(0)
 	gcTicker := time.NewTicker(sc.gcInterval)
 	branchTicker := time.NewTicker(sc.branchInterval)
@@ -500,7 +504,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 
 		if sc.doBranchCheck.Swap(false) {
 			j := ControlJob{desc: "branch update"}
-			newJobs, err := sc.updateBranches(ctx, j)
+			newJobs, err := sc.updateBranches(ctx)
 			if err != nil {
 				sc.error(ControlJob{desc: "branches update"}, err)
 			}
@@ -511,6 +515,8 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		}
 
 		select {
+		case <-sc.Done:
+			return nil
 		case <-ctx.Done():
 			return ctx.Err()
 		case j, ok := <-sc.Interrupts:
@@ -525,6 +531,8 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 		}
 
 		select {
+		case <-sc.Done:
+			return nil
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-jobTimer.C:
@@ -535,7 +543,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 				if !ok {
 					return nil
 				}
-				log.Println("execute: ", j.String())
+				//log.Println("execute: ", j.String())
 				newJobs, err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
@@ -556,7 +564,7 @@ func (sc *StatsCoord) run(ctx *sql.Context) error {
 	}
 }
 
-func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs ...StatsJob) error {
+func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 	for i := 0; i < len(jobs); i++ {
 		j := jobs[i]
 		if j == nil {
@@ -578,7 +586,7 @@ func (sc *StatsCoord) sendJobs(ctx *sql.Context, jobs ...StatsJob) error {
 	return nil
 }
 
-func (sc *StatsCoord) executeJob(ctx *sql.Context, j StatsJob) ([]StatsJob, error) {
+func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) ([]StatsJob, error) {
 	switch j := j.(type) {
 	case SeedDbTablesJob:
 		return sc.seedDbTables(ctx, j)
@@ -598,7 +606,7 @@ func (sc *StatsCoord) executeJob(ctx *sql.Context, j StatsJob) ([]StatsJob, erro
 	return nil, nil
 }
 
-func (sc *StatsCoord) doubleChannelSize(ctx *sql.Context) {
+func (sc *StatsCoord) doubleChannelSize(ctx context.Context) {
 	var restart bool
 	select {
 	case <-sc.Done:
@@ -649,23 +657,6 @@ func (sc *StatsCoord) dropBranchJob(dbName string, branch string) ControlJob {
 	return ControlJob{
 		desc: "drop branch",
 		cb: func(sc *StatsCoord) error {
-			sc.dbMu.Lock()
-			defer sc.dbMu.Unlock()
-			curRefs := sc.Branches[branch]
-			for i, ref := range curRefs {
-				if strings.EqualFold(ref.GetPath(), branch) {
-					sc.Branches[branch] = append(curRefs[:i], curRefs[:i+1]...)
-					break
-				}
-			}
-			for i, db := range sc.dbs {
-				if strings.EqualFold(db.Revision(), branch) && strings.EqualFold(db.AliasedName(), dbName) {
-					sc.dbs = append(sc.dbs[:i], sc.dbs[1+1:]...)
-					break
-				}
-			}
-
-			// stats lock is more contentious, do last
 			sc.statsMu.Lock()
 			defer sc.statsMu.Unlock()
 			var deleteKeys []tableIndexesKey
@@ -723,8 +714,6 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		if err != nil {
 			return nil, err
 		}
-		// TODO check for capacity error during GC
-		log.Println("read ", n.HashOf().String()[:5])
 		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(j.colCnt)))
 		if err != nil {
 			return nil, err
@@ -805,12 +794,23 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	return nil, nil
 }
 
-func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob, error) {
+type dbBranchKey struct {
+	db     string
+	branch string
+}
+
+func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
+	j := ControlJob{desc: "branch update"}
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
 	var ret []StatsJob
 	newBranches := make(map[string][]ref.DoltRef)
 	var newDbs []dsess.SqlDatabase
+
 	for dbName, branches := range sc.Branches {
 		var sqlDb dsess.SqlDatabase
 		for _, db := range sc.dbs {
@@ -820,13 +820,13 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 			}
 		}
 
-		if sqlDb.Name() == "" {
+		if sqlDb == nil {
 			sc.error(j, fmt.Errorf("database in branches list is not tracked: %s", dbName))
 			continue
 		}
 
-		dSess := dsess.DSessFromSess(ctx.Session)
-		dbd, ok := dSess.GetDbData(ctx, dbName)
+		dSess := dsess.DSessFromSess(sqlCtx.Session)
+		dbd, ok := dSess.GetDbData(sqlCtx, dbName)
 		if !ok {
 			sc.error(j, fmt.Errorf("database in branches list does not exist: %s", dbName))
 		}
@@ -853,7 +853,6 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 				i++
 				k++
 			case -1:
-				//ret = append(ret, sc.dropBranchJob(ctx, dbName, branches[i]))
 				i++
 			case +1:
 				// add
@@ -863,12 +862,12 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 					continue
 				}
 
-				newDbs = append(newDbs, sqlDb.(sqle.Database))
-				ret = append(ret, NewSeedJob(sqlDb.(sqle.Database)))
+				newDbs = append(newDbs, sqlDb)
+				ret = append(ret, NewSeedJob(sqlDb))
 				k++
 			}
 		}
-		if k < len(curBranches) {
+		for k < len(curBranches) {
 			br := curBranches[k]
 			sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
 			if err != nil {
@@ -881,8 +880,24 @@ func (sc *StatsCoord) updateBranches(ctx *sql.Context, j ControlJob) ([]StatsJob
 			k++
 		}
 	}
+
 	sc.Branches = newBranches
 	sc.dbs = newDbs
+
+	var statKeys = make(map[dbBranchKey]bool)
+	for _, db := range newDbs {
+		statKeys[dbBranchKey{db.AliasedName(), db.Revision()}] = true
+	}
+
+	newStats := make(map[tableIndexesKey][]*stats.Statistic)
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	for k, s := range sc.Stats {
+		if statKeys[dbBranchKey{db: k.db, branch: k.branch}] {
+			newStats[k] = s
+		}
+	}
+	sc.Stats = newStats
 	return ret, nil
 }
 
@@ -902,7 +917,7 @@ func (sc *StatsCoord) setGc() {
 	}
 }
 
-func (sc *StatsCoord) runGc(ctx *sql.Context, done chan struct{}) error {
+func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 	sc.doGc.Store(false)
 	if !sc.enableGc.Load() {
 		close(done)
@@ -916,13 +931,19 @@ func (sc *StatsCoord) runGc(ctx *sql.Context, done chan struct{}) error {
 		return err
 	}
 
+	// can't take |dbMu| and provider lock
 	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
+	dbs := sc.dbs
+	sc.dbMu.Unlock()
+
 	var bucketCnt int
-	for _, db := range sc.dbs {
-		j := NewGcMarkJob(ctx, db)
+	for _, db := range dbs {
+		j := NewGcMarkJob(db)
 		cnt, err := sc.gcMark(ctx, j)
-		if err != nil {
+		if sql.ErrDatabaseNotFound.Is(err) {
+			// concurrent delete
+			continue
+		} else if err != nil {
 			return err
 		}
 		bucketCnt += cnt

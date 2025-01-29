@@ -223,13 +223,13 @@ func NewSqlEngine(
 			if err != nil {
 				return nil, err
 			}
+			fs, err := pro.FileSystemForDatabase(db.AliasedName())
+			if err != nil {
+				return nil, err
+			}
 			for _, b := range br {
-				sqlDb, err := dsqle.RevisionDbForBranch(ctx, db, b.GetPath(), b.GetPath()+"/"+db.AliasedName())
-				if err != nil {
-					return nil, err
-				}
 				eg.Go(func() error {
-					<-sc.Add(sqlCtx, sqlDb)
+					<-sc.Add(sqlCtx, db, b, fs)
 					return nil
 				})
 			}
