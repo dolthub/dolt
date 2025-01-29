@@ -1892,8 +1892,17 @@ func pullHash(
 	}
 }
 
+func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
+		return types.AddrsFromNomsValue(c, ddb.Format(), addrs)
+	}
+}
+
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db), datas.ChunkStoreFromDatabase(destDB.db), eventCh)
+	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db),
+		datas.ChunkStoreFromDatabase(destDB.db),
+		ddb.getAddrs,
+		eventCh)
 }
 
 // Returns |true| if the underlying ChunkStore for this DoltDB implements |chunks.TableFileStore|.

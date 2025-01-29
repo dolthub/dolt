@@ -492,7 +492,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	err = cs.AddTableFilesToManifest(ctx, updates)
+	err = cs.AddTableFilesToManifest(ctx, updates, rs.getAddrs(cs.Version()))
 	if err != nil {
 		logger.WithError(err).Error("error calling AddTableFilesToManifest")
 		return nil, status.Errorf(codes.Internal, "manifest update error: %v", err)
@@ -641,7 +641,7 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 		updates[hash.New(cti.Hash).String()] = int(cti.ChunkCount)
 	}
 
-	err = cs.AddTableFilesToManifest(ctx, updates)
+	err = cs.AddTableFilesToManifest(ctx, updates, rs.getAddrs(cs.Version()))
 	if err != nil {
 		logger.WithError(err).Error("error occurred updating the manifest")
 		return nil, status.Error(codes.Internal, "manifest update error")
@@ -652,6 +652,18 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	})
 
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
+}
+
+func (rs *RemoteChunkStore) getAddrs(version string) chunks.GetAddrsCurry {
+	fmt, err := types.GetFormatForVersionString(version)
+	if err != nil {
+		panic("unexpxected error on GetFormatForVersionString")
+	}
+	return func(c chunks.Chunk) chunks.GetAddrsCb {
+		return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
+			return types.AddrsFromNomsValue(c, fmt, addrs)
+		}
+	}
 }
 
 func (rs *RemoteChunkStore) getStore(ctx context.Context, logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {

@@ -315,7 +315,7 @@ func (s *noopTableFileDestStore) WriteTableFile(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *noopTableFileDestStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+func (s *noopTableFileDestStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, _ chunks.GetAddrsCurry) error {
 	s.addCalled += 1
 	s.manifest = fileIdToNumChunks
 	return nil
@@ -345,7 +345,7 @@ func (s *testDataTableFileDestStore) WriteTableFile(ctx context.Context, id stri
 	return nil
 }
 
-func (s *testDataTableFileDestStore) AddTableFilesToManifest(context.Context, map[string]int) error {
+func (s *testDataTableFileDestStore) AddTableFilesToManifest(context.Context, map[string]int, chunks.GetAddrsCurry) error {
 	return nil
 }
 
@@ -365,7 +365,7 @@ func (s *errTableFileDestStore) WriteTableFile(ctx context.Context, id string, n
 	return errors.New("this dest store throws an error")
 }
 
-func (s *errTableFileDestStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
+func (s *errTableFileDestStore) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, _ chunks.GetAddrsCurry) error {
 	s.addCalled += 1
 	if s.onAdd {
 		return errors.New("this dest store throws an error")
