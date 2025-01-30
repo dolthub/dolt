@@ -494,12 +494,37 @@ func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash
 	return gcs.newGen.UpdateManifest(ctx, updates)
 }
 
-func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool) error {
-	return gcs.newGen.BeginGC(keeper)
+func (gcs *GenerationalNBS) OldGenGCFilter() chunks.HasManyFunc {
+	return func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return gcs.oldGen.hasManyDep(ctx, hashes, gcDependencyMode_NoDependency)
+	}
 }
 
-func (gcs *GenerationalNBS) EndGC() {
-	gcs.newGen.EndGC()
+func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	err := gcs.newGen.BeginGC(keeper, mode)
+	if err != nil {
+		return err
+	}
+	// In GCMode_Full, the OldGen is also being collected. In normal
+	// operation, the OldGen is not being collected because it is
+	// still growing monotonically and nothing in it is at risk of
+	// going away. In Full mode, we want to take read dependencies
+	// from the OldGen as well.
+	if mode == chunks.GCMode_Full {
+		err = gcs.oldGen.BeginGC(keeper, mode)
+		if err != nil {
+			gcs.newGen.EndGC(mode)
+			return err
+		}
+	}
+	return nil
+}
+
+func (gcs *GenerationalNBS) EndGC(mode chunks.GCMode) {
+	if mode == chunks.GCMode_Full {
+		gcs.oldGen.EndGC(mode)
+	}
+	gcs.newGen.EndGC(mode)
 }
 
 func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
