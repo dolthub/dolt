@@ -1,12 +1,13 @@
 package statspro
 
 import (
-	"context"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"log"
 	"strings"
 )
 
@@ -33,11 +34,7 @@ func (j GcMarkJob) String() string {
 	return b.String()
 }
 
-func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
-	sqlCtx, err := sc.ctxGen(ctx)
-	if err != nil {
-		return 0, err
-	}
+func (sc *StatsCoord) gcMark(sqlCtx *sql.Context, j GcMarkJob) (int, error) {
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
 	db, err := dSess.Provider().Database(sqlCtx, j.sqlDb.AliasedName())
 	if err != nil {
@@ -67,9 +64,9 @@ func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
 			var idx durable.Index
 			var err error
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
-				idx, err = dTab.GetRowData(ctx)
+				idx, err = dTab.GetRowData(sqlCtx)
 			} else {
-				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
+				idx, err = dTab.GetIndexRowData(sqlCtx, sqlIdx.ID())
 			}
 			if err != nil {
 				return 0, err
@@ -82,12 +79,13 @@ func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
 			idxCnt := len(sqlIdx.Expressions())
 
 			prollyMap := durable.ProllyMapFromIndex(idx)
-			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+			levelNodes, err := tree.GetHistogramLevel(sqlCtx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				return 0, err
 			}
 
 			if len(levelNodes) == 0 {
+				log.Println("db-table has no hashes: ", sqlDb.AliasedName())
 				continue
 			}
 
@@ -97,7 +95,7 @@ func (sc *StatsCoord) gcMark(ctx context.Context, j GcMarkJob) (int, error) {
 			sc.kv.GetBound(firstNodeHash)
 
 			for _, n := range levelNodes {
-				err = sc.kv.MarkBucket(ctx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxCnt)))
+				err = sc.kv.MarkBucket(sqlCtx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxCnt)))
 				if err != nil {
 					return 0, err
 				}

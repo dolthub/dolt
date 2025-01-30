@@ -115,6 +115,7 @@ func (m *memStats) GetBound(h hash.Hash) (sql.Row, bool) {
 		return nil, false
 	}
 	if m.doGc {
+		//log.Println("copy bound ", h.String()[:5])
 		m.nextBounds[h] = r
 	}
 	return r, true
@@ -169,7 +170,7 @@ func (m *memStats) FinishGc() {
 	for k, _ := range m.bounds {
 		bounds = append(bounds, k.String())
 	}
-	log.Println("bounds after GC: ", strings.Join(templates, ", "))
+	log.Println("bounds after GC: ", strings.Join(bounds, ", "))
 
 	m.nextBuckets = nil
 	m.nextTemplates = nil

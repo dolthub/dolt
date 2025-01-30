@@ -1266,68 +1266,99 @@ func TestStatsGcConcurrency(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
-
+	sc.SetTimers(1, 100, 50)
 	require.NoError(t, sc.Restart(ctx))
 
-	addDb := func(ctx *sql.Context, i int) {
-		dbName := "db" + strconv.Itoa(i)
+	addDb := func(ctx *sql.Context, dbName string) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database "+dbName))
 	}
 
-	addData := func(ctx *sql.Context, i int) {
-		dbName := "db" + strconv.Itoa(i)
+	addData := func(ctx *sql.Context, dbName string, i int) {
+		log.Println("add ", dbName)
 		require.NoError(t, executeQuery(ctx, sqlEng, "use "+dbName))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
 	}
 
-	dropDb := func(dropCtx *sql.Context, i int) {
-		require.NoError(t, executeQuery(ctx, sqlEng, fmt.Sprintf("drop database db%d", i)))
+	dropDb := func(dropCtx *sql.Context, dbName string) {
+		log.Println("drop ", dbName)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "drop database "+dbName))
 	}
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	addCtx, _ := sc.ctxGen(context.Background())
 	writeCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
-	gcCtx, _ := sc.ctxGen(context.Background())
 
-	iters := 500
+	iters := 200
+	dbs := make(chan string, iters)
+
 	{
-		wg1 := sync.WaitGroup{}
-		wg1.Add(1)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
 
-		wg2 := sync.WaitGroup{}
-		wg2.Add(2)
-
+		addCnt := 0
 		go func() {
 			for i := range iters {
-				addDb(addCtx, i)
-				time.Sleep(10 * time.Millisecond)
-				addData(writeCtx, i)
-				if i == iters/2 {
-					wg1.Done()
+				addCnt++
+				dbName := "db" + strconv.Itoa(i)
+				addDb(addCtx, dbName)
+				addData(writeCtx, dbName, i)
+				dbs <- dbName
+			}
+			close(dbs)
+			wg.Done()
+		}()
+
+		dropCnt := 0
+		go func() {
+			i := 0
+			for db := range dbs {
+				if i%2 == 0 {
+					dropCnt++
+					dropDb(dropCtx, db)
+					time.Sleep(50 * time.Millisecond)
+				}
+				i++
+			}
+			wg.Done()
+		}()
+
+		wg.Wait()
+
+		sc.doBranchCheck.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.doGc.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.Stop()
+
+		// at the end we should still have |iters/2| databases
+		for i := range iters {
+			if i%2 == 1 {
+				dbName := "db" + strconv.Itoa(i)
+				found := false
+				for k := range sc.Stats {
+					if k.db == dbName {
+						found = true
+					}
+				}
+				if !found {
+					log.Println("missing ", dbName)
+				}
+				found = false
+				for k := range sc.Branches {
+					if k == dbName {
+						found = true
+					}
+				}
+				if !found {
+					log.Println("missing ", dbName)
 				}
 			}
-		}()
-
-		go func() {
-			for _ = range iters / 2 {
-				require.NoError(t, sc.runGc(gcCtx, make(chan struct{})))
-				time.Sleep(100 * time.Millisecond)
-			}
-			wg2.Done()
-		}()
-
-		go func() {
-			wg1.Wait()
-			for i := range iters / 2 {
-				time.Sleep(30 * time.Millisecond)
-				dropDb(dropCtx, i)
-			}
-			wg2.Done()
-		}()
-
-		wg2.Wait()
+		}
+		require.Equal(t, iters/2, len(sc.Stats))
+		require.Equal(t, iters/2, sc.kv.Len())
 	}
 }
 
@@ -1358,7 +1389,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	}
 
 	dropBranch := func(dropCtx *sql.Context, branchName string) {
-		log.Println("delete branch: ", branchName)
+		//log.Println("delete branch: ", branchName)
 		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 		del := "call dolt_branch('-d', '" + branchName + "')"
 		require.NoError(t, executeQuery(ctx, sqlEng, del))
@@ -1369,7 +1400,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	//writeCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
 
-	iters := 50
+	iters := 100
 	{
 		branches := make(chan string, iters)
 

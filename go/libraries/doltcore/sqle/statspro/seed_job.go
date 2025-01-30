@@ -196,11 +196,6 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 			return nil, tableStatsInfo{}, err
 		}
 
-		if err := sc.cacheTemplate(ctx, sqlTable, sqlIdx); err != nil {
-			sc.logger.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableInfo.name, sqlIdx, sqlIdx, err)
-			continue
-		}
-
 		prollyMap := durable.ProllyMapFromIndex(idx)
 
 		idxRoot := prollyMap.Node().HashOf()
@@ -235,7 +230,13 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 			tupB:    val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(sqlIdx.Expressions()))),
 		}
 
-		readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, tableInfo.name, levelNodes, prollyMap, len(sqlIdx.Expressions()))
+		key, template, err := sc.getTemplate(ctx, sqlTable, sqlIdx)
+		if err != nil {
+			sc.logger.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableInfo.name, sqlIdx, sqlIdx, err)
+			continue
+		}
+
+		readJobs, err := sc.partitionStatReadJobs(ctx, sqlDb, tableInfo.name, key, template, levelNodes, prollyMap, len(sqlIdx.Expressions()))
 		if err != nil {
 			return nil, tableStatsInfo{}, err
 		}
@@ -263,7 +264,7 @@ type updateOrdinal struct {
 	start, stop uint64
 }
 
-func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableName string, levelNodes []tree.Node, prollyMap prolly.Map, idxCnt int) ([]StatsJob, error) {
+func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableName string, key templateCacheKey, template stats.Statistic, levelNodes []tree.Node, prollyMap prolly.Map, idxCnt int) ([]StatsJob, error) {
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
@@ -276,6 +277,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 	var batchOrdinals []updateOrdinal
 	var nodes []tree.Node
 	var offset uint64
+	first := true
 	for _, n := range levelNodes {
 		treeCnt, err := n.TreeCount()
 		if err != nil {
@@ -299,26 +301,15 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 		nodes = append(nodes, n)
 
 		if curCnt > jobSize {
-			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
+			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
+			first = false
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
 			nodes = nodes[:0]
 		}
 	}
 	if curCnt > 0 {
-		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, table: tableName, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
-	}
-
-	// always check, jobs can be empty on startup but
-	// we still need to load the bound hash
-	firstNodeHash := levelNodes[0].HashOf()
-	if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
-		firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
-		if err != nil {
-			return nil, err
-		}
-		fmt.Printf("%s bound %s: %v\n", tableName, firstNodeHash.String(), firstRow)
-		sc.kv.PutBound(firstNodeHash, firstRow)
+		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
 	}
 
 	return jobs, nil
@@ -333,15 +324,15 @@ func (k templateCacheKey) String() string {
 	return k.idxName + "/" + k.h.String()[:5]
 }
 
-func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) error {
+func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) (templateCacheKey, stats.Statistic, error) {
 	schHash, _, err := sqlTable.IndexCacheKey(ctx)
 	key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 	if _, ok := sc.kv.GetTemplate(key); ok {
-		return nil
+		return templateCacheKey{}, stats.Statistic{}, nil
 	}
 	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
 	if err != nil {
-		return err
+		return templateCacheKey{}, stats.Statistic{}, err
 	}
 
 	var class sql.IndexClass
@@ -365,12 +356,11 @@ func (sc *StatsCoord) cacheTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, 
 		cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 	}
 
-	sc.kv.PutTemplate(key, stats.Statistic{
+	return key, stats.Statistic{
 		Cols:     cols,
 		Typs:     types,
 		IdxClass: uint8(class),
 		Fds:      fds,
 		Colset:   colset,
-	})
-	return nil
+	}, nil
 }

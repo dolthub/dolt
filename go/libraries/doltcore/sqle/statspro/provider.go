@@ -171,6 +171,8 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
+		sc.ddlGuard = true
+
 		doSwap = strings.EqualFold(sc.statsBackingDb, dbName)
 		for i := 0; i < len(sc.dbs); i++ {
 			db := sc.dbs[i]

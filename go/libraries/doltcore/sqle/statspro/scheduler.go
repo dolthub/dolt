@@ -132,7 +132,10 @@ type ReadJob struct {
 	ctx      *sql.Context
 	db       dsess.SqlDatabase
 	table    string
+	key      templateCacheKey
+	template stats.Statistic
 	m        prolly.Map
+	first    bool
 	nodes    []tree.Node
 	ordinals []updateOrdinal
 	colCnt   int
@@ -271,9 +274,11 @@ type StatsCoord struct {
 	// ctxGen lets us fetch the most recent working root
 	ctxGen ctxFactory
 
+	// XXX: do not hold the |dbMu| while accessing |pro|
 	dbMu           *sync.Mutex
 	dbs            []dsess.SqlDatabase
 	branchInterval time.Duration
+	ddlGuard       bool
 
 	kv StatsKv
 
@@ -355,6 +360,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
+	sc.ddlGuard = true
 
 	sc.Branches[db.AliasedName()] = append(sc.Branches[db.AliasedName()], ref.NewBranchRef(db.Revision()))
 	sc.dbs = append(sc.dbs, db)
@@ -392,6 +398,8 @@ func (sc *StatsCoord) Drop(dbName string) {
 	// deprecated
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
+	sc.ddlGuard = true
+
 	for i, db := range sc.dbs {
 		if strings.EqualFold(db.Name(), dbName) {
 			sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
@@ -682,6 +690,31 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 	updater := newBucketBuilder(sql.StatQualifier{}, j.colCnt, prollyMap.KeyDesc().PrefixDesc(j.colCnt))
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
+	// all kv puts are guarded by |gcMu| to avoid concurrent
+	// GC with stale data discarding some or all state
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+
+	if j.first {
+		ctx, err := sc.ctxGen(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		sc.kv.PutTemplate(j.key, j.template)
+
+		firstNodeHash := j.nodes[0].HashOf()
+		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
+			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
+			if err != nil {
+				if err != nil {
+					return nil, err
+				}
+			}
+			fmt.Printf("%s bound %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
+			sc.kv.PutBound(firstNodeHash, firstRow)
+		}
+	}
 	for i, n := range j.nodes {
 		// each node is a bucket
 		updater.newBucket()
@@ -710,6 +743,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		}
 
 		// finalize the aggregation
+		log.Println("read/put chunk ", n.HashOf().String()[:5])
 		bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
 		if err != nil {
 			return nil, err
@@ -753,7 +787,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		}
 	}
 	for key, fs := range j.editIndexes {
-		log.Println("finalize " + key.String())
+		log.Println("finalize " + j.tableKey.String() + " " + key.String())
 		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
 			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
@@ -800,20 +834,26 @@ type dbBranchKey struct {
 }
 
 func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
+	log.Println("run branch update")
 	j := ControlJob{desc: "branch update"}
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
+
 	var ret []StatsJob
 	newBranches := make(map[string][]ref.DoltRef)
 	var newDbs []dsess.SqlDatabase
 
-	for dbName, branches := range sc.Branches {
+	sc.dbMu.Lock()
+	sc.ddlGuard = false
+	dbBranches := sc.Branches
+	dbs := sc.dbs
+	sc.dbMu.Unlock()
+
+	for dbName, branches := range dbBranches {
 		var sqlDb dsess.SqlDatabase
-		for _, db := range sc.dbs {
+		for _, db := range dbs {
 			if strings.EqualFold(db.AliasedName(), dbName) {
 				sqlDb = db
 				break
@@ -829,6 +869,7 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 		dbd, ok := dSess.GetDbData(sqlCtx, dbName)
 		if !ok {
 			sc.error(j, fmt.Errorf("database in branches list does not exist: %s", dbName))
+			continue
 		}
 		curBranches, err := dbd.Ddb.GetBranches(ctx)
 		if err != nil {
@@ -849,10 +890,18 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 					sc.error(j, err)
 					continue
 				}
-				newDbs = append(newDbs, sqlDb.(sqle.Database))
+
+				newDbs = append(newDbs, sqlDb)
 				i++
 				k++
 			case -1:
+				//sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, branches[i].GetPath(), branches[i].GetPath()+"/"+dbName)
+				//if err != nil {
+				//	sc.error(j, err)
+				//	continue
+				//}
+				//
+				//dropDbs[dbBranchKey{sqlDb.AliasedName(), sqlDb.Revision()}] = true
 				i++
 			case +1:
 				// add
@@ -879,13 +928,32 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 			ret = append(ret, NewSeedJob(sqlDb))
 			k++
 		}
+		//for i < len(branches) {
+		//	sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, branches[i].GetPath(), branches[i].GetPath()+"/"+dbName)
+		//	if err != nil {
+		//		sc.error(j, err)
+		//		continue
+		//	}
+		//
+		//	dropDbs[dbBranchKey{sqlDb.AliasedName(), sqlDb.Revision()}] = true
+		//	i++
+		//}
 	}
+
+	sc.dbMu.Lock()
+
+	if sc.ddlGuard {
+		// ddl interrupted branch refresh
+		sc.dbMu.Unlock()
+		return sc.updateBranches(ctx)
+	}
+	defer sc.dbMu.Unlock()
 
 	sc.Branches = newBranches
 	sc.dbs = newDbs
 
 	var statKeys = make(map[dbBranchKey]bool)
-	for _, db := range newDbs {
+	for _, db := range sc.dbs {
 		statKeys[dbBranchKey{db.AliasedName(), db.Revision()}] = true
 	}
 
@@ -918,6 +986,8 @@ func (sc *StatsCoord) setGc() {
 }
 
 func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
+	log.Println("run GC")
+
 	sc.doGc.Store(false)
 	if !sc.enableGc.Load() {
 		close(done)
@@ -927,6 +997,11 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()
 
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+
 	if err := sc.kv.StartGc(ctx, int(sc.bucketCap)); err != nil {
 		return err
 	}
@@ -934,12 +1009,13 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 	// can't take |dbMu| and provider lock
 	sc.dbMu.Lock()
 	dbs := sc.dbs
+	sc.ddlGuard = true
 	sc.dbMu.Unlock()
 
 	var bucketCnt int
 	for _, db := range dbs {
 		j := NewGcMarkJob(db)
-		cnt, err := sc.gcMark(ctx, j)
+		cnt, err := sc.gcMark(sqlCtx, j)
 		if sql.ErrDatabaseNotFound.Is(err) {
 			// concurrent delete
 			continue
