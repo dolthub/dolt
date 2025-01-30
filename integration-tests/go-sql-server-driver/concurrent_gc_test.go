@@ -66,6 +66,7 @@ func TestConcurrentGC(t *testing.T) {
 	doDimensions = func (t *testing.T, base gcTest, dims []dimension) {
 		if len(dims) == 0 {
 			base.run(t)
+			return
 		}
 		dim, dims := dims[0], dims[1:]
 		dimf := dim.factors(base)
