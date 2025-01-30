@@ -119,7 +119,7 @@ func GetInterceptorSqlContext(ctx context.Context) (*sql.Context, error) {
 	if v := ctx.Value(sqlContextInterceptorKey{}); v != nil {
 		return v.(*sql.Context), nil
 	}
-	return nil, errors.New("misconfiguration; a sql.Context should always be available from the intercetpor chain.")
+	return nil, errors.New("misconfiguration; a sql.Context should always be available from the interceptor chain.")
 }
 
 func (si SqlContextServerInterceptor) Stream() grpc.StreamServerInterceptor {
