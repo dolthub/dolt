@@ -64,7 +64,7 @@ func (state *GCSafepointSessionState) EndOutstandingVisitCall() {
 func (state *GCSafepointSessionState) HasOutstandingVisitCall() bool {
 	ch := state.QuiesceCallbackDone.Load().(chan struct{})
 	select {
-	case <- ch:
+	case <-ch:
 		return false
 	default:
 		return true
@@ -73,7 +73,7 @@ func (state *GCSafepointSessionState) HasOutstandingVisitCall() bool {
 
 func (state *GCSafepointSessionState) BlockForOutstandingVisitCall() {
 	ch := state.QuiesceCallbackDone.Load().(chan struct{})
-	<- ch
+	<-ch
 }
 
 var closedCh = make(chan struct{})
@@ -214,19 +214,19 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 
 // Beginning a command on a session has three effects:
 //
-// 1) It registers the Session in the set of all
-//    known sessions, |c.sessions|, if this is our
-//    first time seeing it.
+//  1. It registers the Session in the set of all
+//     known sessions, |c.sessions|, if this is our
+//     first time seeing it.
 //
-// 2) It blocks for any existing call to |CommandEndCallback|
-//    on this session to complete. If a call to |CommendEndCallback|
-//    is outstanding, our |QuiesceCallbackDone| a read from our
-//    |QuiesceCallbackDone| channel will block.
+//  2. It blocks for any existing call to |CommandEndCallback|
+//     on this session to complete. If a call to |CommendEndCallback|
+//     is outstanding, our |QuiesceCallbackDone| a read from our
+//     |QuiesceCallbackDone| channel will block.
 //
-// 3) It sets |OutstandingCommand| for the Session to true. Only
-//    one command can be outstanding at a time, and whether a command
-//    is outstanding controls how |Waiter| treats the Session when it
-//    is setting up all Sessions to visit their GC roots.
+//  3. It sets |OutstandingCommand| for the Session to true. Only
+//     one command can be outstanding at a time, and whether a command
+//     is outstanding controls how |Waiter| treats the Session when it
+//     is setting up all Sessions to visit their GC roots.
 func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
