@@ -31,42 +31,62 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
-	var base = gcTest {
+	type dimension struct {
+		names   []string
+		factors func(gcTest) []gcTest
+	}
+	commits := dimension{
+		names: []string{"NoCommits", "WithCommits"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.commit = false
+			yes.commit = true
+			return []gcTest{no, yes}
+		},
+	}
+	full := dimension{
+		names: []string{"NotFull", "Full"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.full = false
+			yes.full = true
+			return []gcTest{no, yes}
+		},
+	}
+	safepoint := dimension {
+		names: []string{"KillConnections", "SessionAware"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.sessionAware = false
+			yes.sessionAware = true
+			return []gcTest{no, yes}
+		},
+	}
+	var doDimensions func(t *testing.T, base gcTest, dims []dimension)
+	doDimensions = func (t *testing.T, base gcTest, dims []dimension) {
+		if len(dims) == 0 {
+			base.run(t)
+		}
+		dim, dims := dims[0], dims[1:]
+		dimf := dim.factors(base)
+		for i := range dim.names {
+			t.Run(dim.names[i], func(t *testing.T) {
+				doDimensions(t, dimf[i], dims)
+			})
+		}
+	}
+	dimensions := []dimension{commits, full, safepoint}
+	doDimensions(t, gcTest{
 		numThreads: 8,
 		duration:   10 * time.Second,
-	}
-	t.Run("NoCommits", func(t *testing.T) {
-		var base = base
-		base.commit = false
-		t.Run("KillConnections", func(t *testing.T) {
-			var gct = base
-			gct.run(t)
-		})
-		t.Run("SessionAware", func(t *testing.T) {
-			var gct = base
-			gct.sessionAware = true
-			gct.run(t)
-		})
-	})
-	t.Run("WithCommits", func(t *testing.T) {
-		var base = base
-		base.commit = true
-		t.Run("KillConnections", func(t *testing.T) {
-			var gct = base
-			gct.run(t)
-		})
-		t.Run("SessionAware", func(t *testing.T) {
-			var gct = base
-			gct.sessionAware = true
-			gct.run(t)
-		})
-	})
+	}, dimensions)
 }
 
 type gcTest struct {
 	numThreads   int
 	duration     time.Duration
 	commit       bool
+	full         bool
 	sessionAware bool
 }
 
@@ -155,7 +175,11 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 		defer conn.Close()
 	}
 	b := time.Now()
-	_, err = conn.ExecContext(ctx, "call dolt_gc()")
+	if !gct.full {
+		_, err = conn.ExecContext(ctx, "call dolt_gc()")
+	} else {
+		_, err = conn.ExecContext(ctx, `call dolt_gc("--full")`)
+	}
 	if assert.NoError(t, err) {
 		t.Logf("successful dolt_gc took %v", time.Since(b))
 	}

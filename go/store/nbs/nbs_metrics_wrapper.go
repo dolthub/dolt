@@ -71,12 +71,12 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool) error {
-	return nbsMW.nbs.BeginGC(keeper)
+func (nbsMW *NBSMetricWrapper) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	return nbsMW.nbs.BeginGC(keeper, mode)
 }
 
-func (nbsMW *NBSMetricWrapper) EndGC() {
-	nbsMW.nbs.EndGC()
+func (nbsMW *NBSMetricWrapper) EndGC(mode chunks.GCMode) {
+	nbsMW.nbs.EndGC(mode)
 }
 
 func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {

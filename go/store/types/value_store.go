@@ -591,7 +591,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		var oldGenHasMany chunks.HasManyFunc
 		switch mode {
 		case GCModeDefault:
-			oldGenHasMany = oldGen.HasMany
+			oldGenHasMany = gcs.OldGenGCFilter()
 			chksMode = chunks.GCMode_Default
 		case GCModeFull:
 			oldGenHasMany = unfilteredHashFunc
@@ -601,11 +601,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		}
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk)
+			err := collector.BeginGC(lvs.gcAddChunk, chksMode)
 			if err != nil {
 				return err
 			}
-			defer collector.EndGC()
+			defer collector.EndGC(chksMode)
 
 			var callCancelSafepoint bool
 			if safepoint != nil {
@@ -650,7 +650,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			}
 
 			if mode == GCModeDefault {
-				oldGenHasMany = oldGen.HasMany
+				oldGenHasMany = gcs.OldGenGCFilter()
 			} else {
 				oldGenHasMany = newFileHasMany
 			}
@@ -685,11 +685,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		newGenRefs.InsertAll(oldGenRefs)
 
 		err := func() error {
-			err := collector.BeginGC(lvs.gcAddChunk)
+			err := collector.BeginGC(lvs.gcAddChunk, chunks.GCMode_Full)
 			if err != nil {
 				return err
 			}
-			defer collector.EndGC()
+			defer collector.EndGC(chunks.GCMode_Full)
 
 			var callCancelSafepoint bool
 			if safepoint != nil {
