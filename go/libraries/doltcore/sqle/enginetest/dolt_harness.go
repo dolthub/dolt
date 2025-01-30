@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
@@ -45,22 +44,23 @@ import (
 )
 
 type DoltHarness struct {
-	t                   *testing.T
-	provider            dsess.DoltDatabaseProvider
-	statsPro            sql.StatsProvider
-	multiRepoEnv        *env.MultiRepoEnv
-	session             *dsess.DoltSession
-	branchControl       *branch_control.Controller
-	parallelism         int
-	skippedQueries      []string
-	setupData           []setup.SetupScript
-	resetData           []setup.SetupScript
-	engine              *gms.Engine
-	setupDbs            map[string]struct{}
-	skipSetupCommit     bool
-	configureStats      bool
-	useLocalFilesystem  bool
-	setupTestProcedures bool
+	t                     *testing.T
+	provider              dsess.DoltDatabaseProvider
+	statsPro              sql.StatsProvider
+	multiRepoEnv          *env.MultiRepoEnv
+	session               *dsess.DoltSession
+	branchControl         *branch_control.Controller
+	gcSafepointController *dsess.GCSafepointController
+	parallelism           int
+	skippedQueries        []string
+	setupData             []setup.SetupScript
+	resetData             []setup.SetupScript
+	engine                *gms.Engine
+	setupDbs              map[string]struct{}
+	skipSetupCommit       bool
+	configureStats        bool
+	useLocalFilesystem    bool
+	setupTestProcedures   bool
 }
 
 func (d *DoltHarness) UseLocalFileSystem() {
@@ -243,11 +243,13 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
+		d.gcSafepointController = dsess.NewGCSafepointController()
+
 		statsProv := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 		d.statsPro = statsProv
 
 		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
 		require.NoError(t, err)
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
@@ -485,11 +487,9 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 	if err != nil {
 		return nil, err
 	}
-	gcSafepointController := dsess.NewGCSafepointController()
-	readOnlyProvider.RegisterProcedure(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	// reset the session as well since we have swapped out the database provider, which invalidates caching assumptions
-	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
+	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), readOnlyProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
 	require.NoError(d.t, err)
 
 	return enginetest.NewEngineWithProvider(nil, d, readOnlyProvider), nil
@@ -534,8 +534,6 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
 	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
-	gcSafepointController := dsess.NewGCSafepointController()
-	pro.Register(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	return pro
 }

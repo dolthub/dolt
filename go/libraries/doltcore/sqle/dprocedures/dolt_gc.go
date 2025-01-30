@@ -54,25 +54,12 @@ func init() {
 
 var DoltGCFeatureFlag = true
 
-func NewDoltGCProcedure(gcSafepointController *dsess.GCSafepointController) sql.ExternalStoredProcedureDetails {
-	impl := &DoltGCProcedure{
-		gcSafepointController: gcSafepointController,
-	}
-	return sql.ExternalStoredProcedureDetails{
-		Name:      "dolt_gc",
-		Schema:    int64Schema("status"),
-		Function:  impl.Run,
-		ReadOnly:  true,
-		AdminOnly: true,
-	}
-}
-
 // doltGC is the stored procedure to run online garbage collection on a database.
-func (p *DoltGCProcedure) Run(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if !DoltGCFeatureFlag {
 		return nil, errors.New("DOLT_GC() stored procedure disabled")
 	}
-	res, err := p.doGC(ctx, args)
+	res, err := doDoltGC(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -204,14 +191,7 @@ func (sc *sessionAwareSafepointController) CancelSafepoint() {
 	sc.waiter.Wait(canceledCtx)
 }
 
-type DoltGCProcedure struct {
-	// Used by the implementation to visit existing sessions, find them
-	// at a quiesced state and ensure that their in-memory state makes
-	// it to the GC process.
-	gcSafepointController *dsess.GCSafepointController
-}
-
-func (impl *DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) {
+func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -271,10 +251,11 @@ func (impl *DoltGCProcedure) doGC(ctx *sql.Context, args []string) (int, error) 
 
 		var sc types.GCSafepointController
 		if useSessionAwareSafepointController {
+			gcSafepointController := dSess.GCSafepointController()
 			sc = &sessionAwareSafepointController{
 				origEpoch:  origepoch,
 				callCtx:    ctx,
-				controller: impl.gcSafepointController,
+				controller: gcSafepointController,
 			}
 		} else {
 			sc = killConnectionsSafepointController{

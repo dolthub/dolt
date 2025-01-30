@@ -1740,6 +1740,12 @@ func (d *DoltSession) SessionEnd() {
 	}
 }
 
+// dolt_gc accesses the safepoint controller for the current
+// sql engine through here.
+func (d *DoltSession) GCSafepointController() *GCSafepointController {
+	return d.gcSafepointController
+}
+
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
 func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
 	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)

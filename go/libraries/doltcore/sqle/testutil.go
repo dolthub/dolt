@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -116,8 +115,8 @@ func ExecuteSql(dEnv *env.DoltEnv, root doltdb.RootValue, statements string) (do
 	return db.GetRoot(ctx)
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, nil)
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider, gcSafepointController *dsess.GCSafepointController) *sql.Context {
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController)
 	if err != nil {
 		panic(err)
 	}
@@ -137,11 +136,10 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 		return nil, nil, err
 	}
 	gcSafepointController := dsess.NewGCSafepointController()
-	pro.Register(dprocedures.NewDoltGCProcedure(gcSafepointController))
 
 	engine := sqle.NewDefault(pro)
 
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil, gcSafepointController)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }
