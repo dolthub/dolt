@@ -153,8 +153,9 @@ select count(*) from vals;
     dolt commit -m 'initial vals.'
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
+    dolt sql -q "CREATE USER user0@'%' identified by 'pass0'; GRANT ALL ON *.* to user0@'%';"
 
-    dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server --port 3307 --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../../
@@ -182,7 +183,7 @@ call dolt_commit('-am', 'add some vals');
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
-    # # With auth fetch
+    # With auth fetch
     run dolt fetch --user $DOLT_REMOTE_USER
     [[ "$status" -eq 0 ]] || false
 
@@ -223,8 +224,9 @@ call dolt_commit('-am', 'add one val');
     dolt commit -m 'initial vals.'
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
+    dolt sql -q "CREATE USER user0@'%' identified by 'pass0'; GRANT ALL ON *.* to user0@'%';"
 
-    dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server --port 3307 --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../../
@@ -248,8 +250,9 @@ call dolt_commit('-am', 'add one val');
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals
     dolt commit -m 'initial vals.'
+    dolt sql -q "CREATE USER user0@'%' identified by 'pass0'; GRANT ALL ON *.* to user0@'%';"
 
-    dolt sql-server --port 3307 -u user0 -p pass0 --remotesapi-port 50051 &
+    dolt sql-server --port 3307 --remotesapi-port 50051 &
     srv_pid=$!
     sleep 2
     run dolt sql -q "
@@ -325,8 +328,9 @@ call dolt_commit('-am', 'add one val');"
     dolt commit -m 'initial vals.'
     export DOLT_REMOTE_USER="user0"
     export DOLT_REMOTE_PASSWORD="pass0"
+    dolt sql -q "CREATE USER user0@'%' identified by 'pass0'; GRANT ALL ON *.* to user0@'%';"
 
-    dolt sql-server -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../../
@@ -347,7 +351,7 @@ call dolt_commit('-am', 'add one val');"
     export DOLT_REMOTE_USER="user0"
     export PASSWORD="pass0"
 
-    dolt sql-server -u $DOLT_REMOTE_USER  -p $PASSWORD --remotesapi-port 50051 &
+    dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
 
     cd ../../
@@ -377,9 +381,10 @@ call dolt_commit('-am', 'add one val');"
     dolt commit -m 'initial names.'
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u root
@@ -408,11 +413,11 @@ call dolt_commit('-am', 'add one val');"
     dolt commit -m 'initial names.'
     dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace. This won't be cloned
 
-
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u root
@@ -457,9 +462,10 @@ call dolt_commit('-am', 'add one val');"
     dolt commit -m 'initial names.'
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u root
@@ -508,9 +514,10 @@ call dolt_commit('-am', 'add one val');"
     dolt commit -m 'initial names.'
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     dolt sql -q "
 CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
@@ -548,9 +555,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt commit -m 'initial names.'
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT --remotesapi-readonly
+    start_sql_server_with_args --remotesapi-port $APIPORT --remotesapi-readonly
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u "$SQL_USER"
@@ -575,9 +583,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt branch new_branch HEAD
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
@@ -605,9 +614,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt --use-db=remote/new_branch sql -q 'insert into names (name) values ("zeek");' # dirty the workspace
 
     APIPORT=$(definePORT)
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
@@ -637,9 +647,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt commit -m 'initial names.'
 
     APIPORT=$(definePORT)
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
@@ -666,9 +677,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt commit -m 'initial names.'
 
     APIPORT=$( definePORT )
+    dolt sql -q "CREATE USER root@'%' identified by 'rootpass'; GRANT ALL ON *.* to root@'%';"
     export DOLT_REMOTE_PASSWORD="rootpass"
     export SQL_USER="root"
-    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+    start_sql_server_with_args --remotesapi-port $APIPORT
 
     cd ../
     dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER

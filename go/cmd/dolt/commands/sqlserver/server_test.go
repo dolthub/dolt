@@ -75,8 +75,6 @@ func TestServerArgs(t *testing.T) {
 		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
-			"-u", "username",
-			"-p", "password",
 			"-t", "5",
 			"-l", "info",
 			"-r",
@@ -93,16 +91,33 @@ func TestServerArgs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestDeprecatedUserPasswordServerArgs(t *testing.T) {
+	controller := svcs.NewController()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB.Close())
+	}()
+	err = StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		"-H", "localhost",
+		"-P", "15200",
+		"-u", "username",
+		"-p", "password",
+		"-t", "5",
+		"-l", "info",
+		"-r",
+	}, dEnv, dEnv.FS, controller)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--user and --password have been removed from the sql-server command.")
+	require.Contains(t, err.Error(), "Create users explicitly with CREATE USER and GRANT statements instead.")
+}
+
 func TestYAMLServerArgs(t *testing.T) {
 	const yamlConfig = `
 log_level: info
 
 behavior:
     read_only: true
-
-user:
-    name: username
-    password: password
 
 listener:
     host: localhost
@@ -117,11 +132,11 @@ listener:
 	}()
 	controller := svcs.NewController()
 	go func() {
-
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
-		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		err := StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, dEnv.FS, controller)
+		require.NoError(t, err)
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
@@ -284,8 +299,6 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 		StartServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
-			"-u", "username",
-			"-p", "password",
 			"-t", "5",
 			"-l", "info",
 			"-r",
@@ -516,7 +529,6 @@ func TestReadReplica(t *testing.T) {
 
 func TestGenerateYamlConfig(t *testing.T) {
 	args := []string{
-		"--user", "my_name",
 		"--timeout", "11",
 		"--branch-control-file", "dir1/dir2/abc.db",
 	}
@@ -542,10 +554,6 @@ func TestGenerateYamlConfig(t *testing.T) {
   # disable_client_multi_statements: false
   # dolt_transaction_commit: false
   # event_scheduler: "OFF"
-
-user:
-  name: my_name
-  # password: ""
 
 listener:
   # host: localhost
