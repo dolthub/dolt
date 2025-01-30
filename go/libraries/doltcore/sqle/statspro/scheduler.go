@@ -420,17 +420,10 @@ func (sc *StatsCoord) Info() StatsInfo {
 	dbCnt := len(sc.dbs)
 	defer sc.dbMu.Unlock()
 
-	var active bool
-	select {
-	case _, ok := <-sc.Interrupts:
-		active = ok
-	default:
-		active = true
-	}
 	return StatsInfo{
 		DbCnt:   dbCnt,
 		ReadCnt: int(sc.readCounter.Load()),
-		Active:  active,
+		Active:  true,
 		JobCnt:  len(sc.Jobs),
 	}
 }
@@ -633,22 +626,6 @@ func (sc *StatsCoord) doubleChannelSize(ctx context.Context) {
 	}
 }
 
-func (sc *StatsCoord) runOneInterrupt(ctx *sql.Context) error {
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case j, ok := <-sc.Interrupts:
-		if !ok {
-			return nil
-		}
-		if err := j.cb(sc); err != nil {
-			return err
-		}
-	default:
-	}
-	return nil
-}
-
 func (sc *StatsCoord) dropTableJob(sqlDb dsess.SqlDatabase, tableName string) StatsJob {
 	return FinalizeJob{
 		tableKey: tableIndexesKey{
@@ -847,8 +824,12 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 
 	sc.dbMu.Lock()
 	sc.ddlGuard = false
-	dbBranches := sc.Branches
-	dbs := sc.dbs
+	dbBranches := make(map[string][]ref.DoltRef)
+	for k, v := range sc.Branches {
+		dbBranches[k] = v
+	}
+	dbs := make([]dsess.SqlDatabase, len(sc.dbs))
+	copy(dbs, sc.dbs)
 	sc.dbMu.Unlock()
 
 	for dbName, branches := range dbBranches {
@@ -1008,7 +989,8 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 
 	// can't take |dbMu| and provider lock
 	sc.dbMu.Lock()
-	dbs := sc.dbs
+	dbs := make([]dsess.SqlDatabase, len(sc.dbs))
+	copy(dbs, sc.dbs)
 	sc.ddlGuard = true
 	sc.dbMu.Unlock()
 

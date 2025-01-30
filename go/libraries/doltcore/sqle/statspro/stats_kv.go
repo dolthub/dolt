@@ -192,7 +192,7 @@ func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.buckets.Add(h, b)
-	//log.Println("put ", h.String()[:5], m.buckets.Len())
+	log.Println("put ", h.String()[:5], m.buckets.Len())
 	return nil
 }
 

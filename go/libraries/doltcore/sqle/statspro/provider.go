@@ -435,5 +435,8 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 		case <-j.done:
 		}
 	}
-	return nil
+
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+	return sc.validateState(ctx)
 }

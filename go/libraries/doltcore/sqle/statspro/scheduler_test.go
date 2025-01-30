@@ -34,7 +34,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -1274,14 +1273,14 @@ func TestStatsGcConcurrency(t *testing.T) {
 	}
 
 	addData := func(ctx *sql.Context, dbName string, i int) {
-		log.Println("add ", dbName)
+		//log.Println("add ", dbName)
 		require.NoError(t, executeQuery(ctx, sqlEng, "use "+dbName))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
 	}
 
 	dropDb := func(dropCtx *sql.Context, dbName string) {
-		log.Println("drop ", dbName)
+		//log.Println("drop ", dbName)
 		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database "+dbName))
 	}
@@ -1316,9 +1315,9 @@ func TestStatsGcConcurrency(t *testing.T) {
 			i := 0
 			for db := range dbs {
 				if i%2 == 0 {
+					time.Sleep(50 * time.Millisecond)
 					dropCnt++
 					dropDb(dropCtx, db)
-					time.Sleep(50 * time.Millisecond)
 				}
 				i++
 			}
@@ -1333,31 +1332,9 @@ func TestStatsGcConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.Stop()
 
-		// at the end we should still have |iters/2| databases
-		for i := range iters {
-			if i%2 == 1 {
-				dbName := "db" + strconv.Itoa(i)
-				found := false
-				for k := range sc.Stats {
-					if k.db == dbName {
-						found = true
-					}
-				}
-				if !found {
-					log.Println("missing ", dbName)
-				}
-				found = false
-				for k := range sc.Branches {
-					if k == dbName {
-						found = true
-					}
-				}
-				if !found {
-					log.Println("missing ", dbName)
-				}
-			}
-		}
+		// 101 dbs, 100 with stats (not main)
 		require.Equal(t, iters/2, len(sc.Stats))
+		require.NoError(t, sc.validateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
 	}
 }
@@ -1439,6 +1416,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters/2, len(sc.Stats))
+		require.NoError(t, sc.validateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
 	}
 }
