@@ -24,7 +24,7 @@ import (
 type GCSafepointController struct {
 	mu sync.Mutex
 	// All known sessions. The first command registers the session
-	// here, and SessionEnd causes it to be removed.
+	// here and SessionEnd causes it to be removed.
 	sessions map[*DoltSession]*GCSafepointSessionState
 }
 
@@ -33,9 +33,10 @@ type GCSafepointSessionState struct {
 	// false otherwise.
 	OutstandingCommand bool
 
-	// Registered when we create a GCSafepointWaiter, this
-	// will be called when the session's SessionCommandEnd
-	// function is hit.
+	// Registered when we create a GCSafepointWaiter if
+	// there is an outstanding command on the session
+	// at the time. This will be called when the session's
+	// SessionCommandEnd function is called.
 	CommandEndCallback func()
 
 	// When this channel is non-nil, it means that an
@@ -43,6 +44,48 @@ type GCSafepointSessionState struct {
 	// session. The CommandBegin callback will block until
 	// that call has completed.
 	QuiesceCallbackDone atomic.Value // chan struct{}
+}
+
+// Make is so that HasOutstandingVisitCall will return true and
+// BlockForOutstandingVisitCall will block until
+// EndOutstandingVisitCall is called.
+func (state *GCSafepointSessionState) BeginOutstandingVisitCall() {
+	state.QuiesceCallbackDone.Store(make(chan struct{}))
+}
+
+// Bracket the end of an outstanding visit call. Unblocks any
+// callers to |BlockForOutstandingVisitCall|. Must be paired
+// one-for-one with calls to |BeginOutstandingVisitCall|.
+func (state *GCSafepointSessionState) EndOutstandingVisitCall() {
+	close(state.QuiesceCallbackDone.Load().(chan struct{}))
+}
+
+// Peek whether |BlockForOutstandingVisitCall| would block.
+func (state *GCSafepointSessionState) HasOutstandingVisitCall() bool {
+	ch := state.QuiesceCallbackDone.Load().(chan struct{})
+	select {
+	case <- ch:
+		return false
+	default:
+		return true
+	}
+}
+
+func (state *GCSafepointSessionState) BlockForOutstandingVisitCall() {
+	ch := state.QuiesceCallbackDone.Load().(chan struct{})
+	<- ch
+}
+
+var closedCh = make(chan struct{})
+
+func init() {
+	close(closedCh)
+}
+
+func NewGCSafepointSessionState() *GCSafepointSessionState {
+	state := &GCSafepointSessionState{}
+	state.QuiesceCallbackDone.Store(closedCh)
+	return state
 }
 
 type GCSafepointWaiter struct {
@@ -64,7 +107,8 @@ func NewGCSafepointController() *GCSafepointController {
 // |visitQuiescedSession| on each known session as soon as it is safe and possible. The returned
 // |Waiter| is used to |Wait| for all of those to be completed. A call is not made for |thisSession|,
 // since, if that session corresponds to an ongoing SQL procedure call, for example, that session
-// will never quiesce.
+// will never quiesce. Instead, the caller should ensure that |visitQuiescedSession| is called on
+// its own session.
 //
 // After creating a Waiter, it is an error to create a new Waiter before the |Wait| method of the
 // original watier has returned. This error is not guaranteed to always be detected.
@@ -73,34 +117,42 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession *DoltSes
 	defer c.mu.Unlock()
 	ret := &GCSafepointWaiter{controller: c}
 	for sess, state := range c.sessions {
+		// If an existing session already has a |CommandEndCallback| registered,
+		// then more than one |Waiter| would be outstanding on this
+		// SafepointController. This is an error and is not supported.
 		if state.CommandEndCallback != nil {
 			panic("Attempt to create more than one GCSafepointWaiter.")
 		}
 		if sess == thisSession {
 			continue
 		}
-		if state.OutstandingCommand {
-			ret.wg.Add(1)
-			state.CommandEndCallback = func() {
-				state.QuiesceCallbackDone.Store(make(chan struct{}))
-				go func() {
-					err := visitQuiescedSession(ctx, sess)
-					ret.accumulateErrors(err)
-					ret.wg.Done()
-					toClose := state.QuiesceCallbackDone.Load().(chan struct{})
-					close(toClose)
-				}()
-			}
-		} else {
-			ret.wg.Add(1)
-			state.QuiesceCallbackDone.Store(make(chan struct{}))
+		// When this session's |visit| call is done, it will count down this
+		// waitgroup. The |Wait| method, in turn, will block on this waitgroup
+		// completing to know that all callback are done.
+		ret.wg.Add(1)
+		// The work we do when we visit the session, including bookkeeping.
+		work := func() {
+			// We don't set this until the callback is actually called.
+			// If we did set this outside of the callback, Wait's
+			// cleanup logic would need to change to ensure that the
+			// session is in a usable state when the callback gets
+			// canceled before ever being called.
+			state.BeginOutstandingVisitCall()
 			go func() {
 				err := visitQuiescedSession(ctx, sess)
 				ret.accumulateErrors(err)
 				ret.wg.Done()
-				toClose := state.QuiesceCallbackDone.Load().(chan struct{})
-				close(toClose)
+				state.EndOutstandingVisitCall()
 			}()
+		}
+		if state.OutstandingCommand {
+			// If a command is currently running on the session, register
+			// our work to run as soon as the command is done.
+			state.CommandEndCallback = work
+		} else {
+			// When no command is running on the session, we can immediately
+			// visit it.
+			work()
 		}
 	}
 	return ret
@@ -114,6 +166,23 @@ func (w *GCSafepointWaiter) accumulateErrors(err error) {
 	}
 }
 
+// |Wait| will block on the Waiter's waitgroup. A successful
+// return from this method signals that all sessions that were known
+// about when the waiter was created have been visited by the
+// |visitQuiescedSession| callback that was given to |Waiter|.
+//
+// This function will return early, and with an error, if the
+// supplied |ctx|'s |Done| channel delivers. In that case,
+// all sessions will not necessarily have been visited, but
+// any visit callbacks which were started will still have
+// completed.
+//
+// In addition to returning an error if the passed in |ctx|
+// is |Done| before the wait is finished, this function also
+// returns accumulated errors as seen from each
+// |visitQuiescedSession| callback. No attempt is made to
+// cancel callbacks or to return early in the case that errors
+// are seen from the callback functions.
 func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
@@ -143,36 +212,57 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 	}
 }
 
-var closedCh = make(chan struct{})
-
-func init() {
-	close(closedCh)
-}
-
+// Beginning a command on a session has three effects:
+//
+// 1) It registers the Session in the set of all
+//    known sessions, |c.sessions|, if this is our
+//    first time seeing it.
+//
+// 2) It blocks for any existing call to |CommandEndCallback|
+//    on this session to complete. If a call to |CommendEndCallback|
+//    is outstanding, our |QuiesceCallbackDone| a read from our
+//    |QuiesceCallbackDone| channel will block.
+//
+// 3) It sets |OutstandingCommand| for the Session to true. Only
+//    one command can be outstanding at a time, and whether a command
+//    is outstanding controls how |Waiter| treats the Session when it
+//    is setting up all Sessions to visit their GC roots.
 func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var state *GCSafepointSessionState
 	if state = c.sessions[s]; state == nil {
-		state = &GCSafepointSessionState{}
-		state.QuiesceCallbackDone.Store(closedCh)
+		// Step #1: keep track of all seen sessions.
+		state = NewGCSafepointSessionState()
 		c.sessions[s] = state
 	}
 	if state.OutstandingCommand {
-		panic("SesisonBeginCommand called on a session that already had an outstanding command.")
+		panic("SessionBeginCommand called on a session that already had an outstanding command.")
 	}
-	toWait := state.QuiesceCallbackDone.Load().(chan struct{})
-	select {
-	case <-toWait:
-	default:
+	// Step #2: Receiving from QuiesceCallbackDone blocks, then
+	// the callback for this Session is still outstanding. We
+	// don't want to block on this work finishing while holding
+	// the controller-wide lock, so we release it while we block.
+	if state.HasOutstandingVisitCall() {
 		c.mu.Unlock()
-		<-toWait
+		state.BlockForOutstandingVisitCall()
 		c.mu.Lock()
+		if state.OutstandingCommand {
+			// Concurrent calls to SessionCommandBegin. Bad times...
+			panic("SessionBeginCommand called on a session that already had an outstanding command.")
+		}
 	}
+	// Step #3. Record that a command is running so that Waiter
+	// will populate CommandEndCallback instead of running the
+	// visit logic immediately.
 	state.OutstandingCommand = true
 	return nil
 }
 
+// SessionCommandEnd marks the end of a session command. It has for
+// effects that the session no longer has an OutstandingCommand and,
+// if CommandEndCallback was non-nil, the callback itself has been
+// called and the CommandEndCallback field has been reset to |nil|.
 func (c *GCSafepointController) SessionCommandEnd(s *DoltSession) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -190,16 +280,27 @@ func (c *GCSafepointController) SessionCommandEnd(s *DoltSession) {
 	state.OutstandingCommand = false
 }
 
-// Because we only register sessions when the BeginCommand, it is technically
-// possible to get a SessionEnd callback for a session that was never registered.
-// However, if there is a corresponding session, it is certainly an error for
-// us to get this callback and have OutstandingCommand == true.
+// SessionEnd will remove the session from our tracked session state,
+// if we already knew about it. It is an error to call this on a
+// session which currently has an outstanding command.
+//
+// Because we only register sessions when the BeginCommand, it is
+// possible to get a SessionEnd callback for a session that was
+// never registered.
+//
+// This callback does not block for any outstanding |visitQuiescedSession|
+// callback to be completed before allowing the session to unregister
+// itself. It is an error for the application to call |SessionBeginCommand|
+// on a session after it is has called |SessionEnd| on it, but that error
+// is not necessarily detected.
 func (c *GCSafepointController) SessionEnd(s *DoltSession) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	state := c.sessions[s]
-	if state != nil && state.OutstandingCommand == true {
-		panic("SessionEnd called on a session that had an outstanding command.")
+	if state != nil {
+		if state.OutstandingCommand == true {
+			panic("SessionEnd called on a session that had an outstanding command.")
+		}
+		delete(c.sessions, s)
 	}
-	delete(c.sessions, s)
 }

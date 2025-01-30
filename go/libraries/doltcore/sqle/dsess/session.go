@@ -814,7 +814,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					return err
 				}
 				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 				}
 			} else if head.headCommit != nil {
 				h, err := head.headCommit.HashOf()
@@ -822,7 +822,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 					return err
 				}
 				if keep(h) {
-					panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+					panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 				}
 			} else if head.workingSet != nil {
 				hashes, err := head.dbData.Ddb.WorkingSetHashes(ctx, head.workingSet)
@@ -831,7 +831,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 				}
 				for _, h := range hashes {
 					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 					}
 				}
 			}
@@ -843,7 +843,7 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 				}
 				for _, h := range hashes {
 					if keep(h) {
-						panic("gc safepoint establishment found inconsistent state; process could not guarantee it could would be able to keep a chunk if we continue")
+						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 					}
 				}
 			}
