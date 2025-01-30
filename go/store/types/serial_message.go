@@ -769,10 +769,10 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return err
 			}
 		}
-	case serial.TableSchemaFileID, serial.ForeignKeyCollectionFileID:
+	case serial.TableSchemaFileID, serial.ForeignKeyCollectionFileID, serial.TupleFileID:
 		// no further references from these file types
 		return nil
-	case serial.ProllyTreeNodeFileID, serial.AddressMapFileID, serial.MergeArtifactsFileID, serial.BlobFileID, serial.CommitClosureFileID:
+	case serial.ProllyTreeNodeFileID, serial.AddressMapFileID, serial.MergeArtifactsFileID, serial.BlobFileID, serial.CommitClosureFileID, serial.VectorIndexNodeFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
 			return cb(addr)
 		})
