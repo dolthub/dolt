@@ -430,7 +430,7 @@ func TestBinlogPrimary_ReplicaRestart(t *testing.T) {
 	// Restart the MySQL replica and reconnect to the Dolt primary
 	prevPrimaryDatabase := primaryDatabase
 	var err error
-	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	mySqlPort, mySqlProcess, err = startMySqlServer(t, testDir)
 	require.NoError(t, err)
 	replicaDatabase = primaryDatabase
 	primaryDatabase = prevPrimaryDatabase
@@ -1042,7 +1042,7 @@ func outputReplicaApplierStatus(t *testing.T) {
 	newRows, err := replicaDatabase.Queryx("select * from performance_schema.replication_applier_status_by_worker;")
 	require.NoError(t, err)
 	allNewRows := readAllRowsIntoMaps(t, newRows)
-	fmt.Printf("\n\nreplication_applier_status_by_worker: %v\n", allNewRows)
+	t.Logf("\n\nreplication_applier_status_by_worker: %v\n", allNewRows)
 }
 
 // outputShowReplicaStatus prints out replica status information. This is useful for debugging
@@ -1052,7 +1052,7 @@ func outputShowReplicaStatus(t *testing.T) {
 	newRows, err := replicaDatabase.Queryx("show replica status;")
 	require.NoError(t, err)
 	allNewRows := readAllRowsIntoMaps(t, newRows)
-	fmt.Printf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
+	t.Logf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
 }
 
 // copyMap returns a copy of the specified map |m|.
@@ -1098,7 +1098,7 @@ func waitForReplicaToReconnect(t *testing.T) {
 func mustRestartDoltPrimaryServer(t *testing.T) {
 	var err error
 	prevReplicaDatabase := replicaDatabase
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
 	require.NoError(t, err)
 	primaryDatabase = replicaDatabase
 	replicaDatabase = prevReplicaDatabase
@@ -1109,7 +1109,7 @@ func mustRestartDoltPrimaryServer(t *testing.T) {
 func mustRestartMySqlReplicaServer(t *testing.T) {
 	var err error
 	prevPrimaryDatabase := primaryDatabase
-	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	mySqlPort, mySqlProcess, err = startMySqlServer(t, testDir)
 	require.NoError(t, err)
 	replicaDatabase = primaryDatabase
 	primaryDatabase = prevPrimaryDatabase

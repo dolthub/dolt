@@ -1997,3 +1997,43 @@ EOF
     [ $status -eq 1 ]
     [[ "$output" =~ "cannot specify both global --data-dir argument and --data-dir in sql-server config" ]] || false
 }
+
+# This is really a test of the dolt_Branches system table, but due to needing a server with multiple dirty branches
+# it was easier to test it with a sql-server.
+@test "sql-server: dirty branches listed properly in dolt_branches table" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    dolt checkout main
+    dolt branch br1 # Will be a clean commit, ahead of main.
+    dolt branch br2 # will be a dirty branch, on main.
+    dolt branch br3 # will be a dirty branch, on br1
+    start_sql_server repo1
+
+    dolt --use-db "repo1" --branch br1 sql -q "CREATE TABLE tbl (i int primary key)"
+    dolt --use-db "repo1" --branch br1 sql -q "CALL DOLT_COMMIT('-Am', 'commit it')"
+
+    dolt --use-db "repo1" --branch br2 sql -q "CREATE TABLE tbl (j int primary key)"
+
+    # Fast forward br3 to br1, then make it dirty.
+    dolt --use-db "repo1" --branch br3 sql -q "CALL DOLT_MERGE('br1')"
+    dolt --use-db "repo1" --branch br3 sql -q "CREATE TABLE othertbl (k int primary key)"
+
+    stop_sql_server 1 && sleep 0.5
+
+    run dolt sql -q "SELECT name,dirty FROM dolt_branches"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "br1  | false" ]] || false
+    [[ "$output" =~ "br2  | true " ]] || false
+    [[ "$output" =~ "br3  | true" ]] || false
+    [[ "$output" =~ "main | false" ]] || false
+
+    # Verify that the dolt_branches table show the same output, regardless of the checked out branch.
+    dolt checkout br1
+    run dolt sql -q "SELECT name,dirty FROM dolt_branches"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "br1  | false" ]] || false
+    [[ "$output" =~ "br2  | true " ]] || false
+    [[ "$output" =~ "br3  | true" ]] || false
+    [[ "$output" =~ "main | false" ]] || false
+}

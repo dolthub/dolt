@@ -118,7 +118,9 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 		return nil
 	}
 
-	err = gcs.newGen.GetMany(ctx, notFound, func(ctx context.Context, chunk *chunks.Chunk) {
+	hashes = notFound
+	notFound = hashes.Copy()
+	err = gcs.newGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
@@ -143,14 +145,18 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	return gcs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
+}
+
+func (gcs *GenerationalNBS) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
 	var mu sync.Mutex
 	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
+	err := gcs.oldGen.getManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
 		mu.Lock()
 		delete(notInOldGen, chunk.Hash())
 		mu.Unlock()
 		found(ctx, chunk)
-	})
+	}, gcDepMode)
 	if err != nil {
 		return err
 	}
@@ -159,12 +165,12 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 	}
 
 	notFound := notInOldGen.Copy()
-	err = gcs.newGen.GetManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk CompressedChunk) {
+	err = gcs.newGen.getManyCompressed(ctx, notInOldGen, func(ctx context.Context, chunk CompressedChunk) {
 		mu.Lock()
 		delete(notFound, chunk.Hash())
 		mu.Unlock()
 		found(ctx, chunk)
-	})
+	}, gcDepMode)
 	if err != nil {
 		return err
 	}
@@ -174,7 +180,7 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 
 	// The missing chunks may be ghost chunks.
 	if gcs.ghostGen != nil {
-		return gcs.ghostGen.GetManyCompressed(ctx, notFound, found)
+		return gcs.ghostGen.getManyCompressed(ctx, notFound, found, gcDepMode)
 	}
 	return nil
 }
@@ -202,14 +208,30 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 }
 
 // HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
-func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
-	gcs.newGen.mu.RLock()
-	defer gcs.newGen.mu.RUnlock()
-	return gcs.hasMany(toHasRecords(hashes))
+func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	absent, err := gcs.newGen.HasMany(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(absent) == 0 {
+		return nil, err
+	}
+
+	absent, err = gcs.oldGen.HasMany(ctx, absent)
+	if err != nil {
+		return nil, err
+	}
+	if len(absent) == 0 || gcs.ghostGen == nil {
+		return nil, err
+	}
+
+	return gcs.ghostGen.HasMany(ctx, absent)
 }
 
-func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err error) {
-	absent, err = gcs.newGen.hasMany(recs)
+// |refCheck| is called from write processes in newGen, so it is called with
+// newGen.mu held. oldGen.mu is not held however.
+func (gcs *GenerationalNBS) refCheck(recs []hasRecord) (hash.HashSet, error) {
+	absent, err := gcs.newGen.refCheck(recs)
 	if err != nil {
 		return nil, err
 	} else if len(absent) == 0 {
@@ -219,12 +241,11 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 	absent, err = func() (hash.HashSet, error) {
 		gcs.oldGen.mu.RLock()
 		defer gcs.oldGen.mu.RUnlock()
-		return gcs.oldGen.hasMany(recs)
+		return gcs.oldGen.refCheck(recs)
 	}()
 	if err != nil {
 		return nil, err
 	}
-
 	if len(absent) == 0 || gcs.ghostGen == nil {
 		return absent, nil
 	}
@@ -237,7 +258,7 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (gcs *GenerationalNBS) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
-	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.hasMany)
+	return gcs.newGen.putChunk(ctx, c, getAddrs, gcs.refCheck)
 }
 
 // Returns the NomsBinFormat with which this ChunkSource is compatible.
@@ -277,7 +298,7 @@ func (gcs *GenerationalNBS) Root(ctx context.Context) (hash.Hash, error) {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (gcs *GenerationalNBS) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	return gcs.newGen.commit(ctx, current, last, gcs.hasMany)
+	return gcs.newGen.commit(ctx, current, last, gcs.refCheck)
 }
 
 // Stats may return some kind of struct that reports statistics about the
@@ -400,18 +421,18 @@ func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdT
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest of the new or old gen chunkstores
 func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
-	err := gcs.oldGen.pruneTableFiles(ctx, gcs.hasMany)
+	err := gcs.oldGen.pruneTableFiles(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	return gcs.newGen.pruneTableFiles(ctx, gcs.hasMany)
+	return gcs.newGen.pruneTableFiles(ctx)
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root for the newgen cs
 func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return gcs.newGen.setRootChunk(ctx, root, previous, gcs.hasMany)
+	return gcs.newGen.setRootChunk(ctx, root, previous, gcs.refCheck)
 }
 
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
@@ -473,12 +494,37 @@ func (gcs *GenerationalNBS) UpdateManifest(ctx context.Context, updates map[hash
 	return gcs.newGen.UpdateManifest(ctx, updates)
 }
 
-func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool) error {
-	return gcs.newGen.BeginGC(keeper)
+func (gcs *GenerationalNBS) OldGenGCFilter() chunks.HasManyFunc {
+	return func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return gcs.oldGen.hasManyDep(ctx, hashes, gcDependencyMode_NoDependency)
+	}
 }
 
-func (gcs *GenerationalNBS) EndGC() {
-	gcs.newGen.EndGC()
+func (gcs *GenerationalNBS) BeginGC(keeper func(hash.Hash) bool, mode chunks.GCMode) error {
+	err := gcs.newGen.BeginGC(keeper, mode)
+	if err != nil {
+		return err
+	}
+	// In GCMode_Full, the OldGen is also being collected. In normal
+	// operation, the OldGen is not being collected because it is
+	// still growing monotonically and nothing in it is at risk of
+	// going away. In Full mode, we want to take read dependencies
+	// from the OldGen as well.
+	if mode == chunks.GCMode_Full {
+		err = gcs.oldGen.BeginGC(keeper, mode)
+		if err != nil {
+			gcs.newGen.EndGC(mode)
+			return err
+		}
+	}
+	return nil
+}
+
+func (gcs *GenerationalNBS) EndGC(mode chunks.GCMode) {
+	if mode == chunks.GCMode_Full {
+		gcs.oldGen.EndGC(mode)
+	}
+	gcs.newGen.EndGC(mode)
 }
 
 func (gcs *GenerationalNBS) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {

@@ -29,6 +29,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -47,12 +48,53 @@ var mySqlProcess, doltProcess *os.Process
 var doltLogFilePath, oldDoltLogFilePath, mysqlLogFilePath string
 var doltLogFile, mysqlLogFile *os.File
 var testDir string
-var originalWorkingDir string
 
 // doltReplicaSystemVars are the common system variables that need
 // to be set on a Dolt replica before replication is turned on.
 var doltReplicaSystemVars = map[string]string{
 	"server_id": "42",
+}
+
+func TestMain(m *testing.M) {
+	res := func() int {
+		defer func() {
+			cachedDoltDevBuildPathOnce.Do(func() {})
+			if cachedDoltDevBuildPath != "" {
+				os.RemoveAll(filepath.Dir(cachedDoltDevBuildPath))
+			}
+		}()
+		return m.Run()
+	}()
+	os.Exit(res)
+}
+
+var cachedDoltDevBuildPath string
+var cachedDoltDevBuildPathOnce sync.Once
+
+func DoltDevBuildPath() string {
+	cachedDoltDevBuildPathOnce.Do(func() {
+		tmp, err := os.MkdirTemp("", "binlog-replication-doltbin-")
+		if err != nil {
+			panic(err)
+		}
+		fullpath := filepath.Join(tmp, "dolt")
+
+		originalWorkingDir, err := os.Getwd()
+		if err != nil {
+			panic(err)
+		}
+
+		goDirPath := filepath.Join(originalWorkingDir, "..", "..", "..", "..")
+
+		cmd := exec.Command("go", "build", "-o", fullpath, "./cmd/dolt")
+		cmd.Dir = goDirPath
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			panic("unable to build dolt for binlog integration tests: " + err.Error() + "\nFull output: " + string(output) + "\n")
+		}
+		cachedDoltDevBuildPath = fullpath
+	})
+	return cachedDoltDevBuildPath
 }
 
 func teardown(t *testing.T) {
@@ -72,17 +114,17 @@ func teardown(t *testing.T) {
 	// Output server logs on failure for easier debugging
 	if t.Failed() {
 		if oldDoltLogFilePath != "" {
-			fmt.Printf("\nDolt server log from %s:\n", oldDoltLogFilePath)
-			printFile(oldDoltLogFilePath)
+			t.Logf("\nDolt server log from %s:\n", oldDoltLogFilePath)
+			printFile(t, oldDoltLogFilePath)
 		}
 
-		fmt.Printf("\nDolt server log from %s:\n", doltLogFilePath)
-		printFile(doltLogFilePath)
-		fmt.Printf("\nMySQL server log from %s:\n", mysqlLogFilePath)
-		printFile(mysqlLogFilePath)
+		t.Logf("\nDolt server log from %s:\n", doltLogFilePath)
+		printFile(t, doltLogFilePath)
+		t.Logf("\nMySQL server log from %s:\n", mysqlLogFilePath)
+		printFile(t, mysqlLogFilePath)
 		mysqlErrorLogFilePath := filepath.Join(filepath.Dir(mysqlLogFilePath), "error_log.err")
-		fmt.Printf("\nMySQL server error log from %s:\n", mysqlErrorLogFilePath)
-		printFile(mysqlErrorLogFilePath)
+		t.Logf("\nMySQL server error log from %s:\n", mysqlErrorLogFilePath)
+		printFile(t, mysqlErrorLogFilePath)
 	} else {
 		// clean up temp files on clean test runs
 		defer os.RemoveAll(testDir)
@@ -194,7 +236,7 @@ func TestAutoRestartReplica(t *testing.T) {
 	// Restart the Dolt replica
 	stopDoltSqlServer(t)
 	var err error
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
 	require.NoError(t, err)
 
 	// Assert that some test data replicates correctly
@@ -218,7 +260,7 @@ func TestAutoRestartReplica(t *testing.T) {
 
 	// Restart the Dolt replica
 	stopDoltSqlServer(t)
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, nil)
+	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
 	require.NoError(t, err)
 
 	// SHOW REPLICA STATUS should show that replication is NOT running, with no errors
@@ -590,11 +632,13 @@ func TestCharsetsAndCollations(t *testing.T) {
 // Test Helper Functions
 //
 
-// waitForReplicaToCatchUp waits (up to 30s) for the replica to catch up with the primary database. The
-// lag is measured by checking that gtid_executed is the same on the primary and replica.
+// waitForReplicaToCatchUp waits for the replica to catch up with the primary database. The
+// lag is measured by checking that gtid_executed is the same on the primary and replica. If
+// no progress is made in 30 seconds, this function will fail the test.
 func waitForReplicaToCatchUp(t *testing.T) {
 	timeLimit := 30 * time.Second
 
+	lastReplicaGtid := ""
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		replicaGtid := queryGtid(t, replicaDatabase)
@@ -602,8 +646,11 @@ func waitForReplicaToCatchUp(t *testing.T) {
 
 		if primaryGtid == replicaGtid {
 			return
+		} else if lastReplicaGtid != replicaGtid {
+			lastReplicaGtid = replicaGtid
+			endTime = time.Now().Add(timeLimit)
 		} else {
-			fmt.Printf("primary and replica not in sync yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
+			t.Logf("primary and replica not in sync yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
 			time.Sleep(250 * time.Millisecond)
 		}
 	}
@@ -639,7 +686,7 @@ func waitForReplicaToReachGtid(t *testing.T, target int) {
 			}
 		}
 
-		fmt.Printf("replica has not reached transaction %d yet; currently at: %s \n", target, replicaGtid)
+		t.Logf("replica has not reached transaction %d yet; currently at: %s \n", target, replicaGtid)
 	}
 
 	t.Fatal("replica did not reach target GTID within " + timeLimit.String())
@@ -725,20 +772,13 @@ func startSqlServersWithDoltSystemVars(t *testing.T, doltPersistentSystemVars ma
 
 	testDir = filepath.Join(os.TempDir(), fmt.Sprintf("%s-%v", t.Name(), time.Now().Unix()))
 	err := os.MkdirAll(testDir, 0777)
-
-	cmd := exec.Command("chmod", "777", testDir)
-	_, err = cmd.Output()
-	if err != nil {
-		panic(err)
-	}
-
 	require.NoError(t, err)
-	fmt.Printf("temp dir: %v \n", testDir)
+	t.Logf("temp dir: %v \n", testDir)
 
 	// Start up primary and replica databases
-	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)
+	mySqlPort, mySqlProcess, err = startMySqlServer(t, testDir)
 	require.NoError(t, err)
-	doltPort, doltProcess, err = startDoltSqlServer(testDir, doltPersistentSystemVars)
+	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, doltPersistentSystemVars)
 	require.NoError(t, err)
 }
 
@@ -856,25 +896,9 @@ func findFreePort() int {
 
 // startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
 // and the os.Process handle. If unable to start up the MySQL server, an error is returned.
-func startMySqlServer(dir string) (int, *os.Process, error) {
-	originalCwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
-	dir = dir + string(os.PathSeparator) + "mysql" + string(os.PathSeparator)
-	dataDir := dir + "mysql_data"
-	err = os.MkdirAll(dir, 0777)
-	if err != nil {
-		return -1, nil, err
-	}
-	cmd := exec.Command("chmod", "777", dir)
-	output, err := cmd.Output()
-	if err != nil {
-		panic(err)
-	}
-
-	err = os.Chdir(dir)
+func startMySqlServer(t *testing.T, dir string) (int, *os.Process, error) {
+	dir = filepath.Join(dir, "mysql")
+	err := os.MkdirAll(dir, 0777)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -889,28 +913,31 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	}
 	username := user.Username
 	if username == "root" {
-		fmt.Printf("overriding current user (root) to run mysql as 'mysql' user instead\n")
+		t.Logf("overriding current user (root) to run mysql as 'mysql' user instead\n")
 		username = "mysql"
 	}
+
+	dataDir := filepath.Join(dir, "mysql_data")
 
 	// Check to see if the MySQL data directory has the "mysql" directory in it, which
 	// tells us whether this MySQL instance has been initialized yet or not.
 	initialized := directoryExists(filepath.Join(dataDir, "mysql"))
 	if !initialized {
 		// Create a fresh MySQL server for the primary
-		chmodCmd := exec.Command("mysqld",
+		initCmd := exec.Command("mysqld",
 			"--no-defaults",
 			"--user="+username,
 			"--initialize-insecure",
 			"--datadir="+dataDir,
 			"--default-authentication-plugin=mysql_native_password")
-		output, err = chmodCmd.CombinedOutput()
+		initCmd.Dir = dir
+		output, err := initCmd.CombinedOutput()
 		if err != nil {
-			return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", cmd.String(), err.Error(), string(output))
+			return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", initCmd.String(), err.Error(), string(output))
 		}
 	}
 
-	cmd = exec.Command("mysqld",
+	cmd := exec.Command("mysqld",
 		"--no-defaults",
 		"--user="+username,
 		"--datadir="+dataDir,
@@ -920,17 +947,18 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 		fmt.Sprintf("--port=%v", mySqlPort),
 		"--server-id=11223344",
 		fmt.Sprintf("--socket=mysql-%v.sock", mySqlPort),
-		"--general_log_file="+dir+"general_log",
-		"--slow_query_log_file="+dir+"slow_query_log",
+		"--general_log_file="+filepath.Join(dir, "general_log"),
+		"--slow_query_log_file="+filepath.Join(dir, "slow_query_log"),
 		"--log-error="+dir+"error_log",
-		fmt.Sprintf("--pid-file="+dir+"pid-%v.pid", mySqlPort))
+		fmt.Sprintf("--pid-file="+filepath.Join(dir, "pid-%v.pid"), mySqlPort))
+	cmd.Dir = dir
 
 	mysqlLogFilePath = filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
 	mysqlLogFile, err = os.Create(mysqlLogFilePath)
 	if err != nil {
 		return -1, nil, err
 	}
-	fmt.Printf("MySQL server logs at: %s \n", mysqlLogFilePath)
+	t.Logf("MySQL server logs at: %s \n", mysqlLogFilePath)
 	cmd.Stdout = mysqlLogFile
 	cmd.Stderr = mysqlLogFile
 	err = cmd.Start()
@@ -941,7 +969,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
-	err = waitForSqlServerToStart(primaryDatabase)
+	err = waitForSqlServerToStart(t, primaryDatabase)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -955,8 +983,7 @@ func startMySqlServer(dir string) (int, *os.Process, error) {
 	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
 	primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
-	os.Chdir(originalCwd)
-	fmt.Printf("MySQL server started on port %v \n", mySqlPort)
+	t.Logf("MySQL server started on port %v \n", mySqlPort)
 
 	return mySqlPort, cmd.Process, nil
 }
@@ -971,43 +998,10 @@ func directoryExists(path string) bool {
 	return info.IsDir()
 }
 
-var cachedDoltDevBuildPath = ""
-
-func initializeDevDoltBuild(dir string, goDirPath string) string {
-	if cachedDoltDevBuildPath != "" {
-		return cachedDoltDevBuildPath
-	}
-
-	// If we're not in a CI environment, don't worry about building a dev build
-	if os.Getenv("CI") != "true" {
-		return ""
-	}
-
-	basedir := filepath.Dir(filepath.Dir(dir))
-	fullpath := filepath.Join(basedir, fmt.Sprintf("devDolt-%d", os.Getpid()))
-
-	_, err := os.Stat(fullpath)
-	if err == nil {
-		return fullpath
-	}
-
-	fmt.Printf("building dolt dev build at: %s \n", fullpath)
-	cmd := exec.Command("go", "build", "-o", fullpath, "./cmd/dolt")
-	cmd.Dir = goDirPath
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		panic("unable to build dolt for binlog integration tests: " + err.Error() + "\nFull output: " + string(output) + "\n")
-	}
-	cachedDoltDevBuildPath = fullpath
-
-	return cachedDoltDevBuildPath
-}
-
 // startDoltSqlServer starts a Dolt sql-server on a free port from the specified directory |dir|. If
 // |doltPeristentSystemVars| is populated, then those system variables will be set, persistently, for
 // the Dolt database, before the Dolt sql-server is started.
-func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) (int, *os.Process, error) {
+func startDoltSqlServer(t *testing.T, dir string, doltPersistentSystemVars map[string]string) (int, *os.Process, error) {
 	dir = filepath.Join(dir, "dolt")
 	err := os.MkdirAll(dir, 0777)
 	if err != nil {
@@ -1019,57 +1013,34 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 	if doltPort < 1 {
 		doltPort = findFreePort()
 	}
-	fmt.Printf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
-
-	// take the CWD and move up four directories to find the go directory
-	if originalWorkingDir == "" {
-		var err error
-		originalWorkingDir, err = os.Getwd()
-		if err != nil {
-			panic(err)
-		}
-	}
-	goDirPath := filepath.Join(originalWorkingDir, "..", "..", "..", "..")
-	err = os.Chdir(goDirPath)
-	if err != nil {
-		panic(err)
-	}
-
-	socketPath := filepath.Join("/tmp", fmt.Sprintf("dolt.%v.sock", doltPort))
+	t.Logf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
 
 	// use an admin user NOT named "root" to test that we don't require the "root" account
 	adminUser := "admin"
 
 	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
 		// Initialize the dolt directory first
-		err = runDoltCommand(dir, goDirPath, "init", "--name=binlog-test", "--email=binlog@test")
+		err = runDoltCommand(t, dir, "init", "--name=binlog-test", "--email=binlog@test")
 		if err != nil {
 			return -1, nil, err
 		}
 
 		for systemVar, value := range doltPersistentSystemVars {
 			query := fmt.Sprintf("SET @@PERSIST.%s=%s;", systemVar, value)
-			err = runDoltCommand(dir, goDirPath, "sql", fmt.Sprintf("-q=%s", query))
+			err = runDoltCommand(t, dir, "sql", fmt.Sprintf("-q=%s", query))
 			if err != nil {
 				return -1, nil, err
 			}
 		}
 	}
 
-	args := []string{"go", "run", "./cmd/dolt",
+	args := []string{DoltDevBuildPath(),
 		"sql-server",
 		fmt.Sprintf("-u%s", adminUser),
 		"--loglevel=TRACE",
 		fmt.Sprintf("--data-dir=%s", dir),
-		fmt.Sprintf("--port=%v", doltPort),
-		fmt.Sprintf("--socket=%s", socketPath)}
+		fmt.Sprintf("--port=%v", doltPort)}
 
-	// If we're running in CI, use a precompiled dolt binary instead of go run
-	devDoltPath := initializeDevDoltBuild(dir, goDirPath)
-	if devDoltPath != "" {
-		args[2] = devDoltPath
-		args = args[2:]
-	}
 	cmd := exec.Command(args[0], args[1:]...)
 
 	// Set a unique process group ID so that we can cleanly kill this process, as well as
@@ -1094,7 +1065,7 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 	if err != nil {
 		return -1, nil, err
 	}
-	fmt.Printf("dolt sql-server logs at: %s \n", doltLogFilePath)
+	t.Logf("dolt sql-server logs at: %s \n", doltLogFilePath)
 	cmd.Stdout = doltLogFile
 	cmd.Stderr = doltLogFile
 	err = cmd.Start()
@@ -1102,18 +1073,18 @@ func startDoltSqlServer(dir string, doltPersistentSystemVars map[string]string) 
 		return -1, nil, fmt.Errorf("unable to execute command %v: %v", cmd.String(), err.Error())
 	}
 
-	fmt.Printf("Dolt CMD: %s\n", cmd.String())
+	t.Logf("Dolt CMD: %s\n", cmd.String())
 
 	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", adminUser, doltPort)
 	replicaDatabase = sqlx.MustOpen("mysql", dsn)
 
-	err = waitForSqlServerToStart(replicaDatabase)
+	err = waitForSqlServerToStart(t, replicaDatabase)
 	if err != nil {
 		return -1, nil, err
 	}
 
 	mustCreateReplicatorUser(replicaDatabase)
-	fmt.Printf("Dolt server started on port %v \n", doltPort)
+	t.Logf("Dolt server started on port %v \n", doltPort)
 
 	return doltPort, cmd.Process, nil
 }
@@ -1125,24 +1096,17 @@ func mustCreateReplicatorUser(db *sqlx.DB) {
 }
 
 // runDoltCommand runs a short-lived dolt CLI command with the specified arguments from |doltArgs|. The Dolt data
-// directory is specified from |doltDataDir| and |goDirPath| is the path to the go directory within the Dolt repo.
+// directory is specified from |doltDataDir|.
 // This function will only return when the Dolt CLI command has completed, so it is not suitable for running
 // long-lived commands such as "sql-server". If the command fails, an error is returned with the combined output.
-func runDoltCommand(doltDataDir string, goDirPath string, doltArgs ...string) error {
-	// If we're running in CI, use a precompiled dolt binary instead of go run
-	devDoltPath := initializeDevDoltBuild(doltDataDir, goDirPath)
-
-	args := append([]string{"go", "run", "./cmd/dolt",
+func runDoltCommand(t *testing.T, doltDataDir string, doltArgs ...string) error {
+	args := append([]string{DoltDevBuildPath(),
 		fmt.Sprintf("--data-dir=%s", doltDataDir)},
 		doltArgs...)
-	if devDoltPath != "" {
-		args[2] = devDoltPath
-		args = args[2:]
-	}
 	cmd := exec.Command(args[0], args[1:]...)
-	fmt.Printf("Running Dolt CMD: %s\n", cmd.String())
+	t.Logf("Running Dolt CMD: %s\n", cmd.String())
 	output, err := cmd.CombinedOutput()
-	fmt.Printf("Dolt CMD output: %s\n", string(output))
+	t.Logf("Dolt CMD output: %s\n", string(output))
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, string(output))
 	}
@@ -1152,13 +1116,13 @@ func runDoltCommand(doltDataDir string, goDirPath string, doltArgs ...string) er
 // waitForSqlServerToStart polls the specified database to wait for it to become available, pausing
 // between retry attempts, and returning an error if it is not able to verify that the database is
 // available.
-func waitForSqlServerToStart(database *sqlx.DB) error {
-	fmt.Printf("Waiting for server to start...\n")
+func waitForSqlServerToStart(t *testing.T, database *sqlx.DB) error {
+	t.Logf("Waiting for server to start...\n")
 	for counter := 0; counter < 30; counter++ {
 		if database.Ping() == nil {
 			return nil
 		}
-		fmt.Printf("not up yet; waiting...\n")
+		t.Logf("not up yet; waiting...\n")
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -1166,10 +1130,10 @@ func waitForSqlServerToStart(database *sqlx.DB) error {
 }
 
 // printFile opens the specified filepath |path| and outputs the contents of that file to stdout.
-func printFile(path string) {
+func printFile(t *testing.T, path string) {
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Printf("Unable to open file: %s \n", err)
+		t.Logf("Unable to open file: %s \n", err)
 		return
 	}
 	defer file.Close()
@@ -1184,9 +1148,9 @@ func printFile(path string) {
 				panic(err)
 			}
 		}
-		fmt.Print(s)
+		t.Log(s)
 	}
-	fmt.Println()
+	t.Log()
 }
 
 // assertRepoStateFileExists asserts that the repo_state.json file is present for the specified

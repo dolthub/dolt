@@ -63,7 +63,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 			c := nextChunk()
 			mt.addChunk(computeAddr(c), c)
 		}
-		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		c, err := cs.clone()
 		require.NoError(t, err)
@@ -159,11 +159,11 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				var ok bool
 				for _, act := range actualSrcs {
 					var err error
-					ok, err = act.has(rec.a)
+					ok, _, err = act.has(rec.a, nil)
 					require.NoError(t, err)
 					var buf []byte
 					if ok {
-						buf, err = act.get(ctx, rec.a, stats)
+						buf, _, err = act.get(ctx, rec.a, nil, stats)
 						require.NoError(t, err)
 						assert.Equal(t, rec.data, buf)
 						break
@@ -180,7 +180,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		mt := newMemTable(testMemTableSize)
 		data := []byte{0xde, 0xad}
 		mt.addChunk(computeAddr(data), data)
-		src, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		src, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		defer src.close()
 		return tableSpec{src.hash(), mustUint32(src.count())}

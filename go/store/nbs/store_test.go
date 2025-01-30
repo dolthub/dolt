@@ -209,7 +209,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 			addrs.Insert(c.Hash())
 			return nil
 		}
-	}, st.hasMany)
+	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
@@ -334,7 +334,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	require.NoError(t, st.BeginGC(nil))
+	require.NoError(t, st.BeginGC(nil, chunks.GCMode_Full))
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}
@@ -349,7 +349,7 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, sweeper.Close(ctx))
 	require.NoError(t, finalizer.SwapChunksInStore(ctx))
-	st.EndGC()
+	st.EndGC(chunks.GCMode_Full)
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)
@@ -378,7 +378,7 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 		require.True(t, ok)
 		tableFileMap[fileIDHash] = uint32(i + 1)
 		mapIds[i] = fileIDHash
-		cs, err := p.Persist(context.Background(), createMemTable(chunkData), nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), createMemTable(chunkData), nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 
