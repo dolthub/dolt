@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -302,7 +303,8 @@ type StatsCoord struct {
 	bucketCnt     atomic.Int64
 	bucketCap     int64
 
-	Jobs       chan StatsJob
+	Jobs chan StatsJob
+
 	Interrupts chan ControlJob
 	Done       chan struct{}
 
@@ -349,13 +351,13 @@ func (sc *StatsCoord) cancelGc() {
 	}
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys) chan struct{} {
+func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys) (chan struct{}, error) {
 	db, err := sqle.RevisionDbForBranch(ctx, db, branch.GetPath(), branch.GetPath()+"/"+db.AliasedName())
 	if err != nil {
 		sc.error(ControlJob{desc: "add db"}, err)
 		ret := make(chan struct{})
 		close(ret)
-		return ret
+		return ret, nil
 	}
 
 	sc.dbMu.Lock()
@@ -364,7 +366,10 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 
 	sc.Branches[db.AliasedName()] = append(sc.Branches[db.AliasedName()], ref.NewBranchRef(db.Revision()))
 	sc.dbs = append(sc.dbs, db)
-	ret := sc.Seed(ctx, db)
+	ret, err := sc.Seed(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(sc.dbs) == 1 {
 		sc.statsBackingDb = db.AliasedName()
@@ -376,22 +381,22 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 			mem = kv.mem
 		default:
 			mem = NewMemStats()
-			return ret
+			return ret, nil
 		}
 		if sc.memOnly {
-			return ret
+			return ret, nil
 		}
 		newKv, err := sc.initStorage(ctx, db, fs)
 		if err != nil {
 			sc.error(ControlJob{desc: "add db"}, err)
 			close(ret)
-			return ret
+			return ret, nil
 		}
 		newKv.mem = mem
 		sc.kv = newKv
 	}
 
-	return ret
+	return ret, nil
 }
 
 func (sc *StatsCoord) Drop(dbName string) {
@@ -451,16 +456,21 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 	return ret, nil
 }
 
-func (sc *StatsCoord) Seed(ctx *sql.Context, sqlDb dsess.SqlDatabase) chan struct{} {
+func (sc *StatsCoord) Seed(ctx context.Context, sqlDb dsess.SqlDatabase) (chan struct{}, error) {
 	j := NewSeedJob(sqlDb)
-	sc.Jobs <- j
-	return j.done
+	//sc.Jobs <- j
+	if err := sc.safeAsyncSend(ctx, j); err != nil {
+		return nil, err
+	}
+	return j.done, nil
 }
 
-func (sc *StatsCoord) Control(desc string, cb func(sc *StatsCoord) error) chan struct{} {
+func (sc *StatsCoord) Control(ctx context.Context, desc string, cb func(sc *StatsCoord) error) (chan struct{}, error) {
 	j := NewControl(desc, cb)
-	sc.Jobs <- j
-	return j.done
+	if err := sc.safeAsyncSend(ctx, j); err != nil {
+		return nil, err
+	}
+	return j.done, nil
 }
 
 func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan struct{} {
@@ -501,6 +511,7 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 					sc.error(ControlJob{desc: "gc"}, err)
 				}
 			}
+			continue
 		}
 
 		if sc.doBranchCheck.Swap(false) {
@@ -513,6 +524,7 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if err != nil {
 				sc.error(j, err)
 			}
+			continue
 		}
 
 		select {
@@ -566,6 +578,10 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 }
 
 func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
+	// jobs can double and access is concurrent
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+
 	for i := 0; i < len(jobs); i++ {
 		j := jobs[i]
 		if j == nil {
@@ -608,22 +624,12 @@ func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) ([]StatsJob, e
 }
 
 func (sc *StatsCoord) doubleChannelSize(ctx context.Context) {
-	var restart bool
-	select {
-	case <-sc.Done:
-	default:
-		sc.Stop()
-		restart = true
-	}
 	close(sc.Jobs)
 	ch := make(chan StatsJob, cap(sc.Jobs)*2)
 	for j := range sc.Jobs {
 		ch <- j
 	}
 	sc.Jobs = ch
-	if restart {
-		sc.Restart(ctx)
-	}
 }
 
 func (sc *StatsCoord) dropTableJob(sqlDb dsess.SqlDatabase, tableName string) StatsJob {
@@ -688,7 +694,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 					return nil, err
 				}
 			}
-			fmt.Printf("%s bound %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
+			//fmt.Printf("%s bound %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
 			sc.kv.PutBound(firstNodeHash, firstRow)
 		}
 	}
@@ -720,7 +726,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		}
 
 		// finalize the aggregation
-		log.Println("read/put chunk ", n.HashOf().String()[:5])
+		//log.Println("read/put chunk ", n.HashOf().String()[:5])
 		bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
 		if err != nil {
 			return nil, err
@@ -764,7 +770,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		}
 	}
 	for key, fs := range j.editIndexes {
-		log.Println("finalize " + j.tableKey.String() + " " + key.String())
+		//log.Println("finalize " + j.tableKey.String() + " " + key.String())
 		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
 			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
@@ -799,7 +805,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 	// protected swap
 	sc.statsMu.Lock()
 	sc.Stats[j.tableKey] = newStats
-	log.Println("stat cnt: ", len(sc.Stats), len(newStats))
+	//log.Println("stat cnt: ", len(sc.Stats), len(newStats))
 	sc.statsMu.Unlock()
 
 	return nil, nil
@@ -811,7 +817,7 @@ type dbBranchKey struct {
 }
 
 func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
-	log.Println("run branch update")
+	//log.Println("run branch update")
 	j := ControlJob{desc: "branch update"}
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
@@ -967,10 +973,13 @@ func (sc *StatsCoord) setGc() {
 }
 
 func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
-	log.Println("run GC")
-
-	sc.doGc.Store(false)
+	//log.Println("run GC")
 	if !sc.enableGc.Load() {
+		close(done)
+		return nil
+	}
+
+	if sc.activeGc.Swap(true) {
 		close(done)
 		return nil
 	}
@@ -1001,6 +1010,9 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 		if sql.ErrDatabaseNotFound.Is(err) {
 			// concurrent delete
 			continue
+		} else if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			// branch registered but no data
+			continue
 		} else if err != nil {
 			return err
 		}
@@ -1010,7 +1022,12 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 	sc.bucketCnt.Store(int64(bucketCnt))
 	sc.bucketCap = sc.kv.Cap()
 	sc.kv.FinishGc()
-	sc.activeGc.Store(false)
+
+	sc.sendJobs(ctx, NewControl("re-enable GC", func(sc *StatsCoord) error {
+		// avoid GC exhausting the loop
+		sc.activeGc.Store(false)
+		return nil
+	}))
 
 	return nil
 }

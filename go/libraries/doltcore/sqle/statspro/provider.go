@@ -15,6 +15,7 @@
 package statspro
 
 import (
+	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -93,7 +94,7 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		return ctx.Err()
 	case <-sc.Done:
 		return fmt.Errorf("stat queue was interrupted")
-	case sc.Jobs <- analyze:
+	case sc.Jobs <- analyze: //TODO send jobs
 	}
 
 	// wait for finalize to finish before returning
@@ -262,7 +263,11 @@ func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, sqlDb dsess.SqlDataba
 		return err
 	}
 
-	<-sc.Add(ctx, sqlDb, branch, fs)
+	done, err := sc.Add(ctx, sqlDb, branch, fs)
+	if err != nil {
+		return err
+	}
+	<-done
 	return nil
 }
 
@@ -421,22 +426,38 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	return NewProllyStats(ctx, statsDb)
 }
 
+func (sc *StatsCoord) safeAsyncSend(ctx context.Context, j StatsJob) error {
+	// The |Jobs| queue can change, the interrupts queue
+	// does not and is safe to send a blocking write to.
+	ji := NewControl("interrupt: '"+j.String()+"'", func(sc *StatsCoord) error {
+		return sc.sendJobs(ctx, j)
+	})
+	select {
+	case sc.Interrupts <- ji:
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-sc.Done:
+		return fmt.Errorf("stats queue closed")
+	}
+}
+
 func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
-	// make a control job
-	// wait until the control job done before returning
-	for _ = range 2 {
-		j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
-		if err := sc.sendJobs(ctx, j); err != nil {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-		case <-sc.Done:
-		case <-j.done:
-		}
+	// Wait until the control job finishes before returning.
+	// We want to do two cycles -- to pick up new seeds and
+	// execute the finalize jobs that update statistics.
+	j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
+	if err := sc.safeAsyncSend(ctx, j); err != nil {
+		return err
 	}
 
-	sc.gcMu.Lock()
-	defer sc.gcMu.Unlock()
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-sc.Done:
+		return fmt.Errorf("stats queue closed")
+	case <-j.done:
+	}
+
 	return sc.validateState(ctx)
 }

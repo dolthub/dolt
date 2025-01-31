@@ -148,5 +148,8 @@ func (sc *StatsCoord) validateState(ctx context.Context) error {
 			return nil
 		})
 	}
-	return fmt.Errorf(b.String())
+	if b.Len() > 0 {
+		return fmt.Errorf(b.String())
+	}
+	return nil
 }

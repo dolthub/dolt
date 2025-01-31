@@ -34,6 +34,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -1126,8 +1127,8 @@ func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expecte
 	}
 
 	// expect queue to fit all jobs, otherwise this deadlocks
-	// since we stopped accepting before running this, it should just roundtrip
-	// to/from the same buf
+	// since we stopped accepting before running this; it should
+	// just roundtrip to/from the same buffer
 	for _, j := range jobs {
 		select {
 		case <-ctx.Done():
@@ -1174,7 +1175,7 @@ func runAndPause(ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {
 	// making the loop effectively inactive even if the goroutine is still
 	// in the process of closing by the time we are flushing/validating
 	// the queue.
-	pauseDone := sc.Control("pause", func(sc *StatsCoord) error {
+	pauseDone, _ := sc.Control(ctx, "pause", func(sc *StatsCoord) error {
 		sc.Stop()
 		return nil
 	})
@@ -1374,7 +1375,6 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	addCtx, _ := sc.ctxGen(context.Background())
-	//writeCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
 
 	iters := 100
@@ -1418,5 +1418,72 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.Equal(t, iters/2, len(sc.Stats))
 		require.NoError(t, sc.validateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
+	}
+}
+
+func TestStatsCacheGrowth(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
+
+	sc.SetTimers(1, 100, 50)
+	require.NoError(t, sc.Restart(ctx))
+
+	addBranch := func(ctx *sql.Context, i int) {
+		branchName := "branch" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', '"+branchName+"')"))
+	}
+
+	addData := func(ctx *sql.Context, i int) {
+		branchName := "branch" + strconv.Itoa(i)
+		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
+
+	}
+
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	iters := 2000
+	{
+		branches := make(chan string, iters)
+
+		go func() {
+			addCtx, _ := sc.ctxGen(context.Background())
+			for i := range iters {
+				addBranch(addCtx, i)
+				addData(addCtx, i)
+				branches <- "branch" + strconv.Itoa(i)
+				if i%500 == 0 {
+					log.Println("branches: ", strconv.Itoa(i))
+					require.NoError(t, executeQuery(addCtx, sqlEng, "call dolt_stats_wait()"))
+				}
+			}
+			close(branches)
+		}()
+
+		//waitCtx, _ := sc.ctxGen(context.Background())
+		i := 0
+		for _ = range branches {
+			//if i%50 == 0 {
+			//	log.Println("branches: ", strconv.Itoa(i))
+			//	require.NoError(t, executeQuery(waitCtx, sqlEng, "call dolt_stats_wait()"))
+			//}
+			i++
+		}
+
+		sc.doBranchCheck.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.doGc.Store(true)
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		sc.Stop()
+
+		// at the end we should still have |iters/2| databases
+		require.Equal(t, iters, len(sc.Stats))
+		require.NoError(t, sc.validateState(ctx))
+		require.Equal(t, iters, sc.kv.Len())
 	}
 }

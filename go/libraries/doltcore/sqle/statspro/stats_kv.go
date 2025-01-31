@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,18 +158,18 @@ func (m *memStats) FinishGc() {
 	for _, k := range m.buckets.Keys() {
 		hashes = append(hashes, k.String()[:5])
 	}
-	log.Println("hashes after GC: ", strings.Join(hashes, ", "))
+	//log.Println("hashes after GC: ", strings.Join(hashes, ", "))
 	var templates []string
 	for k, _ := range m.templates {
 		templates = append(templates, k.String())
 	}
-	log.Println("templates after GC: ", strings.Join(templates, ", "))
+	//log.Println("templates after GC: ", strings.Join(templates, ", "))
 
 	var bounds []string
 	for k, _ := range m.bounds {
 		bounds = append(bounds, k.String())
 	}
-	log.Println("bounds after GC: ", strings.Join(bounds, ", "))
+	//log.Println("bounds after GC: ", strings.Join(bounds, ", "))
 
 	m.nextBuckets = nil
 	m.nextTemplates = nil
@@ -192,7 +191,7 @@ func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.buckets.Add(h, b)
-	log.Println("put ", h.String()[:5], m.buckets.Len())
+	//log.Println("put ", h.String()[:5], m.buckets.Len())
 	return nil
 }
 
@@ -204,6 +203,10 @@ func (m *memStats) MarkBucket(ctx context.Context, h hash.Hash, _ *val.TupleBuil
 	if ok {
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
+		nextLen := m.nextBuckets.Len()
+		if nextLen == 1000 {
+			print()
+		}
 		if m.nextBuckets.Len() >= gcCap {
 			m.gcCap.Store(int64(gcCap) * 2)
 			m.nextBuckets.Resize(gcCap * 2)

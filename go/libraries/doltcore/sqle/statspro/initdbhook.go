@@ -43,8 +43,8 @@ func NewStatsInitDatabaseHook2(sc *StatsCoord) sqle.InitDatabaseHook {
 		// lock
 		// TODO can we decouple refreshing the working set
 		// from seed job?
-		_ = sc.Add(ctx, sqlDb, head.Ref, denv.FS)
-		return nil
+		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS)
+		return err
 	}
 }
 

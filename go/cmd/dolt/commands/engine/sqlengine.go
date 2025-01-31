@@ -229,17 +229,25 @@ func NewSqlEngine(
 			}
 			for _, b := range br {
 				eg.Go(func() error {
-					<-sc.Add(sqlCtx, db, b, fs)
+					done, err := sc.Add(sqlCtx, db, b, fs)
+					if err != nil {
+						return err
+					}
+					<-done
 					return nil
 				})
 			}
 		}
 		eg.Wait()
 		eg.Go(func() error {
-			<-sc.Control("enable gc", func(sc *statspro.StatsCoord) error {
+			done, err := sc.Control("enable gc", func(sc *statspro.StatsCoord) error {
 				sc.SetEnableGc(false)
 				return nil
 			})
+			if err != nil {
+				return err
+			}
+			<-done
 			return nil
 		})
 		eg.Wait()

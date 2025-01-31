@@ -1964,7 +1964,9 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	writeCtx := enginetest.NewSession(harness)
 	refreshCtx := enginetest.NewSession(harness)
 
-	<-statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"))
+	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), pro.FS)
+	require.NoError(t, err)
+	<-done
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
 		_, iter, _, err := engine.Query(ctx, q)

@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -30,9 +31,16 @@ import (
 	"strings"
 )
 
-func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]StatsJob, error) {
+func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) (ret []StatsJob, err error) {
 	// get list of tables, get list of indexes, partition index ranges into ordinal blocks
 	// return list of IO jobs for table/index/ordinal blocks
+	defer func() {
+		if errors.Is(doltdb.ErrWorkingSetNotFound, err) {
+			err = nil
+			ret = []StatsJob{NewSeedJob(j.sqlDb)}
+		}
+	}()
+
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return nil, err
@@ -52,8 +60,6 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) ([]St
 	}
 
 	var newTableInfo []tableStatsInfo
-	var ret []StatsJob
-
 	var bucketDiff int
 
 	i := 0
