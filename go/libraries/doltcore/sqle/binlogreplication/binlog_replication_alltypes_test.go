@@ -27,27 +27,27 @@ import (
 // TestBinlogReplicationForAllTypes tests that operations (inserts, updates, and deletes) on all SQL
 // data types can be successfully replicated.
 func TestBinlogReplicationForAllTypes(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
 	// when they are converted to UTC for storage.
-	primaryDatabase.MustExec("SET @@time_zone = '+0:00';")
+	h.primaryDatabase.MustExec("SET @@time_zone = '+0:00';")
 
 	// Create the test table
 	tableName := "alltypes"
 	createTableStatement := generateCreateTableStatement(tableName)
-	primaryDatabase.MustExec(createTableStatement)
+	h.primaryDatabase.MustExec(createTableStatement)
 
 	// Make inserts on the primary – small, large, and null values
-	primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 0))
-	primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 1))
-	primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
+	h.primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 0))
+	h.primaryDatabase.MustExec(generateInsertValuesStatement(tableName, 1))
+	h.primaryDatabase.MustExec(generateInsertNullValuesStatement(tableName))
 
 	// Verify inserts on replica
-	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
+	h.waitForReplicaToCatchUp()
+	rows, err := h.replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -62,14 +62,14 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Make updates on the primary
-	primaryDatabase.MustExec(generateUpdateToNullValuesStatement(tableName, 1))
-	primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 2, 0))
-	primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 3, 1))
+	h.primaryDatabase.MustExec(generateUpdateToNullValuesStatement(tableName, 1))
+	h.primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 2, 0))
+	h.primaryDatabase.MustExec(generateUpdateValuesStatement(tableName, 3, 1))
 
 	// Verify updates on the replica
-	waitForReplicaToCatchUp(t)
-	replicaDatabase.MustExec("use db01;")
-	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
+	h.waitForReplicaToCatchUp()
+	h.replicaDatabase.MustExec("use db01;")
+	rows, err = h.replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -84,13 +84,13 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Make deletes on the primary
-	primaryDatabase.MustExec("delete from alltypes where pk=1;")
-	primaryDatabase.MustExec("delete from alltypes where pk=2;")
-	primaryDatabase.MustExec("delete from alltypes where pk=3;")
+	h.primaryDatabase.MustExec("delete from alltypes where pk=1;")
+	h.primaryDatabase.MustExec("delete from alltypes where pk=2;")
+	h.primaryDatabase.MustExec("delete from alltypes where pk=3;")
 
 	// Verify deletes on the replica
-	waitForReplicaToCatchUp(t)
-	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
+	h.waitForReplicaToCatchUp()
+	rows, err = h.replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
