@@ -128,9 +128,9 @@ func (si SqlContextServerInterceptor) Stream() grpc.StreamServerInterceptor {
 		if err != nil {
 			return err
 		}
+		defer sql.SessionEnd(sqlCtx.Session)
 		sql.SessionCommandBegin(sqlCtx.Session)
 		defer sql.SessionCommandEnd(sqlCtx.Session)
-		defer sql.SessionEnd(sqlCtx.Session)
 		newCtx := context.WithValue(ss.Context(), sqlContextInterceptorKey{}, sqlCtx)
 		newSs := serverStreamWrapper{
 			ServerStream: ss,
@@ -146,9 +146,9 @@ func (si SqlContextServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 		if err != nil {
 			return nil, err
 		}
+		defer sql.SessionEnd(sqlCtx.Session)
 		sql.SessionCommandBegin(sqlCtx.Session)
 		defer sql.SessionCommandEnd(sqlCtx.Session)
-		defer sql.SessionEnd(sqlCtx.Session)
 		newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
 		return handler(newCtx, req)
 	}
@@ -163,9 +163,9 @@ func (si SqlContextServerInterceptor) HTTP(existing func(http.Handler) http.Hand
 				http.Error(w, "could not initialize sql.Context", http.StatusInternalServerError)
 				return
 			}
+			defer sql.SessionEnd(sqlCtx.Session)
 			sql.SessionCommandBegin(sqlCtx.Session)
 			defer sql.SessionCommandEnd(sqlCtx.Session)
-			defer sql.SessionEnd(sqlCtx.Session)
 			newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
 			newReq := r.WithContext(newCtx)
 			h.ServeHTTP(w, newReq)
