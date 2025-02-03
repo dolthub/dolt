@@ -292,7 +292,15 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
-				<-statsPro.Add(ctx, dsessDbs[i], ref.NewBranchRef("main"))
+				fs, err := doltProvider.FileSystemForDatabase(dsessDbs[i].AliasedName())
+				if err != nil {
+					return nil, err
+				}
+				done, err := statsPro.Add(ctx, dsessDbs[i], ref.NewBranchRef("main"), fs)
+				if err != nil {
+					return nil, err
+				}
+				<-done
 			}
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)

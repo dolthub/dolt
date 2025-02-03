@@ -216,7 +216,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 
 		indexKey := templateCacheKey{h: schHashKey.Hash, idxName: sqlIdx.ID()}
 
-		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged && !sc.activeGc.Load() {
+		if i < len(tableInfo.idxRoots) && idxRoot.Equal(tableInfo.idxRoots[i]) && !schemaChanged {
 			qual := sql.StatQualifier{
 				Tab:      tableInfo.name,
 				Database: strings.ToLower(sqlDb.AliasedName()),
@@ -252,6 +252,7 @@ func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase
 	if len(ret) > 0 || isNewData || schemaChanged {
 		// if there are any reads to perform, we follow those reads with a table finalize
 		ret = append(ret, FinalizeJob{
+			sqlDb: sqlDb,
 			tableKey: tableIndexesKey{
 				db:     sqlDb.AliasedName(),
 				branch: sqlDb.Revision(),
@@ -283,7 +284,6 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 	var batchOrdinals []updateOrdinal
 	var nodes []tree.Node
 	var offset uint64
-	first := true
 	for _, n := range levelNodes {
 		treeCnt, err := n.TreeCount()
 		if err != nil {
@@ -307,14 +307,15 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 		nodes = append(nodes, n)
 
 		if curCnt > jobSize {
+			first := batchOrdinals[0].start == 0
 			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
-			first = false
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
 			nodes = nodes[:0]
 		}
 	}
 	if curCnt > 0 {
+		first := batchOrdinals[0].start == 0
 		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
 	}
 
@@ -333,8 +334,8 @@ func (k templateCacheKey) String() string {
 func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) (templateCacheKey, stats.Statistic, error) {
 	schHash, _, err := sqlTable.IndexCacheKey(ctx)
 	key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-	if _, ok := sc.kv.GetTemplate(key); ok {
-		return templateCacheKey{}, stats.Statistic{}, nil
+	if template, ok := sc.kv.GetTemplate(key); ok {
+		return key, template, nil
 	}
 	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
 	if err != nil {
@@ -362,11 +363,18 @@ func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sq
 		cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 	}
 
-	return key, stats.Statistic{
+	template := stats.Statistic{
 		Cols:     cols,
 		Typs:     types,
 		IdxClass: uint8(class),
 		Fds:      fds,
 		Colset:   colset,
-	}, nil
+	}
+
+	// Put twice, once for schema changes with no data changes,
+	// and once when we put chunks to avoid GC dropping
+	// templates before the finalize job.
+	sc.kv.PutTemplate(key, template)
+
+	return key, template, nil
 }

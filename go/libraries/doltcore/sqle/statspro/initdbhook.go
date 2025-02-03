@@ -44,7 +44,10 @@ func NewStatsInitDatabaseHook2(sc *StatsCoord) sqle.InitDatabaseHook {
 		// TODO can we decouple refreshing the working set
 		// from seed job?
 		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS)
-		return err
+		if err != nil {
+			sc.logger.Debugf("cannot initialize db stats for %s; queue is closed", sqlDb.AliasedName())
+		}
+		return nil
 	}
 }
 

@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
@@ -168,7 +167,6 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	var doSwap bool
-
 	func() {
 		sc.dbMu.Lock()
 		defer sc.dbMu.Unlock()
@@ -205,6 +203,10 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	for _, k := range deleteKeys {
 		delete(sc.Stats, k)
 	}
+
+	sc.dbMu.Lock()
+	defer sc.dbMu.Unlock()
+	delete(sc.dbFs, dbName)
 
 	return nil
 }
@@ -316,12 +318,7 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 		return err
 	}
 
-	fs, err := sc.pro.FileSystemForDatabase(newStorageTarget.AliasedName())
-	if err != nil {
-		return err
-	}
-
-	newKv, err := sc.initStorage(ctx, newStorageTarget, fs)
+	newKv, err := sc.initStorage(ctx, newStorageTarget)
 	if err != nil {
 		return err
 	}
@@ -333,11 +330,10 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 }
 
 func (sc *StatsCoord) rm(db string) error {
-	fs, err := sc.pro.FileSystemForDatabase(db)
-	if err != nil {
-		return err
+	fs, ok := sc.dbFs[db]
+	if !ok {
+		return fmt.Errorf("failed to remove stats db: %s filesys not found", db)
 	}
-
 	//remove from filesystem
 	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
 	if err != nil {
@@ -361,7 +357,11 @@ func (sc *StatsCoord) rm(db string) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase, fs filesys.Filesys) (*prollyStats, error) {
+func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase) (*prollyStats, error) {
+	fs, ok := sc.dbFs[strings.ToLower(storageTarget.AliasedName())]
+	if !ok {
+		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget.AliasedName())
+	}
 	// assume access is protected by kvLock
 	// get reference to target database
 	params := make(map[string]interface{})
@@ -426,19 +426,18 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	return NewProllyStats(ctx, statsDb)
 }
 
-func (sc *StatsCoord) safeAsyncSend(ctx context.Context, j StatsJob) error {
+func (sc *StatsCoord) unsafeAsyncSend(ctx context.Context, j StatsJob) error {
 	// The |Jobs| queue can change, the interrupts queue
 	// does not and is safe to send a blocking write to.
 	ji := NewControl("interrupt: '"+j.String()+"'", func(sc *StatsCoord) error {
 		return sc.sendJobs(ctx, j)
 	})
+
 	select {
 	case sc.Interrupts <- ji:
 		return nil
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-sc.Done:
-		return fmt.Errorf("stats queue closed")
+	default:
+		return fmt.Errorf("async queue overflowed, failed to put job " + j.String())
 	}
 }
 
@@ -446,17 +445,19 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 	// Wait until the control job finishes before returning.
 	// We want to do two cycles -- to pick up new seeds and
 	// execute the finalize jobs that update statistics.
-	j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
-	if err := sc.safeAsyncSend(ctx, j); err != nil {
-		return err
-	}
+	for _ = range 2 {
+		j := NewControl("wait for sync", func(sc *StatsCoord) error { return nil })
+		if err := sc.unsafeAsyncSend(ctx, j); err != nil {
+			return err
+		}
 
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-sc.Done:
-		return fmt.Errorf("stats queue closed")
-	case <-j.done:
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-sc.Done:
+			return fmt.Errorf("stats queue closed")
+		case <-j.done:
+		}
 	}
 
 	return sc.validateState(ctx)

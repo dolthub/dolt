@@ -1,12 +1,17 @@
 package statspro
 
 import (
+	"context"
+	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
+	"log"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +36,75 @@ func (j GcMarkJob) String() string {
 	b.WriteString("gcMark: ")
 	b.WriteString(j.sqlDb.RevisionQualifiedName())
 	return b.String()
+}
+
+func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
+	if !sc.enableGc.Load() {
+		close(done)
+		return nil
+	}
+
+	if sc.delayGc.Swap(true) {
+		close(done)
+		return nil
+	}
+
+	if sc.Debug {
+		log.Println("stats gc number: ", strconv.Itoa(int(sc.gcCounter.Load())))
+	}
+
+	sc.gcCounter.Add(1)
+
+	sc.gcMu.Lock()
+	defer sc.gcMu.Unlock()
+
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := sc.kv.StartGc(ctx, int(sc.bucketCap)); err != nil {
+		return err
+	}
+
+	// Can't take |dbMu| and provider lock, so copy dbs out.
+	// Unlike branch updates, it is OK if GC misses databases
+	// added in-between GC start and end because stats collection
+	// is paused for the duration.
+	sc.dbMu.Lock()
+	dbs := make([]dsess.SqlDatabase, len(sc.dbs))
+	copy(dbs, sc.dbs)
+	sc.ddlGuard = true
+	sc.dbMu.Unlock()
+
+	var bucketCnt int
+	for _, db := range dbs {
+		j := NewGcMarkJob(db)
+		cnt, err := sc.gcMark(sqlCtx, j)
+		if sql.ErrDatabaseNotFound.Is(err) {
+			// concurrent delete
+			continue
+		} else if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			// branch registered but no data
+			continue
+		} else if err != nil {
+			return err
+		}
+		bucketCnt += cnt
+	}
+
+	sc.bucketCnt.Store(int64(bucketCnt))
+	sc.bucketCap = sc.kv.Cap()
+	sc.kv.FinishGc()
+
+	// Avoid GC starving the loop, only re-enable after
+	// letting a block of other work through.
+	sc.sendJobs(ctx, NewControl("re-enable GC", func(sc *StatsCoord) error {
+		sc.delayGc.Store(false)
+		return nil
+	}))
+
+	return nil
 }
 
 func (sc *StatsCoord) gcMark(sqlCtx *sql.Context, j GcMarkJob) (int, error) {

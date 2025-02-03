@@ -1964,7 +1964,10 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	writeCtx := enginetest.NewSession(harness)
 	refreshCtx := enginetest.NewSession(harness)
 
-	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), pro.FS)
+	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
+	require.NoError(t, err)
+
+	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), fs)
 	require.NoError(t, err)
 	<-done
 

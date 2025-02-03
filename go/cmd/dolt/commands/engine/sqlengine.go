@@ -240,7 +240,7 @@ func NewSqlEngine(
 		}
 		eg.Wait()
 		eg.Go(func() error {
-			done, err := sc.Control("enable gc", func(sc *statspro.StatsCoord) error {
+			done, err := sc.Control(ctx, "enable gc", func(sc *statspro.StatsCoord) error {
 				sc.SetEnableGc(false)
 				return nil
 			})

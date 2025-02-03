@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -34,6 +33,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -164,6 +164,7 @@ type finalizeStruct struct {
 }
 
 type FinalizeJob struct {
+	sqlDb       dsess.SqlDatabase
 	tableKey    tableIndexesKey
 	keepIndexes map[sql.StatQualifier]bool
 	editIndexes map[templateCacheKey]finalizeStruct
@@ -222,7 +223,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *lo
 		logger:         logger,
 		Jobs:           make(chan StatsJob, 1024),
 		Done:           done,
-		Interrupts:     make(chan ControlJob, 1),
+		Interrupts:     make(chan ControlJob, 1024),
 		JobInterval:    50 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
@@ -230,6 +231,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *lo
 		bucketCap:      kv.Cap(),
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
+		dbFs:           make(map[string]filesys.Filesys),
 		threads:        threads,
 		kv:             kv,
 		pro:            pro,
@@ -267,52 +269,65 @@ func (k tableIndexesKey) String() string {
 }
 
 type StatsCoord struct {
-	logger      *logrus.Logger
-	JobInterval time.Duration
-	threads     *sql.BackgroundThreads
-	pro         *sqle.DoltDatabaseProvider
-	memOnly     bool
+	logger         *logrus.Logger
+	threads        *sql.BackgroundThreads
+	pro            *sqle.DoltDatabaseProvider
+	statsBackingDb string
+	dialPro        dbfactory.GRPCDialProvider
+	hdp            env.HomeDirProvider
 	// ctxGen lets us fetch the most recent working root
 	ctxGen ctxFactory
 
-	// XXX: do not hold the |dbMu| while accessing |pro|
-	dbMu           *sync.Mutex
-	dbs            []dsess.SqlDatabase
+	JobInterval    time.Duration
+	gcInterval     time.Duration
 	branchInterval time.Duration
-	ddlGuard       bool
-
-	kv StatsKv
-
-	statsBackingDb string
-	cancelSwitch   context.CancelFunc
-	dialPro        dbfactory.GRPCDialProvider
-	hdp            env.HomeDirProvider
-
-	readCounter atomic.Int32
-
-	activeGc   atomic.Bool
-	doGc       atomic.Bool
-	enableGc   atomic.Bool
-	gcInterval time.Duration
-	gcDone     chan struct{}
-	gcMu       sync.Mutex
-	gcCancel   context.CancelFunc
-
-	doBranchCheck atomic.Bool
-	doCapCheck    atomic.Bool
-	bucketCnt     atomic.Int64
-	bucketCap     int64
+	memOnly        bool
+	Debug          bool
 
 	Jobs chan StatsJob
-
+	// Interrupts skip the job queue and are processed first,
+	// but has a fixed size and will block
 	Interrupts chan ControlJob
 	Done       chan struct{}
 
+	// XXX: do not hold the |dbMu| while accessing |pro|
+	dbMu *sync.Mutex
+	// dbs is a list of branch-qualified databases.
+	dbs  []dsess.SqlDatabase
+	dbFs map[string]filesys.Filesys
+	// Branches lists the branches tracked for each database.
+	// Should track |dbs|.
 	Branches map[string][]ref.DoltRef
+
+	// kv is a content-addressed cache of histogram objects:
+	// buckets, first bounds, and schema-specific statistic
+	// templates.
+	kv StatsKv
 
 	statsMu *sync.Mutex
 	// Stats tracks table statistics accessible to sessions.
 	Stats map[tableIndexesKey][]*stats.Statistic
+
+	branchCounter atomic.Uint64
+	gcCounter     atomic.Uint64
+
+	readCounter atomic.Int32
+
+	delayGc     atomic.Bool
+	delayBranch atomic.Bool
+
+	doGc     atomic.Bool
+	enableGc atomic.Bool
+	gcMu     sync.Mutex
+	gcCancel context.CancelFunc
+
+	// ddlGuard is a compare and swap that lets |updateBranches|
+	// safe and nonblocking
+	ddlGuard      bool
+	doBranchCheck atomic.Bool
+	doCapCheck    atomic.Bool
+	bucketCnt     atomic.Int64
+	bucketCap     int64
 }
 
 func (sc *StatsCoord) Stop() {
@@ -329,7 +344,15 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 		return ctx.Err()
 	case <-sc.Done:
 	default:
-		sc.Stop()
+		j := NewControl("stop thread", func(sc *StatsCoord) error {
+			sc.Stop()
+			return nil
+		})
+		sc.Interrupts <- j
+		select {
+		case <-ctx.Done():
+		case <-j.done:
+		}
 	}
 
 	sc.Done = make(chan struct{})
@@ -341,14 +364,6 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 func (sc *StatsCoord) Close() {
 	sc.Stop()
 	return
-}
-
-func (sc *StatsCoord) cancelGc() {
-	sc.gcMu.Lock()
-	defer sc.gcMu.Unlock()
-	if sc.gcCancel != nil {
-		sc.gcCancel()
-	}
 }
 
 func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys) (chan struct{}, error) {
@@ -366,6 +381,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 
 	sc.Branches[db.AliasedName()] = append(sc.Branches[db.AliasedName()], ref.NewBranchRef(db.Revision()))
 	sc.dbs = append(sc.dbs, db)
+	sc.dbFs[db.AliasedName()] = fs
 	ret, err := sc.Seed(ctx, db)
 	if err != nil {
 		return nil, err
@@ -386,7 +402,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 		if sc.memOnly {
 			return ret, nil
 		}
-		newKv, err := sc.initStorage(ctx, db, fs)
+		newKv, err := sc.initStorage(ctx, db)
 		if err != nil {
 			sc.error(ControlJob{desc: "add db"}, err)
 			close(ret)
@@ -400,7 +416,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 }
 
 func (sc *StatsCoord) Drop(dbName string) {
-	// deprecated
+	// todo: deprecate
 	sc.dbMu.Lock()
 	defer sc.dbMu.Unlock()
 	sc.ddlGuard = true
@@ -414,10 +430,12 @@ func (sc *StatsCoord) Drop(dbName string) {
 }
 
 type StatsInfo struct {
-	DbCnt   int
-	ReadCnt int
-	Active  bool
-	JobCnt  int
+	DbCnt         int
+	ReadCnt       int
+	Active        bool
+	JobCnt        int
+	GcCounter     int
+	BranchCounter int
 }
 
 func (sc *StatsCoord) Info() StatsInfo {
@@ -426,10 +444,12 @@ func (sc *StatsCoord) Info() StatsInfo {
 	defer sc.dbMu.Unlock()
 
 	return StatsInfo{
-		DbCnt:   dbCnt,
-		ReadCnt: int(sc.readCounter.Load()),
-		Active:  true,
-		JobCnt:  len(sc.Jobs),
+		DbCnt:         dbCnt,
+		ReadCnt:       int(sc.readCounter.Load()),
+		Active:        true,
+		JobCnt:        len(sc.Jobs),
+		GcCounter:     int(sc.gcCounter.Load()),
+		BranchCounter: int(sc.branchCounter.Load()),
 	}
 }
 
@@ -459,7 +479,7 @@ func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
 func (sc *StatsCoord) Seed(ctx context.Context, sqlDb dsess.SqlDatabase) (chan struct{}, error) {
 	j := NewSeedJob(sqlDb)
 	//sc.Jobs <- j
-	if err := sc.safeAsyncSend(ctx, j); err != nil {
+	if err := sc.unsafeAsyncSend(ctx, j); err != nil {
 		return nil, err
 	}
 	return j.done, nil
@@ -467,7 +487,7 @@ func (sc *StatsCoord) Seed(ctx context.Context, sqlDb dsess.SqlDatabase) (chan s
 
 func (sc *StatsCoord) Control(ctx context.Context, desc string, cb func(sc *StatsCoord) error) (chan struct{}, error) {
 	j := NewControl(desc, cb)
-	if err := sc.safeAsyncSend(ctx, j); err != nil {
+	if err := sc.unsafeAsyncSend(ctx, j); err != nil {
 		return nil, err
 	}
 	return j.done, nil
@@ -495,7 +515,6 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 		// (1) ctx done/thread canceled
 		// (2) GC check
 		// (3) branch check
-		// (4) cap check
 		// (4) job and other tickers
 		select {
 		case <-sc.Done:
@@ -511,14 +530,13 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 					sc.error(ControlJob{desc: "gc"}, err)
 				}
 			}
-			continue
 		}
 
 		if sc.doBranchCheck.Swap(false) {
-			j := ControlJob{desc: "branch update"}
+			j := ControlJob{desc: "branches update"}
 			newJobs, err := sc.updateBranches(ctx)
 			if err != nil {
-				sc.error(ControlJob{desc: "branches update"}, err)
+				sc.error(j, err)
 			}
 			err = sc.sendJobs(ctx, newJobs...)
 			if err != nil {
@@ -536,6 +554,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if !ok {
 				return nil
 			}
+			if sc.Debug {
+				log.Println("stats interrupt job: ", j.String())
+			}
 			if err := j.cb(sc); err != nil {
 				sc.error(j, err)
 				continue
@@ -548,6 +569,17 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
+		case j, ok := <-sc.Interrupts:
+			if !ok {
+				return nil
+			}
+			if sc.Debug {
+				log.Println("stats interrupt job: ", j.String())
+			}
+			if err := j.cb(sc); err != nil {
+				sc.error(j, err)
+				continue
+			}
 		case <-jobTimer.C:
 			select {
 			case <-ctx.Done():
@@ -556,7 +588,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 				if !ok {
 					return nil
 				}
-				//log.Println("execute: ", j.String())
+				if sc.Debug {
+					log.Println("stats execute: ", j.String())
+				}
 				newJobs, err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
@@ -644,27 +678,6 @@ func (sc *StatsCoord) dropTableJob(sqlDb dsess.SqlDatabase, tableName string) St
 	}
 }
 
-func (sc *StatsCoord) dropBranchJob(dbName string, branch string) ControlJob {
-	return ControlJob{
-		desc: "drop branch",
-		cb: func(sc *StatsCoord) error {
-			sc.statsMu.Lock()
-			defer sc.statsMu.Unlock()
-			var deleteKeys []tableIndexesKey
-			for k, _ := range sc.Stats {
-				if strings.EqualFold(dbName, k.db) && strings.EqualFold(branch, k.branch) {
-					deleteKeys = append(deleteKeys, k)
-				}
-			}
-			for _, k := range deleteKeys {
-				delete(sc.Stats, k)
-			}
-			return nil
-		},
-		done: make(chan struct{}),
-	}
-}
-
 func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, error) {
 	// check if chunk already in cache
 	// if no, see if on disk and we just need to load
@@ -694,7 +707,9 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 					return nil, err
 				}
 			}
-			//fmt.Printf("%s bound %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
+			if sc.Debug {
+				log.Printf("put bound: %s | %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
+			}
 			sc.kv.PutBound(firstNodeHash, firstRow)
 		}
 	}
@@ -770,7 +785,10 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		}
 	}
 	for key, fs := range j.editIndexes {
-		//log.Println("finalize " + j.tableKey.String() + " " + key.String())
+		if len(fs.buckets) == 0 {
+			continue
+		}
+
 		template, ok := sc.kv.GetTemplate(key)
 		if !ok {
 			return nil, fmt.Errorf(" missing template dependency for table: %s", key)
@@ -802,11 +820,43 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		newStats = append(newStats, &template)
 	}
 
-	// protected swap
+	// We cannot mutex protect concurrent db drops
+	// and finalization. We need to check afterward
+	// whether there was a db/stats race. We check
+	// separately for database and branch deletes.
+
+	sc.dbMu.Lock()
+	sc.ddlGuard = false
+	sc.dbMu.Unlock()
+
 	sc.statsMu.Lock()
 	sc.Stats[j.tableKey] = newStats
-	//log.Println("stat cnt: ", len(sc.Stats), len(newStats))
 	sc.statsMu.Unlock()
+
+	sc.dbMu.Lock()
+	if sc.ddlGuard {
+		sqlCtx, err := sc.ctxGen(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := j.sqlDb.GetRoot(sqlCtx); err != nil {
+			sc.statsMu.Lock()
+			delete(sc.Stats, j.tableKey)
+			sc.statsMu.Unlock()
+		}
+	}
+	sc.dbMu.Unlock()
+
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := j.sqlDb.GetRoot(sqlCtx); err != nil {
+		sc.statsMu.Lock()
+		delete(sc.Stats, j.tableKey)
+		sc.statsMu.Unlock()
+	}
 
 	return nil, nil
 }
@@ -817,17 +867,30 @@ type dbBranchKey struct {
 }
 
 func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
-	//log.Println("run branch update")
+	if sc.delayBranch.Swap(true) {
+		return nil, nil
+	}
+
+	if sc.Debug {
+		log.Println("stats branch check number: ", strconv.Itoa(int(sc.branchCounter.Load())))
+	}
+	sc.branchCounter.Add(1)
+
 	j := ControlJob{desc: "branch update"}
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var ret []StatsJob
 	newBranches := make(map[string][]ref.DoltRef)
 	var newDbs []dsess.SqlDatabase
 
+	// Currenrtly, updateBranches is sensitive to concurrent
+	// add/drop database. We used |ddlGuard| as a compare and
+	// swap check after collecting new dbs, branches, and stats.
+	// A failed guard check retries.
+	// If this were incrementally adding/deleting, |ddlGuard| would
+	// be unnecessary, but more complex and maybe more blocking.
 	sc.dbMu.Lock()
 	sc.ddlGuard = false
 	dbBranches := make(map[string][]ref.DoltRef)
@@ -838,6 +901,21 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 	copy(dbs, sc.dbs)
 	sc.dbMu.Unlock()
 
+	{
+		// filter for branches that haven't been deleted
+		var w int
+		for i := 0; i < len(dbs); i++ {
+			if _, err := dbs[i].GetRoot(sqlCtx); err != nil {
+				continue
+			}
+			dbs[w] = dbs[i]
+			w++
+		}
+
+		dbs = dbs[:w]
+	}
+
+	var ret []StatsJob
 	for dbName, branches := range dbBranches {
 		var sqlDb dsess.SqlDatabase
 		for _, db := range dbs {
@@ -852,13 +930,14 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 			continue
 		}
 
+		// check if db still valid
 		dSess := dsess.DSessFromSess(sqlCtx.Session)
-		dbd, ok := dSess.GetDbData(sqlCtx, dbName)
+		dbd, ok := dSess.GetDbData(sqlCtx, sqlDb.AliasedName())
 		if !ok {
 			sc.error(j, fmt.Errorf("database in branches list does not exist: %s", dbName))
 			continue
 		}
-		curBranches, err := dbd.Ddb.GetBranches(ctx)
+		curBranches, err := dbd.Ddb.GetBranches(sqlCtx)
 		if err != nil {
 			sc.error(j, err)
 			continue
@@ -872,40 +951,37 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 			br := curBranches[k]
 			switch strings.Compare(branches[i].GetPath(), curBranches[k].GetPath()) {
 			case 0:
-				sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+				i++
+				k++
+				sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
 				if err != nil {
 					sc.error(j, err)
 					continue
 				}
-
 				newDbs = append(newDbs, sqlDb)
-				i++
-				k++
 			case -1:
-				//sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, branches[i].GetPath(), branches[i].GetPath()+"/"+dbName)
-				//if err != nil {
-				//	sc.error(j, err)
-				//	continue
-				//}
-				//
-				//dropDbs[dbBranchKey{sqlDb.AliasedName(), sqlDb.Revision()}] = true
 				i++
 			case +1:
 				// add
-				sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+				k++
+				sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
 				if err != nil {
 					sc.error(j, err)
+					continue
+				}
+				_, err = sqlDb.GetRoot(sqlCtx)
+				if err != nil {
 					continue
 				}
 
 				newDbs = append(newDbs, sqlDb)
 				ret = append(ret, NewSeedJob(sqlDb))
-				k++
 			}
 		}
 		for k < len(curBranches) {
 			br := curBranches[k]
-			sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
+			k++
+			sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
 			if err != nil {
 				sc.error(j, err)
 				continue
@@ -913,18 +989,7 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 
 			newDbs = append(newDbs, sqlDb)
 			ret = append(ret, NewSeedJob(sqlDb))
-			k++
 		}
-		//for i < len(branches) {
-		//	sqlDb, err := sqle.RevisionDbForBranch(ctx, sqlDb, branches[i].GetPath(), branches[i].GetPath()+"/"+dbName)
-		//	if err != nil {
-		//		sc.error(j, err)
-		//		continue
-		//	}
-		//
-		//	dropDbs[dbBranchKey{sqlDb.AliasedName(), sqlDb.Revision()}] = true
-		//	i++
-		//}
 	}
 
 	sc.dbMu.Lock()
@@ -934,7 +999,6 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 		sc.dbMu.Unlock()
 		return sc.updateBranches(ctx)
 	}
-	defer sc.dbMu.Unlock()
 
 	sc.Branches = newBranches
 	sc.dbs = newDbs
@@ -943,91 +1007,30 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 	for _, db := range sc.dbs {
 		statKeys[dbBranchKey{db.AliasedName(), db.Revision()}] = true
 	}
+	sc.dbMu.Unlock()
 
 	newStats := make(map[tableIndexesKey][]*stats.Statistic)
 	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
 	for k, s := range sc.Stats {
 		if statKeys[dbBranchKey{db: k.db, branch: k.branch}] {
 			newStats[k] = s
 		}
 	}
 	sc.Stats = newStats
-	return ret, nil
-}
+	sc.statsMu.Unlock()
 
-func (sc *StatsCoord) countBuckets() int {
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-	var cnt int
-	for _, ss := range sc.Stats {
-		cnt += len(ss)
-	}
-	return cnt
+	// Avoid branch checks starving the loop, only re-enable after
+	// letting a block of other work through.
+	ret = append(ret, NewControl("re-enable branch check", func(sc *StatsCoord) error {
+		sc.delayBranch.Store(false)
+		return nil
+	}))
+
+	return ret, nil
 }
 
 func (sc *StatsCoord) setGc() {
 	if sc.enableGc.Load() {
 		sc.doGc.Store(true)
 	}
-}
-
-func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
-	//log.Println("run GC")
-	if !sc.enableGc.Load() {
-		close(done)
-		return nil
-	}
-
-	if sc.activeGc.Swap(true) {
-		close(done)
-		return nil
-	}
-
-	sc.gcMu.Lock()
-	defer sc.gcMu.Unlock()
-
-	sqlCtx, err := sc.ctxGen(ctx)
-	if err != nil {
-		return err
-	}
-
-	if err := sc.kv.StartGc(ctx, int(sc.bucketCap)); err != nil {
-		return err
-	}
-
-	// can't take |dbMu| and provider lock
-	sc.dbMu.Lock()
-	dbs := make([]dsess.SqlDatabase, len(sc.dbs))
-	copy(dbs, sc.dbs)
-	sc.ddlGuard = true
-	sc.dbMu.Unlock()
-
-	var bucketCnt int
-	for _, db := range dbs {
-		j := NewGcMarkJob(db)
-		cnt, err := sc.gcMark(sqlCtx, j)
-		if sql.ErrDatabaseNotFound.Is(err) {
-			// concurrent delete
-			continue
-		} else if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			// branch registered but no data
-			continue
-		} else if err != nil {
-			return err
-		}
-		bucketCnt += cnt
-	}
-
-	sc.bucketCnt.Store(int64(bucketCnt))
-	sc.bucketCap = sc.kv.Cap()
-	sc.kv.FinishGc()
-
-	sc.sendJobs(ctx, NewControl("re-enable GC", func(sc *StatsCoord) error {
-		// avoid GC exhausting the loop
-		sc.activeGc.Store(false)
-		return nil
-	}))
-
-	return nil
 }

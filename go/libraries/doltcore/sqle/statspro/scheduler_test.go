@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"io"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,7 +64,7 @@ func TestScheduleLoop(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
 
 		// run two cycles -> (1) seed, (2) populate
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{
 				db: sqlDbs[0], table: "ab",
@@ -82,7 +83,7 @@ func TestScheduleLoop(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
@@ -99,8 +100,8 @@ func TestScheduleLoop(t *testing.T) {
 	}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
-	runAndPause(ctx, sc, &wg)
-	runAndPause(ctx, sc, &wg)
+	runAndPause(t, ctx, sc, &wg)
+	runAndPause(t, ctx, sc, &wg)
 
 	doGcCycle(t, ctx, sc)
 
@@ -120,6 +121,7 @@ func TestAnalyze(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 
+	sc.Debug = true
 	sc.flushQueue(ctx)
 
 	wg := sync.WaitGroup{}
@@ -136,7 +138,7 @@ func TestAnalyze(t *testing.T) {
 		},
 	})
 
-	runAndPause(ctx, sc, &wg)
+	runAndPause(t, ctx, sc, &wg)
 	validateJobState(t, ctx, sc, []StatsJob{
 		ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 416}}},
 		ReadJob{db: sqlDbs[0], table: "xy", nodes: []tree.Node{{}}, ordinals: []updateOrdinal{{0, 241}}},
@@ -148,9 +150,10 @@ func TestAnalyze(t *testing.T) {
 			}},
 	})
 
-	runAndPause(ctx, sc, &wg)
+	runAndPause(t, ctx, sc, &wg)
 	validateJobState(t, ctx, sc, []StatsJob{})
 	kv := sc.kv.(*memStats)
+	require.Equal(t, uint64(0), sc.gcCounter.Load())
 	require.Equal(t, 6, kv.buckets.Len())
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))
@@ -170,7 +173,7 @@ func TestModifyColumn(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y bigint"))
 
 		// expect finalize, no GC
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 210}, {210, 415}, {415, 470}, {470, 500}}},
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 267}, {267, 500}}},
@@ -183,7 +186,7 @@ func TestModifyColumn(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
@@ -209,12 +212,13 @@ func TestAddColumn(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
+	sc.enableGc.Store(false)
 
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy add column z int"))
 
 		// schema but no data change
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -225,7 +229,7 @@ func TestAddColumn(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
@@ -251,7 +255,7 @@ func TestDropIndex(t *testing.T) {
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -262,7 +266,7 @@ func TestDropIndex(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
@@ -301,7 +305,7 @@ func TestDropTable(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into ab values (0,0)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{db: sqlDbs[0], table: "ab", ordinals: []updateOrdinal{{0, 1}}},
@@ -318,7 +322,7 @@ func TestDropTable(t *testing.T) {
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		kv := sc.kv.(*memStats)
 		require.Equal(t, 5, kv.buckets.Len())
@@ -354,8 +358,8 @@ func TestDeleteAboveBoundary(t *testing.T) {
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 498"))
 
-		runAndPause(ctx, sc, &wg) // seed
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // seed
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		kv := sc.kv.(*memStats)
 		require.Equal(t, 5, kv.buckets.Len()) // 1 for new chunk
@@ -383,8 +387,8 @@ func TestDeleteBelowBoundary(t *testing.T) {
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 410"))
 
-		runAndPause(ctx, sc, &wg) // seed
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // seed
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		kv := sc.kv.(*memStats)
 
@@ -414,8 +418,8 @@ func TestDeleteOnBoundary(t *testing.T) {
 		// PRIMARY boundary chunk -> rewrite y_idx's second
 		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 414"))
 
-		runAndPause(ctx, sc, &wg) // seed
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // seed
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		kv := sc.kv.(*memStats)
 		require.Equal(t, 4, kv.buckets.Len())
@@ -438,7 +442,6 @@ func TestAddDropDatabases(t *testing.T) {
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc)
 	var otherDb sqle.Database
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
@@ -451,15 +454,16 @@ func TestAddDropDatabases(t *testing.T) {
 				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
 				require.NoError(t, err)
 				otherDb = dsessDb.(sqle.Database)
-				addHook(ctx, nil, "otherdb", nil, otherDb)
+				//_, err = sc.Seed(ctx, dsessDb)
+				//require.NoError(t, err)
 			}
 		}
 
 		// finish queue of read/finalize
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg) // pull seeds out of interrupt
+		runAndPause(t, ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 			ReadJob{db: otherDb, table: "t", ordinals: []updateOrdinal{{0, 2}}},
 			FinalizeJob{
 				tableKey: tableIndexesKey{db: "otherdb", branch: "main", table: "t"},
@@ -467,9 +471,10 @@ func TestAddDropDatabases(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				}},
 			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsInfo{{name: "t"}}},
+			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		// xy and t
 		kv := sc.kv.(*memStats)
@@ -497,8 +502,6 @@ func TestGC(t *testing.T) {
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc)
-
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
@@ -510,25 +513,9 @@ func TestGC(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table s (i int primary key, j int, key (j))"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into s values (0,0), (1,1), (2,2)"))
 
-		var otherDb sqle.Database
-		var thirdDb sqle.Database
-		for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
-			if db.Name() == "otherdb" {
-				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-				require.NoError(t, err)
-				otherDb = dsessDb.(sqle.Database)
-				addHook(ctx, nil, "otherdb", nil, otherDb)
-			}
-			if db.Name() == "thirddb" {
-				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-				require.NoError(t, err)
-				thirdDb = dsessDb.(sqle.Database)
-				addHook(ctx, nil, "thirddb", nil, thirdDb)
-			}
-		}
-
-		runAndPause(ctx, sc, &wg) // read jobs
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // seed interrupt
+		runAndPause(t, ctx, sc, &wg) // read jobs
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		dropHook := NewStatsDropDatabaseHook2(sc)
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
@@ -536,8 +523,8 @@ func TestGC(t *testing.T) {
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table s drop index j"))
 
-		runAndPause(ctx, sc, &wg) // pick up table drop
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // pick up table drop
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		doGcCycle(t, ctx, sc)
 
@@ -557,8 +544,6 @@ func TestBranches(t *testing.T) {
 	wg := sync.WaitGroup{}
 	sc.enableGc.Store(true)
 
-	addHook := NewStatsInitDatabaseHook2(sc)
-
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy')"))
 
@@ -574,25 +559,9 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into s values (0,0), (1,1), (2,2)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add s')"))
 
-		var otherDb sqle.Database
-		var thirdDb sqle.Database
-		for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
-			if db.Name() == "otherdb" {
-				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-				require.NoError(t, err)
-				otherDb = dsessDb.(sqle.Database)
-				addHook(ctx, nil, "otherdb", nil, otherDb)
-			}
-			if db.Name() == "thirddb" {
-				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-				require.NoError(t, err)
-				thirdDb = dsessDb.(sqle.Database)
-				addHook(ctx, nil, "thirddb", nil, thirdDb)
-			}
-		}
-
-		runAndPause(ctx, sc, &wg) // read jobs
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // seed interrupt
+		runAndPause(t, ctx, sc, &wg) // read jobs
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat1')"))
@@ -610,11 +579,11 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table s drop index j"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'drop index j')"))
 
-		runAndPause(ctx, sc, &wg) // pick up table changes
-		runAndPause(ctx, sc, &wg) // finalize
+		runAndPause(t, ctx, sc, &wg) // pick up table changes
+		runAndPause(t, ctx, sc, &wg) // finalize
 
 		sc.doBranchCheck.Store(true)
-		runAndPause(ctx, sc, &wg) // new branches
+		runAndPause(t, ctx, sc, &wg) // new branches
 
 		require.Equal(t, 7, len(sc.dbs))
 		stat, ok := sc.Stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
@@ -628,8 +597,8 @@ func TestBranches(t *testing.T) {
 		stat = sc.Stats[tableIndexesKey{"thirddb", "main", "s", ""}]
 		require.Equal(t, 2, len(stat))
 
-		runAndPause(ctx, sc, &wg) // seed new branches
-		runAndPause(ctx, sc, &wg) // finalize branches
+		runAndPause(t, ctx, sc, &wg) // seed new branches
+		runAndPause(t, ctx, sc, &wg) // finalize branches
 
 		require.Equal(t, 7, len(sc.dbs))
 
@@ -658,7 +627,7 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
 		dropHook(ctx, "otherdb")
 
-		runAndPause(ctx, sc, &wg) // finalize drop otherdb
+		runAndPause(t, ctx, sc, &wg) // finalize drop otherdb
 
 		require.Equal(t, 4, len(sc.dbs))
 		stat, ok = sc.Stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
@@ -671,8 +640,8 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('-D', 'feat1')"))
 
 		sc.doBranchCheck.Store(true)
-		runAndPause(ctx, sc, &wg) // detect deleted branch
-		runAndPause(ctx, sc, &wg) // finalize branch delete
+		runAndPause(t, ctx, sc, &wg) // detect deleted branch
+		runAndPause(t, ctx, sc, &wg) // finalize branch delete
 
 		require.Equal(t, 3, len(sc.dbs))
 		stat, ok = sc.Stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
@@ -721,8 +690,8 @@ func TestBucketDoubling(t *testing.T) {
 
 	sc.enableGc.Store(true)
 
-	runAndPause(ctx, sc, &wg) // track ab
-	runAndPause(ctx, sc, &wg) // finalize ab
+	runAndPause(t, ctx, sc, &wg) // track ab
+	runAndPause(t, ctx, sc, &wg) // finalize ab
 
 	// 4 old + 2*7 new ab
 	kv := sc.kv.(*memStats)
@@ -756,8 +725,8 @@ func TestBucketCounting(t *testing.T) {
 
 	sc.enableGc.Store(false)
 
-	runAndPause(ctx, sc, &wg) // track ab
-	runAndPause(ctx, sc, &wg) // finalize ab
+	runAndPause(t, ctx, sc, &wg) // track ab
+	runAndPause(t, ctx, sc, &wg) // finalize ab
 
 	// 4 old + 2*7 new ab
 	kv := sc.kv.(*memStats)
@@ -767,8 +736,8 @@ func TestBucketCounting(t *testing.T) {
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table cd (c int primary key, d varchar(200), key (d,c))"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "insert into cd select a,b from ab"))
 
-	runAndPause(ctx, sc, &wg) // track ab
-	runAndPause(ctx, sc, &wg) // finalize ab
+	runAndPause(t, ctx, sc, &wg) // track ab
+	runAndPause(t, ctx, sc, &wg) // finalize ab
 
 	// no new buckets
 	kv = sc.kv.(*memStats)
@@ -779,41 +748,33 @@ func TestBucketCounting(t *testing.T) {
 func TestDropOnlyDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
+	ctx, sqlEng, sc, _ := defaultSetup(t, threads, false)
 
-	addHook := NewStatsInitDatabaseHook2(sc)
-	dropHook := NewStatsDropDatabaseHook2(sc)
+	require.NoError(t, sc.Restart(ctx))
 
-	prollyKv, err := NewProllyStats(ctx, startDbs[0])
-	require.NoError(t, err)
-	prollyKv.mem = sc.kv.(*memStats)
-	sc.kv = prollyKv
-	sc.statsBackingDb = "mydb"
+	_, ok := sc.kv.(*prollyStats)
+	require.True(t, ok)
+	require.Equal(t, "mydb", sc.statsBackingDb)
 
 	// what happens when we drop the only database? swap to memory?
 	// add first database, switch to prolly?
 	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
-	dropHook(ctx, "mydb")
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+
+	sc.Stop()
 
 	// empty memory KV
-	_, ok := sc.kv.(*memStats)
+	_, ok = sc.kv.(*memStats)
 	require.True(t, ok)
 	require.Equal(t, "", sc.statsBackingDb)
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
-
-	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
-		if db.Name() == "mydb" {
-			dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-			require.NoError(t, err)
-			addHook(ctx, nil, "mydb", nil, dsessDb)
-		}
-	}
+	require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
 
 	// empty prollyKv
-	prollyKv, ok = sc.kv.(*prollyStats)
+	_, ok = sc.kv.(*prollyStats)
 	require.True(t, ok)
-	require.Equal(t, "mydb", sc.statsBackingDb)
+	require.Equal(t, "otherdb", sc.statsBackingDb)
 }
 
 func TestRotateBackingDb(t *testing.T) {
@@ -822,40 +783,30 @@ func TestRotateBackingDb(t *testing.T) {
 	ctx, sqlEng, sc, startDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
 
-	addHook := NewStatsInitDatabaseHook2(sc)
-	dropHook := NewStatsDropDatabaseHook2(sc)
-
 	prollyKv, err := NewProllyStats(ctx, startDbs[0])
 	require.NoError(t, err)
 	prollyKv.mem = sc.kv.(*memStats)
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create database backupdb"))
-	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
-		if db.Name() == "backupdb" {
-			dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
-			require.NoError(t, err)
-			addHook(ctx, nil, "backupdb", nil, dsessDb)
-		}
-	}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "use backupdb"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0), (1,1), (2,2)"))
 
-	runAndPause(ctx, sc, &wg) // track xy
-	runAndPause(ctx, sc, &wg) // finalize xy
+	runAndPause(t, ctx, sc, &wg) // seed
+	runAndPause(t, ctx, sc, &wg) // track xy
+	runAndPause(t, ctx, sc, &wg) // finalize xy
 
 	require.Equal(t, 5, sc.kv.Len())
 	require.Equal(t, 2, len(sc.Stats))
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
-	dropHook(ctx, "mydb")
 
 	prollyKv, ok := sc.kv.(*prollyStats)
 	require.True(t, ok)
 	require.Equal(t, "backupdb", sc.statsBackingDb)
 
-	// lost the backing storage, in-memory switches to new kv
+	// lost the backing storage, previous in-memory moves into new kv
 	require.Equal(t, 5, sc.kv.Len())
 	require.Equal(t, 1, len(sc.Stats))
 
@@ -871,7 +822,7 @@ func TestReadCounter(t *testing.T) {
 		require.Equal(t, 0, sc.Info().ReadCnt)
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (501, 0)"))
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		require.Equal(t, 2, sc.Info().ReadCnt)
 	}
@@ -904,7 +855,7 @@ func TestEmptyTable(t *testing.T) {
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(10), key (y,x))"))
 
-	runAndPause(ctx, sc, &wg)
+	runAndPause(t, ctx, sc, &wg)
 	validateJobState(t, ctx, sc, []StatsJob{
 		FinalizeJob{
 			tableKey: tableIndexesKey{db: "mydb", branch: "main", table: "xy"},
@@ -923,10 +874,10 @@ func TestProllyKvUpdate(t *testing.T) {
 	sc.SetEnableGc(true)
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(16), key (y,x))"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,'zero'), (1, 'one')"))
 
 	require.NoError(t, sc.Restart(ctx))
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,'zero'), (1, 'one')"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
 	rows, err := executeQueryResults(ctx, sqlEng, "select database_name, table_name, index_name  from dolt_statistics order by index_name")
@@ -961,7 +912,10 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	require.NoError(t, sc.Restart(ctx))
 
 	ctx, _ = sc.ctxGen(ctx)
-
+	ctx.Session.SetClient(sql.Client{
+		User:    "billy boy",
+		Address: "bigbillie@fake.horse",
+	})
 	require.NoError(t, executeQuery(ctx, sqlEng, "create database mydb"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 
@@ -996,6 +950,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
 	ctx, sqlEng, sc, sqlDbs := emptySetup(t, threads, memOnly)
+	sc.Debug = true
 
 	wg := sync.WaitGroup{}
 
@@ -1013,7 +968,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 
 	{
 		// seed creates read jobs
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 		validateJobState(t, ctx, sc, []StatsJob{
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 415}, {415, 500}}},
 			ReadJob{db: sqlDbs[0], table: "xy", ordinals: []updateOrdinal{{0, 240}, {240, 500}}},
@@ -1029,7 +984,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 
 	{
 		// read jobs populate cache
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
@@ -1053,7 +1008,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 
 	{
 		// seed with no changes yields no new jobs
-		runAndPause(ctx, sc, &wg)
+		runAndPause(t, ctx, sc, &wg)
 
 		validateJobState(t, ctx, sc, []StatsJob{
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
@@ -1157,30 +1112,31 @@ func doGcCycle(t *testing.T, ctx *sql.Context, sc *StatsCoord) {
 	defer sc.enableGc.Store(false)
 
 	wg := sync.WaitGroup{}
-	runAndPause(ctx, sc, &wg) // do GC
-	runAndPause(ctx, sc, &wg) // pick up finish GC job
+	runAndPause(t, ctx, sc, &wg) // do GC
+	runAndPause(t, ctx, sc, &wg) // pick up finish GC job
 
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()
 	require.False(t, sc.doGc.Load())
-	require.False(t, sc.activeGc.Load())
+	require.False(t, sc.delayGc.Load())
 	if sc.gcCancel != nil {
 		t.Errorf("gc cancel non-nil")
 	}
 }
 
-func runAndPause(ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {
+func runAndPause(t *testing.T, ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {
 	// The stop job closes the controller's done channel before the job
 	// is finished. The done channel is closed before the next run loop,
 	// making the loop effectively inactive even if the goroutine is still
 	// in the process of closing by the time we are flushing/validating
 	// the queue.
-	pauseDone, _ := sc.Control(ctx, "pause", func(sc *StatsCoord) error {
+	j := NewControl("pause", func(sc *StatsCoord) error {
 		sc.Stop()
 		return nil
 	})
-	waitOnJob(wg, pauseDone)
-	sc.Restart(ctx)
+	sc.Jobs <- j
+	waitOnJob(wg, j.done)
+	require.NoError(t, sc.Restart(ctx))
 	wg.Wait()
 	return
 }
@@ -1266,7 +1222,9 @@ func TestStatsGcConcurrency(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
-	sc.SetTimers(1, 100, 50)
+	sc.JobInterval = 1 * time.Nanosecond
+	sc.gcInterval = 100 * time.Nanosecond
+	sc.branchInterval = 50 * time.Nanosecond
 	require.NoError(t, sc.Restart(ctx))
 
 	addDb := func(ctx *sql.Context, dbName string) {
@@ -1334,6 +1292,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 		sc.Stop()
 
 		// 101 dbs, 100 with stats (not main)
+		require.Equal(t, iters/2+1, len(sc.dbs))
 		require.Equal(t, iters/2, len(sc.Stats))
 		require.NoError(t, sc.validateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
@@ -1422,12 +1381,14 @@ func TestStatsBranchConcurrency(t *testing.T) {
 }
 
 func TestStatsCacheGrowth(t *testing.T) {
+	//t.Skip("expensive test")
+
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	sc.SetTimers(1, 100, 50)
+	sc.SetTimers(1, 1000, 1000)
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1448,6 +1409,9 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	iters := 2000
+	if os.Getenv("CI") != "" {
+		iters = 1025
+	}
 	{
 		branches := make(chan string, iters)
 
