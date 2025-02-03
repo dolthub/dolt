@@ -115,9 +115,9 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	deaf := dEnv.DbEaFactory()
+	deaf := dEnv.DbEaFactory(ctx)
 	if useBulkEditor {
-		deaf = dEnv.BulkDbEaFactory()
+		deaf = dEnv.BulkDbEaFactory(ctx)
 	}
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -127,5 +127,5 @@ func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEdi
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	return sqle.NewDatabase(ctx, name, dEnv.DbData(), opts)
+	return sqle.NewDatabase(ctx, name, dEnv.DbData(ctx), opts)
 }

@@ -114,7 +114,7 @@ func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgP
 		if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
 			return 2
 		} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
-			nbf := dEnv.DoltDB.Format()
+			nbf := dEnv.DoltDB(ctx).Format()
 			cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
 		}
 	}

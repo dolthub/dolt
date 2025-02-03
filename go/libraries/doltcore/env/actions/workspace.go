@@ -32,7 +32,7 @@ func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint st
 	if err != nil {
 		return nil
 	}
-	return CreateWorkspaceOnDB(ctx, dEnv.DoltDB, name, startPoint, headRef)
+	return CreateWorkspaceOnDB(ctx, dEnv.DoltDB(ctx), name, startPoint, headRef)
 }
 
 func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoint string, headRef ref.DoltRef) error {
@@ -81,7 +81,7 @@ func IsWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool,
 }
 
 func IsWorkspace(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
-	return IsWorkspaceOnDB(ctx, dEnv.DoltDB, str)
+	return IsWorkspaceOnDB(ctx, dEnv.DoltDB(ctx), str)
 }
 
 func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName string, opts DeleteOptions) error {
@@ -107,7 +107,7 @@ func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName strin
 }
 
 func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
-	ddb := dEnv.DoltDB
+	ddb := dEnv.DoltDB(ctx)
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {

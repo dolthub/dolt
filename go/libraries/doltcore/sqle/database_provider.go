@@ -640,7 +640,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
-	err := r.Prepare(ctx, newEnv.DoltDB.Format(), p.remoteDialer)
+	err := r.Prepare(ctx, newEnv.DoltDB(ctx).Format(), p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -656,11 +656,11 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 		return err
 	}
 
-	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
+	newEnv.DoltDB(ctx).SetCommitHooks(ctx, commitHooks)
 
 	// After setting hooks on the newly created DB, we need to do the first push manually
 	branchRef := ref.NewBranchRef(p.defaultBranch)
-	return newEnv.DoltDB.ExecuteCommitHooks(ctx, branchRef.String())
+	return newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String())
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
@@ -855,12 +855,12 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	}
 
 	opts := editor.Options{
-		Deaf: newEnv.DbEaFactory(),
+		Deaf: newEnv.DbEaFactory(ctx),
 		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), opts)
 	if err != nil {
 		return err
 	}

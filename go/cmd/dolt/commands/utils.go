@@ -126,7 +126,7 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv, cwd filesys.Fi
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
 func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
-		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
+		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
 
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
@@ -247,6 +247,11 @@ func newLateBindingEngine(
 	}
 
 	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		// We've deferred loading the database as long as we can.
+		// If we're binding the Queryist, that means that engine is actually
+		// going to be used.
+		mrEnv.ReloadDBs(ctx2)
+
 		se, err := engine.NewSqlEngine(
 			ctx2,
 			mrEnv,
@@ -852,6 +857,27 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 	}
 
 	return 0
+}
+
+func HandleDEnvErrorsAndExitCode(errorBuilder *errhand.DErrorBuilder, dEnv *env.DoltEnv, usage cli.UsagePrinter) bool {
+	errorCount := 0
+	handleError := func(err error) {
+		if err != nil {
+			var verboseError errhand.VerboseError
+			if errorBuilder != nil {
+				verboseError = errorBuilder.AddCause(err).Build()
+			} else {
+				verboseError = errhand.VerboseErrorFromError(err)
+			}
+			HandleVErrAndExitCode(verboseError, usage)
+			errorCount++
+		}
+	}
+	handleError(dEnv.CfgLoadErr)
+	handleError(dEnv.RSLoadErr)
+	handleError(dEnv.DBLoadError)
+
+	return errorCount > 0
 }
 
 // interpolateStoredProcedureCall returns an interpolated query to call |storedProcedureName| with the arguments

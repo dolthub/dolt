@@ -222,7 +222,7 @@ func (db Database) RequestedName() string {
 	return db.requestedName
 }
 
-// GetDoltDB gets the underlying DoltDB of the Database
+// GetDoltDB gets the underlying doltDB of the Database
 func (db Database) GetDoltDB() *doltdb.DoltDB {
 	return db.ddb
 }

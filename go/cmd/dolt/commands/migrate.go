@@ -89,7 +89,7 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 	return 0 // unreachable
 }
 
-// MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB|.
+// MigrateDatabase migrates the NomsBinFormat of |dEnv.DoltDB(ctx)|.
 func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv, dropConflicts bool) error {
 	menv, err := migrate.NewEnvironment(ctx, dEnv)
 	if err != nil {
@@ -97,7 +97,7 @@ func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv, dropConflicts bool)
 	}
 	menv.DropConflicts = dropConflicts
 
-	if curr := menv.Existing.DoltDB.Format(); types.IsFormat_DOLT(curr) {
+	if curr := menv.Existing.DoltDB(ctx).Format(); types.IsFormat_DOLT(curr) {
 		cli.Println("database is already migrated")
 		return nil
 	}
@@ -108,7 +108,7 @@ func MigrateDatabase(ctx context.Context, dEnv *env.DoltEnv, dropConflicts bool)
 	}
 	cli.Println("migrating database at tmp dir: ", p)
 
-	err = migrate.TraverseDAG(ctx, menv, menv.Existing.DoltDB, menv.Migration.DoltDB)
+	err = migrate.TraverseDAG(ctx, menv, menv.Existing.DoltDB(ctx), menv.Migration.DoltDB(ctx))
 	if err != nil {
 		return err
 	}

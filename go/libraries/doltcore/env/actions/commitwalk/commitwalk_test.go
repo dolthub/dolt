@@ -62,20 +62,21 @@ func createUninitializedEnv() *env.DoltEnv {
 }
 
 func TestGetDotDotRevisions(t *testing.T) {
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 
 	cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	require.NoError(t, err)
-	opt, err := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	opt, err := dEnv.DoltDB(ctx).Resolve(context.Background(), cs, nil)
 	require.NoError(t, err)
 	commit, ok := opt.ToCommit()
 	require.True(t, ok)
 
 	rv, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
-	r, rvh, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
+	r, rvh, err := dEnv.DoltDB(ctx).WriteRootValue(context.Background(), rv)
 	require.NoError(t, err)
 	rv = r
 
@@ -83,35 +84,35 @@ func TestGetDotDotRevisions(t *testing.T) {
 	mainCommits := make([]*doltdb.Commit, 6)
 	mainCommits[0] = commit
 	for i := 1; i < 6; i++ {
-		mainCommits[i] = mustCreateCommit(t, dEnv.DoltDB, env.DefaultInitBranch, rvh, mainCommits[i-1])
+		mainCommits[i] = mustCreateCommit(t, dEnv.DoltDB(ctx), env.DefaultInitBranch, rvh, mainCommits[i-1])
 	}
 
 	// Create a feature branch.
 	bref := ref.NewBranchRef("feature")
-	err = dEnv.DoltDB.NewBranchAtCommit(context.Background(), bref, mainCommits[5], nil)
+	err = dEnv.DoltDB(ctx).NewBranchAtCommit(context.Background(), bref, mainCommits[5], nil)
 	require.NoError(t, err)
 
 	// Create 3 commits on feature branch.
 	featureCommits := []*doltdb.Commit{}
 	featureCommits = append(featureCommits, mainCommits[5])
 	for i := 1; i < 4; i++ {
-		featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB, "feature", rvh, featureCommits[i-1]))
+		featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB(ctx), "feature", rvh, featureCommits[i-1]))
 	}
 
 	// Create 1 commit on main.
-	mainCommits = append(mainCommits, mustCreateCommit(t, dEnv.DoltDB, env.DefaultInitBranch, rvh, mainCommits[5]))
+	mainCommits = append(mainCommits, mustCreateCommit(t, dEnv.DoltDB(ctx), env.DefaultInitBranch, rvh, mainCommits[5]))
 
 	// Merge main to feature branch.
-	featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB, "feature", rvh, featureCommits[3], mainCommits[6]))
+	featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB(ctx), "feature", rvh, featureCommits[3], mainCommits[6]))
 
 	// Create 3 commits on feature branch.
 	for i := 5; i < 8; i++ {
-		featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB, "feature", rvh, featureCommits[i-1]))
+		featureCommits = append(featureCommits, mustCreateCommit(t, dEnv.DoltDB(ctx), "feature", rvh, featureCommits[i-1]))
 	}
 
 	// Create 3 commits on main.
 	for i := 7; i < 10; i++ {
-		mainCommits = append(mainCommits, mustCreateCommit(t, dEnv.DoltDB, env.DefaultInitBranch, rvh, mainCommits[i-1]))
+		mainCommits = append(mainCommits, mustCreateCommit(t, dEnv.DoltDB(ctx), env.DefaultInitBranch, rvh, mainCommits[i-1]))
 	}
 
 	// Branches look like this:
@@ -124,7 +125,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 	mainHash := mustGetHash(t, mainCommits[6])
 	featurePreMergeHash := mustGetHash(t, featureCommits[3])
 
-	res, err := GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featureHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 100)
+	res, err := GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featureHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 100)
 	require.NoError(t, err)
 
 	assert.Len(t, res, 7)
@@ -136,25 +137,25 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assertEqualHashes(t, featureCommits[2], res[5])
 	assertEqualHashes(t, featureCommits[1], res[6])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{mainHash}, dEnv.DoltDB, []hash.Hash{featureHash}, 100)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{mainHash}, dEnv.DoltDB(ctx), []hash.Hash{featureHash}, 100)
 	require.NoError(t, err)
 	assert.Len(t, res, 0)
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featureHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featureHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[7], res[0])
 	assertEqualHashes(t, featureCommits[6], res[1])
 	assertEqualHashes(t, featureCommits[5], res[2])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featurePreMergeHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featurePreMergeHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[3], res[0])
 	assertEqualHashes(t, featureCommits[2], res[1])
 	assertEqualHashes(t, featureCommits[1], res[2])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featurePreMergeHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featurePreMergeHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[3], res[0])
@@ -165,7 +166,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 	mergeBaseHash, err := merge.MergeBase(context.Background(), mainCommits[6], featureCommits[7])
 	require.NoError(t, err)
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featureHash, mainHash}, dEnv.DoltDB, []hash.Hash{mergeBaseHash}, -1)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featureHash, mainHash}, dEnv.DoltDB(ctx), []hash.Hash{mergeBaseHash}, -1)
 	require.NoError(t, err)
 	assert.Len(t, res, 7)
 	assertEqualHashes(t, featureCommits[7], res[0])
@@ -179,7 +180,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 	mergeBaseHash, err = merge.MergeBase(context.Background(), mainCommits[6], featureCommits[3])
 	require.NoError(t, err)
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featurePreMergeHash, mainHash}, dEnv.DoltDB, []hash.Hash{mergeBaseHash}, -1)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featurePreMergeHash, mainHash}, dEnv.DoltDB(ctx), []hash.Hash{mergeBaseHash}, -1)
 	require.NoError(t, err)
 	assert.Len(t, res, 4)
 	assertEqualHashes(t, featureCommits[3], res[0])
@@ -188,20 +189,20 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assertEqualHashes(t, featureCommits[1], res[3])
 
 	// Create a similar branch to "feature" on a forked repository and GetDotDotRevisions using that as well.
-	forkEnv := mustForkDB(t, dEnv.DoltDB, "feature", featureCommits[4])
+	forkEnv := mustForkDB(ctx, t, dEnv.DoltDB(ctx), "feature", featureCommits[4])
 
 	// Create 3 commits on feature branch.
 	for i := 5; i < 8; i++ {
-		featureCommits[i] = mustCreateCommit(t, forkEnv.DoltDB, "feature", rvh, featureCommits[i-1])
+		featureCommits[i] = mustCreateCommit(t, forkEnv.DoltDB(ctx), "feature", rvh, featureCommits[i-1])
 	}
 
 	featureHash = mustGetHash(t, featureCommits[7])
 	mainHash = mustGetHash(t, mainCommits[6])
 	featurePreMergeHash = mustGetHash(t, featureCommits[3])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featureHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 100)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featureHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 100)
 	require.Error(t, err)
-	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB, []hash.Hash{featureHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 100)
+	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB(ctx), []hash.Hash{featureHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 100)
 	require.NoError(t, err)
 	assert.Len(t, res, 7)
 	assertEqualHashes(t, featureCommits[7], res[0])
@@ -212,27 +213,27 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assertEqualHashes(t, featureCommits[2], res[5])
 	assertEqualHashes(t, featureCommits[1], res[6])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{mainHash}, dEnv.DoltDB, []hash.Hash{featureHash}, 100)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{mainHash}, dEnv.DoltDB(ctx), []hash.Hash{featureHash}, 100)
 	require.Error(t, err)
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{mainHash}, forkEnv.DoltDB, []hash.Hash{featureHash}, 100)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{mainHash}, forkEnv.DoltDB(ctx), []hash.Hash{featureHash}, 100)
 	require.NoError(t, err)
 	assert.Len(t, res, 0)
 
-	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB, []hash.Hash{featureHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB(ctx), []hash.Hash{featureHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[7], res[0])
 	assertEqualHashes(t, featureCommits[6], res[1])
 	assertEqualHashes(t, featureCommits[5], res[2])
 
-	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB, []hash.Hash{featurePreMergeHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), dEnv.DoltDB(ctx), []hash.Hash{featurePreMergeHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[3], res[0])
 	assertEqualHashes(t, featureCommits[2], res[1])
 	assertEqualHashes(t, featureCommits[1], res[2])
 
-	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB, []hash.Hash{featurePreMergeHash}, dEnv.DoltDB, []hash.Hash{mainHash}, 3)
+	res, err = GetDotDotRevisions(context.Background(), forkEnv.DoltDB(ctx), []hash.Hash{featurePreMergeHash}, dEnv.DoltDB(ctx), []hash.Hash{mainHash}, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assertEqualHashes(t, featureCommits[3], res[0])
@@ -275,7 +276,7 @@ func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash
 	return commit
 }
 
-func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commit) *env.DoltEnv {
+func mustForkDB(ctx context.Context, t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commit) *env.DoltEnv {
 	h, err := cm.HashOf()
 	require.NoError(t, err)
 	forkEnv := createUninitializedEnv()
@@ -286,12 +287,12 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		for range ps {
 		}
 	}()
-	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, ps, nil)
+	err = forkEnv.DoltDB(ctx).PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, ps, nil)
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}
 	require.NoError(t, err)
-	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), h)
+	err = forkEnv.DoltDB(ctx).SetHead(context.Background(), ref.NewBranchRef(bn), h)
 	require.NoError(t, err)
 	return forkEnv
 }

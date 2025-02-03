@@ -91,39 +91,40 @@ func TestCountAgg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
 
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
-			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
+			engine, sqlCtx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
 			require.NoError(t, err)
 
-			err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
+			err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 			require.NoError(t, err)
 
 			for _, q := range tt.setup {
-				_, iter, _, err := engine.Query(ctx, q)
+				_, iter, _, err := engine.Query(sqlCtx, q)
 				require.NoError(t, err)
-				_, err = sql.RowIterToRows(ctx, iter)
+				_, err = sql.RowIterToRows(sqlCtx, iter)
 				require.NoError(t, err)
 			}
 
-			binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler(), engine.Parser)
+			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EngineEventScheduler(), engine.Parser)
 			node, _, _, qFlags, err := binder.Parse(tt.query, nil, false)
 			require.NoError(t, err)
-			node, err = engine.EngineAnalyzer().Analyze(ctx, node, nil, qFlags)
+			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)
 			require.NoError(t, err)
 
 			j := getAgg(node)
 			require.NotNil(t, j)
 
-			iter, err := Builder{}.Build(ctx, j, nil)
+			iter, err := Builder{}.Build(sqlCtx, j, nil)
 			_, ok := iter.(*countAggKvIter)
 			require.Equalf(t, tt.doRowexec, ok, "expected do row exec: %t", tt.doRowexec)
 		})

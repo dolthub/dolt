@@ -64,7 +64,7 @@ func (cmd StashClearCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
 	}
@@ -77,7 +77,7 @@ func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
-	err := dEnv.DoltDB.RemoveAllStashes(ctx)
+	err := dEnv.DoltDB(ctx).RemoveAllStashes(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

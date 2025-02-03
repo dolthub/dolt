@@ -555,9 +555,9 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 		return
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
 
 	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
@@ -591,8 +591,8 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 }
 
 func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
+	ctx := context.Background()
 	getSchema := func(t *testing.T, dEnv *env.DoltEnv) schema.Schema {
-		ctx := context.Background()
 		wr, err := dEnv.WorkingRoot(ctx)
 		assert.NoError(t, err)
 		tbl, ok, err := wr.GetTable(ctx, doltdb.TableName{Name: "test"})
@@ -604,8 +604,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
-	ctx := context.Background()
+	defer dEnv.DoltDB(ctx).Close()
 	for _, c := range setupCommon {
 		exit := c.exec(t, ctx, dEnv)
 		require.Equal(t, 0, exit)
@@ -664,9 +663,9 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 }
 
 func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
-	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	defer dEnv.DoltDB(ctx).Close()
 	for _, c := range setupForeignKeyTests {
 		exit := c.exec(t, ctx, dEnv)
 		require.Equal(t, 0, exit)
@@ -697,7 +696,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	require.NoError(t, err)
 	otherRoot := otherWS.WorkingRoot()
 
-	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
+	opts := editor.TestEditorOptions(dEnv.DoltDB(ctx).ValueReadWriter())
 	mo := merge.MergeOpts{IsCherryPick: false}
 	result, err := merge.MergeRoots(sql.NewContext(ctx), mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)

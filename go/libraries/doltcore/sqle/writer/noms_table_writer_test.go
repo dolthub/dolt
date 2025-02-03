@@ -154,37 +154,38 @@ func TestTableEditor(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv, err := sqle.CreateTestDatabase()
 			require.NoError(t, err)
 
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
-			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
+			engine, sqlCtx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
 			require.NoError(t, err)
 
-			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
+			peopleTable, _, err := db.GetTableInsensitive(sqlCtx, "people")
 			require.NoError(t, err)
 
 			dt := peopleTable.(sql.UpdatableTable)
-			ed := dt.Updater(ctx).(dsess.TableWriter)
+			ed := dt.Updater(sqlCtx).(dsess.TableWriter)
 
-			test.setup(ctx, t, ed)
-			require.NoError(t, ed.Close(ctx))
+			test.setup(sqlCtx, t, ed)
+			require.NoError(t, ed.Close(sqlCtx))
 
-			root, err := db.GetRoot(ctx)
+			root, err := db.GetRoot(sqlCtx)
 			require.NoError(t, err)
 
 			// TODO: not clear why this is necessary, the call to ed.Close should update the working set already
 			require.NoError(t, dEnv.UpdateWorkingRoot(context.Background(), root))
 
-			_, rowIter, _, err := engine.Query(ctx, test.selectQuery)
+			_, rowIter, _, err := engine.Query(sqlCtx, test.selectQuery)
 			require.NoError(t, err)
 
-			actualRows, err := sql.RowIterToRows(ctx, rowIter)
+			actualRows, err := sql.RowIterToRows(sqlCtx, rowIter)
 			require.NoError(t, err)
 
 			assert.Equal(t, test.expectedRows, actualRows)

@@ -38,7 +38,7 @@ func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint strin
 	if err != nil {
 		return err
 	}
-	return CreateTagOnDB(ctx, dEnv.DoltDB, tagName, startPoint, props, headRef)
+	return CreateTagOnDB(ctx, dEnv.DoltDB(ctx), tagName, startPoint, props, headRef)
 }
 
 func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint string, props TagProps, headRef ref.DoltRef) error {

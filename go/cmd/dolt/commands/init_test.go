@@ -67,6 +67,7 @@ func TestInit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := createUninitializedEnv()
 			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 			gCfg.SetStrings(test.GlobalConfig)
@@ -74,8 +75,8 @@ func TestInit(t *testing.T) {
 			latebind := func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) { return nil, nil, func() {}, nil }
 			cliCtx, _ := cli.NewCliContext(&apr, dEnv.Config, dEnv.FS, latebind)
 
-			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv, cliCtx)
-			defer dEnv.DoltDB.Close()
+			result := InitCmd{}.Exec(ctx, "dolt init", test.Args, dEnv, cliCtx)
+			defer dEnv.DoltDB(ctx).Close()
 
 			require.Equalf(t, test.ExpectSuccess, result == 0, "- Expected success: %t; result: %t;", test.ExpectSuccess, result == 0)
 
@@ -92,12 +93,13 @@ func TestInit(t *testing.T) {
 }
 
 func TestInitTwice(t *testing.T) {
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	result := InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
+	result := InitCmd{}.Exec(ctx, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
 	require.True(t, result == 0, "First init should succeed")
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
-	result = InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
+	result = InitCmd{}.Exec(ctx, "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv, nil)
 	require.True(t, result != 0, "Second init should fail")
 }
 

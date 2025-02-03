@@ -32,16 +32,17 @@ import (
 )
 
 func TestLog(t *testing.T) {
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
-	defer dEnv.DoltDB.Close()
+	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	defer dEnv.DoltDB(ctx).Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")
 	}
 
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	opt, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	opt, _ := dEnv.DoltDB(ctx).Resolve(context.Background(), cs, nil)
 	commit, _ := opt.ToCommit()
 
 	meta, _ := commit.GetCommitMeta(context.Background())
@@ -53,16 +54,17 @@ func TestLogSigterm(t *testing.T) {
 		t.Skip("Skipping test as function used is not supported on Windows")
 	}
 
+	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
-	defer dEnv.DoltDB.Close()
+	err := dEnv.InitRepo(ctx, types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	defer dEnv.DoltDB(ctx).Close()
 
 	if err != nil {
 		t.Error("Failed to init repo")
 	}
 
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	optCmt, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	optCmt, _ := dEnv.DoltDB(ctx).Resolve(context.Background(), cs, nil)
 	commit, _ := optCmt.ToCommit()
 	cMeta, _ := commit.GetCommitMeta(context.Background())
 	cHash, _ := commit.HashOf()

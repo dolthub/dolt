@@ -69,7 +69,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	return CopyBranchOnDB(ctx, dEnv.DoltDB, oldBranch, newBranch, force, nil)
+	return CopyBranchOnDB(ctx, dEnv.DoltDB(ctx), oldBranch, newBranch, force, nil)
 }
 
 func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool, rsc *doltdb.ReplicationStatusController) error {
@@ -382,7 +382,7 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 		if err != nil {
 			return nil, err
 		}
-		optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+		optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, headRef)
 		if err != nil && errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, nil
 		}

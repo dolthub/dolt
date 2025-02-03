@@ -120,7 +120,7 @@ var gcSetupCommon = []testCommand{
 func testGarbageCollection(t *testing.T, test gcTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
@@ -132,21 +132,21 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 
 	var res interface{}
 	for _, stage := range test.stages {
-		res = stage.preStageFunc(ctx, t, dEnv.DoltDB, res)
+		res = stage.preStageFunc(ctx, t, dEnv.DoltDB(ctx), res)
 		for _, c := range stage.commands {
 			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 			require.Equal(t, 0, exitCode)
 		}
 	}
 
-	err := dEnv.DoltDB.GC(ctx, types.GCModeDefault, nil)
+	err := dEnv.DoltDB(ctx).GC(ctx, types.GCModeDefault, nil)
 	require.NoError(t, err)
-	test.postGCFunc(ctx, t, dEnv.DoltDB, res)
+	test.postGCFunc(ctx, t, dEnv.DoltDB(ctx), res)
 
 	working, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 	// assert all out rows are present after gc
-	actual, err := sqle.ExecuteSelect(dEnv, working, test.query)
+	actual, err := sqle.ExecuteSelect(ctx, dEnv, working, test.query)
 	require.NoError(t, err)
 	assert.Equal(t, test.expected, actual)
 }

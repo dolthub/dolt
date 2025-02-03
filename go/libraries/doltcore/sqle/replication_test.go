@@ -29,9 +29,10 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
+	ctx := context.Background()
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")

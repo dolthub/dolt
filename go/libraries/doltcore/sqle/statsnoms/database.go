@@ -84,19 +84,12 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "")
+		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "", "")
 	}
 
-	if dEnv.DoltDB == nil {
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
-		if err != nil {
-			return nil, err
-		}
+	dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
 
-		dEnv.DoltDB = ddb
-	}
-
-	deaf := dEnv.DbEaFactory()
+	deaf := dEnv.DbEaFactory(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -106,7 +99,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, err
 	}

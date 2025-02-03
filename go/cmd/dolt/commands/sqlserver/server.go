@@ -179,7 +179,7 @@ func ConfigureServices(
 	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-				if dEnv.IsAccessModeReadOnly() {
+				if dEnv.IsAccessModeReadOnly(ctx) {
 					return true, ErrCouldNotLockDatabase.New(name)
 				}
 				return false, nil

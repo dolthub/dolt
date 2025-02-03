@@ -389,16 +389,17 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		t.Skip("Skipping tests until " + singleUpdateQueryTest)
 	}
 
+	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(t, context.Background(), dEnv, root, test.UpdateQuery)
+	root, _ := dEnv.WorkingRoot(ctx)
+	root, err = executeModify(t, ctx, dEnv, root, test.UpdateQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
@@ -406,7 +407,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, len(test.ExpectedRows), len(actualRows))

@@ -106,7 +106,7 @@ func TestKeylessMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 			setupTest(t, ctx, dEnv, test.setup)
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -279,7 +279,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
 			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
@@ -299,7 +299,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
 			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)

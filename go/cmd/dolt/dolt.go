@@ -94,6 +94,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ProfileCmd{},
 	commands.ArchiveCmd{},
 	commands.FsckCmd{},
+	commands.ConfigCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -416,7 +417,8 @@ func runMain() int {
 	args = nil
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
@@ -537,8 +539,8 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	if csMetrics && dEnv.DoltDB != nil {
-		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+	if csMetrics && dEnv.DoltDB(ctx) != nil {
+		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
 	}
@@ -676,19 +678,19 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
-		// If the loaded target environment has a DoltDB and we do not
+	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
+		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true
-	} else if targetEnv.DoltDB == nil {
-		// If the loaded environment itself does not have a DoltDB, we
+	} else if targetEnv.DoltDB(ctx) == nil {
+		// If the loaded environment itself does not have a doltDB, we
 		// may want to look for a server. We do so if all of the
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
 		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv.DoltDB != nil {
-				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+			if dEnv.DoltDB(ctx) != nil {
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly(ctx)
 			}
 			return !allReposAreReadOnly, nil
 		})
@@ -790,7 +792,7 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
 		return false, 0
 	}
-	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "", doltversion.Version)
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
@@ -835,7 +837,7 @@ func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapCo
 		return nil, true, 1
 	}
 
-	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, doltversion.Version)
+	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
 	var globalConfig config.ReadWriteConfig
 
 	homeDir, err := env.GetCurrentUserHomeDir()

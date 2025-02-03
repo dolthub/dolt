@@ -194,8 +194,9 @@ func TestCreateRdWr(t *testing.T) {
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema), os.ModePerm)
@@ -211,7 +212,7 @@ func TestCreateRdWr(t *testing.T) {
 		if tdErr != nil {
 			t.Fatal("Unexpected error accessing .dolt directory.", tdErr)
 		}
-		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 
 		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
 		if fpErr != nil {

@@ -110,9 +110,10 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return status
 	}
 
+	errorBuilder := errhand.BuildDError("error: failed to create query engine")
 	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to create query engine").AddCause(err).Build(), nil)
+		return HandleVErrAndExitCode(errorBuilder.AddCause(err).Build(), nil)
 	}
 
 	if closeFunc != nil {
@@ -259,7 +260,7 @@ func printCurrentBranch(sqlCtx *sql.Context, queryEngine cli.Queryist) int {
 }
 
 func printAllDatasets(ctx context.Context, dEnv *env.DoltEnv) int {
-	refs, err := dEnv.DoltDB.GetHeadRefs(ctx)
+	refs, err := dEnv.DoltDB(ctx).GetHeadRefs(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
@@ -270,7 +271,7 @@ func printAllDatasets(ctx context.Context, dEnv *env.DoltEnv) int {
 		cli.Println("  " + r.String())
 	}
 
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	branches, err := dEnv.DoltDB(ctx).GetBranches(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
@@ -284,7 +285,7 @@ func printAllDatasets(ctx context.Context, dEnv *env.DoltEnv) int {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 		}
 
-		_, err = dEnv.DoltDB.ResolveWorkingSet(ctx, w)
+		_, err = dEnv.DoltDB(ctx).ResolveWorkingSet(ctx, w)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			continue
 		} else if err != nil {

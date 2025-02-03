@@ -66,7 +66,7 @@ func (cmd ShowRootCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	cli.ParseArgsOrDie(ap, args, usage)
 
-	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
+	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 	dss, err := db.Datasets(ctx)
 	if err != nil {
 		verr := errhand.BuildDError("failed to get database datasets").AddCause(err).Build()

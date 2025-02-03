@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -87,7 +88,8 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	DoltDB      *doltdb.DoltDB
+	loadDBOnce  sync.Once
+	doltDB      *doltdb.DoltDB
 	DBLoadError error
 
 	FS     filesys.Filesys
@@ -95,6 +97,34 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 
 	UserPassConfig *creds.DoltCredsForPass
+}
+
+func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, doltDB *doltdb.DoltDB, fs filesys.Filesys) *DoltEnv {
+	return &DoltEnv{
+		Version:   version,
+		Config:    config,
+		RepoState: repoState,
+		doltDB:    doltDB,
+		FS:        fs,
+	}
+}
+
+func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
+	if dEnv.doltDB == nil {
+		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+	}
+	return dEnv.doltDB
+}
+
+func (dEnv *DoltEnv) LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) error {
+	if dEnv.doltDB == nil {
+		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
+		if err != nil {
+			return err
+		}
+		dEnv.doltDB = ddb
+	}
+	return nil
 }
 
 // IncompleteEnv returns a DoltEnv that is incomplete. There are cases where we want to know that the structure
@@ -107,7 +137,7 @@ func IncompleteEnv(FS filesys.Filesys) *DoltEnv {
 		Config:      nil,
 		RepoState:   nil,
 		RSLoadErr:   nil,
-		DoltDB:      nil,
+		doltDB:      nil,
 		DBLoadError: nil,
 		FS:          FS,
 		urlStr:      "",
@@ -151,7 +181,9 @@ func (dEnv *DoltEnv) ReloadRepoState() error {
 	return nil
 }
 
-func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+// LoadWithoutDB creates a DoltEnv without eagerly loading the DB.
+// If urlStr is non-empty, then the DB can be loaded later by calling LoadDoltDB.
+func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
 
 	repoState, rsErr := createRepoState(fs)
@@ -164,62 +196,66 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, v
 		RSLoadErr:  rsErr,
 		FS:         fs,
 		hdp:        hdp,
+		urlStr:     urlStr,
 	}
 }
 
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
-	dEnv := LoadWithoutDB(ctx, hdp, fs, version)
-
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
-
-	dEnv.DoltDB = ddb
-	dEnv.DBLoadError = dbLoadErr
-	dEnv.urlStr = urlStr
-
-	if dbLoadErr == nil && dEnv.HasDoltDir() {
-		if !dEnv.HasDoltTempTableDir() {
-			tmpDir, err := dEnv.TempTableFilesDir()
-			if err != nil {
-				dEnv.DBLoadError = err
-			}
-			err = dEnv.FS.MkDirs(tmpDir)
-			dEnv.DBLoadError = err
-		} else {
-			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
-			// The process will not wait for this to finish so this may not always complete.
-			go func() {
-				// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
-				tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dbfactory.DoltDir, tempTablesDir))
-				if err != nil {
-					return
-				}
-				_ = fs.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
-					if !isDir {
-						lm, exists := fs.LastModified(path)
-
-						if exists && time.Now().Sub(lm) > (time.Hour*24) {
-							_ = fs.DeleteFile(path)
-						}
-					}
-
-					return false
-				})
-			}()
-		}
-	}
-
-	if dEnv.RSLoadErr == nil && dbLoadErr == nil {
-		// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
-		_, err := dEnv.WorkingSet(ctx)
-		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			_ = dEnv.initWorkingSetFromRepoState(ctx)
-		} else if err != nil {
-			dEnv.RSLoadErr = err
-		}
-	}
-
+	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
+	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
 	return dEnv
+}
+
+func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
+	dEnv.loadDBOnce.Do(func() {
+		ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+		dEnv.doltDB = ddb
+		dEnv.DBLoadError = dbLoadErr
+		dEnv.urlStr = urlStr
+
+		if dbLoadErr == nil && dEnv.HasDoltDir() {
+			if !dEnv.HasDoltTempTableDir() {
+				tmpDir, err := dEnv.TempTableFilesDir()
+				if err != nil {
+					dEnv.DBLoadError = err
+				}
+				err = dEnv.FS.MkDirs(tmpDir)
+				dEnv.DBLoadError = err
+			} else {
+				// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
+				// The process will not wait for this to finish so this may not always complete.
+				go func() {
+					// TODO dEnv.HasDoltTempTableDir() true but dEnv.TempTableFileDir() panics
+					tmpTableDir, err := dEnv.FS.Abs(filepath.Join(dEnv.urlStr, dbfactory.DoltDir, tempTablesDir))
+					if err != nil {
+						return
+					}
+					_ = fs.Iter(tmpTableDir, true, func(path string, size int64, isDir bool) (stop bool) {
+						if !isDir {
+							lm, exists := fs.LastModified(path)
+
+							if exists && time.Now().Sub(lm) > (time.Hour*24) {
+								_ = fs.DeleteFile(path)
+							}
+						}
+
+						return false
+					})
+				}()
+			}
+		}
+
+		if dEnv.RSLoadErr == nil && dbLoadErr == nil {
+			// If the working set isn't present in the DB, create it from the repo state. This step can be removed post 1.0.
+			_, err := dEnv.WorkingSet(ctx)
+			if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+				_ = dEnv.initWorkingSetFromRepoState(ctx)
+			} else if err != nil {
+				dEnv.RSLoadErr = err
+			}
+		}
+	})
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
@@ -256,7 +292,7 @@ func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
 			return fmt.Errorf("Corrupt repo, invalid staged hash %s", stagedHash)
 		}
 
-		stagedRoot, err = dEnv.DoltDB.ReadRootValue(ctx, stagedHash)
+		stagedRoot, err = dEnv.DoltDB(ctx).ReadRootValue(ctx, stagedHash)
 		if err != nil {
 			return err
 		}
@@ -269,13 +305,13 @@ func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
 			return fmt.Errorf("Corrupt repo, invalid working hash %s", workingHash)
 		}
 
-		workingRoot, err = dEnv.DoltDB.ReadRootValue(ctx, workingHash)
+		workingRoot, err = dEnv.DoltDB(ctx).ReadRootValue(ctx, workingHash)
 		if err != nil {
 			return err
 		}
 	}
 
-	mergeState, err := mergeStateToMergeState(ctx, dEnv.RepoState.merge, dEnv.DoltDB)
+	mergeState, err := mergeStateToMergeState(ctx, dEnv.RepoState.merge, dEnv.DoltDB(ctx))
 	if err != nil {
 		return err
 	}
@@ -431,7 +467,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
+	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 
 	return err
 }
@@ -528,12 +564,12 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *types.NomsBinFormat, branchName string, commitMeta datas.CommitMetaGenerator) error {
 	var err error
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
+	dEnv.doltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr, dEnv.FS)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
+	err = dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
@@ -543,7 +579,7 @@ func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *typ
 
 // InitializeRepoState writes a default repo state to disk, consisting of a main branch and current root hash value.
 func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string) error {
-	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, ref.NewBranchRef(branchName))
+	commit, err := dEnv.DoltDB(ctx).ResolveCommitRef(ctx, ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
 	}
@@ -651,7 +687,7 @@ func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (doltdb.RootValue, error) 
 }
 
 func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
-	return WorkingSet(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
+	return WorkingSet(ctx, dEnv.DoltDB(ctx), dEnv.RepoStateReader())
 }
 
 func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
@@ -697,7 +733,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.RootV
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta(), nil)
+	return dEnv.DoltDB(ctx).UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 // UpdateWorkingSet updates the working set for the current working branch to the value given.
@@ -716,7 +752,7 @@ func (dEnv *DoltEnv) UpdateWorkingSet(ctx context.Context, ws *doltdb.WorkingSet
 		}
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta(), nil)
+	return dEnv.DoltDB(ctx).UpdateWorkingSet(ctx, ws.Ref(), ws, h, dEnv.workingSetMeta(), nil)
 }
 
 type repoStateReader struct {
@@ -790,12 +826,12 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (doltdb.RootValue, error) {
 }
 
 func (dEnv *DoltEnv) HeadCommit(ctx context.Context) (*doltdb.Commit, error) {
-	return dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
+	return dEnv.DoltDB(ctx).ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 }
 
-func (dEnv *DoltEnv) DbData() DbData {
+func (dEnv *DoltEnv) DbData(ctx context.Context) DbData {
 	return DbData{
-		Ddb: dEnv.DoltDB,
+		Ddb: dEnv.DoltDB(ctx),
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
 	}
@@ -836,7 +872,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot doltdb.RootVa
 		wsRef = ws.Ref()
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta(), nil)
+	return dEnv.DoltDB(ctx).UpdateWorkingSet(ctx, wsRef, ws.WithStagedRoot(newRoot), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
@@ -850,7 +886,7 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 		return err
 	}
 
-	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta(), nil)
+	return dEnv.DoltDB(ctx).UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta(), nil)
 }
 
 func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
@@ -996,7 +1032,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 		return ErrRemoteNotFound
 	}
 
-	ddb := dEnv.DoltDB
+	ddb := dEnv.DoltDB(ctx)
 	refs, err := ddb.GetRemoteRefs(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrFailedToReadFromDb, err.Error())
@@ -1090,7 +1126,7 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 
 func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, error) {
 	localRef := ref.NewBranchRef(refStr)
-	if hasRef, err := dEnv.DoltDB.HasRef(ctx, localRef); err != nil {
+	if hasRef, err := dEnv.DoltDB(ctx).HasRef(ctx, localRef); err != nil {
 		return nil, err
 	} else if hasRef {
 		return localRef, nil
@@ -1109,7 +1145,7 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 					return nil, err
 				}
 
-				if hasRef, err = dEnv.DoltDB.HasRef(ctx, remoteRef); err != nil {
+				if hasRef, err = dEnv.DoltDB(ctx).HasRef(ctx, remoteRef); err != nil {
 					return nil, err
 				} else if hasRef {
 					return remoteRef, nil
@@ -1217,22 +1253,22 @@ func (dEnv *DoltEnv) TempTableFilesDir() (string, error) {
 	return absPath, nil
 }
 
-func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
+func (dEnv *DoltEnv) DbEaFactory(ctx context.Context) editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil
 	}
-	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB.ValueReadWriter())
+	return editor.NewDbEaFactory(tmpDir, dEnv.DoltDB(ctx).ValueReadWriter())
 }
 
-func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
+func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil
 	}
-	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
+	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
 }
 
-func (dEnv *DoltEnv) IsAccessModeReadOnly() bool {
-	return dEnv.DoltDB.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
+func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
+	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }
