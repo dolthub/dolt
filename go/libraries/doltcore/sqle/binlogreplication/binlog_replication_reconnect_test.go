@@ -28,38 +28,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var toxiClient *toxiproxyclient.Client
-var mysqlProxy *toxiproxyclient.Proxy
-var proxyPort int
-
 // TestBinlogReplicationAutoReconnect tests that the replica's connection to the primary is correctly
 // reestablished if it drops.
 func TestBinlogReplicationAutoReconnect(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	configureToxiProxy(t)
-	configureFastConnectionRetry(t)
-	startReplicationAndCreateTestDb(t, proxyPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.configureToxiProxy()
+	h.configureFastConnectionRetry()
+	h.startReplicationAndCreateTestDb(h.proxyPort)
 
 	// Get the replica started up and ensure it's in sync with the primary before turning on the limit_data toxic
-	testInitialReplicaStatus(t)
-	primaryDatabase.MustExec("create table reconnect_test(pk int primary key, c1 varchar(255));")
-	waitForReplicaToCatchUp(t)
-	turnOnLimitDataToxic(t)
+	h.testInitialReplicaStatus()
+	h.primaryDatabase.MustExec("create table reconnect_test(pk int primary key, c1 varchar(255));")
+	h.waitForReplicaToCatchUp()
+	h.turnOnLimitDataToxic()
 
 	for i := 0; i < 1000; i++ {
 		value := "foobarbazbashfoobarbazbashfoobarbazbashfoobarbazbashfoobarbazbash"
-		primaryDatabase.MustExec(fmt.Sprintf("insert into reconnect_test values (%v, %q)", i, value))
+		h.primaryDatabase.MustExec(fmt.Sprintf("insert into reconnect_test values (%v, %q)", i, value))
 	}
 	// Remove the limit_data toxic so that a connection can be reestablished
-	err := mysqlProxy.RemoveToxic("limit_data")
+	err := h.mysqlProxy.RemoveToxic("limit_data")
 	require.NoError(t, err)
 	t.Logf("Toxiproxy proxy limit_data toxic removed")
 
 	// Assert that all records get written to the table
-	waitForReplicaToCatchUp(t)
+	h.waitForReplicaToCatchUp()
 
-	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
+	rows, err := h.replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
 	require.NoError(t, err)
 
 	row := convertMapScanResultToStrings(readNextRow(t, rows))
@@ -69,7 +65,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Assert that show replica status show reconnection IO error
-	status := showReplicaStatus(t)
+	status := h.showReplicaStatus()
 	require.Equal(t, "1158", status["Last_IO_Errno"])
 	require.True(t, strings.Contains(status["Last_IO_Error"].(string), "EOF"))
 	requireRecentTimeString(t, status["Last_IO_Error_Timestamp"])
@@ -77,54 +73,54 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 
 // configureFastConnectionRetry configures the replica to retry a failed connection after 5s, instead of the default 60s
 // connection retry interval. This is used for testing connection retry logic without waiting the full default period.
-func configureFastConnectionRetry(_ *testing.T) {
-	replicaDatabase.MustExec(
+func (h *harness) configureFastConnectionRetry() {
+	h.replicaDatabase.MustExec(
 		"change replication source to SOURCE_CONNECT_RETRY=5;")
 }
 
 // testInitialReplicaStatus tests the data returned by SHOW REPLICA STATUS and errors
 // out if any values are not what is expected for a replica that has just connected
 // to a MySQL primary.
-func testInitialReplicaStatus(t *testing.T) {
-	status := showReplicaStatus(t)
+func (h *harness) testInitialReplicaStatus() {
+	status := h.showReplicaStatus()
 
 	// Positioning settings
-	require.Equal(t, "1", status["Auto_Position"])
+	require.Equal(h.t, "1", status["Auto_Position"])
 
 	// Connection settings
-	require.Equal(t, "5", status["Connect_Retry"])
-	require.Equal(t, "86400", status["Source_Retry_Count"])
-	require.Equal(t, "localhost", status["Source_Host"])
-	require.NotEmpty(t, status["Source_Port"])
-	require.NotEmpty(t, status["Source_User"])
+	require.Equal(h.t, "5", status["Connect_Retry"])
+	require.Equal(h.t, "86400", status["Source_Retry_Count"])
+	require.Equal(h.t, "localhost", status["Source_Host"])
+	require.NotEmpty(h.t, status["Source_Port"])
+	require.NotEmpty(h.t, status["Source_User"])
 
 	// Error status
-	require.Equal(t, "0", status["Last_Errno"])
-	require.Equal(t, "", status["Last_Error"])
-	require.Equal(t, "0", status["Last_IO_Errno"])
-	require.Equal(t, "", status["Last_IO_Error"])
-	require.Equal(t, "", status["Last_IO_Error_Timestamp"])
-	require.Equal(t, "0", status["Last_SQL_Errno"])
-	require.Equal(t, "", status["Last_SQL_Error"])
-	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
+	require.Equal(h.t, "0", status["Last_Errno"])
+	require.Equal(h.t, "", status["Last_Error"])
+	require.Equal(h.t, "0", status["Last_IO_Errno"])
+	require.Equal(h.t, "", status["Last_IO_Error"])
+	require.Equal(h.t, "", status["Last_IO_Error_Timestamp"])
+	require.Equal(h.t, "0", status["Last_SQL_Errno"])
+	require.Equal(h.t, "", status["Last_SQL_Error"])
+	require.Equal(h.t, "", status["Last_SQL_Error_Timestamp"])
 
 	// Empty filter configuration
-	require.Equal(t, "", status["Replicate_Do_Table"])
-	require.Equal(t, "", status["Replicate_Ignore_Table"])
+	require.Equal(h.t, "", status["Replicate_Do_Table"])
+	require.Equal(h.t, "", status["Replicate_Ignore_Table"])
 
 	// Thread status
-	require.True(t,
+	require.True(h.t,
 		status["Replica_IO_Running"] == "Yes" ||
 			status["Replica_IO_Running"] == "Connecting")
-	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+	require.Equal(h.t, "Yes", status["Replica_SQL_Running"])
 
 	// Unsupported fields
-	require.Equal(t, "INVALID", status["Source_Log_File"])
-	require.Equal(t, "Ignored", status["Source_SSL_Allowed"])
-	require.Equal(t, "None", status["Until_Condition"])
-	require.Equal(t, "0", status["SQL_Delay"])
-	require.Equal(t, "0", status["SQL_Remaining_Delay"])
-	require.Equal(t, "0", status["Seconds_Behind_Source"])
+	require.Equal(h.t, "INVALID", status["Source_Log_File"])
+	require.Equal(h.t, "Ignored", status["Source_SSL_Allowed"])
+	require.Equal(h.t, "None", status["Until_Condition"])
+	require.Equal(h.t, "0", status["SQL_Delay"])
+	require.Equal(h.t, "0", status["SQL_Remaining_Delay"])
+	require.Equal(h.t, "0", status["Seconds_Behind_Source"])
 }
 
 // requireRecentTimeString asserts that the specified |datetime| is a non-nil timestamp string
@@ -141,14 +137,14 @@ func requireRecentTimeString(t *testing.T, datetime interface{}) {
 
 // showReplicaStatus returns a map with the results of SHOW REPLICA STATUS, keyed by the
 // name of each column.
-func showReplicaStatus(t *testing.T) map[string]interface{} {
-	rows, err := replicaDatabase.Queryx("show replica status;")
-	require.NoError(t, err)
+func (h *harness) showReplicaStatus() map[string]interface{} {
+	rows, err := h.replicaDatabase.Queryx("show replica status;")
+	require.NoError(h.t, err)
 	defer rows.Close()
-	return convertMapScanResultToStrings(readNextRow(t, rows))
+	return convertMapScanResultToStrings(readNextRow(h.t, rows))
 }
 
-func configureToxiProxy(t *testing.T) {
+func (h *harness) configureToxiProxy() {
 	toxiproxyPort := findFreePort()
 
 	metrics := toxiproxy.NewMetricsContainer(prometheus.NewRegistry())
@@ -157,31 +153,31 @@ func configureToxiProxy(t *testing.T) {
 		toxiproxyServer.Listen("localhost", strconv.Itoa(toxiproxyPort))
 	}()
 	time.Sleep(500 * time.Millisecond)
-	t.Logf("Toxiproxy control plane running on port %d", toxiproxyPort)
+	h.t.Logf("Toxiproxy control plane running on port %d", toxiproxyPort)
 
-	toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
+	h.toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
 
-	proxyPort = findFreePort()
+	h.proxyPort = findFreePort()
 	var err error
-	mysqlProxy, err = toxiClient.CreateProxy("mysql",
-		fmt.Sprintf("localhost:%d", proxyPort), // downstream
-		fmt.Sprintf("localhost:%d", mySqlPort)) // upstream
+	h.mysqlProxy, err = h.toxiClient.CreateProxy("mysql",
+		fmt.Sprintf("localhost:%d", h.proxyPort), // downstream
+		fmt.Sprintf("localhost:%d", h.mySqlPort)) // upstream
 	if err != nil {
 		panic(fmt.Sprintf("unable to create toxiproxy: %v", err.Error()))
 	}
-	t.Logf("Toxiproxy proxy started on port %d", proxyPort)
+	h.t.Logf("Toxiproxy proxy started on port %d", h.proxyPort)
 }
 
 // turnOnLimitDataToxic adds a limit_data toxic to the active Toxiproxy, which prevents more than 1KB of data
 // from being sent from the primary through the proxy to the replica. Callers MUST call configureToxiProxy
 // before calling this function.
-func turnOnLimitDataToxic(t *testing.T) {
-	require.NotNil(t, mysqlProxy)
-	_, err := mysqlProxy.AddToxic("limit_data", "limit_data", "downstream", 1.0, toxiproxyclient.Attributes{
+func (h *harness) turnOnLimitDataToxic() {
+	require.NotNil(h.t, h.mysqlProxy)
+	_, err := h.mysqlProxy.AddToxic("limit_data", "limit_data", "downstream", 1.0, toxiproxyclient.Attributes{
 		"bytes": 1_000,
 	})
-	require.NoError(t, err)
-	t.Logf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d", proxyPort)
+	require.NoError(h.t, err)
+	h.t.Logf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d", h.proxyPort)
 }
 
 // convertMapScanResultToStrings converts each value in the specified map |m| into a string.

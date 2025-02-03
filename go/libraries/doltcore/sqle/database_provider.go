@@ -688,7 +688,8 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 		if exists {
 			deleteErr := p.fs.Delete(dbName, true)
 			if deleteErr != nil {
-				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s': %s",
+					err.Error(), dbName, deleteErr.Error())
 			}
 		}
 		return err

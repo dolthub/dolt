@@ -47,6 +47,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -55,6 +56,7 @@ type SqlEngine struct {
 	contextFactory contextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
+	fs             filesys.Filesys
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -196,6 +198,7 @@ func NewSqlEngine(
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
+	sqlEngine.fs = pro.FileSystem()
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
@@ -314,6 +317,10 @@ func (se *SqlEngine) Analyze(ctx *sql.Context, n sql.Node, qFlags *sql.QueryFlag
 
 func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 	return se.engine
+}
+
+func (se *SqlEngine) FileSystem() filesys.Filesys {
+	return se.fs
 }
 
 func (se *SqlEngine) Close() error {

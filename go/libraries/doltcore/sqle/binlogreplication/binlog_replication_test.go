@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -23,17 +24,16 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
+	toxiproxyclient "github.com/Shopify/toxiproxy/v2/client"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
@@ -42,12 +42,38 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 )
 
-var mySqlPort, doltPort int
-var primaryDatabase, replicaDatabase *sqlx.DB
-var mySqlProcess, doltProcess *os.Process
-var doltLogFilePath, oldDoltLogFilePath, mysqlLogFilePath string
-var doltLogFile, mysqlLogFile *os.File
-var testDir string
+type harness struct {
+	t                  *testing.T
+	mySqlPort          int
+	doltPort           int
+	primaryDatabase    *sqlx.DB
+	replicaDatabase    *sqlx.DB
+	mySqlProcess       *os.Process
+	doltProcess        *os.Process
+	doltLogFilePath    string
+	oldDoltLogFilePath string
+	mysqlLogFilePath   string
+	doltLogFile        *os.File
+	mysqlLogFile       *os.File
+	testDir            string
+	toxiClient         *toxiproxyclient.Client
+	mysqlProxy         *toxiproxyclient.Proxy
+	proxyPort          int
+}
+
+var commandCtx context.Context
+var commandCtxCancel func()
+
+func init() {
+	commandCtx, commandCtxCancel = context.WithCancel(context.Background())
+}
+
+func newHarness(t *testing.T) *harness {
+	ret := &harness{t: t}
+	t.Cleanup(ret.teardown)
+	t.Parallel()
+	return ret
+}
 
 // doltReplicaSystemVars are the common system variables that need
 // to be set on a Dolt replica before replication is turned on.
@@ -56,6 +82,7 @@ var doltReplicaSystemVars = map[string]string{
 }
 
 func TestMain(m *testing.M) {
+	InstallSignalHandlers()
 	res := func() int {
 		defer func() {
 			cachedDoltDevBuildPathOnce.Do(func() {})
@@ -86,7 +113,7 @@ func DoltDevBuildPath() string {
 
 		goDirPath := filepath.Join(originalWorkingDir, "..", "..", "..", "..")
 
-		cmd := exec.Command("go", "build", "-o", fullpath, "./cmd/dolt")
+		cmd := exec.CommandContext(commandCtx, "go", "build", "-o", fullpath, "./cmd/dolt")
 		cmd.Dir = goDirPath
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -97,44 +124,57 @@ func DoltDevBuildPath() string {
 	return cachedDoltDevBuildPath
 }
 
-func teardown(t *testing.T) {
-	if mySqlProcess != nil {
-		stopMySqlServer(t)
+func (h *harness) teardown() {
+	// Some of this work can take a bit of time. Do some of it in parallel.
+	var wg sync.WaitGroup
+	if h.mySqlProcess != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.stopMySqlServer()
+		}()
 	}
-	if doltProcess != nil {
-		stopDoltSqlServer(t)
+	if h.doltProcess != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.stopDoltSqlServer()
+		}()
 	}
-	if mysqlLogFile != nil {
-		mysqlLogFile.Close()
+	if h.mysqlLogFile != nil {
+		h.mysqlLogFile.Close()
 	}
-	if doltLogFile != nil {
-		doltLogFile.Close()
+	if h.doltLogFile != nil {
+		h.doltLogFile.Close()
+	}
+	wg.Wait()
+
+	if h.toxiClient != nil {
+		proxies, err := h.toxiClient.Proxies()
+		if err != nil {
+			for _, value := range proxies {
+				value.Delete()
+			}
+		}
 	}
 
 	// Output server logs on failure for easier debugging
-	if t.Failed() {
-		if oldDoltLogFilePath != "" {
-			t.Logf("\nDolt server log from %s:\n", oldDoltLogFilePath)
-			printFile(t, oldDoltLogFilePath)
+	if h.t.Failed() {
+		if h.oldDoltLogFilePath != "" {
+			h.t.Logf("\nDolt server log from %s:\n", h.oldDoltLogFilePath)
+			printFile(h.t, h.oldDoltLogFilePath)
 		}
 
-		t.Logf("\nDolt server log from %s:\n", doltLogFilePath)
-		printFile(t, doltLogFilePath)
-		t.Logf("\nMySQL server log from %s:\n", mysqlLogFilePath)
-		printFile(t, mysqlLogFilePath)
-		mysqlErrorLogFilePath := filepath.Join(filepath.Dir(mysqlLogFilePath), "error_log.err")
-		t.Logf("\nMySQL server error log from %s:\n", mysqlErrorLogFilePath)
-		printFile(t, mysqlErrorLogFilePath)
+		h.t.Logf("\nDolt server log from %s:\n", h.doltLogFilePath)
+		printFile(h.t, h.doltLogFilePath)
+		h.t.Logf("\nMySQL server log from %s:\n", h.mysqlLogFilePath)
+		printFile(h.t, h.mysqlLogFilePath)
+		mysqlErrorLogFilePath := filepath.Join(filepath.Dir(h.mysqlLogFilePath), "error_log.err")
+		h.t.Logf("\nMySQL server error log from %s:\n", mysqlErrorLogFilePath)
+		printFile(h.t, mysqlErrorLogFilePath)
 	} else {
 		// clean up temp files on clean test runs
-		defer os.RemoveAll(testDir)
-	}
-
-	if toxiClient != nil {
-		proxies, _ := toxiClient.Proxies()
-		for _, value := range proxies {
-			value.Delete()
-		}
+		os.RemoveAll(h.testDir)
 	}
 }
 
@@ -142,67 +182,67 @@ func teardown(t *testing.T) {
 // a MySQL primary and a Dolt replica, and asserts that a CREATE TABLE statement properly replicates to the
 // Dolt replica, along with simple insert, update, and delete statements.
 func TestBinlogReplicationSanityCheck(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Create a table on the primary and verify on the replica
-	primaryDatabase.MustExec("create table tableT (pk int primary key)")
-	waitForReplicaToCatchUp(t)
-	assertCreateTableStatement(t, replicaDatabase, "tableT",
+	h.primaryDatabase.MustExec("create table tableT (pk int primary key)")
+	h.waitForReplicaToCatchUp()
+	assertCreateTableStatement(h.t, h.replicaDatabase, "tableT",
 		"CREATE TABLE tableT ( pk int NOT NULL, PRIMARY KEY (pk)) "+
 			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin")
-	assertRepoStateFileExists(t, "db01")
+	h.assertRepoStateFileExists("db01")
 
 	// Insert/Update/Delete on the primary
-	primaryDatabase.MustExec("insert into tableT values(100), (200)")
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"100"}, {"200"}})
-	primaryDatabase.MustExec("delete from tableT where pk = 100")
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"200"}})
-	primaryDatabase.MustExec("update tableT set pk = 300")
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db01.tableT", [][]any{{"300"}})
+	h.primaryDatabase.MustExec("insert into tableT values(100), (200)")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.tableT", [][]any{{"100"}, {"200"}})
+	h.primaryDatabase.MustExec("delete from tableT where pk = 100")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.tableT", [][]any{{"200"}})
+	h.primaryDatabase.MustExec("update tableT set pk = 300")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.tableT", [][]any{{"300"}})
 }
 
 // TestBinlogReplicationWithHundredsOfDatabases asserts that we can efficiently replicate the creation of hundreds of databases.
 func TestBinlogReplicationWithHundredsOfDatabases(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Create a table on the primary and verify on the replica
-	primaryDatabase.MustExec("create table tableT (pk int primary key)")
-	waitForReplicaToCatchUp(t)
-	assertCreateTableStatement(t, replicaDatabase, "tableT",
+	h.primaryDatabase.MustExec("create table tableT (pk int primary key)")
+	h.waitForReplicaToCatchUp()
+	assertCreateTableStatement(h.t, h.replicaDatabase, "tableT",
 		"CREATE TABLE tableT ( pk int NOT NULL, PRIMARY KEY (pk)) "+
 			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin")
-	assertRepoStateFileExists(t, "db01")
+	h.assertRepoStateFileExists("db01")
 
 	// Create a few hundred databases on the primary and let them replicate to the replica
 	dbCount := 300
 	startTime := time.Now()
 	for i := range dbCount {
 		dbName := fmt.Sprintf("db%03d", i)
-		primaryDatabase.MustExec(fmt.Sprintf("create database %s", dbName))
+		h.primaryDatabase.MustExec(fmt.Sprintf("create database %s", dbName))
 	}
-	waitForReplicaToCatchUp(t)
+	h.waitForReplicaToCatchUp()
 	endTime := time.Now()
 	logrus.Infof("Time to replicate %d databases: %v", dbCount, endTime.Sub(startTime))
 
 	// Spot check the presence of a database on the replica
-	assertRepoStateFileExists(t, "db042")
+	h.assertRepoStateFileExists("db042")
 
 	// Insert some data in one database
 	startTime = time.Now()
-	primaryDatabase.MustExec("use db042;")
-	primaryDatabase.MustExec("create table t (pk int primary key);")
-	primaryDatabase.MustExec("insert into t values (100), (101), (102);")
+	h.primaryDatabase.MustExec("use db042;")
+	h.primaryDatabase.MustExec("create table t (pk int primary key);")
+	h.primaryDatabase.MustExec("insert into t values (100), (101), (102);")
 
 	// Verify the results on the replica
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db042.t;", [][]any{{"100"}, {"101"}, {"102"}})
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db042.t;", [][]any{{"100"}, {"101"}, {"102"}})
 	endTime = time.Now()
 	logrus.Infof("Time to replicate inserts to 1 database (out of %d): %v", endTime.Sub(startTime), dbCount)
 }
@@ -210,11 +250,11 @@ func TestBinlogReplicationWithHundredsOfDatabases(t *testing.T) {
 // TestAutoRestartReplica tests that a Dolt replica automatically starts up replication if
 // replication was running when the replica was shut down.
 func TestAutoRestartReplica(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
 
 	// Assert that replication is not running yet
-	status := queryReplicaStatus(t)
+	status := h.queryReplicaStatus()
 	require.Equal(t, "0", status["Last_IO_Errno"])
 	require.Equal(t, "", status["Last_IO_Error"])
 	require.Equal(t, "0", status["Last_SQL_Errno"])
@@ -223,30 +263,30 @@ func TestAutoRestartReplica(t *testing.T) {
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	// Start up replication and replicate some test data
-	startReplicationAndCreateTestDb(t, mySqlPort)
-	primaryDatabase.MustExec("create table db01.autoRestartTest(pk int primary key);")
-	waitForReplicaToCatchUp(t)
-	primaryDatabase.MustExec("insert into db01.autoRestartTest values (100);")
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db01.autoRestartTest;", [][]any{{"100"}})
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+	h.primaryDatabase.MustExec("create table db01.autoRestartTest(pk int primary key);")
+	h.waitForReplicaToCatchUp()
+	h.primaryDatabase.MustExec("insert into db01.autoRestartTest values (100);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.autoRestartTest;", [][]any{{"100"}})
 
 	// Test for the presence of the replica-running state file
-	require.True(t, fileExists(filepath.Join(testDir, "dolt", ".doltcfg", "replica-running")))
+	require.True(t, fileExists(filepath.Join(h.testDir, "dolt", ".doltcfg", "replica-running")))
 
 	// Restart the Dolt replica
-	stopDoltSqlServer(t)
+	h.stopDoltSqlServer()
 	var err error
-	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
+	h.doltPort, h.doltProcess, err = h.startDoltSqlServer(nil)
 	require.NoError(t, err)
 
 	// Assert that some test data replicates correctly
-	primaryDatabase.MustExec("insert into db01.autoRestartTest values (200);")
-	waitForReplicaToCatchUp(t)
-	requireReplicaResults(t, "select * from db01.autoRestartTest;",
+	h.primaryDatabase.MustExec("insert into db01.autoRestartTest values (200);")
+	h.waitForReplicaToCatchUp()
+	h.requireReplicaResults("select * from db01.autoRestartTest;",
 		[][]any{{"100"}, {"200"}})
 
 	// SHOW REPLICA STATUS should show that replication is running, with no errors
-	status = queryReplicaStatus(t)
+	status = h.queryReplicaStatus()
 	require.Equal(t, "0", status["Last_IO_Errno"])
 	require.Equal(t, "", status["Last_IO_Error"])
 	require.Equal(t, "0", status["Last_SQL_Errno"])
@@ -255,16 +295,16 @@ func TestAutoRestartReplica(t *testing.T) {
 	require.Equal(t, "Yes", status["Replica_SQL_Running"])
 
 	// Stop replication and assert the replica-running marker file is removed
-	replicaDatabase.MustExec("stop replica")
-	require.False(t, fileExists(filepath.Join(testDir, "dolt", ".doltcfg", "replica-running")))
+	h.replicaDatabase.MustExec("stop replica")
+	require.False(t, fileExists(filepath.Join(h.testDir, "dolt", ".doltcfg", "replica-running")))
 
 	// Restart the Dolt replica
-	stopDoltSqlServer(t)
-	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, nil)
+	h.stopDoltSqlServer()
+	h.doltPort, h.doltProcess, err = h.startDoltSqlServer(nil)
 	require.NoError(t, err)
 
 	// SHOW REPLICA STATUS should show that replication is NOT running, with no errors
-	status = queryReplicaStatus(t)
+	status = h.queryReplicaStatus()
 	require.Equal(t, "0", status["Last_IO_Errno"])
 	require.Equal(t, "", status["Last_IO_Error"])
 	require.Equal(t, "0", status["Last_SQL_Errno"])
@@ -275,10 +315,10 @@ func TestAutoRestartReplica(t *testing.T) {
 
 // TestBinlogSystemUserIsLocked tests that the binlog applier user is locked and cannot be used to connect to the server.
 func TestBinlogSystemUserIsLocked(t *testing.T) {
-	defer teardown(t)
-	startSqlServers(t)
+	h := newHarness(t)
+	h.startSqlServers()
 
-	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", binlogApplierUser, doltPort)
+	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", binlogApplierUser, h.doltPort)
 	db, err := sqlx.Open("mysql", dsn)
 	require.NoError(t, err)
 
@@ -288,7 +328,7 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 	require.ErrorContains(t, err, "No authentication")
 
 	// After starting replication, the system account is locked
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 	err = db.Ping()
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Access denied for user")
@@ -298,23 +338,23 @@ func TestBinlogSystemUserIsLocked(t *testing.T) {
 // including sending new Rotate and FormatDescription events to the replica. This is a simple sanity tests that we can
 // process the events without errors.
 func TestFlushLogs(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Make changes on the primary and verify on the replica
-	primaryDatabase.MustExec("create table t (pk int primary key)")
-	waitForReplicaToCatchUp(t)
+	h.primaryDatabase.MustExec("create table t (pk int primary key)")
+	h.waitForReplicaToCatchUp()
 	expectedStatement := "CREATE TABLE t ( pk int NOT NULL, PRIMARY KEY (pk)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"
-	assertCreateTableStatement(t, replicaDatabase, "t", expectedStatement)
+	assertCreateTableStatement(t, h.replicaDatabase, "t", expectedStatement)
 
-	primaryDatabase.MustExec("flush binary logs;")
-	waitForReplicaToCatchUp(t)
+	h.primaryDatabase.MustExec("flush binary logs;")
+	h.waitForReplicaToCatchUp()
 
-	primaryDatabase.MustExec("insert into t values (1), (2), (3);")
-	waitForReplicaToCatchUp(t)
+	h.primaryDatabase.MustExec("insert into t values (1), (2), (3);")
+	h.waitForReplicaToCatchUp()
 
-	requireReplicaResults(t, "select * from db01.t;", [][]any{
+	h.requireReplicaResults("select * from db01.t;", [][]any{
 		{"1"}, {"2"}, {"3"},
 	})
 }
@@ -322,22 +362,22 @@ func TestFlushLogs(t *testing.T) {
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
 // replication configuration and metadata.
 func TestResetReplica(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// RESET REPLICA returns an error if replication is running
-	_, err := replicaDatabase.Queryx("RESET REPLICA")
+	_, err := h.replicaDatabase.Queryx("RESET REPLICA")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "unable to reset replica while replication is running")
 
 	// Calling RESET REPLICA clears out any errors
-	replicaDatabase.MustExec("STOP REPLICA;")
-	rows, err := replicaDatabase.Queryx("RESET REPLICA;")
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	rows, err := h.replicaDatabase.Queryx("RESET REPLICA;")
 	require.NoError(t, err)
 	require.NoError(t, rows.Close())
 
-	status := queryReplicaStatus(t)
+	status := h.queryReplicaStatus()
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "0", status["Last_IO_Errno"])
@@ -348,10 +388,10 @@ func TestResetReplica(t *testing.T) {
 	require.Equal(t, "", status["Last_SQL_Error_Timestamp"])
 
 	// Calling RESET REPLICA ALL clears out all replica configuration
-	rows, err = replicaDatabase.Queryx("RESET REPLICA ALL;")
+	rows, err = h.replicaDatabase.Queryx("RESET REPLICA ALL;")
 	require.NoError(t, err)
 	require.NoError(t, rows.Close())
-	status = queryReplicaStatus(t)
+	status = h.queryReplicaStatus()
 	require.Equal(t, "", status["Source_Host"])
 	require.Equal(t, "", status["Source_User"])
 	require.Equal(t, "No", status["Replica_IO_Running"])
@@ -359,20 +399,20 @@ func TestResetReplica(t *testing.T) {
 
 	// Now try querying the status using the older, deprecated 'show slave status' statement
 	// and spot check that the data is the same, but the column names have changed
-	status = querySlaveStatus(t)
+	status = h.querySlaveStatus()
 	require.Equal(t, "", status["Master_Host"])
 	require.Equal(t, "", status["Master_User"])
 	require.Equal(t, "No", status["Slave_IO_Running"])
 	require.Equal(t, "No", status["Slave_SQL_Running"])
 
-	rows, err = replicaDatabase.Queryx("select * from mysql.slave_master_info;")
+	rows, err = h.replicaDatabase.Queryx("select * from mysql.slave_master_info;")
 	require.NoError(t, err)
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
 
 	// Start replication again and verify that we can still query replica status
-	startReplicationAndCreateTestDb(t, mySqlPort)
-	replicaStatus := showReplicaStatus(t)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+	replicaStatus := h.showReplicaStatus()
 	require.Equal(t, "0", replicaStatus["Last_Errno"])
 	require.Equal(t, "", replicaStatus["Last_Error"])
 	require.True(t, replicaStatus["Replica_IO_Running"] == binlogreplication.ReplicaIoRunning ||
@@ -382,126 +422,126 @@ func TestResetReplica(t *testing.T) {
 // TestStartReplicaErrors tests that the "START REPLICA" command returns appropriate responses
 // for various error conditions.
 func TestStartReplicaErrors(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
 
 	// START REPLICA returns an error when no replication source is configured
-	_, err := replicaDatabase.Queryx("START REPLICA;")
+	_, err := h.replicaDatabase.Queryx("START REPLICA;")
 	require.Error(t, err)
 	require.ErrorContains(t, err, ErrServerNotConfiguredAsReplica.Error())
 
 	// For an incomplete source configuration, throw an error as early as possible to make sure the user notices it.
-	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, SOURCE_HOST='localhost';")
-	rows, err := replicaDatabase.Queryx("START REPLICA;")
+	h.replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, SOURCE_HOST='localhost';")
+	rows, err := h.replicaDatabase.Queryx("START REPLICA;")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Invalid (empty) username")
 	require.Nil(t, rows)
 
 	// SOURCE_AUTO_POSITION cannot be disabled – we only support GTID positioning
-	rows, err = replicaDatabase.Queryx("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, " +
+	rows, err = h.replicaDatabase.Queryx("CHANGE REPLICATION SOURCE TO SOURCE_PORT=1234, " +
 		"SOURCE_HOST='localhost', SOURCE_USER='replicator', SOURCE_AUTO_POSITION=0;")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "Error 1105 (HY000): SOURCE_AUTO_POSITION cannot be disabled")
 	require.Nil(t, rows)
 
 	// START REPLICA logs a warning if replication is already running
-	startReplicationAndCreateTestDb(t, mySqlPort)
-	replicaDatabase.MustExec("START REPLICA;")
-	assertWarning(t, replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+	h.replicaDatabase.MustExec("START REPLICA;")
+	assertWarning(t, h.replicaDatabase, 3083, "Replication thread(s) for channel '' are already running.")
 }
 
 // TestShowReplicaStatus tests various cases "SHOW REPLICA STATUS" that aren't covered by other tests.
 func TestShowReplicaStatus(t *testing.T) {
-	defer teardown(t)
-	startSqlServers(t)
+	h := newHarness(t)
+	h.startSqlServers()
 
 	// Assert that very long hostnames are handled correctly
 	longHostname := "really.really.really.really.long.host.name.012345678901234567890123456789012345678901234567890123456789.com"
-	replicaDatabase.MustExec(fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s';", longHostname))
-	status := showReplicaStatus(t)
+	h.replicaDatabase.MustExec(fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s';", longHostname))
+	status := h.showReplicaStatus()
 	require.Equal(t, longHostname, status["Source_Host"])
 }
 
 // TestStopReplica tests that STOP REPLICA correctly stops the replication process, and that
 // warnings are logged when STOP REPLICA is invoked when replication is not running.
 func TestStopReplica(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
 
 	// STOP REPLICA logs a warning if replication is not running
-	replicaDatabase.MustExec("STOP REPLICA;")
-	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, h.replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 
 	// Start replication with bad connection params
-	replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
-	replicaDatabase.MustExec("START REPLICA;")
+	h.replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_HOST='doesnotexist', SOURCE_PORT=111, SOURCE_USER='nobody';")
+	h.replicaDatabase.MustExec("START REPLICA;")
 	time.Sleep(200 * time.Millisecond)
-	status := showReplicaStatus(t)
+	status := h.showReplicaStatus()
 	require.Equal(t, "Connecting", status["Replica_IO_Running"])
 	require.Equal(t, "Yes", status["Replica_SQL_Running"])
 
 	// STOP REPLICA works when replication cannot establish a connection
-	replicaDatabase.MustExec("STOP REPLICA;")
-	status = showReplicaStatus(t)
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	status = h.showReplicaStatus()
 	require.Equal(t, "No", status["Replica_IO_Running"])
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	// START REPLICA and verify status
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 	time.Sleep(100 * time.Millisecond)
-	status = showReplicaStatus(t)
+	status = h.showReplicaStatus()
 	require.True(t, status["Replica_IO_Running"] == "Connecting" || status["Replica_IO_Running"] == "Yes")
 	require.Equal(t, "Yes", status["Replica_SQL_Running"])
 
 	// STOP REPLICA stops replication when it is running and connected to the source
-	replicaDatabase.MustExec("STOP REPLICA;")
-	status = showReplicaStatus(t)
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	status = h.showReplicaStatus()
 	require.Equal(t, "No", status["Replica_IO_Running"])
 	require.Equal(t, "No", status["Replica_SQL_Running"])
 
 	// STOP REPLICA logs a warning if replication is not running
-	replicaDatabase.MustExec("STOP REPLICA;")
-	assertWarning(t, replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	assertWarning(t, h.replicaDatabase, 3084, "Replication thread(s) for channel '' are already stopped.")
 }
 
 // TestDoltCommits tests that Dolt commits are created and use correct transaction boundaries.
 func TestDoltCommits(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// First transaction (DDL)
-	primaryDatabase.MustExec("create table t1 (pk int primary key);")
+	h.primaryDatabase.MustExec("create table t1 (pk int primary key);")
 
 	// Second transaction (DDL)
-	primaryDatabase.MustExec("create table t2 (pk int primary key);")
+	h.primaryDatabase.MustExec("create table t2 (pk int primary key);")
 
 	// Third transaction (autocommit DML)
-	primaryDatabase.MustExec("insert into t2 values (0);")
+	h.primaryDatabase.MustExec("insert into t2 values (0);")
 
 	// Disable autocommit so we can manually control transactions
-	primaryDatabase.MustExec("set autocommit=0;")
+	h.primaryDatabase.MustExec("set autocommit=0;")
 
 	// Fourth transaction (explicitly controlled transaction)
-	primaryDatabase.MustExec("start transaction;")
-	primaryDatabase.MustExec("insert into t1 values(1);")
-	primaryDatabase.MustExec("insert into t1 values(2);")
-	primaryDatabase.MustExec("insert into t1 values(3);")
-	primaryDatabase.MustExec("insert into t2 values(3), (2), (1);")
-	primaryDatabase.MustExec("commit;")
+	h.primaryDatabase.MustExec("start transaction;")
+	h.primaryDatabase.MustExec("insert into t1 values(1);")
+	h.primaryDatabase.MustExec("insert into t1 values(2);")
+	h.primaryDatabase.MustExec("insert into t1 values(3);")
+	h.primaryDatabase.MustExec("insert into t2 values(3), (2), (1);")
+	h.primaryDatabase.MustExec("commit;")
 
 	// Verify Dolt commit on replica
-	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("select count(*) as count from db01.dolt_log;")
+	h.waitForReplicaToCatchUp()
+	rows, err := h.replicaDatabase.Queryx("select count(*) as count from db01.dolt_log;")
 	require.NoError(t, err)
 	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "5", row["count"])
 	require.NoError(t, rows.Close())
 
 	// Use dolt_diff so we can see what tables were edited and schema/data changes
-	replicaDatabase.MustExec("use db01;")
+	h.replicaDatabase.MustExec("use db01;")
 	// Note: we don't use an order by clause, since the commits come in so quickly that they get the same timestamp
-	rows, err = replicaDatabase.Queryx("select * from db01.dolt_diff;")
+	rows, err = h.replicaDatabase.Queryx("select * from db01.dolt_diff;")
 	require.NoError(t, err)
 
 	// Fourth transaction
@@ -537,7 +577,7 @@ func TestDoltCommits(t *testing.T) {
 	require.NoError(t, rows.Close())
 
 	// Verify that commit timestamps are unique
-	rows, err = replicaDatabase.Queryx("select distinct date from db01.dolt_log;")
+	rows, err = h.replicaDatabase.Queryx("select distinct date from db01.dolt_log;")
 	require.NoError(t, err)
 	allRows := readAllRowsIntoMaps(t, rows)
 	require.Equal(t, 5, len(allRows)) // 4 transactions + 1 initial commit
@@ -546,38 +586,38 @@ func TestDoltCommits(t *testing.T) {
 // TestForeignKeyChecks tests that foreign key constraints replicate correctly when foreign key checks are
 // enabled and disabled.
 func TestForeignKeyChecks(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Test that we can execute statement-based replication that requires foreign_key_checks
 	// being turned off (referenced table doesn't exist yet).
-	primaryDatabase.MustExec("SET foreign_key_checks = 0;")
-	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, color varchar(100), FOREIGN KEY (color) REFERENCES colors(name));")
-	primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")
-	primaryDatabase.MustExec("SET foreign_key_checks = 1;")
+	h.primaryDatabase.MustExec("SET foreign_key_checks = 0;")
+	h.primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, color varchar(100), FOREIGN KEY (color) REFERENCES colors(name));")
+	h.primaryDatabase.MustExec("CREATE TABLE colors (name varchar(100) primary key);")
+	h.primaryDatabase.MustExec("SET foreign_key_checks = 1;")
 
 	// Insert a record with foreign key checks enabled
-	primaryDatabase.MustExec("START TRANSACTION;")
-	primaryDatabase.MustExec("INSERT INTO colors VALUES ('green'), ('red'), ('blue');")
-	primaryDatabase.MustExec("INSERT INTO t1 VALUES (1, 'red'), (2, 'green');")
-	primaryDatabase.MustExec("COMMIT;")
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("INSERT INTO colors VALUES ('green'), ('red'), ('blue');")
+	h.primaryDatabase.MustExec("INSERT INTO t1 VALUES (1, 'red'), (2, 'green');")
+	h.primaryDatabase.MustExec("COMMIT;")
 
 	// Test the Insert path with foreign key checks turned off
-	primaryDatabase.MustExec("START TRANSACTION;")
-	primaryDatabase.MustExec("SET foreign_key_checks = 0;")
-	primaryDatabase.MustExec("INSERT INTO t1 VALUES (3, 'not-a-color');")
-	primaryDatabase.MustExec("COMMIT;")
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("SET foreign_key_checks = 0;")
+	h.primaryDatabase.MustExec("INSERT INTO t1 VALUES (3, 'not-a-color');")
+	h.primaryDatabase.MustExec("COMMIT;")
 
 	// Test the Update and Delete paths with foreign key checks turned off
-	primaryDatabase.MustExec("START TRANSACTION;")
-	primaryDatabase.MustExec("DELETE FROM colors WHERE name='red';")
-	primaryDatabase.MustExec("UPDATE t1 SET color='still-not-a-color' WHERE pk=2;")
-	primaryDatabase.MustExec("COMMIT;")
+	h.primaryDatabase.MustExec("START TRANSACTION;")
+	h.primaryDatabase.MustExec("DELETE FROM colors WHERE name='red';")
+	h.primaryDatabase.MustExec("UPDATE t1 SET color='still-not-a-color' WHERE pk=2;")
+	h.primaryDatabase.MustExec("COMMIT;")
 
 	// Verify the changes on the replica
-	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("select * from db01.t1 order by pk;")
+	h.waitForReplicaToCatchUp()
+	rows, err := h.replicaDatabase.Queryx("select * from db01.t1 order by pk;")
 	require.NoError(t, err)
 	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
@@ -591,7 +631,7 @@ func TestForeignKeyChecks(t *testing.T) {
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
 
-	rows, err = replicaDatabase.Queryx("select * from db01.colors order by name;")
+	rows, err = h.replicaDatabase.Queryx("select * from db01.colors order by name;")
 	require.NoError(t, err)
 	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "blue", row["name"])
@@ -603,24 +643,24 @@ func TestForeignKeyChecks(t *testing.T) {
 
 // TestCharsetsAndCollations tests that we can successfully replicate data using various charsets and collations.
 func TestCharsetsAndCollations(t *testing.T) {
-	defer teardown(t)
-	startSqlServersWithDoltSystemVars(t, doltReplicaSystemVars)
-	startReplicationAndCreateTestDb(t, mySqlPort)
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
 
 	// Use non-default charset/collations to create data on the primary
-	primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
-	primaryDatabase.MustExec("insert into t1 values (1, \"one\", \"one\");")
+	h.primaryDatabase.MustExec("CREATE TABLE t1 (pk int primary key, c1 varchar(255) COLLATE ascii_general_ci, c2 varchar(255) COLLATE utf16_general_ci);")
+	h.primaryDatabase.MustExec("insert into t1 values (1, \"one\", \"one\");")
 
 	// Verify on the replica
-	waitForReplicaToCatchUp(t)
-	rows, err := replicaDatabase.Queryx("show create table db01.t1;")
+	h.waitForReplicaToCatchUp()
+	rows, err := h.replicaDatabase.Queryx("show create table db01.t1;")
 	require.NoError(t, err)
 	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Contains(t, row["Create Table"], "ascii_general_ci")
 	require.Contains(t, row["Create Table"], "utf16_general_ci")
 	require.NoError(t, rows.Close())
 
-	rows, err = replicaDatabase.Queryx("select * from db01.t1;")
+	rows, err = h.replicaDatabase.Queryx("select * from db01.t1;")
 	require.NoError(t, err)
 	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "one", row["c1"])
@@ -635,14 +675,14 @@ func TestCharsetsAndCollations(t *testing.T) {
 // waitForReplicaToCatchUp waits for the replica to catch up with the primary database. The
 // lag is measured by checking that gtid_executed is the same on the primary and replica. If
 // no progress is made in 30 seconds, this function will fail the test.
-func waitForReplicaToCatchUp(t *testing.T) {
+func (h *harness) waitForReplicaToCatchUp() {
 	timeLimit := 30 * time.Second
 
 	lastReplicaGtid := ""
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
-		replicaGtid := queryGtid(t, replicaDatabase)
-		primaryGtid := queryGtid(t, primaryDatabase)
+		replicaGtid := queryGtid(h.t, h.replicaDatabase)
+		primaryGtid := queryGtid(h.t, h.primaryDatabase)
 
 		if primaryGtid == replicaGtid {
 			return
@@ -650,46 +690,46 @@ func waitForReplicaToCatchUp(t *testing.T) {
 			lastReplicaGtid = replicaGtid
 			endTime = time.Now().Add(timeLimit)
 		} else {
-			t.Logf("primary and replica not in sync yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
+			h.t.Logf("primary and replica not in sync yet... (primary: %s, replica: %s)\n", primaryGtid, replicaGtid)
 			time.Sleep(250 * time.Millisecond)
 		}
 	}
 
 	// Log some status of the replica, before failing the test
-	outputShowReplicaStatus(t)
-	t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
+	h.outputShowReplicaStatus()
+	h.t.Fatal("primary and replica did not synchronize within " + timeLimit.String())
 }
 
 // waitForReplicaToReachGtid waits (up to 10s) for the replica's @@gtid_executed sys var to show that
 // it has executed the |target| gtid transaction number.
-func waitForReplicaToReachGtid(t *testing.T, target int) {
+func (h *harness) waitForReplicaToReachGtid(target int) {
 	timeLimit := 10 * time.Second
 	endTime := time.Now().Add(timeLimit)
 	for time.Now().Before(endTime) {
 		time.Sleep(250 * time.Millisecond)
-		replicaGtid := queryGtid(t, replicaDatabase)
+		replicaGtid := queryGtid(h.t, h.replicaDatabase)
 
 		if replicaGtid != "" {
 			components := strings.Split(replicaGtid, ":")
-			require.Equal(t, 2, len(components))
+			require.Equal(h.t, 2, len(components))
 			sourceGtid := components[1]
 			if strings.Contains(sourceGtid, "-") {
 				gtidRange := strings.Split(sourceGtid, "-")
-				require.Equal(t, 2, len(gtidRange))
+				require.Equal(h.t, 2, len(gtidRange))
 				sourceGtid = gtidRange[1]
 			}
 
 			i, err := strconv.Atoi(sourceGtid)
-			require.NoError(t, err)
+			require.NoError(h.t, err)
 			if i >= target {
 				return
 			}
 		}
 
-		t.Logf("replica has not reached transaction %d yet; currently at: %s \n", target, replicaGtid)
+		h.t.Logf("replica has not reached transaction %d yet; currently at: %s \n", target, replicaGtid)
 	}
 
-	t.Fatal("replica did not reach target GTID within " + timeLimit.String())
+	h.t.Fatal("replica did not reach target GTID within " + timeLimit.String())
 }
 
 // assertWarning asserts that the specified |database| has a warning with |code| and |message|,
@@ -755,108 +795,89 @@ func readAllRowsIntoSlices(t *testing.T, rows *sqlx.Rows) [][]any {
 }
 
 // startSqlServers starts a MySQL server and a Dolt sql-server for use in tests.
-func startSqlServers(t *testing.T) {
-	startSqlServersWithDoltSystemVars(t, nil)
+func (h *harness) startSqlServers() {
+	h.startSqlServersWithDoltSystemVars(nil)
 }
 
 // startSqlServersWithDoltSystemVars starts a MySQL server and a Dolt sql-server for use in tests. Before the
 // Dolt sql-server is started, the specified |doltPersistentSystemVars| are persisted in the Dolt sql-server's
 // local configuration. These are useful when you need to set system variables that must be available when the
 // sql-server starts up, such as replication system variables.
-func startSqlServersWithDoltSystemVars(t *testing.T, doltPersistentSystemVars map[string]string) {
+func (h *harness) startSqlServersWithDoltSystemVars(doltPersistentSystemVars map[string]string) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping binlog replication integ tests on Windows OS")
+		h.t.Skip("Skipping binlog replication integ tests on Windows OS")
 	} else if runtime.GOOS == "darwin" && os.Getenv("CI") == "true" {
-		t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
+		h.t.Skip("Skipping binlog replication integ tests in CI environment on Mac OS")
 	}
 
-	testDir = filepath.Join(os.TempDir(), fmt.Sprintf("%s-%v", t.Name(), time.Now().Unix()))
-	err := os.MkdirAll(testDir, 0777)
-	require.NoError(t, err)
-	t.Logf("temp dir: %v \n", testDir)
+	h.testDir = filepath.Join(os.TempDir(), fmt.Sprintf("%s-%v", h.t.Name(), time.Now().Unix()))
+	err := os.MkdirAll(h.testDir, 0777)
+	require.NoError(h.t, err)
+	h.t.Logf("temp dir: %v \n", h.testDir)
 
 	// Start up primary and replica databases
-	mySqlPort, mySqlProcess, err = startMySqlServer(t, testDir)
-	require.NoError(t, err)
-	doltPort, doltProcess, err = startDoltSqlServer(t, testDir, doltPersistentSystemVars)
-	require.NoError(t, err)
+	h.mySqlPort, h.mySqlProcess, err = h.startMySqlServer()
+	require.NoError(h.t, err)
+	h.doltPort, h.doltProcess, err = h.startDoltSqlServer(doltPersistentSystemVars)
+	require.NoError(h.t, err)
 }
 
 // stopMySqlServer stops the running MySQL server. If any errors are encountered while stopping
 // the MySQL server, this function will fail the current test.
-func stopMySqlServer(t *testing.T) {
-	require.NoError(t, mySqlProcess.Kill())
+func (h *harness) stopMySqlServer() {
+	require.NoError(h.t, StopProcess(h.mySqlProcess))
 }
 
 // stopDoltSqlServer stops the running Dolt sql-server. If any errors are encountered while
 // stopping the Dolt sql-server, this function will fail the current test.
-func stopDoltSqlServer(t *testing.T) {
-	// Use the negative process ID so that we grab the entire process group.
-	// This is necessary to kill all the processes the child spawns.
-	// Note that we use os.FindProcess, instead of syscall.Kill, since syscall.Kill
-	// is not available on windows.
-	p, err := os.FindProcess(-doltProcess.Pid)
-	require.NoError(t, err)
-
-	err = p.Signal(syscall.SIGKILL)
-	require.NoError(t, err)
-	time.Sleep(250 * time.Millisecond)
+func (h *harness) stopDoltSqlServer() {
+	require.NoError(h.t, StopProcess(h.doltProcess))
 
 	// Remove the sql-server lock file so that we can restart cleanly
-	lockFilepath := filepath.Join(testDir, "dolt", "db01", ".dolt", "sql-server.lock")
-	stat, _ := os.Stat(lockFilepath)
-	if stat != nil {
-		err = os.Remove(lockFilepath)
-		require.NoError(t, err)
-	}
+	lockFilepath := filepath.Join(h.testDir, "dolt", "db01", ".dolt", "sql-server.lock")
+	_, err := os.Stat(lockFilepath)
+	require.ErrorIs(h.t, err, os.ErrNotExist)
+
 	// Remove the global sql-server lock file as well
-	lockFilepath = filepath.Join(testDir, "dolt", ".dolt", "sql-server.lock")
-	stat, _ = os.Stat(lockFilepath)
-	if stat != nil {
-		err = os.Remove(lockFilepath)
-		require.NoError(t, err)
-	}
+	lockFilepath = filepath.Join(h.testDir, "dolt", ".dolt", "sql-server.lock")
+	_, err = os.Stat(lockFilepath)
+	require.ErrorIs(h.t, err, os.ErrNotExist)
 }
 
 // startReplication configures the replication source on the replica and runs the START REPLICA statement.
-func startReplication(t *testing.T, port int) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("failed to start replication and caught a panic: %v", r)
-		}
-	}()
-	replicaDatabase.MustExec(
+func (h *harness) startReplication(port int) {
+	h.replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', "+
 			"SOURCE_USER='replicator', SOURCE_PASSWORD='Zqr8_blrGm1!', "+
 			"SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1, SOURCE_CONNECT_RETRY=5;", port))
 
-	replicaDatabase.MustExec("start replica;")
+	h.replicaDatabase.MustExec("start replica;")
 }
 
 // startReplicationAndCreateTestDb starts up replication on the replica, connecting to |port| on the primary,
 // creates the test database, db01, on the primary, and ensures it gets replicated to the replica.
-func startReplicationAndCreateTestDb(t *testing.T, port int) {
-	startReplicationAndCreateTestDbWithDelay(t, port, 100*time.Millisecond)
+func (h *harness) startReplicationAndCreateTestDb(port int) {
+	h.startReplicationAndCreateTestDbWithDelay(port, 100*time.Millisecond)
 }
 
 // startReplicationAndCreateTestDbWithDelay starts up replication on the replica, connecting to |port| on the primary,
 // pauses for |delay| before creating the test database, db01, on the primary, and ensures it
 // gets replicated to the replica.
-func startReplicationAndCreateTestDbWithDelay(t *testing.T, port int, delay time.Duration) {
-	startReplication(t, port)
+func (h *harness) startReplicationAndCreateTestDbWithDelay(port int, delay time.Duration) {
+	h.startReplication(port)
 	time.Sleep(delay)
 
 	// Look to see if the test database, db01, has been created yet. If not, create it and wait for it to
 	// replicate to the replica. Note that when re-starting replication in certain tests, we can't rely on
 	// the replica to contain all GTIDs (i.e. Dolt -> MySQL replication when restarting the replica, since
 	// Dolt doesn't yet resend events that occurred while the replica wasn't connected).
-	dbNames := mustListDatabases(t, primaryDatabase)
+	dbNames := mustListDatabases(h.t, h.primaryDatabase)
 	if !slices.Contains(dbNames, "db01") {
-		primaryDatabase.MustExec("create database db01;")
-		waitForReplicaToCatchUp(t)
+		h.primaryDatabase.MustExec("create database db01;")
+		h.waitForReplicaToCatchUp()
 	}
-	primaryDatabase.MustExec("use db01;")
-	_, _ = replicaDatabase.Exec("use db01;")
+	h.primaryDatabase.MustExec("use db01;")
+	_, _ = h.replicaDatabase.Exec("use db01;")
 }
 
 func assertCreateTableStatement(t *testing.T, database *sqlx.DB, table string, expectedStatement string) {
@@ -901,14 +922,15 @@ func findFreePort() int {
 
 // startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
 // and the os.Process handle. If unable to start up the MySQL server, an error is returned.
-func startMySqlServer(t *testing.T, dir string) (int, *os.Process, error) {
+func (h *harness) startMySqlServer() (int, *os.Process, error) {
+	dir := h.testDir
 	dir = filepath.Join(dir, "mysql")
 	err := os.MkdirAll(dir, 0777)
 	if err != nil {
 		return -1, nil, err
 	}
 
-	mySqlPort = findFreePort()
+	h.mySqlPort = findFreePort()
 
 	// MySQL will NOT start up as the root user, so if we're running as root
 	// (e.g. in a CI env), use the "mysql" user instead.
@@ -918,7 +940,7 @@ func startMySqlServer(t *testing.T, dir string) (int, *os.Process, error) {
 	}
 	username := user.Username
 	if username == "root" {
-		t.Logf("overriding current user (root) to run mysql as 'mysql' user instead\n")
+		h.t.Logf("overriding current user (root) to run mysql as 'mysql' user instead\n")
 		username = "mysql"
 	}
 
@@ -929,52 +951,54 @@ func startMySqlServer(t *testing.T, dir string) (int, *os.Process, error) {
 	initialized := directoryExists(filepath.Join(dataDir, "mysql"))
 	if !initialized {
 		// Create a fresh MySQL server for the primary
-		initCmd := exec.Command("mysqld",
+		initCmd := exec.CommandContext(commandCtx, "mysqld",
 			"--no-defaults",
 			"--user="+username,
 			"--initialize-insecure",
 			"--datadir="+dataDir,
 			"--default-authentication-plugin=mysql_native_password")
 		initCmd.Dir = dir
+		ApplyCmdAttributes(initCmd)
 		output, err := initCmd.CombinedOutput()
 		if err != nil {
 			return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", initCmd.String(), err.Error(), string(output))
 		}
 	}
 
-	cmd := exec.Command("mysqld",
+	cmd := exec.CommandContext(commandCtx, "mysqld",
 		"--no-defaults",
 		"--user="+username,
 		"--datadir="+dataDir,
 		"--gtid-mode=ON",
 		"--skip-replica-start=ON",
 		"--enforce-gtid-consistency=ON",
-		fmt.Sprintf("--port=%v", mySqlPort),
+		fmt.Sprintf("--port=%v", h.mySqlPort),
 		"--server-id=11223344",
-		fmt.Sprintf("--socket=mysql-%v.sock", mySqlPort),
+		fmt.Sprintf("--socket=mysql-%v.sock", h.mySqlPort),
 		"--general_log_file="+filepath.Join(dir, "general_log"),
 		"--slow_query_log_file="+filepath.Join(dir, "slow_query_log"),
 		"--log-error="+dir+"error_log",
-		fmt.Sprintf("--pid-file="+filepath.Join(dir, "pid-%v.pid"), mySqlPort))
+		fmt.Sprintf("--pid-file="+filepath.Join(dir, "pid-%v.pid"), h.mySqlPort))
 	cmd.Dir = dir
+	ApplyCmdAttributes(cmd)
 
-	mysqlLogFilePath = filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
-	mysqlLogFile, err = os.Create(mysqlLogFilePath)
+	h.mysqlLogFilePath = filepath.Join(dir, fmt.Sprintf("mysql-%d.out.log", time.Now().Unix()))
+	h.mysqlLogFile, err = os.Create(h.mysqlLogFilePath)
 	if err != nil {
 		return -1, nil, err
 	}
-	t.Logf("MySQL server logs at: %s \n", mysqlLogFilePath)
-	cmd.Stdout = mysqlLogFile
-	cmd.Stderr = mysqlLogFile
+	h.t.Logf("MySQL server logs at: %s \n", h.mysqlLogFilePath)
+	cmd.Stdout = h.mysqlLogFile
+	cmd.Stderr = h.mysqlLogFile
 	err = cmd.Start()
 	if err != nil {
 		return -1, nil, fmt.Errorf("unable to start process %q: %v", cmd.String(), err.Error())
 	}
 
-	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
-	primaryDatabase = sqlx.MustOpen("mysql", dsn)
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%v)/", h.mySqlPort)
+	h.primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
-	err = waitForSqlServerToStart(t, primaryDatabase)
+	err = waitForSqlServerToStart(h.t, h.primaryDatabase)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -982,15 +1006,15 @@ func startMySqlServer(t *testing.T, dir string) (int, *os.Process, error) {
 	// Ensure the replication user exists with the right grants when we initialize
 	// the MySQL server for the first time
 	if !initialized {
-		mustCreateReplicatorUser(primaryDatabase)
+		mustCreateReplicatorUser(h.primaryDatabase)
 	}
 
-	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/", mySqlPort)
-	primaryDatabase = sqlx.MustOpen("mysql", dsn)
+	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%v)/", h.mySqlPort)
+	h.primaryDatabase = sqlx.MustOpen("mysql", dsn)
 
-	t.Logf("MySQL server started on port %v \n", mySqlPort)
+	h.t.Logf("MySQL server started on port %v \n", h.mySqlPort)
 
-	return mySqlPort, cmd.Process, nil
+	return h.mySqlPort, cmd.Process, nil
 }
 
 // directoryExists returns true if the specified |path| is to a directory that exists, otherwise,
@@ -1006,7 +1030,8 @@ func directoryExists(path string) bool {
 // startDoltSqlServer starts a Dolt sql-server on a free port from the specified directory |dir|. If
 // |doltPeristentSystemVars| is populated, then those system variables will be set, persistently, for
 // the Dolt database, before the Dolt sql-server is started.
-func startDoltSqlServer(t *testing.T, dir string, doltPersistentSystemVars map[string]string) (int, *os.Process, error) {
+func (h *harness) startDoltSqlServer(doltPersistentSystemVars map[string]string) (int, *os.Process, error) {
+	dir := h.testDir
 	dir = filepath.Join(dir, "dolt")
 	err := os.MkdirAll(dir, 0777)
 	if err != nil {
@@ -1015,24 +1040,24 @@ func startDoltSqlServer(t *testing.T, dir string, doltPersistentSystemVars map[s
 
 	// If we already assigned a port, re-use it. This is useful when testing restarting a primary, since
 	// we want the primary to come back up on the same port, so the replica can reconnect.
-	if doltPort < 1 {
-		doltPort = findFreePort()
+	if h.doltPort < 1 {
+		h.doltPort = findFreePort()
 	}
-	t.Logf("Starting Dolt sql-server on port: %d, with data dir %s\n", doltPort, dir)
+	h.t.Logf("Starting Dolt sql-server on port: %d, with data dir %s\n", h.doltPort, dir)
 
 	// use an admin user NOT named "root" to test that we don't require the "root" account
 	adminUser := "admin"
 
 	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
 		// Initialize the dolt directory first
-		err = runDoltCommand(t, dir, "init", "--name=binlog-test", "--email=binlog@test")
+		err = runDoltCommand(h.t, dir, "init", "--name=binlog-test", "--email=binlog@test")
 		if err != nil {
 			return -1, nil, err
 		}
 
 		for systemVar, value := range doltPersistentSystemVars {
 			query := fmt.Sprintf("SET @@PERSIST.%s=%s;", systemVar, value)
-			err = runDoltCommand(t, dir, "sql", fmt.Sprintf("-q=%s", query))
+			err = runDoltCommand(h.t, dir, "sql", fmt.Sprintf("-q=%s", query))
 			if err != nil {
 				return -1, nil, err
 			}
@@ -1043,55 +1068,46 @@ func startDoltSqlServer(t *testing.T, dir string, doltPersistentSystemVars map[s
 		"sql-server",
 		fmt.Sprintf("-u%s", adminUser),
 		"--loglevel=TRACE",
+		"--socket=/dev/null",
 		fmt.Sprintf("--data-dir=%s", dir),
-		fmt.Sprintf("--port=%v", doltPort)}
+		fmt.Sprintf("--port=%v", h.doltPort)}
 
-	cmd := exec.Command(args[0], args[1:]...)
-
-	// Set a unique process group ID so that we can cleanly kill this process, as well as
-	// any spawned child processes later. Mac/Unix can set the "Setpgid" field directly, but
-	// on windows, this field isn't present, so we need to use reflection so that this code
-	// can still compile for windows, even though we don't run it there.
-	procAttr := &syscall.SysProcAttr{}
-	ps := reflect.ValueOf(procAttr)
-	s := ps.Elem()
-	f := s.FieldByName("Setpgid")
-	f.SetBool(true)
-	cmd.SysProcAttr = procAttr
+	cmd := exec.CommandContext(commandCtx, args[0], args[1:]...)
+	ApplyCmdAttributes(cmd)
 
 	// Some tests restart the Dolt sql-server, so if we have a current log file, save a reference
 	// to it so we can print the results later if the test fails.
-	if doltLogFilePath != "" {
-		oldDoltLogFilePath = doltLogFilePath
+	if h.doltLogFilePath != "" {
+		h.oldDoltLogFilePath = h.doltLogFilePath
 	}
 
-	doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
-	doltLogFile, err = os.Create(doltLogFilePath)
+	h.doltLogFilePath = filepath.Join(dir, fmt.Sprintf("dolt-%d.out.log", time.Now().Unix()))
+	h.doltLogFile, err = os.Create(h.doltLogFilePath)
 	if err != nil {
 		return -1, nil, err
 	}
-	t.Logf("dolt sql-server logs at: %s \n", doltLogFilePath)
-	cmd.Stdout = doltLogFile
-	cmd.Stderr = doltLogFile
+	h.t.Logf("dolt sql-server logs at: %s \n", h.doltLogFilePath)
+	cmd.Stdout = h.doltLogFile
+	cmd.Stderr = h.doltLogFile
 	err = cmd.Start()
 	if err != nil {
 		return -1, nil, fmt.Errorf("unable to execute command %v: %v", cmd.String(), err.Error())
 	}
 
-	t.Logf("Dolt CMD: %s\n", cmd.String())
+	h.t.Logf("Dolt CMD: %s\n", cmd.String())
 
-	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", adminUser, doltPort)
-	replicaDatabase = sqlx.MustOpen("mysql", dsn)
+	dsn := fmt.Sprintf("%s@tcp(127.0.0.1:%v)/", adminUser, h.doltPort)
+	h.replicaDatabase = sqlx.MustOpen("mysql", dsn)
 
-	err = waitForSqlServerToStart(t, replicaDatabase)
+	err = waitForSqlServerToStart(h.t, h.replicaDatabase)
 	if err != nil {
 		return -1, nil, err
 	}
 
-	mustCreateReplicatorUser(replicaDatabase)
-	t.Logf("Dolt server started on port %v \n", doltPort)
+	mustCreateReplicatorUser(h.replicaDatabase)
+	h.t.Logf("Dolt server started on port %v \n", h.doltPort)
 
-	return doltPort, cmd.Process, nil
+	return h.doltPort, cmd.Process, nil
 }
 
 // mustCreateReplicatorUser creates the replicator user on the specified |db| and grants them replication slave privs.
@@ -1108,8 +1124,9 @@ func runDoltCommand(t *testing.T, doltDataDir string, doltArgs ...string) error 
 	args := append([]string{DoltDevBuildPath(),
 		fmt.Sprintf("--data-dir=%s", doltDataDir)},
 		doltArgs...)
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.CommandContext(commandCtx, args[0], args[1:]...)
 	t.Logf("Running Dolt CMD: %s\n", cmd.String())
+	ApplyCmdAttributes(cmd)
 	output, err := cmd.CombinedOutput()
 	t.Logf("Dolt CMD output: %s\n", string(output))
 	if err != nil {
@@ -1160,27 +1177,27 @@ func printFile(t *testing.T, path string) {
 
 // assertRepoStateFileExists asserts that the repo_state.json file is present for the specified
 // database |db|.
-func assertRepoStateFileExists(t *testing.T, db string) {
-	repoStateFile := filepath.Join(testDir, "dolt", db, ".dolt", "repo_state.json")
+func (h *harness) assertRepoStateFileExists(db string) {
+	repoStateFile := filepath.Join(h.testDir, "dolt", db, ".dolt", "repo_state.json")
 
 	_, err := os.Stat(repoStateFile)
-	require.NoError(t, err)
+	require.NoError(h.t, err)
 }
 
 // requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
 // |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
 // limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
 // be expressed in strings.
-func requireReplicaResults(t *testing.T, query string, expectedResults [][]any) {
-	requireResults(t, replicaDatabase, query, expectedResults)
+func (h *harness) requireReplicaResults(query string, expectedResults [][]any) {
+	requireResults(h.t, h.replicaDatabase, query, expectedResults)
 }
 
 // requireReplicaResults runs the specified |query| on the primary database and asserts that the results match
 // |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
 // limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
 // be expressed in strings.
-func requirePrimaryResults(t *testing.T, query string, expectedResults [][]any) {
-	requireResults(t, primaryDatabase, query, expectedResults)
+func (h *harness) requirePrimaryResults(query string, expectedResults [][]any) {
+	requireResults(h.t, h.primaryDatabase, query, expectedResults)
 }
 
 func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][]any) {
@@ -1196,11 +1213,11 @@ func requireResults(t *testing.T, db *sqlx.DB, query string, expectedResults [][
 
 // queryReplicaStatus returns the results of `SHOW REPLICA STATUS` as a map, for the replica
 // database. If any errors are encountered, this function will fail the current test.
-func queryReplicaStatus(t *testing.T) map[string]any {
-	rows, err := replicaDatabase.Queryx("SHOW REPLICA STATUS;")
-	require.NoError(t, err)
-	status := convertMapScanResultToStrings(readNextRow(t, rows))
-	require.NoError(t, rows.Close())
+func (h *harness) queryReplicaStatus() map[string]any {
+	rows, err := h.replicaDatabase.Queryx("SHOW REPLICA STATUS;")
+	require.NoError(h.t, err)
+	status := convertMapScanResultToStrings(readNextRow(h.t, rows))
+	require.NoError(h.t, rows.Close())
 	return status
 }
 
@@ -1209,11 +1226,11 @@ func queryReplicaStatus(t *testing.T) map[string]any {
 // The queryReplicaStatus() function should generally be favored over this function for
 // getting the status of a replica. This function exists only to help test that the
 // deprecated 'show slave status' statement works.
-func querySlaveStatus(t *testing.T) map[string]any {
-	rows, err := replicaDatabase.Queryx("SHOW SLAVE STATUS;")
-	require.NoError(t, err)
-	status := convertMapScanResultToStrings(readNextRow(t, rows))
-	require.NoError(t, rows.Close())
+func (h *harness) querySlaveStatus() map[string]any {
+	rows, err := h.replicaDatabase.Queryx("SHOW SLAVE STATUS;")
+	require.NoError(h.t, err)
+	status := convertMapScanResultToStrings(readNextRow(h.t, rows))
+	require.NoError(h.t, rows.Close())
 	return status
 }
 
