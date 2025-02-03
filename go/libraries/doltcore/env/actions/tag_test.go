@@ -68,7 +68,7 @@ func TestVisitResolvedTag(t *testing.T) {
 
 	// Visit the tag and verify its properties
 	var foundTag *doltdb.Tag
-	err = VisitResolvedTag(ctx, dEnv.DoltDB, tagName, func(tag *doltdb.Tag) error {
+	err = VisitResolvedTag(ctx, dEnv.DoltDB(ctx), tagName, func(tag *doltdb.Tag) error {
 		foundTag = tag
 		return nil
 	})
@@ -78,7 +78,7 @@ func TestVisitResolvedTag(t *testing.T) {
 	require.Equal(t, tagMsg, foundTag.Meta.Description)
 
 	// Test visiting non-existent tag
-	err = VisitResolvedTag(ctx, dEnv.DoltDB, "non-existent-tag", func(tag *doltdb.Tag) error {
+	err = VisitResolvedTag(ctx, dEnv.DoltDB(ctx), "non-existent-tag", func(tag *doltdb.Tag) error {
 		return nil
 	})
 	require.Equal(t, doltdb.ErrTagNotFound, err)
@@ -113,7 +113,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 
 	// Test first page
 	var foundTags []string
-	pageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB, "", func(tag *doltdb.Tag) (bool, error) {
+	pageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB(ctx), "", func(tag *doltdb.Tag) (bool, error) {
 		foundTags = append(foundTags, tag.Name)
 		return false, nil
 	})
@@ -124,7 +124,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 
 	// Test second page
 	var secondPageTags []string
-	nextPageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB, pageToken, func(tag *doltdb.Tag) (bool, error) {
+	nextPageToken, err := IterResolvedTagsPaginated(ctx, dEnv.DoltDB(ctx), pageToken, func(tag *doltdb.Tag) (bool, error) {
 		secondPageTags = append(secondPageTags, tag.Name)
 		return false, nil
 	})
@@ -141,7 +141,7 @@ func TestIterResolvedTagsPaginated(t *testing.T) {
 
 	// Test early termination
 	var earlyTermTags []string
-	_, err = IterResolvedTagsPaginated(ctx, dEnv.DoltDB, "", func(tag *doltdb.Tag) (bool, error) {
+	_, err = IterResolvedTagsPaginated(ctx, dEnv.DoltDB(ctx), "", func(tag *doltdb.Tag) (bool, error) {
 		earlyTermTags = append(earlyTermTags, tag.Name)
 		return true, nil // Stop after first tag
 	})
