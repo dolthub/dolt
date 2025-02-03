@@ -590,7 +590,6 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB, meta *datas.W
 		return nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	var r RootValue
 	r, workingRoot, err := db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
 		return nil, err

@@ -171,6 +171,10 @@ func (p *DoltDatabaseProvider) WithFunctions(fns []sql.Function) *DoltDatabasePr
 	return &cp
 }
 
+func (p *DoltDatabaseProvider) RegisterProcedure(procedure sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(procedure)
+}
+
 // WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
 // The URL is used when creating new databases.
 // See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
