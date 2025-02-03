@@ -115,8 +115,8 @@ func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, s
 	return db.GetRoot(sqlCtx)
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession)
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider, gcSafepointController *dsess.GCSafepointController) *sql.Context {
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController)
 	if err != nil {
 		panic(err)
 	}
@@ -135,10 +135,11 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 	if err != nil {
 		return nil, nil, err
 	}
+	gcSafepointController := dsess.NewGCSafepointController()
 
 	engine := sqle.NewDefault(pro)
 
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil, gcSafepointController)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }

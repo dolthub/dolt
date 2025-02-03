@@ -430,3 +430,14 @@ SQL
     [[ "$output" =~ "pk1" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
 }
+
+@test "vector-index: can GC" {
+    dolt sql <<SQL
+CREATE VECTOR INDEX idx_v1 ON onepk(v1);
+INSERT INTO onepk VALUES (1, '[99, 51]'), (2, '[11, 55]'), (3, '[88, 52]'), (4, '[22, 54]'), (5, '[77, 53]');
+SQL
+    dolt gc
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (6, '[99, 51]'), (7, '[11, 55]'), (8, '[88, 52]'), (9, '[22, 54]'), (10, '[77, 53]');
+SQL
+}

@@ -171,6 +171,10 @@ func (p *DoltDatabaseProvider) WithFunctions(fns []sql.Function) *DoltDatabasePr
 	return &cp
 }
 
+func (p *DoltDatabaseProvider) RegisterProcedure(procedure sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(procedure)
+}
+
 // WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
 // The URL is used when creating new databases.
 // See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
@@ -684,7 +688,8 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 		if exists {
 			deleteErr := p.fs.Delete(dbName, true)
 			if deleteErr != nil {
-				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s': %s",
+					err.Error(), dbName, deleteErr.Error())
 			}
 		}
 		return err

@@ -31,49 +31,64 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
-	t.Run("NoCommits", func(t *testing.T) {
-		t.Run("Normal", func(t *testing.T) {
-			var gct = gcTest{
-				numThreads: 8,
-				duration:   10 * time.Second,
-			}
-			gct.run(t)
-		})
-		t.Run("Full", func(t *testing.T) {
-			var gct = gcTest{
-				numThreads: 8,
-				duration:   10 * time.Second,
-				full:       true,
-			}
-			gct.run(t)
-		})
-	})
-	t.Run("WithCommits", func(t *testing.T) {
-		t.Run("Normal", func(t *testing.T) {
-			var gct = gcTest{
-				numThreads: 8,
-				duration:   10 * time.Second,
-				commit:     true,
-			}
-			gct.run(t)
-		})
-		t.Run("Full", func(t *testing.T) {
-			var gct = gcTest{
-				numThreads: 8,
-				duration:   10 * time.Second,
-				commit:     true,
-				full:       true,
-			}
-			gct.run(t)
-		})
-	})
+	type dimension struct {
+		names   []string
+		factors func(gcTest) []gcTest
+	}
+	commits := dimension{
+		names: []string{"NoCommits", "WithCommits"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.commit = false
+			yes.commit = true
+			return []gcTest{no, yes}
+		},
+	}
+	full := dimension{
+		names: []string{"NotFull", "Full"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.full = false
+			yes.full = true
+			return []gcTest{no, yes}
+		},
+	}
+	safepoint := dimension {
+		names: []string{"KillConnections", "SessionAware"},
+		factors: func(base gcTest) []gcTest{
+			no, yes := base, base
+			no.sessionAware = false
+			yes.sessionAware = true
+			return []gcTest{no, yes}
+		},
+	}
+	var doDimensions func(t *testing.T, base gcTest, dims []dimension)
+	doDimensions = func (t *testing.T, base gcTest, dims []dimension) {
+		if len(dims) == 0 {
+			base.run(t)
+			return
+		}
+		dim, dims := dims[0], dims[1:]
+		dimf := dim.factors(base)
+		for i := range dim.names {
+			t.Run(dim.names[i], func(t *testing.T) {
+				doDimensions(t, dimf[i], dims)
+			})
+		}
+	}
+	dimensions := []dimension{commits, full, safepoint}
+	doDimensions(t, gcTest{
+		numThreads: 8,
+		duration:   10 * time.Second,
+	}, dimensions)
 }
 
 type gcTest struct {
-	numThreads int
-	duration   time.Duration
-	commit     bool
-	full       bool
+	numThreads   int
+	duration     time.Duration
+	commit       bool
+	full         bool
+	sessionAware bool
 }
 
 func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -96,13 +111,19 @@ func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
 
 func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int) error {
 	conn, err := db.Conn(ctx)
-	if err != nil {
+	if gct.sessionAware {
+		if !assert.NoError(t, err) {
+			return nil
+		}
+	} else if err != nil {
 		t.Logf("err in Conn: %v", err)
 		return nil
 	}
 	defer conn.Close()
 	_, err = conn.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
-	if err != nil {
+	if gct.sessionAware {
+		assert.NoError(t, err)
+	} else if err != nil {
 		if !assert.NotContains(t, err.Error(), "dangling ref") {
 			return err
 		}
@@ -116,7 +137,9 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 	}
 	if gct.commit {
 		_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
-		if err != nil {
+		if gct.sessionAware {
+			assert.NoError(t, err)
+		} else if err != nil {
 			if !assert.NotContains(t, err.Error(), "dangling ref") {
 				return err
 			}
@@ -134,16 +157,24 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 
 func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 	conn, err := db.Conn(ctx)
-	if err != nil {
+	if gct.sessionAware {
+		if !assert.NoError(t, err) {
+			return nil
+		}
+	} else if err != nil {
 		t.Logf("err in Conn for dolt_gc: %v", err)
 		return nil
 	}
-	defer func() {
-		// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
-		conn.Raw(func(_ any) error {
-			return sqldriver.ErrBadConn
-		})
-	}()
+	if !gct.sessionAware {
+		defer func() {
+			// After calling dolt_gc, the connection is bad. Remove it from the connection pool.
+			conn.Raw(func(_ any) error {
+				return sqldriver.ErrBadConn
+			})
+		}()
+	} else {
+		defer conn.Close()
+	}
 	b := time.Now()
 	if !gct.full {
 		_, err = conn.ExecContext(ctx, "call dolt_gc()")
@@ -204,7 +235,14 @@ func (gct gcTest) run(t *testing.T) {
 	repo, err := rs.MakeRepo("concurrent_gc_test")
 	require.NoError(t, err)
 
-	server := MakeServer(t, repo, &driver.Server{})
+	srvSettings := &driver.Server{}
+	if gct.sessionAware {
+		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=session_aware")
+	} else {
+		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=kill_connections")
+	}
+
+	server := MakeServer(t, repo, srvSettings)
 	server.DBName = "concurrent_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})

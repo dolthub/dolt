@@ -706,6 +706,45 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 	return rv, ref, nil
 }
 
+// Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
+// from the working set. This is used in GC, for example, where all dependencies of the in-memory working
+// set value need to be accounted for.
+func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
+	spec, err := ws.writeValues(ctx, ddb, nil)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]hash.Hash, 0)
+	ret = append(ret, spec.StagedRoot.TargetHash())
+	ret = append(ret, spec.WorkingRoot.TargetHash())
+	if spec.MergeState != nil {
+		fromCommit, err := spec.MergeState.FromCommit(ctx, ddb.vrw)
+		if err != nil {
+			return nil, err
+		}
+		h, err := fromCommit.NomsValue().Hash(ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, h)
+		h, err = spec.MergeState.PreMergeWorkingAddr(ctx, ddb.vrw)
+		ret = append(ret, h)
+	}
+	if spec.RebaseState != nil {
+		ret = append(ret, spec.RebaseState.PreRebaseWorkingAddr())
+		commit, err := spec.RebaseState.OntoCommit(ctx, ddb.vrw)
+		if err != nil {
+			return nil, err
+		}
+		h, err := commit.NomsValue().Hash(ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, h)
+	}
+	return ret, nil
+}
+
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
 // be read, or if the hash given doesn't represent a dolt RootValue.
 func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (RootValue, error) {

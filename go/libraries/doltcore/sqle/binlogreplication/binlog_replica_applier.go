@@ -146,8 +146,9 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 	var conn *mysql.Conn
 	var err error
 	for connectionAttempts := uint64(0); ; connectionAttempts++ {
+		sql.SessionCommandBegin(ctx.Session)
 		replicaSourceInfo, err := loadReplicationConfiguration(ctx, a.engine.Analyzer.Catalog.MySQLDb)
-
+		sql.SessionCommandEnd(ctx.Session)
 		if replicaSourceInfo == nil {
 			err = ErrServerNotConfiguredAsReplica
 			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, err.Error())

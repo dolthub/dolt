@@ -15,7 +15,6 @@
 package binlogreplication
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -158,8 +157,6 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
 // locked, it will be given superuser privs and locked.
 func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) {
-	sql.SessionCommandBegin(ctx.Session)
-	defer sql.SessionCommandEnd(ctx.Session)
 	mySQLDb := d.engine.Analyzer.Catalog.MySQLDb
 	ed := mySQLDb.Editor()
 	defer ed.Close()
@@ -417,8 +414,10 @@ func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 // replication is not configured, hasn't been started, or has been stopped before the server was
 // shutdown, then this method will not start replication. This method should only be called during
 // the server startup process and should not be invoked after that.
-func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
-	runningState, err := loadReplicationRunningState(d.ctx)
+func (d *doltBinlogReplicaController) AutoStart(ctx *sql.Context) error {
+	sql.SessionCommandBegin(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
+	runningState, err := loadReplicationRunningState(ctx)
 	if err != nil {
 		logrus.Errorf("Unable to load replication running state: %s", err.Error())
 		return err
@@ -430,7 +429,7 @@ func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
 	}
 
 	logrus.Info("auto-starting binlog replication from source...")
-	return d.StartReplica(d.ctx)
+	return d.StartReplica(ctx)
 }
 
 // Release all resources, such as replication threads, associated with the replication.

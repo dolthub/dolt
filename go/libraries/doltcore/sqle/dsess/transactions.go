@@ -93,7 +93,7 @@ type dbRoot struct {
 
 type savepoint struct {
 	name string
-	// TODO: we need a root value per DB here
+	// from db name to the root value for that database.
 	roots map[string]doltdb.RootValue
 }
 

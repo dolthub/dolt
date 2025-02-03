@@ -144,7 +144,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv))))
+	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv))), dsess.NewGCSafepointController())
 	h.sess = sqlCtx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(sqlCtx)

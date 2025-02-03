@@ -16,13 +16,15 @@ package sqle
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -81,17 +83,12 @@ type CreateUnknownDatabasesSetting bool
 const CreateUnknownDatabases CreateUnknownDatabasesSetting = true
 const DoNotCreateUnknownDatabases CreateUnknownDatabasesSetting = false
 
-// Considers |args| and returns a new |remotesrv.ServerArgs| instance which
-// will serve databases accessible through |ctxFactory|.
-func RemoteSrvFSAndDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (filesys.Filesys, remotesrv.DBCache, error) {
-	sqlCtx, err := ctxFactory(context.Background())
-	if err != nil {
-		return nil, nil, err
-	}
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	fs := sess.Provider().FileSystem()
+// Returns a remotesrv.DBCache instance which will use the *sql.Context
+// returned from |ctxFactory| to access a database in the session
+// DatabaseProvider.
+func RemoteSrvDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (remotesrv.DBCache, error) {
 	dbcache := remotesrvStore{ctxFactory, bool(createSetting)}
-	return fs, dbcache, nil
+	return dbcache, nil
 }
 
 func WithUserPasswordAuth(args remotesrv.ServerArgs, authnz remotesrv.AccessControl) remotesrv.ServerArgs {
@@ -101,4 +98,89 @@ func WithUserPasswordAuth(args remotesrv.ServerArgs, authnz remotesrv.AccessCont
 	}
 	args.Options = append(args.Options, si.Options()...)
 	return args
+}
+
+type SqlContextServerInterceptor struct {
+	Factory func(context.Context) (*sql.Context, error)
+}
+
+type serverStreamWrapper struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s serverStreamWrapper) Context() context.Context {
+	return s.ctx
+}
+
+type sqlContextInterceptorKey struct{}
+
+func GetInterceptorSqlContext(ctx context.Context) (*sql.Context, error) {
+	if v := ctx.Value(sqlContextInterceptorKey{}); v != nil {
+		return v.(*sql.Context), nil
+	}
+	return nil, errors.New("misconfiguration; a sql.Context should always be available from the interceptor chain.")
+}
+
+func (si SqlContextServerInterceptor) Stream() grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		sqlCtx, err := si.Factory(ss.Context())
+		if err != nil {
+			return err
+		}
+		defer sql.SessionEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+		defer sql.SessionCommandEnd(sqlCtx.Session)
+		newCtx := context.WithValue(ss.Context(), sqlContextInterceptorKey{}, sqlCtx)
+		newSs := serverStreamWrapper{
+			ServerStream: ss,
+			ctx:          newCtx,
+		}
+		return handler(srv, newSs)
+	}
+}
+
+func (si SqlContextServerInterceptor) Unary() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		sqlCtx, err := si.Factory(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer sql.SessionEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+		defer sql.SessionCommandEnd(sqlCtx.Session)
+		newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
+		return handler(newCtx, req)
+	}
+}
+
+func (si SqlContextServerInterceptor) HTTP(existing func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		this := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			sqlCtx, err := si.Factory(ctx)
+			if err != nil {
+				http.Error(w, "could not initialize sql.Context", http.StatusInternalServerError)
+				return
+			}
+			defer sql.SessionEnd(sqlCtx.Session)
+			sql.SessionCommandBegin(sqlCtx.Session)
+			defer sql.SessionCommandEnd(sqlCtx.Session)
+			newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
+			newReq := r.WithContext(newCtx)
+			h.ServeHTTP(w, newReq)
+		})
+		if existing != nil {
+			return existing(this)
+		} else {
+			return this
+		}
+	}
+}
+
+func (si SqlContextServerInterceptor) Options() []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(si.Unary()),
+		grpc.ChainStreamInterceptor(si.Stream()),
+	}
 }
