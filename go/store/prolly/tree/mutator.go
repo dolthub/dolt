@@ -21,8 +21,16 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
+// A Mutation represents a single change being applies to a tree.
+// Node is nil -> The key is being set to the value (or removed if value is nil)
+// Node is non-nil -> The next values after |Key| are the values in |Node|.
+type Mutation struct {
+	Key, Value Item
+	Node       *Node
+}
+
 type MutationIter interface {
-	NextMutation(ctx context.Context) (key, value Item)
+	NextMutation(ctx context.Context) Mutation
 	Close() error
 }
 
@@ -64,12 +72,12 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	serializer S,
 	edits MutationIter,
 ) (Node, error) {
-	newKey, newValue := edits.NextMutation(ctx)
-	if newKey == nil {
+	newMutation := edits.NextMutation(ctx)
+	if newMutation.Key == nil {
 		return root, nil // no mutations
 	}
 
-	cur, err := newCursorAtKey(ctx, ns, root, K(newKey), order)
+	cur, err := newCursorAtKey(ctx, ns, root, K(newMutation.Key), order)
 	if err != nil {
 		return Node{}, err
 	}
@@ -79,64 +87,121 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return Node{}, err
 	}
 
-	for newKey != nil {
-
-		// move |cur| to the NextMutation mutation point
-		err = Seek(ctx, cur, K(newKey), order)
-		if err != nil {
-			return Node{}, err
-		}
-
-		var oldValue Item
-		if cur.Valid() {
-			// Compare mutations |newKey| and |newValue|
-			// to the existing pair from the cursor
-			if order.Compare(ctx, K(newKey), K(cur.CurrentKey())) == 0 {
-				oldValue = cur.currentValue()
-			}
-
-			// check for no-op mutations
-			// this includes comparing the key bytes because two equal keys may have different bytes,
-			// in which case we need to update the index to match the bytes in the table.
-			if equalValues(newValue, oldValue) && bytes.Equal(newKey, cur.CurrentKey()) {
-				newKey, newValue = edits.NextMutation(ctx)
-				continue
-			}
-		}
-
-		if oldValue == nil && newValue == nil {
-			// Don't try to delete what isn't there.
-			newKey, newValue = edits.NextMutation(ctx)
-			continue
-		}
-
-		// move |chkr| to the NextMutation mutation point
-		err = chkr.advanceTo(ctx, cur)
-		if err != nil {
-			return Node{}, err
-		}
-
-		if oldValue == nil {
-			err = chkr.AddPair(ctx, newKey, newValue)
+	for newMutation.Key != nil {
+		if newMutation.Node == nil {
+			err = applyLeafMutation(ctx, order, chkr, cur, newMutation.Key, newMutation.Value)
 		} else {
-			if newValue != nil {
-				err = chkr.UpdatePair(ctx, newKey, newValue)
-			} else {
-				err = chkr.DeletePair(ctx, newKey, oldValue)
-			}
+			err = applyNodeMutation(ctx, order, chkr, cur, newMutation.Key, newMutation.Node)
 		}
 		if err != nil {
 			return Node{}, err
 		}
-
-		prev := newKey
-		newKey, newValue = edits.NextMutation(ctx)
-		if newKey != nil {
-			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits: %v, %v", prev, newKey)
+		prev := newMutation.Key
+		newMutation = edits.NextMutation(ctx)
+		if newMutation.Key != nil {
+			assertTrue(order.Compare(K(newMutation.Key), K(prev)) >= 0, "expected sorted edits")
 		}
 	}
 
 	return chkr.Done(ctx)
+}
+
+func applyLeafMutation[K ~[]byte, O Ordering[K], S message.Serializer](
+	ctx context.Context,
+	order O,
+	chkr *chunker[S],
+	cur *cursor,
+	newKey, newValue Item,
+) (err error) {
+	// move |cur| to the NextMutation mutation point
+	err = Seek(ctx, cur, K(newKey), order)
+	if err != nil {
+		return err
+	}
+
+	var oldValue Item
+	if cur.Valid() {
+		// Compare mutations |newKey| and |newValue|
+		// to the existing pair from the cursor
+		if order.Compare(ctx, K(newKey), K(cur.CurrentKey())) == 0 {
+			oldValue = cur.currentValue()
+		}
+
+		// check for no-op mutations
+		// this includes comparing the key bytes because two equal keys may have different bytes,
+		// in which case we need to update the index to match the bytes in the table.
+		if equalValues(newValue, oldValue) && bytes.Equal(newKey, cur.CurrentKey()) {
+			return nil
+		}
+	}
+
+	if oldValue == nil && newValue == nil {
+		// Don't try to delete what isn't there.
+		return nil
+	}
+
+	// move |chkr| to the NextMutation mutation point
+	err = chkr.advanceTo(ctx, cur)
+	if err != nil {
+		return err
+	}
+
+	if oldValue == nil {
+		err = chkr.AddPair(ctx, newKey, newValue)
+	} else {
+		if newValue != nil {
+			err = chkr.UpdatePair(ctx, newKey, newValue)
+		} else {
+			err = chkr.DeletePair(ctx, newKey, oldValue)
+		}
+	}
+	return err
+}
+
+// applyNodeMutation copies every value from a node into a chunker, replacing all other keys in the node's range.
+func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
+	ctx context.Context,
+	order O,
+	chkr *chunker[S],
+	cur *cursor,
+	prevKey Item, node *Node) (err error) {
+
+	// In this mutation type, the key refers to the last key before the start of the chunk.
+	// move |cur| to the NextMutation mutation point
+	err = Seek(ctx, cur, K(prevKey), order)
+	if err != nil {
+		return err
+	}
+	// if that key exists in the cursor we may need to advance one into the start of the affected region?
+	if order.Compare(K(prevKey), K(cur.CurrentKey())) == 0 {
+		err = cur.advance(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = chkr.advanceTo(ctx, cur)
+	if err != nil {
+		return err
+	}
+
+		prev := newKey
+		newKey, newValue = edits.NextMutation(ctx)
+		if newKey != nil {
+			assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
+		}
+	}
+	// Append all key-values from the Node.
+	// If we're on a chunk boundary, this will just copy the node in.
+	err = chkr.insertRange(ctx, start, end)
+	if err != nil {
+		return err
+	}
+	err = Seek(ctx, chkr.cur, K(end.CurrentKey()), order)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func equalValues(left, right Item) bool {

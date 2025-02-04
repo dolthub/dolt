@@ -92,35 +92,40 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 // from the parallel treeDiffers and transforms them into
 // patches for the chunker to apply.
 type patchBuffer struct {
-	buf chan patch
+	buf chan Mutation
 }
 
 var _ MutationIter = patchBuffer{}
 
-type patch [2]Item
-
 func newPatchBuffer(sz int) patchBuffer {
-	return patchBuffer{buf: make(chan patch, sz)}
+	return patchBuffer{buf: make(chan Mutation, sz)}
 }
 
 func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
-	p := patch{diff.Key, diff.To}
+	var m Mutation
+	switch diff.Type {
+	default:
+		m = Mutation{
+			Key:   diff.Key,
+			Value: diff.To,
+			Node:  nil,
+		}
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case ps.buf <- p:
+	case ps.buf <- m:
 		return nil
 	}
 }
 
 // NextMutation implements MutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
-	var p patch
+func (ps patchBuffer) NextMutation(ctx context.Context) (mutation Mutation) {
 	select {
-	case p = <-ps.buf:
-		return p[0], p[1]
+	case mutation = <-ps.buf:
+		return mutation
 	case <-ctx.Done():
-		return nil, nil
+		return mutation
 	}
 }
 
