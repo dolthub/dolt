@@ -42,7 +42,7 @@ const (
 	StatsMcv2ColName          = "mcv2"
 	StatsMcv3ColName          = "mcv3"
 	StatsMcv4ColName          = "mcv4"
-	StatsMcvCountsColName     = "mcvCounts"
+	StatsMcvCountsColName     = "mcv_counts"
 	StatsVersionColName       = "version"
 )
 

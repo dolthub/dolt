@@ -892,7 +892,7 @@ func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]
 	newBranches := make(map[string][]ref.DoltRef)
 	var newDbs []dsess.SqlDatabase
 
-	// Currenrtly, updateBranches is sensitive to concurrent
+	// Currently, updateBranches is sensitive to concurrent
 	// add/drop database. We used |ddlGuard| as a compare and
 	// swap check after collecting new dbs, branches, and stats.
 	// A failed guard check retries.
