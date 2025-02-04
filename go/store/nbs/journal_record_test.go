@@ -71,10 +71,10 @@ func TestUnknownJournalRecordTag(t *testing.T) {
 	// test behavior encountering unknown tag
 	buf := makeUnknownTagJournalRecord()
 	// checksum is ok
-	ok := validateJournalRecord(buf)
-	assert.True(t, ok)
+	err := validateJournalRecord(buf)
+	assert.NoError(t, err)
 	// reading record fails
-	_, err := readJournalRecord(buf)
+	_, err = readJournalRecord(buf)
 	assert.Error(t, err)
 }
 
@@ -118,13 +118,13 @@ func TestProcessJournalRecords(t *testing.T) {
 	assert.Equal(t, int(off), int(n))
 	require.NoError(t, err)
 
+	// write a bogus record to the end and verify that we don't get an error
 	i, sum = 0, 0
-	// write a bogus record to the end and process again
 	writeCorruptJournalRecord(journal[off:])
 	n, err = processJournalRecords(ctx, bytes.NewReader(journal), 0, check)
+	require.NoError(t, err)
 	assert.Equal(t, cnt, i)
 	assert.Equal(t, int(off), int(n))
-	require.NoError(t, err)
 }
 
 func randomMemTable(cnt int) (*memTable, map[hash.Hash]chunks.Chunk) {
