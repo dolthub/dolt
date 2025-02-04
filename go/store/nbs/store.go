@@ -1979,7 +1979,7 @@ func (gcf gcFinalizer) SwapChunksInStore(ctx context.Context) error {
 
 func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
 	for _, v := range nbs.tables.novel {
-		err := v.iterateAllChunks(ctx, cb)
+		err := v.iterateAllChunks(ctx, cb, nbs.stats)
 		if err != nil {
 			return err
 		}
@@ -1988,7 +1988,7 @@ func (nbs *NomsBlockStore) IterateAllChunks(ctx context.Context, cb func(chunk c
 		}
 	}
 	for _, v := range nbs.tables.upstream {
-		err := v.iterateAllChunks(ctx, cb)
+		err := v.iterateAllChunks(ctx, cb, nbs.stats)
 		if err != nil {
 			return err
 		}

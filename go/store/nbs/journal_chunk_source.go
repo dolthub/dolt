@@ -230,7 +230,7 @@ func (s journalChunkSource) close() error {
 	return nil
 }
 
-func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
+func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {
 	var finalErr error
 
 	// TODO - a less time consuming lock is possible here. Using s.journal.snapshot and processJournalRecords()

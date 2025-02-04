@@ -177,7 +177,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	}, keeper, stats)
 }
 
-func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
+func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {
 	addrCount := uint32(len(acs.aRdr.prefixes))
 	for i := uint32(0); i < addrCount; i++ {
 		var h hash.Hash

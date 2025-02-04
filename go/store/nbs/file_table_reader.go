@@ -30,7 +30,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -168,49 +167,6 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 
 func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
-}
-
-func (ftr *fileTableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk)) error {
-	count := ftr.idx.chunkCount()
-
-	rdr, err := ftr.tableReader.r.Reader(ctx)
-	if err != nil {
-		return err
-	}
-
-	skr, ok := rdr.(io.ReadSeeker)
-	if !ok {
-		return errors.New("runtime error: reader does not support seeking")
-	}
-
-	for i := uint32(0); i < count; i++ {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		var h hash.Hash
-		ie, err := ftr.idx.indexEntry(i, &h)
-		if err != nil {
-			return err
-		}
-
-		readNBytes, err := readNFrom(skr, ie.Offset(), ie.Length())
-		if err != nil {
-			return err
-		}
-
-		cchk, err := NewCompressedChunk(h, readNBytes)
-		if err != nil {
-			return err
-		}
-		chk, err := cchk.ToChunk()
-		if err != nil {
-			return err
-		}
-
-		cb(chk)
-	}
-	return nil
 }
 
 func (ftr *fileTableReader) Close() error {
