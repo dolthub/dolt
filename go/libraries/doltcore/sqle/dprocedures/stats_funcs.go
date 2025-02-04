@@ -53,6 +53,8 @@ type ToggableStats interface {
 	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
+	Gc(ctx *sql.Context) error
+	BranchSync(ctx *sql.Context) error
 }
 
 type BranchStatsProvider interface {
@@ -115,6 +117,28 @@ func statsWait(ctx *sql.Context) (interface{}, error) {
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
 		afp.WaitForDbSync(ctx)
+		return nil, nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+// statsGc
+func statsGc(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		afp.Gc(ctx)
+		return nil, nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+// statsGc
+func statsBranchSync(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		afp.BranchSync(ctx)
 		return nil, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")

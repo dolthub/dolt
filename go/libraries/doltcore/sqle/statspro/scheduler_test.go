@@ -582,7 +582,7 @@ func TestBranches(t *testing.T) {
 		runAndPause(t, ctx, sc, &wg) // pick up table changes
 		runAndPause(t, ctx, sc, &wg) // finalize
 
-		sc.doBranchCheck.Store(true)
+		sc.doBranchSync.Store(true)
 		runAndPause(t, ctx, sc, &wg) // new branches
 
 		require.Equal(t, 7, len(sc.dbs))
@@ -639,7 +639,7 @@ func TestBranches(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('-D', 'feat1')"))
 
-		sc.doBranchCheck.Store(true)
+		sc.doBranchSync.Store(true)
 		runAndPause(t, ctx, sc, &wg) // detect deleted branch
 		runAndPause(t, ctx, sc, &wg) // finalize branch delete
 
@@ -1285,7 +1285,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 
 		wg.Wait()
 
-		sc.doBranchCheck.Store(true)
+		sc.doBranchSync.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.doGc.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
@@ -1367,7 +1367,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		wg.Wait()
 
-		sc.doBranchCheck.Store(true)
+		sc.doBranchSync.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.doGc.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
@@ -1439,7 +1439,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 			i++
 		}
 
-		sc.doBranchCheck.Store(true)
+		sc.doBranchSync.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.doGc.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))

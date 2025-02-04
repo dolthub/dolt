@@ -223,7 +223,7 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *lo
 		logger:         logger,
 		Jobs:           make(chan StatsJob, 1024),
 		Done:           done,
-		Interrupts:     make(chan ControlJob, 1024),
+		Interrupts:     make(chan StatsJob, 1024),
 		JobInterval:    50 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
@@ -287,7 +287,7 @@ type StatsCoord struct {
 	Jobs chan StatsJob
 	// Interrupts skip the job queue and are processed first,
 	// but has a fixed size and will block
-	Interrupts chan ControlJob
+	Interrupts chan StatsJob
 	Done       chan struct{}
 
 	// XXX: do not hold the |dbMu| while accessing |pro|
@@ -323,11 +323,11 @@ type StatsCoord struct {
 
 	// ddlGuard is a compare and swap that lets |updateBranches|
 	// safe and nonblocking
-	ddlGuard      bool
-	doBranchCheck atomic.Bool
-	doCapCheck    atomic.Bool
-	bucketCnt     atomic.Int64
-	bucketCap     int64
+	ddlGuard     bool
+	doBranchSync atomic.Bool
+	doCapCheck   atomic.Bool
+	bucketCnt    atomic.Int64
+	bucketCap    int64
 }
 
 func (sc *StatsCoord) Stop() {
@@ -532,9 +532,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			}
 		}
 
-		if sc.doBranchCheck.Swap(false) {
+		if sc.doBranchSync.Swap(false) {
 			j := ControlJob{desc: "branches update"}
-			newJobs, err := sc.updateBranches(ctx)
+			newJobs, err := sc.runBranchSync(ctx, make(chan struct{}))
 			if err != nil {
 				sc.error(j, err)
 			}
@@ -557,9 +557,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if sc.Debug {
 				log.Println("stats interrupt job: ", j.String())
 			}
-			if err := j.cb(sc); err != nil {
+			err := sc.executeJob(ctx, j)
+			if err != nil {
 				sc.error(j, err)
-				continue
 			}
 		default:
 		}
@@ -576,9 +576,9 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if sc.Debug {
 				log.Println("stats interrupt job: ", j.String())
 			}
-			if err := j.cb(sc); err != nil {
+			err := sc.executeJob(ctx, j)
+			if err != nil {
 				sc.error(j, err)
-				continue
 			}
 		case <-jobTimer.C:
 			select {
@@ -589,23 +589,18 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 					return nil
 				}
 				if sc.Debug {
-					log.Println("stats execute: ", j.String())
+					log.Println("stats execute job: ", j.String())
 				}
-				newJobs, err := sc.executeJob(ctx, j)
+				err := sc.executeJob(ctx, j)
 				if err != nil {
 					sc.error(j, err)
 				}
-				err = sc.sendJobs(ctx, newJobs...)
-				if err != nil {
-					sc.error(j, err)
-				}
-				j.Finish()
 			default:
 			}
 		case <-gcTicker.C:
 			sc.setGc()
 		case <-branchTicker.C:
-			sc.doBranchCheck.Store(true)
+			sc.doBranchSync.Store(true)
 		}
 		jobTimer.Reset(sc.JobInterval)
 	}
@@ -637,24 +632,35 @@ func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 	return nil
 }
 
-func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) ([]StatsJob, error) {
+func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) error {
+	var newJobs []StatsJob
+	var err error
 	switch j := j.(type) {
 	case SeedDbTablesJob:
-		return sc.seedDbTables(ctx, j)
+		newJobs, err = sc.seedDbTables(ctx, j)
 	case ReadJob:
 		sc.readCounter.Add(-1)
-		return sc.readChunks(ctx, j)
+		newJobs, err = sc.readChunks(ctx, j)
 	case FinalizeJob:
-		return sc.finalizeUpdate(ctx, j)
+		newJobs, err = sc.finalizeUpdate(ctx, j)
 	case ControlJob:
 		if err := j.cb(sc); err != nil {
 			sc.error(j, err)
 		}
 	case AnalyzeJob:
-		return sc.runAnalyze(ctx, j)
+		newJobs, err = sc.runAnalyze(ctx, j)
 	default:
+		return fmt.Errorf("unknown job type: %T", j)
 	}
-	return nil, nil
+	if err != nil {
+		return err
+	}
+	err = sc.sendJobs(ctx, newJobs...)
+	if err != nil {
+		sc.error(j, err)
+	}
+	j.Finish()
+	return nil
 }
 
 func (sc *StatsCoord) doubleChannelSize(ctx context.Context) {
@@ -866,8 +872,9 @@ type dbBranchKey struct {
 	branch string
 }
 
-func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
+func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]StatsJob, error) {
 	if sc.delayBranch.Swap(true) {
+		close(done)
 		return nil, nil
 	}
 
@@ -997,7 +1004,7 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 	if sc.ddlGuard {
 		// ddl interrupted branch refresh
 		sc.dbMu.Unlock()
-		return sc.updateBranches(ctx)
+		return sc.runBranchSync(ctx, done)
 	}
 
 	sc.Branches = newBranches
@@ -1023,6 +1030,7 @@ func (sc *StatsCoord) updateBranches(ctx context.Context) ([]StatsJob, error) {
 	// letting a block of other work through.
 	ret = append(ret, NewControl("re-enable branch check", func(sc *StatsCoord) error {
 		sc.delayBranch.Store(false)
+		close(done)
 		return nil
 	}))
 

@@ -462,3 +462,34 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 
 	return sc.validateState(ctx)
 }
+
+func (sc *StatsCoord) Gc(ctx *sql.Context) error {
+	done := make(chan struct{})
+	if err := sc.runGc(ctx, done); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-done:
+		return nil
+	}
+}
+
+func (sc *StatsCoord) BranchSync(ctx *sql.Context) error {
+	done := make(chan struct{})
+	newJobs, err := sc.runBranchSync(ctx, done)
+	if err != nil {
+		return err
+	}
+	for _, j := range newJobs {
+		// have to go through interrupts queue for thread safety
+		sc.Interrupts <- j
+	}
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-done:
+		return nil
+	}
+}
