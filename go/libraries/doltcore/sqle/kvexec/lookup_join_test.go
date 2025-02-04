@@ -145,6 +145,17 @@ func TestLookupJoin(t *testing.T) {
 			join:      "select /*+ LOOKUP_JOIN(dolt_diff_xy,dolt_log) */ count(*) from dolt_diff_xy join dolt_log on commit_hash = from_commit",
 			doRowexec: false,
 		},
+		{
+			name: "type conversion panic bug",
+			setup: []string{
+				"create table xy (x int primary key, y int, z varchar(10), key (y,z));",
+				"insert into xy values (0,0,'0'), (1,1,'1');",
+				"create table ab (a int primary key, b int);",
+				"insert into ab values (0,0), (1,1);",
+			},
+			join:      "select /*+ LOOKUP_JOIN(ab,xy) JOIN_ORDER(ab,xy) */ count(*) from xy join ab on y = a and z = 0",
+			doRowexec: true,
+		},
 	}
 
 	for _, tt := range tests {
