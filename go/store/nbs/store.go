@@ -312,7 +312,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		currAppendixSpecs := contents.getAppendixSet()
 		appendixSpecs := make([]tableSpec, 0)
 
- 		hasWork := (appendixOption != nil && *appendixOption == ManifestAppendixOption_Set)
+		hasWork := (appendixOption != nil && *appendixOption == ManifestAppendixOption_Set)
 		for h, count := range updates {
 			if appendixOption == nil {
 				if _, ok := currSpecs[h]; !ok {
