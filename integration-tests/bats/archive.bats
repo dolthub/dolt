@@ -213,3 +213,51 @@ mutations_and_gc_statement() {
 
     [[ "$output" =~ "151525" ]] || false # i = 1 - 550, sum is 151525
 }
+
+@test "archive: can fetch chunks from an archived repo" {
+    mkdir -p remote/.dolt
+    mkdir cloned
+
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cd remote
+
+    port=$( definePORT )
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned
+    dolt clone http://localhost:$port/test-org/test-repo repo1
+    # Fetch when there are no changes.
+    cd repo1
+    dolt fetch
+
+    ## update the remote repo directly. Need to run the archive command when the server is stopped.
+    ## This will result in achived files on the remote, which we will need to read chunks from when we fetch.
+    cd ../../remote
+    kill $remotesrv_pid
+    wait $remotesrv_pid || :
+    remotesrv_pid=""
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt archive
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
+
+    cd ../cloned/repo1
+
+    run dolt fetch
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "Your branch is behind 'origin/main' by 20 commits, and can be fast-forwarded" ]] || false
+
+    # Verify the repo has integrity.
+    dolt fsck
+}
+

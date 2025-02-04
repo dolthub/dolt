@@ -33,6 +33,11 @@ type GetRange struct {
 	Offset uint64
 	Length uint32
 	Region *Region
+
+	// Archive file format requires the url/dictionary offset/length to be carried through to fully resolve the chunk.
+	// This information is not used withing the range calculations at all, as the range is not related to the chunk content.
+	DictionaryOffset uint64
+	DictionaryLength uint32
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
@@ -145,12 +150,14 @@ func (t *Tree) Len() int {
 	return t.t.Len()
 }
 
-func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
+func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dictOffset uint64, dictLength uint32) {
 	ins := &GetRange{
-		Url:    t.intern(url),
-		Hash:   hash,
-		Offset: offset,
-		Length: length,
+		Url:              t.intern(url),
+		Hash:             hash,
+		Offset:           offset,
+		Length:           length,
+		DictionaryOffset: dictOffset,
+		DictionaryLength: dictLength,
 	}
 	t.t.ReplaceOrInsert(ins)
 

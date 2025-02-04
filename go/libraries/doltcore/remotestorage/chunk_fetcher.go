@@ -18,9 +18,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/gozstd"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -68,7 +71,14 @@ const (
 	reliableCallDeliverRespTimeout = 15 * time.Second
 )
 
+var globalDictCache *DictionaryCache
+var once sync.Once
+
 func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
+	once.Do(func() {
+		globalDictCache = NewDictionaryCache(newDownloads(), dcs.csClient)
+	})
+
 	eg, ctx := errgroup.WithContext(ctx)
 	ret := &ChunkFetcher{
 		eg:    eg,
@@ -368,18 +378,27 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		d.refreshes[path] = refresh
 	}
 	for _, r := range gr.Ranges {
-		d.ranges.Insert(gr.Url, r.Hash, r.Offset, r.Length)
+		// NM4 - Split at this point? Break the dictionary into its own request.
+		d.ranges.Insert(gr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
+		//		if r.DictionaryLength == 0 {
+		//			// NM4 - maybe invert the hash, and add it to a set of..... not sure.
+		//			d.ranges.Insert(gr.Url, r.Hash, r.DictionaryOffset, r.DictionaryLength)
+		//		}
 	}
 }
 
+// NM4 - On the client side, we only request HttpRanges for raw bytes. The struct includes the dictionary offset and length,
+// but those only make sense in the response of DownloadLocations.
 func toGetRange(rs []*ranges.GetRange) *GetRange {
 	ret := new(GetRange)
 	for _, r := range rs {
 		ret.Url = r.Url
 		ret.Ranges = append(ret.Ranges, &remotesapi.RangeChunk{
-			Hash:   r.Hash,
-			Offset: r.Offset,
-			Length: r.Length,
+			Hash:             r.Hash,
+			Offset:           r.Offset,
+			Length:           r.Length,
+			DictionaryOffset: r.DictionaryOffset,
+			DictionaryLength: r.DictionaryLength,
 		})
 	}
 	return ret
@@ -591,5 +610,114 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 				}
 			}
 		}
+	}
+}
+
+///////
+
+type DictionaryKey struct {
+	url string
+	off uint64
+	len uint32
+}
+
+type DictionaryCache struct {
+	mu     sync.Mutex
+	cache  map[DictionaryKey]*gozstd.DDict
+	client remotesapi.ChunkStoreServiceClient
+	dlds   downloads
+}
+
+func NewDictionaryCache(downloads downloads, client remotesapi.ChunkStoreServiceClient) *DictionaryCache {
+	return &DictionaryCache{
+		mu:     sync.Mutex{},
+		cache:  make(map[DictionaryKey]*gozstd.DDict),
+		client: client,
+		dlds:   downloads,
+	}
+}
+
+func (dc *DictionaryCache) Get(rang *GetRange, idx int, stats StatsRecorder, recorder reliable.HealthRecorder) (*gozstd.DDict, error) {
+	// Way too granular... but I'll use a real cache for production. prototype maddddddneeesssss
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	path := rang.ResourcePath()
+	off := rang.Ranges[idx].DictionaryOffset
+	ln := rang.Ranges[idx].DictionaryLength
+
+	key := DictionaryKey{path, off, ln}
+	if v, ok := dc.cache[key]; ok {
+		return v, nil
+	} else {
+
+		pathToUrl := dc.dlds.refreshes[path]
+		if pathToUrl == nil {
+			// Kinda do what Add does....
+			refresh := new(locationRefresh)
+
+			sRang := &remotesapi.HttpGetRange{}
+			sRang.Url = rang.Url
+			sRang.Ranges = append(sRang.Ranges, &remotesapi.RangeChunk{Offset: off, Length: ln})
+			rang := &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: sRang}
+			dl := &remotesapi.DownloadLoc{Location: rang}
+
+			refresh.Add(dl)
+			dc.dlds.refreshes[path] = refresh
+
+			pathToUrl = refresh
+		}
+
+		ctx := context.Background()
+		fetcher := globalHttpFetcher
+
+		urlF := func(lastError error) (string, error) {
+			earl, err := pathToUrl.GetURL(ctx, lastError, dc.client)
+			if err != nil {
+				return "", err
+			}
+			if earl == "" {
+				earl = path
+			}
+			return earl, nil
+		}
+
+		resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
+			Fetcher: fetcher,
+			Offset:  off,
+			Length:  uint64(ln),
+			UrlFact: urlF,
+			Stats:   stats,
+			Health:  recorder,
+			BackOffFact: func(ctx context.Context) backoff.BackOff {
+				return downloadBackOff(ctx, 3) // params.DownloadRetryCount)
+			},
+			Throughput: reliable.MinimumThroughputCheck{
+				CheckInterval: defaultRequestParams.ThroughputMinimumCheckInterval,
+				BytesPerCheck: defaultRequestParams.ThroughputMinimumBytesPerCheck,
+				NumIntervals:  defaultRequestParams.ThroughputMinimumNumIntervals,
+			},
+			RespHeadersTimeout: defaultRequestParams.RespHeadersTimeout,
+		})
+		defer resp.Close()
+
+		buf := make([]byte, ln)
+		_, err := io.ReadFull(resp.Body, buf)
+		if err != nil {
+			return nil, err
+		}
+
+		rawDict, err := gozstd.Decompress(nil, buf)
+		if err != nil {
+			return nil, err
+		}
+
+		dict, err := gozstd.NewDDict(rawDict)
+		if err != nil {
+			return nil, err
+		}
+
+		dc.cache[key] = dict
+		return dict, nil
 	}
 }

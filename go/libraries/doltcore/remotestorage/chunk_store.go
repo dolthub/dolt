@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/gozstd"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -371,6 +372,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
+// NM4 - Extending the protobuf isn't not really necesary. Possible split this out into a new struct.
 type GetRange remotesapi.HttpGetRange
 
 func (gr *GetRange) ResourcePath() string {
@@ -436,6 +438,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
+
 	return func() error {
 		urlF := func(lastError error) (string, error) {
 			url, err := pathToUrl(ctx, lastError, gr.ResourcePath())
@@ -466,9 +469,9 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			RespHeadersTimeout: params.RespHeadersTimeout,
 		})
 		defer resp.Close()
-		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
+		reader := &RangeChunkReader{Path: gr.ResourcePath(), GetRange: gr, Reader: resp.Body}
 		for {
-			cc, err := reader.ReadChunk()
+			cc, err := reader.ReadChunk(stats, health)
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
@@ -484,14 +487,59 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 	}
 }
 
+type ArchiveToChunker struct {
+	h          hash.Hash
+	dictionary *gozstd.DDict
+	chunkData  []byte
+}
+
+func (a ArchiveToChunker) Hash() hash.Hash {
+	return a.h
+}
+
+func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
+	dict := a.dictionary
+	data := a.chunkData
+	rawChunk, err := gozstd.DecompressDict(nil, data, dict)
+	// NM4 - calculate chunk addr for safety while testing.
+	newChunk := chunks.NewChunk(rawChunk)
+
+	if newChunk.Hash() != a.h {
+		panic("Hash Mismatch!!")
+	}
+
+	return newChunk, err
+
+}
+
+func (a ArchiveToChunker) FullCompressedChunkLen() uint32 {
+	//TODO Not sure what the right impl for this is.... NM4.
+	return uint32(len(a.chunkData)) // + dictionary???
+}
+
+func (a ArchiveToChunker) IsEmpty() bool {
+	//TODO implement me
+	return len(a.chunkData) == 0
+}
+
+func (a ArchiveToChunker) IsGhost() bool {
+	//TODO implement me
+	// NM4 - yes, need to. Or maybe not????
+	return false
+}
+
+var _ nbs.ToChunker = (*ArchiveToChunker)(nil)
+
 type RangeChunkReader struct {
+	Path     string
 	GetRange *GetRange
 	Reader   io.Reader
 	i        int
 	skip     int
 }
 
-func (r *RangeChunkReader) ReadChunk() (nbs.CompressedChunk, error) {
+// NM4 - THis is the place where we need to intercept responses and conjour the "full" chunk.
+func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.HealthRecorder) (nbs.ToChunker, error) {
 	if r.skip > 0 {
 		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
 		if err != nil {
@@ -499,21 +547,41 @@ func (r *RangeChunkReader) ReadChunk() (nbs.CompressedChunk, error) {
 		}
 		r.skip = 0
 	}
-	if r.i >= len(r.GetRange.Ranges) {
+
+	idx := r.i
+	r.i += 1
+
+	if idx >= len(r.GetRange.Ranges) {
 		return nbs.CompressedChunk{}, io.EOF
 	}
-	if r.i < len(r.GetRange.Ranges)-1 {
-		r.skip = int(r.GetRange.GapBetween(r.i, r.i+1))
+	if idx < len(r.GetRange.Ranges)-1 {
+		r.skip = int(r.GetRange.GapBetween(idx, idx+1))
 	}
-	l := r.GetRange.Ranges[r.i].Length
-	h := hash.New(r.GetRange.Ranges[r.i].Hash)
-	r.i += 1
+
+	rang := r.GetRange.Ranges[idx]
+	l := rang.Length
+	h := hash.New(rang.Hash)
+
+	if strings.HasPrefix(h.String(), "eh9e0b3ou") {
+		_ = h.String()
+	}
+
 	buf := make([]byte, l)
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
 		return nbs.CompressedChunk{}, err
 	} else {
-		return nbs.NewCompressedChunk(h, buf)
+		if rang.DictionaryLength == 0 {
+			// NOMS snappy compressed chunk.
+			return nbs.NewCompressedChunk(h, buf)
+		} else {
+			dict, err := globalDictCache.Get(r.GetRange, idx, stats, health)
+			if err != nil {
+				return nbs.CompressedChunk{}, err
+			}
+
+			return ArchiveToChunker{h: h, dictionary: dict, chunkData: buf}, nil
+		}
 	}
 }
 
