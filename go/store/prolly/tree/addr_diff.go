@@ -52,7 +52,7 @@ func (ads *AddrDiffStream[K, O]) Next(ctx context.Context) (AddrDiff, error) {
 			}
 
 			if dif.Type == ModifiedDiff {
-				return AddrDiff{hash.Hash(dif.From), hash.Hash(dif.To)}, nil
+				return AddrDiff{hash.Hash(dif.From), hash.Hash(dif.To())}, nil
 			} // else, continue
 		} else {
 			return AddrDiff{}, io.EOF

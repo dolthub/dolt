@@ -43,6 +43,28 @@ type Ordering[K ~[]byte] interface {
 	Compare(ctx context.Context, left, right K) int
 }
 
+func newCursorAtRoot(ctx context.Context, ns NodeStore, nd Node) (cur *cursor) {
+	cur = &cursor{nd: nd, nrw: ns}
+	return
+}
+
+func newCursorAtEndOfRoot(ctx context.Context, ns NodeStore, nd Node) (cur *cursor) {
+	cur = &cursor{nd: nd, nrw: ns}
+	cur.skipToNodeEnd()
+	return
+}
+
+func newChildCursor(ctx context.Context, ns NodeStore, cur *cursor) (*cursor, error) {
+	nd, err := fetchChild(ctx, ns, cur.currentRef())
+	if err != nil {
+		return nil, err
+	}
+
+	parent := cur
+	cur = &cursor{nd: nd, parent: parent, nrw: ns}
+	return cur, nil
+}
+
 func newCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *cursor, err error) {
 	cur = &cursor{nd: nd, nrw: ns}
 	for !cur.isLeaf() {

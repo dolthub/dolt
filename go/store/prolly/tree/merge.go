@@ -104,10 +104,16 @@ func newPatchBuffer(sz int) patchBuffer {
 func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 	var m Mutation
 	switch diff.Type {
+	case RangeDiff:
+		m = Mutation{
+			Key:   diff.PreviousKey,
+			Value: nil,
+			Node:  &diff.toCur.nd,
+		}
 	default:
 		m = Mutation{
 			Key:   diff.Key,
-			Value: diff.To,
+			Value: diff.To(),
 			Node:  nil,
 		}
 	}
