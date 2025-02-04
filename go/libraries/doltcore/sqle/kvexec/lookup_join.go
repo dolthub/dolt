@@ -113,7 +113,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, io.EOF
 			}
 
-			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(l.srcKey, l.srcVal)
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +173,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				// override default left join behavior
 				l.dstKey = nil
 				continue
-			} else if !sql.IsTrue(res) && l.dstKey != nil {
+			} else if !sql.IsTrue(res) && dstKey != nil {
 				continue
 			}
 		}
@@ -292,7 +292,7 @@ func (m *lookupMapping) valid() bool {
 	return true
 }
 
-func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tuple) (val.Tuple, error) {
+func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error) {
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
