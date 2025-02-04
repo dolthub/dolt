@@ -196,7 +196,7 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getR
 			result[hAddr] = rng
 		}
 	}
-	return result, gcBehavior_Block, nil // NM4 - FIXME. Merging. This is wrong. Use the keeperF
+	return result, gcBehavior_Continue, nil // NM4 - FIXME. Merging. This is wrong. Use the keeperF
 }
 
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {

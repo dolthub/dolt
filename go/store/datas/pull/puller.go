@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -371,8 +372,14 @@ func (p *Puller) Pull(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-			} else {
-				panic("TODO: handle ZStd-CompressedChunk") // NM4.
+			} else if _, ok := cChk.(remotestorage.ArchiveToChunker); ok {
+				// NM4 - Until we can write quickly to archives.....
+				cc := nbs.ChunkToCompressedChunk(chnk)
+
+				err = p.wr.AddCompressedChunk(ctx, cc)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	})

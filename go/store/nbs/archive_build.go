@@ -57,7 +57,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 					return err
 				}
 				if exists {
-					// We have a fast path to follow because oritinal table file is still on disk.
+					// We have a fast path to follow because original table file is still on disk.
 					swapMap[arc.hash()] = orginTfId
 				} else {
 					// We don't have the original table file id, so we have to create a new one.
