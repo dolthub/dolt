@@ -151,12 +151,12 @@ func (g GhostBlockStore) hasMany(hashes hash.HashSet) (absent hash.HashSet, err 
 
 func (g GhostBlockStore) refCheck(recs []hasRecord) (hash.HashSet, error) {
 	absent := hash.HashSet{}
-	for _, r := range recs {
-		if !r.has {
-			if g.skippedRefs.Has(*r.a) {
-				r.has = true
+	for i := range recs {
+		if !recs[i].has {
+			if g.skippedRefs.Has(*recs[i].a) {
+				recs[i].has = true
 			} else {
-				absent.Insert(*r.a)
+				absent.Insert(*recs[i].a)
 			}
 		}
 	}
