@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -313,13 +314,10 @@ type StatsCoord struct {
 
 	readCounter atomic.Int32
 
-	delayGc     atomic.Bool
-	delayBranch atomic.Bool
-
-	doGc     atomic.Bool
-	enableGc atomic.Bool
-	gcMu     sync.Mutex
-	gcCancel context.CancelFunc
+	doGc         atomic.Bool
+	enableGc     atomic.Bool
+	enableBrSync atomic.Bool
+	gcMu         sync.Mutex
 
 	// ddlGuard is a compare and swap that lets |updateBranches|
 	// safe and nonblocking
@@ -327,6 +325,7 @@ type StatsCoord struct {
 	doBranchSync atomic.Bool
 	doCapCheck   atomic.Bool
 	bucketCnt    atomic.Int64
+	seedCnt      atomic.Int64
 	bucketCap    int64
 }
 
@@ -344,14 +343,20 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 		return ctx.Err()
 	case <-sc.Done:
 	default:
+		// have loop stop itself to avoid accidentally closing
+		// channel twice
 		j := NewControl("stop thread", func(sc *StatsCoord) error {
 			sc.Stop()
 			return nil
 		})
-		sc.Interrupts <- j
+		if err := sc.unsafeAsyncSend(ctx, j); err != nil {
+			return err
+		}
 		select {
 		case <-ctx.Done():
+			return context.Cause(ctx)
 		case <-j.done:
+		case <-sc.Done:
 		}
 	}
 
@@ -429,32 +434,38 @@ func (sc *StatsCoord) Drop(dbName string) {
 	}
 }
 
-type StatsInfo struct {
-	DbCnt         int
-	ReadCnt       int
-	Active        bool
-	JobCnt        int
-	GcCounter     int
-	BranchCounter int
-}
-
-func (sc *StatsCoord) Info() StatsInfo {
+func (sc *StatsCoord) Info() dtables.StatsInfo {
 	sc.dbMu.Lock()
 	dbCnt := len(sc.dbs)
+	cachedBucketCnt := sc.kv.Len()
 	defer sc.dbMu.Unlock()
 
-	return StatsInfo{
-		DbCnt:         dbCnt,
-		ReadCnt:       int(sc.readCounter.Load()),
-		Active:        true,
-		JobCnt:        len(sc.Jobs),
-		GcCounter:     int(sc.gcCounter.Load()),
-		BranchCounter: int(sc.branchCounter.Load()),
+	sc.statsMu.Lock()
+	statCnt := len(sc.Stats)
+	defer sc.statsMu.Unlock()
+
+	var active bool
+	select {
+	case <-sc.Done:
+	default:
+		active = true
+	}
+
+	return dtables.StatsInfo{
+		DbCnt:           dbCnt,
+		ReadCnt:         int(sc.readCounter.Load()),
+		Active:          active,
+		DbSeedCnt:       int(sc.seedCnt.Load()),
+		EstBucketCnt:    int(sc.bucketCnt.Load()),
+		CachedBucketCnt: cachedBucketCnt,
+		StatCnt:         statCnt,
+		GcCounter:       int(sc.gcCounter.Load()),
+		BranchCounter:   int(sc.branchCounter.Load()),
 	}
 }
 
 // event loop must be stopped
-func (sc *StatsCoord) flushQueue(ctx context.Context) ([]StatsJob, error) {
+func (sc *StatsCoord) captureFlushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
 	case <-sc.Done:
 	default:
@@ -482,6 +493,7 @@ func (sc *StatsCoord) Seed(ctx context.Context, sqlDb dsess.SqlDatabase) (chan s
 	if err := sc.unsafeAsyncSend(ctx, j); err != nil {
 		return nil, err
 	}
+	sc.seedCnt.Add(1)
 	return j.done, nil
 }
 
@@ -632,9 +644,14 @@ func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 	return nil
 }
 
-func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) error {
+func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+			err = fmt.Errorf("stats job %s panicked: %s", j.String(), r)
+		}
+	}()
 	var newJobs []StatsJob
-	var err error
 	switch j := j.(type) {
 	case SeedDbTablesJob:
 		newJobs, err = sc.seedDbTables(ctx, j)
@@ -873,7 +890,7 @@ type dbBranchKey struct {
 }
 
 func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]StatsJob, error) {
-	if sc.delayBranch.Swap(true) {
+	if !sc.enableBrSync.Swap(false) {
 		close(done)
 		return nil, nil
 	}
@@ -983,6 +1000,7 @@ func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]
 
 				newDbs = append(newDbs, sqlDb)
 				ret = append(ret, NewSeedJob(sqlDb))
+				sc.seedCnt.Add(1)
 			}
 		}
 		for k < len(curBranches) {
@@ -996,6 +1014,7 @@ func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]
 
 			newDbs = append(newDbs, sqlDb)
 			ret = append(ret, NewSeedJob(sqlDb))
+			sc.seedCnt.Add(1)
 		}
 	}
 
@@ -1029,7 +1048,7 @@ func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]
 	// Avoid branch checks starving the loop, only re-enable after
 	// letting a block of other work through.
 	ret = append(ret, NewControl("re-enable branch check", func(sc *StatsCoord) error {
-		sc.delayBranch.Store(false)
+		sc.enableBrSync.Store(true)
 		close(done)
 		return nil
 	}))

@@ -15,7 +15,9 @@
 package dprocedures
 
 import (
+	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,7 +36,12 @@ var statsFuncSchema = []*sql.Column{
 }
 
 func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	return func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	return func(ctx *sql.Context, args ...string) (iter sql.RowIter, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
+			}
+		}()
 		res, err := fn(ctx)
 		if err != nil {
 			return nil, err
@@ -47,14 +54,16 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 // observing and manipulating background database auto refresh threads.
 type ToggableStats interface {
 	sql.StatsProvider
-	CancelRefreshThread(string)
-	StartRefreshThread(*sql.Context, dsess.SqlDatabase, ref.DoltRef) error
-	ThreadStatus(string) string
+	FlushQueue(ctx context.Context) error
+	Restart(context.Context) error
+	Info() dtables.StatsInfo
 	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error
 	BranchSync(ctx *sql.Context) error
+	ValidateState(ctx context.Context) error
+	Init(context.Context, []dsess.SqlDatabase) error
 }
 
 type BranchStatsProvider interface {
@@ -65,53 +74,45 @@ type BranchStatsProvider interface {
 func statsRestart(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
-	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		pro := dSess.Provider()
-
-		sqlDb, ok := pro.BaseDatabase(ctx, dbName)
-		if !ok {
-			return nil, fmt.Errorf("failed to restart stats collection: database not found: %s", dbName)
-		}
-
-		afp.CancelRefreshThread(dbName)
-
-		ddb, _ := dSess.GetDoltDB(ctx, dbName)
-
-		branch, err := ddb.GetRefByNameInsensitive(ctx, "main")
-		if err != nil {
-			branches, err := ddb.GetBranches(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to restart collection: %w", err)
-			}
-			if len(branches) == 0 {
-				return nil, fmt.Errorf("failed to restart collection: no branches found")
-			}
-			branch = branches[0]
-		}
-
-		err = afp.StartRefreshThread(ctx, sqlDb, branch)
+		err := afp.FlushQueue(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restart collection: %w", err)
 		}
+
+		dbs := dSess.Provider().AllDatabases(ctx)
+		var sqlDbs []dsess.SqlDatabase
+		for _, db := range dbs {
+			sqlDb, ok := db.(dsess.SqlDatabase)
+			if ok {
+				sqlDbs = append(sqlDbs, sqlDb)
+			}
+		}
+		if err := afp.Init(ctx, sqlDbs); err != nil {
+			return nil, err
+		}
+		if err := afp.Restart(ctx); err != nil {
+			return nil, err
+		}
+
 		return fmt.Sprintf("restarted stats collection: %s", ref.StatsRef{}.String()), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsStatus returns the last update for a stats thread
-func statsStatus(ctx *sql.Context) (interface{}, error) {
+// statsInfo returns the last update for a stats thread
+func statsInfo(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		return afp.ThreadStatus(dbName), nil
+		info := afp.Info()
+		return info.ToJson(), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsStatus returns the last update for a stats thread
+// statsInfo returns the last update for a stats thread
 func statsWait(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -127,8 +128,7 @@ func statsGc(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		afp.Gc(ctx)
-		return nil, nil
+		return nil, afp.Gc(ctx)
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -138,7 +138,17 @@ func statsBranchSync(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		afp.BranchSync(ctx)
+		return nil, afp.BranchSync(ctx)
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+// statsGc
+func statsValidate(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		afp.ValidateState(ctx)
 		return nil, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
@@ -151,49 +161,12 @@ func statsStop(ctx *sql.Context) (interface{}, error) {
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		afp.CancelRefreshThread(dbName)
+		if err := afp.FlushQueue(ctx); err != nil {
+			return nil, err
+		}
 		return fmt.Sprintf("stopped thread: %s", dbName), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
-}
-
-// statsDrop deletes the stats ref
-func statsDrop(ctx *sql.Context) (interface{}, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	pro := dSess.StatsProvider()
-	dbName := strings.ToLower(ctx.GetCurrentDatabase())
-
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return nil, fmt.Errorf("failed to drop stats: %w", err)
-	}
-
-	if afp, ok := pro.(ToggableStats); ok {
-		// currently unsafe to drop stats while running refresh
-		afp.CancelRefreshThread(dbName)
-	}
-	if bsp, ok := pro.(BranchStatsProvider); ok {
-		err := bsp.DropBranchDbStats(ctx, branch, dbName, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to drop stats: %w", err)
-		}
-	}
-
-	return fmt.Sprintf("deleted stats ref for %s", dbName), nil
-}
-
-// statsPrune replaces the current disk contents with only the currently
-// tracked in memory statistics.
-func statsPrune(ctx *sql.Context) (interface{}, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	pro, ok := dSess.StatsProvider().(ToggableStats)
-	if !ok {
-		return nil, fmt.Errorf("stats not persisted, cannot purge")
-	}
-	if err := pro.Prune(ctx); err != nil {
-		return "failed to prune stats databases", err
-	}
-	return "pruned all stats databases", nil
 }
 
 // statsPurge removes the stats database from disk
@@ -203,8 +176,29 @@ func statsPurge(ctx *sql.Context) (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}
-	if err := pro.Purge(ctx); err != nil {
-		return "failed to purged databases", err
+
+	err := pro.FlushQueue(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to flush queue: %w", err)
 	}
+
+	if err := pro.Purge(ctx); err != nil {
+		return "failed to purge stats", err
+	}
+
+	dbs := dSess.Provider().AllDatabases(ctx)
+	var sqlDbs []dsess.SqlDatabase
+	for _, db := range dbs {
+		sqlDb, ok := db.(dsess.SqlDatabase)
+		if ok {
+			sqlDbs = append(sqlDbs, sqlDb)
+		}
+	}
+
+	// init is currently the safest way to reset state
+	if err := pro.Init(ctx, sqlDbs); err != nil {
+		return "failed to purge stats", err
+	}
+
 	return "purged all database stats", nil
 }

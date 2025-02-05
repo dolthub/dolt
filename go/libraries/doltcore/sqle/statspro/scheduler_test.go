@@ -121,8 +121,7 @@ func TestAnalyze(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 
-	sc.Debug = true
-	sc.flushQueue(ctx)
+	sc.captureFlushQueue(ctx)
 
 	wg := sync.WaitGroup{}
 
@@ -168,7 +167,7 @@ func TestModifyColumn(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
 	wg := sync.WaitGroup{}
-
+	sc.enableGc.Store(false)
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y bigint"))
 
@@ -250,6 +249,8 @@ func TestDropIndex(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 
 	{
@@ -299,6 +300,8 @@ func TestDropTable(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b int)"))
@@ -351,6 +354,8 @@ func TestDeleteAboveBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -380,6 +385,8 @@ func TestDeleteBelowBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -410,6 +417,8 @@ func TestDeleteOnBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
@@ -440,6 +449,8 @@ func TestAddDropDatabases(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, sqlDbs := defaultSetup(t, threads, true)
+	sc.enableGc.Store(false)
+
 	wg := sync.WaitGroup{}
 
 	var otherDb sqle.Database
@@ -454,8 +465,6 @@ func TestAddDropDatabases(t *testing.T) {
 				dsessDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), "main", "main/"+db.Name())
 				require.NoError(t, err)
 				otherDb = dsessDb.(sqle.Database)
-				//_, err = sc.Seed(ctx, dsessDb)
-				//require.NoError(t, err)
 			}
 		}
 
@@ -867,36 +876,76 @@ func TestEmptyTable(t *testing.T) {
 	})
 }
 
-func TestProllyKvUpdate(t *testing.T) {
+func TestPanic(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(16), key (y,x))"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,'zero'), (1, 'one')"))
+	require.NoError(t, sc.Restart(ctx))
+
+	sc.Control(ctx, "panic", func(sc *StatsCoord) error {
+		panic("test panic")
+	})
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+}
+
+func TestValidate(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
 
 	require.NoError(t, sc.Restart(ctx))
 
+	sc.Control(ctx, "panic", func(sc *StatsCoord) error {
+		panic("test panic")
+	})
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+}
+
+func TestPurge(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+	sc.SetEnableGc(true)
+
+	require.NoError(t, sc.Restart(ctx))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(10), key (y,x))"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0), (1,1), (2,2)"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "create database other"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "use other"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(10), key (b,a))"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "insert into ab values (0,0), (1,1), (2,2)"))
+
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
-	rows, err := executeQueryResults(ctx, sqlEng, "select database_name, table_name, index_name  from dolt_statistics order by index_name")
+	sc.Stop()
+
+	kv := sc.kv.(*prollyStats)
+	require.Equal(t, 2, kv.Len())
+	require.Equal(t, 4, len(kv.mem.templates))
+	require.Equal(t, 2, len(kv.mem.bounds))
+	m, err := kv.m.Map(ctx)
 	require.NoError(t, err)
-	require.Equal(t, []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y"}}, rows)
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy select x, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
-	rows, err = executeQueryResults(ctx, sqlEng, "select count(*) from dolt_statistics")
+	cmpCnt, err := m.Count()
 	require.NoError(t, err)
-	require.Equal(t, []sql.Row{{int64(9)}}, rows)
+	require.Equal(t, 2, cmpCnt)
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "update xy set y = 2 where x between 100 and 800"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.NoError(t, sc.Purge(ctx))
 
-	rows, err = executeQueryResults(ctx, sqlEng, "select count(*) from dolt_statistics")
+	kv = sc.kv.(*prollyStats)
+	require.Equal(t, 0, kv.Len())
+	require.Equal(t, 0, len(kv.mem.templates))
+	require.Equal(t, 0, len(kv.mem.bounds))
+	m, err = kv.m.Map(ctx)
 	require.NoError(t, err)
-	require.Equal(t, []sql.Row{{int64(9)}}, rows)
+	cmpCnt, err = m.Count()
+	require.NoError(t, err)
+	require.Equal(t, 0, cmpCnt)
 }
 
 func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
@@ -909,6 +958,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.SetEnableGc(false)
+	sc.enableBrSync.Store(false)
 	require.NoError(t, sc.Restart(ctx))
 
 	ctx, _ = sc.ctxGen(ctx)
@@ -945,12 +995,14 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		sc.kv = statsKv
 	}
 
+	sc.enableBrSync.Store(true)
+
 	return ctx, sqlEng, sc, sqlDbs
 }
 
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord, []sqle.Database) {
 	ctx, sqlEng, sc, sqlDbs := emptySetup(t, threads, memOnly)
-	sc.Debug = true
+	//sc.Debug = true
 
 	wg := sync.WaitGroup{}
 
@@ -1035,7 +1087,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 // validateJobs compares the current event loop and launches a background thread
 // that will repopulate the queue in-order
 func validateJobState(t *testing.T, ctx context.Context, sc *StatsCoord, expected []StatsJob) {
-	jobs, err := sc.flushQueue(ctx)
+	jobs, err := sc.captureFlushQueue(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, len(expected), len(jobs), fmt.Sprintf("expected: %s; found: %s", expected, jobs))
@@ -1118,10 +1170,6 @@ func doGcCycle(t *testing.T, ctx *sql.Context, sc *StatsCoord) {
 	sc.gcMu.Lock()
 	defer sc.gcMu.Unlock()
 	require.False(t, sc.doGc.Load())
-	require.False(t, sc.delayGc.Load())
-	if sc.gcCancel != nil {
-		t.Errorf("gc cancel non-nil")
-	}
 }
 
 func runAndPause(t *testing.T, ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGroup) {
@@ -1294,7 +1342,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 		// 101 dbs, 100 with stats (not main)
 		require.Equal(t, iters/2+1, len(sc.dbs))
 		require.Equal(t, iters/2, len(sc.Stats))
-		require.NoError(t, sc.validateState(ctx))
+		require.NoError(t, sc.ValidateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
 	}
 }
@@ -1375,7 +1423,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters/2, len(sc.Stats))
-		require.NoError(t, sc.validateState(ctx))
+		require.NoError(t, sc.ValidateState(ctx))
 		require.Equal(t, iters/2, sc.kv.Len())
 	}
 }
@@ -1447,7 +1495,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters, len(sc.Stats))
-		require.NoError(t, sc.validateState(ctx))
+		require.NoError(t, sc.ValidateState(ctx))
 		require.Equal(t, iters, sc.kv.Len())
 	}
 }

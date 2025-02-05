@@ -25,9 +25,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"path"
 	"path/filepath"
@@ -255,8 +257,21 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	return 0, nil
 }
 
-func (sc *StatsCoord) CancelRefreshThread(dbName string) {
-	sc.Drop(dbName)
+func (sc *StatsCoord) FlushQueue(ctx context.Context) error {
+	sc.Stop()
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-sc.Done:
+	}
+	oldCap := cap(sc.Jobs)
+	close(sc.Jobs)
+	for _ = range sc.Jobs {
+	}
+	sc.Jobs = make(chan StatsJob, oldCap)
+	sc.seedCnt.Store(0)
+	sc.readCounter.Store(0)
+	return nil
 }
 
 func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, sqlDb dsess.SqlDatabase, branch ref.DoltRef) error {
@@ -273,8 +288,82 @@ func (sc *StatsCoord) StartRefreshThread(ctx *sql.Context, sqlDb dsess.SqlDataba
 	return nil
 }
 
-func (sc *StatsCoord) ThreadStatus(string) string {
-	return ""
+func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
+	sc.dbMu.Lock()
+	sc.statsMu.Lock()
+
+	sc.dbs = sc.dbs[:0]
+	sc.Stats = make(map[tableIndexesKey][]*stats.Statistic)
+	sc.Branches = make(map[string][]ref.DoltRef)
+	sc.dbFs = make(map[string]filesys.Filesys)
+	sc.dbMu.Unlock()
+	sc.statsMu.Unlock()
+
+	sc.bucketCnt.Store(0)
+
+	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+	sc.SetMemOnly(memOnly.(int8) == 1)
+
+	typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+	_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+	_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
+
+	jobInterval, _, _ := typ.GetType().Convert(jobI)
+	gcInterval, _, _ := typ.GetType().Convert(gcI)
+	brInterval, _, _ := typ.GetType().Convert(brI)
+
+	sc.SetTimers(jobInterval.(int64), gcInterval.(int64), brInterval.(int64))
+
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+
+	sc.SetEnableGc(false)
+	sc.enableBrSync.Store(false)
+
+	if err := sc.Restart(sqlCtx); err != nil {
+		return err
+	}
+	eg := errgroup.Group{}
+	for _, db := range dbs {
+		if db, ok := db.(dsess.SqlDatabase); ok {
+			br, err := db.DbData().Ddb.GetBranches(ctx)
+			if err != nil {
+				return err
+			}
+			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
+			if err != nil {
+				return err
+			}
+			for _, b := range br {
+				eg.Go(func() error {
+					done, err := sc.Add(sqlCtx, db, b, fs)
+					if err != nil {
+						return err
+					}
+					<-done
+					return nil
+				})
+			}
+		}
+	}
+	eg.Wait()
+	eg.Go(func() error {
+		done, err := sc.Control(ctx, "enable gc", func(sc *StatsCoord) error {
+			sc.SetEnableGc(true)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		<-done
+		sc.Stop()
+		return nil
+	})
+	eg.Wait()
+	<-sc.Done
+	return nil
 }
 
 func (sc *StatsCoord) Prune(ctx *sql.Context) error {
@@ -284,8 +373,21 @@ func (sc *StatsCoord) Prune(ctx *sql.Context) error {
 	return nil
 }
 
-func (sc *StatsCoord) Purge(ctx *sql.Context) error {
+func (sc *StatsCoord) DropKv(ctx *sql.Context) error {
 	return sc.rotateStorage(ctx)
+}
+
+func (sc *StatsCoord) Purge(ctx *sql.Context) error {
+	if err := sc.rotateStorage(ctx); err != nil {
+		return err
+	}
+	if err := sc.kv.StartGc(ctx, 0); err != nil {
+		return err
+	}
+	sc.kv.FinishGc()
+	sc.bucketCnt.Store(0)
+
+	return nil
 }
 
 func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
@@ -460,7 +562,7 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 		}
 	}
 
-	return sc.validateState(ctx)
+	return sc.ValidateState(ctx)
 }
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {

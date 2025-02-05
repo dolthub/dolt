@@ -26,7 +26,6 @@ import (
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"strconv"
 	"strings"
@@ -198,59 +197,10 @@ func NewSqlEngine(
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 
-	sqlCtx, err := sqlEngine.NewLocalContext(ctx)
-
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-		sc.SetMemOnly(memOnly.(int8) == 1)
-
-		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-		_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
-
-		jobInterval, _, _ := typ.GetType().Convert(jobI)
-		gcInterval, _, _ := typ.GetType().Convert(gcI)
-		brInterval, _, _ := typ.GetType().Convert(brI)
-
-		sc.SetTimers(jobInterval.(int64), gcInterval.(int64), brInterval.(int64))
-
-		sc.Restart(sqlCtx)
-		eg := errgroup.Group{}
-		for _, db := range dbs {
-			br, err := db.DbData().Ddb.GetBranches(ctx)
-			if err != nil {
-				return nil, err
-			}
-			fs, err := pro.FileSystemForDatabase(db.AliasedName())
-			if err != nil {
-				return nil, err
-			}
-			for _, b := range br {
-				eg.Go(func() error {
-					done, err := sc.Add(sqlCtx, db, b, fs)
-					if err != nil {
-						return err
-					}
-					<-done
-					return nil
-				})
-			}
-		}
-		eg.Wait()
-		eg.Go(func() error {
-			done, err := sc.Control(ctx, "enable gc", func(sc *statspro.StatsCoord) error {
-				sc.SetEnableGc(false)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-			<-done
-			return nil
-		})
-		eg.Wait()
+		sc.Init(ctx, dbs)
 	}
 
 	// Load MySQL Db information

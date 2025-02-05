@@ -38,6 +38,8 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) (ret 
 		if errors.Is(doltdb.ErrWorkingSetNotFound, err) {
 			err = nil
 			ret = []StatsJob{NewSeedJob(j.sqlDb)}
+		} else if err != nil {
+			sc.seedCnt.Add(-1)
 		}
 	}()
 

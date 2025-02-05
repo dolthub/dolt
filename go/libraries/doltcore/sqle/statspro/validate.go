@@ -105,9 +105,9 @@ func generateDeps(
 	return nil
 }
 
-// validateState expects all tracked databases to be fully cached,
+// ValidateState expects all tracked databases to be fully cached,
 // and returns an error including any gaps.
-func (sc *StatsCoord) validateState(ctx context.Context) error {
+func (sc *StatsCoord) ValidateState(ctx context.Context) error {
 	sc.dbMu.Lock()
 	dbs := make([]dsess.SqlDatabase, len(sc.dbs))
 	copy(dbs, sc.dbs)

@@ -52,14 +52,15 @@ func (j GcMarkJob) String() string {
 	return b.String()
 }
 
-func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
-	if !sc.enableGc.Load() {
-		close(done)
-		return nil
-	}
+func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) (err error) {
+	defer func() {
+		if err != nil {
+			sc.enableGc.Store(true)
+			close(done)
+		}
+	}()
 
-	if sc.delayGc.Swap(true) {
-		close(done)
+	if !sc.enableGc.Swap(false) {
 		return nil
 	}
 
@@ -113,11 +114,13 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) error {
 
 	// Avoid GC starving the loop, only re-enable after
 	// letting a block of other work through.
-	sc.sendJobs(ctx, NewControl("re-enable GC", func(sc *StatsCoord) error {
-		sc.delayGc.Store(false)
+	if err := sc.unsafeAsyncSend(ctx, NewControl("re-enable GC", func(sc *StatsCoord) error {
+		sc.enableGc.Store(true)
 		close(done)
 		return nil
-	}))
+	})); err != nil {
+		return err
+	}
 
 	return nil
 }
