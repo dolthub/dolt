@@ -250,7 +250,7 @@ func (gcs *GenerationalNBS) refCheck(recs []hasRecord) (hash.HashSet, error) {
 		return absent, nil
 	}
 
-	return gcs.ghostGen.hasMany(absent)
+	return gcs.ghostGen.refCheck(recs)
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to

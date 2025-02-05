@@ -149,6 +149,20 @@ func (g GhostBlockStore) hasMany(hashes hash.HashSet) (absent hash.HashSet, err 
 	return absent, nil
 }
 
+func (g GhostBlockStore) refCheck(recs []hasRecord) (hash.HashSet, error) {
+	absent := hash.HashSet{}
+	for i := range recs {
+		if !recs[i].has {
+			if g.skippedRefs.Has(*recs[i].a) {
+				recs[i].has = true
+			} else {
+				absent.Insert(*recs[i].a)
+			}
+		}
+	}
+	return absent, nil
+}
+
 func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	panic("GhostBlockStore does not support Put")
 }
