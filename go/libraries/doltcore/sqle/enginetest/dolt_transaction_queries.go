@@ -861,16 +861,16 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:       "/* client b */ insert into t1 values (3, 3)",
+				Query:    "/* client b */ insert into t1 values (3, 3)",
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:            "/* client a */ commit",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ commit",
-				Skip: true, // multiple indexes covering the same column set cannot be merged: 'i1' and 'u1'
+				Query:            "/* client b */ commit",
+				Skip:             true, // multiple indexes covering the same column set cannot be merged: 'i1' and 'u1'
 				SkipResultsCheck: true,
 			},
 		},

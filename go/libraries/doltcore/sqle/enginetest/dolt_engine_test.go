@@ -1374,15 +1374,15 @@ func TestSingleTransactionScript(t *testing.T) {
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:       "/* client b */ insert into t1 values (3, 3)",
+					Query:    "/* client b */ insert into t1 values (3, 3)",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "/* client a */ commit",
+					Query:            "/* client a */ commit",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client b */ commit",
+					Query:            "/* client b */ commit",
 					SkipResultsCheck: true,
 				},
 			},
