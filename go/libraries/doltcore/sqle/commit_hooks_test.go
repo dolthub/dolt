@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
 	"bytes"
@@ -24,16 +24,21 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -59,7 +64,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	destDB, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
 	testDir, err = test.ChangeToTestDir("TestReplicationSource")
@@ -75,7 +80,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	err = ddb.WriteEmptyRepo(context.Background(), "main", committerName, committerEmail)
 
 	if err != nil {
@@ -83,7 +88,7 @@ func TestPushOnWriteHook(t *testing.T) {
 	}
 
 	// prepare a commit in the source repo
-	cs, _ := NewCommitSpec("main")
+	cs, _ := doltdb.NewCommitSpec("main")
 	optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 	if err != nil {
 		t.Fatal("Couldn't find commit")
@@ -95,28 +100,28 @@ func TestPushOnWriteHook(t *testing.T) {
 	assert.NoError(t, err)
 
 	if meta.Name != committerName || meta.Email != committerEmail {
-		t.Error("Unexpected metadata")
+		t.Fatal("Unexpected metadata")
 	}
 
 	root, err := commit.GetRootValue(context.Background())
 
 	assert.NoError(t, err)
 
-	names, err := root.GetTableNames(context.Background(), DefaultSchemaName)
+	names, err := root.GetTableNames(context.Background(), doltdb.DefaultSchemaName)
 	assert.NoError(t, err)
 	if len(names) != 0 {
 		t.Fatal("There should be no tables in empty db")
 	}
 
 	tSchema := createTestSchema(t)
-	rowData := createTestRowData(t, ddb.vrw, ddb.ns, tSchema)
-	tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
+	rowData := createTestRowData(t, ddb.ValueReadWriter(), ddb.NodeStore(), tSchema)
+	tbl, err := createHooksTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), tSchema, rowData)
 
 	if err != nil {
 		t.Fatal("Failed to create test table with data")
 	}
 
-	root, err = root.PutTable(context.Background(), TableName{Name: "test"}, tbl)
+	root, err = root.PutTable(context.Background(), doltdb.TableName{Name: "test"}, tbl)
 	assert.NoError(t, err)
 
 	r, valHash, err := ddb.WriteRootValue(context.Background(), root)
@@ -130,19 +135,19 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	// setup hook
 	hook := NewPushOnWriteHook(destDB, tmpDir)
-	ddb.SetCommitHooks(ctx, []CommitHook{hook})
+	ddb.SetCommitHooks(ctx, []doltdb.CommitHook{hook})
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 		require.NoError(t, err)
 
-		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+		ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 
 		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
-		cs, _ = NewCommitSpec(defaultBranch)
+		cs, _ = doltdb.NewCommitSpec(defaultBranch)
 		optCmt, err := destDB.Resolve(context.Background(), cs, nil)
 		require.NoError(t, err)
 		destCommit, ok := optCmt.ToCommit()
@@ -199,7 +204,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	destDB, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	destDB, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 
 	// source repo
 	testDir, err = test.ChangeToTestDir("TestReplicationSource")
@@ -215,7 +220,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		t.Fatal("Failed to create noms directory")
 	}
 
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	err = ddb.WriteEmptyRepo(context.Background(), "main", committerName, committerEmail)
 
 	if err != nil {
@@ -231,7 +236,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		}
 
 		for i := 0; i < 200; i++ {
-			cs, _ := NewCommitSpec("main")
+			cs, _ := doltdb.NewCommitSpec("main")
 			optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 			if err != nil {
 				t.Fatal("Couldn't find commit")
@@ -251,16 +256,16 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			assert.NoError(t, err)
 
 			tSchema := createTestSchema(t)
-			rowData, err := durable.NewEmptyPrimaryIndex(ctx, ddb.vrw, ddb.ns, tSchema)
+			rowData, err := durable.NewEmptyPrimaryIndex(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), tSchema)
 			require.NoError(t, err)
-			tbl, err := CreateTestTable(ddb.vrw, ddb.ns, tSchema, rowData)
+			tbl, err := createHooksTestTable(ddb.ValueReadWriter(), ddb.NodeStore(), tSchema, rowData)
 			require.NoError(t, err)
 
 			if err != nil {
 				t.Fatal("Failed to create test table with data")
 			}
 
-			root, err = root.PutTable(context.Background(), TableName{Name: "test"}, tbl)
+			root, err = root.PutTable(context.Background(), doltdb.TableName{Name: "test"}, tbl)
 			assert.NoError(t, err)
 
 			r, valHash, err := ddb.WriteRootValue(context.Background(), root)
@@ -274,7 +279,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 			_, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
 			require.NoError(t, err)
-			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+			ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 			require.NoError(t, err)
 			_, err = hook.Execute(ctx, ds, ddb)
 			require.NoError(t, err)
@@ -293,20 +298,20 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		// same as the call which is made after a branch delete.
 
 		counts := &countingCommitHook{make(map[string]int)}
-		destDB.SetCommitHooks(context.Background(), []CommitHook{counts})
+		destDB.SetCommitHooks(context.Background(), []doltdb.CommitHook{counts})
 
 		bThreads := sql.NewBackgroundThreads()
 		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
 		require.NoError(t, err, "create push on write hook without an error")
 
 		// Pretend we replicate a HEAD which does exist.
-		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+		ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
 		// Pretend we replicate a HEAD which does not exist, i.e., a branch delete.
-		ds, err = ddb.db.GetDataset(ctx, "refs/heads/does_not_exist")
+		ds, err = doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/does_not_exist")
 		require.NoError(t, err)
 		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
@@ -326,14 +331,14 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	})
 }
 
-var _ CommitHook = (*countingCommitHook)(nil)
+var _ doltdb.CommitHook = (*countingCommitHook)(nil)
 
 type countingCommitHook struct {
 	// The number of times Execute() got called for given dataset.
 	counts map[string]int
 }
 
-func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error) {
+func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	c.counts[ds.ID()] += 1
 	return nil, nil
 }
@@ -348,4 +353,81 @@ func (c *countingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error 
 
 func (c *countingCommitHook) ExecuteForWorkingSets() bool {
 	return false
+}
+
+const (
+	idTag        = 0
+	firstTag     = 1
+	lastTag      = 2
+	isMarriedTag = 3
+	ageTag       = 4
+	emptySchTag  = 5
+)
+const testSchemaIndexName = "idx_name"
+const testSchemaIndexAge = "idx_age"
+
+var id0, _ = uuid.NewRandom()
+var id1, _ = uuid.NewRandom()
+var id2, _ = uuid.NewRandom()
+var id3, _ = uuid.NewRandom()
+
+func createTestSchema(t *testing.T) schema.Schema {
+	colColl := schema.NewColCollection(
+		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", ageTag, types.UintKind, false),
+		schema.NewColumn("empty", emptySchTag, types.IntKind, false),
+	)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, nil, schema.IndexProperties{IsUnique: false, Comment: ""})
+	require.NoError(t, err)
+	return sch
+}
+
+func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) durable.Index {
+	if types.Format_Default == types.Format_DOLT {
+		idx, err := durable.NewEmptyPrimaryIndex(context.Background(), vrw, ns, sch)
+		require.NoError(t, err)
+		return idx
+	}
+
+	vals := []row.TaggedValues{
+		{idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+		{idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+		{idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+	}
+
+	var err error
+	rows := make([]row.Row, len(vals))
+
+	m, err := types.NewMap(context.Background(), vrw)
+	assert.NoError(t, err)
+	ed := m.Edit()
+
+	for i, val := range vals {
+		r, err := row.New(vrw.Format(), sch, val)
+		require.NoError(t, err)
+		rows[i] = r
+		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = ed.Map(context.Background())
+	assert.NoError(t, err)
+	return durable.IndexFromNomsMap(m, vrw, ns)
+}
+
+func createHooksTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*doltdb.Table, error) {
+        tbl, err := doltdb.NewTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
+
+        if err != nil {
+                return nil, err
+        }
+
+        return tbl, nil
 }
