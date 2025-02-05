@@ -376,9 +376,6 @@ func ConfigureServices(
 	// instead of dolt db initialization, because we only want to create the privileges database when it's
 	// used for a server, and because we want the same root initialization logic when a sql-server is started
 	// for a clone. More details: https://dev.mysql.com/doc/mysql-security-excerpt/8.0/en/default-privileges.html
-	//
-	// NOTE: The MySQL root user is created for host 'localhost', not any host ('%'). We could do the same here,
-	//       but it seems like it would cause problems for users who want to connect from outside of Docker.
 	InitImplicitRootSuperUser := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
 			// If privileges.db has already been initialized, indicating that this is NOT the
@@ -395,9 +392,8 @@ func ConfigureServices(
 			ed := mysqlDb.Editor()
 			defer ed.Close()
 
-			// If no ephemeral superuser has been configured and root user initialization wasn't skipped,
-			// then create a root@localhost superuser.
-			if !serverConfig.UserIsSpecified() && !config.SkipRootUserInitialization {
+			// Create the root@localhost superuser, unless --skip-root-user-initialization was specified
+			if !config.SkipRootUserInitialization {
 				// Allow the user to override the default root host (localhost) and password ("").
 				// This is particularly useful in a Docker container, where you need to connect
 				// to the sql-server from outside the container and can't rely on localhost.
@@ -435,26 +431,6 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitImplicitRootSuperUser)
-
-	// Add an ephemeral superuser if one was requested
-	InitEphemeralSuperUser := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
-			ed := mysqlDb.Editor()
-
-			userSpecified := config.ServerUser != ""
-			if userSpecified {
-				superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
-				if superuser == nil {
-					mysqlDb.AddEphemeralSuperUser(ed, config.ServerUser, "%", config.ServerPass)
-				}
-			}
-			ed.Close()
-
-			return nil
-		},
-	}
-	controller.Register(InitEphemeralSuperUser)
 
 	var metListener *metricsListener
 	InitMetricsListener := &svcs.AnonService{

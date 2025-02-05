@@ -13,7 +13,8 @@ setup_dolt_repo() {
 
     PORT=$( definePORT )
     USER="dolt"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
+    dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
+    dolt sql-server --host 0.0.0.0 --port=$PORT --loglevel=trace &
     SERVER_PID=$!
     # Give the server a chance to start
     sleep 1

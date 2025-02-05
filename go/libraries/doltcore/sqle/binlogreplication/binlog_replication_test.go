@@ -1047,6 +1047,11 @@ func (h *harness) startDoltSqlServer(doltPersistentSystemVars map[string]string)
 
 	// use an admin user NOT named "root" to test that we don't require the "root" account
 	adminUser := "admin"
+	err = runDoltCommand(h.t, dir, "sql", fmt.Sprintf("-q=%s",
+		"CREATE USER IF NOT EXISTS admin@'%'; GRANT ALL ON *.* TO admin@'%';"))
+	if err != nil {
+		return -1, nil, err
+	}
 
 	if doltPersistentSystemVars != nil && len(doltPersistentSystemVars) > 0 {
 		// Initialize the dolt directory first
@@ -1066,7 +1071,6 @@ func (h *harness) startDoltSqlServer(doltPersistentSystemVars map[string]string)
 
 	args := []string{DoltDevBuildPath(),
 		"sql-server",
-		fmt.Sprintf("-u%s", adminUser),
 		"--loglevel=TRACE",
 		"--socket=/dev/null",
 		fmt.Sprintf("--data-dir=%s", dir),
