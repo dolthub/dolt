@@ -169,7 +169,12 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 //	processPrefix is only necessary for the "fast forward" case where we
 //	synchronized the tree level before reaching |next|.
 func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
-	cmp := tc.cur.compare(next)
+	return tc.insertRange(ctx, tc.cur, next)
+}
+
+func (tc *chunker[S]) insertRange(ctx context.Context, start, end *cursor) error {
+	cur := start
+	cmp := cur.compare(end)
 	if cmp == 0 { // step (1)
 		return nil
 	} else if cmp > 0 {
@@ -177,52 +182,52 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 		// we navigate to the end of the previous chunk rather than the
 		// beginning of the next chunk. I think this is basically a one-off
 		// error.
-		for tc.cur.compare(next) > 0 {
-			if err := next.advance(ctx); err != nil {
+		for cur.compare(end) > 0 {
+			if err := end.advance(ctx); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	sz, err := tc.cur.currentSubtreeSize()
+	sz, err := cur.currentSubtreeSize()
 	if err != nil {
 		return err
 	}
-	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
+	split, err := tc.append(ctx, cur.CurrentKey(), cur.currentValue(), sz)
 	if err != nil {
 		return err
 	}
 
-	for !(split && tc.cur.atNodeEnd()) { // step (2)
-		err = tc.cur.advance(ctx)
+	for !(split && cur.atNodeEnd()) { // step (2)
+		err = cur.advance(ctx)
 		if err != nil {
 			return err
 		}
-		if cmp = tc.cur.compare(next); cmp >= 0 {
+		if cmp = cur.compare(end); cmp >= 0 {
 			// we caught up before synchronizing
 			return nil
 		}
-		sz, err := tc.cur.currentSubtreeSize()
+		sz, err := cur.currentSubtreeSize()
 		if err != nil {
 			return err
 		}
-		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
+		split, err = tc.append(ctx, cur.CurrentKey(), cur.currentValue(), sz)
 		if err != nil {
 			return err
 		}
 	}
 
-	if tc.cur.parent == nil || next.parent == nil { // step (3)
+	if cur.parent == nil || end.parent == nil { // step (3)
 		// end of tree
-		tc.cur.copy(next)
+		cur.copy(end)
 		return nil
 	}
 
-	if tc.cur.parent.compare(next.parent) == 0 { // step (3)
+	if cur.parent.compare(end.parent) == 0 { // step (3)
 		// (rare) new tree synchronized with old tree at the
 		// same time as the cursor caught up to the next mutation point
-		tc.cur.copy(next)
+		cur.copy(end)
 		return nil
 	}
 
@@ -231,21 +236,21 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	// This optimization is logically equivalent to advancing
 	// current cursor. Because we just wrote a chunk, we are
 	// at a boundary and can simply increment the parent.
-	err = tc.cur.parent.advance(ctx)
+	err = cur.parent.advance(ctx)
 	if err != nil {
 		return err
 	}
-	tc.cur.invalidateAtEnd()
+	cur.invalidateAtEnd()
 
 	// no more pending chunks at this level, recurse
 	// into parent
-	err = tc.parent.advanceTo(ctx, next.parent)
+	err = tc.parent.insertRange(ctx, cur.parent, end.parent)
 	if err != nil {
 		return err
 	}
 
 	// fast forward to the edit index at this level
-	tc.cur.copy(next)
+	cur.copy(end)
 
 	// incoming edit can affect the entire chunk, process the prefix
 	err = tc.processPrefix(ctx)
