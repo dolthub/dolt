@@ -97,7 +97,7 @@ func TestDeprecatedUserPasswordServerArgs(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(context.Background()).Close())
 	}()
 	err = StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 		"-H", "localhost",
