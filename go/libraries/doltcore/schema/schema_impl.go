@@ -497,15 +497,15 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		queryType := sqlType.Type()
 		var t val.Type
 
-		_, contentHashedField := contentHashedFields[tag];
-		extendedType, isExtendedType := sqlType.(gmstypes.ExtendedType);
-		
+		_, contentHashedField := contentHashedFields[tag]
+		extendedType, isExtendedType := sqlType.(gmstypes.ExtendedType)
+
 		if isExtendedType {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		}	else {
+		} else {
 			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
 				t = val.Type{
 					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARBINARY)),
@@ -528,7 +528,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 				}
 			}
 		}
-		
+
 		tt = append(tt, t)
 		stringType, isStringType := sqlType.(sql.StringType)
 		if isStringType && (queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT) {
@@ -539,7 +539,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		}
 
 		handlers = append(handlers, extendedType)
-		
+
 		return
 	})
 
