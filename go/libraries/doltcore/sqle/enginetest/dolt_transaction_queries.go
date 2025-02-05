@@ -839,6 +839,42 @@ var DoltTransactionTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "non-ff commit merge with multiple indexes on a column",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, val int)",
+			"create index i1 on t1 (val)",
+			"alter table t1 add unique key u1 (val)",
+			"insert into t1 values (1, 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "/* client a */ set autocommit = off",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client b */ set autocommit = off",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ insert into t1 values (2, 2)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:       "/* client b */ insert into t1 values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ commit",
+				Skip: true, // multiple indexes covering the same column set cannot be merged: 'i1' and 'u1'
+				SkipResultsCheck: true,
+			},
+		},
+	},
 }
 
 var DoltConflictHandlingTests = []queries.TransactionTest{
