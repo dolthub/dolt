@@ -74,7 +74,7 @@ type databaseDropReplication struct {
 	wg     *sync.WaitGroup
 }
 
-type SqlContextFactory func (ctx context.Context) (*sql.Context, error)
+type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
 
 type Controller struct {
 	cfg           servercfg.ClusterConfig
