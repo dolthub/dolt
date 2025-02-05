@@ -754,3 +754,39 @@ func (tr tableReader) clone() (tableReader, error) {
 		blockSize: tr.blockSize,
 	}, nil
 }
+
+func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk), stats *Stats) error {
+	count := tr.idx.chunkCount()
+	for i := uint32(0); i < count; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		var h hash.Hash
+		ie, err := tr.idx.indexEntry(i, &h)
+		if err != nil {
+			return err
+		}
+
+		res := make([]byte, ie.Length())
+		n, err := tr.r.ReadAtWithStats(ctx, res, int64(ie.Offset()), stats)
+		if err != nil {
+			return err
+		}
+		if uint32(n) != ie.Length() {
+			return errors.New("failed to read all data")
+		}
+
+		cchk, err := NewCompressedChunk(h, res)
+		if err != nil {
+			return err
+		}
+		chk, err := cchk.ToChunk()
+		if err != nil {
+			return err
+		}
+
+		cb(chk)
+	}
+	return nil
+}

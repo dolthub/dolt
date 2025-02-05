@@ -265,7 +265,7 @@ type chunkSource interface {
 	// If there is a failure reading the chunk, the error will be returned - note that this can happen in the middle of
 	// the scan, and will likely mean that the scan didn't complete. Note that errors returned by this method are not
 	// related to the callback - if the callback discovers an error, it must manage that out of band.
-	iterateAllChunks(context.Context, func(chunk chunks.Chunk)) error
+	iterateAllChunks(context.Context, func(chunk chunks.Chunk), *Stats) error
 }
 
 type chunkSources []chunkSource
