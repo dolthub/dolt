@@ -60,9 +60,8 @@ type ChunkFetcher struct {
 	// buy having a Hash, but are empty. NM4.
 	resCh chan nbs.ToChunker
 
-	abortCh   chan struct{}
-	stats     StatsRecorder
-	dictCache *DictionaryCache
+	abortCh chan struct{}
+	stats   StatsRecorder
 }
 
 const (
