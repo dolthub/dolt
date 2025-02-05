@@ -162,7 +162,7 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	if err != nil {
 		return nil, err
 	}
-	toret := make(map[string]map[hash.Hash]Range, len(locs)) // NM4
+	toret := make(map[string]map[hash.Hash]Range, len(locs))
 	for k, v := range locs {
 		toret[k] = v
 	}
@@ -469,7 +469,6 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	}
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
-		// NM4 - not sure on this one....
 		s := tableSpec{fileType: typeNoms, hash: h, chunkCount: c}
 		contents.appendix = append(contents.appendix, s)
 		contents.specs = append(contents.specs, s)

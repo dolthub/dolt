@@ -33,6 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+
+	"github.com/hashicorp/golang-lru/v2"
 )
 
 // A remotestorage.ChunkFetcher is a pipelined chunk fetcher for fetching a
@@ -52,12 +54,12 @@ type ChunkFetcher struct {
 	egCtx context.Context
 
 	// toGetCh is the channel used to request chunks. This will be initially given a root,
-	// and as refs are found, they will be added to the channel for workers to batch and request. NM4.
+	// and as refs are found, they will be added to the channel for workers to batch and request.
 	toGetCh chan hash.HashSet
 
 	// resCh is the results channel for the fetcher. It is used both to return
 	// chunks themselves, and to indicate which chunks were requested but missing
-	// buy having a Hash, but are empty. NM4.
+	// by having a Hash, but are empty.
 	resCh chan nbs.ToChunker
 
 	abortCh chan struct{}
@@ -71,12 +73,12 @@ const (
 	reliableCallDeliverRespTimeout = 15 * time.Second
 )
 
-var globalDictCache *DictionaryCache
+var globalDictCache *dictionaryCache
 var once sync.Once
 
 func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	once.Do(func() {
-		globalDictCache = NewDictionaryCache(newDownloads(), dcs.csClient)
+		globalDictCache = NewDictionaryCache(dcs.csClient)
 	})
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -378,17 +380,10 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		d.refreshes[path] = refresh
 	}
 	for _, r := range gr.Ranges {
-		// NM4 - Split at this point? Break the dictionary into its own request.
 		d.ranges.Insert(gr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
-		//		if r.DictionaryLength == 0 {
-		//			// NM4 - maybe invert the hash, and add it to a set of..... not sure.
-		//			d.ranges.Insert(gr.Url, r.Hash, r.DictionaryOffset, r.DictionaryLength)
-		//		}
 	}
 }
 
-// NM4 - On the client side, we only request HttpRanges for raw bytes. The struct includes the dictionary offset and length,
-// but those only make sense in the response of DownloadLocations.
 func toGetRange(rs []*ranges.GetRange) *GetRange {
 	ret := new(GetRange)
 	for _, r := range rs {
@@ -613,111 +608,143 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 	}
 }
 
-///////
+// dictionaryCache caches dictionaries for the chunks in an archive store. When we fetch from a database with an archive,
+// we get back the path/offset/length of the dictionary for each chunk. These, by definition, are repeatedly used
+// and we don't want to request the same dictionary multiple times.
+//
+// Currently (feb '25), archives generally have only a default dictionary, so this is kind of overkill. Mainly planning
+// for the future when chunk grouping is the default and we could have thousands of dictionaries.
+type dictionaryCache struct {
+	cache   *lru.TwoQueueCache[DictionaryKey, *gozstd.DDict]
+	pending sync.Map
+	client  remotesapi.ChunkStoreServiceClient
+	dlds    downloads
+}
 
+// DictionaryKey is the a globaly unique identifier for an archive dictionary.
 type DictionaryKey struct {
-	url string
-	off uint64
-	len uint32
+	// This is the short url to the resource, not including the query parameters - which are provided by the
+	// locationRefresher.
+	path string
+	off  uint64
+	len  uint32
 }
 
-type DictionaryCache struct {
-	mu     sync.Mutex
-	cache  map[DictionaryKey]*gozstd.DDict
-	client remotesapi.ChunkStoreServiceClient
-	dlds   downloads
-}
+func NewDictionaryCache(client remotesapi.ChunkStoreServiceClient) *dictionaryCache {
+	c, err := lru.New2Q[DictionaryKey, *gozstd.DDict](1024)
+	if err != nil {
+		panic(err)
+	}
 
-func NewDictionaryCache(downloads downloads, client remotesapi.ChunkStoreServiceClient) *DictionaryCache {
-	return &DictionaryCache{
-		mu:     sync.Mutex{},
-		cache:  make(map[DictionaryKey]*gozstd.DDict),
+	return &dictionaryCache{
+		cache:  c,
 		client: client,
-		dlds:   downloads,
+		dlds:   newDownloads(),
 	}
 }
 
-func (dc *DictionaryCache) Get(rang *GetRange, idx int, stats StatsRecorder, recorder reliable.HealthRecorder) (*gozstd.DDict, error) {
-	// Way too granular... but I'll use a real cache for production. prototype maddddddneeesssss
-	dc.mu.Lock()
-	defer dc.mu.Unlock()
-
+func (dc *dictionaryCache) get(rang *GetRange, idx int, stats StatsRecorder, recorder reliable.HealthRecorder) (*gozstd.DDict, error) {
 	path := rang.ResourcePath()
 	off := rang.Ranges[idx].DictionaryOffset
 	ln := rang.Ranges[idx].DictionaryLength
 
 	key := DictionaryKey{path, off, ln}
-	if v, ok := dc.cache[key]; ok {
-		return v, nil
-	} else {
-
-		pathToUrl := dc.dlds.refreshes[path]
-		if pathToUrl == nil {
-			// Kinda do what Add does....
-			refresh := new(locationRefresh)
-
-			sRang := &remotesapi.HttpGetRange{}
-			sRang.Url = rang.Url
-			sRang.Ranges = append(sRang.Ranges, &remotesapi.RangeChunk{Offset: off, Length: ln})
-			rang := &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: sRang}
-			dl := &remotesapi.DownloadLoc{Location: rang}
-
-			refresh.Add(dl)
-			dc.dlds.refreshes[path] = refresh
-
-			pathToUrl = refresh
-		}
-
-		ctx := context.Background()
-		fetcher := globalHttpFetcher
-
-		urlF := func(lastError error) (string, error) {
-			earl, err := pathToUrl.GetURL(ctx, lastError, dc.client)
-			if err != nil {
-				return "", err
-			}
-			if earl == "" {
-				earl = path
-			}
-			return earl, nil
-		}
-
-		resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
-			Fetcher: fetcher,
-			Offset:  off,
-			Length:  uint64(ln),
-			UrlFact: urlF,
-			Stats:   stats,
-			Health:  recorder,
-			BackOffFact: func(ctx context.Context) backoff.BackOff {
-				return downloadBackOff(ctx, 3) // params.DownloadRetryCount)
-			},
-			Throughput: reliable.MinimumThroughputCheck{
-				CheckInterval: defaultRequestParams.ThroughputMinimumCheckInterval,
-				BytesPerCheck: defaultRequestParams.ThroughputMinimumBytesPerCheck,
-				NumIntervals:  defaultRequestParams.ThroughputMinimumNumIntervals,
-			},
-			RespHeadersTimeout: defaultRequestParams.RespHeadersTimeout,
-		})
-		defer resp.Close()
-
-		buf := make([]byte, ln)
-		_, err := io.ReadFull(resp.Body, buf)
-		if err != nil {
-			return nil, err
-		}
-
-		rawDict, err := gozstd.Decompress(nil, buf)
-		if err != nil {
-			return nil, err
-		}
-
-		dict, err := gozstd.NewDDict(rawDict)
-		if err != nil {
-			return nil, err
-		}
-
-		dc.cache[key] = dict
+	if dict, ok := dc.cache.Get(key); ok {
 		return dict, nil
 	}
+
+	// Check for an in-flight request. Default dictionary will be requested many times, so we want to avoid
+	// making multiple requests for the same resource.
+	if ch, loaded := dc.pending.LoadOrStore(key, make(chan struct{})); loaded {
+		// There's an ongoing fetch, wait for its completion
+		<-ch.(chan struct{})
+		if dict, ok := dc.cache.Get(key); ok {
+			return dict, nil
+		}
+		return nil, errors.New("failed to fetch dictionary due to in-flight request")
+	}
+	// When update is done, regardless of success or failure, we need to unblock anyone waiting.
+	defer func() {
+		if ch, found := dc.pending.LoadAndDelete(key); found {
+			close(ch.(chan *gozstd.DDict))
+		}
+	}()
+
+	// Fetch the dictionary
+	ddict, err := dc.fetchDictionary(rang, idx, stats, recorder)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the dictionary in the cache
+	dc.cache.Add(key, ddict)
+
+	return ddict, nil
+}
+
+func (dc *dictionaryCache) fetchDictionary(rang *GetRange, idx int, stats StatsRecorder, recorder reliable.HealthRecorder) (*gozstd.DDict, error) {
+	path := rang.ResourcePath()
+	off := rang.Ranges[idx].DictionaryOffset
+	ln := rang.Ranges[idx].DictionaryLength
+
+	ctx := context.Background()
+	pathToUrl := dc.dlds.refreshes[path]
+	if pathToUrl == nil {
+		// We manually construct the RangeChunk and DownloadLoc in this case because we are retrieving the dictionary span.
+		// We'll make a single span request, and consume the entire response to create the dictionary.
+		sRang := &remotesapi.HttpGetRange{}
+		sRang.Url = rang.Url
+		sRang.Ranges = append(sRang.Ranges, &remotesapi.RangeChunk{Offset: off, Length: ln})
+		rang := &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: sRang}
+		dl := &remotesapi.DownloadLoc{Location: rang}
+
+		refresh := new(locationRefresh)
+		refresh.Add(dl)
+		dc.dlds.refreshes[path] = refresh
+		pathToUrl = refresh
+	}
+
+	urlF := func(lastError error) (string, error) {
+		earl, err := pathToUrl.GetURL(ctx, lastError, dc.client)
+		if err != nil {
+			return "", err
+		}
+		if earl == "" {
+			earl = path
+		}
+		return earl, nil
+	}
+
+	resp := reliable.StreamingRangeDownload(ctx, reliable.StreamingRangeRequest{
+		Fetcher: globalHttpFetcher,
+		Offset:  off,
+		Length:  uint64(ln),
+		UrlFact: urlF,
+		Stats:   stats,
+		Health:  recorder,
+		BackOffFact: func(ctx context.Context) backoff.BackOff {
+			return downloadBackOff(ctx, 3) // params.DownloadRetryCount)
+		},
+		Throughput: reliable.MinimumThroughputCheck{
+			CheckInterval: defaultRequestParams.ThroughputMinimumCheckInterval,
+			BytesPerCheck: defaultRequestParams.ThroughputMinimumBytesPerCheck,
+			NumIntervals:  defaultRequestParams.ThroughputMinimumNumIntervals,
+		},
+		RespHeadersTimeout: defaultRequestParams.RespHeadersTimeout,
+	})
+	defer resp.Close()
+
+	buf := make([]byte, ln)
+	_, err := io.ReadFull(resp.Body, buf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dictionaries are compressed, but with vanilla zstd, so there is no dictionary.
+	rawDict, err := gozstd.Decompress(nil, buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return gozstd.NewDDict(rawDict)
 }

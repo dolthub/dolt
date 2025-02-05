@@ -372,7 +372,8 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
-// NM4 - Extending the protobuf isn't not really necesary. Possible split this out into a new struct.
+// GetRange is structurally the same as remotesapi.HttpGetRange, but with added functions. Instances of GetRange
+// don't get sent over the wire, so it is not necessary to use the remotesapi, just convenient.
 type GetRange remotesapi.HttpGetRange
 
 func (gr *GetRange) ResourcePath() string {
@@ -509,7 +510,6 @@ func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	}
 
 	return newChunk, err
-
 }
 
 func (a ArchiveToChunker) FullCompressedChunkLen() uint32 {
@@ -523,8 +523,7 @@ func (a ArchiveToChunker) IsEmpty() bool {
 }
 
 func (a ArchiveToChunker) IsGhost() bool {
-	//TODO implement me
-	// NM4 - yes, need to. Or maybe not????
+	// archives are never ghosts. They are only instantiated when the chunk is found.
 	return false
 }
 
@@ -538,7 +537,6 @@ type RangeChunkReader struct {
 	skip     int
 }
 
-// NM4 - THis is the place where we need to intercept responses and conjour the "full" chunk.
 func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.HealthRecorder) (nbs.ToChunker, error) {
 	if r.skip > 0 {
 		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
@@ -562,20 +560,15 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 	l := rang.Length
 	h := hash.New(rang.Hash)
 
-	if strings.HasPrefix(h.String(), "eh9e0b3ou") {
-		_ = h.String()
-	}
-
 	buf := make([]byte, l)
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
 		return nbs.CompressedChunk{}, err
 	} else {
 		if rang.DictionaryLength == 0 {
-			// NOMS snappy compressed chunk.
 			return nbs.NewCompressedChunk(h, buf)
 		} else {
-			dict, err := globalDictCache.Get(r.GetRange, idx, stats, health)
+			dict, err := globalDictCache.get(r.GetRange, idx, stats, health)
 			if err != nil {
 				return nbs.CompressedChunk{}, err
 			}
