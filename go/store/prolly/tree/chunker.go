@@ -23,6 +23,7 @@ package tree
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
@@ -146,6 +147,11 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 
 // advanceTo progresses the chunker until its tracking cursor catches up with
 // |next|, a cursor indicating next key where an edit will be applied.
+func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
+	return tc.insertRange(ctx, tc.cur, next)
+}
+
+// Advances the |start| cursor until it catches up to |end|, inserting all values in between into the chunker.
 //
 // The method proceeds from the deepest chunker recursively into its
 // linked list parents:
@@ -168,8 +174,9 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 //	anticipation of impending edits that may edit the current chunk. Note that
 //	processPrefix is only necessary for the "fast forward" case where we
 //	synchronized the tree level before reaching |next|.
-func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
-	cmp := tc.cur.compare(next)
+func (tc *chunker[S]) insertRange(ctx context.Context, start, end *cursor) error {
+	cur := start
+	cmp := cur.compare(end)
 	if cmp == 0 { // step (1)
 		return nil
 	} else if cmp > 0 {
@@ -177,52 +184,52 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 		// we navigate to the end of the previous chunk rather than the
 		// beginning of the next chunk. I think this is basically a one-off
 		// error.
-		for tc.cur.compare(next) > 0 {
-			if err := next.advance(ctx); err != nil {
+		for cur.compare(end) > 0 {
+			if err := end.advance(ctx); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	sz, err := tc.cur.currentSubtreeSize()
+	sz, err := cur.currentSubtreeSize()
 	if err != nil {
 		return err
 	}
-	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
+	split, err := tc.append(ctx, cur.CurrentKey(), cur.currentValue(), sz)
 	if err != nil {
 		return err
 	}
 
-	for !(split && tc.cur.atNodeEnd()) { // step (2)
-		err = tc.cur.advance(ctx)
+	for !(split && cur.atNodeEnd()) { // step (2)
+		err = cur.advance(ctx)
 		if err != nil {
 			return err
 		}
-		if cmp = tc.cur.compare(next); cmp >= 0 {
+		if cmp = cur.compare(end); cmp >= 0 {
 			// we caught up before synchronizing
 			return nil
 		}
-		sz, err := tc.cur.currentSubtreeSize()
+		sz, err := cur.currentSubtreeSize()
 		if err != nil {
 			return err
 		}
-		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.currentValue(), sz)
+		split, err = tc.append(ctx, cur.CurrentKey(), cur.currentValue(), sz)
 		if err != nil {
 			return err
 		}
 	}
 
-	if tc.cur.parent == nil || next.parent == nil { // step (3)
+	if cur.parent == nil || end.parent == nil { // step (3)
 		// end of tree
-		tc.cur.copy(next)
+		cur.copy(end)
 		return nil
 	}
 
-	if tc.cur.parent.compare(next.parent) == 0 { // step (3)
+	if cur.parent.compare(end.parent) == 0 { // step (3)
 		// (rare) new tree synchronized with old tree at the
 		// same time as the cursor caught up to the next mutation point
-		tc.cur.copy(next)
+		cur.copy(end)
 		return nil
 	}
 
@@ -231,27 +238,75 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	// This optimization is logically equivalent to advancing
 	// current cursor. Because we just wrote a chunk, we are
 	// at a boundary and can simply increment the parent.
-	err = tc.cur.parent.advance(ctx)
+	err = cur.parent.advance(ctx)
 	if err != nil {
 		return err
 	}
-	tc.cur.invalidateAtEnd()
+	cur.invalidateAtEnd()
 
 	// no more pending chunks at this level, recurse
 	// into parent
-	err = tc.parent.advanceTo(ctx, next.parent)
+	err = tc.parent.insertRange(ctx, cur.parent, end.parent)
 	if err != nil {
 		return err
 	}
 
 	// fast forward to the edit index at this level
-	tc.cur.copy(next)
+	cur.copy(end)
 
 	// incoming edit can affect the entire chunk, process the prefix
 	err = tc.processPrefix(ctx)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Context, tc *chunker[S], fromKey K, toKey K, addr hash.Hash, subtree uint64, level int, order O) error {
+	// In the best case, the start of the supplied range is greater than the last key written, and the tree levels line up. In that case
+	// we can just advance to the start and write the supplied address.
+	// If the supplied tree level is *above* our current one, we need to load the chunk and write its children until the chunk boundaries line up.
+	if level == tc.level {
+		// The chunker is on a boundary at the required level: we can simply write the address at that level.
+		_, err := tc.append(ctx, Item(toKey), addr[:], subtree)
+		return err
+	}
+	if tc.builder.count() == 0 {
+		// The supplied address is at a higher level. There are no pending writes on this level so we can simply
+		// call the parent chunker.
+		return insertNode(ctx, tc.parent, fromKey, toKey, addr, subtree, level, order)
+	}
+
+	// The supplied address is at a higher level, but we have pending writes on this level. Recurse.
+	// Resolve the address and add its children recursively.
+	nd, err := tc.ns.Read(ctx, addr)
+	if err != nil {
+		return err
+	}
+	if level == 1 {
+		for i := 0; i < nd.Count(); i++ {
+			_, err := tc.append(ctx, nd.GetKey(i), nd.GetValue(i), 0)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		nd, err = nd.loadSubtrees()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < nd.Count(); i++ {
+			subtreeCount, err := nd.getSubtreeCount(i)
+			if err != nil {
+				return err
+			}
+			err = insertNode[K, S, O](ctx, tc, nil, K(nd.GetKey(i)), nd.getAddress(i), subtreeCount, level-1, order)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
