@@ -163,7 +163,8 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	}
 
 	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
-	for cs, ranges := range sourcesToRanges {
+	for csP, ranges := range sourcesToRanges {
+		cs := *csP
 		suffix := ""
 		if _, ok := cs.(archiveChunkSource); ok {
 			suffix = ArchiveFileSuffix
@@ -174,8 +175,8 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	return res, nil
 }
 
-func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[chunkSource]map[hash.Hash]Range, error) {
-	fn := func(css chunkSourceSet, gr []getRecord, ranges map[chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
+func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[*chunkSource]map[hash.Hash]Range, error) {
+	fn := func(css chunkSourceSet, gr []getRecord, ranges map[*chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
 			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
 			if err != nil {
@@ -188,12 +189,12 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 				continue
 			}
 
-			if m, ok := ranges[cs]; ok {
+			if m, ok := ranges[&cs]; ok {
 				for k, v := range rng {
 					m[k] = v
 				}
 			} else {
-				ranges[cs] = rng
+				ranges[&cs] = rng
 			}
 		}
 		return gcBehavior_Continue, nil
@@ -205,7 +206,7 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
-		ranges := make(map[chunkSource]map[hash.Hash]Range)
+		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(tables.upstream, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
@@ -233,7 +234,8 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 		return nil, err
 	}
 	res := make(map[string]map[hash.Hash]Range, len(hashes))
-	for cs, ranges := range sourcesToRanges {
+	for csP, ranges := range sourcesToRanges {
+		cs := *csP
 		suffix := ""
 		if _, ok := cs.(archiveChunkSource); ok {
 			suffix = ArchiveFileSuffix
@@ -498,7 +500,6 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	}
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
-		// NM4 - not sure on this one....
 		s := tableSpec{name: h, chunkCount: c}
 		contents.appendix = append(contents.appendix, s)
 		contents.specs = append(contents.specs, s)
