@@ -423,11 +423,11 @@ func createTestRowData(t *testing.T, vrw types.ValueReadWriter, ns tree.NodeStor
 }
 
 func createHooksTestTable(vrw types.ValueReadWriter, ns tree.NodeStore, tSchema schema.Schema, rowData durable.Index) (*doltdb.Table, error) {
-        tbl, err := doltdb.NewTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, ns, tSchema, rowData, nil, nil)
 
-        if err != nil {
-                return nil, err
-        }
+	if err != nil {
+		return nil, err
+	}
 
-        return tbl, nil
+	return tbl, nil
 }
