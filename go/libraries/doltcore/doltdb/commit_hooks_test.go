@@ -139,7 +139,7 @@ func TestPushOnWriteHook(t *testing.T) {
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
 
-		_, err = hook.Execute(ctx, ds, ddb.db)
+		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
 		cs, _ = NewCommitSpec(defaultBranch)
@@ -276,7 +276,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			require.NoError(t, err)
 			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 			require.NoError(t, err)
-			_, err = hook.Execute(ctx, ds, ddb.db)
+			_, err = hook.Execute(ctx, ds, ddb)
 			require.NoError(t, err)
 		}
 	})
@@ -302,13 +302,13 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		// Pretend we replicate a HEAD which does exist.
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
 		require.NoError(t, err)
-		_, err = hook.Execute(ctx, ds, ddb.db)
+		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
 		// Pretend we replicate a HEAD which does not exist, i.e., a branch delete.
 		ds, err = ddb.db.GetDataset(ctx, "refs/heads/does_not_exist")
 		require.NoError(t, err)
-		_, err = hook.Execute(ctx, ds, ddb.db)
+		_, err = hook.Execute(ctx, ds, ddb)
 		require.NoError(t, err)
 
 		// Wait a bit for background thread to fire, in case it is
@@ -333,7 +333,7 @@ type countingCommitHook struct {
 	counts map[string]int
 }
 
-func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error) {
 	c.counts[ds.ID()] += 1
 	return nil, nil
 }

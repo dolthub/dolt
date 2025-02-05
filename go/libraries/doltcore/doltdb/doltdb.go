@@ -94,7 +94,9 @@ func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
+	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
+	ret.db.db = ret
+	return ret
 }
 
 // GetDatabaseName returns the name of the database.
@@ -148,7 +150,9 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		return nil, err
 	}
 
-	return &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}, nil
+	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}
+	ret.db.db = ret
+	return ret, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map

@@ -26,14 +26,15 @@ import (
 
 type hooksDatabase struct {
 	datas.Database
-	postCommitHooks []CommitHook
-	rsc             *ReplicationStatusController
+	db    *DoltDB
+	hooks []CommitHook
+	rsc   *ReplicationStatusController
 }
 
 // CommitHook is an abstraction for executing arbitrary commands after atomic database commits
 type CommitHook interface {
 	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
-	Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error)
+	Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error)
 	// HandleError is an bridge function to handle Execute errors
 	HandleError(ctx context.Context, err error) error
 	// SetLogger lets clients specify an output stream for HandleError
@@ -51,13 +52,13 @@ type NotifyWaitFailedCommitHook interface {
 }
 
 func (db hooksDatabase) SetCommitHooks(ctx context.Context, postHooks []CommitHook) hooksDatabase {
-	db.postCommitHooks = make([]CommitHook, len(postHooks))
-	copy(db.postCommitHooks, postHooks)
+	db.hooks = make([]CommitHook, len(postHooks))
+	copy(db.hooks, postHooks)
 	return db
 }
 
 func (db hooksDatabase) SetCommitHookLogger(ctx context.Context, wr io.Writer) hooksDatabase {
-	for _, h := range db.postCommitHooks {
+	for _, h := range db.hooks {
 		h.SetLogger(ctx, wr)
 	}
 	return db
@@ -69,8 +70,8 @@ func (db hooksDatabase) withReplicationStatusController(rsc *ReplicationStatusCo
 }
 
 func (db hooksDatabase) PostCommitHooks() []CommitHook {
-	toret := make([]CommitHook, len(db.postCommitHooks))
-	copy(toret, db.postCommitHooks)
+	toret := make([]CommitHook, len(db.hooks))
+	copy(toret, db.hooks)
 	return toret
 }
 
@@ -80,17 +81,17 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 	var ioff int
 	if rsc != nil {
 		ioff = len(rsc.Wait)
-		rsc.Wait = append(rsc.Wait, make([]func(context.Context) error, len(db.postCommitHooks))...)
-		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(db.postCommitHooks))...)
+		rsc.Wait = append(rsc.Wait, make([]func(context.Context) error, len(db.hooks))...)
+		rsc.NotifyWaitFailed = append(rsc.NotifyWaitFailed, make([]func(), len(db.hooks))...)
 	}
-	for il, hook := range db.postCommitHooks {
+	for il, hook := range db.hooks {
 		if !onlyWS || hook.ExecuteForWorkingSets() {
 			i := il
 			hook := hook
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				f, err := hook.Execute(ctx, ds, db)
+				f, err := hook.Execute(ctx, ds, db.db)
 				if err != nil {
 					hook.HandleError(ctx, err)
 				}

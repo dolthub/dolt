@@ -455,11 +455,10 @@ var errDetectedBrokenConfigStr = "error: more than one server was configured as 
 
 // Execute on this commithook updates the target root hash we're attempting to
 // replicate and wakes the replication thread.
-func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	lgr := h.logger()
 	lgr.Tracef("cluster/commithook: Execute called post commit")
-	cs := datas.ChunkStoreFromDatabase(db)
-	root, err := cs.Root(ctx)
+	root, err := db.NomsRoot(ctx)
 	if err != nil {
 		lgr.Errorf("cluster/commithook: Execute: error retrieving local database root: %v", err)
 		return nil, err

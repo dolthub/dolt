@@ -30,7 +30,7 @@ import (
 )
 
 type PushOnWriteHook struct {
-	destDB datas.Database
+	destDB *DoltDB
 	tmpDir string
 	out    io.Writer
 	fmt    *types.NomsBinFormat
@@ -42,25 +42,29 @@ var _ CommitHook = (*PushOnWriteHook)(nil)
 // and a local tempfile for pushing
 func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
 	return &PushOnWriteHook{
-		destDB: destDB.db,
+		destDB: destDB,
 		tmpDir: tmpDir,
 		fmt:    destDB.Format(),
 	}
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error) {
 	return nil, pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
 }
 
-func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dataset, tmpDir string) error {
+func pushDataset(ctx context.Context, destDB, srcDB *DoltDB, ds datas.Dataset, tmpDir string) error {
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
-		_, err := destDB.Delete(ctx, ds, "")
+		rf, err := ref.Parse(ds.ID())
+		if err != nil {
+			return err
+		}
+		err = destDB.DeleteBranch(ctx, rf, nil)
 		return err
 	}
 
-	err := pullHash(ctx, destDB, srcDB, []hash.Hash{addr}, tmpDir, nil, nil)
+	err := destDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{addr}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -70,13 +74,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	ds, err = destDB.GetDataset(ctx, rf.String())
-	if err != nil {
-		return err
-	}
-
-	_, err = destDB.SetHead(ctx, ds, addr, "")
-	return err
+	return destDB.SetHead(ctx, rf, addr)
 }
 
 // HandleError implements CommitHook
@@ -102,7 +100,7 @@ func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 
 type PushArg struct {
 	ds   datas.Dataset
-	db   datas.Database
+	db   *DoltDB
 	hash hash.Hash
 }
 
@@ -135,16 +133,11 @@ func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error) {
 	addr, _ := ds.MaybeHeadAddr()
-
-	select {
-	case ah.ch <- PushArg{ds: ds, db: db, hash: addr}:
-	case <-ctx.Done():
-		ah.ch <- PushArg{ds: ds, db: db, hash: addr}
-		return nil, ctx.Err()
-	}
-	return nil, nil
+	// TODO: Unconditional push here seems dangerous.
+	ah.ch <- PushArg{ds: ds, db: db, hash: addr}
+	return nil, ctx.Err()
 }
 
 // HandleError implements CommitHook
@@ -174,7 +167,7 @@ func NewLogHook(msg []byte) *LogHook {
 }
 
 // Execute implements CommitHook, writes message to log channel
-func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error) {
 	if lh.out != nil {
 		_, err := lh.out.Write(lh.msg)
 		return nil, err
@@ -259,7 +252,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg
 		for id, newCm := range newHeadsCopy {
 			if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 				// use background context to drain after sql context is canceled
-				err := pushDataset(context.Background(), destDB.db, newCm.db, newCm.ds, tmpDir)
+				err := pushDataset(context.Background(), destDB, newCm.db, newCm.ds, tmpDir)
 				if err != nil {
 					logger.Write([]byte("replication failed: " + err.Error()))
 				}
