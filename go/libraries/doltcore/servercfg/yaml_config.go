@@ -187,10 +187,6 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
 			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 		},
-		UserConfig: UserYAMLConfig{
-			Name:     ptr(cfg.User()),
-			Password: ptr(cfg.Password()),
-		},
 		ListenerConfig: ListenerYAMLConfig{
 			HostStr:                 ptr(cfg.Host()),
 			PortNumber:              ptr(cfg.Port()),
@@ -259,10 +255,6 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			DisableClientMultiStatements: zeroIf(ptr(cfg.DisableClientMultiStatements()), !cfg.ValueSet(DisableClientMultiStatementsKey)),
 			DoltTransactionCommit:        zeroIf(ptr(cfg.DoltTransactionCommit()), !cfg.ValueSet(DoltTransactionCommitKey)),
 			EventSchedulerStatus:         zeroIf(ptr(cfg.EventSchedulerStatus()), !cfg.ValueSet(EventSchedulerKey)),
-		},
-		UserConfig: UserYAMLConfig{
-			Name:     zeroIf(ptr(cfg.User()), !cfg.ValueSet(UserKey)),
-			Password: zeroIf(ptr(cfg.Password()), !cfg.ValueSet(PasswordKey)),
 		},
 		ListenerConfig: ListenerYAMLConfig{
 			HostStr:                 zeroIf(ptr(cfg.Host()), !cfg.ValueSet(HostKey)),
@@ -471,13 +463,6 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	}
 	if withDefaults.BehaviorConfig.DoltTransactionCommit == nil {
 		withDefaults.BehaviorConfig.DoltTransactionCommit = defaults.BehaviorConfig.DoltTransactionCommit
-	}
-
-	if withDefaults.UserConfig.Name == nil {
-		withDefaults.UserConfig.Name = defaults.UserConfig.Name
-	}
-	if withDefaults.UserConfig.Password == nil {
-		withDefaults.UserConfig.Password = defaults.UserConfig.Password
 	}
 
 	if withDefaults.ListenerConfig.HostStr == nil {

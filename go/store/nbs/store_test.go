@@ -419,10 +419,9 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 }
 
 func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
-	assert := assert.New(t)
 	ctx := context.Background()
 
-	_, p, q, store, _, _ := prepStore(ctx, t, assert)
+	_, p, q, store, _, _ := prepStore(ctx, t, assert.New(t))
 	defer func() {
 		require.NoError(t, store.Close())
 		require.EqualValues(t, 0, q.Usage())
@@ -469,6 +468,7 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			assert := assert.New(t)
 			updates := make(map[hash.Hash]uint32)
 			for _, id := range test.appendixSpecIds {
 				updates[id] = appendixUpdates[id]
@@ -481,7 +481,7 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 				assert.Equal(test.expectedNumberOfAppendixSpecs, info.NumAppendixSpecs())
 			} else {
 				_, err := store.UpdateManifestWithAppendix(ctx, updates, test.option)
-				assert.Equal(test.expectedError, err)
+				assert.ErrorIs(err, test.expectedError)
 			}
 		})
 	}

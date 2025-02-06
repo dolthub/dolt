@@ -294,15 +294,15 @@ SQL
     start_multi_db_server repo1
     cd ..
 
-    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t1 (a int primary key)"
-    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
-    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
-    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t2 (a int primary key)"
-    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
-    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
-    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t3 (a int primary key)"
-    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
-    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo1 --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t1 (a int primary key)"
+    dolt --use-db repo1 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo1 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo2 --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t2 (a int primary key)"
+    dolt --use-db repo2 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo2 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo3 --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t3 (a int primary key)"
+    dolt --use-db repo3 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo3 --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
 
@@ -357,21 +357,21 @@ SQL
     dolt config --global --unset sqlserver.global.dolt_replicate_heads
 
     # Assert that no databases are synced to the read replica server yet
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "show databases"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "show databases"
     [ $status -eq 0 ]
     [[ "$output" =~ "information_schema" ]] || false
     [[ ! "$output" =~ "repo1" ]] || false
     [[ ! "$output" =~ "repo2" ]] || false
 
     # Sync repo1 to the read replica server by use'ing it
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "use repo1; show databases;"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "use repo1; show databases;"
     [ $status -eq 0 ]
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "repo1" ]] || false
     [[ ! "$output" =~ "repo2" ]] || false
 
     # Sync repo1 by using it
-    run dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
+    run dolt --use-db repo1 --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
     [ $status -eq 0 ]
     [[ "$output" =~ "42" ]] || false
 
@@ -382,7 +382,7 @@ SQL
     dolt push remote1 main:main
 
     # Verify that the changes from repo1 have been pulled
-    run dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
+    run dolt --use-db repo1 --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from t1;"
     [ $status -eq 0 ]
     [[ "$output" =~ "42" ]] || false
     [[ "$output" =~ "43" ]] || false

@@ -35,10 +35,6 @@ behavior:
     disable_client_multi_statements: false
     event_scheduler: ON
 
-user:
-    name: ""
-    password: ""
-
 listener:
     host: localhost
     port: 3306

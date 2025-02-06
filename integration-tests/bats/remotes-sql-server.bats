@@ -434,7 +434,7 @@ teardown() {
     [[ "$output" =~ "Tables_in_repo2/feature" ]] || false
     [[ "$output" =~ "test" ]] || false
 
-    run dolt -u dolt branch
+    run dolt branch
     [[ "$output" =~ "feature" ]] || false
 }
 
@@ -462,11 +462,11 @@ teardown() {
     dolt branch newbranch
     dolt push remote1 newbranch
 
-    run dolt --use-db repo2/feature --port $PORT --host 0.0.0.0 --no-tls -u dolt sql -q "select active_branch()"
+    run dolt --use-db repo2/feature --port $PORT --host 0.0.0.0 --no-tls sql -q "select active_branch()"
     [ $status -eq 0 ]
     [[ "$output" =~ "feature" ]] || false
 
-    run dolt --use-db repo2/newbranch --port $PORT --host 0.0.0.0 --no-tls -u dolt sql -q "select active_branch()"
+    run dolt --use-db repo2/newbranch --port $PORT --host 0.0.0.0 --no-tls sql -q "select active_branch()"
     [ $status -eq 0 ]
     [[ "$output" =~ "newbranch" ]] || false
 

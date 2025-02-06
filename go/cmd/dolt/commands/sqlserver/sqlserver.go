@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -39,7 +40,6 @@ const (
 	hostFlag                    = "host"
 	portFlag                    = "port"
 	skipRootUserInitialization  = "skip-root-user-initialization"
-	passwordFlag                = "password"
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
 	logLevelFlag                = "loglevel"
@@ -96,10 +96,6 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
 
-{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database. 
-
-{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password for an ephemeral superuser that will exist for the lifetime of the sql-server process. This user will not be persisted to the privileges database.
-
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
 {{.EmphasisLeft}}listener.port{{.EmphasisRight}}: The port that the server should listen on
@@ -129,7 +125,7 @@ SUPPORTED CONFIG FILE FIELDS:
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -163,9 +159,11 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
-	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
+	// TODO: After December 2025, remove the deprecated user/password arguments completely from the command line
+	//       and config file options for dolt sql-server.
+	ap.SupportsString(commands.UserFlag, "u", "user", "This option is no longer supported. Instead, you can create users using CREATE USER and GRANT SQL statements.")
 	ap.SupportsFlag(skipRootUserInitialization, "", "Skips the automatic creation of a default root super user on the first launch of a SQL server.")
-	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
+	ap.SupportsString("password", "p", "password", "This option is no longer supported. Instead, you can create users using CREATE USER and GRANT SQL statements.")
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace`, `debug`, `info`, `warning`, `error`, `fatal`. Defaults to `%v`.", serverConfig.LogLevel()))
@@ -235,6 +233,12 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	if multiDbDir {
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 	}
+	_, userSpecified := apr.GetValue(commands.UserFlag)
+	if userSpecified {
+		return fmt.Errorf("ERROR: --user and --password have been removed from the sql-server command. " +
+			"Create users explicitly with CREATE USER and GRANT statements instead.")
+	}
+
 	return nil
 }
 
@@ -373,20 +377,16 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, data
 		return nil, err
 	}
 
-	// if command line user argument was given, override the config file's user and password
-	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
-		if wcfg, ok := cfg.(servercfg.WritableServerConfig); ok {
-			pass, _ := apr.GetValue(passwordFlag)
-			wcfg.SetUserName(user)
-			wcfg.SetPassword(pass)
-		}
-	}
-
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
 		if yamlCfg, ok := cfg.(servercfg.YAMLConfig); ok {
 			cli.Println(connStr)
 			yamlCfg.GoldenMysqlConn = &connStr
 		}
+	}
+
+	if cfg.UserIsSpecified() {
+		logrus.Warn("user and password are no longer supported in sql-server configuration files." +
+			"Use CREATE USER and GRANT statements to manage user accounts.")
 	}
 
 	return cfg, nil

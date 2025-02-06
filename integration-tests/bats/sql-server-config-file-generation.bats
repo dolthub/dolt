@@ -28,7 +28,7 @@ teardown() {
             mkdir -p "$data_dir"
         fi
 
-        start_sql_server_with_args --data-dir "$data_dir" --host 0.0.0.0 --user dolt
+        start_sql_server_with_args --data-dir "$data_dir" --host 0.0.0.0
 
         [[ -f "$data_dir/$CONFIG_FILE_NAME" ]] || false
 
@@ -45,7 +45,7 @@ teardown() {
 
         echo "Don't overwrite me!" >"$data_dir/$CONFIG_FILE_NAME"
 
-        start_sql_server_with_args --data-dir "$data_dir" --host 0.0.0.0 --user dolt
+        start_sql_server_with_args --data-dir "$data_dir" --host 0.0.0.0
 
         run cat "$data_dir/$CONFIG_FILE_NAME"
         [ $status -eq 0 ]
@@ -98,8 +98,7 @@ EOF
         --max-connections 77 \
         --timeout 7777777 \
         --allow-cleartext-passwords true \
-        --host 0.0.0.0 \
-        --user dolt
+        --host 0.0.0.0
 
     run cat "$CONFIG_FILE_NAME"
     [ $status -eq 0 ]
@@ -115,8 +114,7 @@ EOF
     start_sql_server_with_args \
         --max-connections 77 \
         --timeout 7777777 \
-        --host 0.0.0.0 \
-        --user dolt
+        --host 0.0.0.0
 
     run cat "$CONFIG_FILE_NAME"
     [ $status -eq 0 ]
