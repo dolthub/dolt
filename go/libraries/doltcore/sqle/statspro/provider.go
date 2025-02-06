@@ -312,15 +312,17 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
 	gcInterval, _, _ := typ.GetType().Convert(gcI)
 	brInterval, _, _ := typ.GetType().Convert(brI)
 
-	sc.SetTimers(jobInterval.(int64), gcInterval.(int64), brInterval.(int64))
+	sc.SetEnableGc(false)
+	sc.enableBrSync.Store(false)
+	sc.JobInterval = 1
+	defer sc.SetTimers(jobInterval.(int64), gcInterval.(int64), brInterval.(int64))
+	defer sc.SetEnableGc(true)
+	defer sc.enableBrSync.Store(true)
 
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
 	}
-
-	sc.SetEnableGc(false)
-	sc.enableBrSync.Store(false)
 
 	if err := sc.Restart(sqlCtx); err != nil {
 		return err
@@ -351,7 +353,6 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
 	eg.Wait()
 	eg.Go(func() error {
 		done, err := sc.Control(ctx, "enable gc", func(sc *StatsCoord) error {
-			sc.SetEnableGc(true)
 			return nil
 		})
 		if err != nil {
@@ -364,17 +365,6 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
 	eg.Wait()
 	<-sc.Done
 	return nil
-}
-
-func (sc *StatsCoord) Prune(ctx *sql.Context) error {
-	done := make(chan struct{})
-	sc.runGc(ctx, done)
-	<-done
-	return nil
-}
-
-func (sc *StatsCoord) DropKv(ctx *sql.Context) error {
-	return sc.rotateStorage(ctx)
 }
 
 func (sc *StatsCoord) Purge(ctx *sql.Context) error {
@@ -436,7 +426,7 @@ func (sc *StatsCoord) rm(db string) error {
 	if !ok {
 		return fmt.Errorf("failed to remove stats db: %s filesys not found", db)
 	}
-	//remove from filesystem
+
 	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
 	if err != nil {
 		return err
@@ -464,8 +454,7 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	if !ok {
 		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget.AliasedName())
 	}
-	// assume access is protected by kvLock
-	// get reference to target database
+
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
 

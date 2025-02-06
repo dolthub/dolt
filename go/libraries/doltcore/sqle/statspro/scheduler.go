@@ -41,22 +41,6 @@ import (
 	"time"
 )
 
-type StatsDbController struct {
-	ch       chan StatsJob
-	destDb   dsess.SqlDatabase
-	sourceDb dsess.SqlDatabase
-	// qualified db ->
-	branches map[string]BranchDb
-	dirty    sql.FastIntSet
-}
-
-type BranchDb struct {
-	db           string
-	branch       string
-	tableHashes  map[string]hash.Hash
-	schemaHashes map[string]hash.Hash
-}
-
 type StatsJob interface {
 	Finish()
 	String() string
@@ -75,6 +59,7 @@ func NewSeedJob(sqlDb dsess.SqlDatabase) SeedDbTablesJob {
 	}
 }
 
+// todo refactor so we can count buckets globally
 type tableStatsInfo struct {
 	name        string
 	schHash     hash.Hash
@@ -305,9 +290,9 @@ type StatsCoord struct {
 	// templates.
 	kv StatsKv
 
-	statsMu *sync.Mutex
 	// Stats tracks table statistics accessible to sessions.
-	Stats map[tableIndexesKey][]*stats.Statistic
+	Stats   map[tableIndexesKey][]*stats.Statistic
+	statsMu *sync.Mutex
 
 	branchCounter atomic.Uint64
 	gcCounter     atomic.Uint64
@@ -420,20 +405,6 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 	return ret, nil
 }
 
-func (sc *StatsCoord) Drop(dbName string) {
-	// todo: deprecate
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-	sc.ddlGuard = true
-
-	for i, db := range sc.dbs {
-		if strings.EqualFold(db.Name(), dbName) {
-			sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
-			return
-		}
-	}
-}
-
 func (sc *StatsCoord) Info() dtables.StatsInfo {
 	sc.dbMu.Lock()
 	dbCnt := len(sc.dbs)
@@ -464,7 +435,8 @@ func (sc *StatsCoord) Info() dtables.StatsInfo {
 	}
 }
 
-// event loop must be stopped
+// captureFlushQueue is a debug method that lets us inspect and
+// restore the job queue
 func (sc *StatsCoord) captureFlushQueue(ctx context.Context) ([]StatsJob, error) {
 	select {
 	case <-sc.Done:
@@ -489,7 +461,6 @@ func (sc *StatsCoord) captureFlushQueue(ctx context.Context) ([]StatsJob, error)
 
 func (sc *StatsCoord) Seed(ctx context.Context, sqlDb dsess.SqlDatabase) (chan struct{}, error) {
 	j := NewSeedJob(sqlDb)
-	//sc.Jobs <- j
 	if err := sc.unsafeAsyncSend(ctx, j); err != nil {
 		return nil, err
 	}
@@ -512,7 +483,9 @@ func (sc *StatsCoord) Interrupt(desc string, cb func(sc *StatsCoord) error) chan
 }
 
 func (sc *StatsCoord) error(j StatsJob, err error) {
-	fmt.Println(err.Error())
+	if sc.Debug {
+		log.Println("stats error: ", err.Error())
+	}
 	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", j.String(), err)
 }
 
@@ -527,7 +500,8 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 		// (1) ctx done/thread canceled
 		// (2) GC check
 		// (3) branch check
-		// (4) job and other tickers
+		// (4) interrupt queue
+		// (5) job and other tickers
 		select {
 		case <-sc.Done:
 			return nil
@@ -554,7 +528,6 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if err != nil {
 				sc.error(j, err)
 			}
-			continue
 		}
 
 		select {
@@ -632,7 +605,6 @@ func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case sc.Jobs <- j:
-			//log.Println("send ", j.String())
 			if _, ok := j.(ReadJob); ok {
 				sc.readCounter.Add(1)
 			}
@@ -715,16 +687,11 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 	defer sc.gcMu.Unlock()
 
 	if j.first {
-		ctx, err := sc.ctxGen(ctx)
-		if err != nil {
-			return nil, err
-		}
-
 		sc.kv.PutTemplate(j.key, j.template)
 
 		firstNodeHash := j.nodes[0].HashOf()
 		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
-			firstRow, err := firstRowForIndex(ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
+			firstRow, err := firstRowForIndex(j.ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
 			if err != nil {
 				if err != nil {
 					return nil, err
@@ -764,7 +731,6 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		}
 
 		// finalize the aggregation
-		//log.Println("read/put chunk ", n.HashOf().String()[:5])
 		bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
 		if err != nil {
 			return nil, err
@@ -986,7 +952,6 @@ func (sc *StatsCoord) runBranchSync(ctx context.Context, done chan struct{}) ([]
 			case -1:
 				i++
 			case +1:
-				// add
 				k++
 				sqlDb, err := sqle.RevisionDbForBranch(sqlCtx, sqlDb, br.GetPath(), br.GetPath()+"/"+dbName)
 				if err != nil {

@@ -57,7 +57,6 @@ type ToggableStats interface {
 	FlushQueue(ctx context.Context) error
 	Restart(context.Context) error
 	Info() dtables.StatsInfo
-	Prune(ctx *sql.Context) error
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error

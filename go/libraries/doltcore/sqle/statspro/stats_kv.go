@@ -41,13 +41,13 @@ const defaultBucketSize = 1024 // must be > 0 to avoid panic
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
 	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
-	MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
 	GetTemplate(key templateCacheKey) (stats.Statistic, bool)
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row)
 	Flush(ctx context.Context) error
 	StartGc(ctx context.Context, sz int) error
+	MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
 	FinishGc()
 	Len() int
 	Cap() int64
@@ -114,7 +114,6 @@ func (m *memStats) GetBound(h hash.Hash) (sql.Row, bool) {
 		return nil, false
 	}
 	if m.doGc {
-		//log.Println("copy bound ", h.String()[:5])
 		m.nextBounds[h] = r
 	}
 	return r, true
@@ -153,24 +152,6 @@ func (m *memStats) FinishGc() {
 	m.buckets = m.nextBuckets
 	m.templates = m.nextTemplates
 	m.bounds = m.nextBounds
-
-	var hashes []string
-	for _, k := range m.buckets.Keys() {
-		hashes = append(hashes, k.String()[:5])
-	}
-	//log.Println("hashes after GC: ", strings.Join(hashes, ", "))
-	var templates []string
-	for k, _ := range m.templates {
-		templates = append(templates, k.String())
-	}
-	//log.Println("templates after GC: ", strings.Join(templates, ", "))
-
-	var bounds []string
-	for k, _ := range m.bounds {
-		bounds = append(bounds, k.String())
-	}
-	//log.Println("bounds after GC: ", strings.Join(bounds, ", "))
-
 	m.nextBuckets = nil
 	m.nextTemplates = nil
 	m.nextBounds = nil
@@ -191,15 +172,13 @@ func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.buckets.Add(h, b)
-	//log.Println("put ", h.String()[:5], m.buckets.Len())
 	return nil
 }
 
-func (m *memStats) MarkBucket(ctx context.Context, h hash.Hash, _ *val.TupleBuilder) error {
+func (m *memStats) MarkBucket(_ context.Context, h hash.Hash, _ *val.TupleBuilder) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	b, ok := m.buckets.Get(h)
-	//log.Printf("mark %s, %t\n", h.String()[:5], ok)
 	if ok {
 		m.nextBuckets.Add(h, b)
 		gcCap := int(m.gcCap.Load())
@@ -366,7 +345,7 @@ func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
 func (p *prollyStats) MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error {
 	p.mem.MarkBucket(ctx, h, tupB)
 
-	// missing bucket and not GC'ing, try disk
+	// try disk
 	k, err := p.encodeHash(h)
 	if err != nil {
 		return err

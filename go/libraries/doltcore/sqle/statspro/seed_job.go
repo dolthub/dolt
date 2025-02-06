@@ -373,8 +373,8 @@ func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sq
 		Colset:   colset,
 	}
 
-	// Put twice, once for schema changes with no data changes,
-	// and once when we put chunks to avoid GC dropping
+	// We put template twice, once for schema changes with no data
+	// changes (here), and once when we put chunks to avoid GC dropping
 	// templates before the finalize job.
 	sc.kv.PutTemplate(key, template)
 
