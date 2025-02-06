@@ -70,7 +70,8 @@ type BranchStatsProvider interface {
 	DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error
 }
 
-// statsRestart tries to stop and then start a refresh thread
+// statsRestart flushes the current job queue and re-inits all
+// statistic databases.
 func statsRestart(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
@@ -112,7 +113,9 @@ func statsInfo(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsInfo returns the last update for a stats thread
+// statsWait blocks until the job queue executes two full loops
+// of instructions, which will (1) pick up and (2) commit new
+// sets of index-bucket dependencies.
 func statsWait(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -123,7 +126,8 @@ func statsWait(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsGc
+// statsGc rewrites the cache to only include objects reachable
+// by the current root value.
 func statsGc(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -133,7 +137,8 @@ func statsGc(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsGc
+// statsBranchSync update database branch tracking based on the
+// most recent session.
 func statsBranchSync(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -143,18 +148,18 @@ func statsBranchSync(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsGc
+// statsValidate returns inconsistencies if the kv cache is out of date
 func statsValidate(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		afp.ValidateState(ctx)
-		return nil, nil
+		return afp.ValidateState(ctx).Error(), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsStop cancels a refresh thread
+// statsStop flushes the job queue and leaves the stats provider
+// in a paused state.
 func statsStop(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
@@ -169,7 +174,9 @@ func statsStop(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsPurge removes the stats database from disk
+// statsPurge flushes the job queue, deletes the current caches
+// and storage targets, re-initializes the tracked database
+// states, and returns with stats collection paused.
 func statsPurge(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro, ok := dSess.StatsProvider().(ToggableStats)

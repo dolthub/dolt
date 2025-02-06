@@ -130,12 +130,12 @@ func (sc *StatsCoord) ValidateState(ctx context.Context) error {
 		generateDeps(sqlCtx, db, func(key templateCacheKey) {
 			_, ok := sc.kv.GetTemplate(key)
 			if !ok {
-				fmt.Fprintf(&b, "stats db (%s) missing cache template (%s)\n", db.RevisionQualifiedName(), key.String())
+				fmt.Fprintf(&b, "(%s) missing template (%s)\n", db.RevisionQualifiedName(), key.String())
 			}
 		}, func(h hash.Hash) {
 			_, ok := sc.kv.GetBound(h)
 			if !ok {
-				fmt.Fprintf(&b, "stats db (%s) missing cache bound (%s)\n", db.RevisionQualifiedName(), h.String()[:5])
+				fmt.Fprintf(&b, "(%s) missing bound (%s)\n", db.RevisionQualifiedName(), h.String()[:5])
 			}
 		}, func(h hash.Hash, tupB *val.TupleBuilder) error {
 			_, ok, err := sc.kv.GetBucket(ctx, h, tupB)
@@ -143,7 +143,7 @@ func (sc *StatsCoord) ValidateState(ctx context.Context) error {
 				return err
 			}
 			if !ok {
-				fmt.Fprintf(&b, "stats db (%s) missing cache chunk (%s)\n", db.RevisionQualifiedName(), h.String()[:5])
+				fmt.Fprintf(&b, "(%s) missing chunk (%s)\n", db.RevisionQualifiedName(), h.String()[:5])
 			}
 			return nil
 		})

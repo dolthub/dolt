@@ -462,6 +462,36 @@ func TestStatScripts(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "stats validate",
+			setup: []string{
+				"create table xy (x int primary key, y int, key (y,x))",
+				"insert into xy values (0,0), (1,0), (2,0)",
+				"call dolt_add('-A')",
+				"call dolt_commit('-m', 'create xy')",
+				"call dolt_checkout('-b', 'feat')",
+				"call dolt_checkout('main')",
+			},
+			assertions: []assertion{
+				{
+					query: "call dolt_stats_info()",
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+				},
+				{
+					query: "call dolt_stats_stop()",
+				},
+				{
+					query: "create table ab (a int primary key, b int)",
+				},
+				{
+					query: "insert into ab values (0,0), (1,1), (2,2)",
+				},
+				{
+					query: "call dolt_stats_validate()",
+					res:   []sql.Row{{"(mydb/main) missing template (PRIMARY/e29in)\n(mydb/main) missing bound (d9aov)\n(mydb/main) missing chunk (d9aov)\n"}},
+				},
+			},
+		},
 	}
 
 	for _, tt := range scripts {
