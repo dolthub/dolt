@@ -114,13 +114,12 @@ const (
 var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
+func NewAsyncPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	err := RunAsyncReplicationThreads(bThreads, ch, destDB, tmpDir, logger)
-	if err != nil {
-		return nil, err
+	runThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
+		return RunAsyncReplicationThreads(bThreads, ch, destDB, tmpDir, logger)
 	}
-	return &AsyncPushOnWriteHook{ch: ch}, nil
+	return &AsyncPushOnWriteHook{ch: ch}, runThreads
 }
 
 func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {

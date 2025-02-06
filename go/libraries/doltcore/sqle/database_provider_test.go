@@ -19,6 +19,7 @@ import (
 	"io"
 	"testing"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,27 +41,46 @@ func setGlobalSqlVariable(t *testing.T, name string, val interface{}) {
 }
 
 func TestDatabaseProvider(t *testing.T) {
+	setup := func(t *testing.T) (*sqle.Engine, *sql.Context, *DoltDatabaseProvider) {
+		ctx := context.Background()
+		dEnv := dtestutils.CreateTestEnv()
+		tmpDir, err := dEnv.TempTableFilesDir()
+		require.NoError(t, err)
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+		db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+		require.NoError(t, err)
+
+		engine, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
+		require.NoError(t, err)
+
+		sess := dsess.DSessFromSess(sqlCtx.Session)
+		pro := sess.Provider().(*DoltDatabaseProvider)
+
+		ctxF := func(ctx context.Context) (*sql.Context, error) {
+			config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+			sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, sess.GCSafepointController())
+			sqlCtx.SetCurrentDatabase(db.Name())
+			return sqlCtx, nil
+		}
+
+		bThreads := sql.NewBackgroundThreads()
+		t.Cleanup(func() {
+			bThreads.Shutdown()
+		})
+
+		pro.InstallReplicationInitDatabaseHook(bThreads, ctxF)
+		pro.AddInitDatabaseHook(InstallSnoopingCommitHook)
+		return engine, sqlCtx, pro
+	}
 	t.Run("ReplicationConfig", func(t *testing.T) {
 		t.Run("CreateDatabase", func(t *testing.T) {
 			t.Run("NoReplication", func(t *testing.T) {
-				ctx := context.Background()
-				dEnv := dtestutils.CreateTestEnv()
-				tmpDir, err := dEnv.TempTableFilesDir()
-				require.NoError(t, err)
-				opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
-				db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
+				engine, sqlCtx, pro := setup(t)
+
+				err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
 				require.NoError(t, err)
 
-				engine, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
-				require.NoError(t, err)
-
-				sess := dsess.DSessFromSess(sqlCtx.Session)
-				sess.Provider().(*DoltDatabaseProvider).AddInitDatabaseHook(InstallSnoopingCommitHook)
-
-				err = ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
-				require.NoError(t, err)
-
-				sqlDb, err := sess.Provider().Database(sqlCtx, "mytest")
+				sqlDb, err := pro.Database(sqlCtx, "mytest")
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
@@ -72,28 +92,14 @@ func TestDatabaseProvider(t *testing.T) {
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[0])
 			})
 			t.Run("PushOnWriteReplication", func(t *testing.T) {
-				ctx := context.Background()
-				dEnv := dtestutils.CreateTestEnv()
-				tmpDir, err := dEnv.TempTableFilesDir()
-
 				setGlobalSqlVariable(t, dsess.ReplicateToRemote, "fileremote")
 				setGlobalSqlVariable(t, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
+				engine, sqlCtx, pro := setup(t)
 
-				require.NoError(t, err)
-				opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
-				db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
-				require.NoError(t, err)
-
-				engine, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
+				err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
 				require.NoError(t, err)
 
-				sess := dsess.DSessFromSess(sqlCtx.Session)
-				sess.Provider().(*DoltDatabaseProvider).AddInitDatabaseHook(InstallSnoopingCommitHook)
-
-				err = ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
-				require.NoError(t, err)
-
-				sqlDb, err := sess.Provider().Database(sqlCtx, "mytest")
+				sqlDb, err := pro.Database(sqlCtx, "mytest")
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
@@ -107,29 +113,16 @@ func TestDatabaseProvider(t *testing.T) {
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[1])
 			})
 			t.Run("AsyncPushOnWrite", func(t *testing.T) {
-				ctx := context.Background()
-				dEnv := dtestutils.CreateTestEnv()
-				tmpDir, err := dEnv.TempTableFilesDir()
-
 				setGlobalSqlVariable(t, dsess.ReplicateToRemote, "fileremote")
 				setGlobalSqlVariable(t, dsess.ReplicationRemoteURLTemplate, "mem://remote_{database}")
 				setGlobalSqlVariable(t, dsess.AsyncReplication, dsess.SysVarTrue)
 
-				require.NoError(t, err)
-				opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
-				db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
-				require.NoError(t, err)
+				engine, sqlCtx, pro := setup(t)
 
-				engine, sqlCtx, err := NewTestEngine(dEnv, context.Background(), db)
+				err := ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
 				require.NoError(t, err)
 
-				sess := dsess.DSessFromSess(sqlCtx.Session)
-				sess.Provider().(*DoltDatabaseProvider).AddInitDatabaseHook(InstallSnoopingCommitHook)
-
-				err = ExecuteSqlOnEngine(sqlCtx, engine, "CREATE DATABASE mytest;")
-				require.NoError(t, err)
-
-				sqlDb, err := sess.Provider().Database(sqlCtx, "mytest")
+				sqlDb, err := pro.Database(sqlCtx, "mytest")
 				require.NoError(t, err)
 				ddbs := sqlDb.(Database).DoltDatabases()
 				require.Len(t, ddbs, 1)
