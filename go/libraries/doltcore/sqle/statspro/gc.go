@@ -176,7 +176,6 @@ func (sc *StatsCoord) gcMark(sqlCtx *sql.Context, j GcMarkJob) (int, error) {
 			}
 
 			if len(levelNodes) == 0 {
-				//log.Println("db-table has no hashes: ", sqlDb.AliasedName())
 				continue
 			}
 

@@ -24,11 +24,10 @@ import (
 const StatsVersion int64 = 1
 
 const (
-	StatsQualifierColName     = "qualifier"
 	StatsDbColName            = "database_name"
 	StatsTableColName         = "table_name"
 	StatsIndexColName         = "index_name"
-	StatsPositionColName      = "position"
+	StatsBranchName           = "branch"
 	StatsCommitHashColName    = "commit_hash"
 	StatsRowCountColName      = "row_count"
 	StatsDistinctCountColName = "distinct_count"
@@ -72,23 +71,23 @@ func StatsTableSqlSchema(dbName string) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
 		Schema: sql.Schema{
 			&sql.Column{Name: StatsDbColName, Type: types.Text, DatabaseSource: dbName},
+			&sql.Column{Name: StatsBranchName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsTableColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsIndexColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsRowCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsDistinctCountColName, Type: types.Int64, DatabaseSource: dbName},
 			&sql.Column{Name: StatsNullCountColName, Type: types.Int64, DatabaseSource: dbName},
-			&sql.Column{Name: StatsColumnsColName, Type: types.Int64, DatabaseSource: dbName},
-			&sql.Column{Name: StatsTypesColName, Type: types.Int64, DatabaseSource: dbName},
+			&sql.Column{Name: StatsColumnsColName, Type: types.Text, DatabaseSource: dbName},
+			&sql.Column{Name: StatsTypesColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsUpperBoundCntColName, Type: types.Int64, DatabaseSource: dbName},
-			&sql.Column{Name: StatsCreatedAtColName, Type: types.Int64, DatabaseSource: dbName},
+			&sql.Column{Name: StatsCreatedAtColName, Type: types.Datetime, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv1ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv2ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv3ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcv4ColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsMcvCountsColName, Type: types.Text, DatabaseSource: dbName},
 		},
-		PkOrdinals: []int{0},
 	}
 }
 

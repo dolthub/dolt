@@ -639,7 +639,7 @@ func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 	case StringAddrEnc:
 		return hex.EncodeToString(value)
 	case CommitAddrEnc:
-		return hash.New(value).String()
+		return hash.New(value).String()[:5]
 	case CellEnc:
 		return hex.EncodeToString(value)
 	case ExtendedEnc:

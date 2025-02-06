@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func NewStatsInitDatabaseHook2(sc *StatsCoord) sqle.InitDatabaseHook {
+func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
 	return func(
 		ctx *sql.Context,
 		_ *sqle.DoltDatabaseProvider,
@@ -38,11 +38,7 @@ func NewStatsInitDatabaseHook2(sc *StatsCoord) sqle.InitDatabaseHook {
 			return nil
 		}
 
-		// this function needs to return before the add
-		// can complete, b/c we currently hold the provider
-		// lock
-		// TODO can we decouple refreshing the working set
-		// from seed job?
+		// call should only fail if backpressure in secondary queue
 		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS)
 		if err != nil {
 			sc.logger.Debugf("cannot initialize db stats for %s; queue is closed", sqlDb.AliasedName())
@@ -51,13 +47,10 @@ func NewStatsInitDatabaseHook2(sc *StatsCoord) sqle.InitDatabaseHook {
 	}
 }
 
-func NewStatsDropDatabaseHook2(sc *StatsCoord) sqle.DropDatabaseHook {
+func NewDropDatabaseHook(sc *StatsCoord) sqle.DropDatabaseHook {
 	return func(ctx *sql.Context, name string) {
-		// go sc.DropDbStats(ctx, name, false)
 		if err := sc.DropDbStats(ctx, name, false); err != nil {
 			ctx.GetLogger().Debugf("failed to close stats database: %s", err)
 		}
-
-		// todo delete stats db?
 	}
 }

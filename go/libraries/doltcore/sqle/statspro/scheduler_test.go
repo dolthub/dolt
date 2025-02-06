@@ -495,7 +495,7 @@ func TestAddDropDatabases(t *testing.T) {
 		require.Equal(t, 1, len(stat))
 	}
 
-	dropHook := NewStatsDropDatabaseHook2(sc)
+	dropHook := NewDropDatabaseHook(sc)
 	{
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
 		dropHook(ctx, "otherdb")
@@ -526,7 +526,7 @@ func TestGC(t *testing.T) {
 		runAndPause(t, ctx, sc, &wg) // read jobs
 		runAndPause(t, ctx, sc, &wg) // finalize
 
-		dropHook := NewStatsDropDatabaseHook2(sc)
+		dropHook := NewDropDatabaseHook(sc)
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
 		dropHook(ctx, "otherdb")
 
@@ -632,7 +632,7 @@ func TestBranches(t *testing.T) {
 		require.Equal(t, 2+1+(2+1), len(kv.templates))
 		require.Equal(t, 7-1, len(sc.Stats))
 
-		dropHook := NewStatsDropDatabaseHook2(sc)
+		dropHook := NewDropDatabaseHook(sc)
 		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
 		dropHook(ctx, "otherdb")
 
@@ -1254,8 +1254,8 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 		return sql.NewContext(ctx, sql.WithSession(doltSession)), nil
 	}
 
-	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, NewStatsInitDatabaseHook2(sc))
-	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, NewStatsDropDatabaseHook2(sc))
+	pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, NewInitDatabaseHook(sc))
+	pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, NewDropDatabaseHook(sc))
 
 	sqlEng := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     false,

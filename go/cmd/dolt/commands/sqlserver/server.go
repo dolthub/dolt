@@ -272,12 +272,6 @@ func ConfigureServices(
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			//if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsEnabled); err != nil {
-			//	// Auto-stats is off by default for every command except
-			//	// sql-server. Unless the config specifies a specific
-			//	// behavior, enable server stats collection.
-			//	sql.SystemVariables.SetGlobal(dsess.DoltStatsEnabled, 1)
-			//}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,

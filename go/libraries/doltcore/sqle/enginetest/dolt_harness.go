@@ -321,7 +321,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	}
 	bThreads := sql.NewBackgroundThreads()
 	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-	statsPro.Restart(ctx)
+	require.NoError(t, statsPro.Restart(ctx))
 	d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
@@ -438,7 +438,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
-	//d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession)
