@@ -166,6 +166,8 @@ func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResult
 	dbName := strings.TrimSpace(apr.Arg(2))
 	force := apr.Contains(cli.ForceFlag)
 
+	sess := dsess.DSessFromSess(ctx.Session)
+
 	remoteParams := map[string]string{}
 	r := env.NewRemote("", backupUrl, remoteParams)
 	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, nil)
@@ -173,7 +175,6 @@ func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResult
 		return err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
 	existingDbData, restoringExistingDb := sess.GetDbData(ctx, dbName)
 	if restoringExistingDb {
 		if !force {

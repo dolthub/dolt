@@ -115,6 +115,22 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	return rrd, nil
 }
 
+func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase) (dsess.SqlDatabase, error) {
+	if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
+		remoteName, ok := remote.(string)
+		if !ok {
+			return nil, sql.ErrInvalidSystemVariableValue.New(remote)
+		}
+		rdb, err := newReplicaDatabase(ctx, db.Name(), remoteName, dEnv)
+		if err == nil {
+			db = rdb
+		} else {
+			logrus.Errorf("invalid replication configuration, replication disabled: %v", err)
+		}
+	}
+	return db, nil
+}
+
 func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, logger io.Writer, dbs ...dsess.SqlDatabase) ([]dsess.SqlDatabase, error) {
 	outputDbs := make([]dsess.SqlDatabase, len(dbs))
 	for i, db := range dbs {
@@ -127,22 +143,12 @@ func ApplyReplicationConfig(ctx context.Context, bThreads *sql.BackgroundThreads
 		if err != nil {
 			return nil, err
 		}
-		dEnv.DoltDB(ctx).SetCommitHooks(ctx, postCommitHooks)
+		dEnv.DoltDB(ctx).PrependCommitHooks(ctx, postCommitHooks...)
 
-		if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
-			remoteName, ok := remote.(string)
-			if !ok {
-				return nil, sql.ErrInvalidSystemVariableValue.New(remote)
-			}
-			rdb, err := newReplicaDatabase(ctx, db.Name(), remoteName, dEnv)
-			if err == nil {
-				db = rdb
-			} else {
-				logrus.Errorf("invalid replication configuration, replication disabled: %v", err)
-			}
+		outputDbs[i], err = applyReadReplicationConfigToDatabase(ctx, dEnv, db)
+		if err != nil {
+			return nil, err
 		}
-
-		outputDbs[i] = db
 	}
 	return outputDbs, nil
 }

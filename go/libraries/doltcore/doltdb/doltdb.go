@@ -1945,13 +1945,8 @@ func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (da
 	return ddb.db.DatasetsByRootHash(ctx, hashof)
 }
 
-func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
-	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
-	return ddb
-}
-
-func (ddb *DoltDB) PrependCommitHook(ctx context.Context, hook CommitHook) *DoltDB {
-	ddb.db = ddb.db.SetCommitHooks(ctx, append([]CommitHook{hook}, ddb.db.PostCommitHooks()...))
+func (ddb *DoltDB) PrependCommitHooks(ctx context.Context, hooks ...CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, append(hooks, ddb.db.PostCommitHooks()...))
 	return ddb
 }
 
