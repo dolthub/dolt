@@ -21,6 +21,16 @@ package statspro
 // from the job queue to execute. The thread has exclusive ownership
 // over the job channel.
 //
+// All stats are persisted within a single database. If there are multiple
+// databases, one is selected by random as the storage target. If during
+// initialization multiple databases have stats, one will be chosen by
+// random as the target. If a database changes between server restarts,
+// the storage stats will be useless but not impair operations because
+// storage is only ever a best-effort content-addressed persistence layer;
+// buckets will be regenerated if they are missing. If the database acting
+// as a storage target is deleted, we swap the cache to write to a new storage
+// target that still exists.
+//
 // The main data structures:
 //  - Table statistics map, that returns a list of table index statistics
 //    for a specific branch, database, and table name.
@@ -56,5 +66,14 @@ package statspro
 // statistics needs to end with no statistics, which requires a delete check
 // after finalize.
 //
-// TODO:
-// - validate loop, clear the job queue and seeds everything anew?
+// The stats lifecycle can be controlled with:
+//  - dolt_stats_stop: clear queue and disable thread
+//  - dolt_stats_restart: clear queue, refresh queue, start thread
+//  - dolt_stats_purge: clear queue, clear cache, refresh queue,
+//    disable thread
+//  - dolt_stats_validate: return report of cache misses for current
+//    root value.
+//
+// `dolt_stats_wait` is additionally useful for blocking on a full
+// queue cycle and then validating whether the session head is caught up.
+//
