@@ -17,6 +17,7 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -488,19 +489,14 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "")
+		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "", doltversion.Version)
 	}
 
-	if dEnv.DoltDB == nil {
-		ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
-		if err != nil {
-			return nil, err
-		}
-
-		dEnv.DoltDB = ddb
+	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {
+		return nil, err
 	}
 
-	deaf := dEnv.DbEaFactory()
+	deaf := dEnv.DbEaFactory(ctx)
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
@@ -510,7 +506,7 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, err
 	}

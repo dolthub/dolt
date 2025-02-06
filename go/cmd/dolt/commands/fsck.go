@@ -72,7 +72,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = dEnv.DoltDB.FSCK(ctx, progress)
+		report, err = dEnv.DoltDB(ctx).FSCK(ctx, progress)
 		if err != nil {
 			cli.PrintErrln(err.Error())
 			return true

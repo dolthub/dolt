@@ -158,9 +158,9 @@ func (mr *MultiRepoTestSetup) NewRemote(remoteName string) {
 	mr.Remotes[remoteName] = rem
 }
 
-func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
+func (mr *MultiRepoTestSetup) NewBranch(ctx context.Context, dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(), branchName, "head", false, nil)
+	err := actions.CreateBranchWithStartPt(context.Background(), dEnv.DbData(ctx), branchName, "head", false, nil)
 	if err != nil {
 		mr.Errhand(err)
 	}
@@ -168,7 +168,7 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv)
+	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv, dEnv.FS)
 	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(context.Background())
 	if err != nil {
 		mr.Errhand(err)
@@ -211,7 +211,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	}
 	defer os.Chdir(wd)
 
-	ddb := dEnv.DoltDB
+	ddb := dEnv.DoltDB(ctx)
 
 	mr.envs[dbName] = dEnv
 	mr.DoltDBs[dbName] = ddb
@@ -258,7 +258,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
 		Message:    "auto commit",
 		Date:       t,
 		AllowEmpty: true,
@@ -275,7 +275,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		panic("couldn't get working set: " + err.Error())
 	}
 
-	commit, err := dEnv.DoltDB.CommitWithWorkingSet(
+	commit, err := dEnv.DoltDB(ctx).CommitWithWorkingSet(
 		ctx,
 		headRef,
 		ws.Ref(),
@@ -312,7 +312,7 @@ func createTestDataTable(ctx context.Context, ddb *doltdb.DoltDB) (*table.InMemT
 func (mr *MultiRepoTestSetup) CreateTable(ctx context.Context, dbName, tblName string) {
 	dEnv := mr.envs[dbName]
 
-	imt, sch := createTestDataTable(ctx, dEnv.DoltDB)
+	imt, sch := createTestDataTable(ctx, dEnv.DoltDB(ctx))
 	rows := make([]row.Row, imt.NumRows())
 	for i := 0; i < imt.NumRows(); i++ {
 		r, err := imt.GetRow(i)
@@ -354,12 +354,12 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	targets, remote, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false, false, false)
+	targets, remote, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB(ctx), false, false, false, false)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
 
-	remoteDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), mr.envs[dbName])
+	remoteDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), mr.envs[dbName])
 	if err != nil {
 		mr.Errhand(actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err))
 	}
@@ -374,7 +374,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		Remote:  remote,
 		Rsr:     dEnv.RepoStateReader(),
 		Rsw:     dEnv.RepoStateWriter(),
-		SrcDb:   dEnv.DoltDB,
+		SrcDb:   dEnv.DoltDB(ctx),
 		DestDb:  remoteDB,
 		TmpDir:  tmpDir,
 	}
@@ -387,8 +387,8 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 // createTestTable creates a new test table with the name, schema, and rows given.
 func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema) error {
 	ctx := context.Background()
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	ns := dEnv.DoltDB.NodeStore()
+	vrw := dEnv.DoltDB(ctx).ValueReadWriter()
+	ns := dEnv.DoltDB(ctx).NodeStore()
 
 	idx, err := durable.NewEmptyPrimaryIndex(ctx, vrw, ns, sch)
 	if err != nil {

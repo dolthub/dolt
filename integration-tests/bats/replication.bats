@@ -201,6 +201,48 @@ teardown() {
     [[ "$output" =~ "b1" ]] || false
 }
 
+# When a replica pulls refs, the remote refs are compared with the local refs to identify which local refs
+# need to be deleted. Branches, tags, and remotes all share the ref space and previous versions of Dolt could
+# incorrectly map remote refs and local refs, resulting in local refs being incorrectly removed, until future
+# runs of replica synchronization.
+@test "replication: local tag refs are not deleted" {
+    # Configure repo1 to push changes on commit and create tag a1
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt sql -q "call dolt_tag('a1');"
+
+    # Configure repo2 to pull changes on read
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    run dolt sql -q "select tag_name from dolt_tags;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| tag_name |" ]] || false
+    [[ "$output" =~ "| a1       |" ]] || false
+
+    # Create branch new1 in repo1 – "new1" sorts after "main", but before "a1", and previous
+    # versions of Dolt had problems computing which local refs to delete in this case.
+    cd ../repo1
+    dolt sql -q "call dolt_branch('new1');"
+
+    # Confirm that tag a1 has not been deleted. Note that we need to check for this immediately after
+    # creating branch new1 (i.e. before looking at branches), because the bug in the previous versions
+    # of Dolt would only manifest in the next command, and would be fixed by later remote pulls.
+    cd ../repo2
+    run dolt sql -q "select tag_name from dolt_tags;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| tag_name |" ]] || false
+    [[ "$output" =~ "| a1       |" ]] || false
+
+    # Try again to make sure the results are stable
+    run dolt sql -q "select tag_name from dolt_tags;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| tag_name |" ]] || false
+    [[ "$output" =~ "| a1       |" ]] || false
+}
+
 @test "replication: pull branch delete current branch" {
     skip "broken by latest transaction changes"
 
@@ -627,7 +669,6 @@ SQL
 }
 
 @test "replication: pull all heads pulls tags" {
-
     dolt clone file://./rem1 repo2
     cd repo2
     dolt checkout -b new_feature
@@ -901,15 +942,6 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
-}
-
-@test "replication: local clone" {
-    run dolt clone file://./repo1/.dolt/noms repo2
-    [ "$status" -eq 0 ]
-    cd repo2
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "replication: commit --amend" {

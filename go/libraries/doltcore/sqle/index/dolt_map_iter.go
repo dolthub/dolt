@@ -25,14 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func maxU64(x, y uint64) uint64 {
-	if x > y {
-		return x
-	}
-
-	return y
-}
-
 // KVToSqlRowConverter takes noms types.Value key value pairs and converts them directly to a sql.Row.  It
 // can be configured to only process a portion of the columns and map columns to desired output columns.
 type KVToSqlRowConverter struct {
@@ -73,7 +65,7 @@ func getValLocations(tagToSqlColIdx map[uint64]int, cols []schema.Column) (int, 
 				fromKey++
 			} else {
 				fromVal++
-				maxValTag = maxU64(maxValTag, col.Tag)
+				maxValTag = max(maxValTag, col.Tag)
 			}
 		}
 	}

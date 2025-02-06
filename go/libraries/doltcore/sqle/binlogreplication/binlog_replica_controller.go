@@ -15,7 +15,6 @@
 package binlogreplication
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -133,10 +132,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 		return fmt.Errorf("no execution context set for the replica controller")
 	}
 
-	err = d.configureReplicationUser(ctx)
-	if err != nil {
-		return err
-	}
+	d.configureReplicationUser(ctx)
 
 	// Set execution context's user to the binlog replication user
 	d.ctx.SetClient(sql.Client{
@@ -156,34 +152,15 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	return nil
 }
 
-// configureReplicationUser creates or configures the super user account needed to apply replication
+// configureReplicationUser creates or configures the superuser account needed to apply replication
 // changes and execute DDL statements on the running server. If the account doesn't exist, it will be
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
-// locked, it will be given super user privs and locked.
-func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) error {
+// locked, it will be given superuser privs and locked.
+func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) {
 	mySQLDb := d.engine.Analyzer.Catalog.MySQLDb
 	ed := mySQLDb.Editor()
 	defer ed.Close()
-
-	replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
-	if replicationUser == nil {
-		// If the replication user doesn't exist yet, create it and lock it
-		mySQLDb.AddSuperUser(ed, binlogApplierUser, "localhost", "")
-		replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
-		if replicationUser == nil {
-			return fmt.Errorf("unable to load replication user")
-		}
-		// Make sure this account is locked so that it cannot be used to log in
-		replicationUser.Locked = true
-		ed.PutUser(replicationUser)
-	} else if replicationUser.IsSuperUser == false || replicationUser.Locked == false {
-		// Fix the replication user if it has been modified
-		replicationUser.IsSuperUser = true
-		replicationUser.Locked = true
-		ed.PutUser(replicationUser)
-	}
-
-	return nil
+	mySQLDb.AddLockedSuperUser(ed, binlogApplierUser, "localhost", "")
 }
 
 // SetExecutionContext sets the unique |ctx| for the replica's applier to use when applying changes from binlog events
@@ -202,12 +179,15 @@ func (d *doltBinlogReplicaController) SetEngine(engine *sqle.Engine) {
 
 // StopReplica implements the BinlogReplicaController interface.
 func (d *doltBinlogReplicaController) StopReplica(ctx *sql.Context) error {
+	d.operationMutex.Lock()
+	defer d.operationMutex.Unlock()
+
 	if d.applier.IsRunning() == false {
 		ctx.Warn(3084, "Replication thread(s) for channel '' are already stopped.")
 		return nil
 	}
 
-	d.applier.stopReplicationChan <- struct{}{}
+	d.applier.Stop()
 
 	d.updateStatus(func(status *binlogreplication.ReplicaStatus) {
 		status.ReplicaIoRunning = binlogreplication.ReplicaIoNotRunning
@@ -434,8 +414,10 @@ func (d *doltBinlogReplicaController) setSqlError(errno uint, message string) {
 // replication is not configured, hasn't been started, or has been stopped before the server was
 // shutdown, then this method will not start replication. This method should only be called during
 // the server startup process and should not be invoked after that.
-func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
-	runningState, err := loadReplicationRunningState(d.ctx)
+func (d *doltBinlogReplicaController) AutoStart(ctx *sql.Context) error {
+	sql.SessionCommandBegin(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
+	runningState, err := loadReplicationRunningState(ctx)
 	if err != nil {
 		logrus.Errorf("Unable to load replication running state: %s", err.Error())
 		return err
@@ -447,7 +429,18 @@ func (d *doltBinlogReplicaController) AutoStart(_ context.Context) error {
 	}
 
 	logrus.Info("auto-starting binlog replication from source...")
-	return d.StartReplica(d.ctx)
+	return d.StartReplica(ctx)
+}
+
+// Release all resources, such as replication threads, associated with the replication.
+// This can only be done once in the lifecycle of the instance. Because DoltBinlogReplicaController
+// is currently a global singleton, this should only be done once in the lifecycle of the
+// application.
+func (d *doltBinlogReplicaController) Close() {
+	d.applier.Stop()
+	if d.ctx != nil {
+		sql.SessionEnd(d.ctx.Session)
+	}
 }
 
 //

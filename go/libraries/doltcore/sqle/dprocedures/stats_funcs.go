@@ -16,8 +16,8 @@ package dprocedures
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -50,13 +50,33 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 	}
 }
 
+type StatsInfo struct {
+	DbCnt           int  `json:"dbCnt"`
+	ReadCnt         int  `json:"readCnt"`
+	Active          bool `json:"active"`
+	DbSeedCnt       int  `json:"dbSeedCnt"`
+	EstBucketCnt    int  `json:"estBucketCnt"`
+	CachedBucketCnt int  `json:"cachedBucketCnt"`
+	StatCnt         int  `json:"statCnt"`
+	GcCounter       int  `json:"gcCounter"`
+	BranchCounter   int  `json:"branchCounter"`
+}
+
+func (si StatsInfo) ToJson() string {
+	jsonData, err := json.Marshal(si)
+	if err != nil {
+		return ""
+	}
+	return string(jsonData)
+}
+
 // ToggableStats is a sql.StatsProvider that exposes hooks for
 // observing and manipulating background database auto refresh threads.
 type ToggableStats interface {
 	sql.StatsProvider
 	FlushQueue(ctx context.Context) error
 	Restart(context.Context) error
-	Info() dtables.StatsInfo
+	Info() StatsInfo
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error

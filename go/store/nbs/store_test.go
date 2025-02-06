@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -210,7 +209,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 			addrs.Insert(c.Hash())
 			return nil
 		}
-	}, st.hasMany)
+	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
@@ -297,8 +296,10 @@ func TestNBSCopyGC(t *testing.T) {
 	st, _, _ := makeTestLocalStore(t, 8)
 	defer st.Close()
 
-	keepers := makeChunkSet(64, 64)
-	tossers := makeChunkSet(64, 64)
+	const numChunks = 64
+
+	keepers := makeChunkSet(numChunks, 64)
+	tossers := makeChunkSet(numChunks, 64)
 
 	for _, c := range keepers {
 		err := st.Put(ctx, c, noopGetAddrs)
@@ -333,26 +334,22 @@ func TestNBSCopyGC(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	keepChan := make(chan []hash.Hash, 16)
-	var msErr error
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		require.NoError(t, st.BeginGC(nil))
-		var finalizer chunks.GCFinalizer
-		finalizer, msErr = st.MarkAndSweepChunks(ctx, keepChan, nil, chunks.GCMode_Full)
-		if msErr == nil {
-			msErr = finalizer.SwapChunksInStore(ctx)
-		}
-		st.EndGC()
-		wg.Done()
-	}()
-	for h := range keepers {
-		keepChan <- []hash.Hash{h}
+	require.NoError(t, st.BeginGC(nil, chunks.GCMode_Full))
+	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+		return hashes, nil
 	}
-	close(keepChan)
-	wg.Wait()
-	require.NoError(t, msErr)
+	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full)
+	require.NoError(t, err)
+	keepersSlice := make([]hash.Hash, 0, len(keepers))
+	for h := range keepers {
+		keepersSlice = append(keepersSlice, h)
+	}
+	require.NoError(t, sweeper.SaveHashes(ctx, keepersSlice))
+	finalizer, err := sweeper.Finalize(ctx)
+	require.NoError(t, err)
+	require.NoError(t, sweeper.Close(ctx))
+	require.NoError(t, finalizer.SwapChunksInStore(ctx))
+	st.EndGC(chunks.GCMode_Full)
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)
@@ -381,7 +378,7 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 		require.True(t, ok)
 		tableFileMap[fileIDHash] = uint32(i + 1)
 		mapIds[i] = fileIDHash
-		cs, err := p.Persist(context.Background(), createMemTable(chunkData), nil, &Stats{})
+		cs, _, err := p.Persist(context.Background(), createMemTable(chunkData), nil, nil, &Stats{})
 		require.NoError(t, err)
 		require.NoError(t, cs.close())
 
@@ -422,10 +419,9 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 }
 
 func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
-	assert := assert.New(t)
 	ctx := context.Background()
 
-	_, p, q, store, _, _ := prepStore(ctx, t, assert)
+	_, p, q, store, _, _ := prepStore(ctx, t, assert.New(t))
 	defer func() {
 		require.NoError(t, store.Close())
 		require.EqualValues(t, 0, q.Usage())
@@ -472,6 +468,7 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			assert := assert.New(t)
 			updates := make(map[hash.Hash]uint32)
 			for _, id := range test.appendixSpecIds {
 				updates[id] = appendixUpdates[id]
@@ -484,7 +481,7 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 				assert.Equal(test.expectedNumberOfAppendixSpecs, info.NumAppendixSpecs())
 			} else {
 				_, err := store.UpdateManifestWithAppendix(ctx, updates, test.option)
-				assert.Equal(test.expectedError, err)
+				assert.ErrorIs(err, test.expectedError)
 			}
 		})
 	}

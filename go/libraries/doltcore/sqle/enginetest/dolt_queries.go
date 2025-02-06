@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/hashicorp/go-uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
@@ -4769,6 +4770,43 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// JSON chunking can't currently break chunks in a JSON value, so large string values can
+		// generate chunks that are larger than typical chunks.
+		Name: "JSON with large string (> 1MB)",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j1 JSON)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// NOTE: This doesn't trigger the same error that we see with sql-server
+				//       because the Golang enginetests use an in-memory chunk store, and
+				//       not the filesystem journaling chunk store.
+				Query:    fmt.Sprintf(`insert into t (pk, j1) VALUES (1, '{"large_value": "%s"}');`, generateStringData(1024*1024*3)),
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    `SELECT pk, length(j1->>"$.large_value") from t;`,
+				Expected: []sql.Row{{1, 1024 * 1024 * 3}},
+			},
+		},
+	},
+}
+
+// generateStringData generates random string data of length |length|. The data is generated
+// using UUIDs to avoid data that could be easily compressed.
+func generateStringData(length int) string {
+	var b strings.Builder
+	for length > 0 {
+		uuid, err := uuid.GenerateUUID()
+		if err != nil {
+			panic(err)
+		}
+		uuid = strings.ReplaceAll(uuid, "-", "")
+		b.WriteString(uuid)
+		length -= len(uuid)
+	}
+	return b.String()
 }
 
 var DoltTagTestScripts = []queries.ScriptTest{
@@ -7527,6 +7565,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_constraint_violations"},
 					{"dolt_constraint_violations_test"},
 					{"dolt_diff_test"},
+					{"dolt_help"},
 					{"dolt_history_test"},
 					{"dolt_log"},
 					{"dolt_remote_branches"},
@@ -7552,7 +7591,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7567,7 +7606,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7590,7 +7629,7 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			{
 				Query: "show create table t;",
 				Expected: []sql.Row{
-					{"t", "CREATE TABLE `t` (\n" +
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
 						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
 						"  PRIMARY KEY (`i`)\n" +
 						") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
@@ -7628,6 +7667,64 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{types.NewOkResult(0)},
 				},
+			},
+		},
+	},
+	{
+		Name:    "drop temporary table behavior",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			"create table t (i int);",
+			"create temporary table tmp (i int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "show create table tmp;",
+				Expected: []sql.Row{
+					{"tmp", "CREATE TEMPORARY TABLE `tmp` (\n" +
+						"  `i` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query: "drop temporary table tmp;",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+
+			{
+				Query: "create temporary table t (i int, j int);",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{
+					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
+						"  `i` int,\n" +
+						"  `j` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query: "drop temporary table t;",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+			{
+				Query: "show create table t;",
+				Expected: []sql.Row{
+					{"t", "CREATE TABLE `t` (\n" +
+						"  `i` int\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+				},
+			},
+			{
+				Query:       "drop temporary table t;",
+				ExpectedErr: sql.ErrUnknownTable,
 			},
 		},
 	},

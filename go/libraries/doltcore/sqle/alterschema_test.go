@@ -84,12 +84,12 @@ func TestRenameTable(t *testing.T) {
 		t.Run(tt.description, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
 			// setup tests
-			root, err = ExecuteSql(dEnv, root, setup)
+			root, err = ExecuteSql(ctx, dEnv, root, setup)
 			require.NoError(t, err)
 
 			schemas, err := doltdb.GetAllSchemas(ctx, root)
@@ -229,7 +229,7 @@ func TestAddColumnToTable(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := makePeopleTable(ctx, dtestutils.CreateTestEnv())
 			require.NoError(t, err)
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -435,13 +435,13 @@ func TestDropPks(t *testing.T) {
 		childFkName := "fk"
 
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
 			ctx := context.Background()
+			dEnv := dtestutils.CreateTestEnv()
+			defer dEnv.DoltDB(ctx).Close()
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
 			root, _ := dEnv.WorkingRoot(ctx)
@@ -749,7 +749,7 @@ func TestModifyColumn(t *testing.T) {
 			ctx := context.Background()
 			dEnv, err := makePeopleTable(ctx, dtestutils.CreateTestEnv())
 			require.NoError(t, err)
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			assert.NoError(t, err)

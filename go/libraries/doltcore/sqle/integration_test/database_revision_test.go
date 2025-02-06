@@ -150,9 +150,9 @@ func TestDbRevision(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
-			cliCtx, _ := cmd.NewArgFreeCliContext(ctx, dEnv)
+			cliCtx, _ := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {
@@ -163,14 +163,14 @@ func TestDbRevision(t *testing.T) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			cm1, cm2, cm3 = populateCommitHashes(t, dEnv, root)
+			cm1, cm2, cm3 = populateCommitHashes(ctx, t, dEnv, root)
 			require.NotEqual(t, cm1, hash.Hash{})
 			require.NotEqual(t, cm2, hash.Hash{})
 			require.NotEqual(t, cm3, hash.Hash{})
 
 			for _, a := range test.asserts {
 				t.Run(a.query, func(t *testing.T) {
-					makeTestAssertion(t, a, dEnv, root)
+					makeTestAssertion(ctx, t, a, dEnv, root)
 				})
 			}
 			for _, a2 := range test.asserts2 {
@@ -179,16 +179,16 @@ func TestDbRevision(t *testing.T) {
 					rows:  a2.rows,
 				}
 				t.Run(a.query, func(t *testing.T) {
-					makeTestAssertion(t, a, dEnv, root)
+					makeTestAssertion(ctx, t, a, dEnv, root)
 				})
 			}
 		})
 	}
 }
 
-func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue) (cm1, cm2, cm3 hash.Hash) {
+func populateCommitHashes(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue) (cm1, cm2, cm3 hash.Hash) {
 	q := "SELECT commit_hash FROM dolt_log;"
-	rows, err := sqle.ExecuteSelect(dEnv, root, q)
+	rows, err := sqle.ExecuteSelect(ctx, dEnv, root, q)
 	require.NoError(t, err)
 	assert.Len(t, rows, 4)
 	cm3 = hash.Parse(rows[0][0].(string))
@@ -197,8 +197,8 @@ func populateCommitHashes(t *testing.T, dEnv *env.DoltEnv, root doltdb.RootValue
 	return
 }
 
-func makeTestAssertion(t *testing.T, a testAssert, dEnv *env.DoltEnv, root doltdb.RootValue) {
-	actRows, err := sqle.ExecuteSelect(dEnv, root, a.query)
+func makeTestAssertion(ctx context.Context, t *testing.T, a testAssert, dEnv *env.DoltEnv, root doltdb.RootValue) {
+	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, a.query)
 	require.NoError(t, err)
 	assert.Equal(t, a.rows, actRows)
 }

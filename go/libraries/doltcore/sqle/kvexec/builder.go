@@ -57,7 +57,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 			if ita, ok := getIta(n.Right()); ok && len(r) == 0 && simpleLookupExpressions(ita.Expressions()) {
 				if _, _, _, dstIter, _, _, dstTags, dstFilter, err := getSourceKv(ctx, n.Right(), false); err == nil && dstIter != nil {
 					if srcMap, _, srcIter, _, srcSchema, _, srcTags, srcFilter, err := getSourceKv(ctx, n.Left(), true); err == nil && srcSchema != nil {
-						if keyLookupMapper := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), srcMap.NodeStore()); keyLookupMapper.valid() {
+						if keyLookupMapper, err := newLookupKeyMapping(ctx, srcSchema, dstIter.InputKeyDesc(), ita.Expressions(), ita.Index().ColumnExpressionTypes(), srcMap.NodeStore()); err == nil && keyLookupMapper.valid() {
 							// conditions:
 							// (1) lookup or left lookup join
 							// (2) left-side is something we read KVs from (table or indexscan, ex: no subqueries)
@@ -524,7 +524,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		//case *dtables.DiffTable:
 		// TODO: add interface to include system tables
 		default:
-			return ms, nil
+			return ms, fmt.Errorf("non-standard indexed table not supported")
 		}
 
 		if idx.Format() != types.Format_DOLT {

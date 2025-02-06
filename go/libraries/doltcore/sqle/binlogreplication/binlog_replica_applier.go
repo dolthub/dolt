@@ -19,6 +19,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -63,6 +64,7 @@ type binlogReplicaApplier struct {
 	currentPosition           *mysql.Position // successfully executed GTIDs
 	filters                   *filterConfiguration
 	running                   atomic.Bool
+	handlerWg                 sync.WaitGroup
 	engine                    *gms.Engine
 	dbsWithUncommittedChanges map[string]struct{}
 }
@@ -88,10 +90,14 @@ const rowFlag_rowsAreComplete = 0x0008
 
 // Go spawns a new goroutine to run the applier's binlog event handler.
 func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
+	if !a.running.CompareAndSwap(false, true) {
+		panic("attempt to start binlogReplicaApplier while it is already running")
+	}
+	a.handlerWg.Add(1)
 	go func() {
-		a.running.Store(true)
+		defer a.handlerWg.Done()
+		defer a.running.Store(false)
 		err := a.replicaBinlogEventHandler(ctx)
-		a.running.Store(false)
 		if err != nil {
 			ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
 			DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
@@ -102,6 +108,27 @@ func (a *binlogReplicaApplier) Go(ctx *sql.Context) {
 // IsRunning returns true if this binlog applier is running and has not been stopped, otherwise returns false.
 func (a *binlogReplicaApplier) IsRunning() bool {
 	return a.running.Load()
+}
+
+// Stop will shutdown the replication thread if it is running. This is not safe to call concurrently |Go|.
+// This is used by the controller when implementing STOP REPLICA, but it is also used on shutdown when the
+// replication thread should be shutdown cleanly in the event that it is still running.
+func (a *binlogReplicaApplier) Stop() {
+	if a.IsRunning() {
+		// We jump through some hoops here. It is not the case that the replication thread
+		// is guaranteed to read from |stopReplicationChan|. Instead, it can exit on its
+		// own with an error, for example, after exceeding connection retry attempts.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			a.handlerWg.Wait()
+		}()
+		select {
+		case a.stopReplicationChan <- struct{}{}:
+		case <-done:
+		}
+		a.handlerWg.Wait()
+	}
 }
 
 // connectAndStartReplicationEventStream connects to the configured MySQL replication source, including pausing
@@ -119,8 +146,9 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 	var conn *mysql.Conn
 	var err error
 	for connectionAttempts := uint64(0); ; connectionAttempts++ {
+		sql.SessionCommandBegin(ctx.Session)
 		replicaSourceInfo, err := loadReplicationConfiguration(ctx, a.engine.Analyzer.Catalog.MySQLDb)
-
+		sql.SessionCommandEnd(ctx.Session)
 		if replicaSourceInfo == nil {
 			err = ErrServerNotConfiguredAsReplica
 			DoltBinlogReplicaController.setIoError(ERFatalReplicaError, err.Error())
@@ -263,25 +291,21 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error {
 	engine := a.engine
 
-	var conn *mysql.Conn
 	var eventProducer *binlogEventProducer
 
 	// Process binlog events
 	for {
-		if conn == nil {
+		if eventProducer == nil {
 			ctx.GetLogger().Debug("no binlog connection to source, attempting to establish one")
-			if eventProducer != nil {
-				eventProducer.Stop()
-			}
 
-			var err error
-			if conn, err = a.connectAndStartReplicationEventStream(ctx); err == ErrReplicationStopped {
+			if conn, err := a.connectAndStartReplicationEventStream(ctx); err == ErrReplicationStopped {
 				return nil
 			} else if err != nil {
 				return err
+			} else {
+				eventProducer = newBinlogEventProducer(conn)
+				eventProducer.Go(ctx)
 			}
-			eventProducer = newBinlogEventProducer(conn)
-			eventProducer.Go(ctx)
 		}
 
 		select {
@@ -305,8 +329,6 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 					})
 					eventProducer.Stop()
 					eventProducer = nil
-					conn.Close()
-					conn = nil
 				}
 			} else {
 				// otherwise, log the error if it's something we don't expect and continue
@@ -317,6 +339,7 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 		case <-a.stopReplicationChan:
 			ctx.GetLogger().Trace("received stop replication signal")
 			eventProducer.Stop()
+			eventProducer = nil
 			return nil
 		}
 	}
@@ -325,6 +348,8 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 // processBinlogEvent processes a single binlog event message and returns an error if there were any problems
 // processing it.
 func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
+	sql.SessionCommandBegin(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
 	var err error
 	createCommit := false
 

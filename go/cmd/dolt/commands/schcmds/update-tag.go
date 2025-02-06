@@ -71,7 +71,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, updateTagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if !types.IsFormat_DOLT(dEnv.DoltDB.Format()) {
+	if !types.IsFormat_DOLT(dEnv.DoltDB(ctx).Format()) {
 		verr := errhand.BuildDError("update-tag is only available in storage format __DOLT__").Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}

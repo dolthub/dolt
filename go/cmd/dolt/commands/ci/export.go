@@ -33,8 +33,8 @@ import (
 )
 
 var exportDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Export a Dolt continuous integration workflow file by name",
-	LongDesc:  "Export a Dolt continuous integration workflow file by name",
+	ShortDesc: "Export a Dolt continuous integration workflow by name",
+	LongDesc:  "Export a Dolt continuous integration workflow by name",
 	Synopsis: []string{
 		"{{.LessThan}}workflow name{{.GreaterThan}}",
 	},
@@ -65,7 +65,7 @@ func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 
 // Hidden should return true if this command should be hidden from the help text
 func (cmd ExportCmd) Hidden() bool {
-	return true
+	return false
 }
 
 // ArgParser implements cli.Command.

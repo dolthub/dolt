@@ -145,43 +145,55 @@ func TestLookupJoin(t *testing.T) {
 			join:      "select /*+ LOOKUP_JOIN(dolt_diff_xy,dolt_log) */ count(*) from dolt_diff_xy join dolt_log on commit_hash = from_commit",
 			doRowexec: false,
 		},
+		{
+			name: "type conversion panic bug",
+			setup: []string{
+				"create table xy (x int primary key, y int, z varchar(10), key (y,z));",
+				"insert into xy values (0,0,'0'), (1,1,'1');",
+				"create table ab (a int primary key, b int);",
+				"insert into ab values (0,0), (1,1);",
+			},
+			join:      "select /*+ LOOKUP_JOIN(ab,xy) JOIN_ORDER(ab,xy) */ count(*) from xy join ab on y = a and z = 0",
+			doRowexec: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			tmpDir, err := dEnv.TempTableFilesDir()
 			require.NoError(t, err)
 
-			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+			db, err := sqle.NewDatabase(context.Background(), "dolt", dEnv.DbData(ctx), opts)
 			require.NoError(t, err)
 
-			engine, ctx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
+			engine, sqlCtx, err := sqle.NewTestEngine(dEnv, context.Background(), db)
 			require.NoError(t, err)
 
-			err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
+			err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
 			require.NoError(t, err)
 
 			for _, q := range tt.setup {
-				_, iter, _, err := engine.Query(ctx, q)
+				_, iter, _, err := engine.Query(sqlCtx, q)
 				require.NoError(t, err)
-				_, err = sql.RowIterToRows(ctx, iter)
+				_, err = sql.RowIterToRows(sqlCtx, iter)
 				require.NoError(t, err)
 			}
 
-			binder := planbuilder.New(ctx, engine.EngineAnalyzer().Catalog, engine.EventScheduler, engine.Parser)
+			binder := planbuilder.New(sqlCtx, engine.EngineAnalyzer().Catalog, engine.EventScheduler, engine.Parser)
 			node, _, _, qFlags, err := binder.Parse(tt.join, nil, false)
 			require.NoError(t, err)
-			node, err = engine.EngineAnalyzer().Analyze(ctx, node, nil, qFlags)
+			node, err = engine.EngineAnalyzer().Analyze(sqlCtx, node, nil, qFlags)
 			require.NoError(t, err)
 
 			j := getJoin(node)
 			require.NotNil(t, j)
 
-			iter, err := Builder{}.Build(ctx, j, nil)
+			iter, err := Builder{}.Build(sqlCtx, j, nil)
 			_, ok := iter.(*lookupJoinKvIter)
 			require.Equalf(t, tt.doRowexec, ok, "expected do row exec: %t", tt.doRowexec)
 		})

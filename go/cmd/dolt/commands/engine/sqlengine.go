@@ -44,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
@@ -52,6 +53,7 @@ type SqlEngine struct {
 	contextFactory contextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
+	fs             filesys.Filesys
 }
 
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
@@ -60,22 +62,23 @@ type contextFactory func(ctx context.Context, session sql.Session) (*sql.Context
 type SystemVariables map[string]interface{}
 
 type SqlEngineConfig struct {
-	IsReadOnly              bool
-	IsServerLocked          bool
-	DoltCfgDirPath          string
-	PrivFilePath            string
-	BranchCtrlFilePath      string
-	ServerUser              string
-	ServerPass              string
-	ServerHost              string
-	Autocommit              bool
-	DoltTransactionCommit   bool
-	Bulk                    bool
-	JwksConfig              []servercfg.JwksConfig
-	SystemVariables         SystemVariables
-	ClusterController       *cluster.Controller
-	BinlogReplicaController binlogreplication.BinlogReplicaController
-	EventSchedulerStatus    eventscheduler.SchedulerStatus
+	IsReadOnly                 bool
+	IsServerLocked             bool
+	DoltCfgDirPath             string
+	PrivFilePath               string
+	BranchCtrlFilePath         string
+	ServerUser                 string
+	ServerPass                 string
+	ServerHost                 string
+	SkipRootUserInitialization bool
+	Autocommit                 bool
+	DoltTransactionCommit      bool
+	Bulk                       bool
+	JwksConfig                 []servercfg.JwksConfig
+	SystemVariables            SystemVariables
+	ClusterController          *cluster.Controller
+	BinlogReplicaController    binlogreplication.BinlogReplicaController
+	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -119,6 +122,8 @@ func NewSqlEngine(
 		all = append(all, clusterDB.(dsess.SqlDatabase))
 		locations = append(locations, nil)
 	}
+
+	gcSafepointController := dsess.NewGCSafepointController()
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
@@ -191,11 +196,12 @@ func NewSqlEngine(
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
+	sqlEngine.fs = pro.FileSystem()
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
@@ -316,8 +322,15 @@ func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 	return se.engine
 }
 
+func (se *SqlEngine) FileSystem() filesys.Filesys {
+	return se.fs
+}
+
 func (se *SqlEngine) Close() error {
 	if se.engine != nil {
+		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
+			dblr.DoltBinlogReplicaController.Close()
+		}
 		return se.engine.Close()
 	}
 	return nil
@@ -412,9 +425,9 @@ func sqlContextFactory() contextFactory {
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *dsess.GCSafepointController, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController)
 		if err != nil {
 			return nil, err
 		}

@@ -12,9 +12,9 @@ make_test_repo_and_start_server() {
   export DOLT_EVENT_SCHEDULER_PERIOD=1
   start_sql_server
 
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db information_schema sql -q "CREATE DATABASE repo1;"
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "call dolt_commit('-Am', 'creating table');"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db information_schema sql -q "CREATE DATABASE repo1;"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "call dolt_commit('-Am', 'creating table');"
 }
 
 setup() {
@@ -263,7 +263,7 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
 
-    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it executed
+    # Sleep for a few seconds to give the scheduler time to run this event and verify that it executed
     sleep 2
     run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
@@ -286,7 +286,7 @@ SQL
     run dolt sql -q "SHOW EVENTS;"
     [[ $output =~ '| repo1 | eventTest1 | `__dolt_local_user__`@`localhost` | SYSTEM    | RECURRING | NULL       | 1              | SECOND         | 2020-02-20 00:00:00 | NULL | ENABLED | 0          | utf8mb4              | utf8mb4_0900_bin     | utf8mb4_0900_bin   |' ]] || false
 
-    # Sleep for a few seconds to give the scheduler timer to run this event and verify that it is still enabled
+    # Sleep for a few seconds to give the scheduler time to run this event and verify that it is still enabled
     sleep 2
     run dolt sql -q "SHOW EVENTS"
     [ $status -eq 0 ]

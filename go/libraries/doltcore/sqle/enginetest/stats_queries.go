@@ -288,7 +288,7 @@ var DoltHistogramTests = []queries.ScriptTest{
 	},
 }
 
-var DoltStatsIOTests = []queries.ScriptTest{
+var DoltStatsStorageTests = []queries.ScriptTest{
 	{
 		Name: "single-table",
 		SetUpScript: []string{

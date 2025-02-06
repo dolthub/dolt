@@ -187,7 +187,7 @@ func MultiEnvForDirectory(
 			version = dEnv.Version
 		}
 
-		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		newEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 		} else {
@@ -204,8 +204,6 @@ func MultiEnvForDirectory(
 		}
 		return false
 	})
-
-	enforceSingleFormat(envSet)
 
 	// if the current directory database is in our set, add it first so it will be the current database
 	if env, ok := envSet[dbName]; ok && env.Valid() {
@@ -224,6 +222,31 @@ func MultiEnvForDirectory(
 	}
 
 	return mrEnv, nil
+}
+
+func (mrEnv *MultiRepoEnv) ReloadDBs(
+	ctx context.Context,
+) {
+	for _, namedEnv := range mrEnv.envs {
+		dEnv := namedEnv.env
+
+		if dEnv.doltDB == nil {
+			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		}
+		if !dEnv.Valid() {
+			dbErr := dEnv.DBLoadError
+			if dbErr != nil {
+				if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+					logrus.Warnf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
+				}
+			}
+			cfgErr := dEnv.CfgLoadErr
+			if cfgErr != nil {
+				logrus.Warnf("failed to load database configuration at %s with error: %s", dEnv.urlStr, cfgErr.Error())
+			}
+		}
+	}
+	mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -327,10 +350,11 @@ func getRepoRootDir(path, pathSeparator string) string {
 // enforceSingleFormat enforces that constraint that all databases in
 // a multi-database environment have the same NomsBinFormat.
 // Databases are removed from the MultiRepoEnv to ensure this is true.
-func enforceSingleFormat(envSet map[string]*DoltEnv) {
+func enforceSingleFormat(ctx context.Context, envSet []NamedEnv) []NamedEnv {
 	formats := set.NewEmptyStrSet()
-	for _, dEnv := range envSet {
-		formats.Add(dEnv.DoltDB.Format().VersionString())
+	for _, namedEnv := range envSet {
+		dEnv := namedEnv.env
+		formats.Add(dEnv.DoltDB(ctx).Format().VersionString())
 	}
 
 	var nbf string
@@ -339,17 +363,24 @@ func enforceSingleFormat(envSet map[string]*DoltEnv) {
 		nbf = types.Format_Default.VersionString()
 	} else {
 		// otherwise, pick an arbitrary format
-		for _, dEnv := range envSet {
-			nbf = dEnv.DoltDB.Format().VersionString()
+		for _, namedEnv := range envSet {
+			dEnv := namedEnv.env
+			nbf = dEnv.DoltDB(ctx).Format().VersionString()
+			break
 		}
 	}
 
+	prunedEnvs := make([]NamedEnv, 0, len(envSet))
 	template := "incompatible format for database '%s'; expected '%s', found '%s'"
-	for name, dEnv := range envSet {
-		found := dEnv.DoltDB.Format().VersionString()
+	for _, namedEnv := range envSet {
+		name := namedEnv.name
+		dEnv := namedEnv.env
+		found := dEnv.DoltDB(ctx).Format().VersionString()
 		if found != nbf {
 			logrus.Infof(template, name, nbf, found)
-			delete(envSet, name)
+		} else {
+			prunedEnvs = append(prunedEnvs, namedEnv)
 		}
 	}
+	return prunedEnvs
 }

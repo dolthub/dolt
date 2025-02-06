@@ -254,6 +254,9 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	if apr.Contains(cli.NoEditFlag) {
 		args = append(args, "'--no-edit'")
 	}
+	if apr.Contains(cli.PruneFlag) {
+		args = append(args, "'--prune'")
+	}
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		args = append(args, "'--user'")
 		args = append(args, "?")

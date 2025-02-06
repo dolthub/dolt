@@ -34,24 +34,24 @@ import (
 
 type emptyChunkSource struct{}
 
-func (ecs emptyChunkSource) has(h hash.Hash) (bool, error) {
-	return false, nil
+func (ecs emptyChunkSource) has(h hash.Hash, _ keeperF) (bool, gcBehavior, error) {
+	return false, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) hasMany(addrs []hasRecord) (bool, error) {
-	return true, nil
+func (ecs emptyChunkSource) hasMany(addrs []hasRecord, _ keeperF) (bool, gcBehavior, error) {
+	return true, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
-	return nil, nil
+func (ecs emptyChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
+	return nil, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
-	return true, nil
+func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+	return true, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
-	return true, nil
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+	return true, gcBehavior_Continue, nil
 }
 
 func (ecs emptyChunkSource) count() (uint32, error) {
@@ -74,8 +74,8 @@ func (ecs emptyChunkSource) reader(context.Context) (io.ReadCloser, uint64, erro
 	return io.NopCloser(&bytes.Buffer{}), 0, nil
 }
 
-func (ecs emptyChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
-	return map[hash.Hash]Range{}, nil
+func (ecs emptyChunkSource) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+	return map[hash.Hash]Range{}, gcBehavior_Continue, nil
 }
 
 func (ecs emptyChunkSource) currentSize() uint64 {
@@ -94,6 +94,6 @@ func (ecs emptyChunkSource) clone() (chunkSource, error) {
 	return ecs, nil
 }
 
-func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
+func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	return nil
 }

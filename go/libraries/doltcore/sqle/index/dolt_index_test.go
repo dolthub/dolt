@@ -1343,7 +1343,7 @@ func doltIndexSetup(t *testing.T) (doltdb.RootValue, map[string]index.DoltIndex)
 	if err != nil {
 		panic(err)
 	}
-	root, err = sqle.ExecuteSql(dEnv, root, `
+	root, err = sqle.ExecuteSql(ctx, dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,

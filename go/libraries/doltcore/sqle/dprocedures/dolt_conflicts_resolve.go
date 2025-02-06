@@ -346,13 +346,14 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	}
 
 	// TODO: There's an issue with using `dolt conflicts resolve` for schema conflicts, since having
-	//       schema conflicts reported means that we haven't yet merged the table data. In some case,
-	//       such as when there have ONLY been schema changes and no data changes that need to be
-	//       merged, it is safe to use `dolt conflicts resolve`, but there are many other cases where the
-	//       data changes would not be merged and could surprise customers. So, we are being cautious to
-	//       prevent auto-resolution of schema changes with `dolt conflicts resolve` until we have a fix
-	//       for resolving schema changes AND merging data (including dealing with any data conflicts).
-	//       For more details, see: https://github.com/dolthub/dolt/issues/6616
+	//
+	//	schema conflicts reported means that we haven't yet merged the table data. In some case,
+	//	such as when there have ONLY been schema changes and no data changes that need to be
+	//	merged, it is safe to use `dolt conflicts resolve`, but there are many other cases where the
+	//	data changes would not be merged and could surprise customers. So, we are being cautious to
+	//	prevent auto-resolution of schema changes with `dolt conflicts resolve` until we have a fix
+	//	for resolving schema changes AND merging data (including dealing with any data conflicts).
+	//	For more details, see: https://github.com/dolthub/dolt/issues/6616
 	if ws.MergeState().HasSchemaConflicts() {
 		return nil, fmt.Errorf("Unable to automatically resolve schema conflicts since data changes may " +
 			"not have been fully merged yet. " +

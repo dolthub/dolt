@@ -171,6 +171,10 @@ func (p *DoltDatabaseProvider) WithFunctions(fns []sql.Function) *DoltDatabasePr
 	return &cp
 }
 
+func (p *DoltDatabaseProvider) RegisterProcedure(procedure sql.ExternalStoredProcedureDetails) {
+	p.externalProcedures.Register(procedure)
+}
+
 // WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
 // The URL is used when creating new databases.
 // See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
@@ -419,12 +423,15 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 }
 
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
+	// there is no current transaction to commit; this happens in certain tests like
 	currentTx := ctx.GetTransaction()
-
-	err := dSess.CommitTransaction(ctx, currentTx)
-	if err != nil {
-		return err
+	if currentTx != nil {
+		err := dSess.CommitTransaction(ctx, currentTx)
+		if err != nil {
+			return err
+		}
 	}
+
 	newTx, err := dSess.StartTransaction(ctx, sql.ReadWrite)
 	if err != nil {
 		return err
@@ -633,7 +640,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 
 	// TODO: params for AWS, others that need them
 	r := env.NewRemote(remoteName, remoteUrl, nil)
-	err := r.Prepare(ctx, newEnv.DoltDB.Format(), p.remoteDialer)
+	err := r.Prepare(ctx, newEnv.DoltDB(ctx).Format(), p.remoteDialer)
 	if err != nil {
 		return err
 	}
@@ -649,11 +656,11 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 		return err
 	}
 
-	newEnv.DoltDB.SetCommitHooks(ctx, commitHooks)
+	newEnv.DoltDB(ctx).SetCommitHooks(ctx, commitHooks)
 
 	// After setting hooks on the newly created DB, we need to do the first push manually
 	branchRef := ref.NewBranchRef(p.defaultBranch)
-	return newEnv.DoltDB.ExecuteCommitHooks(ctx, branchRef.String())
+	return newEnv.DoltDB(ctx).ExecuteCommitHooks(ctx, branchRef.String())
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
@@ -681,7 +688,8 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 		if exists {
 			deleteErr := p.fs.Delete(dbName, true)
 			if deleteErr != nil {
-				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s'", err.Error(), dbName)
+				err = fmt.Errorf("%s: unable to clean up failed clone in directory '%s': %s",
+					err.Error(), dbName, deleteErr.Error())
 			}
 		}
 		return err
@@ -847,12 +855,12 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	}
 
 	opts := editor.Options{
-		Deaf: newEnv.DbEaFactory(),
+		Deaf: newEnv.DbEaFactory(ctx),
 		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
 		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
 	}
 
-	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, name, newEnv.DbData(ctx), opts)
 	if err != nil {
 		return err
 	}

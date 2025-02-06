@@ -73,7 +73,7 @@ func (cmd StashPopCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
 	}
@@ -125,7 +125,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.RootValue, idx int) (bool, error) {
-	stashRoot, headCommit, meta, err := dEnv.DoltDB.GetStashRootAndHeadCommitAtIdx(ctx, idx)
+	stashRoot, headCommit, meta, err := dEnv.DoltDB(ctx).GetStashRootAndHeadCommitAtIdx(ctx, idx)
 	if err != nil {
 		return false, err
 	}
@@ -142,7 +142,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 	if err != nil {
 		return false, err
 	}
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, headCommitSpec, headRef)
 	if err != nil {
 		return false, err
 	}
@@ -163,7 +163,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 		return false, err
 	}
 
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(ctx), Tempdir: tmpDir}
 	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return false, err

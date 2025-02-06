@@ -43,23 +43,24 @@ func TestIsKeyFuncs(t *testing.T) {
 }
 
 func TestNeedsToReloadEvents(t *testing.T) {
+	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
 
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
-	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
+	db, err := NewDatabase(ctx, "dolt", dEnv.DbData(ctx), opts)
 	require.NoError(t, err)
 
-	_, ctx, err := NewTestEngine(dEnv, context.Background(), db)
+	_, sqlCtx, err := NewTestEngine(dEnv, ctx, db)
 	require.NoError(t, err)
 
 	var token any
 
 	t.Run("empty schema table doesn't need to be reloaded", func(t *testing.T) {
-		needsReload, err := db.NeedsToReloadEvents(ctx, token)
+		needsReload, err := db.NeedsToReloadEvents(sqlCtx, token)
 		require.NoError(t, err)
 		assert.False(t, needsReload)
 	})
@@ -73,38 +74,38 @@ BEGIN
     CALL archive_order_history(DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
 END`
 
-	err = db.addFragToSchemasTable(ctx, "event", "testEvent", eventDefn, timestamp, nil)
+	err = db.addFragToSchemasTable(sqlCtx, "event", "testEvent", eventDefn, timestamp, nil)
 	require.NoError(t, err)
 
 	t.Run("events need to be reloaded after addition", func(t *testing.T) {
-		needsReload, err := db.NeedsToReloadEvents(ctx, token)
+		needsReload, err := db.NeedsToReloadEvents(sqlCtx, token)
 		require.NoError(t, err)
 		assert.True(t, needsReload)
 	})
 
-	_, token, err = db.GetEvents(ctx)
+	_, token, err = db.GetEvents(sqlCtx)
 	require.NoError(t, err)
 
 	t.Run("events do not need to be reloaded after no change", func(t *testing.T) {
-		needsReload, err := db.NeedsToReloadEvents(ctx, token)
+		needsReload, err := db.NeedsToReloadEvents(sqlCtx, token)
 		require.NoError(t, err)
 		assert.False(t, needsReload)
 	})
 
-	err = db.dropFragFromSchemasTable(ctx, "event", "testEvent", nil)
+	err = db.dropFragFromSchemasTable(sqlCtx, "event", "testEvent", nil)
 	require.NoError(t, err)
 
 	t.Run("events need to be reloaded after dropping one", func(t *testing.T) {
-		needsReload, err := db.NeedsToReloadEvents(ctx, token)
+		needsReload, err := db.NeedsToReloadEvents(sqlCtx, token)
 		require.NoError(t, err)
 		assert.True(t, needsReload)
 	})
 
-	_, token, err = db.GetEvents(ctx)
+	_, token, err = db.GetEvents(sqlCtx)
 	require.NoError(t, err)
 
 	t.Run("events do not need to be reloaded after no change", func(t *testing.T) {
-		needsReload, err := db.NeedsToReloadEvents(ctx, token)
+		needsReload, err := db.NeedsToReloadEvents(sqlCtx, token)
 		require.NoError(t, err)
 		assert.False(t, needsReload)
 	})

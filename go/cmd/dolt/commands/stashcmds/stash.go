@@ -94,7 +94,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
 	}
@@ -228,7 +228,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	if err != nil {
 		return err
 	}
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, commitSpec, curHeadRef)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, commitSpec, curHeadRef)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err
 	}
 
-	err = dEnv.DoltDB.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)))
+	err = dEnv.DoltDB(ctx).AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)))
 	if err != nil {
 		return err
 	}

@@ -292,7 +292,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return verr
 	}
 
-	sch, verr := inferSchemaFromFile(ctx, dEnv.DoltDB.ValueReadWriter().Format(), impArgs, root)
+	sch, verr := inferSchemaFromFile(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), impArgs, root)
 	if verr != nil {
 		return verr
 	}

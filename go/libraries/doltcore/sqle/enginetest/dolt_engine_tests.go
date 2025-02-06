@@ -35,10 +35,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltcmd"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1409,7 +1411,7 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 
 	for _, stt := range SystemTableIndexTests {
-		harness = harness.NewHarness(t).WithParallelism(2)
+		harness = harness.NewHarness(t).WithParallelism(1)
 		defer harness.Close()
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
@@ -1421,27 +1423,30 @@ func RunSystemTableIndexesTests(t *testing.T, harness DoltEnginetestHarness) {
 			enginetest.RunQueryWithContext(t, e, harness, ctx, q)
 		}
 
-		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
-			e.EngineAnalyzer().Coster = biasedCosters[i]
-			for _, tt := range stt.queries {
-				if tt.query == "select count(*) from dolt_blame_xy" && c == "inner" {
-					// todo we either need join hints to work inside the blame view
-					// and force the window relation to be primary, or we need the
-					// blame view's timestamp columns to be specific enough to not
-					// overlap during testing.
-					t.Skip("the blame table is unstable as secondary table in join with exchange node")
-				}
-				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
-					if tt.skip {
-						t.Skip()
+		costers := []string{"inner", "lookup", "hash", "merge"}
+		for i, c := range costers {
+			t.Run(c, func(t *testing.T) {
+				e.EngineAnalyzer().Coster = biasedCosters[i]
+				for _, tt := range stt.queries {
+					if tt.query == "select count(*) from dolt_blame_xy" && c == "inner" {
+						// todo we either need join hints to work inside the blame view
+						// and force the window relation to be primary, or we need the
+						// blame view's timestamp columns to be specific enough to not
+						// overlap during testing.
+						t.Skip("the blame table is unstable as secondary table in join with exchange node")
 					}
+					t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
+						if tt.skip {
+							t.Skip()
+						}
 
-					ctx = ctx.WithQuery(tt.query)
-					if tt.exp != nil {
-						enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
-					}
-				})
-			}
+						ctx = ctx.WithQuery(tt.query)
+						if tt.exp != nil {
+							enginetest.TestQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, nil)
+						}
+					})
+				}
+			})
 		}
 	}
 }
@@ -1552,9 +1557,8 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunStatsIOTests(t *testing.T, h DoltEnginetestHarness) {
-	h.Setup(setup.MydbData)
-	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
 			e := mustNewEngine(t, h)
@@ -1965,5 +1969,17 @@ func RunDoltWorkspaceTests(t *testing.T, h DoltEnginetestHarness) {
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
+	}
+}
+
+func RunDoltHelpSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
+	dtables.DoltCommand = doltcmd.DoltCommand
+
+	for _, script := range DoltHelpScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
 	}
 }

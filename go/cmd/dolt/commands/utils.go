@@ -106,7 +106,7 @@ func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Comm
 }
 
 // NewArgFreeCliContext creates a new CliContext instance with no arguments using a local SqlEngine. This is useful for testing primarily
-func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContext, errhand.VerboseError) {
+func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv, cwd filesys.Filesys) (cli.CliContext, errhand.VerboseError) {
 	mrEnv, err := env.MultiEnvForSingleEnv(ctx, dEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -119,14 +119,14 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 	if err != nil {
 		return nil, verr
 	}
-	return cli.NewCliContext(argparser.NewEmptyResults(), dEnv.Config, lateBind)
+	return cli.NewCliContext(argparser.NewEmptyResults(), dEnv.Config, cwd, lateBind)
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
 func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
 	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
-		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
+		return nil, errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
 	}
 
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
@@ -247,6 +247,11 @@ func newLateBindingEngine(
 	}
 
 	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (cli.Queryist, *sql.Context, func(), error) {
+		// We've deferred loading the database as long as we can.
+		// If we're binding the Queryist, that means that engine is actually
+		// going to be used.
+		mrEnv.ReloadDBs(ctx2)
+
 		se, err := engine.NewSqlEngine(
 			ctx2,
 			mrEnv,
@@ -287,22 +292,11 @@ func newLateBindingEngine(
 			}
 
 		} else {
+			// Ensure a root user exists, with superuser privs
 			dbUser = DefaultUser
 			ed := rawDb.Editor()
-			user := rawDb.GetUser(ed, dbUser, config.ServerHost, false)
-			ed.Close()
-			if user != nil {
-				// Want to ensure that the user has an empty password. If it has a password, we'll error
-				err := passwordValidate(rawDb, salt, dbUser, nil)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			}
-
-			// If the user doesn't exist, we'll create it with superuser privs.
-			ed = rawDb.Editor()
 			defer ed.Close()
-			rawDb.AddSuperUser(ed, dbUser, config.ServerHost, "")
+			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
 		}
 
 		// Set client to specified user
@@ -863,6 +857,27 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 	}
 
 	return 0
+}
+
+func HandleDEnvErrorsAndExitCode(errorBuilder *errhand.DErrorBuilder, dEnv *env.DoltEnv, usage cli.UsagePrinter) bool {
+	errorCount := 0
+	handleError := func(err error) {
+		if err != nil {
+			var verboseError errhand.VerboseError
+			if errorBuilder != nil {
+				verboseError = errorBuilder.AddCause(err).Build()
+			} else {
+				verboseError = errhand.VerboseErrorFromError(err)
+			}
+			HandleVErrAndExitCode(verboseError, usage)
+			errorCount++
+		}
+	}
+	handleError(dEnv.CfgLoadErr)
+	handleError(dEnv.RSLoadErr)
+	handleError(dEnv.DBLoadError)
+
+	return errorCount > 0
 }
 
 // interpolateStoredProcedureCall returns an interpolated query to call |storedProcedureName| with the arguments

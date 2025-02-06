@@ -228,7 +228,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 
 	source := journalChunkSource{journal: j}
 	for a, cc := range data {
-		buf, err := source.get(ctx, a, nil)
+		buf, _, err := source.get(ctx, a, nil, nil)
 		require.NoError(t, err)
 		ch, err := cc.ToChunk()
 		require.NoError(t, err)

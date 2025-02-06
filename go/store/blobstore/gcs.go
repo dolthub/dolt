@@ -232,12 +232,3 @@ func (bs *GCSBlobstore) composeObjects(ctx context.Context, composite string, so
 func fmtGeneration(g int64) string {
 	return strconv.FormatInt(g, 16)
 }
-
-func min(l, r int) (m int) {
-	if l < r {
-		m = l
-	} else {
-		m = r
-	}
-	return
-}

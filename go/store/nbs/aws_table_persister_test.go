@@ -90,7 +90,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3svc := makeFakeS3(t)
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
-				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+				src, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 				require.NoError(t, err)
 				defer src.close()
 
@@ -108,7 +108,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3svc := makeFakeS3(t)
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", limits: limits64mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
-				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+				src, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 				require.NoError(t, err)
 				defer src.close()
 				if assert.True(mustUint32(src.count()) > 0) {
@@ -133,7 +133,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3svc := makeFakeS3(t)
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
-				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
+				src, _, err := s3p.Persist(context.Background(), mt, existingTable, nil, &Stats{})
 				require.NoError(t, err)
 				defer src.close()
 				assert.True(mustUint32(src.count()) == 0)
@@ -148,7 +148,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				s3svc := &failingFakeS3{makeFakeS3(t), sync.Mutex{}, 1}
 				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
-				_, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+				_, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 				assert.Error(err)
 			})
 		}
@@ -306,7 +306,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			for i := 0; i < len(chunks); i++ {
 				mt := newMemTable(uint64(2 * targetPartSize))
 				mt.addChunk(computeAddr(chunks[i]), chunks[i])
-				cs, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+				cs, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 				require.NoError(t, err)
 				sources = append(sources, cs)
 			}
@@ -379,7 +379,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			}
 
 			var err error
-			sources[i], err = s3p.Persist(context.Background(), mt, nil, &Stats{})
+			sources[i], _, err = s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 			require.NoError(t, err)
 		}
 		src, _, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
@@ -417,9 +417,9 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			rand.Read(medChunks[i])
 			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
 		}
-		cs1, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+		cs1, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
-		cs2, err := s3p.Persist(context.Background(), mtb, nil, &Stats{})
+		cs2, _, err := s3p.Persist(context.Background(), mtb, nil, nil, &Stats{})
 		require.NoError(t, err)
 		sources := chunkSources{cs1, cs2}
 
@@ -450,7 +450,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			mt := newMemTable(uint64(2 * targetPartSize))
 			mt.addChunk(computeAddr(smallChunks[i]), smallChunks[i])
 			var err error
-			sources[i], err = s3p.Persist(context.Background(), mt, nil, &Stats{})
+			sources[i], _, err = s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 			require.NoError(t, err)
 		}
 
@@ -461,7 +461,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 
 		var err error
-		cs, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, _, err := s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		sources = append(sources, cs)
 
@@ -474,7 +474,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			mt.addChunk(computeAddr(medChunks[i]), medChunks[i])
 		}
 
-		cs, err = s3p.Persist(context.Background(), mt, nil, &Stats{})
+		cs, _, err = s3p.Persist(context.Background(), mt, nil, nil, &Stats{})
 		require.NoError(t, err)
 		sources = append(sources, cs)
 

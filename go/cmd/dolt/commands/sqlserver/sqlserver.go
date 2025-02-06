@@ -16,12 +16,15 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -36,7 +39,7 @@ import (
 const (
 	hostFlag                    = "host"
 	portFlag                    = "port"
-	passwordFlag                = "password"
+	skipRootUserInitialization  = "skip-root-user-initialization"
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
 	logLevelFlag                = "loglevel"
@@ -81,7 +84,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}log_level{{.EmphasisRight}}: Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
 
-{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created as needed.
+{{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created automatically if it doesn't exist.
 
 {{.EmphasisLeft}}branch_control_file{{.EmphasisRight}}: Path to a file to load and store branch control permissions. Defaults to {{.EmphasisLeft}}$doltcfg-dir/branch_control.db{{.EmphasisRight}}. Will be created as needed.
 
@@ -92,10 +95,6 @@ SUPPORTED CONFIG FILE FIELDS:
 {{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}}: If true every statement is committed automatically. Defaults to true. @@autocommit can also be specified in each session.
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
-
-{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username that connections should use for authentication
-
-{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password that connections should use for authentication.
 
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
@@ -126,7 +125,7 @@ SUPPORTED CONFIG FILE FIELDS:
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -160,8 +159,11 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "host address", fmt.Sprintf("Defines the host address that the server will run on. Defaults to `%v`.", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "port", fmt.Sprintf("Defines the port that the server will run on. Defaults to `%v`.", serverConfig.Port()))
-	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the server user. Defaults to `%v`. This should be explicit if desired.", serverConfig.User()))
-	ap.SupportsString(passwordFlag, "p", "password", fmt.Sprintf("Defines the server password. Defaults to `%v`.", serverConfig.Password()))
+	// TODO: After December 2025, remove the deprecated user/password arguments completely from the command line
+	//       and config file options for dolt sql-server.
+	ap.SupportsString(commands.UserFlag, "u", "user", "This option is no longer supported. Instead, you can create users using CREATE USER and GRANT SQL statements.")
+	ap.SupportsFlag(skipRootUserInitialization, "", "Skips the automatic creation of a default root super user on the first launch of a SQL server.")
+	ap.SupportsString("password", "p", "password", "This option is no longer supported. Instead, you can create users using CREATE USER and GRANT SQL statements.")
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace`, `debug`, `info`, `warning`, `error`, `fatal`. Defaults to `%v`.", serverConfig.LogLevel()))
@@ -213,7 +215,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 	}()
 
-	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, cliCtx.WorkingDir(), controller)
 	if err != nil {
 		cli.Println(color.RedString(err.Error()))
 		return 1
@@ -231,14 +233,26 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	if multiDbDir {
 		cli.PrintErrln("WARNING: --multi-db-dir is deprecated, use --data-dir instead")
 	}
+	_, userSpecified := apr.GetValue(commands.UserFlag)
+	if userSpecified {
+		return fmt.Errorf("ERROR: --user and --password have been removed from the sql-server command. " +
+			"Create users explicitly with CREATE USER and GRANT statements instead.")
+	}
+
 	return nil
 }
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped.
-func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
+func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv)
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwd)
+	if err != nil {
+		return err
+	}
+
+	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
 		return err
 	}
@@ -248,9 +262,10 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
-	cli.PrintErrf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
+	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
-	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
+	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
+	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv, skipRootUserInitialization)
 	if startError != nil {
 		return startError
 	}
@@ -261,31 +276,88 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return nil
 }
 
+// GetDataDirPreStart returns the data dir to use for the process. This is called early in the bootstrapping of the process
+// to ensure that we know the data dir early. This function first parses the args for the --data-dir flag,
+// then attempts to find it in the server's yaml config file if it was specified.
+//
+// The returned value is non-empty only if we found a data dir. The string will be an absolute path to the data dir. An
+// empty string indicates that there was no data dir specified, and the caller should determine the data dir.
+//
+// If the --data-dir flag is specified in the command line, and the config file, an error is returned.
+func GetDataDirPreStart(fs filesys.Filesys, args []string) (string, error) {
+	ap := SqlServerCmd{}.ArgParser()
+	apr, err := cli.ParseArgs(ap, args, nil)
+	if err != nil {
+		// Parse failure at this stage is ignored. We'll handle it during command execution, to be more consistent with
+		// other commands.
+		return "", nil
+	}
+
+	cliDataDir, hasDataDirCliArg := apr.GetValue(commands.DataDirFlag)
+	if hasDataDirCliArg {
+		cliDataDir, err = fs.Abs(cliDataDir)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	var cfgDataDir string
+	confArg, hasConfArg := apr.GetValue(configFileFlag)
+	if hasConfArg {
+		reader := DoltServerConfigReader{}
+		cfg, err := reader.ReadConfigFile(fs, confArg)
+		if err != nil {
+			return "", err
+		}
+
+		if cfg.DataDir() != "" {
+			cfgDataDir, err = fs.Abs(cfg.DataDir())
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+
+	if cfgDataDir != "" && cliDataDir != "" {
+		return "", errors.New("--data-dir specified in both config file and command line. Please specify only one.")
+	}
+	if cfgDataDir != "" {
+		return cfgDataDir, nil
+	}
+	if cliDataDir != "" {
+		return cliDataDir, nil
+	}
+	return "", nil
+}
+
 // ServerConfigFromArgs returns a ServerConfig from the given args
-func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (servercfg.ServerConfig, error) {
-	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
+func ServerConfigFromArgs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cwd filesys.Filesys) (servercfg.ServerConfig, error) {
+	return ServerConfigFromArgsWithReader(apr, dEnv, cwd, DoltServerConfigReader{})
 }
 
 // ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
 func ServerConfigFromArgsWithReader(
-	ap *argparser.ArgParser,
-	help cli.UsagePrinter,
-	args []string,
+	apr *argparser.ArgParseResults,
 	dEnv *env.DoltEnv,
+	cwd filesys.Filesys,
 	reader ServerConfigReader,
 ) (servercfg.ServerConfig, error) {
-	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return nil, err
 	}
 
-	serverConfig, err := getServerConfig(dEnv.FS, apr, reader)
+	dataDir, err := dEnv.FS.Abs("")
+	if err != nil {
+		return nil, err
+	}
+
+	serverConfig, err := getServerConfig(cwd, apr, dataDir, reader)
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
 
-	if err = setupDoltConfig(dEnv, apr, serverConfig); err != nil {
+	if err = setupDoltConfig(dEnv, cwd, apr, serverConfig); err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
 
@@ -294,10 +366,10 @@ func ServerConfigFromArgsWithReader(
 
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (servercfg.ServerConfig, error) {
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, dataDirOverride string, reader ServerConfigReader) (servercfg.ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 	if !ok {
-		return reader.ReadConfigArgs(apr)
+		return reader.ReadConfigArgs(apr, dataDirOverride)
 	}
 
 	cfg, err := reader.ReadConfigFile(cwdFS, cfgFile)
@@ -305,20 +377,16 @@ func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, read
 		return nil, err
 	}
 
-	// if command line user argument was given, override the config file's user and password
-	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
-		if wcfg, ok := cfg.(servercfg.WritableServerConfig); ok {
-			pass, _ := apr.GetValue(passwordFlag)
-			wcfg.SetUserName(user)
-			wcfg.SetPassword(pass)
-		}
-	}
-
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
 		if yamlCfg, ok := cfg.(servercfg.YAMLConfig); ok {
 			cli.Println(connStr)
 			yamlCfg.GoldenMysqlConn = &connStr
 		}
+	}
+
+	if cfg.UserIsSpecified() {
+		logrus.Warn("user and password are no longer supported in sql-server configuration files." +
+			"Use CREATE USER and GRANT statements to manage user accounts.")
 	}
 
 	return cfg, nil
@@ -332,7 +400,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
 
 	if !hasCfgFile {
-		return NewCommandLineConfig(creds, apr)
+		return NewCommandLineConfig(creds, apr, "")
 	}
 
 	var yamlCfg servercfg.YAMLConfig
@@ -357,7 +425,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 }
 
 // setupDoltConfig updates the given server config with where to create .doltcfg directory
-func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config servercfg.ServerConfig) error {
+func setupDoltConfig(dEnv *env.DoltEnv, cwd filesys.Filesys, apr *argparser.ArgParseResults, config servercfg.ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
 		return nil
 	}
@@ -372,6 +440,13 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	dataDir := serverConfig.DataDir()
 	cfgDir, cfgDirSpecified := apr.GetValue(commands.CfgDirFlag)
 	if cfgDirSpecified {
+		if !filepath.IsAbs(cfgDir) {
+			var err error
+			cfgDir, err = cwd.Abs(cfgDir)
+			if err != nil {
+				return err
+			}
+		}
 		cfgDirPath = cfgDir
 	} else if dataDirSpecified {
 		cfgDirPath = filepath.Join(dataDir, commands.DefaultCfgDirName)
@@ -408,8 +483,17 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	}
 	serverConfig.withCfgDir(cfgDirPath)
 
+	if cfgDirSpecified {
+		serverConfig.valuesSet[servercfg.CfgDirKey] = struct{}{}
+	}
+
+	if dataDirSpecified {
+		serverConfig.valuesSet[servercfg.DataDirKey] = struct{}{}
+	}
+
 	if privsFp, ok := apr.GetValue(commands.PrivsFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privsFp)
+		serverConfig.valuesSet[servercfg.PrivilegeFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultPrivsName))
 		if err != nil {
@@ -420,6 +504,7 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 
 	if branchControlFilePath, ok := apr.GetValue(commands.BranchCtrlPathFlag); ok {
 		serverConfig.withBranchControlFilePath(branchControlFilePath)
+		serverConfig.valuesSet[servercfg.BranchControlFilePathKey] = struct{}{}
 	} else {
 		path, err := dEnv.FS.Abs(filepath.Join(cfgDirPath, commands.DefaultBranchCtrlName))
 		if err != nil {
@@ -429,4 +514,50 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config s
 	}
 
 	return nil
+}
+
+// generateYamlConfigIfNone creates a YAML config file in the database directory if one is not specified in the args
+// and one doesn't already exist in the database directory. The fields of the YAML file are generated using the values
+// in serverConfig that were explicitly set by the command line args.
+func generateYamlConfigIfNone(
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	serverConfig servercfg.ServerConfig) error {
+	const yamlConfigName = "config.yaml"
+
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if apr.Contains(configFileFlag) {
+		return nil
+	}
+
+	path := filepath.Join(serverConfig.DataDir(), yamlConfigName)
+	exists, _ := dEnv.FS.Exists(path)
+	if exists {
+		return nil
+	}
+
+	generatedYaml := generateYamlConfig(serverConfig)
+
+	err := dEnv.FS.WriteFile(path, []byte(generatedYaml), os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// generateYamlConfig returns a YAML string containing the fields in serverConfig that
+// were explicitly set by the command line args, along with commented-out placeholders for any
+// fields that were not explicitly set by the command line args.
+func generateYamlConfig(serverConfig servercfg.ServerConfig) string {
+	yamlConfig := servercfg.ServerConfigSetValuesAsYAMLConfig(serverConfig)
+
+	return `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#` + "\n\n" + yamlConfig.VerboseString()
 }

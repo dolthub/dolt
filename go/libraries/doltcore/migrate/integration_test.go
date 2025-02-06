@@ -153,7 +153,7 @@ func TestMigration(t *testing.T) {
 			root, err := postEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			for _, a := range test.asserts {
-				actual, err := sqle.ExecuteSelect(postEnv, root, a.query)
+				actual, err := sqle.ExecuteSelect(ctx, postEnv, root, a.query)
 				assert.NoError(t, err)
 				assert.Equal(t, a.expected, actual)
 			}
@@ -170,7 +170,7 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 		dEnv, err = test.hook(ctx, dEnv)
 		require.NoError(t, err)
 	}
-	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
 
 	cmd := commands.SqlCmd{}
@@ -212,15 +212,15 @@ func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, err
 func runMigration(t *testing.T, ctx context.Context, preEnv *env.DoltEnv) (postEnv *env.DoltEnv) {
 	ddb, err := initTestMigrationDB(ctx)
 	require.NoError(t, err)
-	postEnv = &env.DoltEnv{
-		Version:   preEnv.Version,
-		Config:    preEnv.Config,
-		RepoState: preEnv.RepoState,
-		FS:        preEnv.FS,
-		DoltDB:    ddb,
-	}
+	postEnv = env.NewDoltEnv(
+		preEnv.Version,
+		preEnv.Config,
+		preEnv.RepoState,
+		ddb,
+		preEnv.FS,
+	)
 
-	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB, postEnv.DoltDB)
+	err = migrate.TraverseDAG(ctx, migrate.Environment{}, preEnv.DoltDB(ctx), postEnv.DoltDB(ctx))
 	assert.NoError(t, err)
 	return
 }

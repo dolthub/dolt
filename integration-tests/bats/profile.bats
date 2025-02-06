@@ -48,7 +48,7 @@ teardown() {
 
     run dolt --profile nonExistentProfile sql -q "select * from altDB_tbl"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Failure to parse arguments: profile nonExistentProfile not found" ]] || false
+    [[ "$output" =~ "Failed to inject profile arguments: profile nonExistentProfile not found" ]] || false
 }
 
 @test "profile: additional flag gets used" {
@@ -88,7 +88,7 @@ teardown() {
     cd -
 
     start_sql_server altDb
-    dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+    dolt sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
     dolt profile add --user "not-steph" --password "pass" --use-db altDB userWithDBProfile
 
     run dolt --profile userWithDBProfile --user steph sql -q "select * from test"
@@ -105,7 +105,7 @@ teardown() {
     cd -
 
     start_sql_server altDb
-    dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+    dolt sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
     dolt profile add --user "not-steph" --password "pass" userProfile
 
     run dolt --profile userProfile --user steph --use-db altDB sql -q "select * from test"

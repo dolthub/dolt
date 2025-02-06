@@ -104,7 +104,7 @@ func persistReplicaRunningState(ctx *sql.Context, state replicaRunningState) err
 
 // loadReplicationConfiguration loads the replication configuration for default channel ("") from
 // the "mysql" database, |mysqlDb|.
-func loadReplicationConfiguration(_ *sql.Context, mysqlDb *mysql_db.MySQLDb) (*mysql_db.ReplicaSourceInfo, error) {
+func loadReplicationConfiguration(ctx *sql.Context, mysqlDb *mysql_db.MySQLDb) (*mysql_db.ReplicaSourceInfo, error) {
 	rd := mysqlDb.Reader()
 	defer rd.Close()
 

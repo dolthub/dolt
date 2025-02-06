@@ -655,28 +655,28 @@ type testChunkSource struct {
 
 var _ chunkSource = (*testChunkSource)(nil)
 
-func (tcs *testChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+func (tcs *testChunkSource) get(_ context.Context, h hash.Hash, _ keeperF, _ *Stats) ([]byte, gcBehavior, error) {
 	for _, chk := range tcs.chunks {
 		if chk.Hash() == h {
-			return chk.Data(), nil
+			return chk.Data(), gcBehavior_Continue, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, gcBehavior_Continue, errors.New("not found")
 }
 
-func (tcs *testChunkSource) has(h hash.Hash) (bool, error) {
+func (tcs *testChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) hasMany(addrs []hasRecord) (bool, error) {
+func (tcs *testChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (tcs *testChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	panic("never used")
 }
 
@@ -700,7 +700,7 @@ func (tcs *testChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, 
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
+func (tcs *testChunkSource) getRecordRanges(ctx context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
 	panic("never used")
 }
 
@@ -716,6 +716,6 @@ func (tcs *testChunkSource) currentSize() uint64 {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
+func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	panic("never used")
 }

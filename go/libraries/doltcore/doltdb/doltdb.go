@@ -594,6 +594,56 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw, ddb.ns)
 }
 
+// TagResolver is used to late load tag metadata resolution. There are situations where we need to list all the tags, but
+// don't necessarily need to load their metadata. See GetTagResolvers
+type TagResolver struct {
+	ddb *DoltDB
+	ref ref.TagRef
+	h   hash.Hash
+}
+
+// Addr returns the hash of the object storing the Tag data. It is loaded and deserialize by the Resolve method.
+func (tr *TagResolver) Addr() hash.Hash {
+	return tr.h
+}
+
+// Resolve resolves the tag reference to a *Tag, complete with its metadata.
+func (tr *TagResolver) Resolve(ctx context.Context) (*Tag, error) {
+	return tr.ddb.ResolveTag(ctx, tr.ref)
+}
+
+// GetTagResolvers takes a slice of TagRefs and returns the corresponding Tag objects.
+func (ddb *DoltDB) GetTagResolvers(ctx context.Context, tagRefs []ref.DoltRef) ([]TagResolver, error) {
+	datasets, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]ref.TagRef)
+	for _, tagRef := range tagRefs {
+		if tr, ok := tagRef.(ref.TagRef); ok {
+			tagMap[tagRef.String()] = tr
+		} else {
+			panic(fmt.Sprintf("runtime error: expected TagRef, got %T", tagRef))
+		}
+	}
+
+	results := make([]TagResolver, 0, len(tagRefs))
+
+	err = datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+		if val, ok := tagMap[id]; ok {
+			tr := TagResolver{ddb: ddb, ref: val, h: addr}
+			results = append(results, tr)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.
 func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.WorkingSetRef) (*WorkingSet, error) {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
@@ -654,6 +704,45 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv RootValue) (RootValue,
 		return nil, types.Ref{}, err
 	}
 	return rv, ref, nil
+}
+
+// Persists all relevant root values of the WorkingSet to the database and returns all hashes reachable
+// from the working set. This is used in GC, for example, where all dependencies of the in-memory working
+// set value need to be accounted for.
+func (ddb *DoltDB) WorkingSetHashes(ctx context.Context, ws *WorkingSet) ([]hash.Hash, error) {
+	spec, err := ws.writeValues(ctx, ddb, nil)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]hash.Hash, 0)
+	ret = append(ret, spec.StagedRoot.TargetHash())
+	ret = append(ret, spec.WorkingRoot.TargetHash())
+	if spec.MergeState != nil {
+		fromCommit, err := spec.MergeState.FromCommit(ctx, ddb.vrw)
+		if err != nil {
+			return nil, err
+		}
+		h, err := fromCommit.NomsValue().Hash(ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, h)
+		h, err = spec.MergeState.PreMergeWorkingAddr(ctx, ddb.vrw)
+		ret = append(ret, h)
+	}
+	if spec.RebaseState != nil {
+		ret = append(ret, spec.RebaseState.PreRebaseWorkingAddr())
+		commit, err := spec.RebaseState.OntoCommit(ctx, ddb.vrw)
+		if err != nil {
+			return nil, err
+		}
+		h, err := commit.NomsValue().Hash(ddb.db.Format())
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, h)
+	}
+	return ret, nil
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
@@ -1678,7 +1767,7 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 // until no possibly-stale ChunkStore state is retained in memory, or failing
 // certain in-progress operations which cannot be finalized in a timely manner,
 // etc.
-func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, safepointF func() error) error {
+func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, safepointController types.GCSafepointController) error {
 	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
@@ -1722,7 +1811,7 @@ func (ddb *DoltDB) GC(ctx context.Context, mode types.GCMode, safepointF func() 
 		return err
 	}
 
-	return collector.GC(ctx, mode, oldGen, newGen, safepointF)
+	return collector.GC(ctx, mode, oldGen, newGen, safepointController)
 }
 
 func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
@@ -1837,7 +1926,7 @@ func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
 func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
 	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
 	if !ok {
-		return false, errors.New("unsupported operation, DoltDB.TableFileStoreHasManifest on non-TableFileStore")
+		return false, errors.New("unsupported operation, doltDB.TableFileStoreHasManifest on non-TableFileStore")
 	}
 	_, tableFiles, _, err := tableFileStore.Sources(ctx)
 	if err != nil {

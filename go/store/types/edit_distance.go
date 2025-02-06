@@ -54,26 +54,6 @@ func (s Splice) String() string {
 	return fmt.Sprintf("[%d, %d, %d, %d]", s.SpAt, s.SpRemoved, s.SpAdded, s.SpFrom)
 }
 
-func uint64Min(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func uint64Min3(a, b, c uint64) uint64 {
-	if a < b {
-		if a < c {
-			return a
-		}
-	} else {
-		if b < c {
-			return b
-		}
-	}
-	return c
-}
-
 func reverse(numbers []uint64) []uint64 {
 	newNumbers := make([]uint64, len(numbers))
 	for i := 0; i < len(numbers); i++ {
@@ -91,7 +71,7 @@ func addSplice(splices []Splice, s Splice) []Splice {
 }
 
 func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSize uint64, eqFn EditDistanceEqualsFn) ([]Splice, error) {
-	minLength := uint64Min(previousLength, currentLength)
+	minLength := min(previousLength, currentLength)
 	prefixCount, err := sharedPrefix(eqFn, minLength)
 
 	if err != nil {
@@ -227,7 +207,7 @@ func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previous
 			} else {
 				north := distances[i-1][j] + 1
 				west := distances[i][j-1] + 1
-				distances[i][j] = uint64Min(north, west)
+				distances[i][j] = min(north, west)
 			}
 		}
 	}
@@ -255,7 +235,7 @@ func operationsFromEditDistances(distances [][]uint64) []uint64 {
 		west := distances[i-1][j]
 		north := distances[i][j-1]
 
-		minValue := uint64Min3(west, north, northWest)
+		minValue := min(west, north, northWest)
 
 		if minValue == northWest {
 			if northWest == current {

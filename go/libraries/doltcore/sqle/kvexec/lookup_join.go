@@ -113,7 +113,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				return nil, io.EOF
 			}
 
-			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(ctx, l.srcKey, l.srcVal)
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(l.srcKey, l.srcVal)
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +173,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				// override default left join behavior
 				l.dstKey = nil
 				continue
-			} else if !sql.IsTrue(res) && l.dstKey != nil {
+			} else if !sql.IsTrue(res) && dstKey != nil {
 				continue
 			}
 		}
@@ -200,7 +200,7 @@ type lookupMapping struct {
 	pool pool.BuffPool
 }
 
-func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, ns tree.NodeStore) *lookupMapping {
+func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {
 	keyless := schema.IsKeyless(sourceSch)
 	// |split| is an index into the schema separating the key and value fields
 	var split int
@@ -223,7 +223,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 			// map the schema order index to the physical storage index
 			col, ok := sourceSch.GetAllCols().LowerNameToCol[strings.ToLower(e.Name())]
 			if !ok {
-				return nil
+				return nil, fmt.Errorf("failed to build lookup mapping, column missing from schema: %s", e.Name())
 			}
 			if col.IsPartOfPK {
 				srcMapping[i] = sourceSch.GetPKCols().TagToIdx[col.Tag]
@@ -242,7 +242,14 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	litDesc := val.NewTupleDescriptor(litTypes...)
 	litTb := val.NewTupleBuilder(litDesc)
 	for i, j := range litMappings {
-		tree.PutField(ctx, ns, litTb, i, keyExprs[j].(*expression.Literal).Value())
+		val := keyExprs[j].(*expression.Literal).Value()
+		val, _, err := typs[j].Type.Convert(val)
+		if err != nil {
+			return nil, err
+		}
+		if err := tree.PutField(ctx, ns, litTb, i, val); err != nil {
+			return nil, err
+		}
 	}
 
 	var litTuple val.Tuple
@@ -260,7 +267,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 		targetKb:   val.NewTupleBuilder(tgtKeyDesc),
 		ns:         ns,
 		pool:       ns.Pool(),
-	}
+	}, nil
 }
 
 // valid returns whether the source and destination key types
@@ -292,7 +299,7 @@ func (m *lookupMapping) valid() bool {
 	return true
 }
 
-func (m *lookupMapping) dstKeyTuple(ctx context.Context, srcKey, srcVal val.Tuple) (val.Tuple, error) {
+func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error) {
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)

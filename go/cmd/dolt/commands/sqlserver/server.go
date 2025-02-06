@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -57,6 +59,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -81,13 +84,14 @@ func Serve(
 	serverConfig servercfg.ServerConfig,
 	controller *svcs.Controller,
 	dEnv *env.DoltEnv,
+	skipRootUserInitialization bool,
 ) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
 	if controller == nil {
 		controller = svcs.NewController()
 	}
 
-	ConfigureServices(serverConfig, controller, version, dEnv)
+	ConfigureServices(serverConfig, controller, version, dEnv, skipRootUserInitialization)
 
 	go controller.Start(ctx)
 	err := controller.WaitForStart()
@@ -102,6 +106,7 @@ func ConfigureServices(
 	controller *svcs.Controller,
 	version string,
 	dEnv *env.DoltEnv,
+	skipRootUserInitialization bool,
 ) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
@@ -155,30 +160,13 @@ func ConfigureServices(
 	controller.Register(newHeartbeatService(version, dEnv))
 
 	fs := dEnv.FS
-	InitDataDir := &svcs.AnonService{
+	InitFailsafes := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
-				if err != nil {
-					return err
-				}
-				// If datadir has changed, then reload the DoltEnv to ensure its local
-				// configuration store gets configured correctly
-				dEnv.FS = fs
-				dEnv = env.Load(ctx, dEnv.GetUserHomeDir, fs, doltdb.LocalDirDoltDB, dEnv.Version)
-
-				// If the datadir has changed, then we need to load any persisted global variables
-				// from the new datadir's local configuration store
-				err = dsess.InitPersistedSystemVars(dEnv)
-				if err != nil {
-					logrus.Errorf("failed to load persisted global variables: %s\n", err.Error())
-				}
-			}
 			dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 			return nil
 		},
 	}
-	controller.Register(InitDataDir)
+	controller.Register(InitFailsafes)
 
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
@@ -192,7 +180,7 @@ func ConfigureServices(
 	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
 			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-				if dEnv.IsAccessModeReadOnly() {
+				if dEnv.IsAccessModeReadOnly(ctx) {
 					return true, ErrCouldNotLockDatabase.New(name)
 				}
 				return false, nil
@@ -237,19 +225,20 @@ func ConfigureServices(
 	InitSqlEngineConfig := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			config = &engine.SqlEngineConfig{
-				IsReadOnly:              serverConfig.ReadOnly(),
-				PrivFilePath:            serverConfig.PrivilegeFilePath(),
-				BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
-				DoltCfgDirPath:          serverConfig.CfgDir(),
-				ServerUser:              serverConfig.User(),
-				ServerPass:              serverConfig.Password(),
-				ServerHost:              serverConfig.Host(),
-				Autocommit:              serverConfig.AutoCommit(),
-				DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
-				JwksConfig:              serverConfig.JwksConfig(),
-				SystemVariables:         serverConfig.SystemVars(),
-				ClusterController:       clusterController,
-				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
+				IsReadOnly:                 serverConfig.ReadOnly(),
+				PrivFilePath:               serverConfig.PrivilegeFilePath(),
+				BranchCtrlFilePath:         serverConfig.BranchControlFilePath(),
+				DoltCfgDirPath:             serverConfig.CfgDir(),
+				ServerUser:                 serverConfig.User(),
+				ServerPass:                 serverConfig.Password(),
+				ServerHost:                 serverConfig.Host(),
+				Autocommit:                 serverConfig.AutoCommit(),
+				DoltTransactionCommit:      serverConfig.DoltTransactionCommit(),
+				JwksConfig:                 serverConfig.JwksConfig(),
+				SystemVariables:            serverConfig.SystemVars(),
+				ClusterController:          clusterController,
+				BinlogReplicaController:    binlogreplication.DoltBinlogReplicaController,
+				SkipRootUserInitialization: skipRootUserInitialization,
 			}
 			return nil
 		},
@@ -381,30 +370,68 @@ func ConfigureServices(
 	}
 	controller.Register(InitBinlogging)
 
-	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
-	InitSuperUser := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			userSpecified := config.ServerUser != ""
+	// MySQL creates a root superuser when the mysql install is first initialized. Depending on the options
+	// specified, the root superuser is created without a password, or with a random password. This varies
+	// slightly in some OS-specific installers. Dolt initializes the root superuser the first time a
+	// sql-server is started and initializes its privileges database. We do this on sql-server initialization,
+	// instead of dolt db initialization, because we only want to create the privileges database when it's
+	// used for a server, and because we want the same root initialization logic when a sql-server is started
+	// for a clone. More details: https://dev.mysql.com/doc/mysql-security-excerpt/8.0/en/default-privileges.html
+	InitImplicitRootSuperUser := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			// If privileges.db has already been initialized, indicating that this is NOT the
+			// first time sql-server has been launched, then don't initialize the root superuser.
+			if permissionDbExists, err := doesPrivilegesDbExist(dEnv, serverConfig.PrivilegeFilePath()); err != nil {
+				return err
+			} else if permissionDbExists {
+				logrus.Debug("privileges.db already exists, not creating root superuser")
+				return nil
+			}
 
+			// We always persist the privileges.db file, to signal that the privileges system has been initialized
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			var numUsers int
-			ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
-			privsExist := numUsers != 0
-			if userSpecified {
-				superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
-				if userSpecified && superuser == nil {
-					mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
-				}
-			} else if !privsExist {
-				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, "%", servercfg.DefaultPass)
-			}
-			ed.Close()
+			defer ed.Close()
 
-			return nil
+			// Create the root@localhost superuser, unless --skip-root-user-initialization was specified
+			if !config.SkipRootUserInitialization {
+				// Allow the user to override the default root host (localhost) and password ("").
+				// This is particularly useful in a Docker container, where you need to connect
+				// to the sql-server from outside the container and can't rely on localhost.
+				rootHost := "localhost"
+				doltRootHost := os.Getenv(dconfig.EnvDoltRootHost)
+				if doltRootHost != "" {
+					logrus.Infof("Overriding root user host with value from DOLT_ROOT_HOST: %s", doltRootHost)
+					rootHost = doltRootHost
+				}
+
+				rootPassword := servercfg.DefaultPass
+				doltRootPassword := os.Getenv(dconfig.EnvDoltRootPassword)
+				if doltRootPassword != "" {
+					logrus.Info("Overriding root user password with value from DOLT_ROOT_PASSWORD")
+					rootPassword = doltRootPassword
+				}
+
+				logrus.Infof("Creating root@%s superuser", rootHost)
+				mysqlDb.AddSuperUser(ed, servercfg.DefaultUser, rootHost, rootPassword)
+			}
+
+			// TODO: The in-memory filesystem doesn't work with the GMS API
+			//       for persisting the privileges database. The filesys API
+			//       is in the Dolt layer, so when the file path is passed to
+			//       GMS, it expects it to be a path on disk, and errors out.
+			if _, isInMemFs := dEnv.FS.(*filesys.InMemFS); isInMemFs {
+				return nil
+			} else {
+				sqlCtx, err := sqlEngine.NewDefaultContext(context.Background())
+				if err != nil {
+					return err
+				}
+				return mysqlDb.Persist(sqlCtx, ed)
+			}
 		},
 	}
-	controller.Register(InitSuperUser)
+	controller.Register(InitImplicitRootSuperUser)
 
 	var metListener *metricsListener
 	InitMetricsListener := &svcs.AnonService{
@@ -424,7 +451,7 @@ func ConfigureServices(
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
+			mysqlDb.AddEphemeralSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
 			ed.Close()
 			return nil
 		},
@@ -509,21 +536,27 @@ func ConfigureServices(
 			}
 
 			listenaddr := fmt.Sprintf(":%d", port)
+			sqlContextInterceptor := sqle.SqlContextServerInterceptor{
+				Factory: sqlEngine.NewDefaultContext,
+			}
 			args := remotesrv.ServerArgs{
 				Logger:             logrus.NewEntry(lgr),
 				ReadOnly:           apiReadOnly || serverConfig.ReadOnly(),
 				HttpListenAddr:     listenaddr,
 				GrpcListenAddr:     listenaddr,
 				ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET,
+				Options:            sqlContextInterceptor.Options(),
+				HttpInterceptor:    sqlContextInterceptor.HTTP(nil),
 			}
 			var err error
-			args.FS, args.DBCache, err = sqle.RemoteSrvFSAndDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)
+			args.FS = sqlEngine.FileSystem()
+			args.DBCache, err = sqle.RemoteSrvDBCache(sqle.GetInterceptorSqlContext, sqle.DoNotCreateUnknownDatabases)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
 			}
 
-			authenticator := newAccessController(sqlEngine.NewDefaultContext, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			authenticator := newAccessController(sqle.GetInterceptorSqlContext, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			args = sqle.WithUserPasswordAuth(args, authenticator)
 			args.TLSConfig = serverConf.TLSConfig
 
@@ -571,6 +604,7 @@ func ConfigureServices(
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
 			}
+			args.FS = sqlEngine.FileSystem()
 
 			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
 			if err != nil {
@@ -584,7 +618,7 @@ func ConfigureServices(
 				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
 				return err
 			}
-			clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.srv.GrpcServer())
+			clusterController.RegisterGrpcServices(sqle.GetInterceptorSqlContext, clusterRemoteSrv.srv.GrpcServer())
 
 			clusterRemoteSrv.lis, err = clusterRemoteSrv.srv.Listeners()
 			if err != nil {
@@ -661,7 +695,13 @@ func ConfigureServices(
 	AutoStartBinlogReplica := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
 			// If we're unable to restart replication, log an error, but don't prevent the server from starting up
-			if err := binlogreplication.DoltBinlogReplicaController.AutoStart(ctx); err != nil {
+			sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+			if err != nil {
+				logrus.Errorf("unable to restart replication, could not create session: %s", err.Error())
+				return nil
+			}
+			defer sql.SessionEnd(sqlCtx.Session)
+			if err := binlogreplication.DoltBinlogReplicaController.AutoStart(sqlCtx); err != nil {
 				logrus.Errorf("unable to restart replication: %s", err.Error())
 			}
 			return nil
@@ -874,6 +914,29 @@ func (r *remotesapiAuth) ApiAuthorize(ctx context.Context, superUserRequired boo
 		}
 		return false, fmt.Errorf("API Authorization Failure: %s has not been granted CLONE_ADMIN access", sqlCtx.Session.Client().User)
 	}
+	return true, nil
+}
+
+// doesPrivilegesDbExist looks for an existing privileges database as the specified |privilegeFilePath|. If
+// |privilegeFilePath| is an absolute path, it is used directly. If it is a relative path, then it is resolved
+// relative to the root of the specified |dEnv|.
+func doesPrivilegesDbExist(dEnv *env.DoltEnv, privilegeFilePath string) (exists bool, err error) {
+	if !filepath.IsAbs(privilegeFilePath) {
+		privilegeFilePath, err = dEnv.FS.Abs(privilegeFilePath)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	_, err = os.Stat(privilegeFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+
 	return true, nil
 }
 

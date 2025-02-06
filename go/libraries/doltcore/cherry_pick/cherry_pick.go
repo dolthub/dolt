@@ -246,7 +246,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 
 	doltDB, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
-		return nil, "", fmt.Errorf("failed to get DoltDB")
+		return nil, "", fmt.Errorf("failed to get doltDB")
 	}
 
 	dbData, ok := dSess.GetDbData(ctx, dbName)

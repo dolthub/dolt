@@ -45,21 +45,28 @@ func (ea gcErrAccum) Error() string {
 
 type gcCopier struct {
 	writer *CmpChunkTableWriter
+	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier() (*gcCopier, error) {
+func newGarbageCollectionCopier(tfp tableFilePersister) (*gcCopier, error) {
 	writer, err := NewCmpChunkTableWriter("")
 	if err != nil {
 		return nil, err
 	}
-	return &gcCopier{writer}, nil
+	return &gcCopier{writer, tfp}, nil
 }
 
 func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
 	return gcc.writer.AddCmpChunk(c)
 }
 
-func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister) (ts []tableSpec, err error) {
+// If the writer should be closed and deleted, instead of being used with
+// copyTablesToDir, call this method.
+func (gcc *gcCopier) cancel(_ context.Context) error {
+	return gcc.writer.Cancel()
+}
+
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err error) {
 	var filename string
 	filename, err = gcc.writer.Finish()
 	if err != nil {
@@ -79,7 +86,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 		return nil, fmt.Errorf("invalid filename: %s", filename)
 	}
 
-	exists, err := tfp.Exists(ctx, addr, uint32(gcc.writer.ChunkCount()), nil)
+	exists, err := gcc.tfp.Exists(ctx, addr, uint32(gcc.writer.ChunkCount()), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +101,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	}
 
 	// Attempt to rename the file to the destination if we are working with a fsTablePersister...
-	if mover, ok := tfp.(movingTableFilePersister); ok {
+	if mover, ok := gcc.tfp.(movingTableFilePersister); ok {
 		err = mover.TryMoveCmpChunkTableWriter(ctx, filename, gcc.writer)
 		if err == nil {
 			return []tableSpec{
@@ -114,7 +121,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	defer r.Close()
 	sz := gcc.writer.ContentLength()
 
-	err = tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
+	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
 		return nil, err
 	}

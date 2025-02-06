@@ -16,6 +16,7 @@ setup_test_user() {
     dolt sql -q "create user test identified by ''"
     dolt sql -q "grant all on *.* to test"
     dolt sql -q "delete from dolt_branch_control where user='%'"
+    SQL_USER=test
 }
 
 @test "branch-control: fresh database. branch control tables exist" {

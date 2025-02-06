@@ -342,6 +342,17 @@ func (sm SerialMessage) HumanReadableStringAtIndentationLevel(level int) string 
 
 		_ = OutputProllyNodeBytes(ret, serial.Message(sm))
 
+		// deleting everything from a vector index turns it into a regular index?
+		level -= 1
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
+	case serial.VectorIndexNodeFileID:
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "Vector Index {\n")
+		level++
+
+		_ = OutputVectorIndexNodeBytes(ret, serial.Message(sm))
+
 		level -= 1
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
@@ -476,6 +487,66 @@ func OutputProllyNodeBytes(w io.Writer, msg serial.Message) error {
 						continue
 					}
 				}
+				w.Write([]byte(hex.EncodeToString(field)))
+			}
+
+			w.Write([]byte(" }"))
+		} else {
+			ref := hash.New(values.GetItem(i, msg))
+
+			w.Write([]byte(" ref: #"))
+			w.Write([]byte(ref.String()))
+			w.Write([]byte(" }"))
+		}
+	}
+
+	w.Write([]byte("\n"))
+	return nil
+}
+
+func OutputVectorIndexNodeBytes(w io.Writer, msg serial.Message) error {
+	fileId, keys, values, treeLevel, count, err := message.UnpackFields(msg)
+	if fileId != serial.VectorIndexNodeFileID {
+		return fmt.Errorf("unexpected file ID, expected %s, got %s", serial.VectorIndexNodeFileID, fileId)
+	}
+	if err != nil {
+		return err
+	}
+	isLeaf := treeLevel == 0
+
+	for i := 0; i < int(count); i++ {
+		k := keys.GetItem(i, msg)
+		kt := val.Tuple(k)
+
+		w.Write([]byte("\n    { key: "))
+		// The first key of a vector index is always a vector, which right now is JSON and thus addressable.
+		// This may not always be true in the future.
+
+		for j := 0; j < kt.Count(); j++ {
+			if j == 0 {
+				ref := hash.New(kt.GetField(0))
+
+				w.Write([]byte(" #"))
+				w.Write([]byte(ref.String()))
+				continue
+			}
+			if j > 0 {
+				w.Write([]byte(", "))
+			}
+
+			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
+		}
+
+		if isLeaf {
+			v := values.GetItem(i, msg)
+			vt := val.Tuple(v)
+
+			w.Write([]byte(" value: "))
+			for j := 0; j < vt.Count(); j++ {
+				if j > 0 {
+					w.Write([]byte(", "))
+				}
+				field := vt.GetField(j)
 				w.Write([]byte(hex.EncodeToString(field)))
 			}
 
@@ -698,10 +769,10 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return err
 			}
 		}
-	case serial.TableSchemaFileID, serial.ForeignKeyCollectionFileID:
+	case serial.TableSchemaFileID, serial.ForeignKeyCollectionFileID, serial.TupleFileID:
 		// no further references from these file types
 		return nil
-	case serial.ProllyTreeNodeFileID, serial.AddressMapFileID, serial.MergeArtifactsFileID, serial.BlobFileID, serial.CommitClosureFileID:
+	case serial.ProllyTreeNodeFileID, serial.AddressMapFileID, serial.MergeArtifactsFileID, serial.BlobFileID, serial.CommitClosureFileID, serial.VectorIndexNodeFileID:
 		return message.WalkAddresses(context.TODO(), serial.Message(sm), func(ctx context.Context, addr hash.Hash) error {
 			return cb(addr)
 		})

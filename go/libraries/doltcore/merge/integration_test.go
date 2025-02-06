@@ -122,7 +122,7 @@ func TestMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			for _, tc := range setupCommon {
 				exit := tc.exec(t, ctx, dEnv)
@@ -135,7 +135,7 @@ func TestMerge(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
+			actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, test.query)
 			require.NoError(t, err)
 
 			require.Equal(t, len(test.expected), len(actRows))
@@ -244,7 +244,7 @@ func TestMergeConflicts(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtu.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 
 			for _, tc := range setupCommon {
 				exit := tc.exec(t, ctx, dEnv)
@@ -263,7 +263,7 @@ func TestMergeConflicts(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
+			actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, test.query)
 			require.NoError(t, err)
 
 			require.Equal(t, len(test.expected), len(actRows))
@@ -293,7 +293,7 @@ const (
 func TestMergeConcurrency(t *testing.T) {
 	ctx := context.Background()
 	dEnv := setupConcurrencyTest(t, ctx)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	_, eng := engineFromEnvironment(ctx, dEnv)
 
 	eg, ctx := errgroup.WithContext(ctx)

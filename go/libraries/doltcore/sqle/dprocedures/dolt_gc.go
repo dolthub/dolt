@@ -15,6 +15,7 @@
 package dprocedures
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,9 +37,18 @@ const (
 	cmdSuccess = 0
 )
 
+var useSessionAwareSafepointController bool
+
 func init() {
 	if os.Getenv(dconfig.EnvDisableGcProcedure) != "" {
 		DoltGCFeatureFlag = false
+	}
+	if choice := os.Getenv(dconfig.EnvGCSafepointControllerChoice); choice != "" {
+		if choice == "session_aware" {
+			useSessionAwareSafepointController = true
+		} else if choice != "kill_connections" {
+			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
+		}
 	}
 }
 
@@ -56,6 +67,129 @@ func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 var ErrServerPerformedGC = errors.New("this connection was established when this server performed an online garbage collection. this connection can no longer be used. please reconnect.")
+
+// The original behavior safepoint controller, which kills all connections right as the GC process is being finalized.
+// The only connection which is left up is the connection on which dolt_gc is called, but that connection is
+// invalidated in such a way that all future queries on it return an error.
+type killConnectionsSafepointController struct {
+	callCtx   *sql.Context
+	origEpoch int
+}
+
+func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	return nil
+}
+
+func (sc killConnectionsSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	return nil
+}
+
+func checkEpochSame(origEpoch int) error {
+	// Here we need to sanity check role and epoch.
+	if origEpoch != -1 {
+		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+			if role.(string) != "primary" {
+				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
+			}
+			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			if !ok {
+				return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
+			}
+			if origEpoch != epoch.(int) {
+				return fmt.Errorf("dolt_gc failed: when we began we were primary in the cluster at epoch %d, but now we are at epoch %d. for gc to safely finalize, our role and epoch must not change throughout the gc.", origEpoch, epoch.(int))
+			}
+		} else {
+			return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role.")
+		}
+	}
+	return nil
+}
+
+func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
+	err := checkEpochSame(sc.origEpoch)
+	if err != nil {
+		return err
+	}
+
+	killed := make(map[uint32]struct{})
+	processes := sc.callCtx.ProcessList.Processes()
+	for _, p := range processes {
+		if p.Connection != sc.callCtx.Session.ID() {
+			// Kill any inflight query.
+			sc.callCtx.ProcessList.Kill(p.Connection)
+			// Tear down the connection itself.
+			sc.callCtx.KillConnection(p.Connection)
+			killed[p.Connection] = struct{}{}
+		}
+	}
+
+	// Look in processes until the connections are actually gone.
+	params := backoff.NewExponentialBackOff()
+	params.InitialInterval = 1 * time.Millisecond
+	params.MaxInterval = 25 * time.Millisecond
+	params.MaxElapsedTime = 3 * time.Second
+	err = backoff.Retry(func() error {
+		processes := sc.callCtx.ProcessList.Processes()
+		allgood := true
+		for _, p := range processes {
+			if _, ok := killed[p.Connection]; ok {
+				allgood = false
+				sc.callCtx.ProcessList.Kill(p.Connection)
+			}
+		}
+		if !allgood {
+			return errors.New("unable to establish safepoint.")
+		}
+		return nil
+	}, params)
+	if err != nil {
+		return err
+	}
+	sc.callCtx.Session.SetTransaction(nil)
+	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
+	return nil
+}
+
+func (sc killConnectionsSafepointController) CancelSafepoint() {
+}
+
+type sessionAwareSafepointController struct {
+	controller *dsess.GCSafepointController
+	callCtx    *sql.Context
+	origEpoch  int
+
+	waiter *dsess.GCSafepointWaiter
+	keeper func(hash.Hash) bool
+}
+
+func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
+	return sess.VisitGCRoots(ctx, sc.callCtx.GetCurrentDatabase(), sc.keeper)
+}
+
+func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.keeper = keeper
+	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
+	err := sc.visit(ctx, thisSess)
+	if err != nil {
+		return err
+	}
+	sc.waiter = sc.controller.Waiter(ctx, thisSess, sc.visit)
+	return nil
+}
+
+func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	return sc.waiter.Wait(ctx)
+}
+
+func (sc *sessionAwareSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
+	return checkEpochSame(sc.origEpoch)
+}
+
+func (sc *sessionAwareSafepointController) CancelSafepoint() {
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sc.waiter.Wait(canceledCtx)
+}
 
 func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
@@ -97,7 +231,6 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 		// We assert that we are the primary here before we begin, and
 		// we assert again that we are the primary at the same epoch as
 		// we establish the safepoint.
-
 		origepoch := -1
 		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
 			// TODO: magic constant...
@@ -116,61 +249,21 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		// TODO: If we got a callback at the beginning and an
-		// (allowed-to-block) callback at the end, we could more
-		// gracefully tear things down.
-		err = ddb.GC(ctx, mode, func() error {
-			if origepoch != -1 {
-				// Here we need to sanity check role and epoch.
-				if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
-					if role.(string) != "primary" {
-						return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but now our role is %s", role.(string))
-					}
-					_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
-					if !ok {
-						return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role epoch.")
-					}
-					if origepoch != epoch.(int) {
-						return fmt.Errorf("dolt_gc failed: when we began we were primary in the cluster at epoch %d, but now we are at epoch %d. for gc to safely finalize, our role and epoch must not change throughout the gc.", origepoch, epoch.(int))
-					}
-				} else {
-					return fmt.Errorf("dolt_gc failed: when we began we were a primary in a cluster, but we can no longer read the cluster role.")
-				}
+		var sc types.GCSafepointController
+		if useSessionAwareSafepointController {
+			gcSafepointController := dSess.GCSafepointController()
+			sc = &sessionAwareSafepointController{
+				origEpoch:  origepoch,
+				callCtx:    ctx,
+				controller: gcSafepointController,
 			}
-
-			killed := make(map[uint32]struct{})
-			processes := ctx.ProcessList.Processes()
-			for _, p := range processes {
-				if p.Connection != ctx.Session.ID() {
-					// Kill any inflight query.
-					ctx.ProcessList.Kill(p.Connection)
-					// Tear down the connection itself.
-					ctx.KillConnection(p.Connection)
-					killed[p.Connection] = struct{}{}
-				}
+		} else {
+			sc = killConnectionsSafepointController{
+				origEpoch: origepoch,
+				callCtx:   ctx,
 			}
-
-			// Look in processes until the connections are actually gone.
-			params := backoff.NewExponentialBackOff()
-			params.InitialInterval = 1 * time.Millisecond
-			params.MaxInterval = 25 * time.Millisecond
-			params.MaxElapsedTime = 3 * time.Second
-			err := backoff.Retry(func() error {
-				processes := ctx.ProcessList.Processes()
-				for _, p := range processes {
-					if _, ok := killed[p.Connection]; ok {
-						return errors.New("unable to establish safepoint.")
-					}
-				}
-				return nil
-			}, params)
-			if err != nil {
-				return err
-			}
-			ctx.Session.SetTransaction(nil)
-			dsess.DSessFromSess(ctx.Session).SetValidateErr(ErrServerPerformedGC)
-			return nil
-		})
+		}
+		err = ddb.GC(ctx, mode, sc)
 		if err != nil {
 			return cmdFailure, err
 		}

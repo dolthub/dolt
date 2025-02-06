@@ -176,7 +176,7 @@ func TestGetKeyTags(t *testing.T) {
 func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.DoltDB, doltdb.RootValue) {
 	dEnv := dtestutils.CreateTestEnv()
 	cmd := commands.SqlCmd{}
-	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
 	for _, query := range setup {
@@ -185,5 +185,5 @@ func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.Dolt
 	}
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	return dEnv.DoltDB, root
+	return dEnv.DoltDB(ctx), root
 }

@@ -9,24 +9,31 @@ teardown() {
     teardown_common
 }
 
-make_inserts() {
-  for ((i=1; i<=25; i++))
+# Inserts 25 new rows and commits them.
+insert_statement() {
+  res="INSERT INTO tbl (guid) VALUES (UUID());"
+  for ((i=1; i<=24; i++))
   do
-    dolt sql -q "INSERT INTO tbl (guid) VALUES (UUID())"
+    res="$res INSERT INTO tbl (guid) VALUES (UUID());"
   done
-  dolt commit -a -m "Add 25 values"
+  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Add 25 values\");"
+  echo "$res"
 }
 
-# Helper function to create enough chunks to allow archive to be created. Duplicate in archive.bats.
-make_updates() {
-  for ((i=1; i<=10; i++))
+# Updates 10 random rows and commits the changes.
+update_statement() {
+  res="SET @max_id = (SELECT MAX(i) FROM tbl);
+SET @random_id = FLOOR(1 + RAND() * @max_id);
+UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
+  for ((i=1; i<=9; i++))
   do
-    dolt sql -q	"
-    SET @max_id = (SELECT MAX(i) FROM tbl);
-    SET @random_id = FLOOR(1 + RAND() * @max_id);
-    UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
+    res="$res
+SET @max_id = (SELECT MAX(i) FROM tbl);
+SET @random_id = FLOOR(1 + RAND() * @max_id);
+UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   done
-  dolt commit -a -m "Update 10 values."
+  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Update 10 values\");"
+  echo "$res"
 }
 
 @test "fsck: bad commit" {
@@ -42,18 +49,18 @@ make_updates() {
     [[ "$output" =~ "hacky@hackypants.com" ]] || false
 }
 
-# This test runs over 45 seconds, resulting in a timeout in lambdabats
-# bats test_tags=no_lambda
 @test "fsck: good archive" {
     dolt init
     dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
     dolt commit -A -m "create tbl"
 
+    stmt=""
     for ((j=1; j<=10; j++))
     do
-        make_inserts
-        make_updates
+        stmt="$stmt $(insert_statement)"
+        stmt="$stmt $(update_statement)"
     done
+    dolt sql -q "$stmt"
 
     dolt gc
     dolt archive
@@ -66,7 +73,7 @@ make_updates() {
     dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
     dolt commit -Am "Create table tbl"
 
-    make_inserts
+    dolt sql -q "$(insert_statement)"
 
     # Objects are in the journal. Don't gc.
     dolt fsck

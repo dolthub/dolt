@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -27,12 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -62,22 +65,21 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
+	ctx := context.Background()
 	controller := svcs.NewController()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 	go func() {
 		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
-			"-u", "username",
-			"-p", "password",
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
@@ -90,6 +92,27 @@ func TestServerArgs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestDeprecatedUserPasswordServerArgs(t *testing.T) {
+	controller := svcs.NewController()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(context.Background()).Close())
+	}()
+	err = StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		"-H", "localhost",
+		"-P", "15200",
+		"-u", "username",
+		"-p", "password",
+		"-t", "5",
+		"-l", "info",
+		"-r",
+	}, dEnv, dEnv.FS, controller)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--user and --password have been removed from the sql-server command.")
+	require.Contains(t, err.Error(), "Create users explicitly with CREATE USER and GRANT statements instead.")
+}
+
 func TestYAMLServerArgs(t *testing.T) {
 	const yamlConfig = `
 log_level: info
@@ -97,28 +120,25 @@ log_level: info
 behavior:
     read_only: true
 
-user:
-    name: username
-    password: password
-
 listener:
     host: localhost
     port: 15200
     read_timeout_millis: 5000
     write_timeout_millis: 5000
 `
+	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 	controller := svcs.NewController()
 	go func() {
-
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
-		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		err := StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
+		require.NoError(t, err)
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
@@ -132,10 +152,11 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	tests := [][]string{
@@ -151,7 +172,7 @@ func TestServerBadArgs(t *testing.T) {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			controller := svcs.NewController()
 			go func() {
-				StartServer(context.Background(), "test", "dolt sql-server", test, env, controller)
+				StartServer(context.Background(), "test", "dolt sql-server", test, env, env.FS, controller)
 			}()
 			if !assert.Error(t, controller.WaitForStart()) {
 				controller.Stop()
@@ -161,10 +182,11 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	tests := []servercfg.ServerConfig{
@@ -187,7 +209,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(servercfg.ConfigInfo(test), func(t *testing.T) {
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
-				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
+				_, _ = Serve(context.Background(), "0.0.0", config, sc, env, false)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -203,10 +225,11 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
+	ctx := context.Background()
 	env, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, env.DoltDB.Close())
+		assert.NoError(t, env.DoltDB(ctx).Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15300)
@@ -214,7 +237,7 @@ func TestServerSelect(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env, false)
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -260,6 +283,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
+	ctx := context.Background()
 	controller := svcs.NewController()
 	server := &http.Server{
 		Addr:    ":15200",
@@ -268,7 +292,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 
 	var wg sync.WaitGroup
@@ -281,12 +305,10 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 		StartServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
-			"-u", "username",
-			"-p", "password",
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, controller)
+		}, dEnv, dEnv.FS, controller)
 	}()
 
 	err = controller.WaitForStart()
@@ -302,10 +324,11 @@ type defaultBranchTest struct {
 }
 
 func TestServerSetDefaultBranch(t *testing.T) {
+	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB.Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 
 	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)
@@ -313,7 +336,7 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
+		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv, false)
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -477,7 +500,7 @@ func TestReadReplica(t *testing.T) {
 
 	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 	go func() {
-		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
+		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName), false)
 		require.NoError(t, err)
 	}()
 	require.NoError(t, sc.WaitForStart())
@@ -495,7 +518,7 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 		sess := conn.NewSession(nil)
 
-		multiSetup.NewBranch(sourceDbName, "feature")
+		multiSetup.NewBranch(ctx, sourceDbName, "feature")
 		multiSetup.CheckoutBranch(sourceDbName, "feature")
 		multiSetup.PushToRemote(sourceDbName, "remote1", "feature")
 
@@ -509,4 +532,111 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})
 	})
+}
+
+func TestGenerateYamlConfig(t *testing.T) {
+	args := []string{
+		"--timeout", "11",
+		"--branch-control-file", "dir1/dir2/abc.db",
+	}
+
+	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
+	require.NoError(t, err)
+
+	expected := `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#
+
+# log_level: info
+
+# max_logged_query_len: 0
+
+# encode_logged_query: false
+
+# behavior:
+  # read_only: false
+  # autocommit: true
+  # disable_client_multi_statements: false
+  # dolt_transaction_commit: false
+  # event_scheduler: "OFF"
+
+listener:
+  # host: localhost
+  # port: 3306
+  # max_connections: 100
+  read_timeout_millis: 11000
+  write_timeout_millis: 11000
+  # tls_key: key.pem
+  # tls_cert: cert.pem
+  # require_secure_transport: false
+  # allow_cleartext_passwords: false
+  # socket: /tmp/mysql.sock
+
+# data_dir: .
+
+# cfg_dir: .doltcfg
+
+# remotesapi:
+  # port: 8000
+  # read_only: false
+
+# privilege_file: ` + privilegeFilePath +
+		`
+
+branch_control_file: dir1/dir2/abc.db
+
+# user_session_vars:
+# - name: root
+  # vars:
+    # dolt_log_level: warn
+    # dolt_show_system_tables: 1
+
+# system_variables:
+  # dolt_log_level: info
+  # dolt_transaction_commit: 1
+
+# jwks: []
+
+# metrics:
+  # labels: {}
+  # host: localhost
+  # port: 9091
+
+# cluster:
+  # standby_remotes:
+  # - name: standby_replica_one
+    # remote_url_template: https://standby_replica_one.svc.cluster.local:50051/{database}
+  # - name: standby_replica_two
+    # remote_url_template: https://standby_replica_two.svc.cluster.local:50051/{database}
+  # bootstrap_role: primary
+  # bootstrap_epoch: 1
+  # remotesapi:
+    # address: 127.0.0.1
+    # port: 50051
+    # tls_key: remotesapi_key.pem
+    # tls_cert: remotesapi_chain.pem
+    # tls_ca: standby_cas.pem
+    # server_name_urls:
+    # - https://standby_replica_one.svc.cluster.local
+    # - https://standby_replica_two.svc.cluster.local
+    # server_name_dns:
+    # - standby_replica_one.svc.cluster.local
+    # - standby_replica_two.svc.cluster.local`
+
+	ap := SqlServerCmd{}.ArgParser()
+
+	dEnv := sqle.CreateTestEnv()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	cwdFs, err := filesys.LocalFilesysWithWorkingDir(cwd)
+	require.NoError(t, err)
+
+	apr := cli.ParseArgsOrDie(ap, args, nil)
+	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwdFs)
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, generateYamlConfig(serverConfig))
 }

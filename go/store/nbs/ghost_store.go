@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -32,8 +33,9 @@ type GhostBlockStore struct {
 	ghostObjectsFile string
 }
 
-// We use the Has, HasMany, Get, GetMany, and PersistGhostHashes methods from the ChunkStore interface. All other methods are not supported.
-var _ chunks.ChunkStore = &GhostBlockStore{}
+// We use the Has, HasMany, Get, GetMany, GetManyCompressed, and PersistGhostHashes methods from the ChunkStore interface. All other methods are not supported.
+var _ chunks.ChunkStore = (*GhostBlockStore)(nil)
+var _ NBSCompressedChunkStore = (*GenerationalNBS)(nil)
 
 // NewGhostBlockStore returns a new GhostBlockStore instance. Currently the only parameter is the path to the directory
 // where we will create a text file called ghostObjects.txt. This file will contain the hashes of the ghost objects. Creation
@@ -52,6 +54,7 @@ func NewGhostBlockStore(nomsPath string) (*GhostBlockStore, error) {
 		// Other error, permission denied, etc, we want to hear about.
 		return nil, err
 	}
+	defer f.Close()
 	scanner := bufio.NewScanner(f)
 	skiplist := &hash.HashSet{}
 	for scanner.Scan() {
@@ -87,6 +90,19 @@ func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	return nil
 }
 
+func (g GhostBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+	return g.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
+}
+
+func (g GhostBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
+	for h := range hashes {
+		if g.skippedRefs.Has(h) {
+			found(ctx, NewGhostCompressedChunk(h))
+		}
+	}
+	return nil
+}
+
 func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.HashSet) error {
 	if hashes.Size() == 0 {
 		return fmt.Errorf("runtime error. PersistGhostHashes called with empty hash set")
@@ -96,6 +112,7 @@ func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.Ha
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	for h := range hashes {
 		if _, err := f.WriteString(h.String() + "\n"); err != nil {
@@ -132,12 +149,27 @@ func (g GhostBlockStore) hasMany(hashes hash.HashSet) (absent hash.HashSet, err 
 	return absent, nil
 }
 
+func (g GhostBlockStore) refCheck(recs []hasRecord) (hash.HashSet, error) {
+	absent := hash.HashSet{}
+	for i := range recs {
+		if !recs[i].has {
+			if g.skippedRefs.Has(*recs[i].a) {
+				recs[i].has = true
+			} else {
+				absent.Insert(*recs[i].a)
+			}
+		}
+	}
+	return absent, nil
+}
+
 func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	panic("GhostBlockStore does not support Put")
 }
 
 func (g GhostBlockStore) Version() string {
-	panic("GhostBlockStore does not support Version")
+	// This should never be used, but it makes testing a bit more ergonomic in a few places.
+	return constants.FormatDefaultString
 }
 
 func (g GhostBlockStore) AccessMode() chunks.ExclusiveAccessMode {

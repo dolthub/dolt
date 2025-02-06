@@ -146,7 +146,7 @@ func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIn
 }
 
 var _ sql.PartitionIter = (*pointPartition)(nil)
-var _ sql.Partition = (*pointPartition)(nil)
+var _ sql.Partition = pointPartition{}
 
 type pointPartition struct {
 	r    prolly.Range
@@ -246,6 +246,42 @@ func GetDurableIndex(ctx *sql.Context,
 	return s.Secondary, nil
 }
 
+// vectorPartitionIter is the sql.PartitionIter for vector indexes.
+// Because it only ever has one partition, it also implements sql.Partition
+// and returns itself in calls to Next.
+type vectorPartitionIter struct {
+	Column sql.Expression
+	sql.OrderAndLimit
+	used bool
+}
+
+var _ sql.PartitionIter = (*vectorPartitionIter)(nil)
+var _ sql.Partition = vectorPartitionIter{}
+
+// Key returns the key used to distinguish partitions. Since it only ever has one partition,
+// this value is unused.
+func (v vectorPartitionIter) Key() []byte {
+	return nil
+}
+
+func (v *vectorPartitionIter) Close(_ *sql.Context) error {
+	return nil
+}
+
+func (v *vectorPartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
+	if v.used {
+		return nil, io.EOF
+	}
+	v.used = true
+	return *v, nil
+}
+
+func NewVectorPartitionIter(lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	return &vectorPartitionIter{
+		OrderAndLimit: lookup.VectorOrderAndLimit,
+	}, nil
+}
+
 // IndexScanBuilder generates secondary lookups for partitions and
 // encapsulates fast path optimizations for certain point lookups.
 type IndexScanBuilder interface {
@@ -296,10 +332,18 @@ func NewIndexReaderBuilder(
 	}
 
 	if isDoltFormat {
-		base.sec = durable.ProllyMapFromIndex(s.Secondary)
-		base.secKd, base.secVd = base.sec.Descriptors()
-		base.ns = base.sec.NodeStore()
+		secondaryIndex := durable.MapFromIndex(s.Secondary)
+		base.ns = secondaryIndex.NodeStore()
+		base.secKd, base.secVd = secondaryIndex.Descriptors()
 		base.prefDesc = base.secKd.PrefixDesc(len(di.columns))
+		switch si := secondaryIndex.(type) {
+		case prolly.Map:
+			base.sec = si
+		case prolly.ProximityMap:
+			base.proximitySecondary = si
+		default:
+			return nil, fmt.Errorf("unknown index type %v", secondaryIndex)
+		}
 	}
 
 	switch {
@@ -382,10 +426,12 @@ type baseIndexImplBuilder struct {
 	sch         sql.PrimaryKeySchema
 	projections []uint64
 
-	sec          prolly.Map
-	secKd, secVd val.TupleDesc
-	prefDesc     val.TupleDesc
-	ns           tree.NodeStore
+	isProximity        bool
+	sec                prolly.Map
+	proximitySecondary prolly.ProximityMap
+	secKd, secVd       val.TupleDesc
+	prefDesc           val.TupleDesc
+	ns                 tree.NodeStore
 }
 
 func (ib *baseIndexImplBuilder) Key() doltdb.DataCacheKey {
@@ -414,6 +460,10 @@ func (ib *baseIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe 
 // every subsequent point lookup. Note that equality joins can have a mix of
 // point lookups on concrete values, and range lookups for null matches.
 func (ib *baseIndexImplBuilder) newPointLookup(ctx *sql.Context, rang prolly.Range) (iter prolly.MapIter, err error) {
+	if ib.isProximity {
+		// TODO: It should be possible to do a point lookup with a proximity index.
+		return nil, fmt.Errorf("can't perform point lookup with a proximity index")
+	}
 	err = ib.sec.GetPrefix(ctx, rang.Tup, ib.prefDesc, func(key val.Tuple, value val.Tuple) (err error) {
 		if key != nil && rang.Matches(key) {
 			iter = prolly.NewPointLookup(key, value)
@@ -430,6 +480,9 @@ func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) 
 	case pointPartition:
 		return ib.newPointLookup(ctx, p.r)
 	case rangePartition:
+		if ib.isProximity {
+			return nil, fmt.Errorf("range iter not allowed for vector index")
+		}
 		if p.isReverse {
 			return ib.sec.IterRangeReverse(ctx, p.prollyRange)
 		} else {
@@ -437,9 +490,23 @@ func (ib *baseIndexImplBuilder) rangeIter(ctx *sql.Context, part sql.Partition) 
 		}
 	case DoltgresPartition:
 		return doltgresProllyMapIterator(ctx, ib.secKd, ib.ns, ib.sec.Node(), p.rang)
+	case vectorPartitionIter:
+		return nil, fmt.Errorf("ranger iter not allowed for vector partition")
 	default:
 		panic(fmt.Sprintf("unexpected prolly partition type: %T", part))
 	}
+}
+
+func (ib *baseIndexImplBuilder) proximityIter(ctx *sql.Context, part vectorPartitionIter) (prolly.MapIter, error) {
+	candidateVector, err := part.Literal.Eval(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := part.Limit.Eval(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return ib.proximitySecondary.GetClosest(ctx, candidateVector, int(limit.(int64)))
 }
 
 // coveringIndexImplBuilder constructs row iters for covering lookups,
@@ -524,6 +591,9 @@ func (ib *coveringIndexImplBuilder) OutputSchema() schema.Schema {
 
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
+	if ib.isProximity {
+		return nil, fmt.Errorf("range map iter not allowed for vector index")
+	}
 	if reverse {
 		return ib.sec.IterRangeReverse(ctx, r)
 	} else {
@@ -533,13 +603,19 @@ func (ib *coveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r proll
 
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *coveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	rangeIter, err := ib.rangeIter(ctx, part)
+	var indexIter prolly.MapIter
+	var err error
+	if proximityPartition, ok := part.(vectorPartitionIter); ok {
+		indexIter, err = ib.proximityIter(ctx, proximityPartition)
+	} else {
+		indexIter, err = ib.rangeIter(ctx, part)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return prollyCoveringIndexIter{
 		idx:         ib.idx,
-		indexIter:   rangeIter,
+		indexIter:   indexIter,
 		keyDesc:     ib.secKd,
 		valDesc:     ib.secVd,
 		keyMap:      ib.keyMap,
@@ -611,6 +687,9 @@ func (ib *nonCoveringIndexImplBuilder) OutputSchema() schema.Schema {
 
 // NewRangeMapIter implements IndexScanBuilder
 func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly.Range, reverse bool) (prolly.MapIter, error) {
+	if ib.isProximity {
+		return nil, fmt.Errorf("range map iter not allowed for vector index")
+	}
 	var secIter prolly.MapIter
 	var err error
 	if reverse {
@@ -632,13 +711,19 @@ func (ib *nonCoveringIndexImplBuilder) NewRangeMapIter(ctx context.Context, r pr
 
 // NewPartitionRowIter implements IndexScanBuilder
 func (ib *nonCoveringIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	rangeIter, err := ib.rangeIter(ctx, part)
+	var indexIter prolly.MapIter
+	var err error
+	if proximityPartition, ok := part.(vectorPartitionIter); ok {
+		indexIter, err = ib.proximityIter(ctx, proximityPartition)
+	} else {
+		indexIter, err = ib.rangeIter(ctx, part)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return prollyIndexIter{
 		idx:         ib.idx,
-		indexIter:   rangeIter,
+		indexIter:   indexIter,
 		primary:     ib.pri,
 		pkBld:       ib.pkBld,
 		pkMap:       ib.pkMap,

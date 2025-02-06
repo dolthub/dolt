@@ -222,7 +222,7 @@ func (db Database) RequestedName() string {
 	return db.requestedName
 }
 
-// GetDoltDB gets the underlying DoltDB of the Database
+// GetDoltDB gets the underlying doltDB of the Database
 func (db Database) GetDoltDB() *doltdb.DoltDB {
 	return db.ddb
 }
@@ -717,6 +717,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		dt = NewSchemaTable(backingTable)
+	case doltdb.GetHelpTableName(), doltdb.HelpTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewHelpTable(ctx, db.Name(), lwrName), true
+		}
 	}
 
 	if found {

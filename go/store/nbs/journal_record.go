@@ -21,7 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -92,9 +95,6 @@ const (
 	journalRecAddrSz      = 20
 	journalRecChecksumSz  = 4
 	journalRecTimestampSz = 8
-
-	// todo(andy): less arbitrary
-	journalRecMaxSz = 128 * 1024
 )
 
 // journalRecordTimestampGenerator returns the current time in Unix epoch seconds. This function is stored in a
@@ -104,14 +104,23 @@ var journalRecordTimestampGenerator = func() uint64 {
 }
 
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
-	recordSz += journalRecLenSz
-	recordSz += journalRecTagSz + journalRecKindSz
-	recordSz += journalRecTagSz + journalRecAddrSz
-	recordSz += journalRecTagSz // payload tag
-	payloadOff = recordSz
+	payloadOff += journalRecLenSz
+	payloadOff += journalRecTagSz + journalRecKindSz
+	payloadOff += journalRecTagSz + journalRecAddrSz
+	payloadOff += journalRecTagSz // payload tag
+
+	// Make sure the size of the chunk wouldn't overflow the uint32 record length
+	maxCompressedChunkSize := math.MaxUint32 - int(payloadOff+journalRecChecksumSz)
+	if len(c.FullCompressedChunk) > maxCompressedChunkSize {
+		panic(fmt.Sprintf("compressed chunk size (%d) is larger than max size allowed "+
+			"for chunk record (%d)", len(c.FullCompressedChunk), maxCompressedChunkSize))
+	}
+
+	recordSz = payloadOff
 	recordSz += uint32(len(c.FullCompressedChunk))
 	recordSz += journalRecChecksumSz
-	return
+
+	return recordSz, payloadOff
 }
 
 func rootHashRecordSize() (recordSz int) {
@@ -124,7 +133,9 @@ func rootHashRecordSize() (recordSz int) {
 }
 
 func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
-	// length
+	// length – comes back as an unsigned 32 bit int, which aligns with the four bytes used
+	// in the journal storage protocol to store the total record length, assuring that we can't
+	// read a length that is too large to safely write.
 	l, _ := chunkRecordSize(c)
 	writeUint32(buf[:journalRecLenSz], l)
 	n += journalRecLenSz
@@ -214,21 +225,38 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 	return
 }
 
-func validateJournalRecord(buf []byte) bool {
+// validateJournalRecord performs some sanity checks on the buffer |buf| containing a journal
+// record, such as checking that the length of the record is not too short, and checking the
+// checksum. If any problems are detected, an error is returned, otherwise nil is returned.
+func validateJournalRecord(buf []byte) error {
 	if len(buf) < (journalRecLenSz + journalRecChecksumSz) {
-		return false
+		return fmt.Errorf("invalid journal record: buffer length too small (%d < %d)", len(buf), (journalRecLenSz + journalRecChecksumSz))
 	}
+
 	off := readUint32(buf)
 	if int(off) > len(buf) {
-		return false
+		return fmt.Errorf("invalid journal record: offset is greater than length of buffer (%d > %d)",
+			off, len(buf))
 	}
+
 	off -= indexRecChecksumSz
-	return crc(buf[:off]) == readUint32(buf[off:])
+	crcMatches := crc(buf[:off]) == readUint32(buf[off:])
+	if !crcMatches {
+		return fmt.Errorf("invalid journal record: CRC checksum does not match")
+	}
+
+	return nil
 }
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
 // offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
 // is returned, or any error encountered along the way.
+// If an invalid journal record is found, it is not included and this function stops processing journal
+// entries, but does not return an error. Journal records may be incomplete if the system crashes while
+// records are being persisted to disk. This isn't likely, but the OS filesystem write is not an atomic
+// operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
+// without preventing the server from starting up, so we are careful to only return the journal file
+// offset that points to end fo the last valid record.
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
@@ -247,16 +275,33 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 			break
 		}
 
+		// The first 4 bytes in the journal record are the total length of the record (including
+		// these first four bytes)
 		l := readUint32(buf)
-		if l > journalRecMaxSz {
-			break
-		} else if buf, err = rdr.Peek(int(l)); err != nil {
+
+		// The journal file data is initialized to a block of zero bytes, so if we read a record
+		// length of 0, we know we've reached the end of the journal records and are starting to
+		// read the zero padding.
+		if l == 0 {
 			break
 		}
 
-		if !validateJournalRecord(buf) {
-			// We read the journal file until we run into an invalid record.
-			break // stop if we can't validate |rec|
+		if buf, err = rdr.Peek(int(l)); err != nil {
+			break
+		}
+
+		// TODO: The NomsBlockStore manifest is updated when the sql engine is shutdown cleanly. In the clean shutdown
+		//       case, we have the root hash value and the number of chunks written to the journal from the manifest
+		//       and we could use that to more aggressively validate journal records. When we are starting up from a
+		//       clean shutdown, we expect all journal records to be valid, and could safely error out during startup
+		//       for invalid records.
+		if validationErr := validateJournalRecord(buf); validationErr != nil {
+			// NOTE: We don't assign the validation error to err, because we want to stop processing journal records
+			//       when we see an invalid record and return successfully from processJournalRecords(), so that only
+			//       the preceding, valid records in the journal are used.
+			logrus.Errorf("Error validating journal record; "+
+				"skipping remaining journal records past offset %d: %s", off, validationErr)
+			break
 		}
 
 		var rec journalRec
@@ -273,9 +318,13 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		}
 		off += int64(len(buf))
 	}
+
+	// If a non-EOF error was captured while processing journal records, return a
+	// journal offset of 0 and the error, which will cause startup to halt.
 	if err != nil && err != io.EOF {
 		return 0, err
 	}
+
 	// reset the file pointer to end of the last
 	// successfully processed journal record
 	if _, err = r.Seek(off, 0); err != nil {

@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"os"
@@ -852,6 +853,18 @@ func TestIndexes(t *testing.T) {
 	enginetest.TestIndexes(t, harness)
 }
 
+func TestVectorIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestVectorIndexes(t, harness)
+}
+
+func TestVectorFunctions(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestVectorFunctions(t, harness)
+}
+
 func TestIndexPrefix(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
@@ -1607,10 +1620,11 @@ func TestNullRanges(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
+	ctx := context.Background()
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 	localConf, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	require.True(t, ok)
 	globals := config.NewPrefixConfig(localConf, env.SqlServerGlobalsPrefix)
@@ -1663,9 +1677,9 @@ func TestStatsHistograms(t *testing.T) {
 
 // TestStatsIO force a provider reload in-between setup and assertions that
 // forces a round trip of the statistics table before inspecting values.
-func TestStatsIO(t *testing.T) {
+func TestStatsStorage(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
-	RunStatsIOTests(t, h)
+	RunStatsStorageTests(t, h)
 }
 
 func TestJoinStats(t *testing.T) {
@@ -2047,4 +2061,10 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 func TestDoltWorkspace(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltWorkspaceTests(t, harness)
+}
+
+func TestDoltHelpSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	RunDoltHelpSystemTableTests(t, harness)
 }

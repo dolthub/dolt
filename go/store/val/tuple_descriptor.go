@@ -282,7 +282,7 @@ func (td TupleDesc) GetUint32(i int, tup Tuple) (v uint32, ok bool) {
 	td.expectEncoding(i, Uint32Enc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readUint32(b), true
+		v, ok = ReadUint32(b), true
 	}
 	return
 }
@@ -590,7 +590,7 @@ func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 		v := readInt32(value)
 		return strconv.Itoa(int(v))
 	case Uint32Enc:
-		v := readUint32(value)
+		v := ReadUint32(value)
 		return strconv.Itoa(int(v))
 	case Int64Enc:
 		v := readInt64(value)

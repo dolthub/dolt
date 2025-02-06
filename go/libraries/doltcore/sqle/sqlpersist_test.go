@@ -95,9 +95,10 @@ func TestExecutePersist(t *testing.T) {
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testPersistQuery(t *testing.T, test PersistTest) {
+	ctx := context.Background()
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
@@ -105,8 +106,8 @@ func testPersistQuery(t *testing.T, test PersistTest) {
 
 	variables.InitSystemVariables()
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(t, context.Background(), dEnv, root, test.PersistQuery)
+	root, _ := dEnv.WorkingRoot(ctx)
+	root, err = executeModify(t, ctx, dEnv, root, test.PersistQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
@@ -114,7 +115,7 @@ func testPersistQuery(t *testing.T, test PersistTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, _, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, _, err := executeSelect(t, ctx, dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

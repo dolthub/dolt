@@ -784,6 +784,7 @@ func BasicSelectTests() []SelectTest {
 					"Initialize data repository",
 					"",
 					"",
+					true, // Test setup has a dirty workspace.
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
@@ -795,6 +796,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "latest_commit_message", Type: gmstypes.Text},
 				&sql.Column{Name: "remote", Type: gmstypes.Text},
 				&sql.Column{Name: "branch", Type: gmstypes.Text},
+				&sql.Column{Name: "dirty", Type: gmstypes.Boolean},
 			},
 		},
 	}
@@ -1357,16 +1359,17 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	cleanup := installTestCommitClock()
 	defer cleanup()
 
+	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.Query)
+	root, _ := dEnv.WorkingRoot(ctx)
+	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.
@@ -1453,7 +1456,7 @@ func mustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, s
 }
 
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []HistoryNode {
-	vrw := dEnv.DoltDB.ValueReadWriter()
+	vrw := dEnv.DoltDB(ctx).ValueReadWriter()
 
 	return []HistoryNode{
 		{
@@ -1560,7 +1563,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	cs, err := doltdb.NewCommitSpec("main")
 	require.NoError(t, err)
 
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
 	cm, ok := optCmt.ToCommit()
@@ -1676,7 +1679,7 @@ func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv,
 		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
 		require.NoError(t, err)
 
-		optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
 		require.NoError(t, err)
 
 		cm, ok := optCmt.ToCommit()
@@ -1688,18 +1691,18 @@ func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv,
 
 func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node HistoryNode, parent *doltdb.Commit) {
 	branchRef := ref.NewBranchRef(node.Branch)
-	ok, err := dEnv.DoltDB.HasRef(ctx, branchRef)
+	ok, err := dEnv.DoltDB(ctx).HasRef(ctx, branchRef)
 	require.NoError(t, err)
 
 	if !ok {
-		err = dEnv.DoltDB.NewBranchAtCommit(ctx, branchRef, parent, nil)
+		err = dEnv.DoltDB(ctx).NewBranchAtCommit(ctx, branchRef, parent, nil)
 		require.NoError(t, err)
 	}
 
 	cs, err := doltdb.NewCommitSpec(branchRef.String())
 	require.NoError(t, err)
 
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
 	cm, ok := optCmt.ToCommit()
@@ -1709,14 +1712,14 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	require.NoError(t, err)
 
 	root = updateTables(t, ctx, root, node.Updates)
-	r, h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
+	r, h, err := dEnv.DoltDB(ctx).WriteRootValue(ctx, root)
 	require.NoError(t, err)
 	root = r
 
 	meta, err := datas.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
 	require.NoError(t, err)
 
-	cm, err = dEnv.DoltDB.Commit(ctx, h, branchRef, meta)
+	cm, err = dEnv.DoltDB(ctx).Commit(ctx, h, branchRef, meta)
 	require.NoError(t, err)
 
 	for _, child := range node.Children {

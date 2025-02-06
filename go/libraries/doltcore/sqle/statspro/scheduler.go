@@ -22,8 +22,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -405,7 +405,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 	return ret, nil
 }
 
-func (sc *StatsCoord) Info() dtables.StatsInfo {
+func (sc *StatsCoord) Info() dprocedures.StatsInfo {
 	sc.dbMu.Lock()
 	dbCnt := len(sc.dbs)
 	cachedBucketCnt := sc.kv.Len()
@@ -422,7 +422,7 @@ func (sc *StatsCoord) Info() dtables.StatsInfo {
 		active = true
 	}
 
-	return dtables.StatsInfo{
+	return dprocedures.StatsInfo{
 		DbCnt:           dbCnt,
 		ReadCnt:         int(sc.readCounter.Load()),
 		Active:          active,

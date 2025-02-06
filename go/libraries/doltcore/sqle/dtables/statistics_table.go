@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"encoding/json"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
@@ -31,26 +30,6 @@ type StatisticsTable struct {
 	schemaName string
 	branch     string
 	tableNames []string
-}
-
-type StatsInfo struct {
-	DbCnt           int  `json:"dbCnt"`
-	ReadCnt         int  `json:"readCnt"`
-	Active          bool `json:"active"`
-	DbSeedCnt       int  `json:"dbSeedCnt"`
-	EstBucketCnt    int  `json:"estBucketCnt"`
-	CachedBucketCnt int  `json:"cachedBucketCnt"`
-	StatCnt         int  `json:"statCnt"`
-	GcCounter       int  `json:"gcCounter"`
-	BranchCounter   int  `json:"branchCounter"`
-}
-
-func (si StatsInfo) ToJson() string {
-	jsonData, err := json.Marshal(si)
-	if err != nil {
-		return ""
-	}
-	return string(jsonData)
 }
 
 var _ sql.Table = (*StatisticsTable)(nil)

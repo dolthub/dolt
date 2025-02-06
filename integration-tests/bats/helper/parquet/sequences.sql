@@ -1,0 +1,1 @@
+create table sequences(`pk` int primary key, `name` varchar(20), `embeddings` json);

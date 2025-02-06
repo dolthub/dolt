@@ -298,16 +298,17 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
 	}
 
+	ctx := context.Background()
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(t, context.Background(), dEnv, root, test.ReplaceQuery)
+	root, _ := dEnv.WorkingRoot(ctx)
+	root, err = executeModify(t, ctx, dEnv, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), test.ExpectedErr)

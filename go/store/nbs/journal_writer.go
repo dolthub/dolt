@@ -35,11 +35,18 @@ import (
 )
 
 const (
+	// chunkJournalFileSize is the size we initialize the journal file to when it is first created. We
+	// create a 16KB block of zero-initialized data and then sync the file to the first byte. We do this
+	// to ensure that we can write to the journal file and that we have some space for initial records.
+	// This probably isn't strictly necessary, but it also doesn't hurt.
 	chunkJournalFileSize = 16 * 1024
 
-	// todo(andy): buffer must be able to hold an entire record,
-	//   but we don't have a hard limit on record size right now
-	journalWriterBuffSize = 1024 * 1024
+	// journalWriterBuffSize is the size of the statically allocated buffer where journal records are
+	// built before being written to the journal file on disk. There is not a hard limit on the size
+	// of records – specifically, some newer data chunking formats (i.e. optimized JSON storage) can
+	// produce chunks (and therefore chunk records) that are megabytes in size. The current limit of
+	// 5MB should be large enough to cover all but the most extreme cases.
+	journalWriterBuffSize = 5 * 1024 * 1024
 
 	chunkJournalAddr = chunks.JournalFileID
 
@@ -115,6 +122,9 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, err
 	}
 
+	// Open the journal file and initialize it with 16KB of zero bytes. This is intended to
+	// ensure that we can write to the journal and to allocate space for the first set of
+	// records, but probably isn't strictly necessary.
 	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
 		return nil, err
 	}
@@ -180,7 +190,7 @@ var _ io.Closer = &journalWriter{}
 // The journal index will bw truncated to the last valid batch of lookups. Lookups with offsets
 // larger than the position of the last valid lookup metadata are rewritten to the index as they
 // are added to the novel ranges map. If the number of novel lookups exceeds |wr.maxNovel|, we
-// extend the jounral index with one metadata flush before existing this function to save indexing
+// extend the journal index with one metadata flush before existing this function to save indexing
 // progress.
 func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer) (last hash.Hash, err error) {
 	wr.lock.Lock()

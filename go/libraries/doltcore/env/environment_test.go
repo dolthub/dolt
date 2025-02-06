@@ -145,10 +145,11 @@ func TestRepoDirNoLocal(t *testing.T) {
 }
 
 func TestInitRepo(t *testing.T) {
+	ctx := context.Background()
 	dEnv, _ := createTestEnv(false, false)
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	_, err = dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -168,12 +169,13 @@ func TestMigrateWorkingSet(t *testing.T) {
 	homeDir, err := os.MkdirTemp("", "TestMigrateWorkingSet*")
 	require.NoError(t, err)
 
+	ctx := context.Background()
 	dEnv := createFileTestEnv(t, working, homeDir)
 	assert.NoError(t, dEnv.CfgLoadErr)
 
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org", DefaultInitBranch)
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	ws, err := dEnv.WorkingSet(context.Background())
 	require.NoError(t, err)
@@ -183,7 +185,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 
 	// We don't have a merge in progress, so we'll just fake one. We're only interested in seeing the fields loaded and
 	// persisted to the working set
-	commit, err := dEnv.DoltDB.ResolveCommitRef(context.Background(), dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB(ctx).ResolveCommitRef(context.Background(), dEnv.RepoState.CWBHeadRef())
 	require.NoError(t, err)
 	ws.StartMerge(commit, "HEAD")
 
@@ -207,7 +209,7 @@ func TestMigrateWorkingSet(t *testing.T) {
 	}
 
 	// Clear the working set
-	require.NoError(t, dEnv.DoltDB.DeleteWorkingSet(context.Background(), ws.Ref()))
+	require.NoError(t, dEnv.DoltDB(ctx).DeleteWorkingSet(context.Background(), ws.Ref()))
 
 	// Make sure it's gone
 	_, err = dEnv.WorkingSet(context.Background())

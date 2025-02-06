@@ -176,3 +176,23 @@ SQL
     [ ! -d test-repo ]
     cd ..
 }
+
+@test "remotes-file-system: disallow cloning directly from a repo" {
+    mkdir repo1 repo2
+    cd repo1
+    dolt init
+    cd ../repo2
+    run dolt clone file://../repo1/.dolt/noms repo2
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot create NBS store for directory containing chunk journal" ]] || false
+}
+
+@test "remotes-file-system: disallow cloning directly from a child repo" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    cd ..
+    run dolt clone file://./repo1/.dolt/noms repo2
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot create NBS store for directory containing chunk journal" ]] || false
+}

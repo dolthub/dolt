@@ -426,16 +426,17 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
+	ctx := context.Background()
 	dEnv, err := CreateEmptyTestDatabase()
 	require.NoError(t, err)
-	defer dEnv.DoltDB.Close()
+	defer dEnv.DoltDB(ctx).Close()
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(t, context.Background(), dEnv, root, test.InsertQuery)
+	root, _ := dEnv.WorkingRoot(ctx)
+	root, err = executeModify(t, ctx, dEnv, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), test.ExpectedErr)
@@ -444,7 +445,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

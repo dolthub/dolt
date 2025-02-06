@@ -59,7 +59,7 @@ func (cmd fvCommand) exec(ctx context.Context, dEnv *env.DoltEnv) int {
 	doltdb.DoltFeatureVersion = cmd.user.vers
 	defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
-	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 
 	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv, cliCtx)
 }
@@ -154,7 +154,7 @@ func TestFeatureVersion(t *testing.T) {
 
 			doltdb.DoltFeatureVersion = oldVersion
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB.Close()
+			defer dEnv.DoltDB(ctx).Close()
 			doltdb.DoltFeatureVersion = DoltFeatureVersionCopy
 
 			for _, cmd := range test.setup {

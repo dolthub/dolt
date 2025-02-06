@@ -127,7 +127,7 @@ func TestJsonValues(t *testing.T) {
 func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
-	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
 	setup := append(setupCommon, test.setup...)
@@ -139,7 +139,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
 
-	actRows, err := sqle.ExecuteSelect(dEnv, root, test.query)
+	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, test.query)
 	require.NoError(t, err)
 
 	require.Equal(t, len(test.rows), len(actRows))

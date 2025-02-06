@@ -76,6 +76,12 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 
 // AddCmpChunk adds a compressed chunk
 func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
+	if c.IsGhost() {
+		// Ghost chunks cannot be written to a table file. They should
+		// always be filtered by the write processes before landing
+		// here.
+		return ErrGhostChunkRequested
+	}
 	if len(c.CompressedData) == 0 {
 		panic("NBS blocks cannot be zero length")
 	}
@@ -165,6 +171,21 @@ func (tw *CmpChunkTableWriter) Reader() (io.ReadCloser, error) {
 
 func (tw *CmpChunkTableWriter) Remove() error {
 	return os.Remove(tw.path)
+}
+
+// Cancel the inprogress write and attempt to cleanup any
+// resources associated with it. It is an error to call
+// Flush{,ToFile} or Reader after canceling the writer.
+func (tw *CmpChunkTableWriter) Cancel() error {
+	closer, err := tw.sink.Reader()
+	if err != nil {
+		return err
+	}
+	err = closer.Close()
+	if err != nil {
+		return err
+	}
+	return tw.Remove()
 }
 
 func containsDuplicates(prefixes prefixIndexSlice) bool {

@@ -44,15 +44,13 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/ci"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
+	"github.com/dolthub/dolt/go/cmd/dolt/doltcmd"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -60,6 +58,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -71,68 +70,8 @@ import (
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
 
-var doltSubCommands = []cli.Command{
-	commands.InitCmd{},
-	commands.StatusCmd{},
-	commands.AddCmd{},
-	commands.DiffCmd{},
-	commands.ResetCmd{},
-	commands.CleanCmd{},
-	commands.CommitCmd{},
-	commands.SqlCmd{VersionStr: doltversion.Version},
-	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
-	commands.LogCmd{},
-	commands.ShowCmd{},
-	commands.BranchCmd{},
-	commands.CheckoutCmd{},
-	commands.MergeCmd{},
-	cnfcmds.Commands,
-	commands.CherryPickCmd{},
-	commands.RevertCmd{},
-	commands.CloneCmd{},
-	commands.FetchCmd{},
-	commands.PullCmd{},
-	commands.PushCmd{},
-	commands.ConfigCmd{},
-	commands.RemoteCmd{},
-	commands.BackupCmd{},
-	commands.LoginCmd{},
-	credcmds.Commands,
-	commands.LsCmd{},
-	schcmds.Commands,
-	tblcmds.Commands,
-	commands.TagCmd{},
-	commands.BlameCmd{},
-	cvcmds.Commands,
-	commands.SendMetricsCmd{},
-	commands.MigrateCmd{},
-	indexcmds.Commands,
-	commands.ReadTablesCmd{},
-	commands.GarbageCollectionCmd{},
-	commands.FsckCmd{},
-	commands.FilterBranchCmd{},
-	commands.MergeBaseCmd{},
-	commands.RootsCmd{},
-	commands.VersionCmd{VersionStr: doltversion.Version},
-	commands.DumpCmd{},
-	commands.InspectCmd{},
-	dumpDocsCommand,
-	dumpZshCommand,
-	docscmds.Commands,
-	stashcmds.StashCommands,
-	&commands.Assist{},
-	commands.ProfileCmd{},
-	commands.QueryDiff{},
-	commands.ReflogCmd{},
-	commands.RebaseCmd{},
-	commands.ArchiveCmd{},
-	ci.Commands,
-}
-
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.CloneCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},
@@ -155,6 +94,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ProfileCmd{},
 	commands.ArchiveCmd{},
 	commands.FsckCmd{},
+	commands.ConfigCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -205,7 +145,7 @@ func needsWriteAccess(commandName string) bool {
 	return true
 }
 
-var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
+var doltCommand = doltcmd.DoltCommand
 var globalArgParser = cli.CreateGlobalArgParser("dolt")
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
 
@@ -227,6 +167,8 @@ func init() {
 	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
 		eventFlushDisabled = true
 	}
+
+	dtables.DoltCommand = doltCommand
 }
 
 const pprofServerFlag = "--pprof-server"
@@ -468,52 +410,14 @@ func runMain() int {
 		return exit
 	}
 
-	_, usage := cli.HelpAndUsagePrinters(globalDocs)
-
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
-	apr, _, err := globalArgParser.ParseGlobalArgs(args)
-	if err == argparser.ErrHelp {
-		doltCommand.PrintUsage("dolt")
-		cli.Println(globalSpecialMsg)
-		usage()
-		return 0
-	} else if err != nil {
-		cli.PrintErrln(color.RedString("Failure to parse global arguments: %v", err))
-		return 1
+	cfg, terminate, status := createBootstrapConfig(ctx, args)
+	if terminate {
+		return status
 	}
+	args = nil
 
-	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
-	if hasDataDir {
-		// If a relative path was provided, this ensures we have an absolute path everywhere.
-		dataDir, err = fs.Abs(dataDir)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
-			return 1
-		}
-		if ok, dir := fs.Exists(dataDir); !ok || !dir {
-			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
-			return 1
-		}
-	}
-
-	// Current working directory is preserved to ensure that user provided path arguments are always calculated
-	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
-	// specified one.
-	cwdFS := fs
-	dataDirFS, err := fs.WithWorkingDir(dataDir)
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
-		return 1
-	}
-
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
-
-	homeDir, err := env.GetCurrentUserHomeDir()
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
-		return 1
-	}
+	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -522,27 +426,13 @@ func runMain() int {
 
 	strMetricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 	var metricsEmitter events.Emitter
-	metricsEmitter = events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	metricsEmitter = events.NewFileEmitter(cfg.homeDir, dbfactory.DoltDir)
 	metricsDisabled, err := strconv.ParseBool(strMetricsDisabled)
 	if err != nil || metricsDisabled {
 		metricsEmitter = events.NullEmitter{}
 	}
 
 	events.SetGlobalCollector(events.NewCollector(doltversion.Version, metricsEmitter))
-
-	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
-	if !ok {
-		cli.PrintErrln(color.RedString("Failed to get global config"))
-		return 1
-	}
-
-	globalConfig.Iter(func(name, val string) (stop bool) {
-		option := strings.ToLower(name)
-		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
-		}
-		return false
-	})
 
 	// try verifying contents of local config
 	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
@@ -556,29 +446,16 @@ func runMain() int {
 		})
 	}
 
-	apr, remainingArgs, subcommandName, err := parseGlobalArgsAndSubCommandName(globalConfig, args)
-	if err == argparser.ErrHelp {
-		doltCommand.PrintUsage("dolt")
-		cli.Println(globalSpecialMsg)
-		usage()
+	defer emitUsageEvents(metricsEmitter, cfg.subCommand)
 
-		return 0
-	} else if err != nil {
-		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
-		return 1
-	}
-
-	defer emitUsageEvents(metricsEmitter, args)
-
-	if needsWriteAccess(subcommandName) {
-		err = reconfigIfTempFileMoveFails(dEnv)
+	if needsWriteAccess(cfg.subCommand) {
+		err = reconfigIfTempFileMoveFails(cfg.dataDirFS)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
 			return 1
 		}
 	}
-
 	defer tempfiles.MovableTempFileProvider.Clean()
 
 	// Find all database names and add global variables for them. This needs to
@@ -598,7 +475,7 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -615,30 +492,30 @@ func runMain() int {
 	}
 
 	var cliCtx cli.CliContext = nil
-	if initCliContext(subcommandName) {
+	if initCliContext(cfg.subCommand) {
 		// validate that --user and --password are set appropriately.
-		aprAlt, creds, err := cli.BuildUserPasswordPrompt(apr)
-		apr = aprAlt
+		aprAlt, creds, err := cli.BuildUserPasswordPrompt(cfg.apr)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to parse credentials: %v", err))
 			return 1
 		}
+		cfg.apr = aprAlt
 
-		lateBind, err := buildLateBinder(ctx, cwdFS, dEnv, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, cfg.cwdFs, dEnv, mrEnv, creds, cfg.apr, cfg.subCommand, verboseEngineSetup)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
 			return 1
 		}
 
-		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
+		cliCtx, err = cli.NewCliContext(cfg.apr, dEnv.Config, cfg.cwdFs, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1
 		}
 	} else {
-		if args[0] != subcommandName {
-			if supportsGlobalArgs(subcommandName) {
+		if cfg.hasGlobalArgs {
+			if supportsGlobalArgs(cfg.subCommand) {
 				cli.PrintErrln(
 					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
 If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
@@ -652,7 +529,7 @@ or check the docs for questions about usage.`)
 	}
 
 	ctx, stop := context.WithCancel(ctx)
-	res := doltCommand.Exec(ctx, "dolt", remainingArgs, dEnv, cliCtx)
+	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {
@@ -662,13 +539,53 @@ or check the docs for questions about usage.`)
 		}
 	}
 
-	if csMetrics && dEnv.DoltDB != nil {
-		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+	if csMetrics && dEnv.DoltDB(ctx) != nil {
+		metricsSummary := dEnv.DoltDB(ctx).CSMetricsSummary()
 		cli.Println("Command took", time.Since(start).Seconds())
 		cli.PrintErrln(metricsSummary)
 	}
 
 	return res
+}
+
+// resolveDataDirDeeply goes through three levels of resolution for the data directory. The simple case is to look at
+// the --data-dir flag which was provide before the sub-command. When runing sql-server, the data directory can also
+// be specificed in the arguments after the sub-command, and the config file. This method will ensure there is only
+// one of these three options specified, and return it as an absolute path. If there is an error, or if there are multiple
+// options specified, an error is returned.
+func resolveDataDirDeeply(gArgs *argparser.ArgParseResults, subCmd string, remainingArgs []string, cwdFs filesys.Filesys) (dataDir string, err error) {
+	// global config is the dolt --data-dir <foo> sub-command version. Applies to most CLI commands.
+	globalDir, hasGlobalDataDir := gArgs.GetValue(commands.DataDirFlag)
+	if hasGlobalDataDir {
+		// If a relative path was provided, this ensures we have an absolute path everywhere.
+		dd, err := cwdFs.Abs(globalDir)
+		if err != nil {
+			return "", errors.New(fmt.Sprintf("Failed to get absolute path for %s: %v", dataDir, err))
+		}
+		dataDir = dd
+	}
+
+	if subCmd == (sqlserver.SqlServerCmd{}).Name() {
+		// GetDataDirPreStart always returns an absolute path.
+		dd, err := sqlserver.GetDataDirPreStart(cwdFs, remainingArgs)
+		if err != nil {
+			return "", err
+		}
+
+		if dd != "" {
+			if hasGlobalDataDir {
+				return "", errors.New("cannot specify both global --data-dir argument and --data-dir in sql-server config. Please specify only one.")
+			}
+			dataDir = dd
+		}
+	}
+
+	if dataDir == "" {
+		// No data dir specified, so we default to the current directory.
+		return cwdFs.Abs("")
+	}
+
+	return dataDir, nil
 }
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
@@ -761,19 +678,19 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
-		// If the loaded target environment has a DoltDB and we do not
+	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
+		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true
-	} else if targetEnv.DoltDB == nil {
-		// If the loaded environment itself does not have a DoltDB, we
+	} else if targetEnv.DoltDB(ctx) == nil {
+		// If the loaded environment itself does not have a doltDB, we
 		// may want to look for a server. We do so if all of the
 		// repositories in our MultiEnv are ReadOnly. This includes the
 		// case where there are no repositories in our MultiEnv
 		var allReposAreReadOnly bool = true
 		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-			if dEnv.DoltDB != nil {
-				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+			if dEnv.DoltDB(ctx) != nil {
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly(ctx)
 			}
 			return !allReposAreReadOnly, nil
 		})
@@ -827,14 +744,14 @@ func seedGlobalRand() {
 //  1. The config key |metrics.disabled|, when set to |true|, disables all metrics emission
 //  2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
 //     This is mostly used for testing.
-func emitUsageEvents(emitter events.Emitter, args []string) {
+func emitUsageEvents(emitter events.Emitter, subCmd string) {
 	// write events
 	collector := events.GlobalCollector()
 	ctx := context.Background()
 	_ = emitter.LogEvents(ctx, doltversion.Version, collector.Close())
 
 	// flush events
-	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {
+	if !eventFlushDisabled && shouldFlushEvents(subCmd) {
 		_ = flushEventsDir()
 	}
 }
@@ -875,70 +792,174 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
 		return false, 0
 	}
-	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltversion.Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, "", doltversion.Version)
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
-// parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
-func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args []string) (apr *argparser.ArgParseResults, remaining []string, subcommandName string, err error) {
-	apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+// bootstrapConfig is the struct that holds the parsed arguments and other configurations. Most importantly, is holds
+// the data dir information for the process. There are multiple ways for users to specify the data directory, and constructing
+// the bootstrap config early in the process start up allows us to simplify the startup process.
+type bootstrapConfig struct {
+	// apr is the parsed global arguments. This will not include hidden administrative arguments, which are pulled out first.
+	// This APR will include profile injected arguments.
+	apr *argparser.ArgParseResults
+	// hasGlobalArgs is true if the global arguments were provided.
+	hasGlobalArgs bool
+
+	// dataDir is the absolute path to the data directory. This should be the final word - uses of dataDir downstream should
+	// only use this path.
+	dataDir string
+	// dataDirFS is the filesys.Filesys for the data directory.
+	dataDirFS filesys.Filesys
+	// cwdFs is the filesys.Filesys where the process started. Used when there are relative path arguments provided by the user.
+	cwdFs filesys.Filesys
+
+	// remainingArgs is the remaining arguments after parsing global arguments. This includes the subCommand at location 0
+	// always.
+	remainingArgs []string
+	subCommand    string
+
+	// homeDir is the absolute path to the user's home directory. This is resolved using env.GetCurrentUserHomeDir, and saved
+	homeDir string
+}
+
+// createBootstrapConfig parses the global arguments, inspects current working directory, loads the profile, and
+// even digs into server config to build the bootstrapConfig struct. If all goes well, |cfg| is set to a struct that
+// contains all the parsed arguments and other configurations. If there is an error, |cfg| will be nil.
+// |terminate| is set to true if the process should end for any reason. Errors or messages to the user will be printed already.
+// |status| is the exit code to terminate with, and can be ignored if |terminate| is false.
+func createBootstrapConfig(ctx context.Context, args []string) (cfg *bootstrapConfig, terminate bool, status int) {
+	lfs := filesys.LocalFS
+	cwd, err := lfs.Abs("")
+	cwdFs, err := lfs.WithWorkingDir(cwd)
 	if err != nil {
-		return nil, nil, "", err
+		cli.PrintErrln(color.RedString("Failed to load the current working directory: %v", err))
+		return nil, true, 1
 	}
 
-	subcommandName = remaining[0]
+	tmpEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cwdFs, "", doltversion.Version)
+	var globalConfig config.ReadWriteConfig
 
+	homeDir, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+		return nil, true, 1
+	}
+
+	if tmpEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config: %v", tmpEnv.CfgLoadErr))
+		return nil, true, 1
+	}
+
+	if tmpEnv.Config != nil {
+		var ok bool
+		globalConfig, ok = tmpEnv.Config.GetConfig(env.GlobalConfig)
+		if !ok {
+			cli.PrintErrln(color.RedString("Failed to load the global config"))
+			return nil, true, 1
+		}
+	} else {
+		panic("runtime error. tmpEnv.Config is nil by no tmpEnv.CfgLoadErr set")
+	}
+
+	globalConfig.Iter(func(name, val string) (stop bool) {
+		option := strings.ToLower(name)
+		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
+			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
+		}
+		return false
+	})
+
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
+	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	if errors.Is(err, argparser.ErrHelp) {
+		doltCommand.PrintUsage("dolt")
+		cli.Println(globalSpecialMsg)
+		usage()
+		return nil, true, 0
+	} else if err != nil {
+		cli.PrintErrln(color.RedString("Failed to parse global arguments: %v", err))
+		return nil, true, 1
+	}
+
+	hasGlobalArgs := false
+	if len(remainingArgs) != len(args) {
+		hasGlobalArgs = true
+	}
+
+	subCommand := remainingArgs[0]
+
+	// If there is a profile flag, we want to load the profile and inject it's args into the global args.
 	useDefaultProfile := false
 	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
 	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			if hasProfile {
-				return nil, nil, "", errors.New("no profiles found")
+				cli.PrintErrln(color.RedString("Unable to load profile: %s. Not found.", profileName))
+				return nil, true, 1
 			} else {
-				return apr, remaining, subcommandName, nil
+				// We done. Jump to returning what we have.
 			}
 		} else {
-			return nil, nil, "", err
+			cli.Println(color.RedString("Failed to retrieve config key: %v", err))
+			return nil, true, 1
 		}
 	}
-	profiles, err := commands.DecodeProfile(encodedProfiles)
+	profilesJson, err := commands.DecodeProfile(encodedProfiles)
 	if err != nil {
-		return nil, nil, "", err
+		cli.PrintErrln(color.RedString("Failed to decode profiles: %v", err))
+		return nil, true, 1
 	}
 
-	if !hasProfile && supportsGlobalArgs(subcommandName) {
-		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
+	if !hasProfile && supportsGlobalArgs(subCommand) {
+		defaultProfile := gjson.Get(profilesJson, commands.DefaultProfileName)
 		if defaultProfile.Exists() {
-			args = append([]string{"--profile", commands.DefaultProfileName}, args...)
-			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
-			if err != nil {
-				return nil, nil, "", err
-			}
-			profileName, _ = apr.GetValue(commands.ProfileFlag)
+			profileName = commands.DefaultProfileName
 			useDefaultProfile = true
 		}
 	}
 
 	if hasProfile || useDefaultProfile {
-		profileArgs, err := getProfile(apr, profileName, profiles)
+		apr, err = injectProfileArgs(apr, profileName, profilesJson)
 		if err != nil {
-			return nil, nil, "", err
-		}
-		args = append(profileArgs, args...)
-		apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
-		if err != nil {
-			return nil, nil, "", err
+			cli.PrintErrln(color.RedString("Failed to inject profile arguments: %v", err))
+			return nil, true, 1
 		}
 	}
 
-	return
+	dataDir, err := resolveDataDirDeeply(apr, subCommand, remainingArgs[1:], cwdFs)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to resolve the data directory: %v", err))
+		return nil, true, 1
+	}
+
+	dataDirFS, err := cwdFs.WithWorkingDir(dataDir)
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to set the data directory to: %s. %v", dataDir, err))
+		return nil, true, 1
+	}
+
+	cfg = &bootstrapConfig{
+		apr:           apr,
+		hasGlobalArgs: hasGlobalArgs,
+		remainingArgs: remainingArgs,
+		dataDirFS:     dataDirFS,
+		dataDir:       dataDir,
+		cwdFs:         cwdFs,
+		subCommand:    subCommand,
+		homeDir:       homeDir,
+	}
+
+	return cfg, false, 0
 }
 
-// getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
-// for that profile in a []string. If the profile is not found, an error is returned.
-func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (result []string, err error) {
-	prof := gjson.Get(profiles, profileName)
+// injectProfileArgs retrieves the given |profileName| from the provided |profilesJson| and inject the profile details
+// in the provided |apr|. A new ArgParseResults is returned which contains the profile details. If the profile is not
+// found, an error is returned.
+func injectProfileArgs(apr *argparser.ArgParseResults, profileName, profilesJson string) (aprUpdated *argparser.ArgParseResults, err error) {
+	prof := gjson.Get(profilesJson, profileName)
+	aprUpdated = apr
 	if prof.Exists() {
 		hasPassword := false
 		password := ""
@@ -950,20 +971,29 @@ func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (r
 					hasPassword = value.Bool()
 				} else if flag == cli.NoTLSFlag {
 					if value.Bool() {
-						result = append(result, "--"+flag)
-						continue
+						// There is currently no way to unset a flag, but setting is to the empty string at least sets it to true.
+						aprUpdated, err = aprUpdated.SetArgument(flag, "")
+						if err != nil {
+							return nil, err
+						}
 					}
 				} else {
 					if value.Str != "" {
-						result = append(result, "--"+flag, value.Str)
+						aprUpdated, err = aprUpdated.SetArgument(flag, value.Str)
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
 		}
 		if !apr.Contains(cli.PasswordFlag) && hasPassword {
-			result = append(result, "--"+cli.PasswordFlag, password)
+			aprUpdated, err = aprUpdated.SetArgument(cli.PasswordFlag, password)
+			if err != nil {
+				return nil, err
+			}
 		}
-		return result, nil
+		return aprUpdated, nil
 	} else {
 		return nil, fmt.Errorf("profile %s not found", profileName)
 	}

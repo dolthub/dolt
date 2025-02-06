@@ -263,7 +263,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root doltdb.Root
 		return nil, err
 	}
 
-	scanner := newStreamScanner(strings.NewReader(query))
+	scanner := NewStreamScanner(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
@@ -339,8 +339,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 	if err != nil {
 		return nil, nil, err
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(), opts)
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(ctx), Tempdir: tmpDir}
+	db, err := dsqle.NewDatabase(ctx, filterDbName, dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, nil, err
 	}

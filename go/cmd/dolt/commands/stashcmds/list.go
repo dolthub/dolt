@@ -64,7 +64,7 @@ func (cmd StashListCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
 		cli.PrintErrln(ErrStashNotSupportedForOldFormat.Error())
 		return 1
 	}
@@ -80,7 +80,7 @@ func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
-	stashes, err := dEnv.DoltDB.GetStashes(ctx)
+	stashes, err := dEnv.DoltDB(ctx).GetStashes(ctx)
 	if err != nil {
 		return err
 	}
