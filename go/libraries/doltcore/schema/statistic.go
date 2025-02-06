@@ -71,7 +71,6 @@ func StatsTableSqlSchema(dbName string) sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
 		Schema: sql.Schema{
 			&sql.Column{Name: StatsDbColName, Type: types.Text, DatabaseSource: dbName},
-			&sql.Column{Name: StatsBranchName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsTableColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsIndexColName, Type: types.Text, DatabaseSource: dbName},
 			&sql.Column{Name: StatsRowCountColName, Type: types.Int64, DatabaseSource: dbName},

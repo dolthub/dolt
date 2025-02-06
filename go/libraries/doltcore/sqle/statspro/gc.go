@@ -108,7 +108,7 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) (err error)
 		bucketCnt += cnt
 	}
 
-	sc.bucketCnt.Store(int64(bucketCnt))
+	//sc.bucketCnt.Store(int64(bucketCnt))
 	sc.bucketCap = sc.kv.Cap()
 	sc.kv.FinishGc()
 

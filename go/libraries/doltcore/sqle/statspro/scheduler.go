@@ -703,7 +703,15 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			sc.kv.PutBound(firstNodeHash, firstRow)
 		}
 	}
+
 	for i, n := range j.nodes {
+		if _, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
+			return nil, err
+		} else if ok {
+			// concurrent reads overestimate shared buckets
+			sc.bucketCnt.Add(-1)
+			continue
+		}
 		// each node is a bucket
 		updater.newBucket()
 
@@ -735,7 +743,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		if err != nil {
 			return nil, err
 		}
-		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(j.colCnt)))
+		err = sc.kv.PutBucket(ctx, n.HashOf(), bucket, keyBuilder)
 		if err != nil {
 			return nil, err
 		}

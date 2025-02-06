@@ -982,14 +982,6 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		}
 	}
 
-	{
-		// initialize seed jobs
-		validateJobState(t, ctx, sc, []StatsJob{
-			// first job doesn't have tracked tables
-			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: nil},
-		})
-	}
-
 	if memOnly {
 		statsKv := NewMemStats()
 		sc.kv = statsKv
@@ -1353,7 +1345,9 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	sc.SetTimers(1, 100, 50)
+	sc.JobInterval = 10
+	sc.gcInterval = 100
+	sc.branchInterval = 100
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1436,7 +1430,9 @@ func TestStatsCacheGrowth(t *testing.T) {
 	ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	sc.SetTimers(1, 1000, 1000)
+	sc.JobInterval = 10
+	sc.gcInterval = 100
+	sc.branchInterval = 100
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {

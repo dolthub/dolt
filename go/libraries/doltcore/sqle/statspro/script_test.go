@@ -74,7 +74,7 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "select count(*) from dolt_statistics",
-					res:   []sql.Row{{int64(8)}},
+					res:   []sql.Row{{int64(9)}},
 				},
 				{
 					query: "delete from xy where x > 600",
@@ -131,7 +131,7 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "select count(*) from dolt_statistics",
-					res:   []sql.Row{{0}},
+					res:   []sql.Row{{int64(0)}},
 				},
 			},
 		},
@@ -195,11 +195,24 @@ func TestStatScripts(t *testing.T) {
 			setup: []string{
 				"create table xy (x int primary key, y int, key (y,x))",
 				"alter table xy add index y2 (y)",
+				"alter table xy add index x2 (x,y)",
 				"insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,1), (8,1), (9,1),(10,3),(11,4),(12,5),(13,6),(14,7),(15,8),(16,9),(17,10),(18,11)",
 			},
 			assertions: []assertion{
 				{
 					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'y2'",
+					res:   []sql.Row{{"1", "0", "4,6"}},
+				},
+				{
+					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'y'",
+					res:   []sql.Row{{"1", "0", "4,6"}},
+				},
+				{
+					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'x2'",
+					res:   []sql.Row{{"1", "0", "4,6"}},
+				},
+				{
+					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'primary'",
 					res:   []sql.Row{{"1", "0", "4,6"}},
 				},
 			},
@@ -349,7 +362,7 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_checkout('feat')",
@@ -410,21 +423,21 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_stats_stop()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":0,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":0,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_stats_restart()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 			},
 		},
@@ -441,14 +454,14 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_stats_purge()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_stats_restart()",
@@ -458,7 +471,7 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 			},
 		},
@@ -475,7 +488,7 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":4,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
 				},
 				{
 					query: "call dolt_stats_stop()",
