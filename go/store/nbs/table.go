@@ -187,7 +187,7 @@ type extractRecord struct {
 	err  error
 }
 
-// Returned by read methods that take a |keeperFunc|, this lets a
+// Returned by read methods that take a |keeperF|, this lets a
 // caller know whether the operation was successful or if it needs to
 // be retried. It may need to be retried if a GC is in progress but
 // the dependencies indicated by the operation cannot be added to the
@@ -202,6 +202,10 @@ const (
 	gcBehavior_Block = true
 )
 
+// keeperF is a function that takes a hash.Hash and returns true if the hash is used by the GC system to indicate
+// that the chunk requested may not be present in the future, and therefore |gcBehavior_Block| should be returned. This
+// is used to allow read/write ops to the store by non-GC processes while GC is underway. The |keeperF| may be nil,
+// in which case GC is not underway. If it's non-nil, and return false, it's ok to proceed with the operation (|gcBehavior_Continue|)
 type keeperF func(hash.Hash) bool
 
 type chunkReader interface {
