@@ -156,7 +156,6 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 
 	dcc.ch.AddConfig(localConfigName, cfg)
 
-
 	return nil
 }
 
