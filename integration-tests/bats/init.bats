@@ -287,7 +287,7 @@ teardown() {
 
     mkdir -p dbdir/.dolt
     cd dbdir
-    touch .dolt/config.json
+    touch .dolt/not_config.json
     run dolt init
     [ "$status" -eq 1 ]
     [[ "$output" =~ ".dolt directory already exists" ]] || false
