@@ -32,7 +32,7 @@ func generateDeps(
 	sqlCtx *sql.Context,
 	sqlDb dsess.SqlDatabase,
 	tCb func(key templateCacheKey),
-	bCb func(h hash.Hash),
+	bCb func(h hash.Hash, cnt int),
 	hCb func(h hash.Hash, tupB *val.TupleBuilder) error,
 ) error {
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
@@ -76,7 +76,7 @@ func generateDeps(
 			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 			tCb(key)
 
-			idxCnt := len(sqlIdx.Expressions())
+			idxLen := len(sqlIdx.Expressions())
 
 			prollyMap := durable.ProllyMapFromIndex(idx)
 			levelNodes, err := tree.GetHistogramLevel(sqlCtx, prollyMap.Tuples(), bucketLowCnt)
@@ -92,10 +92,10 @@ func generateDeps(
 			bucketCnt += len(levelNodes)
 
 			firstNodeHash := levelNodes[0].HashOf()
-			bCb(firstNodeHash)
+			bCb(firstNodeHash, idxLen)
 
 			for _, n := range levelNodes {
-				err = hCb(n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxCnt)))
+				err = hCb(n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen)))
 				if err != nil {
 					return err
 				}
@@ -132,8 +132,8 @@ func (sc *StatsCoord) ValidateState(ctx context.Context) error {
 			if !ok {
 				fmt.Fprintf(&b, "(%s) missing template (%s)\n", db.RevisionQualifiedName(), key.String())
 			}
-		}, func(h hash.Hash) {
-			_, ok := sc.kv.GetBound(h)
+		}, func(h hash.Hash, cnt int) {
+			_, ok := sc.kv.GetBound(h, cnt)
 			if !ok {
 				fmt.Fprintf(&b, "(%s) missing bound (%s)\n", db.RevisionQualifiedName(), h.String()[:5])
 			}

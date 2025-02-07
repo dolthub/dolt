@@ -29,6 +29,7 @@ const (
 	StatsIndexColName         = "index_name"
 	StatsBranchName           = "branch"
 	StatsCommitHashColName    = "commit_hash"
+	StatsPrefixLenName        = "prefix_len"
 	StatsRowCountColName      = "row_count"
 	StatsDistinctCountColName = "distinct_count"
 	StatsNullCountColName     = "null_count"
@@ -51,6 +52,7 @@ const (
 	StatsIndexTag
 	StatsPositionTag
 	StatsVersionTag
+	StatsPrefixLenTag
 	StatsCommitHashTag
 	StatsRowCountTag
 	StatsDistinctCountTag
@@ -94,6 +96,7 @@ var StatsTableDoltSchema = StatsTableDoltSchemaGen()
 
 func StatsTableDoltSchemaGen() Schema {
 	colColl := NewColCollection(
+		NewColumn(StatsPrefixLenName, StatsPrefixLenTag, stypes.IntKind, true, NotNullConstraint{}),
 		NewColumn(StatsCommitHashColName, StatsCommitHashTag, stypes.StringKind, true, NotNullConstraint{}),
 		NewColumn(StatsVersionColName, StatsVersionTag, stypes.IntKind, false, NotNullConstraint{}),
 		NewColumn(StatsRowCountColName, StatsRowCountTag, stypes.IntKind, false, NotNullConstraint{}),

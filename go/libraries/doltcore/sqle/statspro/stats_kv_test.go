@@ -34,6 +34,7 @@ func TestProllyKv(t *testing.T) {
 
 	h := hash.Parse(strings.Repeat("a", hash.StringLen))
 	h2 := hash.Parse(strings.Repeat("b", hash.StringLen))
+	k := getBucketKey(h, 2)
 
 	tupB := val.NewTupleBuilder(val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: true},
@@ -43,11 +44,11 @@ func TestProllyKv(t *testing.T) {
 	t.Run("test bounds", func(t *testing.T) {
 		exp := sql.Row{1, 1}
 		prollyKv.PutBound(h, exp)
-		cmp, ok := prollyKv.GetBound(h)
+		cmp, ok := prollyKv.GetBound(h, 2)
 		require.True(t, ok)
 		require.Equal(t, exp, cmp)
 
-		_, ok = prollyKv.GetBound(h2)
+		_, ok = prollyKv.GetBound(h2, 2)
 		require.False(t, ok)
 	})
 
@@ -84,9 +85,9 @@ func TestProllyKv(t *testing.T) {
 		require.False(t, ok)
 
 		// delete from memory, should pull from disk when |tupB| supplied
-		prollyKv.mem.buckets.Remove(h)
+		prollyKv.mem.buckets.Remove(k)
 
-		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, nil)
+		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, tupB)
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, (*stats.Bucket)(nil), cmp)
@@ -110,7 +111,7 @@ func TestProllyKv(t *testing.T) {
 		prollyKv.StartGc(context.Background(), 10)
 
 		// if we delete from memory, no more fallback to disk
-		prollyKv.mem.buckets.Remove(h)
+		prollyKv.mem.buckets.Remove(k)
 		_, ok, err := prollyKv.GetBucket(context.Background(), h2, tupB)
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -166,7 +167,7 @@ func TestProllyKv(t *testing.T) {
 		prollyKv.PutBound(h2, exp)
 
 		prollyKv.StartGc(context.Background(), 10)
-		prollyKv.GetBound(h2)
+		prollyKv.GetBound(h2, 2)
 		prollyKv.FinishGc()
 
 		require.Equal(t, 1, len(prollyKv.mem.bounds))

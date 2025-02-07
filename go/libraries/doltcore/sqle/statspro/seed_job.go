@@ -310,7 +310,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 
 		if curCnt > jobSize {
 			first := batchOrdinals[0].start == 0
-			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
+			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, idxLen: idxCnt, done: make(chan struct{})})
 			curCnt = 0
 			batchOrdinals = batchOrdinals[:0]
 			nodes = nodes[:0]
@@ -318,7 +318,7 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 	}
 	if curCnt > 0 {
 		first := batchOrdinals[0].start == 0
-		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, colCnt: idxCnt, done: make(chan struct{})})
+		jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, idxLen: idxCnt, done: make(chan struct{})})
 	}
 
 	return jobs, nil

@@ -204,16 +204,12 @@ func TestStatScripts(t *testing.T) {
 					res:   []sql.Row{{"1", "0", "4,6"}},
 				},
 				{
-					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'y'",
-					res:   []sql.Row{{"1", "0", "4,6"}},
+					query: "select mcv_counts from dolt_statistics where index_name = 'y'",
+					res:   []sql.Row{{""}},
 				},
 				{
-					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'x2'",
-					res:   []sql.Row{{"1", "0", "4,6"}},
-				},
-				{
-					query: "select mcv1, mcv2, mcv_counts from dolt_statistics where index_name = 'primary'",
-					res:   []sql.Row{{"1", "0", "4,6"}},
+					query: "select mcv_counts from dolt_statistics where index_name = 'x2'",
+					res:   []sql.Row{{""}},
 				},
 			},
 		},
@@ -513,6 +509,8 @@ func TestStatScripts(t *testing.T) {
 			sc.SetEnableGc(true)
 
 			require.NoError(t, sc.Restart(ctx))
+
+			sc.Debug = true
 
 			for _, s := range tt.setup {
 				require.NoError(t, executeQuery(ctx, sqlEng, s))

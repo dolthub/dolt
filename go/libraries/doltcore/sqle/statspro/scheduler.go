@@ -125,7 +125,7 @@ type ReadJob struct {
 	first    bool
 	nodes    []tree.Node
 	ordinals []updateOrdinal
-	colCnt   int
+	idxLen   int
 	done     chan struct{}
 }
 
@@ -617,12 +617,12 @@ func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 }
 
 func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered in f", r)
-			err = fmt.Errorf("stats job %s panicked: %s", j.String(), r)
-		}
-	}()
+	//defer func() {
+	//	if r := recover(); r != nil {
+	//		fmt.Println("Recovered in f", r)
+	//		err = fmt.Errorf("stats job %s panicked: %s", j.String(), r)
+	//	}
+	//}()
 	var newJobs []StatsJob
 	switch j := j.(type) {
 	case SeedDbTablesJob:
@@ -677,9 +677,10 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 	// check if chunk already in cache
 	// if no, see if on disk and we just need to load
 	// otherwise perform read to create the bucket, write to disk, update mem ref
+
 	prollyMap := j.m
-	updater := newBucketBuilder(sql.StatQualifier{}, j.colCnt, prollyMap.KeyDesc().PrefixDesc(j.colCnt))
-	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
+	updater := newBucketBuilder(sql.StatQualifier{}, j.idxLen, prollyMap.KeyDesc())
+	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(j.idxLen))
 
 	// all kv puts are guarded by |gcMu| to avoid concurrent
 	// GC with stale data discarding some or all state
@@ -690,8 +691,8 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 		sc.kv.PutTemplate(j.key, j.template)
 
 		firstNodeHash := j.nodes[0].HashOf()
-		if _, ok := sc.kv.GetBound(firstNodeHash); !ok {
-			firstRow, err := firstRowForIndex(j.ctx, prollyMap, val.NewTupleBuilder(prollyMap.KeyDesc()))
+		if _, ok := sc.kv.GetBound(firstNodeHash, j.idxLen); !ok {
+			firstRow, err := firstRowForIndex(j.ctx, prollyMap, keyBuilder)
 			if err != nil {
 				if err != nil {
 					return nil, err
@@ -794,7 +795,7 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 
 		for i, bh := range fs.buckets {
 			if i == 0 {
-				bnd, ok := sc.kv.GetBound(bh)
+				bnd, ok := sc.kv.GetBound(bh, fs.tupB.Desc.Count())
 				if !ok {
 					log.Println("chunks: ", fs.buckets)
 					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s", key, bh)

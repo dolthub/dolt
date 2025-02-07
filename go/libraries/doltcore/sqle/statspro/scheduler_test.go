@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -676,7 +675,7 @@ func TestBucketDoubling(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	cur := sc.kv.(*memStats).buckets
-	newB, _ := lru.New[hash.Hash, *stats.Bucket](4)
+	newB, _ := lru.New[bucketKey, *stats.Bucket](4)
 	for _, k := range cur.Keys() {
 		v, _ := cur.Get(k)
 		newB.Add(k, v)

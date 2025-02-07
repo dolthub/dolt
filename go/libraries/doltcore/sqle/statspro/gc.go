@@ -167,7 +167,7 @@ func (sc *StatsCoord) gcMark(sqlCtx *sql.Context, j GcMarkJob) (int, error) {
 			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 			sc.kv.GetTemplate(key)
 
-			idxCnt := len(sqlIdx.Expressions())
+			idxLen := len(sqlIdx.Expressions())
 
 			prollyMap := durable.ProllyMapFromIndex(idx)
 			levelNodes, err := tree.GetHistogramLevel(sqlCtx, prollyMap.Tuples(), bucketLowCnt)
@@ -182,10 +182,10 @@ func (sc *StatsCoord) gcMark(sqlCtx *sql.Context, j GcMarkJob) (int, error) {
 			bucketCnt += len(levelNodes)
 
 			firstNodeHash := levelNodes[0].HashOf()
-			sc.kv.GetBound(firstNodeHash)
+			sc.kv.GetBound(firstNodeHash, idxLen)
 
 			for _, n := range levelNodes {
-				err = sc.kv.MarkBucket(sqlCtx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxCnt)))
+				err = sc.kv.MarkBucket(sqlCtx, n.HashOf(), val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen)))
 				if err != nil {
 					return 0, err
 				}
