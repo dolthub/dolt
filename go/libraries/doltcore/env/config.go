@@ -145,13 +145,17 @@ func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string
 	}
 
 	path := filepath.Join(dir, getLocalConfigPath())
-	cfg, err := config.NewFileConfig(path, dcc.fs, vals)
+	if exists, _ := dcc.fs.Exists(path); exists {
+		return nil
+	}
 
+	cfg, err := config.NewFileConfig(path, dcc.fs, vals)
 	if err != nil {
 		return err
 	}
 
 	dcc.ch.AddConfig(localConfigName, cfg)
+
 
 	return nil
 }

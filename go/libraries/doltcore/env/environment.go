@@ -499,7 +499,7 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 		}
 
 		if len(entries) == 1 {
-			if !entries[0].IsDir() || entries[0].Name() != TmpDirName {
+			if (!entries[0].IsDir() && entries[0].Name() != TmpDirName) && (!entries[0].IsDir() && entries[0].Name() != configFile) {
 				return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
 			}
 		} else if len(entries) != 0 {
