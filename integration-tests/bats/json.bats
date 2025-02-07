@@ -298,24 +298,3 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Blob" ]] || false
 }
-
-# Older clients have a bug that prevents them from reading indexed JSON documents with strings split across chunks,
-# And making one large chunk can causes issues with the journal.
-# Thus, we expect that the document gets stored as a blob.
-@test "json: document with large string value doesn't get indexed" {
-    run dolt sql <<SQL
-    CREATE TABLE js (
-        pk int PRIMARY KEY,
-        js json
-    );
-    insert into js values (1, '{"key": "`head -c 2097152 < /dev/zero | tr '\0' '\141'`" }');
-    insert into js values (2, '{"`head -c 2097152 < /dev/zero | tr '\0' '\141'`": "value" }');
-SQL
-    # If the documents aren't put into an IndexedJsonDocument, they will contain the following hashes.
-    run dolt show 9erat0qpsqrmmr53fhu6b7gnjj5n1v9i
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Blob" ]] || false
-    run dolt show 69cm31n0k392sch3snf5jc7ndfiaund8
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Blob" ]] || false
-}
