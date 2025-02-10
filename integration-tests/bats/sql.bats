@@ -1067,11 +1067,12 @@ SQL
 
     echo "select * from test;" > in.sql
 
-    run dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
+    dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
     [ $status -eq 0 ]
 
     run cat out.parquet
     [ $status -eq 0 ]
+    [[ "$output" =~ "Tables_in_" ]] || false
     [[ ! "$output" =~ "Processed" ]] || false
 
     run cat out.txt
