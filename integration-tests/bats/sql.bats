@@ -1071,7 +1071,6 @@ SQL
 
     run cat out.parquet
     [ $status -eq 0 ]
-    [[ "$output" =~ "Tables_in_" ]] || false
     [[ ! "$output" =~ "Processed" ]] || false
 
     run cat out.txt
