@@ -183,6 +183,16 @@ mutations_and_gc_statement() {
     run dolt sql -q 'select sum(i) from tbl;'
     [[ "$status" -eq 0 ]] || false
     [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+
+    ## Temporary check. We want to ensure that backup will give an error, even when
+    ## there are archives in newgen.
+    mkdir ../backup
+    dolt backup add bac1 file://../backup
+
+    run dolt backup sync bac1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: archive files present" ]] || false
 }
 
 @test "archive: can clone respiratory with mixed types" {
@@ -235,7 +245,7 @@ mutations_and_gc_statement() {
     dolt fetch
 
     ## update the remote repo directly. Need to run the archive command when the server is stopped.
-    ## This will result in achived files on the remote, which we will need to read chunks from when we fetch.
+    ## This will result in archived files on the remote, which we will need to read chunks from when we fetch.
     cd ../../remote
     kill $remotesrv_pid
     wait $remotesrv_pid || :
@@ -248,7 +258,6 @@ mutations_and_gc_statement() {
     [[ "$remotesrv_pid" -gt 0 ]] || false
 
     cd ../cloned/repo1
-
     run dolt fetch
     [ "$status" -eq 0 ]
 
