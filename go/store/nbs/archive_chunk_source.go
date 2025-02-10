@@ -145,6 +145,10 @@ func (acs archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
 
+func (acs archiveChunkSource) suffix() string {
+	return archiveFileSuffix
+}
+
 func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
 	return nil, 0, errors.New("Archive chunk source does not support reader")
 }

@@ -157,19 +157,32 @@ func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	locs, err := nbs.GetChunkLocations(ctx, hashes)
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	toret := make(map[string]map[hash.Hash]Range, len(locs))
-	for k, v := range locs {
-		toret[k.String()] = v
+	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
+	for cs, ranges := range sourcesToRanges {
+		res[hash.Hash(cs.hash()).String()+chunkSourceFileSuffix(cs)] = ranges
 	}
-	return toret, nil
+	return res, nil
 }
 
 func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
-	fn := func(css chunkSourceSet, gr []getRecord, ranges map[hash.Hash]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[hash.Hash]map[hash.Hash]Range, len(hashes))
+	for cs, ranges := range sourcesToRanges {
+		h := hash.Hash(cs.hash())
+		res[h] = ranges
+	}
+	return res, nil
+}
+
+func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[chunkSource]map[hash.Hash]Range, error) {
+	fn := func(css chunkSourceSet, gr []getRecord, ranges map[chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
 			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
 			if err != nil {
@@ -179,13 +192,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 				return gcb, nil
 			}
 
-			h := hash.Hash(cs.hash())
-			if m, ok := ranges[h]; ok {
+			if m, ok := ranges[cs]; ok {
 				for k, v := range rng {
 					m[k] = v
 				}
 			} else {
-				ranges[h] = rng
+				ranges[cs] = rng
 			}
 		}
 		return gcBehavior_Continue, nil
@@ -197,7 +209,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
-		ranges := make(map[hash.Hash]map[hash.Hash]Range)
+		ranges := make(map[chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(tables.upstream, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
@@ -1477,8 +1489,9 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info TableSpecInfo
-	open func(ctx context.Context) (io.ReadCloser, uint64, error)
+	info   TableSpecInfo
+	open   func(ctx context.Context) (io.ReadCloser, uint64, error)
+	suffix string
 }
 
 // LocationPrefix
@@ -1488,7 +1501,7 @@ func (tf tableFile) LocationPrefix() string {
 
 // FileID gets the id of the file
 func (tf tableFile) FileID() string {
-	return tf.info.GetName()
+	return tf.info.GetName() + tf.suffix
 }
 
 // NumChunks returns the number of chunks in a table file
@@ -1555,7 +1568,17 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 	return tableFiles, nil
 }
 
+func chunkSourceFileSuffix(cs chunkSource) string {
+	if suffixer, ok := cs.(interface {
+		suffix() string
+	}); ok {
+		return suffixer.suffix()
+	}
+	return ""
+}
+
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
+	suffix := chunkSourceFileSuffix(cs)
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
@@ -1565,6 +1588,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			}
 			return r, s, nil
 		},
+		suffix: suffix,
 	}
 }
 
