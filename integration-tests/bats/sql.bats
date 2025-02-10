@@ -1069,6 +1069,7 @@ SQL
     run dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
     [ $status -eq 0 ]
 
+    parquet cat out.parquet
     run parquet cat out.parquet
     [ $status -eq 0 ]
     [[ "$output" =~ "Tables_in_" ]] || false
