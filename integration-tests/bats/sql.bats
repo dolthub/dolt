@@ -1070,7 +1070,7 @@ SQL
     run dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
     [ $status -eq 0 ]
 
-    run parquet cat out.parquet
+    run cat out.parquet
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
     [[ ! "$output" =~ "Processed" ]] || false
