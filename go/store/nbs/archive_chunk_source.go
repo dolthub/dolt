@@ -36,7 +36,7 @@ type archiveChunkSource struct {
 var _ chunkSource = &archiveChunkSource{}
 
 func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
-	archiveFile := filepath.Join(dir, h.String()+archiveFileSuffix)
+	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	file, size, err := openReader(archiveFile)
 	if err != nil {
@@ -112,7 +112,6 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 		if data == nil {
 			foundAll = false
 		} else {
-			// NM4
 			if keeper != nil && keeper(h) {
 				return true, gcBehavior_Block, nil
 			}
@@ -143,7 +142,7 @@ func (acs archiveChunkSource) hash() hash.Hash {
 }
 
 func (acs archiveChunkSource) name() string {
-	return acs.hash().String() + ".darc" // NM4 - second time this const is defined. Fix!
+	return acs.hash().String() + ArchiveFileSuffix
 }
 
 func (acs archiveChunkSource) currentSize() uint64 {
@@ -203,7 +202,7 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getR
 
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk *chunks.Chunk) {
-		// NM4 - UPDATE. this is def wrong. Not sure why I did this!
+		// NM4 - UPDATE. this is def wrong.
 		found(ctx, ChunkToCompressedChunk(*chk))
 	}, keeper, stats)
 }

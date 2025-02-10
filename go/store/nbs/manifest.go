@@ -461,7 +461,7 @@ func (ts tableSpec) GetFileName() string {
 	case typeNoms:
 		return ts.hash.String()
 	case typeArchive:
-		return ts.hash.String() + ".darc" // NM4 - common code for this???
+		return ts.hash.String() + ArchiveFileSuffix
 	default:
 		panic(fmt.Sprintf("runtime error: unknown table file type: %d", ts.fileType))
 	}
