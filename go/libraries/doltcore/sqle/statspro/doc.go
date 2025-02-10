@@ -25,7 +25,7 @@ package statspro
 // databases, one is selected by random as the storage target. If during
 // initialization multiple databases have stats, one will be chosen by
 // random as the target. If a database changes between server restarts,
-// the storage stats will be useless but not impair operations because
+// the storage stats will be useless but not impair regular operations because
 // storage is only ever a best-effort content-addressed persistence layer;
 // buckets will be regenerated if they are missing. If the database acting
 // as a storage target is deleted, we swap the cache to write to a new storage
@@ -35,11 +35,9 @@ package statspro
 //  - Table statistics map, that returns a list of table index statistics
 //    for a specific branch, database, and table name.
 //  - Object caches:
-//    - Bucket cache: Chunk addressed histogram bucket. All provider
-//      histogram references should be in the bucket cache. This is an LRU
-//      that is sized to always fit the current active set, and doubles
-//      when the provider bucket counter reaches the threshold. Backed
-//      by a best-effort on-disk prolly.Map to make restarts faster.
+//    - Bucket cache: Chunk addressed hash map. All provider histogram
+//      references point to objects in the bucket cache. Backed by a
+//      best-effort on-disk prolly.Map to make restarts faster.
 //    - Template cache: Table-schema/index addressed stats.Statistics object
 //      for a specific index.
 //    - Bound cache: Chunk addressed first row for an index histogram.
@@ -64,7 +62,7 @@ package statspro
 // up over time means we need to do special checks when finalizing a set
 // of database stats. A race between deleting a database and finalizing
 // statistics needs to end with no statistics, which requires a delete check
-// after finalize.
+// for when finalize wins a race.
 //
 // The stats lifecycle can be controlled with:
 //  - dolt_stats_stop: clear queue and disable thread

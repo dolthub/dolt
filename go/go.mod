@@ -56,7 +56,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250204220847-d8430ebf9ed0
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250210190204-a73f126157ef
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/esote/minmaxheap v1.0.0
@@ -91,7 +91,6 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.21.0
 	gonum.org/v1/plot v0.11.0
-	gopkg.in/errgo.v2 v2.1.0
 	gopkg.in/go-jose/go-jose.v2 v2.6.3
 	gopkg.in/yaml.v3 v3.0.1
 )

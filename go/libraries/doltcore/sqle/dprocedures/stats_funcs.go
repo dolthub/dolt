@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -34,14 +35,14 @@ var statsFuncSchema = []*sql.Column{
 
 const OkResult = "Ok"
 
-func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (iter sql.RowIter, err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
 			}
 		}()
-		res, err := fn(ctx)
+		res, err := fn(ctx, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -84,6 +85,7 @@ type ToggableStats interface {
 	BranchSync(ctx *sql.Context) error
 	ValidateState(ctx context.Context) error
 	Init(context.Context, []dsess.SqlDatabase) error
+	SetTimers(int64, int64, int64)
 }
 
 type BranchStatsProvider interface {
@@ -92,7 +94,7 @@ type BranchStatsProvider interface {
 
 // statsRestart flushes the current job queue and re-inits all
 // statistic databases.
-func statsRestart(ctx *sql.Context) (interface{}, error) {
+func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 
@@ -123,7 +125,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 }
 
 // statsInfo returns the last update for a stats thread
-func statsInfo(ctx *sql.Context) (interface{}, error) {
+func statsInfo(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -136,7 +138,7 @@ func statsInfo(ctx *sql.Context) (interface{}, error) {
 // statsWait blocks until the job queue executes two full loops
 // of instructions, which will (1) pick up and (2) commit new
 // sets of index-bucket dependencies.
-func statsWait(ctx *sql.Context) (interface{}, error) {
+func statsWait(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -150,7 +152,7 @@ func statsWait(ctx *sql.Context) (interface{}, error) {
 
 // statsGc rewrites the cache to only include objects reachable
 // by the current root value.
-func statsGc(ctx *sql.Context) (interface{}, error) {
+func statsGc(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -164,7 +166,7 @@ func statsGc(ctx *sql.Context) (interface{}, error) {
 
 // statsBranchSync update database branch tracking based on the
 // most recent session.
-func statsBranchSync(ctx *sql.Context) (interface{}, error) {
+func statsBranchSync(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -177,7 +179,7 @@ func statsBranchSync(ctx *sql.Context) (interface{}, error) {
 }
 
 // statsValidate returns inconsistencies if the kv cache is out of date
-func statsValidate(ctx *sql.Context) (interface{}, error) {
+func statsValidate(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -191,7 +193,7 @@ func statsValidate(ctx *sql.Context) (interface{}, error) {
 
 // statsStop flushes the job queue and leaves the stats provider
 // in a paused state.
-func statsStop(ctx *sql.Context) (interface{}, error) {
+func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 
@@ -207,7 +209,7 @@ func statsStop(ctx *sql.Context) (interface{}, error) {
 // statsPurge flushes the job queue, deletes the current caches
 // and storage targets, re-initializes the tracked database
 // states, and returns with stats collection paused.
-func statsPurge(ctx *sql.Context) (interface{}, error) {
+func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro, ok := dSess.StatsProvider().(ToggableStats)
 	if !ok {
@@ -238,4 +240,32 @@ func statsPurge(ctx *sql.Context) (interface{}, error) {
 	}
 
 	return OkResult, nil
+}
+
+// statsTimers updates the stats timers, which go into effect after the next restart.
+func statsTimers(ctx *sql.Context, args ...string) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	statsPro := dSess.StatsProvider()
+
+	if len(args) != 3 {
+		return nil, fmt.Errorf("expected timer arguments (ns): (job, gc, sync)")
+	}
+	job, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("interval timer must be positive intergers")
+	}
+	gc, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("interval timer must be positive intergers")
+	}
+	sync, err := strconv.ParseInt(args[2], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("interval arguments must be positive intergers")
+	}
+
+	if afp, ok := statsPro.(ToggableStats); ok {
+		afp.SetTimers(job, gc, sync)
+		return OkResult, nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
