@@ -64,10 +64,8 @@ teardown() {
 
   mkdir .dolt
 
-  run dolt config --add user.name foo
-  [ "$status" -eq 0 ]
-  run dolt config --add user.email foo@bar.com
-  [ "$status" -eq 0 ]
+  dolt config --add user.name foo
+  dolt config --add user.email foo@bar.com
 
   run dolt config --local --get user.name
   [ "$status" -eq 0 ]
