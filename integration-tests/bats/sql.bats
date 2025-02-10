@@ -1068,7 +1068,6 @@ SQL
     echo "select * from test;" > in.sql
 
     dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
-    [ $status -eq 0 ]
 
     run cat out.parquet
     [ $status -eq 0 ]
