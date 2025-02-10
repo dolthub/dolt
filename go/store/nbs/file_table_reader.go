@@ -54,7 +54,7 @@ func tableFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error)
 }
 
 func archiveFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error) {
-	darc := fmt.Sprintf("%s%s", h.String(), archiveFileSuffix)
+	darc := fmt.Sprintf("%s%s", h.String(), ArchiveFileSuffix)
 
 	path := filepath.Join(dir, darc)
 	_, err := os.Stat(path)

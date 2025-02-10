@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
@@ -83,8 +84,8 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 
 	for i, tblFile := range tblFiles {
 		fileId := tblFile.FileID()
-		if strings.HasSuffix(fileId, ".darc") {
-			fileId = fileId[:len(fileId)-5] // NM4.
+		if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
+			fileId = fileId[:len(fileId)-len(nbs.ArchiveFileSuffix)]
 		}
 
 		fileIDtoTblFile[fileId] = tblFile
