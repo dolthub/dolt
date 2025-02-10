@@ -1917,23 +1917,21 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 
 // ChunkJournal returns the ChunkJournal for this DoltDB, if one is in use.
 func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
-	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
-	if !ok {
-		return nil
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	var store *nbs.NomsBlockStore
+	generationalNBS, ok := cs.(*nbs.GenerationalNBS)
+	if ok {
+		store = generationalNBS.NewGen().(*nbs.NomsBlockStore)
+	} else {
+		store = cs.(*nbs.NomsBlockStore)
 	}
 
-	generationalNbs, ok := tableFileStore.(*nbs.GenerationalNBS)
-	if !ok {
+	if store != nil {
+		return store.ChunkJournal()
+	} else {
 		return nil
 	}
-
-	newGen := generationalNbs.NewGen()
-	nbs, ok := newGen.(*nbs.NomsBlockStore)
-	if !ok {
-		return nil
-	}
-
-	return nbs.ChunkJournal()
 }
 
 func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {

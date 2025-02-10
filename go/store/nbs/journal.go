@@ -490,6 +490,10 @@ func (j *ChunkJournal) AccessMode() chunks.ExclusiveAccessMode {
 	return chunks.ExclusiveAccessMode_Exclusive
 }
 
+func (j *ChunkJournal) Size() int64 {
+	return j.wr.size()
+}
+
 type journalConjoiner struct {
 	child conjoinStrategy
 }

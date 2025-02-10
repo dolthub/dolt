@@ -257,6 +257,16 @@ func ConfigureServices(
 	}
 	controller.Register(InitEventSchedulerStatus)
 
+	InitAutoGCController := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			if serverConfig.AutoGCBehavior().Enable() {
+				config.AutoGCController = sqle.NewAutoGCController(lgr)
+			}
+			return nil
+		},
+	}
+	controller.Register(InitAutoGCController)
+
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
