@@ -36,7 +36,7 @@ type archiveChunkSource struct {
 var _ chunkSource = &archiveChunkSource{}
 
 func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
-	archiveFile := filepath.Join(dir, h.String()+archiveFileSuffix)
+	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	file, size, err := openReader(archiveFile)
 	if err != nil {
@@ -142,7 +142,7 @@ func (acs archiveChunkSource) hash() hash.Hash {
 }
 
 func (acs archiveChunkSource) name() string {
-	return acs.hash().String() + ".darc" // NM4 - second time this const is defined. Fix!
+	return acs.hash().String() + ArchiveFileSuffix
 }
 
 func (acs archiveChunkSource) currentSize() uint64 {

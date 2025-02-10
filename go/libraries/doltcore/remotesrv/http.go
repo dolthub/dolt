@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -96,8 +97,8 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		}
 
 		fileName := path[i+1:]
-		if strings.HasSuffix(fileName, ".darc") {
-			fileName = fileName[:len(fileName)-5]
+		if strings.HasSuffix(fileName, nbs.ArchiveFileSuffix) {
+			fileName = fileName[:len(fileName)-len(nbs.ArchiveFileSuffix)]
 		}
 		_, ok := hash.MaybeParse(fileName)
 		if !ok {
