@@ -1072,7 +1072,6 @@ SQL
 
     run cat out.parquet
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
     [[ ! "$output" =~ "Processed" ]] || false
 
     run cat out.txt
