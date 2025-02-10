@@ -1062,18 +1062,17 @@ SQL
     c varchar(80),
     d datetime
 );
+    insert into test values (1, 1.5, "1", "2020-01-01");
 SQL
 
-    echo "show tables;" > in.sql
+    echo "select * from test;" > in.sql
 
     run dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
     [ $status -eq 0 ]
 
-    parquet cat out.parquet
     run parquet cat out.parquet
     [ $status -eq 0 ]
-    [[ "$output" =~ "Tables_in_" ]] || false
-    [[ "$output" =~ "test" ]] || false
+    [ "${#lines[@]}" -eq 8 ]
     [[ ! "$output" =~ "Processed" ]] || false
 
     run cat out.txt
