@@ -18,12 +18,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -34,6 +31,8 @@ var statsFuncSchema = []*sql.Column{
 		Nullable: true,
 	},
 }
+
+const OkResult = "Ok"
 
 func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (iter sql.RowIter, err error) {
@@ -51,15 +50,17 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 }
 
 type StatsInfo struct {
-	DbCnt           int  `json:"dbCnt"`
-	ReadCnt         int  `json:"readCnt"`
-	Active          bool `json:"active"`
-	DbSeedCnt       int  `json:"dbSeedCnt"`
-	EstBucketCnt    int  `json:"estBucketCnt"`
-	CachedBucketCnt int  `json:"cachedBucketCnt"`
-	StatCnt         int  `json:"statCnt"`
-	GcCounter       int  `json:"gcCounter"`
-	BranchCounter   int  `json:"branchCounter"`
+	DbCnt             int  `json:"dbCnt"`
+	ReadCnt           int  `json:"readCnt"`
+	Active            bool `json:"active"`
+	DbSeedCnt         int  `json:"dbSeedCnt"`
+	EstBucketCnt      int  `json:"estBucketCnt"`
+	CachedBucketCnt   int  `json:"cachedBucketCnt"`
+	CachedBoundCnt    int  `json:"cachedBoundCnt"`
+	CachedTemplateCnt int  `json:"cachedTemplateCnt"`
+	StatCnt           int  `json:"statCnt"`
+	GcCounter         int  `json:"gcCounter"`
+	SyncCounter       int  `json:"syncCounter"`
 }
 
 func (si StatsInfo) ToJson() string {
@@ -116,7 +117,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 			return nil, err
 		}
 
-		return fmt.Sprintf("restarted stats collection: %s", ref.StatsRef{}.String()), nil
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -139,8 +140,10 @@ func statsWait(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		afp.WaitForDbSync(ctx)
-		return nil, nil
+		if err := afp.WaitForDbSync(ctx); err != nil {
+			return nil, err
+		}
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -151,7 +154,10 @@ func statsGc(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		return nil, afp.Gc(ctx)
+		if err := afp.Gc(ctx); err != nil {
+			return nil, err
+		}
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -162,7 +168,10 @@ func statsBranchSync(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		return nil, afp.BranchSync(ctx)
+		if err := afp.BranchSync(ctx); err != nil {
+			return nil, err
+		}
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -172,7 +181,10 @@ func statsValidate(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		return afp.ValidateState(ctx).Error(), nil
+		if err := afp.ValidateState(ctx); err != nil {
+			return nil, err
+		}
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -182,13 +194,12 @@ func statsValidate(ctx *sql.Context) (interface{}, error) {
 func statsStop(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
-	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
 	if afp, ok := statsPro.(ToggableStats); ok {
 		if err := afp.FlushQueue(ctx); err != nil {
 			return nil, err
 		}
-		return fmt.Sprintf("stopped thread: %s", dbName), nil
+		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -226,5 +237,5 @@ func statsPurge(ctx *sql.Context) (interface{}, error) {
 		return "failed to purge stats", err
 	}
 
-	return "purged all database stats", nil
+	return OkResult, nil
 }

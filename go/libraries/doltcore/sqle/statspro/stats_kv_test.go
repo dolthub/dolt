@@ -43,7 +43,7 @@ func TestProllyKv(t *testing.T) {
 
 	t.Run("test bounds", func(t *testing.T) {
 		exp := sql.Row{1, 1}
-		prollyKv.PutBound(h, exp)
+		prollyKv.PutBound(h, exp, 2)
 		cmp, ok := prollyKv.GetBound(h, 2)
 		require.True(t, ok)
 		require.Equal(t, exp, cmp)
@@ -85,12 +85,12 @@ func TestProllyKv(t *testing.T) {
 		require.False(t, ok)
 
 		// delete from memory, should pull from disk when |tupB| supplied
-		prollyKv.mem.buckets.Remove(k)
+		delete(prollyKv.mem.buckets, k)
 
 		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, tupB)
 		require.NoError(t, err)
 		require.True(t, ok)
-		require.Equal(t, (*stats.Bucket)(nil), cmp)
+		require.Equal(t, exp, cmp)
 
 		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, tupB)
 		require.NoError(t, err)
@@ -108,37 +108,53 @@ func TestProllyKv(t *testing.T) {
 	})
 
 	t.Run("test bucket GC", func(t *testing.T) {
-		prollyKv.StartGc(context.Background(), 10)
-
-		// if we delete from memory, no more fallback to disk
-		prollyKv.mem.buckets.Remove(k)
-		_, ok, err := prollyKv.GetBucket(context.Background(), h2, tupB)
-		require.NoError(t, err)
-		require.False(t, ok)
-
 		exp := stats.NewHistogramBucket(15, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
-		err = prollyKv.PutBucket(context.Background(), h, exp, tupB)
+		err := prollyKv.PutBucket(context.Background(), h, exp, tupB)
 		require.NoError(t, err)
 
 		exp2 := stats.NewHistogramBucket(10, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
 		err = prollyKv.PutBucket(context.Background(), h2, exp2, tupB)
 		require.NoError(t, err)
 
+		prollyKv.StartGc(context.Background(), 10)
+		err = prollyKv.MarkBucket(context.Background(), h, tupB)
+		require.NoError(t, err)
+		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
+		require.NoError(t, err)
+
 		prollyKv.FinishGc()
 
+		m, _ := prollyKv.m.Map(context.Background())
+		iter, _ := m.IterAll(context.Background())
+		for i := range 2 {
+			k, _, err := iter.Next(context.Background())
+			if i == 0 {
+				require.Equal(t, "( 2, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa )", prollyKv.kb.Desc.Format(k))
+			} else if i == 1 {
+				require.Equal(t, "( 2, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb )", prollyKv.kb.Desc.Format(k))
+			} else if i == 2 {
+				require.Error(t, err)
+			}
+		}
+
 		prollyKv.StartGc(context.Background(), 10)
+		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
+		require.NoError(t, err)
+		prollyKv.FinishGc()
+
 		cmp2, ok, err := prollyKv.GetBucket(context.Background(), h2, tupB)
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.Equal(t, exp2.BoundCount(), cmp2.BoundCnt)
-		prollyKv.FinishGc()
 		// only tagged one bucket
 		require.Equal(t, 1, prollyKv.Len())
 	})
 
-	t.Run("test GC overflow", func(t *testing.T) {
-		prollyKv.StartGc(context.Background(), 8)
-		expLen := 1024
+	t.Run("test overflow", func(t *testing.T) {
+		prollyKv.StartGc(context.Background(), 10)
+		prollyKv.FinishGc()
+
+		expLen := 2000
 		var expected []hash.Hash
 		for i := range expLen {
 			exp := stats.NewHistogramBucket(uint64(i), 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
@@ -149,7 +165,6 @@ func TestProllyKv(t *testing.T) {
 			err := prollyKv.PutBucket(context.Background(), newH, exp, tupB)
 			require.NoError(t, err)
 		}
-		prollyKv.FinishGc()
 
 		for _, h := range expected {
 			_, ok, err := prollyKv.GetBucket(context.Background(), h, tupB)
@@ -157,14 +172,13 @@ func TestProllyKv(t *testing.T) {
 			require.True(t, ok)
 		}
 
-		require.Equal(t, 1024, prollyKv.Len())
-		require.Equal(t, int64(2048), prollyKv.Cap())
+		require.Equal(t, expLen, prollyKv.Len())
 	})
 
 	t.Run("test bounds GC", func(t *testing.T) {
 		exp := sql.Row{1, 1}
-		prollyKv.PutBound(h, exp)
-		prollyKv.PutBound(h2, exp)
+		prollyKv.PutBound(h, exp, 2)
+		prollyKv.PutBound(h2, exp, 2)
 
 		prollyKv.StartGc(context.Background(), 10)
 		prollyKv.GetBound(h2, 2)

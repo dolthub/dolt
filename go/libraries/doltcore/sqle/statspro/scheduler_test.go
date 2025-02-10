@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/stats"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -89,7 +88,7 @@ func TestScheduleLoop(t *testing.T) {
 
 		// 4 old + 2*7 new ab
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 18, kv.buckets.Len())
+		require.Equal(t, 18, len(kv.buckets))
 		require.Equal(t, 4, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
@@ -105,7 +104,7 @@ func TestScheduleLoop(t *testing.T) {
 	doGcCycle(t, ctx, sc)
 
 	kv := sc.kv.(*memStats)
-	require.Equal(t, 14, kv.buckets.Len())
+	require.Equal(t, 14, len(kv.buckets))
 	require.Equal(t, 2, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats))
@@ -152,7 +151,7 @@ func TestAnalyze(t *testing.T) {
 	validateJobState(t, ctx, sc, []StatsJob{})
 	kv := sc.kv.(*memStats)
 	require.Equal(t, uint64(0), sc.gcCounter.Load())
-	require.Equal(t, 6, kv.buckets.Len())
+	require.Equal(t, 6, len(kv.buckets))
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))
 	require.Equal(t, 1, len(sc.Stats))
@@ -190,18 +189,18 @@ func TestModifyColumn(t *testing.T) {
 		})
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 10, kv.buckets.Len())
+		require.Equal(t, 10, len(kv.buckets))
 		require.Equal(t, 4, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 4, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
-		require.Equal(t, int64(6), sc.bucketCnt.Load())
+		require.Equal(t, int64(6), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
-		require.Equal(t, int64(6), sc.bucketCnt.Load())
-		require.Equal(t, 6, kv.buckets.Len())
+		require.Equal(t, int64(6), sc.lastBucketCnt.Load())
+		require.Equal(t, 6, len(kv.buckets))
 	}
 }
 
@@ -233,14 +232,14 @@ func TestAddColumn(t *testing.T) {
 		})
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.buckets))
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 4, len(kv.templates)) // +2 for new schema
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
-		require.Equal(t, int64(4), sc.bucketCnt.Load())
+		require.Equal(t, int64(4), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -272,26 +271,26 @@ func TestDropIndex(t *testing.T) {
 		})
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.buckets))
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.bucketCnt.Load())
+		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 
 		kv = sc.kv.(*memStats)
-		require.Equal(t, 2, kv.buckets.Len())
+		require.Equal(t, 2, len(kv.buckets))
 		require.Equal(t, 1, len(kv.bounds))
 		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.bucketCnt.Load())
+		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -327,7 +326,7 @@ func TestDropTable(t *testing.T) {
 		runAndPause(t, ctx, sc, &wg)
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 5, len(kv.buckets))
 		require.Equal(t, 3, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
@@ -338,14 +337,14 @@ func TestDropTable(t *testing.T) {
 		doGcCycle(t, ctx, sc)
 
 		kv = sc.kv.(*memStats)
-		require.Equal(t, 1, kv.buckets.Len())
+		require.Equal(t, 1, len(kv.buckets))
 		require.Equal(t, 1, len(kv.bounds))
 		require.Equal(t, 1, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.bucketCnt.Load())
+		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -366,17 +365,17 @@ func TestDeleteAboveBoundary(t *testing.T) {
 		runAndPause(t, ctx, sc, &wg) // finalize
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, kv.buckets.Len()) // 1 for new chunk
+		require.Equal(t, 5, len(kv.buckets)) // 1 for new chunk
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates)) // +1 for schema change
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.bucketCnt.Load())
+		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
-		require.Equal(t, 2, kv.buckets.Len())
-		require.Equal(t, int64(2), sc.bucketCnt.Load())
+		require.Equal(t, 2, len(kv.buckets))
+		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -398,17 +397,17 @@ func TestDeleteBelowBoundary(t *testing.T) {
 
 		kv := sc.kv.(*memStats)
 
-		require.Equal(t, 5, kv.buckets.Len()) // +1 rewrite partial chunk
-		require.Equal(t, 3, len(kv.bounds))   // +1 rewrite first chunk
+		require.Equal(t, 5, len(kv.buckets)) // +1 rewrite partial chunk
+		require.Equal(t, 3, len(kv.bounds))  // +1 rewrite first chunk
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.bucketCnt.Load())
+		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
-		require.Equal(t, 1, kv.buckets.Len())
-		require.Equal(t, int64(1), sc.bucketCnt.Load())
+		require.Equal(t, 1, len(kv.buckets))
+		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -430,17 +429,17 @@ func TestDeleteOnBoundary(t *testing.T) {
 		runAndPause(t, ctx, sc, &wg) // finalize
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.buckets))
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates)) // +1 schema change
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.bucketCnt.Load())
+		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
-		require.Equal(t, 1, kv.buckets.Len())
-		require.Equal(t, int64(1), sc.bucketCnt.Load())
+		require.Equal(t, 1, len(kv.buckets))
+		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -486,7 +485,7 @@ func TestAddDropDatabases(t *testing.T) {
 
 		// xy and t
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 5, len(kv.buckets))
 		require.Equal(t, 3, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
@@ -538,7 +537,7 @@ func TestGC(t *testing.T) {
 
 		// test for cleanup
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, kv.buckets.Len())
+		require.Equal(t, 5, len(kv.buckets))
 		require.Equal(t, 3, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats))
@@ -626,7 +625,7 @@ func TestBranches(t *testing.T) {
 		// otherdb: 1 + 1
 		// thirddb: 2 + shared
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 4+2+2, kv.buckets.Len())
+		require.Equal(t, 4+2+2, len(kv.buckets))
 		require.Equal(t, 2+(1+1)+2, len(kv.bounds))
 		require.Equal(t, 2+1+(2+1), len(kv.templates))
 		require.Equal(t, 7-1, len(sc.Stats))
@@ -661,7 +660,7 @@ func TestBranches(t *testing.T) {
 
 		// 3 dbs remaining, mydb/main, thirddb/feat1, thirddb/main
 		kv = sc.kv.(*memStats)
-		require.Equal(t, 4+2, kv.buckets.Len())
+		require.Equal(t, 4+2, len(kv.buckets))
 		require.Equal(t, 4, len(kv.bounds))
 		require.Equal(t, 5, len(kv.templates))
 		require.Equal(t, 3, len(sc.Stats))
@@ -675,13 +674,11 @@ func TestBucketDoubling(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	cur := sc.kv.(*memStats).buckets
-	newB, _ := lru.New[bucketKey, *stats.Bucket](4)
-	for _, k := range cur.Keys() {
-		v, _ := cur.Get(k)
-		newB.Add(k, v)
+	newB := make(map[bucketKey]*stats.Bucket)
+	for k, v := range cur {
+		newB[k] = v
 	}
 	sc.kv.(*memStats).buckets = newB
-	sc.bucketCap = 4
 
 	// add more data
 	b := strings.Repeat("b", 100)
@@ -703,7 +700,7 @@ func TestBucketDoubling(t *testing.T) {
 
 	// 4 old + 2*7 new ab
 	kv := sc.kv.(*memStats)
-	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 18, len(kv.buckets))
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 4, len(kv.templates))
 	require.Equal(t, 2, len(sc.Stats))
@@ -738,7 +735,7 @@ func TestBucketCounting(t *testing.T) {
 
 	// 4 old + 2*7 new ab
 	kv := sc.kv.(*memStats)
-	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 18, len(kv.buckets))
 	require.Equal(t, 2, len(sc.Stats))
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table cd (c int primary key, d varchar(200), key (d,c))"))
@@ -749,7 +746,7 @@ func TestBucketCounting(t *testing.T) {
 
 	// no new buckets
 	kv = sc.kv.(*memStats)
-	require.Equal(t, 18, kv.buckets.Len())
+	require.Equal(t, 18, len(kv.buckets))
 	require.Equal(t, 3, len(sc.Stats))
 }
 
@@ -1040,7 +1037,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 		case *prollyStats:
 			kv = s.mem
 		}
-		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.buckets))
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 2, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
@@ -1064,7 +1061,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 		case *prollyStats:
 			kv = s.mem
 		}
-		require.Equal(t, 4, kv.buckets.Len())
+		require.Equal(t, 4, len(kv.buckets))
 		require.Equal(t, 2, len(kv.bounds))
 		require.Equal(t, 2, len(kv.templates))
 		require.Equal(t, 1, len(sc.Stats))
@@ -1174,9 +1171,8 @@ func runAndPause(t *testing.T, ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGr
 		return nil
 	})
 	sc.Jobs <- j
-	waitOnJob(wg, j.done)
 	require.NoError(t, sc.Restart(ctx))
-	wg.Wait()
+	<-j.done
 	return
 }
 

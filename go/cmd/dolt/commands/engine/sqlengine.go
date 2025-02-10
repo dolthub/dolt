@@ -206,7 +206,11 @@ func NewSqlEngine(
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
-		sc.Init(ctx, dbs)
+		//sc.Debug = true
+		err := sc.Init(ctx, dbs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Load MySQL Db information

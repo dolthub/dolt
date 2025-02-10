@@ -1,8 +1,10 @@
 package statspro
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
+	"strconv"
 	"testing"
 )
 
@@ -15,6 +17,7 @@ type scriptTest struct {
 type assertion struct {
 	query string
 	res   []sql.Row
+	err   string
 }
 
 func TestStatScripts(t *testing.T) {
@@ -84,7 +87,7 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "select count(*) from dolt_statistics",
-					res:   []sql.Row{{int64(4)}},
+					res:   []sql.Row{{int64(5)}},
 				},
 			},
 		},
@@ -341,7 +344,7 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "select count(*) from dolt_statistics",
-					res:   []sql.Row{{int64(1)}},
+					res:   []sql.Row{{int64(0)}},
 				},
 			},
 		},
@@ -358,7 +361,21 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_checkout('feat')",
@@ -379,11 +396,22 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_gc()",
 				},
 				{
-					query: "call dolt_stats_sync()",
-				},
-				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":1,"gcCounter":3,"branchCounter":2}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      0, // deleting table can undershoot if shared buckets
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           1,
+							GcCounter:         3,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_checkout('main')",
@@ -402,7 +430,21 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":1,"readCnt":0,"active":true,"dbSeedCnt":1,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":1,"gcCounter":4,"branchCounter":3}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             1,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         1,
+							EstBucketCnt:      0,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           1,
+							GcCounter:         4,
+							SyncCounter:       2,
+						}.ToJson(),
+						}},
 				},
 			},
 		},
@@ -419,21 +461,63 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      4,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_stats_stop()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":0,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            false,
+							DbSeedCnt:         0,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_stats_restart()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 			},
 		},
@@ -450,14 +534,42 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_stats_purge()",
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":false,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            false,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_stats_restart()",
@@ -467,7 +579,21 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 			},
 		},
@@ -484,7 +610,21 @@ func TestStatScripts(t *testing.T) {
 			assertions: []assertion{
 				{
 					query: "call dolt_stats_info()",
-					res:   []sql.Row{{`{"dbCnt":2,"readCnt":0,"active":true,"dbSeedCnt":2,"estBucketCnt":2,"cachedBucketCnt":2,"statCnt":2,"gcCounter":1,"branchCounter":1}`}},
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							DbSeedCnt:         2,
+							EstBucketCnt:      2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCounter:         1,
+							SyncCounter:       1,
+						}.ToJson(),
+						}},
 				},
 				{
 					query: "call dolt_stats_stop()",
@@ -497,7 +637,39 @@ func TestStatScripts(t *testing.T) {
 				},
 				{
 					query: "call dolt_stats_validate()",
-					res:   []sql.Row{{"(mydb/main) missing template (PRIMARY/e29in)\n(mydb/main) missing bound (d9aov)\n(mydb/main) missing chunk (d9aov)\n"}},
+					err:   "(mydb/main) missing template (PRIMARY/e29in)\n(mydb/main) missing bound (d9aov)\n(mydb/main) missing chunk (d9aov)\n",
+				},
+				{
+					query: "call dolt_stats_restart()",
+				},
+				{
+					query: "call dolt_stats_validate()",
+					res:   []sql.Row{{"Ok"}},
+				},
+			},
+		},
+		{
+			name: "null bounds",
+			setup: []string{
+				"create table xy (x int primary key, y int, key (y))",
+				"insert into xy values (0,NULL), (1,0), (2,0)",
+			},
+			assertions: []assertion{
+				{
+					query: "call dolt_stats_info()",
+					res: []sql.Row{{dprocedures.StatsInfo{
+						DbCnt:             1,
+						ReadCnt:           0,
+						Active:            true,
+						DbSeedCnt:         1,
+						EstBucketCnt:      2,
+						CachedBucketCnt:   2,
+						CachedBoundCnt:    2,
+						CachedTemplateCnt: 2,
+						StatCnt:           1,
+						GcCounter:         1,
+						SyncCounter:       1,
+					}.ToJson()}},
 				},
 			},
 		},
@@ -510,7 +682,7 @@ func TestStatScripts(t *testing.T) {
 
 			require.NoError(t, sc.Restart(ctx))
 
-			sc.Debug = true
+			//sc.Debug = true
 
 			for _, s := range tt.setup {
 				require.NoError(t, executeQuery(ctx, sqlEng, s))
@@ -520,11 +692,15 @@ func TestStatScripts(t *testing.T) {
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-			for _, a := range tt.assertions {
+			for i, a := range tt.assertions {
 				rows, err := executeQueryResults(ctx, sqlEng, a.query)
-				require.NoError(t, err)
+				if a.err != "" {
+					require.Equal(t, a.err, err.Error())
+				} else {
+					require.NoError(t, err)
+				}
 				if a.res != nil {
-					require.Equal(t, a.res, rows)
+					require.Equal(t, a.res, rows, strconv.Itoa(i)+": "+a.query)
 				}
 			}
 		})

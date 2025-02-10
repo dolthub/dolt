@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
-	"log"
 	"strings"
 )
 
@@ -85,7 +84,6 @@ func generateDeps(
 			}
 
 			if len(levelNodes) == 0 {
-				log.Println("db-table has no hashes: ", sqlDb.AliasedName())
 				continue
 			}
 

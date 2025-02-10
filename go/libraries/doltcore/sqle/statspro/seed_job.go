@@ -112,12 +112,7 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) (ret 
 		k++
 	}
 
-	sc.bucketCnt.Add(int64(bucketDiff))
-
-	for sc.bucketCnt.Load() > sc.bucketCap {
-		sc.bucketCap *= 2
-		sc.doGc.Store(true)
-	}
+	sc.lastBucketCnt.Add(int64(bucketDiff))
 
 	// retry again after finishing planned work
 	ret = append(ret, SeedDbTablesJob{tables: newTableInfo, sqlDb: sqlDb, done: make(chan struct{})})
@@ -165,6 +160,9 @@ func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (*sq
 }
 
 func (sc *StatsCoord) readJobsForTable(ctx *sql.Context, sqlDb dsess.SqlDatabase, tableInfo tableStatsInfo) ([]StatsJob, tableStatsInfo, error) {
+	if tableInfo.name == "is_restricted" {
+		print()
+	}
 	var ret []StatsJob
 	var bucketCnt int
 	sqlTable, dTab, err := GetLatestTable(ctx, tableInfo.name, sqlDb)
@@ -312,8 +310,8 @@ func (sc *StatsCoord) partitionStatReadJobs(ctx *sql.Context, sqlDb dsess.SqlDat
 			first := batchOrdinals[0].start == 0
 			jobs = append(jobs, ReadJob{ctx: ctx, db: sqlDb, first: first, table: tableName, key: key, template: template, m: prollyMap, nodes: nodes, ordinals: batchOrdinals, idxLen: idxCnt, done: make(chan struct{})})
 			curCnt = 0
-			batchOrdinals = batchOrdinals[:0]
-			nodes = nodes[:0]
+			batchOrdinals = nil
+			nodes = nil
 		}
 	}
 	if curCnt > 0 {

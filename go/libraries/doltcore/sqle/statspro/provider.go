@@ -31,10 +31,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"golang.org/x/sync/errgroup"
-	"log"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -95,7 +93,7 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-sc.Done:
-		return fmt.Errorf("stat queue was interrupted")
+		return fmt.Errorf("stat queue is closed")
 	case sc.Jobs <- analyze: //TODO send jobs
 	}
 
@@ -104,7 +102,7 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-sc.Done:
-		return fmt.Errorf("stat queue was interrupted")
+		return fmt.Errorf("stat queue is closed")
 	case <-after.done:
 		return nil
 	}
@@ -144,15 +142,11 @@ func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []
 func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	log.Printf("get stat: %s/%s/%s\n", branch, db, table)
 	key := tableIndexesKey{
 		db:     db,
 		branch: branch,
 		table:  table,
 		schema: schema,
-	}
-	for key, ss := range sc.Stats {
-		log.Println("  stats exist " + key.String() + " " + strconv.Itoa(len(ss)))
 	}
 	return sc.Stats[key], nil
 }
@@ -300,7 +294,7 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
 	sc.dbMu.Unlock()
 	sc.statsMu.Unlock()
 
-	sc.bucketCnt.Store(0)
+	sc.lastBucketCnt.Store(0)
 
 	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 	sc.SetMemOnly(memOnly.(int8) == 1)
@@ -353,7 +347,7 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase) error {
 	}
 	eg.Wait()
 	eg.Go(func() error {
-		done, err := sc.Control(ctx, "enable gc", func(sc *StatsCoord) error {
+		done, err := sc.Control(ctx, "wait for sync", func(sc *StatsCoord) error {
 			return nil
 		})
 		if err != nil {
@@ -376,7 +370,7 @@ func (sc *StatsCoord) Purge(ctx *sql.Context) error {
 		return err
 	}
 	sc.kv.FinishGc()
-	sc.bucketCnt.Store(0)
+	sc.lastBucketCnt.Store(0)
 
 	return nil
 }
@@ -558,6 +552,8 @@ func (sc *StatsCoord) Gc(ctx *sql.Context) error {
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
+	case <-sc.Done:
+		return fmt.Errorf("stats queue closed")
 	case <-done:
 		return nil
 	}
@@ -576,6 +572,8 @@ func (sc *StatsCoord) BranchSync(ctx *sql.Context) error {
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
+	case <-sc.Done:
+		return fmt.Errorf("stats queue closed")
 	case <-done:
 		return nil
 	}

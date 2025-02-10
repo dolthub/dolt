@@ -28,11 +28,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
@@ -45,44 +43,42 @@ type StatsKv interface {
 	GetTemplate(key templateCacheKey) (stats.Statistic, bool)
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
-	PutBound(h hash.Hash, r sql.Row)
+	PutBound(h hash.Hash, r sql.Row, l int)
 	Flush(ctx context.Context) error
 	StartGc(ctx context.Context, sz int) error
 	MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
 	FinishGc()
 	Len() int
-	Cap() int64
 }
 
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
 
 func NewMemStats() *memStats {
-	buckets, _ := lru.New[bucketKey, *stats.Bucket](defaultBucketSize)
-	gcCap := atomic.Int64{}
-	gcCap.Store(defaultBucketSize)
 	return &memStats{
 		mu:        sync.Mutex{},
-		buckets:   buckets,
+		buckets:   make(map[bucketKey]*stats.Bucket),
 		templates: make(map[templateCacheKey]stats.Statistic),
 		bounds:    make(map[bucketKey]sql.Row),
-		gcCap:     gcCap,
 	}
 }
 
 type memStats struct {
-	mu    sync.Mutex
-	doGc  bool
-	gcCap atomic.Int64
+	mu   sync.Mutex
+	doGc bool
 
-	buckets     *lru.Cache[bucketKey, *stats.Bucket]
-	nextBuckets *lru.Cache[bucketKey, *stats.Bucket]
+	//buckets     *lru.Cache[bucketKey, *stats.Bucket]
+	//nextBuckets *lru.Cache[bucketKey, *stats.Bucket]
+	buckets     map[bucketKey]*stats.Bucket
+	nextBuckets map[bucketKey]*stats.Bucket
 
 	templates     map[templateCacheKey]stats.Statistic
 	nextTemplates map[templateCacheKey]stats.Statistic
 
 	bounds     map[bucketKey]sql.Row
 	nextBounds map[bucketKey]sql.Row
+
+	epochCnt int
 }
 
 func (m *memStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
@@ -130,10 +126,10 @@ func (m *memStats) GetBound(h hash.Hash, l int) (sql.Row, bool) {
 	return r, true
 }
 
-func (m *memStats) PutBound(h hash.Hash, r sql.Row) {
+func (m *memStats) PutBound(h hash.Hash, r sql.Row, l int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := getBucketKey(h, len(r))
+	k := getBucketKey(h, l)
 	m.bounds[k] = r
 	if m.doGc {
 		m.nextBounds[k] = r
@@ -144,18 +140,24 @@ func (m *memStats) StartGc(ctx context.Context, sz int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.doGc = true
-	m.gcCap.Store(int64(sz))
 	if sz == 0 {
-		sz = m.buckets.Len() * 2
+		sz = len(m.buckets) * 2
 	}
 	var err error
-	m.nextBuckets, err = lru.New[bucketKey, *stats.Bucket](sz)
+	//m.nextBuckets, err = lru.New[bucketKey, *stats.Bucket](sz)
+	m.nextBuckets = make(map[bucketKey]*stats.Bucket, sz)
 	if err != nil {
 		return err
 	}
 	m.nextBounds = make(map[bucketKey]sql.Row)
 	m.nextTemplates = make(map[templateCacheKey]stats.Statistic)
 	return nil
+}
+
+func (m *memStats) RestartEpoch() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.epochCnt = 0
 }
 
 func (m *memStats) FinishGc() {
@@ -173,18 +175,14 @@ func (m *memStats) FinishGc() {
 func (m *memStats) Len() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.buckets.Len()
-}
-
-func (m *memStats) Cap() int64 {
-	return m.gcCap.Load()
+	return len(m.buckets)
 }
 
 func (m *memStats) PutBucket(_ context.Context, h hash.Hash, b *stats.Bucket, _ *val.TupleBuilder) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := getBucketKey(h, len(b.BoundVal))
-	m.buckets.Add(k, b)
+	m.buckets[k] = b
 	return nil
 }
 
@@ -192,18 +190,9 @@ func (m *memStats) MarkBucket(_ context.Context, h hash.Hash, tupB *val.TupleBui
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := getBucketKey(h, tupB.Desc.Count())
-	b, ok := m.buckets.Get(k)
+	b, ok := m.buckets[k]
 	if ok {
-		m.nextBuckets.Add(k, b)
-		gcCap := int(m.gcCap.Load())
-		nextLen := m.nextBuckets.Len()
-		if nextLen == 1000 {
-			print()
-		}
-		if m.nextBuckets.Len() >= gcCap {
-			m.gcCap.Store(int64(gcCap) * 2)
-			m.nextBuckets.Resize(gcCap * 2)
-		}
+		m.nextBuckets[k] = b
 	}
 	return nil
 }
@@ -215,7 +204,7 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, tupB *val.TupleBuil
 		return nil, false, nil
 	}
 	k := getBucketKey(h, tupB.Desc.Count())
-	b, ok := m.buckets.Get(k)
+	b, ok := m.buckets[k]
 	return b, ok, nil
 }
 
@@ -257,10 +246,6 @@ func (p *prollyStats) Len() int {
 	return p.mem.Len()
 }
 
-func (p *prollyStats) Cap() int64 {
-	return p.mem.Cap()
-}
-
 func (p *prollyStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
 	return p.mem.GetTemplate(key)
 }
@@ -273,8 +258,8 @@ func (p *prollyStats) GetBound(h hash.Hash, l int) (sql.Row, bool) {
 	return p.mem.GetBound(h, l)
 }
 
-func (p *prollyStats) PutBound(h hash.Hash, r sql.Row) {
-	p.mem.PutBound(h, r)
+func (p *prollyStats) PutBound(h hash.Hash, r sql.Row, l int) {
+	p.mem.PutBound(h, r, l)
 }
 
 func (p *prollyStats) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
@@ -301,7 +286,6 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 		return nil, false, nil
 	}
 	b, ok, err := p.mem.GetBucket(ctx, h, tupB)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -394,6 +378,7 @@ func (p *prollyStats) FinishGc() {
 	p.mem.FinishGc()
 	p.m = p.newM
 	p.newM = nil
+	_, _ = p.m.Map(context.Background())
 }
 
 func (p *prollyStats) encodeHash(h hash.Hash, len int) (val.Tuple, error) {

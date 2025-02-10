@@ -140,6 +140,10 @@ func (j ReadJob) String() string {
 	for i, o := range j.ordinals {
 		b.WriteString(fmt.Sprintf("%s[%s:%d-%d]", sep, j.nodes[i].HashOf().String()[:5], o.start, o.stop))
 		sep = ", "
+		if b.Len() > 100 {
+			b.WriteString("...")
+			break
+		}
 	}
 	return b.String()
 }
@@ -172,6 +176,10 @@ func (j FinalizeJob) String() string {
 		for _, h := range fs.buckets {
 			b.WriteString(fmt.Sprintf("%s%s", sep, h.String()[:5]))
 			sep = ", "
+			if b.Len() > 20 {
+				b.WriteString("...")
+				break
+			}
 		}
 		b.WriteString(")")
 		sep = ", "
@@ -214,7 +222,6 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *lo
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		enableGc:       atomic.Bool{},
-		bucketCap:      kv.Cap(),
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		Branches:       make(map[string][]ref.DoltRef),
 		dbFs:           make(map[string]filesys.Filesys),
@@ -309,9 +316,11 @@ type StatsCoord struct {
 	ddlGuard     bool
 	doBranchSync atomic.Bool
 	doCapCheck   atomic.Bool
-	bucketCnt    atomic.Int64
 	seedCnt      atomic.Int64
-	bucketCap    int64
+
+	epoch         atomic.Uint64
+	lastBucketCnt atomic.Int64
+	bucketCap     int64
 }
 
 func (sc *StatsCoord) Stop() {
@@ -328,8 +337,6 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 		return ctx.Err()
 	case <-sc.Done:
 	default:
-		// have loop stop itself to avoid accidentally closing
-		// channel twice
 		j := NewControl("stop thread", func(sc *StatsCoord) error {
 			sc.Stop()
 			return nil
@@ -346,9 +353,20 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 	}
 
 	sc.Done = make(chan struct{})
-	return sc.threads.Add("stats", func(ctx context.Context) {
+	if err := sc.threads.Add("stats", func(ctx context.Context) {
 		sc.run(ctx)
-	})
+	}); err != nil {
+		return err
+	}
+
+	return nil
+	//return sc.unsafeAsyncSend(ctx, NewControl("update epoch", func(sc *StatsCoord) error {
+	//	sc.epoch.Add(1)
+	//	return sc.sendJobs(ctx, NewControl("update epoch", func(sc *StatsCoord) error {
+	//		sc.epoch.Add(1)
+	//		return nil
+	//	}))
+	//}))
 }
 
 func (sc *StatsCoord) Close() {
@@ -409,6 +427,16 @@ func (sc *StatsCoord) Info() dprocedures.StatsInfo {
 	sc.dbMu.Lock()
 	dbCnt := len(sc.dbs)
 	cachedBucketCnt := sc.kv.Len()
+	var cachedBoundCnt int
+	var cachedTemplateCnt int
+	switch kv := sc.kv.(type) {
+	case *memStats:
+		cachedBoundCnt = len(kv.bounds)
+		cachedTemplateCnt = len(kv.templates)
+	case *prollyStats:
+		cachedBoundCnt = len(kv.mem.bounds)
+		cachedTemplateCnt = len(kv.mem.templates)
+	}
 	defer sc.dbMu.Unlock()
 
 	sc.statsMu.Lock()
@@ -423,15 +451,17 @@ func (sc *StatsCoord) Info() dprocedures.StatsInfo {
 	}
 
 	return dprocedures.StatsInfo{
-		DbCnt:           dbCnt,
-		ReadCnt:         int(sc.readCounter.Load()),
-		Active:          active,
-		DbSeedCnt:       int(sc.seedCnt.Load()),
-		EstBucketCnt:    int(sc.bucketCnt.Load()),
-		CachedBucketCnt: cachedBucketCnt,
-		StatCnt:         statCnt,
-		GcCounter:       int(sc.gcCounter.Load()),
-		BranchCounter:   int(sc.branchCounter.Load()),
+		DbCnt:             dbCnt,
+		ReadCnt:           int(sc.readCounter.Load()),
+		Active:            active,
+		DbSeedCnt:         int(sc.seedCnt.Load()),
+		EstBucketCnt:      int(sc.lastBucketCnt.Load()),
+		CachedBucketCnt:   cachedBucketCnt,
+		CachedBoundCnt:    cachedBoundCnt,
+		CachedTemplateCnt: cachedTemplateCnt,
+		StatCnt:           statCnt,
+		GcCounter:         int(sc.gcCounter.Load()),
+		SyncCounter:       int(sc.branchCounter.Load()),
 	}
 }
 
@@ -617,12 +647,12 @@ func (sc *StatsCoord) sendJobs(ctx context.Context, jobs ...StatsJob) error {
 }
 
 func (sc *StatsCoord) executeJob(ctx context.Context, j StatsJob) (err error) {
-	//defer func() {
-	//	if r := recover(); r != nil {
-	//		fmt.Println("Recovered in f", r)
-	//		err = fmt.Errorf("stats job %s panicked: %s", j.String(), r)
-	//	}
-	//}()
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+			err = fmt.Errorf("stats job %s panicked: %s", j.String(), r)
+		}
+	}()
 	var newJobs []StatsJob
 	switch j := j.(type) {
 	case SeedDbTablesJob:
@@ -701,7 +731,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			if sc.Debug {
 				log.Printf("put bound: %s | %s: %v\n", j.table, firstNodeHash.String()[:5], firstRow)
 			}
-			sc.kv.PutBound(firstNodeHash, firstRow)
+			sc.kv.PutBound(firstNodeHash, firstRow, j.idxLen)
 		}
 	}
 
@@ -710,7 +740,7 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			return nil, err
 		} else if ok {
 			// concurrent reads overestimate shared buckets
-			sc.bucketCnt.Add(-1)
+			sc.lastBucketCnt.Add(-1)
 			continue
 		}
 		// each node is a bucket
@@ -776,6 +806,8 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		return nil, nil
 	}
 
+	sc.kv.Flush(ctx)
+
 	var newStats []*stats.Statistic
 	for _, s := range sc.Stats[j.tableKey] {
 		if ok := j.keepIndexes[s.Qual]; ok {
@@ -797,17 +829,15 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 			if i == 0 {
 				bnd, ok := sc.kv.GetBound(bh, fs.tupB.Desc.Count())
 				if !ok {
-					log.Println("chunks: ", fs.buckets)
-					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s", key, bh)
+					return nil, fmt.Errorf("missing read job bound dependency for chunk %s: %s/%d", key, bh, fs.tupB.Desc.Count())
 				}
-				template.LowerBnd = bnd[:fs.tupB.Desc.Count()]
+				template.LowerBnd = bnd
 			}
 			// accumulate counts
 			if b, ok, err := sc.kv.GetBucket(ctx, bh, fs.tupB); err != nil {
 				return nil, err
 			} else if !ok {
-				log.Println("need chunks: ", fs.buckets)
-				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s", bh)
+				return nil, fmt.Errorf("missing read job bucket dependency for chunk: %s/%d", bh, fs.tupB.Desc.Count())
 			} else {
 				template.RowCnt += b.RowCnt
 				template.DistinctCnt += b.DistinctCnt
