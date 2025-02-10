@@ -176,7 +176,7 @@ func DeleteAndPrint(prevMsgLen int, msg string) int {
 		}
 	}
 
-	Print(string(backspacesAndMsg))
+	PrintErr(string(backspacesAndMsg))
 	return msgLen
 }
 

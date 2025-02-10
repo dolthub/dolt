@@ -1240,7 +1240,7 @@ func (f *fileReadProgress) printNewLineIfNeeded() {
 func updateFileReadProgressOutput() {
 	if fileReadProg == nil {
 		// this should not happen, but sanity check
-		cli.Println("No file is being processed.")
+		cli.PrintErrln("No file is being processed.")
 	}
 	// batch can be writing to the line, so print new line.
 	batchEditStats.printNewLineIfNeeded()

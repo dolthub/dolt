@@ -1054,6 +1054,30 @@ SQL
     [ "${#lines[@]}" -eq 0 ]
 }
 
+@test "sql: parquet file output separates output and status messages" {
+    dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    b float,
+    c varchar(80),
+    d datetime
+);
+    insert into test values (1, 1.5, "1", "2020-01-01");
+SQL
+
+    echo "select * from test;" > in.sql
+
+    dolt sql -r parquet -f in.sql > out.parquet 2> out.txt
+
+    run cat out.parquet
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "Processed" ]] || false
+
+    run cat out.txt
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Processed" ]] || false
+}
+
 @test "sql: output for escaped longtext exports properly" {
  dolt sql <<SQL
     CREATE TABLE test (
