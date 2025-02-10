@@ -100,7 +100,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 			newSpecs := make([]tableSpec, 0, len(specs))
 			for _, spec := range specs {
 				if newSpec, exists := swapMap[spec.hash]; exists {
-					newSpecs = append(newSpecs, tableSpec{typeNoms, newSpec, spec.chunkCount})
+					newSpecs = append(newSpecs, tableSpec{TypeNoms, newSpec, spec.chunkCount})
 				} else {
 					newSpecs = append(newSpecs, spec)
 				}
@@ -170,7 +170,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		newSpecs := make([]tableSpec, 0, len(specs))
 		for _, spec := range specs {
 			if newSpec, exists := swapMap[spec.hash]; exists {
-				newSpecs = append(newSpecs, tableSpec{typeArchive, newSpec, spec.chunkCount})
+				newSpecs = append(newSpecs, tableSpec{TypeArchive, newSpec, spec.chunkCount})
 			} else {
 				newSpecs = append(newSpecs, spec)
 			}

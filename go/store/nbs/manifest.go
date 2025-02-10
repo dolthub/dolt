@@ -441,26 +441,27 @@ func (mm manifestManager) Name() string {
 type TableSpecInfo interface {
 	GetFileName() string
 	GetChunkCount() uint32
+	GetFileType() TableFileFormat
 }
 
-type tableFileType int
+type TableFileFormat int
 
 const (
-	typeNoms tableFileType = iota
-	typeArchive
+	TypeNoms TableFileFormat = iota
+	TypeArchive
 )
 
 type tableSpec struct {
-	fileType   tableFileType
+	fileType   TableFileFormat
 	hash       hash.Hash
 	chunkCount uint32
 }
 
 func (ts tableSpec) GetFileName() string {
 	switch ts.fileType {
-	case typeNoms:
+	case TypeNoms:
 		return ts.hash.String()
-	case typeArchive:
+	case TypeArchive:
 		return ts.hash.String() + ArchiveFileSuffix
 	default:
 		panic(fmt.Sprintf("runtime error: unknown table file type: %d", ts.fileType))
@@ -469,6 +470,10 @@ func (ts tableSpec) GetFileName() string {
 
 func (ts tableSpec) GetChunkCount() uint32 {
 	return ts.chunkCount
+}
+
+func (ts tableSpec) GetFileType() TableFileFormat {
+	return ts.fileType
 }
 
 func tableSpecsToMap(specs []tableSpec) map[string]int {

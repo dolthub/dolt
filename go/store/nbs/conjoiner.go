@@ -240,7 +240,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 	if err != nil {
 		return tableSpec{}, nil, err
 	}
-	return tableSpec{typeNoms, h, cnt}, cleanup, nil
+	return tableSpec{TypeNoms, h, cnt}, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {
@@ -258,7 +258,7 @@ func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 		if err != nil {
 			return nil, err
 		}
-		specs[i] = tableSpec{typeNoms, h, cnt}
+		specs[i] = tableSpec{TypeNoms, h, cnt}
 	}
 
 	return specs, nil

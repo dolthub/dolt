@@ -321,15 +321,15 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			if appendixOption == nil {
 				if _, ok := currSpecs[h]; !ok {
 					hasWork = true
-					contents.specs = append(contents.specs, tableSpec{typeNoms, h, count})
+					contents.specs = append(contents.specs, tableSpec{TypeNoms, h, count})
 				}
 			} else if *appendixOption == ManifestAppendixOption_Set {
 				hasWork = true
-				appendixSpecs = append(appendixSpecs, tableSpec{typeNoms, h, count})
+				appendixSpecs = append(appendixSpecs, tableSpec{TypeNoms, h, count})
 			} else if *appendixOption == ManifestAppendixOption_Append {
 				if _, ok := currAppendixSpecs[h]; !ok {
 					hasWork = true
-					appendixSpecs = append(appendixSpecs, tableSpec{typeNoms, h, count})
+					appendixSpecs = append(appendixSpecs, tableSpec{TypeNoms, h, count})
 				}
 			} else {
 				return manifestContents{}, ErrUnsupportedManifestAppendixOption
@@ -469,12 +469,12 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	}
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
-		s := tableSpec{fileType: typeNoms, hash: h, chunkCount: c}
+		s := tableSpec{fileType: TypeNoms, hash: h, chunkCount: c}
 		contents.appendix = append(contents.appendix, s)
 		contents.specs = append(contents.specs, s)
 	}
 	for h, c := range tableFiles {
-		s := tableSpec{fileType: typeNoms, hash: h, chunkCount: c}
+		s := tableSpec{fileType: TypeNoms, hash: h, chunkCount: c}
 		contents.specs = append(contents.specs, s)
 	}
 	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix, nil)
@@ -1556,7 +1556,7 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 		}
 
 		if _, ok := cs.(archiveChunkSource); ok {
-			info.fileType = typeArchive
+			info.fileType = TypeArchive
 		}
 
 		tableFiles = append(tableFiles, newTableFile(cs, info))

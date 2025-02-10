@@ -521,9 +521,11 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		if err != nil {
 			return nil, err
 		} else if cnt > 0 {
-			// NM4 - New to choose between classic or archive here.
-			h := src.hash()
-			tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
+			if _, ok := src.(archiveChunkSource); ok {
+				tableSpecs = append(tableSpecs, tableSpec{TypeArchive, src.hash(), cnt})
+			} else {
+				tableSpecs = append(tableSpecs, tableSpec{TypeNoms, src.hash(), cnt})
+			}
 		}
 	}
 	for _, src := range ts.upstream {
@@ -533,9 +535,11 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		} else if cnt <= 0 {
 			return nil, errors.New("no upstream chunks")
 		}
-		// NM4 - New to choose between classic or archive here.
-		h := src.hash()
-		tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
+		if _, ok := src.(archiveChunkSource); ok {
+			tableSpecs = append(tableSpecs, tableSpec{TypeArchive, src.hash(), cnt})
+		} else {
+			tableSpecs = append(tableSpecs, tableSpec{TypeNoms, src.hash(), cnt})
+		}
 	}
 	sort.Slice(tableSpecs, func(i, j int) bool {
 		return bytes.Compare(tableSpecs[i].hash[:], tableSpecs[j].hash[:]) < 0
