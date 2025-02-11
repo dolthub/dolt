@@ -92,9 +92,9 @@ teardown() {
 
     #dolt sql -q "insert into xy values (0,0), (1,1)"
     #dolt sql -q "analyze table xy"
+    #
+    #dolt sql -q "set @@PERSIST.dolt_stats_enabled = 0;"
 
-    #start_sql_server
-    #dolt sql -q "call dolt_stats_wait()"
     #run dolt sql -r csv -q "select count(*) from dolt_statistics"
     #[ "$status" -eq 0 ]
     #[ "${lines[1]}" = "2" ]
@@ -103,11 +103,12 @@ teardown() {
 #@test "stats: server-server reload from disk" {
     #cd repo2
 
-    #start_sql_server
 
     #dolt sql -q "insert into xy values (0,0), (1,1)"
     #dolt sql -q "analyze table xy"
 
+    #start_sql_server
+    #dolt sql -q "call dolt_stats_wait()"
     #run dolt sql -r csv -q "select count(*) from dolt_statistics"
     #[ "$status" -eq 0 ]
     #[ "${lines[1]}" = "2" ]
@@ -142,6 +143,23 @@ teardown() {
     #[ "$status" -eq 0 ]
     #[ "${lines[1]}" = "0" ]
 #}
+
+
+@test "stats: waiters error for closed stats queue" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+    dolt sql -q "analyze table xy"
+
+    run dolt sql -q "call dolt_stats_gc()"
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "call dolt_stats_wait()"
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "call dolt_stats_sync()"
+    [ "$status" -eq 1 ]
+}
 
 #@test "stats: empty initial stats" {
     #cd repo2
