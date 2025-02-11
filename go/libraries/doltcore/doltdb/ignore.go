@@ -112,7 +112,7 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 			return nil, err
 		}
 		keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
-		
+
 		ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
 		if err != nil {
 			return nil, err
@@ -127,12 +127,12 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 			}
 
 			m := durable.MapFromIndex(index)
-			
+
 			pattern, err := GetIgnoreTablePatternKey(keyDesc, keyTuple, m.NodeStore())
 			if err != nil {
 				return nil, err
 			}
-			
+
 			ignore, err := ConvertTupleToIgnoreBoolean(valueDesc, valueTuple)
 			if err != nil {
 				return nil, err
