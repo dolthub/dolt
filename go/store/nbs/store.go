@@ -1821,6 +1821,13 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 	var mu sync.Mutex
 	first := true
 	for {
+		// We manually check context here, because in some cases
+		// the work we are doing here does not result in a timely
+		// error once the context is canceled.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		if !first {
 			copy := toVisit.Copy()
 			for h := range toVisit {
