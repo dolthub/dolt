@@ -157,19 +157,25 @@ func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	locs, err := nbs.GetChunkLocations(ctx, hashes)
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	toret := make(map[string]map[hash.Hash]Range, len(locs)) // NM4
-	for k, v := range locs {
-		toret[k] = v
+
+	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
+	for cs, ranges := range sourcesToRanges {
+		suffix := ""
+		if _, ok := cs.(archiveChunkSource); ok {
+			suffix = ArchiveFileSuffix
+		}
+
+		res[cs.hash().String()+suffix] = ranges
 	}
-	return toret, nil
+	return res, nil
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	fn := func(css chunkSourceSet, gr []getRecord, ranges map[string]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
+func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[chunkSource]map[hash.Hash]Range, error) {
+	fn := func(css chunkSourceSet, gr []getRecord, ranges map[chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
 			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
 			if err != nil {
@@ -182,13 +188,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 				continue
 			}
 
-			h := cs.name()
-			if m, ok := ranges[h]; ok {
+			if m, ok := ranges[cs]; ok {
 				for k, v := range rng {
 					m[k] = v
 				}
 			} else {
-				ranges[h] = rng
+				ranges[cs] = rng
 			}
 		}
 		return gcBehavior_Continue, nil
@@ -200,7 +205,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
-		ranges := make(map[string]map[hash.Hash]Range)
+		ranges := make(map[chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(tables.upstream, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
@@ -218,6 +223,21 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 
 		return ranges, nil
 	}
+
+}
+
+// string or hash.Hash?!?!?
+func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]map[hash.Hash]Range, len(hashes))
+	for cs, ranges := range sourcesToRanges {
+		h := cs.hash()
+		res[h.String()] = ranges // NOT SURE about this. NM4.
+	}
+	return res, nil
 }
 
 func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endRead func(), err error) (bool, error) {
