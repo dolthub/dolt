@@ -115,6 +115,10 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 	return rrd, nil
 }
 
+// Converts |db| into a |ReadReplicaDatabase| if read replication is
+// configured through sql SystemVariables. This is called both at
+// startup, for the entire set of databases, and is called when
+// we create new databases through |registerNewDatabases|.
 func applyReadReplicationConfigToDatabase(ctx context.Context, dEnv *env.DoltEnv, db dsess.SqlDatabase) (dsess.SqlDatabase, error) {
 	if _, remote, ok := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote); ok && remote != "" {
 		remoteName, ok := remote.(string)

@@ -613,7 +613,11 @@ type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name str
 type DropDatabaseHook func(ctx *sql.Context, name string)
 
 // NewConfigureReplicationDatabaseHook sets up the hooks to push to a remote to replicate a newly created database.
-// TODO: consider the replication heads / all heads setting
+//
+// For a new database, this hook
+// 1) creates a new remote based on dsess.ReplicationRemoteURLTemplate
+// 2) Installed push-on-write replication hooks based on existing sql.SystemVariables on the *DoltDB
+// 3) Triggers the push-on-write hook for the default branch.
 func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads) func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 		_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
@@ -867,7 +871,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	}
 
 	// If we have any initialization hooks, invoke them, until any error is returned.
-	// By default, this will be ConfigureReplicationDatabaseHook, which will set up
+	// By default, this will be NewConfigureReplicationDatabaseHook, which will set up
 	// replication for the new database if a remote url template is set.
 	for _, initHook := range p.InitDatabaseHooks {
 		err = initHook(ctx, p, name, newEnv, db)
@@ -876,6 +880,9 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		}
 	}
 
+	// Push replication is configured by InitDatabaseHooks, but pull-on-read
+	// replication is a special type of wrapper database, |ReadReplicaDatabase|.
+	// Transform the |db| into the replicating one if we need to.
 	sdb, err := applyReadReplicationConfigToDatabase(ctx, newEnv, db)
 	if err != nil {
 		return err
