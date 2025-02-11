@@ -61,6 +61,7 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) (err error)
 	}()
 
 	if !sc.enableGc.Swap(false) {
+		close(done)
 		return nil
 	}
 
@@ -108,8 +109,6 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) (err error)
 		bucketCnt += cnt
 	}
 
-	//sc.bucketCnt.Store(int64(bucketCnt))
-	//sc.bucketCap = sc.kv.Cap()
 	if err = sc.kv.FinishGc(nil); err != nil {
 		return err
 	}

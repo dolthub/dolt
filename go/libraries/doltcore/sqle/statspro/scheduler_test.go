@@ -1214,7 +1214,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 }
 
 func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, threads)
 	if err != nil {
 		panic(err)
 	}
@@ -1344,8 +1344,8 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	sc.SetEnableGc(true)
 
 	sc.JobInterval = 10
-	sc.gcInterval = 100
-	sc.branchInterval = 100
+	sc.gcInterval = time.Hour
+	sc.branchInterval = time.Hour
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1362,7 +1362,11 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
 		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
+		err := executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
+		for err != nil {
+			log.Println("add waiting on: ", err.Error())
+			err = executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
+		}
 	}
 
 	dropBranch := func(dropCtx *sql.Context, branchName string) {
@@ -1407,10 +1411,16 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		wg.Wait()
 
-		sc.doBranchSync.Store(true)
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		sc.doGc.Store(true)
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		err := executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
+		for err != nil {
+			log.Println("waiting on final branch sync", err)
+			err = executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
+		}
+		err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
+		for err != nil {
+			log.Println("waiting on final Gc", err)
+			err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
+		}
 		require.NoError(t, sc.Stop(context.Background()))
 
 		// at the end we should still have |iters/2| databases
@@ -1429,8 +1439,8 @@ func TestStatsCacheGrowth(t *testing.T) {
 	sc.SetEnableGc(true)
 
 	sc.JobInterval = 10
-	sc.gcInterval = 1000
-	sc.branchInterval = 1000
+	sc.gcInterval = time.Hour
+	sc.branchInterval = time.Hour
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {

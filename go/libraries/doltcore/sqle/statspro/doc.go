@@ -67,11 +67,15 @@ package statspro
 // The stats lifecycle can be controlled with:
 //  - dolt_stats_stop: clear queue and disable thread
 //  - dolt_stats_restart: clear queue, refresh queue, start thread
-//  - dolt_stats_purge: clear queue, clear cache, refresh queue,
+//  - dolt_stats_purge: clear queue, refresh queue, clear cache,
 //    disable thread
 //  - dolt_stats_validate: return report of cache misses for current
 //    root value.
 //
 // `dolt_stats_wait` is additionally useful for blocking on a full
 // queue cycle and then validating whether the session head is caught up.
+//
+// `dolt_stats_sync` can be used to grab the most up-to-date branch set
+// for each database. This races with branch ticker and concurrent
+// database/branch adds.
 //
