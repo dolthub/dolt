@@ -417,7 +417,7 @@ func runMain() int {
 	args = nil
 
 	// This is the dEnv passed to sub-commands, and is used to create the multi-repo environment.
-	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, cfg.dataDirFS, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -678,11 +678,8 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
-		// If the loaded target environment has a doltDB and we do not
-		// have access to it, we look for a server.
-		lookForServer = true
-	} else if targetEnv.DoltDB(ctx) == nil {
+
+	if !targetEnv.Exists() {
 		// If the loaded environment itself does not have a doltDB, we
 		// may want to look for a server. We do so if all of the
 		// repositories in our MultiEnv are ReadOnly. This includes the
@@ -695,6 +692,10 @@ If you're interested in running this command against a remote host, hit us up on
 			return !allReposAreReadOnly, nil
 		})
 		lookForServer = allReposAreReadOnly
+	} else if targetEnv.IsAccessModeReadOnly(ctx) {
+		// If the loaded target environment has a doltDB and we do not
+		// have access to it, we look for a server.
+		lookForServer = true
 	}
 	if lookForServer {
 		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)

@@ -187,7 +187,7 @@ func MultiEnvForDirectory(
 			version = dEnv.Version
 		}
 
-		newEnv := LoadWithoutDB(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
+		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
 		} else {
@@ -246,7 +246,12 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 			}
 		}
 	}
-	mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
+	// We can skip the format check if there's only one environment.
+	// This is vital because it allows us to defer loading the database if there's only one.
+	// TODO: Can we determine the format without loading the database?
+	if len(mrEnv.envs) > 1 {
+		mrEnv.envs = enforceSingleFormat(ctx, mrEnv.envs)
+	}
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {

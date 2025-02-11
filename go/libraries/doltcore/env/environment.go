@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -88,6 +88,7 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
+	dbLoader    dbfactory.DBLoader
 	loadDBOnce  sync.Once
 	doltDB      *doltdb.DoltDB
 	DBLoadError error
@@ -203,13 +204,14 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, u
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
-	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+	dEnv.dbLoader, dEnv.DBLoadError = doltdb.GetDBLoader(ctx, types.Format_Default, urlStr, fs)
+
 	return dEnv
 }
 
 func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
 	dEnv.loadDBOnce.Do(func() {
-		ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+		ddb, dbLoadErr := doltdb.LoadDB(ctx, dEnv.dbLoader, urlStr)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 		dEnv.urlStr = urlStr
@@ -1269,6 +1271,13 @@ func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB(ctx).ValueReadWriter(), tmpDir)
 }
 
+func (dEnv *DoltEnv) Exists() bool {
+	return dEnv.dbLoader != nil || dEnv.doltDB != nil
+}
+
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
+	if dEnv.dbLoader != nil {
+		return dEnv.dbLoader.IsAccessModeReadOnly()
+	}
 	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }
