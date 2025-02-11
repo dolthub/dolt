@@ -162,7 +162,7 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 				return upstream, func() {}, nil
 			}
 			for i := range upstream.appendix {
-				if upstream.appendix[i].hash != appendixSpecs[i].hash {
+				if upstream.appendix[i].name != appendixSpecs[i].name {
 					return upstream, func() {}, nil
 				}
 			}
@@ -176,19 +176,19 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 		conjoineeSet := map[hash.Hash]struct{}{}
 		upstreamNames := map[hash.Hash]struct{}{}
 		for _, spec := range upstream.specs {
-			upstreamNames[spec.hash] = struct{}{}
+			upstreamNames[spec.name] = struct{}{}
 		}
 		for _, c := range conjoinees {
-			if _, present := upstreamNames[c.hash]; !present {
+			if _, present := upstreamNames[c.name]; !present {
 				return upstream, func() {}, nil // Bail!
 			}
-			conjoineeSet[c.hash] = struct{}{}
+			conjoineeSet[c.name] = struct{}{}
 		}
 
 		// Filter conjoinees out of upstream.specs to generate new set of keepers
 		keepers = make([]tableSpec, 0, len(upstream.specs)-len(conjoinees))
 		for _, spec := range upstream.specs {
-			if _, present := conjoineeSet[spec.hash]; !present {
+			if _, present := conjoineeSet[spec.name]; !present {
 				keepers = append(keepers, spec)
 			}
 		}
@@ -202,7 +202,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 	for idx := range conjoinees {
 		i, spec := idx, conjoinees[idx]
 		eg.Go(func() (err error) {
-			toConjoin[i], err = p.Open(ectx, spec.hash, spec.chunkCount, stats)
+			toConjoin[i], err = p.Open(ectx, spec.name, spec.chunkCount, stats)
 			return
 		})
 	}
@@ -240,7 +240,7 @@ func conjoinTables(ctx context.Context, conjoinees []tableSpec, p tablePersister
 	if err != nil {
 		return tableSpec{}, nil, err
 	}
-	return tableSpec{typeNoms, h, cnt}, cleanup, nil
+	return tableSpec{h, cnt}, cleanup, nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {
@@ -258,7 +258,7 @@ func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 		if err != nil {
 			return nil, err
 		}
-		specs[i] = tableSpec{typeNoms, h, cnt}
+		specs[i] = tableSpec{h, cnt}
 	}
 
 	return specs, nil

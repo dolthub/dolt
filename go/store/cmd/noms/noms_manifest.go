@@ -103,7 +103,7 @@ func runManifest(ctx context.Context, args []string) int {
 	nbsFiles := make([]NbsFile, numSpecs)
 	for i := 0; i < numSpecs; i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
-		path := filepath.Join(spec.DatabaseName, tableSpecInfo.GetFileName())
+		path := filepath.Join(spec.DatabaseName, tableSpecInfo.GetName())
 		fileInfo, err := os.Stat(path)
 		nbsFiles[i] = NbsFile{tableSpecInfo, fileInfo, err}
 	}
@@ -130,7 +130,7 @@ func runManifest(ctx context.Context, args []string) int {
 	fmt.Println("    referenced nbs files:")
 
 	for _, nbsFile := range nbsFiles {
-		name := nbsFile.manifestSpec.GetFileName()
+		name := nbsFile.manifestSpec.GetName()
 		chunkCnt := nbsFile.manifestSpec.GetChunkCount()
 		sizeStr := nbsFile.sizeStr()
 		existsStr := nbsFile.fileInfoErr == nil

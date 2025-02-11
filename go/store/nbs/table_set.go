@@ -497,10 +497,10 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSour
 	specs = make([]tableSpec, 0, len(orig))
 	seen := map[hash.Hash]struct{}{}
 	for _, spec := range orig {
-		if _, ok := seen[spec.hash]; ok {
+		if _, ok := seen[spec.name]; ok {
 			continue
 		}
-		seen[spec.hash] = struct{}{}
+		seen[spec.name] = struct{}{}
 		// keep specs in order to play nicely with
 		// manifest appendix optimization
 		specs = append(specs, spec)
@@ -544,7 +544,7 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSour
 			} else if existing, ok := srcs[spec.name]; ok {
 				cs, err = existing.clone()
 			} else {
-				cs, err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats) // NM4 - spec.name is the tf/arch name.
+				cs, err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 			}
 			if err != nil {
 				return err
@@ -584,7 +584,7 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		} else if cnt > 0 {
 			// NM4 - New to choose between classic or archive here.
 			h := src.hash()
-			tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
+			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
 	}
 	for _, src := range ts.upstream {
@@ -596,10 +596,10 @@ func (ts tableSet) toSpecs() ([]tableSpec, error) {
 		}
 		// NM4 - New to choose between classic or archive here.
 		h := src.hash()
-		tableSpecs = append(tableSpecs, tableSpec{typeNoms, h, cnt})
+		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
 	sort.Slice(tableSpecs, func(i, j int) bool {
-		return bytes.Compare(tableSpecs[i].hash[:], tableSpecs[j].hash[:]) < 0
+		return bytes.Compare(tableSpecs[i].name[:], tableSpecs[j].name[:]) < 0
 	})
 	return tableSpecs, nil
 }
