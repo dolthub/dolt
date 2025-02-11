@@ -57,8 +57,8 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 }
 
 // AddTableFilesToManifest adds table files to the manifest
-func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
-	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs)
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

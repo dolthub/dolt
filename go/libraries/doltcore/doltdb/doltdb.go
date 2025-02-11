@@ -1896,8 +1896,17 @@ func pullHash(
 	}
 }
 
+func (ddb *DoltDB) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
+		return types.AddrsFromNomsValue(c, ddb.Format(), addrs)
+	}
+}
+
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db), datas.ChunkStoreFromDatabase(destDB.db), eventCh)
+	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db),
+		datas.ChunkStoreFromDatabase(destDB.db),
+		ddb.getAddrs,
+		eventCh)
 }
 
 // Returns |true| if the underlying ChunkStore for this DoltDB implements |chunks.TableFileStore|.
@@ -1949,13 +1958,8 @@ func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (da
 	return ddb.db.DatasetsByRootHash(ctx, hashof)
 }
 
-func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
-	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
-	return ddb
-}
-
-func (ddb *DoltDB) PrependCommitHook(ctx context.Context, hook CommitHook) *DoltDB {
-	ddb.db = ddb.db.SetCommitHooks(ctx, append([]CommitHook{hook}, ddb.db.PostCommitHooks()...))
+func (ddb *DoltDB) PrependCommitHooks(ctx context.Context, hooks ...CommitHook) *DoltDB {
+	ddb.db = ddb.db.SetCommitHooks(ctx, append(hooks, ddb.db.PostCommitHooks()...))
 	return ddb
 }
 

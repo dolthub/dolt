@@ -351,7 +351,8 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootVal
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	bThreads := sql.NewBackgroundThreads()
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, bThreads)
 	if err != nil {
 		return nil, nil, err
 	}

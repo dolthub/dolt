@@ -43,7 +43,7 @@ type ItemAccess struct {
 	// If the serial.Message does not contain an
 	// offset buffer (offStart is zero), then
 	// Items have a fixed width equal to itemWidth.
-	itemWidth  uint16
+	itemWidth  uint32
 	offsetSize offsetSize
 }
 

@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -58,6 +59,8 @@ type PullTableFileWriter struct {
 	egCtx       context.Context
 	eg          *errgroup.Group
 
+	getAddrs chunks.GetAddrsCurry
+
 	bufferedSendBytes uint64
 	finishedSendBytes uint64
 }
@@ -72,11 +75,13 @@ type PullTableFileWriterConfig struct {
 	TempDir string
 
 	DestStore DestTableFileStore
+
+	GetAddrs chunks.GetAddrsCurry
 }
 
 type DestTableFileStore interface {
 	WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
-	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error
+	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error
 }
 
 type PullTableFileWriterStats struct {
@@ -96,6 +101,7 @@ func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) 
 		cfg:         cfg,
 		addChunkCh:  make(chan nbs.CompressedChunk),
 		newWriterCh: make(chan *nbs.CmpChunkTableWriter, cfg.MaximumBufferedFiles),
+		getAddrs:    cfg.GetAddrs,
 	}
 	ret.eg, ret.egCtx = errgroup.WithContext(ctx)
 	ret.eg.Go(ret.uploadAndFinalizeThread)
@@ -174,7 +180,7 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 	}
 
 	if len(manifestUpdates) > 0 {
-		return w.cfg.DestStore.AddTableFilesToManifest(w.egCtx, manifestUpdates)
+		return w.cfg.DestStore.AddTableFilesToManifest(w.egCtx, manifestUpdates, w.getAddrs)
 	} else {
 		return nil
 	}
