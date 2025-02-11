@@ -86,7 +86,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads) sqle
 			commitHook := newCommitHook(controller.lgr, r.Name(), remoteUrls[i], name, role, remoteDBs[i], denv.DoltDB(ctx), ttfdir)
 			denv.DoltDB(ctx).PrependCommitHooks(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
-			if err := commitHook.Run(bt); err != nil {
+			if err := commitHook.Run(bt, controller.sqlCtxFactory); err != nil {
 				// XXX: An error here means we are not replicating to every standby.
 				return err
 			}
