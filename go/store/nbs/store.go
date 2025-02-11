@@ -1507,13 +1507,18 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info TableSpecInfo
-	open func(ctx context.Context) (io.ReadCloser, uint64, error)
+	info   TableSpecInfo
+	open   func(ctx context.Context) (io.ReadCloser, uint64, error)
+	suffix string
 }
 
 // LocationPrefix
 func (tf tableFile) LocationPrefix() string {
 	return ""
+}
+
+func (tf tableFile) LocationSuffix() string {
+	return tf.suffix
 }
 
 // FileID gets the id of the file
@@ -1581,17 +1586,17 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 			return nil, ErrSpecWithoutChunkSource
 		}
 
-		// NM4 - We know here........
-		//if _, ok := cs.(archiveChunkSource); ok {
-		//	info.fileType = typeArchive
-		//}
-
 		tableFiles = append(tableFiles, newTableFile(cs, info))
 	}
 	return tableFiles, nil
 }
 
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
+	s := ""
+	if _, ok := cs.(archiveChunkSource); ok {
+		s = ArchiveFileSuffix
+	}
+
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
@@ -1601,6 +1606,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			}
 			return r, s, nil
 		},
+		suffix: s,
 	}
 }
 

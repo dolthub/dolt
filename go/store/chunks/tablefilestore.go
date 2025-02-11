@@ -31,6 +31,9 @@ type TableFile interface {
 	// LocationPrefix
 	LocationPrefix() string
 
+	// NM4
+	LocationSuffix() string
+
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
