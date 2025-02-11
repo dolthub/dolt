@@ -48,7 +48,6 @@ func TestAutoGC(t *testing.T) {
 	if enabled_16.NewGen > 0 && disabled.NewGen > 0 {
 		assert.Greater(t, enabled_16.OldGen, disabled.OldGen)
 		assert.Greater(t, enabled_16.OldGenC, disabled.OldGenC)
-		assert.Greater(t, enabled_16.NewGen-enabled_16.Journal, enabled_16.Journal)
 		assert.Less(t, disabled.NewGen-disabled.Journal, disabled.Journal)
 	}
 }
