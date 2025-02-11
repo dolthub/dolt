@@ -440,6 +440,8 @@ func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, s
 			source.close()
 		}
 	}
+	// First add clones of all sources that are already present in
+	// ts.novel or ts.upstream.
 	for h := range files {
 		if s, ok := ts.novel[h]; ok {
 			cloned, err := s.clone()
@@ -457,16 +459,24 @@ func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, s
 			ret[h] = cloned
 		}
 	}
+	// Concurrently open all files that are not already
+	// in |ret|.
 	eg, ctx := errgroup.WithContext(ctx)
 	var mu sync.Mutex
-	for h, c := range files {
+	for fileId, chunkCount := range files {
+		mu.Lock()
+		_, ok := ret[fileId]
+		mu.Unlock()
+		if ok {
+			continue
+		}
 		eg.Go(func() error {
-			cs, err := ts.p.Open(ctx, h, c, stats)
+			cs, err := ts.p.Open(ctx, fileId, chunkCount, stats)
 			if err != nil {
 				return err
 			}
 			mu.Lock()
-			ret[h] = cs
+			ret[fileId] = cs
 			mu.Unlock()
 			return nil
 		})
