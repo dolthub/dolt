@@ -1474,7 +1474,6 @@ func TestStatsCacheGrowth(t *testing.T) {
 				branches <- "branch" + strconv.Itoa(i)
 				if i%500 == 0 {
 					log.Println("branches: ", strconv.Itoa(i))
-
 					for {
 						syncErr := executeQuery(addCtx, sqlEng, "call dolt_stats_sync()")
 						waitErr := executeQuery(addCtx, sqlEng, "call dolt_stats_wait()")
@@ -1486,7 +1485,6 @@ func TestStatsCacheGrowth(t *testing.T) {
 							log.Println("waiting on: ", strconv.Itoa(i), waitErr.Error())
 						}
 					}
-					//executeQuery(addCtx, sqlEng, "call dolt_stats_wait()")
 				}
 			}
 			close(branches)
