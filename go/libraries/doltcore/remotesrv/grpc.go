@@ -611,7 +611,7 @@ func getTableFileInfo(
 	}
 	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
 	for _, t := range tableList {
-		url := rs.getDownloadUrl(md, prefix+"/"+t.LocationPrefix()+t.FileID())
+		url := rs.getDownloadUrl(md, prefix+"/"+t.LocationPrefix()+t.FileID()+t.LocationSuffix())
 		url, err = rs.sealer.Seal(url)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get seal download url for "+t.FileID())

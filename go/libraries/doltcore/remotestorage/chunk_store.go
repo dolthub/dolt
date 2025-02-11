@@ -1152,6 +1152,10 @@ func (drtf DoltRemoteTableFile) LocationPrefix() string {
 	return ""
 }
 
+func (drtf DoltRemoteTableFile) LocationSuffix() string {
+	panic("implement me LocationSuffix")
+}
+
 // FileID gets the id of the file
 func (drtf DoltRemoteTableFile) FileID() string {
 	id := drtf.info.FileId
