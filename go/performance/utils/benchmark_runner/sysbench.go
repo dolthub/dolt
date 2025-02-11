@@ -17,11 +17,12 @@ package benchmark_runner
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type sysbenchTesterImpl struct {
