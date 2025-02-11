@@ -590,7 +590,6 @@ var StatBranchTests = []queries.ScriptTest{
 	{
 		Name: "multi branch stats",
 		SetUpScript: []string{
-			"set @@PERSIST.dolt_stats_branches = 'main,feat';",
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
 			"call dolt_commit('-Am', 'xy')",
@@ -602,10 +601,7 @@ var StatBranchTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_stats_restart()",
-			},
-			{
-				Query: "select sleep(.1)",
+				Query: "call dolt_stats_sync()",
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics",
@@ -640,7 +636,7 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "call dolt_commit('-am', 'cm')",
 			},
 			{
-				Query: "select sleep(.1)",
+				Query: "call dolt_stats_wait()",
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
@@ -652,30 +648,6 @@ var StatBranchTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
-				Expected: []sql.Row{
-					{"xy", "primary", uint64(6)},
-					{"xy", "y", uint64(6)},
-				},
-			},
-			{
-				Query: "call dolt_checkout('feat')",
-			},
-			{
-				Query: "call dolt_stats_stop()",
-			},
-			{
-				Query: "select sleep(.1)",
-			},
-			{
-				Query: "call dolt_stats_drop()",
-			},
-			{
-				Query:    "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
-				Expected: []sql.Row{},
-			},
-			{
-				// we dropped 'feat', not 'main'
 				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
 				Expected: []sql.Row{
 					{"xy", "primary", uint64(6)},

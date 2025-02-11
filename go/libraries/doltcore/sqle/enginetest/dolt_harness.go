@@ -254,7 +254,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		bThreads := sql.NewBackgroundThreads()
 
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
-			return d.NewSession(), nil
+			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
 		}
 		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))

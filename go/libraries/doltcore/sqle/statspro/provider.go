@@ -64,13 +64,24 @@ func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table
 
 func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbName string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
-	if err != nil {
-		return err
-	}
 
+	var branch string
+	if strings.Contains(dbName, "/") {
+		parts := strings.Split(dbName, "/")
+		if len(parts) == 2 {
+			dbName = parts[0]
+			branch = parts[1]
+		}
+	}
 	if branch == "" {
-		branch = "main"
+		branch, err := dSess.GetBranch()
+		if err != nil {
+			return err
+		}
+
+		if branch == "" {
+			branch = "main"
+		}
 	}
 
 	var sqlDb dsess.SqlDatabase
