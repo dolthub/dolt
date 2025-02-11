@@ -17,8 +17,6 @@ package tree
 import (
 	"fmt"
 	"io"
-
-	errorkinds "gopkg.in/src-d/go-errors.v1"
 )
 
 // JsonScanner is a state machine that parses already-normalized JSON while keeping track of the path to the current value.
@@ -40,15 +38,7 @@ type JsonScanner struct {
 	valueOffset int
 }
 
-// The JSONChunker can't draw a chunk boundary within an object key.
-// This can lead to large chunks that may cause problems.
-// We've observed chunks getting written incorrectly if they exceed 48KB.
-// Since boundaries are always drawn once a chunk exceeds maxChunkSize (16KB),
-// this is the largest length that can be appended to a chunk without exceeding 48KB.
-var maxJsonStringLength = 48*1024 - maxChunkSize
-
 var jsonParseError = fmt.Errorf("encountered invalid JSON while reading JSON from the database, or while preparing to write JSON to the database. This is most likely a bug in JSON diffing")
-var largeJsonStringError = errorkinds.NewKind("encountered JSON key with length %s, larger than max allowed length %s")
 
 func (j JsonScanner) Clone() JsonScanner {
 	return JsonScanner{
@@ -215,9 +205,6 @@ func (s *JsonScanner) acceptKeyString() (stringBytes []byte, err error) {
 		}
 		s.valueOffset++
 	}
-	if s.valueOffset-stringStart > maxJsonStringLength {
-		return nil, largeJsonStringError.New(s.valueOffset-stringStart, maxJsonStringLength)
-	}
 	result := s.jsonBuffer[stringStart:s.valueOffset]
 	// Advance past the ending quotes
 	s.valueOffset++
@@ -233,19 +220,12 @@ func (s *JsonScanner) acceptValueString() (finishedString bool, err error) {
 }
 
 func (s *JsonScanner) acceptRestOfValueString() (finishedString bool, err error) {
-	stringStart := s.valueOffset
 	for s.current() != '"' {
 		switch s.current() {
 		case '\\':
 			s.valueOffset++
 		}
 		s.valueOffset++
-	}
-	// We don't currently split value strings across chunks because it causes issues being read by older clients.
-	// Instead, by returning largeJsonStringError, we trigger the fallback behavior where the JSON document
-	// gets treated as a non-indexed blob.
-	if s.valueOffset-stringStart > maxJsonStringLength {
-		return false, largeJsonStringError.New(s.valueOffset-stringStart, maxJsonStringLength)
 	}
 	// Advance past the ending quotes
 	s.valueOffset++

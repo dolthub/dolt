@@ -250,7 +250,7 @@ func (gcs *GenerationalNBS) refCheck(recs []hasRecord) (hash.HashSet, error) {
 		return absent, nil
 	}
 
-	return gcs.ghostGen.hasMany(absent)
+	return gcs.ghostGen.refCheck(recs)
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to
@@ -415,8 +415,8 @@ func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, n
 }
 
 // AddTableFilesToManifest adds table files to the manifest of the newgen cs
-func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error {
-	return gcs.newGen.AddTableFilesToManifest(ctx, fileIdToNumChunks)
+func (gcs *GenerationalNBS) AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error {
+	return gcs.newGen.addTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs, gcs.refCheck)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest of the new or old gen chunkstores

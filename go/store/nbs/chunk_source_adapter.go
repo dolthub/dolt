@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -53,8 +52,4 @@ func (csa chunkSourceAdapter) clone() (chunkSource, error) {
 		return &chunkSourceAdapter{}, err
 	}
 	return &chunkSourceAdapter{tr, csa.h}, nil
-}
-
-func (csa chunkSourceAdapter) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk)) error {
-	panic("unimplemented")
 }

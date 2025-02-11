@@ -99,7 +99,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *s
 	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, sql.NewBackgroundThreads())
 	if err != nil {
 		return nil, nil, nil
 	}

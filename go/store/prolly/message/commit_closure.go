@@ -41,7 +41,7 @@ func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
 	}
 	ret.bufStart = lookupVectorOffset(commitClosureKeyItemBytesVOffset, m.Table())
 	ret.bufLen = uint32(m.KeyItemsLength())
-	ret.itemWidth = uint16(commitClosureKeyLength)
+	ret.itemWidth = uint32(commitClosureKeyLength)
 	return ret, nil
 }
 

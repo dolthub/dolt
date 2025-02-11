@@ -497,32 +497,38 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		queryType := sqlType.Type()
 		var t val.Type
 
-		contentHashedField := false
-		if _, ok := contentHashedFields[tag]; ok {
-			contentHashedField = true
-		}
+		_, contentHashedField := contentHashedFields[tag]
+		extendedType, isExtendedType := sqlType.(gmstypes.ExtendedType)
 
-		if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
-			t = val.Type{
-				Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARBINARY)),
-				Nullable: columnMissingNotNullConstraint(col),
-			}
-		} else if convertAddressColumns && !contentHashedField && queryType == query.Type_TEXT {
-			t = val.Type{
-				Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARCHAR)),
-				Nullable: columnMissingNotNullConstraint(col),
-			}
-		} else if convertAddressColumns && !contentHashedField && queryType == query.Type_GEOMETRY {
-			t = val.Type{
-				Enc:      val.Encoding(serial.EncodingCell),
-				Nullable: columnMissingNotNullConstraint(col),
-			}
-		} else {
+		if isExtendedType {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
+		} else {
+			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
+				t = val.Type{
+					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARBINARY)),
+					Nullable: columnMissingNotNullConstraint(col),
+				}
+			} else if convertAddressColumns && !contentHashedField && queryType == query.Type_TEXT {
+				t = val.Type{
+					Enc:      val.Encoding(EncodingFromQueryType(query.Type_VARCHAR)),
+					Nullable: columnMissingNotNullConstraint(col),
+				}
+			} else if convertAddressColumns && !contentHashedField && queryType == query.Type_GEOMETRY {
+				t = val.Type{
+					Enc:      val.Encoding(serial.EncodingCell),
+					Nullable: columnMissingNotNullConstraint(col),
+				}
+			} else {
+				t = val.Type{
+					Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
+					Nullable: columnMissingNotNullConstraint(col),
+				}
+			}
 		}
+
 		tt = append(tt, t)
 		stringType, isStringType := sqlType.(sql.StringType)
 		if isStringType && (queryType == query.Type_CHAR || queryType == query.Type_VARCHAR || queryType == query.Type_TEXT) {
@@ -532,11 +538,8 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		if extendedType, ok := sqlType.(gmstypes.ExtendedType); ok {
-			handlers = append(handlers, extendedType)
-		} else {
-			handlers = append(handlers, nil)
-		}
+		handlers = append(handlers, extendedType)
+
 		return
 	})
 

@@ -12,9 +12,9 @@ make_test_repo_and_start_server() {
   export DOLT_EVENT_SCHEDULER_PERIOD=1
   start_sql_server
 
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db information_schema sql -q "CREATE DATABASE repo1;"
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
-  dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "call dolt_commit('-Am', 'creating table');"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db information_schema sql -q "CREATE DATABASE repo1;"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
+  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "call dolt_commit('-Am', 'creating table');"
 }
 
 setup() {

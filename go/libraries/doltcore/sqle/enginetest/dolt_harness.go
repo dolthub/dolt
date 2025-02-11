@@ -484,7 +484,7 @@ func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginete
 		locations[i] = loc
 	}
 
-	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations)
+	readOnlyProvider, err := sqle.NewDoltDatabaseProviderWithDatabases("main", ddp.FileSystem(), dbs, locations, sql.NewBackgroundThreads())
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func (d *DoltHarness) newProvider(ctx context.Context) sql.MutableDatabaseProvid
 	d.multiRepoEnv = mrEnv
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
+	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), sql.NewBackgroundThreads())
 	require.NoError(d.t, err)
 
 	return pro

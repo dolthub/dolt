@@ -272,14 +272,10 @@ SQL
 
     dolt sql -f $BATS_TEST_DIRNAME/json-large-value-insert.sql
 
-    # TODO: Retrieving the JSON errors with a JSON truncated message
-    #       Unskip this once the JSON truncation issue is fixed and
-    #       fill in the expected length below.
-    skip "Function Support is currently disabled"
-
+    dolt sql -q "SELECT pk, length(j1) FROM t;" -r csv
     run dolt sql -q "SELECT pk, length(j1) FROM t;" -r csv
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = '1,???' ]
+    [ "${lines[1]}" = '1,3145771' ]
 }
 
 # This test inserts a large JSON document with the `dolt_dont_optimize_json` flag set.
@@ -295,27 +291,6 @@ SQL
 SQL
     # If the document isn't put into an IndexedJsonDocument, it will have the following hash.
     run dolt show qivuleqpbin1eise78h5u8k1hqe4f07g
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Blob" ]] || false
-}
-
-# Older clients have a bug that prevents them from reading indexed JSON documents with strings split across chunks,
-# And making one large chunk can causes issues with the journal.
-# Thus, we expect that the document gets stored as a blob.
-@test "json: document with large string value doesn't get indexed" {
-    run dolt sql <<SQL
-    CREATE TABLE js (
-        pk int PRIMARY KEY,
-        js json
-    );
-    insert into js values (1, '{"key": "`head -c 2097152 < /dev/zero | tr '\0' '\141'`" }');
-    insert into js values (2, '{"`head -c 2097152 < /dev/zero | tr '\0' '\141'`": "value" }');
-SQL
-    # If the documents aren't put into an IndexedJsonDocument, they will contain the following hashes.
-    run dolt show 9erat0qpsqrmmr53fhu6b7gnjj5n1v9i
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Blob" ]] || false
-    run dolt show 69cm31n0k392sch3snf5jc7ndfiaund8
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Blob" ]] || false
 }

@@ -716,6 +716,6 @@ func (tcs *testChunkSource) currentSize() uint64 {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk)) error {
+func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	panic("never used")
 }

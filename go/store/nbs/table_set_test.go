@@ -190,7 +190,7 @@ func TestTableSetRebase(t *testing.T) {
 
 	specs, err = fullTS.toSpecs()
 	require.NoError(t, err)
-	ts2, err := ts.rebase(context.Background(), specs, nil)
+	ts2, err := ts.rebase(context.Background(), specs, nil, nil)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, ts2.close())
@@ -242,7 +242,7 @@ func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
 	}
 
 	ts := newTableSet(p, q)
-	ts2, err := ts.rebase(context.Background(), specs, &Stats{})
+	ts2, err := ts.rebase(context.Background(), specs, nil, &Stats{})
 	require.Error(t, err)
 
 	assert.NoError(t, ts.close())

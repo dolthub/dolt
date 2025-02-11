@@ -53,6 +53,7 @@ func TestBinlogPrimary_BinlogNotEnabled(t *testing.T) {
 	h.requirePrimaryResults("SHOW BINARY LOGS", [][]any{})
 
 	h.startReplicationAndCreateTestDb(h.doltPort)
+	time.Sleep(1 * time.Second)
 	status := h.queryReplicaStatus()
 	require.Equal(t, "13120", status["Last_IO_Errno"])
 	require.Contains(t, status["Last_IO_Error"],
@@ -71,7 +72,7 @@ func TestBinlogPrimary_GtidModeNotEnabled(t *testing.T) {
 	h.requirePrimaryResults("SHOW BINARY LOGS", [][]any{{"binlog-main.000001", "151", "No"}})
 
 	h.startReplication(h.doltPort)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	status := h.queryReplicaStatus()
 	require.Equal(t, "13117", status["Last_IO_Errno"])
 	require.Contains(t, status["Last_IO_Error"],
@@ -90,7 +91,7 @@ func TestBinlogPrimary_EnforceGtidConsistencyNotEnabled(t *testing.T) {
 	h.requirePrimaryResults("SHOW BINARY LOGS", [][]any{{"binlog-main.000001", "151", "No"}})
 
 	h.startReplication(h.doltPort)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	status := h.queryReplicaStatus()
 	require.Equal(t, "13114", status["Last_IO_Errno"])
 	require.Contains(t, status["Last_IO_Error"],
@@ -257,6 +258,7 @@ func TestBinlogPrimary_AutoPurging(t *testing.T) {
 
 	// Verify the replica reports an error about the GTIDs not being available
 	h.startReplicationAndCreateTestDb(h.doltPort)
+	time.Sleep(1 * time.Second)
 	status := h.queryReplicaStatus()
 	require.Equal(t, "13114", status["Last_IO_Errno"])
 	require.Contains(t, status["Last_IO_Error"],
@@ -394,6 +396,7 @@ func TestBinlogPrimary_Heartbeats(t *testing.T) {
 		[][]any{{fmt.Sprintf("%d", maxInsertValue)}})
 
 	// Make sure no errors have occurred
+	time.Sleep(1 * time.Second)
 	status := h.queryReplicaStatus()
 	require.Equal(t, "", status["Last_SQL_Error"])
 	require.Equal(t, "", status["Last_IO_Error"])

@@ -164,20 +164,6 @@ teardown() {
     [[ $output =~ "| user1 | localhost |" ]] || false
 }
 
-# Asserts that the root@localhost superuser does not get created when a temporary superuser is
-# specified the first time a sql-server is started and privileges.db is initialized.
-@test "sql-privs: implicit root superuser doesn't get created when specifying a temporary superuser" {
-    PORT=$( definePORT )
-    dolt sql-server --port $PORT -u temp1 &
-    SERVER_PID=$!
-    sleep 1
-
-    # Assert that there is no root user
-    run dolt -u temp1 sql -q "select user, host from mysql.user where user='root';"
-    [ $status -eq 0 ]
-    ! [[ $output =~ "root" ]] || false
-}
-
 # Asserts that the root@localhost superuser is not created when the --skip-default-root-user flag
 # is specified when first running sql-server and initializing privileges.db.
 @test "sql-privs: implicit root superuser doesn't get created when skipped" {
@@ -190,14 +176,8 @@ teardown() {
     run dolt -u root sql -q "select user, host from mysql.user where user='root';"
     [ $status -ne 0 ]
 
-    # Restart the SQL server with a temporary superuser
-    stop_sql_server 1 && sleep 0.5
-    dolt sql-server --port $PORT --u user1 &
-    SERVER_PID=$!
-    sleep 1
-
     # Assert that there is no root user
-    run dolt -u user1 sql -q "select user, host from mysql.user where user='root';"
+    run dolt sql -q "select user, host from mysql.user where user='root';"
     [ $status -eq 0 ]
     ! [[ $output =~ "root" ]] || false
 }
@@ -210,12 +190,12 @@ teardown() {
 
     run dolt sql -q "select user from mysql.user order by user"
     [ $status -eq 0 ]
-    [[ $output =~ "dolt" ]] || false
+    [[ $output =~ "root" ]] || false
     
     dolt sql -q "create user new_user"
     run dolt sql -q "select user from mysql.user order by user"
     [ $status -eq 0 ]
-    [[ $output =~ "dolt" ]] || false
+    [[ $output =~ "root" ]] || false
     [[ $output =~ "new_user" ]] || false
     
     run ls -a
@@ -223,59 +203,6 @@ teardown() {
 
     run ls .doltcfg
     [[ "$output" =~ "privileges.db" ]] || false
-}
-
-@test "sql-privs: yaml with no user is replaced with command line user" {
-    make_test_repo
-    touch server.yaml
-    PORT=$( definePORT )
-
-    echo "log_level: debug
-
-listener:
-    host: 0.0.0.0
-    port: $PORT
-    max_connections: 10
-
-behavior:
-    autocommit: false
-" > server.yaml
-
-    dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
-    SERVER_PID=$!
-    sleep 5
-
-
-    run dolt -u cmddolt sql -q "select user from mysql.user"
-    [ $status -eq 0 ]
-    [[ $output =~ "cmddolt" ]] || false
-}
-
-@test "sql-privs: yaml with user is also replaced with command line user" {
-    make_test_repo
-    touch server.yaml
-    PORT=$( definePORT )
-
-    echo "log_level: debug
-user:
-  name: yamldolt
-
-listener:
-    host: 0.0.0.0
-    port: $PORT
-    max_connections: 10
-
-behavior:
-    autocommit: false
-" > server.yaml
-
-    dolt sql-server --port=$PORT --config server.yaml --user cmddolt &
-    SERVER_PID=$!
-    sleep 5
-
-    run dolt -u cmddolt sql -q "select user from mysql.user"
-    [ $status -eq 0 ]
-    [[ $output =~ "cmddolt" ]] || false
 }
 
 @test "sql-privs: yaml specifies doltcfg dir" {
@@ -335,10 +262,12 @@ behavior:
     run cat privs.json
     [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
+    SQL_USER=dolt
+    start_sql_server_with_args --host 0.0.0.0 --privilege-file=privs.json
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
+    ! [[ $output =~ root ]] || false
     [[ $output =~ dolt ]] || false
     [[ $output =~ privs_user ]] || false
 
@@ -346,6 +275,7 @@ behavior:
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
+    ! [[ $output =~ root ]] || false
     [[ $output =~ dolt ]] || false
     [[ $output =~ new_user ]] || false
     [[ $output =~ privs_user ]] || false
@@ -356,10 +286,11 @@ behavior:
 
     # Restart server
     stop_sql_server
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
+    start_sql_server_with_args --host 0.0.0.0 --privilege-file=privs.json
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
+    ! [[ $output =~ root ]] || false
     [[ $output =~ dolt ]] || false
     [[ $output =~ new_user ]] || false
     [[ $output =~ privs_user ]] || false
@@ -371,7 +302,7 @@ behavior:
     touch privs.db
     echo "garbage" > privs.db
 
-    run start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
+    run start_sql_server_with_args --host 0.0.0.0 --privilege-file=privs.db
     [ "$status" -eq 1 ]
     [[ "$output" =~ "ill formatted privileges file" ]] || false
 }
@@ -402,15 +333,6 @@ behavior:
     [[ "$output" =~ "privileges.db" ]] || false
 }
 
-@test "sql-privs: host option doesn't affect user" {
-    make_test_repo
-
-    start_sql_server_with_args --host 127.0.0.1 --user=dolt
-    run dolt sql --result-format csv -q "select user, host from mysql.user order by user"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "dolt,%" ]] || false
-}
-
 @test "sql-privs: multiple doltcfg directories causes error" {
     # setup repo
     rm -rf test_db
@@ -433,7 +355,7 @@ behavior:
 @test "sql-privs: sql-server specify data-dir" {
     make_multi_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir
+    start_sql_server_with_args --host 0.0.0.0 --data-dir=db_dir
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -443,7 +365,7 @@ behavior:
     [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]
     [[ $output =~ db1 ]] || false
     [[ $output =~ db2 ]] || false
@@ -451,15 +373,15 @@ behavior:
     [[ $output =~ information_schema ]] || false
     [[ $output =~ mysql ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
     [[ $output =~ dolt ]] || false
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
 
     run ls -a
@@ -477,7 +399,7 @@ behavior:
 @test "sql-privs: specify doltcfg directory" {
     make_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir
+    start_sql_server_with_args --host 0.0.0.0 --doltcfg-dir=doltcfgdir
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -485,13 +407,13 @@ behavior:
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
     dolt sql -q "create user new_user"
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
     
     run ls -a
@@ -505,7 +427,7 @@ behavior:
 @test "sql-privs: specify privilege file" {
     make_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.db
+    start_sql_server_with_args --host 0.0.0.0 --privilege-file=privs.db
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -517,15 +439,14 @@ behavior:
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
     dolt sql -q "create user new_user"
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
-    ! [[ $output =~ root ]] || false
 
     run ls -a
     [[ "$output" =~ ".doltcfg" ]] || false
@@ -535,7 +456,7 @@ behavior:
 @test "sql-privs: specify data-dir and doltcfg-dir" {
     make_multi_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir
+    start_sql_server_with_args --host 0.0.0.0 --data-dir=db_dir --doltcfg-dir=doltcfgdir
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -546,7 +467,7 @@ behavior:
     ! [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privileges.db" ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]
     [[ $output =~ db1 ]] || false
     [[ $output =~ db2 ]] || false
@@ -554,15 +475,15 @@ behavior:
     [[ $output =~ information_schema ]] || false
     [[ $output =~ mysql ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
 
     run ls -a
@@ -581,7 +502,7 @@ behavior:
 @test "sql-privs: specify data-dir and privilege-file" {
     make_multi_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --privilege-file=privs.db
+    start_sql_server_with_args --host 0.0.0.0 --data-dir=db_dir --privilege-file=privs.db
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -591,7 +512,7 @@ behavior:
     [[ "$output" =~ ".doltcfg" ]] || false
     ! [[ "$output" =~ "privs.db" ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]
     [[ $output =~ db1 ]] || false
     [[ $output =~ db2 ]] || false
@@ -599,15 +520,15 @@ behavior:
     [[ $output =~ information_schema ]] || false
     [[ $output =~ mysql ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
 
     run ls -a
@@ -625,7 +546,7 @@ behavior:
 @test "sql-privs: specify doltcfg-dir and privilege-file" {
     make_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --doltcfg-dir=doltcfgdir --privilege-file=privs.db
+    start_sql_server_with_args --host 0.0.0.0 --doltcfg-dir=doltcfgdir --privilege-file=privs.db
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -635,7 +556,7 @@ behavior:
 
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
     dolt sql -q "create user new_user"
 
@@ -657,7 +578,7 @@ behavior:
 @test "sql-privs: specify data-dir, doltcfg-dir, and privileges-file" {
     make_multi_test_repo
 
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db
+    start_sql_server_with_args --host 0.0.0.0 --data-dir=db_dir --doltcfg-dir=doltcfgdir --privilege-file=privs.db
 
     run ls -a
     ! [[ "$output" =~ ".doltcfg" ]] || false
@@ -665,7 +586,7 @@ behavior:
     ! [[ "$output" =~ "privileges.db" ]] || false
     [[ "$output" =~ "privs.db" ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "show databases"
     [ $status -eq 0 ]
     [[ $output =~ db1 ]] || false
     [[ $output =~ db2 ]] || false
@@ -673,15 +594,15 @@ behavior:
     [[ $output =~ information_schema ]] || false
     [[ $output =~ mysql ]] || false
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "create user new_user"
 
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db db1 sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
 
     run ls -a
@@ -704,7 +625,7 @@ behavior:
     make_multi_test_repo
 
     dolt init
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+    start_sql_server_with_args --host 0.0.0.0
 
     dolt sql -q "create user new_user"
     stop_sql_server
@@ -715,16 +636,15 @@ behavior:
     [[ "$output" =~ "privileges.db" ]] || false
 
     cd db_dir
-    start_sql_server_with_args --host 0.0.0.0 --user=dolt
+    start_sql_server_with_args --host 0.0.0.0
     run dolt sql -q "select user from mysql.user"
     [ $status -eq 0 ]
-    [[ $output =~ dolt ]] || false
+    [[ $output =~ root ]] || false
     [[ $output =~ new_user ]] || false
 }
 
 @test "sql-privs: basic lack of privileges tests" {
      make_test_repo
-     SQL_USER='dolt'
      start_sql_server
 
      dolt sql -q "create table t1(c1 int)"
@@ -768,14 +688,16 @@ behavior:
 
      dolt sql -q "grant insert on *.* to test@'127.0.0.1'"
      # check information_schema.USER_PRIVILEGES table
-     run dolt -u test sql -q "select * from information_schema.USER_PRIVILEGES;"
-     [[ "$output" =~ "| 'test'@'127.0.0.1' | def           | INSERT         | NO           |" ]] || false
+     run dolt sql -r csv -q "select * from information_schema.USER_PRIVILEGES;"
+     [[ "$output" =~ "'test'@'127.0.0.1',def,INSERT,NO" ]] || false
 
      dolt sql -q "drop user test@'127.0.0.1'"
      dolt sql -q "create user test@'10.10.10.10'"
      dolt sql -q "grant select on test_db.* to test@'10.10.10.10'"
+     # Assert that using the test account results in an authentication error, since only test@10.10.10.10 exists now
      run dolt -u test sql -q "show tables"
      [ $status -ne 0 ]
+     [[ "$output" =~ "No authentication methods available for authentication" ]] || false
 }
 
 @test "sql-privs: creating user identified by password" {
@@ -807,17 +729,16 @@ behavior:
 
 @test "sql-privs: deleting user prevents access by that user" {
      make_test_repo
-     SQL_USER='dolt'
      start_sql_server
 
-     dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test_db sql -q "create table t1(c1 int)"
-     dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "create user test"
-     dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "grant select on test_db.* to test"
-     run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test_db sql -q "show tables"
+     dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test_db sql -q "create table t1(c1 int)"
+     dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "create user test"
+     dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "grant select on test_db.* to test"
+     run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test_db sql -q "show tables"
      [ $status -eq 0 ]
      [[ $output =~ t1 ]] || false
 
-     dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "drop user test"
+     dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "drop user test"
 
      run dolt -u test --port $PORT --host 0.0.0.0 --no-tls --use-db test_db sql -q "show tables"
      [ $status -ne 0 ]

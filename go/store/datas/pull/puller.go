@@ -101,12 +101,25 @@ func NewPuller(
 		return nil, ErrIncompatibleSourceChunkStore
 	}
 
+	// walkAddrs can be used for getAddrs on the AddTableFile call as well.
+	getAddrs := func(c chunks.Chunk) chunks.GetAddrsCb {
+		return func(ctx context.Context, ins hash.HashSet, filter chunks.PendingRefExists) error {
+			return walkAddrs(c, func(h hash.Hash, _ bool) error {
+				if !filter(h) {
+					ins.Insert(h)
+				}
+				return nil
+			})
+		}
+	}
+
 	wr := NewPullTableFileWriter(ctx, PullTableFileWriterConfig{
 		ConcurrentUploads:    2,
 		ChunksPerFile:        chunksPerTF,
 		MaximumBufferedFiles: 8,
 		TempDir:              tempDir,
 		DestStore:            sinkCS.(chunks.TableFileStore),
+		GetAddrs:             getAddrs,
 	})
 
 	rd := GetChunkFetcher(ctx, srcChunkStore)

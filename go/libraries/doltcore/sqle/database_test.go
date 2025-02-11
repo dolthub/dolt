@@ -71,7 +71,7 @@ ON SCHEDULE
     STARTS now()
 DO
 BEGIN
-    CALL archive_order_history(DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
+    SELECT 1;
 END`
 
 	err = db.addFragToSchemasTable(sqlCtx, "event", "testEvent", eventDefn, timestamp, nil)
