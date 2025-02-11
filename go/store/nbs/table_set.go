@@ -464,7 +464,10 @@ func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, s
 	eg, ctx := errgroup.WithContext(ctx)
 	var mu sync.Mutex
 	for fileId, chunkCount := range files {
-		if _, ok := ret[fileId]; ok {
+		mu.Lock()
+		_, ok := ret[fileId]
+		mu.Unlock()
+		if ok {
 			continue
 		}
 		eg.Go(func() error {
