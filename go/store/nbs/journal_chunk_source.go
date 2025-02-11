@@ -302,10 +302,10 @@ func equalSpecs(left, right []tableSpec) bool {
 	}
 	l := make(map[hash.Hash]struct{}, len(left))
 	for _, s := range left {
-		l[s.hash] = struct{}{}
+		l[s.name] = struct{}{}
 	}
 	for _, s := range right {
-		if _, ok := l[s.hash]; !ok {
+		if _, ok := l[s.name]; !ok {
 			return false
 		}
 	}

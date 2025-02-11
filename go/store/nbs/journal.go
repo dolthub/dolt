@@ -510,7 +510,7 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	var stash tableSpec // don't conjoin journal
 	pruned := make([]tableSpec, 0, len(upstream))
 	for _, ts := range upstream {
-		if isJournalAddr(ts.hash) {
+		if isJournalAddr(ts.name) {
 			stash = ts
 		} else {
 			pruned = append(pruned, ts)
@@ -520,7 +520,7 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	if err != nil {
 		return nil, nil, err
 	}
-	if !hash.Hash(stash.hash).IsEmpty() {
+	if !hash.Hash(stash.name).IsEmpty() {
 		keepers = append(keepers, stash)
 	}
 	return
@@ -653,7 +653,7 @@ func (jm *journalManifest) Close() (err error) {
 
 func containsJournalSpec(specs []tableSpec) (ok bool) {
 	for _, spec := range specs {
-		if spec.hash == journalAddr {
+		if spec.name == journalAddr {
 			ok = true
 			break
 		}

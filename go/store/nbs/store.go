@@ -325,15 +325,15 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 			if appendixOption == nil {
 				if _, ok := currSpecs[h]; !ok {
 					hasWork = true
-					contents.specs = append(contents.specs, tableSpec{typeNoms, h, count})
+					contents.specs = append(contents.specs, tableSpec{h, count})
 				}
 			} else if *appendixOption == ManifestAppendixOption_Set {
 				hasWork = true
-				appendixSpecs = append(appendixSpecs, tableSpec{typeNoms, h, count})
+				appendixSpecs = append(appendixSpecs, tableSpec{h, count})
 			} else if *appendixOption == ManifestAppendixOption_Append {
 				if _, ok := currAppendixSpecs[h]; !ok {
 					hasWork = true
-					appendixSpecs = append(appendixSpecs, tableSpec{typeNoms, h, count})
+					appendixSpecs = append(appendixSpecs, tableSpec{h, count})
 				}
 			} else {
 				return manifestContents{}, false, ErrUnsupportedManifestAppendixOption
@@ -475,12 +475,12 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
 		// NM4 - not sure on this one....
-		s := tableSpec{fileType: typeNoms, hash: h, chunkCount: c}
+		s := tableSpec{name: h, chunkCount: c}
 		contents.appendix = append(contents.appendix, s)
 		contents.specs = append(contents.specs, s)
 	}
 	for h, c := range tableFiles {
-		s := tableSpec{fileType: typeNoms, hash: h, chunkCount: c}
+		s := tableSpec{name: h, chunkCount: c}
 		contents.specs = append(contents.specs, s)
 	}
 	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix, nil)
@@ -1409,7 +1409,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 
 		filtered := make([]tableSpec, 0, len(specs))
 		for _, s := range specs {
-			if _, present := appendixSet[s.hash]; !present {
+			if _, present := appendixSet[s.name]; !present {
 				filtered = append(filtered, s)
 			}
 		}
@@ -1498,7 +1498,7 @@ func (tf tableFile) LocationPrefix() string {
 
 // FileID gets the id of the file
 func (tf tableFile) FileID() string {
-	return tf.info.GetFileName()
+	return tf.info.GetName()
 }
 
 // NumChunks returns the number of chunks in a table file
@@ -1556,14 +1556,15 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 	}
 	for i := 0; i < numSpecs; i++ {
 		info := specFunc(contents, i)
-		cs, ok := css[info.hash]
+		cs, ok := css[info.name]
 		if !ok {
 			return nil, ErrSpecWithoutChunkSource
 		}
 
-		if _, ok := cs.(archiveChunkSource); ok {
-			info.fileType = typeArchive
-		}
+		// NM4 - We know here........
+		//if _, ok := cs.(archiveChunkSource); ok {
+		//	info.fileType = typeArchive
+		//}
 
 		tableFiles = append(tableFiles, newTableFile(cs, info))
 	}
@@ -2065,7 +2066,7 @@ func (gcf gcFinalizer) AddChunksToStore(ctx context.Context) (chunks.HasManyFunc
 	fileIdToNumChunks := tableSpecsToMap(gcf.specs)
 	var addrs []hash.Hash
 	for _, spec := range gcf.specs {
-		addrs = append(addrs, spec.hash)
+		addrs = append(addrs, spec.name)
 	}
 	f := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return gcf.nbs.hasManyInSources(addrs, hashes)

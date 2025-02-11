@@ -118,7 +118,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
 
 		// If the oldgen/name exists, it's not an archive. If it exists with a .darc suffix, then it's an archive.
-		tfName := tableSpecInfo.GetFileName()
+		tfName := tableSpecInfo.GetName()
 		fullPath := filepath.Join(oldgen, tfName)
 		_, err := os.Stat(fullPath)
 		if err == nil {
