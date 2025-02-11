@@ -259,7 +259,8 @@ func ConfigureServices(
 
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {
-			if serverConfig.AutoGCBehavior().Enable() {
+			if serverConfig.AutoGCBehavior() != nil &&
+				serverConfig.AutoGCBehavior().Enable() {
 				config.AutoGCController = sqle.NewAutoGCController(lgr)
 			}
 			return nil
