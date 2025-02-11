@@ -74,6 +74,8 @@ type databaseDropReplication struct {
 	wg     *sync.WaitGroup
 }
 
+type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
+
 type Controller struct {
 	cfg           servercfg.ClusterConfig
 	persistentCfg config.ReadWriteConfig
@@ -110,6 +112,8 @@ type Controller struct {
 	dropDatabase             func(*sql.Context, string) error
 	outstandingDropDatabases map[string]*databaseDropReplication
 	remoteSrvDBCache         remotesrv.DBCache
+
+	sqlCtxFactory SqlContextFactory
 }
 
 type sqlvars interface {
@@ -247,7 +251,7 @@ func (c *Controller) ManageSystemVariables(variables sqlvars) {
 	c.refreshSystemVars()
 }
 
-func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.BackgroundThreads, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
+func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, mrEnv *env.MultiRepoEnv, dbs ...dsess.SqlDatabase) error {
 	if c == nil {
 		return nil
 	}
@@ -259,7 +263,7 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 			continue
 		}
 		c.lgr.Tracef("cluster/controller: applying commit hooks for %s with role %s", db.Name(), string(c.role))
-		hooks, err := c.applyCommitHooks(ctx, db.Name(), bt, denv)
+		hooks, err := c.applyCommitHooks(ctx, db.Name(), denv)
 		if err != nil {
 			return err
 		}
@@ -291,7 +295,7 @@ func (c *Controller) ManageQueryConnections(iterSessions IterSessions, killQuery
 	c.killConnection = killConnection
 }
 
-func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.BackgroundThreads, denv *env.DoltEnv) ([]*commithook, error) {
+func (c *Controller) applyCommitHooks(ctx context.Context, name string, denv *env.DoltEnv) ([]*commithook, error) {
 	ttfdir, err := denv.TempTableFilesDir()
 	if err != nil {
 		return nil, err
@@ -315,13 +319,24 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
 			return remote.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 		}, denv.DoltDB(ctx), ttfdir)
-		denv.DoltDB(ctx).PrependCommitHook(ctx, commitHook)
-		if err := commitHook.Run(bt); err != nil {
-			return nil, err
-		}
+		denv.DoltDB(ctx).PrependCommitHooks(ctx, commitHook)
 		hooks = append(hooks, commitHook)
 	}
 	return hooks, nil
+}
+
+func (c *Controller) RunCommitHooks(bt *sql.BackgroundThreads, ctxF SqlContextFactory) error {
+	if c == nil {
+		return nil
+	}
+	c.sqlCtxFactory = ctxF
+	for _, hook := range c.commithooks {
+		err := hook.Run(bt, ctxF)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Controller) gRPCDialProvider(denv *env.DoltEnv) dbfactory.GRPCDialProvider {

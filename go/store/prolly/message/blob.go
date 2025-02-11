@@ -83,7 +83,7 @@ func getBlobValues(msg serial.Message) (values ItemAccess, err error) {
 	} else {
 		values.bufStart = lookupVectorOffset(blobPayloadBytesVOffset, b.Table())
 		values.bufLen = uint32(b.PayloadLength())
-		values.itemWidth = uint16(b.PayloadLength())
+		values.itemWidth = uint32(b.PayloadLength())
 	}
 	return
 }

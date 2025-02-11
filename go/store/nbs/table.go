@@ -279,3 +279,9 @@ func copyChunkSourceSet(s chunkSourceSet) (cp chunkSourceSet) {
 	}
 	return
 }
+
+func (css chunkSourceSet) close() {
+	for _, cs := range css {
+		cs.close()
+	}
+}

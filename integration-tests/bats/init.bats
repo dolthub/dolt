@@ -59,6 +59,28 @@ teardown() {
   assert_valid_repository
 }
 
+@test "init: explicit local configuration for config file" {
+  set_dolt_user "baz", "baz@bash.com"
+
+  mkdir .dolt
+
+  dolt config --add user.name foo
+  dolt config --add user.email foo@bar.com
+
+  run dolt config --local --get user.name
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "foo" ]] || false
+
+  run dolt config --local --get user.email
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "foo@bar.com" ]] || false
+
+  run dolt init
+  [ "$status" -eq 0 ]
+
+  assert_valid_repository
+}
+
 @test "init: explicit local configuration for name and email" {
   set_dolt_user "baz", "baz@bash.com"
 
@@ -263,7 +285,7 @@ teardown() {
 
     mkdir -p dbdir/.dolt
     cd dbdir
-    touch .dolt/config.json
+    touch .dolt/not_config.json
     run dolt init
     [ "$status" -eq 1 ]
     [[ "$output" =~ ".dolt directory already exists" ]] || false

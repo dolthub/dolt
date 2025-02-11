@@ -84,7 +84,7 @@ func writeLocalTableFiles(t *testing.T, st *NomsBlockStore, numTableFiles, seed 
 func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fileToData {
 	ctx := context.Background()
 	fileIDToNumChunks, fileToData := writeLocalTableFiles(t, st, numTableFiles, 0)
-	err := st.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+	err := st.AddTableFilesToManifest(ctx, fileIDToNumChunks, noopGetAddrs)
 	require.NoError(t, err)
 	return fileToData
 }

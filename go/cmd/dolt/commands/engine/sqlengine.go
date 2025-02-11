@@ -101,7 +101,7 @@ func NewSqlEngine(
 
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 
-	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
+	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, mrEnv, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func NewSqlEngine(
 	gcSafepointController := dsess.NewGCSafepointController()
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, bThreads)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +203,10 @@ func NewSqlEngine(
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
+
+	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
+		return nil, err
+	}
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv

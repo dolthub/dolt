@@ -51,6 +51,7 @@ type commithook struct {
 	lastSuccess          time.Time
 	currentError         *string
 	cancelReplicate      func()
+	sqlCtxFactory        SqlContextFactory
 
 	// waitNotify is set by controller when it needs to track whether the
 	// commithooks are caught up with replicating to the standby.
@@ -99,7 +100,8 @@ func newCommitHook(lgr *logrus.Logger, remotename, remoteurl, dbname string, rol
 	return &ret
 }
 
-func (h *commithook) Run(bt *sql.BackgroundThreads) error {
+func (h *commithook) Run(bt *sql.BackgroundThreads, ctxF SqlContextFactory) error {
+	h.sqlCtxFactory = ctxF
 	return bt.Add("Standby Replication - "+h.dbname+" to "+h.remotename, h.run)
 }
 
@@ -142,20 +144,30 @@ func (h *commithook) replicate(ctx context.Context) {
 		}
 		if h.primaryNeedsInit() {
 			lgr.Tracef("cluster/commithook: fetching current head.")
-			// When the replicate thread comes up, it attempts to replicate the current head.
-			datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.srcDB)
-			cs := datas.ChunkStoreFromDatabase(datasDB)
-			var err error
-			h.nextHead, err = cs.Root(ctx)
-			if err != nil {
-				// TODO: if err != nil, something is really wrong; should shutdown or backoff.
-				lgr.Warningf("standby replication thread failed to load database root: %v", err)
-				h.nextHead = hash.Hash{}
-			}
+			func() {
+				sqlCtx, err := h.sqlCtxFactory(ctx)
+				if err != nil {
+					lgr.Warningf("standby replication thread failed to load database root: could not create sql.Context: %v", err)
+					return
+				}
+				defer sql.SessionEnd(sqlCtx.Session)
+				sql.SessionCommandBegin(sqlCtx.Session)
+				defer sql.SessionCommandEnd(sqlCtx.Session)
 
-			// We do not know when this head was written, but we
-			// are starting to try to replicate it now.
-			h.nextHeadIncomingTime = time.Now()
+				// When the replicate thread comes up, it attempts to replicate the current head.
+				datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.srcDB)
+				cs := datas.ChunkStoreFromDatabase(datasDB)
+				h.nextHead, err = cs.Root(ctx)
+				if err != nil {
+					// TODO: if err != nil, something is really wrong; should shutdown or backoff.
+					lgr.Warningf("standby replication thread failed to load database root: %v", err)
+					h.nextHead = hash.Hash{}
+				}
+
+				// We do not know when this head was written, but we
+				// are starting to try to replicate it now.
+				h.nextHeadIncomingTime = time.Now()
+			}()
 		} else if h.shouldReplicate() {
 			h.attemptReplicate(ctx)
 			shouldHeartbeat = false
@@ -255,6 +267,9 @@ func (h *commithook) attemptHeartbeat(ctx context.Context) {
 		}
 		h.cancelReplicate = nil
 	}()
+	// We do not take a sql.Context here. Our
+	// sql Session lifecycle events are for
+	// accessing srcDB, not destDB.
 	h.mu.Unlock()
 	datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
 	cs := datas.ChunkStoreFromDatabase(datasDB)
@@ -283,20 +298,34 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	defer h.progressNotifier.RecordFailure(attempt)
 	h.mu.Unlock()
 
+	sqlCtx, err := h.sqlCtxFactory(ctx)
+	if err != nil {
+		h.mu.Lock()
+		h.currentError = new(string)
+		*h.currentError = fmt.Sprintf("could not replicate to standby: error creating sql.Context: %v.", err)
+		lgr.Warnf("cluster/commithook: could not replicate to standby: error creating sql.Context: %v.", err)
+		if toPush == h.nextHead {
+			h.nextPushAttempt = time.Now().Add(1 * time.Second)
+		}
+		return
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+
 	if destDB == nil {
 		lgr.Tracef("cluster/commithook: attempting to fetch destDB.")
 		var err error
 		destDB, err = h.destDBF(ctx)
 		if err != nil {
+			h.mu.Lock()
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("could not replicate to standby: error fetching destDB: %v", err)
 			lgr.Warnf("cluster/commithook: could not replicate to standby: error fetching destDB: %v.", err)
-			h.mu.Lock()
 			// TODO: We could add some backoff here.
 			if toPush == h.nextHead {
 				h.nextPushAttempt = time.Now().Add(1 * time.Second)
 			}
-			h.cancelReplicate = nil
 			return
 		}
 		lgr.Tracef("cluster/commithook: fetched destDB")
@@ -306,7 +335,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	}
 
 	lgr.Tracef("cluster/commithook: pushing chunks for root hash %v to destDB", toPush.String())
-	err := destDB.PullChunks(ctx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
+	err = destDB.PullChunks(ctx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
 	if err == nil {
 		lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
 		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
@@ -455,11 +484,10 @@ var errDetectedBrokenConfigStr = "error: more than one server was configured as 
 
 // Execute on this commithook updates the target root hash we're attempting to
 // replicate and wakes the replication thread.
-func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	lgr := h.logger()
 	lgr.Tracef("cluster/commithook: Execute called post commit")
-	cs := datas.ChunkStoreFromDatabase(db)
-	root, err := cs.Root(ctx)
+	root, err := db.NomsRoot(ctx)
 	if err != nil {
 		lgr.Errorf("cluster/commithook: Execute: error retrieving local database root: %v", err)
 		return nil, err

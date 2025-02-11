@@ -93,13 +93,14 @@ func TestServerArgs(t *testing.T) {
 }
 
 func TestDeprecatedUserPasswordServerArgs(t *testing.T) {
+	ctx := context.Background()
 	controller := svcs.NewController()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
-		assert.NoError(t, dEnv.DoltDB(context.Background()).Close())
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
-	err = StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+	err = StartServer(ctx, "0.0.0", "dolt sql-server", []string{
 		"-H", "localhost",
 		"-P", "15200",
 		"-u", "username",

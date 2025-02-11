@@ -425,9 +425,73 @@ func (ts tableSet) flatten(ctx context.Context) (tableSet, error) {
 	return flattened, nil
 }
 
+// openForAdd will attempt to open every file named in |files| with the
+// table persister, returning a new chunkSourceSet for all of the files
+// if they are all able to be opened. An error will be returned if any
+// errors are encountered when opening the files.
+//
+// For any files which appear in |novel| or |upstream|, this function
+// will return clones of the chunk sources, instead of opening them
+// anew.
+func (ts tableSet) openForAdd(ctx context.Context, files map[hash.Hash]uint32, stats *Stats) (chunkSourceSet, error) {
+	ret := make(chunkSourceSet)
+	cleanup := func() {
+		for _, source := range ret {
+			source.close()
+		}
+	}
+	// First add clones of all sources that are already present in
+	// ts.novel or ts.upstream.
+	for h := range files {
+		if s, ok := ts.novel[h]; ok {
+			cloned, err := s.clone()
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			ret[h] = cloned
+		} else if s, ok := ts.upstream[h]; ok {
+			cloned, err := s.clone()
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			ret[h] = cloned
+		}
+	}
+	// Concurrently open all files that are not already
+	// in |ret|.
+	eg, ctx := errgroup.WithContext(ctx)
+	var mu sync.Mutex
+	for fileId, chunkCount := range files {
+		mu.Lock()
+		_, ok := ret[fileId]
+		mu.Unlock()
+		if ok {
+			continue
+		}
+		eg.Go(func() error {
+			cs, err := ts.p.Open(ctx, fileId, chunkCount, stats)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			ret[fileId] = cs
+			mu.Unlock()
+			return nil
+		})
+	}
+	err := eg.Wait()
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	return ret, nil
+}
+
 // rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
-func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
+func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, srcs chunkSourceSet, stats *Stats) (tableSet, error) {
 	// deduplicate |specs|
 	orig := specs
 	specs = make([]tableSpec, 0, len(orig))
@@ -442,18 +506,26 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		specs = append(specs, spec)
 	}
 
+	closeAll := func(css chunkSourceSet) {
+		for _, cs := range css {
+			cs.close()
+		}
+	}
+
 	// copy |ts.novel|, skipping empty chunkSources
 	// (usually due to de-duping during table compaction)
 	novel := make(chunkSourceSet, len(ts.novel))
 	for _, t := range ts.novel {
 		cnt, err := t.count()
 		if err != nil {
+			closeAll(novel)
 			return tableSet{}, err
 		} else if cnt == 0 {
 			continue
 		}
 		t2, err := t.clone()
 		if err != nil {
+			closeAll(novel)
 			return tableSet{}, err
 		}
 		novel[t2.hash()] = t2
@@ -462,27 +534,18 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	eg, ctx := errgroup.WithContext(ctx)
 	mu := new(sync.Mutex)
 	upstream := make(chunkSourceSet, len(specs))
-	for _, s := range specs {
-		// clone tables that we have already opened
-		if cs, ok := ts.upstream[s.name]; ok {
-			cl, err := cs.clone()
-			if err != nil {
-				_ = eg.Wait()
-				for _, cs := range upstream {
-					// close any opened chunkSources
-					_ = cs.close()
-				}
-				return tableSet{}, err
-			}
-			mu.Lock()
-			upstream[cl.hash()] = cl
-			mu.Unlock()
-			continue
-		}
+	for _, spec := range specs {
 		// open missing tables in parallel
-		spec := s
 		eg.Go(func() error {
-			cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats) // NM4 - spec.name is the tf/arch name.
+			var cs chunkSource
+			var err error
+			if existing, ok := ts.upstream[spec.name]; ok {
+				cs, err = existing.clone()
+			} else if existing, ok := srcs[spec.name]; ok {
+				cs, err = existing.clone()
+			} else {
+				cs, err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats) // NM4 - spec.name is the tf/arch name.
+			}
 			if err != nil {
 				return err
 			}
@@ -494,10 +557,8 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	if err := eg.Wait(); err != nil {
-		for _, cs := range upstream {
-			// close any opened chunkSources
-			_ = cs.close()
-		}
+		closeAll(upstream)
+		closeAll(novel)
 		return tableSet{}, err
 	}
 

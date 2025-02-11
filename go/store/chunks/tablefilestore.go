@@ -64,7 +64,7 @@ type TableFileStore interface {
 	WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
 
 	// AddTableFilesToManifest adds table files to the manifest
-	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error
+	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs GetAddrsCurry) error
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context) error
