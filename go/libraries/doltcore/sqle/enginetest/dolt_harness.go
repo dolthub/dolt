@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
@@ -259,10 +258,6 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		}
 		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))
-		err = statsPro.Restart(ctx)
-		if err != nil {
-			return nil, err
-		}
 		d.statsPro = statsPro
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
@@ -296,20 +291,19 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e = e.WithBackgroundThreads(bThreads)
 
 		if d.configureStats {
-			dSess := dsess.DSessFromSess(sqlCtx.Session)
-			dbCache := dSess.DatabaseCache(sqlCtx)
-			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
-			for i, dbName := range dbs {
-				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
-				fs, err := doltProvider.FileSystemForDatabase(dsessDbs[i].AliasedName())
-				if err != nil {
-					return nil, err
+			var dsessDbs []dsess.SqlDatabase
+			for _, db := range databases {
+				if sqlDb, ok := db.(dsess.SqlDatabase); ok {
+					dsessDbs = append(dsessDbs, sqlDb)
 				}
-				done, err := statsPro.Add(sqlCtx, dsessDbs[i], ref.NewBranchRef("main"), fs, false)
-				if err != nil {
-					return nil, err
-				}
-				<-done
+			}
+			if err := statsPro.Init(ctx, dsessDbs, false); err != nil {
+				return nil, err
+			}
+
+			err = statsPro.Restart(ctx)
+			if err != nil {
+				return nil, err
 			}
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)

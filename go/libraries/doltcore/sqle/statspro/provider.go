@@ -310,7 +310,7 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase, keepSto
 
 	eg := errgroup.Group{}
 	for _, db := range dbs {
-		if db, ok := db.(*sqle.Database); ok { // exclude read replica dbs
+		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
 			br, err := db.DbData().Ddb.GetBranches(ctx)
 			if err != nil {
 				return err
