@@ -62,10 +62,10 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 		return nil, err
 	}
 	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
-		return doltdb.NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
+		return NewAsyncPushOnWriteHook(bThreads, ddb, tmpDir, logger)
 	}
 
-	return doltdb.NewPushOnWriteHook(ddb, tmpDir), nil
+	return NewPushOnWriteHook(ddb, tmpDir), nil
 }
 
 // GetCommitHooks creates a list of hooks to execute on database commit. Hooks that cannot be created because of an
@@ -77,7 +77,7 @@ func GetCommitHooks(ctx context.Context, bThreads *sql.BackgroundThreads, dEnv *
 	if err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		logrus.Errorf("error loading replication for database at %s, replication disabled: %v", path, err)
-		postCommitHooks = append(postCommitHooks, doltdb.NewLogHook([]byte(err.Error()+"\n")))
+		postCommitHooks = append(postCommitHooks, NewLogHook([]byte(err.Error()+"\n")))
 	} else if hook != nil {
 		postCommitHooks = append(postCommitHooks, hook)
 	}

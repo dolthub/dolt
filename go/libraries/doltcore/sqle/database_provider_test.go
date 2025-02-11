@@ -103,7 +103,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.Len(t, hooks, 2)
 				_, ok := hooks[0].(*snoopingCommitHook)
 				assert.True(t, ok, "expect hook to be snoopingCommitHook, it is %T", hooks[0])
-				_, ok = hooks[1].(*doltdb.PushOnWriteHook)
+				_, ok = hooks[1].(*PushOnWriteHook)
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[1])
 			})
 			t.Run("AsyncPushOnWrite", func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.Len(t, hooks, 2)
 				_, ok := hooks[0].(*snoopingCommitHook)
 				assert.True(t, ok, "expect hook to be snoopingCommitHook, it is %T", hooks[0])
-				_, ok = hooks[1].(*doltdb.AsyncPushOnWriteHook)
+				_, ok = hooks[1].(*AsyncPushOnWriteHook)
 				assert.True(t, ok, "expect hook to be AsyncPushOnWriteHook, it is %T", hooks[1])
 			})
 		})
@@ -149,7 +149,7 @@ func TestDatabaseProvider(t *testing.T) {
 type snoopingCommitHook struct {
 }
 
-func (*snoopingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (*snoopingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	return nil, nil
 }
 

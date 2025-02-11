@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package sqle
 
 import (
 	"context"
@@ -23,44 +23,43 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type PushOnWriteHook struct {
-	destDB datas.Database
+	destDB *doltdb.DoltDB
 	tmpDir string
 	out    io.Writer
-	fmt    *types.NomsBinFormat
 }
 
-var _ CommitHook = (*PushOnWriteHook)(nil)
+var _ doltdb.CommitHook = (*PushOnWriteHook)(nil)
 
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
-func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
+func NewPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string) *PushOnWriteHook {
 	return &PushOnWriteHook{
-		destDB: destDB.db,
+		destDB: destDB,
 		tmpDir: tmpDir,
-		fmt:    destDB.Format(),
 	}
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	return nil, pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
 }
 
-func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dataset, tmpDir string) error {
+func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dataset, tmpDir string) error {
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
-		_, err := destDB.Delete(ctx, ds, "")
+		// TODO: fix up hack usage.
+		_, err := doltdb.HackDatasDatabaseFromDoltDB(destDB).Delete(ctx, ds, "")
 		return err
 	}
 
-	err := pullHash(ctx, destDB, srcDB, []hash.Hash{addr}, tmpDir, nil, nil)
+	err := destDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{addr}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -70,13 +69,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	ds, err = destDB.GetDataset(ctx, rf.String())
-	if err != nil {
-		return err
-	}
-
-	_, err = destDB.SetHead(ctx, ds, addr, "")
-	return err
+	return destDB.SetHead(ctx, rf, addr)
 }
 
 // HandleError implements CommitHook
@@ -102,7 +95,7 @@ func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 
 type PushArg struct {
 	ds   datas.Dataset
-	db   datas.Database
+	db   *doltdb.DoltDB
 	hash hash.Hash
 }
 
@@ -118,10 +111,10 @@ const (
 	asyncPushSyncReplica   = "async_push_sync_replica"
 )
 
-var _ CommitHook = (*AsyncPushOnWriteHook)(nil)
+var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
+func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
 	ch := make(chan PushArg, asyncPushBufferSize)
 	err := RunAsyncReplicationThreads(bThreads, ch, destDB, tmpDir, logger)
 	if err != nil {
@@ -135,16 +128,11 @@ func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	addr, _ := ds.MaybeHeadAddr()
-
-	select {
-	case ah.ch <- PushArg{ds: ds, db: db, hash: addr}:
-	case <-ctx.Done():
-		ah.ch <- PushArg{ds: ds, db: db, hash: addr}
-		return nil, ctx.Err()
-	}
-	return nil, nil
+	// TODO: Unconditional push here seems dangerous.
+	ah.ch <- PushArg{ds: ds, db: db, hash: addr}
+	return nil, ctx.Err()
 }
 
 // HandleError implements CommitHook
@@ -166,7 +154,7 @@ type LogHook struct {
 	out io.Writer
 }
 
-var _ CommitHook = (*LogHook)(nil)
+var _ doltdb.CommitHook = (*LogHook)(nil)
 
 // NewLogHook is a noop that logs to a writer when invoked
 func NewLogHook(msg []byte) *LogHook {
@@ -174,7 +162,7 @@ func NewLogHook(msg []byte) *LogHook {
 }
 
 // Execute implements CommitHook, writes message to log channel
-func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	if lh.out != nil {
 		_, err := lh.out.Write(lh.msg)
 		return nil, err
@@ -200,7 +188,7 @@ func (*LogHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *DoltDB, tmpDir string, logger io.Writer) error {
+func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
@@ -259,7 +247,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg
 		for id, newCm := range newHeadsCopy {
 			if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
 				// use background context to drain after sql context is canceled
-				err := pushDataset(context.Background(), destDB.db, newCm.db, newCm.ds, tmpDir)
+				err := pushDataset(context.Background(), destDB, newCm.db, newCm.ds, tmpDir)
 				if err != nil {
 					logger.Write([]byte("replication failed: " + err.Error()))
 				}

@@ -43,7 +43,7 @@ func TestCommitHooksNoErrors(t *testing.T) {
 		t.Error("failed to produce noop hook")
 	} else {
 		switch h := hooks[0].(type) {
-		case *doltdb.LogHook:
+		case *LogHook:
 		default:
 			t.Errorf("expected LogHook, found: %s", h)
 		}
