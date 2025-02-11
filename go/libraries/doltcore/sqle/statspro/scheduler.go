@@ -18,6 +18,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -29,16 +41,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/stats"
-	"github.com/sirupsen/logrus"
-	"io"
-	"log"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type StatsJob interface {
@@ -362,7 +364,6 @@ func (sc *StatsCoord) lockedStop(ctx context.Context) error {
 	case <-j.done:
 		return nil
 	}
-	return nil
 }
 
 func (sc *StatsCoord) Restart(ctx context.Context) error {

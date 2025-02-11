@@ -17,6 +17,15 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"log"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,13 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/stats"
-	"golang.org/x/sync/errgroup"
-	"log"
-	"path"
-	"path/filepath"
-	"strings"
 )
 
 var _ sql.StatsProvider = (*StatsCoord)(nil)

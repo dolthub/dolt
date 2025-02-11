@@ -1,12 +1,14 @@
 package statspro
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
 	"log"
 	"strconv"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 )
 
 type scriptTest struct {
@@ -687,7 +689,7 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range scripts {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, sqlEng, sc, _ := emptySetup(t, threads, false)

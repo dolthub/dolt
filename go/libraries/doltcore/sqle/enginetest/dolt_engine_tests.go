@@ -1164,21 +1164,6 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	return e
 }
 
-func RunStatsFunctionsTest(t *testing.T, harness DoltEnginetestHarness) {
-	defer harness.Close()
-	for _, test := range StatProcTests {
-		t.Run(test.Name, func(t *testing.T) {
-			// reset engine so provider statistics are clean
-			harness = harness.NewHarness(t).WithConfigureStats(true)
-			harness.Setup(setup.MydbData)
-			harness.SkipSetupCommit()
-			e := mustNewEngine(t, harness)
-			defer e.Close()
-			enginetest.TestScriptWithEngine(t, e, harness, test)
-		})
-	}
-}
-
 func RunDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {

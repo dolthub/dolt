@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 

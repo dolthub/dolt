@@ -17,7 +17,6 @@ package enginetest
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"os"
 	"runtime"
 	"sync"
@@ -35,6 +34,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -1451,11 +1451,6 @@ func TestColumnDiffSystemTablePrepared(t *testing.T) {
 func TestStatBranchTests(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunStatBranchTests(t, harness)
-}
-
-func TestStatsFunctions(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunStatsFunctionsTest(t, harness)
 }
 
 func TestDiffTableFunction(t *testing.T) {

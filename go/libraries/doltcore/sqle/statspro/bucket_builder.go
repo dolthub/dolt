@@ -17,9 +17,10 @@ package statspro
 import (
 	"container/heap"
 	"context"
+	"sort"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
-	"sort"
 
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
