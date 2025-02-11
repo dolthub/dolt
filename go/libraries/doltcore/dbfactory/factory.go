@@ -17,6 +17,7 @@ package dbfactory
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"net/url"
 	"strings"
 
@@ -57,10 +58,32 @@ const (
 	defaultMemTableSize = 256 * 1024 * 1024
 )
 
+type DBLoader interface {
+	IsAccessModeReadOnly() bool
+	LoadDB(ctx context.Context) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+}
+
+type ChunkStoreLoader struct {
+	cs chunks.ChunkStore
+}
+
+var _ DBLoader = ChunkStoreLoader{}
+
+func (l ChunkStoreLoader) IsAccessModeReadOnly() bool {
+	return false
+}
+
+func (l ChunkStoreLoader) LoadDB(ctx context.Context) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	vrw := types.NewValueStore(l.cs)
+	ns := tree.NewNodeStore(l.cs)
+	db := datas.NewTypesDatabase(vrw, ns)
+	return db, vrw, ns, nil
+}
+
 // DBFactory is an interface for creating concrete datas.Database instances from different backing stores
 type DBFactory interface {
-	// CreateDB returns the database located at the URL given and its associated data access interfaces
-	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error)
+	// GetDBLoader verifies the DB exists and acquires any necessary locks, returning an object that can be used to load the DB.
+	GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (DBLoader, error)
 	// PrepareDB does any necessary setup work for a new database to be created at the URL given, e.g. to receive a push.
 	// Not all factories support this operation.
 	PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) error
@@ -83,10 +106,18 @@ var DBFactories = map[string]DBFactory{
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
 func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+	dbLoader, err := GetDBLoader(ctx, nbf, urlStr, params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return dbLoader.LoadDB(ctx)
+}
+
+func GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (DBLoader, error) {
 	urlObj, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	scheme := urlObj.Scheme
@@ -95,10 +126,10 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 	}
 
 	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
-		return fact.CreateDB(ctx, nbf, urlObj, params)
+		return fact.GetDBLoader(ctx, nbf, urlObj, params)
 	}
 
-	return nil, nil, nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+	return nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
 }
 
 // PrepareDB does the necessary work to create a database at the URL given, e.g. to ready a new remote for pushing. Not

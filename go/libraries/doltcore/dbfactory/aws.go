@@ -30,9 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -117,19 +115,14 @@ func (fact AWSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	var db datas.Database
+func (fact AWSFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (DBLoader, error) {
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(cs)
-	ns := tree.NewNodeStore(cs)
-	db = datas.NewTypesDatabase(vrw, ns)
-
-	return db, vrw, ns, nil
+	return ChunkStoreLoader{cs: cs}, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/fslock"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -62,12 +63,14 @@ type FileFactory struct {
 }
 
 type singletonDB struct {
-	ddb datas.Database
-	vrw types.ValueReadWriter
-	ns  tree.NodeStore
+	lockFile *fslock.Lock
+	ddb      datas.Database
+	vrw      types.ValueReadWriter
+	ns       tree.NodeStore
 }
 
 var singletonLock = new(sync.Mutex)
+var singletonFileLocks = make(map[string]*fslock.Lock)
 var singletons = make(map[string]singletonDB)
 
 func CloseAllLocalDatabases() (err error) {
@@ -114,46 +117,40 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	return nil
 }
 
-// CreateDB creates a local filesys backed database
-func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+type FileDBLoader struct {
+	urlPath    string
+	path       string
+	useJournal bool
+	nbf        *types.NomsBinFormat
+	lockFile   *fslock.Lock
+}
+
+var _ DBLoader = FileDBLoader{}
+
+func (l FileDBLoader) IsAccessModeReadOnly() bool {
+	return l.lockFile == nil
+}
+
+func (l FileDBLoader) LoadDB(ctx context.Context) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
-
-	if s, ok := singletons[urlObj.Path]; ok {
+	if s, ok := singletons[l.urlPath]; ok {
 		return s.ddb, s.vrw, s.ns, nil
 	}
-
-	path, err := url.PathUnescape(urlObj.Path)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	path = filepath.FromSlash(path)
-	path = urlObj.Host + path
-
-	err = validateDir(path)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	var useJournal bool
-	if params != nil {
-		_, useJournal = params[ChunkJournalParam]
-	}
-
 	var newGenSt *nbs.NomsBlockStore
+	var err error // TODO: Need to take both locks
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
+	if l.useJournal && chunkJournalFeatureFlag {
+		newGenSt, err = nbs.NewLocalJournalingStoreWithLock(ctx, l.lockFile, l.nbf.VersionString(), l.path, q)
 	} else {
-		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+		newGenSt, err = nbs.NewLocalStoreWithLock(ctx, l.lockFile, l.nbf.VersionString(), l.path, defaultMemTableSize, q)
 	}
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	oldgenPath := filepath.Join(path, "oldgen")
+	oldgenPath := filepath.Join(l.path, "oldgen")
 	err = validateDir(oldgenPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -171,7 +168,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, nil, nil, err
 	}
 
-	ghostGen, err := nbs.NewGhostBlockStore(path)
+	ghostGen, err := nbs.NewGhostBlockStore(l.path)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -183,13 +180,58 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	ns := tree.NewNodeStore(st)
 	ddb := datas.NewTypesDatabase(vrw, ns)
 
-	singletons[urlObj.Path] = singletonDB{
+	singletons[l.urlPath] = singletonDB{
 		ddb: ddb,
 		vrw: vrw,
 		ns:  ns,
 	}
 
 	return ddb, vrw, ns, nil
+}
+
+// CreateDB creates a local filesys backed database
+func (fact FileFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (dbLoader DBLoader, err error) {
+	singletonLock.Lock()
+	defer singletonLock.Unlock()
+
+	path, err := url.PathUnescape(urlObj.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	path = filepath.FromSlash(path)
+	path = urlObj.Host + path
+
+	err = validateDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var useJournal bool
+	if params != nil {
+		_, useJournal = params[ChunkJournalParam]
+	}
+
+	var lock *fslock.Lock
+
+	if s, ok := singletonFileLocks[urlObj.Path]; ok {
+		lock = s
+	} else {
+		lock, err = nbs.AcquireManifestLock(path)
+		if err != nil {
+			return nil, err
+		}
+
+		singletonFileLocks[urlObj.Path] = lock
+	}
+
+	return FileDBLoader{
+		urlPath:    urlObj.Path,
+		path:       path,
+		useJournal: useJournal,
+		lockFile:   lock,
+		nbf:        nbf,
+	}, nil
 }
 
 func validateDir(path string) error {

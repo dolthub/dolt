@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/fslock"
 	"io"
 	"os"
 	"path/filepath"
@@ -565,10 +566,15 @@ func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blo
 }
 
 func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q)
+	lock := fslock.New(filepath.Join(dir, lockFileName))
+	return newLocalStore(ctx, lock, nbfVerStr, dir, memTableSize, defaultMaxTables, q)
 }
 
-func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewLocalStoreWithLock(ctx context.Context, lockFile *fslock.Lock, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, lockFile, nbfVerStr, dir, memTableSize, defaultMaxTables, q)
+}
+
+func newLocalStore(ctx context.Context, lockFile *fslock.Lock, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
@@ -580,7 +586,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, fmt.Errorf("cannot create NBS store for directory containing chunk journal: %s", dir)
 	}
 
-	m, err := getFileManifest(ctx, dir, asyncFlush)
+	m, err := getFileManifest(ctx, lockFile, dir, asyncFlush)
 	if err != nil {
 		return nil, err
 	}
@@ -591,12 +597,17 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 }
 
 func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	lock := fslock.New(filepath.Join(dir, lockFileName))
+	return NewLocalJournalingStoreWithLock(ctx, lock, nbfVers, dir, q)
+}
+
+func NewLocalJournalingStoreWithLock(ctx context.Context, lock *fslock.Lock, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
-	m, err := newJournalManifest(ctx, dir)
+	m, err := newJournalManifest(ctx, lock, dir)
 	if err != nil {
 		return nil, err
 	}

@@ -38,17 +38,21 @@ func (fact MemFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 // CreateDB creates an in memory backed database
 func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	var db datas.Database
+	dbLoader, err := fact.GetDBLoader(ctx, nbf, urlObj, params)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return dbLoader.LoadDB(ctx)
+}
 
+// GetDBLoader creates an object that can be used to create a memory backed database
+func (fact MemFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, u *url.URL, params map[string]interface{}) (DBLoader, error) {
 	bs := blobstore.NewInMemoryBlobstore(uuid.New().String())
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	cs, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(cs)
-	ns := tree.NewNodeStore(cs)
-	db = datas.NewTypesDatabase(vrw, ns)
-	return db, vrw, ns, nil
+	return ChunkStoreLoader{cs: cs}, nil
 }

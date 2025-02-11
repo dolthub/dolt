@@ -116,7 +116,19 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 	return LoadDoltDBWithParams(ctx, nbf, urlStr, fs, nil)
 }
 
+func GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys) (dbfactory.DBLoader, error) {
+	return GetDBLoaderWithParams(ctx, nbf, urlStr, fs, nil)
+}
+
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
+	dbLoader, err := GetDBLoaderWithParams(ctx, nbf, urlStr, fs, params)
+	if err != nil {
+		return nil, err
+	}
+	return LoadDB(ctx, dbLoader, urlStr)
+}
+
+func GetDBLoaderWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (dbfactory.DBLoader, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 		if !exists {
@@ -138,12 +150,16 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
+	return dbfactory.GetDBLoader(ctx, nbf, urlStr, params)
+}
+
+func LoadDB(ctx context.Context, dbLoader dbfactory.DBLoader, urlStr string) (*DoltDB, error) {
 	// Pull the database name out of the URL string. For filesystem-based databases (e.g. in-memory or disk-based
 	// filesystem implementations), we can determine the database name by looking at the filesystem path. This
 	// won't work for other storage schemes though.
 	name := findParentDirectory(urlStr, ".dolt")
 
-	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
+	db, vrw, ns, err := dbLoader.LoadDB(ctx)
 	if err != nil {
 		return nil, err
 	}

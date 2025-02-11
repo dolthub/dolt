@@ -28,9 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -67,17 +65,13 @@ func (fact OSSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // CreateDB creates an OSS backed database
-func (fact OSSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+func (fact OSSFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (DBLoader, error) {
 	ossStore, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(ossStore)
-	ns := tree.NewNodeStore(ossStore)
-	db := datas.NewTypesDatabase(vrw, ns)
-
-	return db, vrw, ns, nil
+	return ChunkStoreLoader{cs: ossStore}, nil
 }
 
 func (fact OSSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {

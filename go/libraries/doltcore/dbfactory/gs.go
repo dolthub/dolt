@@ -22,9 +22,7 @@ import (
 	"cloud.google.com/go/storage"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -38,12 +36,11 @@ func (fact GSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, u
 }
 
 // CreateDB creates an GCS backed database
-func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	var db datas.Database
+func (fact GSFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (DBLoader, error) {
 	gcs, err := storage.NewClient(ctx)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	bs := blobstore.NewGCSBlobstore(gcs, urlObj.Host, urlObj.Path)
@@ -51,14 +48,10 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(gcsStore)
-	ns := tree.NewNodeStore(gcsStore)
-	db = datas.NewTypesDatabase(vrw, ns)
-
-	return db, vrw, ns, nil
+	return ChunkStoreLoader{cs: gcsStore}, nil
 }
 
 // LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
@@ -71,12 +64,11 @@ func (fact LocalBSFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinForm
 }
 
 // CreateDB creates a local filesystem blobstore backed database
-func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	var db datas.Database
+func (fact LocalBSFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (DBLoader, error) {
 	absPath, err := filepath.Abs(filepath.Join(urlObj.Host, urlObj.Path))
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	bs := blobstore.NewLocalBlobstore(absPath)
@@ -84,12 +76,8 @@ func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinForma
 	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(bsStore)
-	ns := tree.NewNodeStore(bsStore)
-	db = datas.NewTypesDatabase(vrw, ns)
-
-	return db, vrw, ns, err
+	return ChunkStoreLoader{cs: bsStore}, err
 }
