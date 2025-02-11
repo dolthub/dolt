@@ -1353,10 +1353,12 @@ func TestSingleTransactionScript(t *testing.T) {
 
 	sql.RunWithNowFunc(tcc.Now, func() error {
 		script := queries.TransactionTest{
-			Name: "Insert error with auto commit off",
+			Name: "non-ff commit merge with multiple indexes on a column",
 			SetUpScript: []string{
 				"create table t1 (pk int primary key, val int)",
-				"insert into t1 values (0,0)",
+				"create index i1 on t1 (val)",
+				"alter table t1 add unique key u1 (val)",
+				"insert into t1 values (1, 1)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
@@ -1368,40 +1370,20 @@ func TestSingleTransactionScript(t *testing.T) {
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client a */ insert into t1 values (1, 1)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query:       "/* client a */ insert into t1 values (1, 2)",
-					ExpectedErr: sql.ErrPrimaryKeyViolation,
-				},
-				{
 					Query:    "/* client a */ insert into t1 values (2, 2)",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
-				},
-				{
-					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}},
+					Query:    "/* client b */ insert into t1 values (3, 3)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
 					Query:            "/* client a */ commit",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:            "/* client b */ start transaction",
+					Query:            "/* client b */ commit",
 					SkipResultsCheck: true,
-				},
-				{
-					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
-				},
-				{
-					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 			},
 		}
