@@ -2044,7 +2044,7 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash RootValue, 
 	return err
 }
 
-func (ddb *DoltDB) SetStatisics(ctx context.Context, branch string, addr hash.Hash) error {
+func (ddb *DoltDB) SetStatistics(ctx context.Context, branch string, addr hash.Hash) error {
 	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
 	if err != nil {
 		return err

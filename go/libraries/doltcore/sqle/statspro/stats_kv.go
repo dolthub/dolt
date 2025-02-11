@@ -44,10 +44,10 @@ type StatsKv interface {
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row, l int)
-	Flush(ctx context.Context) error
+	Flush(ctx context.Context) (int, error)
 	StartGc(ctx context.Context, sz int) error
 	MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
-	FinishGc()
+	FinishGc(context.Context) error
 	Len() int
 }
 
@@ -79,6 +79,10 @@ type memStats struct {
 	nextBounds map[bucketKey]sql.Row
 
 	epochCnt int
+}
+
+func (m *memStats) StorageCnt(context.Context) (int, error) {
+	return 0, nil
 }
 
 func (m *memStats) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
@@ -160,7 +164,7 @@ func (m *memStats) RestartEpoch() {
 	m.epochCnt = 0
 }
 
-func (m *memStats) FinishGc() {
+func (m *memStats) FinishGc(context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.buckets = m.nextBuckets
@@ -170,6 +174,7 @@ func (m *memStats) FinishGc() {
 	m.nextTemplates = nil
 	m.nextBounds = nil
 	m.doGc = false
+	return nil
 }
 
 func (m *memStats) Len() int {
@@ -208,8 +213,8 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, tupB *val.TupleBuil
 	return b, ok, nil
 }
 
-func (m *memStats) Flush(_ context.Context) error {
-	return nil
+func (m *memStats) Flush(_ context.Context) (int, error) {
+	return 0, nil
 }
 
 func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats, error) {
@@ -325,6 +330,22 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 	return b, true, nil
 }
 
+func (p *prollyStats) Flush(ctx context.Context) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	flushedMap, err := p.m.Map(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := p.destDb.DbData().Ddb.SetStatistics(ctx, "main", flushedMap.HashOf()); err != nil {
+		return 0, err
+	}
+
+	cnt, err := flushedMap.Count()
+	return cnt, err
+}
+
 func (p *prollyStats) StartGc(ctx context.Context, sz int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -372,13 +393,18 @@ func (p *prollyStats) MarkBucket(ctx context.Context, h hash.Hash, tupB *val.Tup
 	return p.newM.Put(ctx, k, v)
 }
 
-func (p *prollyStats) FinishGc() {
+func (p *prollyStats) FinishGc(context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.mem.FinishGc()
-	p.m = p.newM
+	p.mem.FinishGc(nil)
+	m, err := p.newM.Map(context.Background())
+	if err != nil {
+		return err
+	}
+	p.m = m.Mutate()
 	p.newM = nil
-	_, _ = p.m.Map(context.Background())
+
+	return nil
 }
 
 func (p *prollyStats) encodeHash(h hash.Hash, len int) (val.Tuple, error) {
@@ -491,15 +517,7 @@ func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *v
 	return p.vb.Build(p.m.NodeStore().Pool()), nil
 }
 
-func (p *prollyStats) Flush(ctx context.Context) error {
-	flushedMap, err := p.m.Map(ctx)
-	if err != nil {
-		return err
-	}
-	return p.destDb.DbData().Ddb.SetStatisics(ctx, "main", flushedMap.HashOf())
-}
-
-func (p *prollyStats) NewEmpty(ctx *sql.Context) (StatsKv, error) {
+func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
 	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 	newMap, err := prolly.NewMapFromTuples(ctx, p.destDb.DbData().Ddb.NodeStore(), kd, vd)
 	if err != nil {

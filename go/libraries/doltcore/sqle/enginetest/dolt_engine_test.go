@@ -1981,7 +1981,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)
 
-	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), fs)
+	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), fs, false)
 	require.NoError(t, err)
 	<-done
 

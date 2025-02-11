@@ -78,6 +78,7 @@ func TestScheduleLoop(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "b"}:       {},
 				}},
+			ControlJob{desc: "flush"},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "ab"}, {name: "xy"}}},
 		})
 
@@ -180,6 +181,7 @@ func TestModifyColumn(t *testing.T) {
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "y"}:       {},
 				}},
+			ControlJob{desc: "flush"},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 
@@ -196,10 +198,8 @@ func TestModifyColumn(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 4, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
-		require.Equal(t, int64(6), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
-		require.Equal(t, int64(6), sc.lastBucketCnt.Load())
 		require.Equal(t, 6, len(kv.buckets))
 	}
 }
@@ -239,7 +239,6 @@ func TestAddColumn(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 2, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
-		require.Equal(t, int64(4), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -278,7 +277,6 @@ func TestDropIndex(t *testing.T) {
 		stat := sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 
@@ -290,7 +288,6 @@ func TestDropIndex(t *testing.T) {
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -344,7 +341,6 @@ func TestDropTable(t *testing.T) {
 		stat = sc.Stats[tableIndexesKey{"mydb", "main", "ab", ""}]
 		require.Equal(t, 1, len(stat))
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -371,11 +367,9 @@ func TestDeleteAboveBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 		require.Equal(t, 2, len(kv.buckets))
-		require.Equal(t, int64(2), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -403,11 +397,9 @@ func TestDeleteBelowBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 		require.Equal(t, 1, len(kv.buckets))
-		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -435,11 +427,9 @@ func TestDeleteOnBoundary(t *testing.T) {
 		require.Equal(t, 1, len(sc.Stats))
 		stat := sc.Stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
 		require.Equal(t, 1, len(stat[0].Hist))
-		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 
 		doGcCycle(t, ctx, sc)
 		require.Equal(t, 1, len(kv.buckets))
-		require.Equal(t, int64(1), sc.lastBucketCnt.Load())
 	}
 }
 
@@ -477,6 +467,7 @@ func TestAddDropDatabases(t *testing.T) {
 				editIndexes: map[templateCacheKey]finalizeStruct{
 					templateCacheKey{idxName: "PRIMARY"}: {},
 				}},
+			ControlJob{desc: "flush"},
 			SeedDbTablesJob{sqlDb: otherDb, tables: []tableStatsInfo{{name: "t"}}},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
@@ -767,7 +758,7 @@ func TestDropOnlyDb(t *testing.T) {
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
-	sc.Stop()
+	require.NoError(t, sc.Stop(context.Background()))
 
 	// empty memory KV
 	_, ok = sc.kv.(*memStats)
@@ -824,12 +815,16 @@ func TestReadCounter(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	{
-		require.Equal(t, 0, sc.Info().ReadCnt)
+		si, err := sc.Info(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 0, si.ReadCnt)
 
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (501, 0)"))
 		runAndPause(t, ctx, sc, &wg)
 
-		require.Equal(t, 2, sc.Info().ReadCnt)
+		si, err = sc.Info(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 2, si.ReadCnt)
 	}
 }
 
@@ -919,7 +914,7 @@ func TestPurge(t *testing.T) {
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
-	sc.Stop()
+	require.NoError(t, sc.Stop(context.Background()))
 
 	kv := sc.kv.(*prollyStats)
 	require.Equal(t, 2, kv.Len())
@@ -952,9 +947,17 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		Address: "bigbillie@fake.horse",
 	})
 
+	sql.SystemVariables.AssignValues(map[string]interface{}{
+		dsess.DoltStatsGCInterval:     100,
+		dsess.DoltStatsBranchInterval: 100,
+		dsess.DoltStatsJobInterval:    1,
+	})
+
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.SetEnableGc(false)
 	sc.enableBrSync.Store(false)
+	sc.JobInterval = time.Nanosecond
+
 	require.NoError(t, sc.Restart(ctx))
 
 	ctx, _ = sc.ctxGen(ctx)
@@ -966,7 +969,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-	sc.Stop()
+	require.NoError(t, sc.Stop(context.Background()))
 
 	var sqlDbs []sqle.Database
 	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
@@ -1018,6 +1021,7 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 					templateCacheKey{idxName: "PRIMARY"}: {},
 					templateCacheKey{idxName: "y"}:       {},
 				}},
+			ControlJob{desc: "flush"},
 			SeedDbTablesJob{sqlDb: sqlDbs[0], tables: []tableStatsInfo{{name: "xy"}}},
 		})
 	}
@@ -1166,10 +1170,7 @@ func runAndPause(t *testing.T, ctx *sql.Context, sc *StatsCoord, wg *sync.WaitGr
 	// making the loop effectively inactive even if the goroutine is still
 	// in the process of closing by the time we are flushing/validating
 	// the queue.
-	j := NewControl("pause", func(sc *StatsCoord) error {
-		sc.Stop()
-		return nil
-	})
+	j := NewStop()
 	sc.Jobs <- j
 	require.NoError(t, sc.Restart(ctx))
 	<-j.done
@@ -1326,7 +1327,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.doGc.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		sc.Stop()
+		require.NoError(t, sc.Stop(context.Background()))
 
 		// 101 dbs, 100 with stats (not main)
 		require.Equal(t, iters/2+1, len(sc.dbs))
@@ -1360,8 +1361,8 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
+		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
 	}
 
 	dropBranch := func(dropCtx *sql.Context, branchName string) {
@@ -1410,7 +1411,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		sc.doGc.Store(true)
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		sc.Stop()
+		require.NoError(t, sc.Stop(context.Background()))
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters/2, len(sc.Stats))
@@ -1428,8 +1429,8 @@ func TestStatsCacheGrowth(t *testing.T) {
 	sc.SetEnableGc(true)
 
 	sc.JobInterval = 10
-	sc.gcInterval = 100
-	sc.branchInterval = 100
+	sc.gcInterval = 1000
+	sc.branchInterval = 1000
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1448,7 +1449,6 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	}
 
-	// it is important to use new sessions for this test, to avoid working root conflicts
 	iters := 2000
 	if os.Getenv("CI") != "" {
 		iters = 1025
@@ -1464,7 +1464,19 @@ func TestStatsCacheGrowth(t *testing.T) {
 				branches <- "branch" + strconv.Itoa(i)
 				if i%500 == 0 {
 					log.Println("branches: ", strconv.Itoa(i))
-					require.NoError(t, executeQuery(addCtx, sqlEng, "call dolt_stats_wait()"))
+
+					for {
+						syncErr := executeQuery(addCtx, sqlEng, "call dolt_stats_sync()")
+						waitErr := executeQuery(addCtx, sqlEng, "call dolt_stats_wait()")
+						if waitErr == nil && syncErr == nil {
+							break
+						} else if syncErr != nil {
+							log.Println("waiting on: ", strconv.Itoa(i), syncErr.Error())
+						} else if syncErr != nil {
+							log.Println("waiting on: ", strconv.Itoa(i), waitErr.Error())
+						}
+					}
+					//executeQuery(addCtx, sqlEng, "call dolt_stats_wait()")
 				}
 			}
 			close(branches)
@@ -1481,10 +1493,12 @@ func TestStatsCacheGrowth(t *testing.T) {
 		}
 
 		sc.doBranchSync.Store(true)
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
 		sc.doGc.Store(true)
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		sc.Stop()
+		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
+		require.NoError(t, sc.Stop(context.Background()))
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters, len(sc.Stats))

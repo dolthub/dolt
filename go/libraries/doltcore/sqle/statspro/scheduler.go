@@ -205,6 +205,23 @@ func (j ControlJob) String() string {
 	return "ControlJob: " + j.desc
 }
 
+// NewStop lets caller block until run thread exits
+func NewStop() StopJob {
+	return StopJob{done: make(chan struct{})}
+}
+
+type StopJob struct {
+	done chan struct{}
+}
+
+func (j StopJob) Finish() {
+	close(j.done)
+}
+
+func (j StopJob) String() string {
+	return "StopJob"
+}
+
 type ctxFactory func(ctx context.Context) (*sql.Context, error)
 
 func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
@@ -213,12 +230,13 @@ func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *lo
 	kv := NewMemStats()
 	return &StatsCoord{
 		dbMu:           &sync.Mutex{},
+		stopMu:         &sync.Mutex{},
 		statsMu:        &sync.Mutex{},
 		logger:         logger,
 		Jobs:           make(chan StatsJob, 1024),
 		Done:           done,
 		Interrupts:     make(chan StatsJob, 1024),
-		JobInterval:    50 * time.Millisecond,
+		JobInterval:    500 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		enableGc:       atomic.Bool{},
@@ -245,9 +263,9 @@ func (sc *StatsCoord) SetEnableGc(v bool) {
 }
 
 func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
-	sc.JobInterval = time.Duration(job) * time.Millisecond
-	sc.gcInterval = time.Duration(gc) * time.Millisecond
-	sc.branchInterval = time.Duration(branch) * time.Millisecond
+	sc.JobInterval = time.Duration(job)
+	sc.gcInterval = time.Duration(gc)
+	sc.branchInterval = time.Duration(branch)
 }
 
 type tableIndexesKey struct {
@@ -282,6 +300,7 @@ type StatsCoord struct {
 	// but has a fixed size and will block
 	Interrupts chan StatsJob
 	Done       chan struct{}
+	stopMu     *sync.Mutex
 
 	// XXX: do not hold the |dbMu| while accessing |pro|
 	dbMu *sync.Mutex
@@ -317,41 +336,45 @@ type StatsCoord struct {
 	doBranchSync atomic.Bool
 	doCapCheck   atomic.Bool
 	seedCnt      atomic.Int64
-
-	epoch         atomic.Uint64
-	lastBucketCnt atomic.Int64
-	bucketCap     int64
 }
 
-func (sc *StatsCoord) Stop() {
+// Stop blocks until |sc.Done| is closed and the |run| thread exits.
+func (sc *StatsCoord) Stop(ctx context.Context) error {
+	sc.stopMu.Lock()
+	defer sc.stopMu.Unlock()
+	return sc.lockedStop(ctx)
+}
+
+func (sc *StatsCoord) lockedStop(ctx context.Context) error {
 	select {
 	case <-sc.Done:
+		return nil
 	default:
-		close(sc.Done)
 	}
+	j := NewStop()
+	if err := sc.unsafeAsyncSend(ctx, j); err != nil {
+		close(j.done)
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-j.done:
+		return nil
+	}
+	return nil
 }
 
 func (sc *StatsCoord) Restart(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-sc.Done:
-	default:
-		j := NewControl("stop thread", func(sc *StatsCoord) error {
-			sc.Stop()
-			return nil
-		})
-		if err := sc.unsafeAsyncSend(ctx, j); err != nil {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		case <-j.done:
-		case <-sc.Done:
-		}
-	}
+	sc.stopMu.Lock()
+	defer sc.stopMu.Unlock()
+	return sc.lockedRestart(ctx)
+}
 
+func (sc *StatsCoord) lockedRestart(ctx context.Context) error {
+	if err := sc.lockedStop(ctx); err != nil {
+		return err
+	}
 	sc.Done = make(chan struct{})
 	if err := sc.threads.Add("stats", func(ctx context.Context) {
 		sc.run(ctx)
@@ -360,21 +383,18 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 	}
 
 	return nil
-	//return sc.unsafeAsyncSend(ctx, NewControl("update epoch", func(sc *StatsCoord) error {
-	//	sc.epoch.Add(1)
-	//	return sc.sendJobs(ctx, NewControl("update epoch", func(sc *StatsCoord) error {
-	//		sc.epoch.Add(1)
-	//		return nil
-	//	}))
-	//}))
 }
 
 func (sc *StatsCoord) Close() {
-	sc.Stop()
+	select {
+	case <-sc.Done:
+	default:
+		close(sc.Done)
+	}
 	return
 }
 
-func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys) (chan struct{}, error) {
+func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.DoltRef, fs filesys.Filesys, keepStorage bool) (chan struct{}, error) {
 	db, err := sqle.RevisionDbForBranch(ctx, db, branch.GetPath(), branch.GetPath()+"/"+db.AliasedName())
 	if err != nil {
 		sc.error(ControlJob{desc: "add db"}, err)
@@ -395,7 +415,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 		return nil, err
 	}
 
-	if len(sc.dbs) == 1 {
+	if len(sc.dbs) == 1 && !keepStorage {
 		sc.statsBackingDb = db.AliasedName()
 		var mem *memStats
 		switch kv := sc.kv.(type) {
@@ -423,7 +443,7 @@ func (sc *StatsCoord) Add(ctx *sql.Context, db dsess.SqlDatabase, branch ref.Dol
 	return ret, nil
 }
 
-func (sc *StatsCoord) Info() dprocedures.StatsInfo {
+func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 	sc.dbMu.Lock()
 	dbCnt := len(sc.dbs)
 	cachedBucketCnt := sc.kv.Len()
@@ -443,6 +463,10 @@ func (sc *StatsCoord) Info() dprocedures.StatsInfo {
 	statCnt := len(sc.Stats)
 	defer sc.statsMu.Unlock()
 
+	storageCnt, err := sc.kv.Flush(ctx)
+	if err != nil {
+		return dprocedures.StatsInfo{}, err
+	}
 	var active bool
 	select {
 	case <-sc.Done:
@@ -455,14 +479,14 @@ func (sc *StatsCoord) Info() dprocedures.StatsInfo {
 		ReadCnt:           int(sc.readCounter.Load()),
 		Active:            active,
 		DbSeedCnt:         int(sc.seedCnt.Load()),
-		EstBucketCnt:      int(sc.lastBucketCnt.Load()),
 		CachedBucketCnt:   cachedBucketCnt,
+		StorageBucketCnt:  storageCnt,
 		CachedBoundCnt:    cachedBoundCnt,
 		CachedTemplateCnt: cachedTemplateCnt,
 		StatCnt:           statCnt,
 		GcCounter:         int(sc.gcCounter.Load()),
 		SyncCounter:       int(sc.branchCounter.Load()),
-	}
+	}, nil
 }
 
 // captureFlushQueue is a debug method that lets us inspect and
@@ -572,6 +596,11 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if sc.Debug {
 				log.Println("stats interrupt job: ", j.String())
 			}
+			if _, ok := j.(StopJob); ok {
+				defer j.Finish()
+				defer close(sc.Done)
+				return nil
+			}
 			err := sc.executeJob(ctx, j)
 			if err != nil {
 				sc.error(j, err)
@@ -591,6 +620,11 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 			if sc.Debug {
 				log.Println("stats interrupt job: ", j.String())
 			}
+			if _, ok := j.(StopJob); ok {
+				defer j.Finish()
+				defer close(sc.Done)
+				return nil
+			}
 			err := sc.executeJob(ctx, j)
 			if err != nil {
 				sc.error(j, err)
@@ -605,6 +639,11 @@ func (sc *StatsCoord) run(ctx context.Context) error {
 				}
 				if sc.Debug {
 					log.Println("stats execute job: ", j.String())
+				}
+				if _, ok := j.(StopJob); ok {
+					defer j.Finish()
+					defer close(sc.Done)
+					return nil
 				}
 				err := sc.executeJob(ctx, j)
 				if err != nil {
@@ -740,7 +779,6 @@ func (sc *StatsCoord) readChunks(ctx context.Context, j ReadJob) ([]StatsJob, er
 			return nil, err
 		} else if ok {
 			// concurrent reads overestimate shared buckets
-			sc.lastBucketCnt.Add(-1)
 			continue
 		}
 		// each node is a bucket
@@ -805,8 +843,6 @@ func (sc *StatsCoord) finalizeUpdate(ctx context.Context, j FinalizeJob) ([]Stat
 		sc.statsMu.Unlock()
 		return nil, nil
 	}
-
-	sc.kv.Flush(ctx)
 
 	var newStats []*stats.Statistic
 	for _, s := range sc.Stats[j.tableKey] {

@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"math"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -237,21 +238,21 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
-		Default: 100,
+		Default: int64(500 * time.Millisecond / time.Millisecond),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsBranchInterval,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemIntType(dsess.DoltStatsBranchInterval, 0, math.MaxInt, false),
-		Default: 60 * 60 * 24,
+		Default: int64(time.Hour / time.Millisecond),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsGCInterval,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
-		Default: 60 * 60 * 24,
+		Default: int64(time.Hour / time.Millisecond),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsBranches,
@@ -457,21 +458,21 @@ func AddDoltSystemVariables() {
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
-			Default: 60 * 60 * 24,
+			Default: int64(time.Hour / time.Millisecond),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsJobInterval,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
-			Default: 60 * 60 * 24,
+			Default: int64(500 * time.Millisecond / time.Millisecond),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsBranchInterval,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemIntType(dsess.DoltStatsBranchInterval, 0, math.MaxInt, false),
-			Default: 60 * 60 * 24,
+			Default: int64(time.Hour / time.Millisecond),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsMemoryOnly,

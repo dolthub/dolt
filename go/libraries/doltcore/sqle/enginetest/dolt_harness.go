@@ -17,7 +17,17 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -29,17 +39,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
+	"time"
 )
 
 type DoltHarness struct {
@@ -253,9 +253,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		bThreads := sql.NewBackgroundThreads()
 
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
-			return d.NewContext(), nil
+			return d.NewSession(), nil
 		}
 		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))
 		err = statsPro.Restart(ctx)
 		if err != nil {
 			return nil, err
@@ -302,7 +303,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 				if err != nil {
 					return nil, err
 				}
-				done, err := statsPro.Add(sqlCtx, dsessDbs[i], ref.NewBranchRef("main"), fs)
+				done, err := statsPro.Add(sqlCtx, dsessDbs[i], ref.NewBranchRef("main"), fs, false)
 				if err != nil {
 					return nil, err
 				}

@@ -110,7 +110,9 @@ func (sc *StatsCoord) runGc(ctx context.Context, done chan struct{}) (err error)
 
 	//sc.bucketCnt.Store(int64(bucketCnt))
 	//sc.bucketCap = sc.kv.Cap()
-	sc.kv.FinishGc()
+	if err = sc.kv.FinishGc(nil); err != nil {
+		return err
+	}
 
 	// Avoid GC starving the loop, only re-enable after
 	// letting a block of other work through.

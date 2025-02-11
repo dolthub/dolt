@@ -29,6 +29,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -207,7 +208,23 @@ func NewSqlEngine(
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
 		//sc.Debug = true
-		err := sc.Init(ctx, dbs)
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+		_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
+
+		jobInterval, _, _ := typ.GetType().Convert(jobI)
+		gcInterval, _, _ := typ.GetType().Convert(gcI)
+		brInterval, _, _ := typ.GetType().Convert(brI)
+
+		sc.SetTimers(
+			jobInterval.(int64)*int64(time.Millisecond),
+			gcInterval.(int64)*int64(time.Millisecond),
+			brInterval.(int64)*int64(time.Millisecond))
+
+		err := sc.Init(ctx, dbs, false)
 		if err != nil {
 			return nil, err
 		}

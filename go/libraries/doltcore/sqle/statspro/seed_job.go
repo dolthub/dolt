@@ -112,8 +112,21 @@ func (sc *StatsCoord) seedDbTables(ctx context.Context, j SeedDbTablesJob) (ret 
 		k++
 	}
 
-	sc.lastBucketCnt.Add(int64(bucketDiff))
-
+	// flush results
+	if bucketDiff > 0 {
+		//ret = append(ret, NewControl("flush", func(sc *StatsCoord) error {
+		//	ctx, err := sc.ctxGen(ctx)
+		//	if err != nil {
+		//		return err
+		//	}
+		//	if cnt, err := sc.kv.Flush(ctx); err != nil {
+		//		return err
+		//	} else if cnt > sc.kv.Len()*2 {
+		//		sc.doGc.Store(true)
+		//	}
+		//	return nil
+		//}))
+	}
 	// retry again after finishing planned work
 	ret = append(ret, SeedDbTablesJob{tables: newTableInfo, sqlDb: sqlDb, done: make(chan struct{})})
 	return ret, nil

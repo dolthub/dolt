@@ -4,6 +4,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
+	"log"
 	"strconv"
 	"testing"
 )
@@ -367,7 +368,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -403,7 +404,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      0, // deleting table can undershoot if shared buckets
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -436,7 +437,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         1,
-							EstBucketCnt:      0,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -467,7 +468,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      4,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -488,7 +489,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            false,
 							DbSeedCnt:         0,
-							EstBucketCnt:      2,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -509,7 +510,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -533,6 +534,18 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
+					query: "insert into xy values (3,0)",
+				},
+				{
+					query: "call dolt_checkout('feat')",
+				},
+				{
+					query: "insert into xy values (3,0)",
+				},
+				{
+					query: "call dolt_stats_wait()",
+				},
+				{
 					query: "call dolt_stats_info()",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
@@ -540,9 +553,9 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
+							StorageBucketCnt:  4,
+							CachedBucketCnt:   4,
+							CachedBoundCnt:    4,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
 							GcCounter:         1,
@@ -561,10 +574,10 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            false,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
+							StorageBucketCnt:  0,
+							CachedBucketCnt:   0,
+							CachedBoundCnt:    0,
+							CachedTemplateCnt: 0,
 							StatCnt:           2,
 							GcCounter:         1,
 							SyncCounter:       1,
@@ -585,7 +598,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -616,7 +629,7 @@ func TestStatScripts(t *testing.T) {
 							ReadCnt:           0,
 							Active:            true,
 							DbSeedCnt:         2,
-							EstBucketCnt:      2,
+							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
@@ -662,7 +675,7 @@ func TestStatScripts(t *testing.T) {
 						ReadCnt:           0,
 						Active:            true,
 						DbSeedCnt:         1,
-						EstBucketCnt:      2,
+						StorageBucketCnt:  2,
 						CachedBucketCnt:   2,
 						CachedBoundCnt:    2,
 						CachedTemplateCnt: 2,
@@ -674,7 +687,7 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 	}
-
+	
 	for _, tt := range scripts {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
@@ -693,6 +706,7 @@ func TestStatScripts(t *testing.T) {
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
 			for i, a := range tt.assertions {
+				log.Println(a.query)
 				rows, err := executeQueryResults(ctx, sqlEng, a.query)
 				if a.err != "" {
 					require.Equal(t, a.err, err.Error())

@@ -55,7 +55,7 @@ type StatsInfo struct {
 	ReadCnt           int  `json:"readCnt"`
 	Active            bool `json:"active"`
 	DbSeedCnt         int  `json:"dbSeedCnt"`
-	EstBucketCnt      int  `json:"estBucketCnt"`
+	StorageBucketCnt  int  `json:"storageBucketCnt"`
 	CachedBucketCnt   int  `json:"cachedBucketCnt"`
 	CachedBoundCnt    int  `json:"cachedBoundCnt"`
 	CachedTemplateCnt int  `json:"cachedTemplateCnt"`
@@ -78,13 +78,13 @@ type ToggableStats interface {
 	sql.StatsProvider
 	FlushQueue(ctx context.Context) error
 	Restart(context.Context) error
-	Info() StatsInfo
+	Info(ctx context.Context) (StatsInfo, error)
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error
 	BranchSync(ctx *sql.Context) error
 	ValidateState(ctx context.Context) error
-	Init(context.Context, []dsess.SqlDatabase) error
+	Init(context.Context, []dsess.SqlDatabase, bool) error
 	SetTimers(int64, int64, int64)
 }
 
@@ -112,7 +112,7 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 				sqlDbs = append(sqlDbs, sqlDb)
 			}
 		}
-		if err := afp.Init(ctx, sqlDbs); err != nil {
+		if err := afp.Init(ctx, sqlDbs, true); err != nil {
 			return nil, err
 		}
 		if err := afp.Restart(ctx); err != nil {
@@ -129,7 +129,10 @@ func statsInfo(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		info := afp.Info()
+		info, err := afp.Info(ctx)
+		if err != nil {
+			return nil, err
+		}
 		return info.ToJson(), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
@@ -221,10 +224,6 @@ func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 		return nil, fmt.Errorf("failed to flush queue: %w", err)
 	}
 
-	if err := pro.Purge(ctx); err != nil {
-		return "failed to purge stats", err
-	}
-
 	dbs := dSess.Provider().AllDatabases(ctx)
 	var sqlDbs []dsess.SqlDatabase
 	for _, db := range dbs {
@@ -234,8 +233,13 @@ func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 		}
 	}
 
-	// init is currently the safest way to reset state
-	if err := pro.Init(ctx, sqlDbs); err != nil {
+	// reset state
+	if err := pro.Init(ctx, sqlDbs, true); err != nil {
+		return "failed to purge stats", err
+	}
+
+	//
+	if err := pro.Purge(ctx); err != nil {
 		return "failed to purge stats", err
 	}
 

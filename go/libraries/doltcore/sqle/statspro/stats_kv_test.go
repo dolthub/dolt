@@ -122,7 +122,7 @@ func TestProllyKv(t *testing.T) {
 		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
 		require.NoError(t, err)
 
-		prollyKv.FinishGc()
+		prollyKv.FinishGc(nil)
 
 		m, _ := prollyKv.m.Map(context.Background())
 		iter, _ := m.IterAll(context.Background())
@@ -140,7 +140,7 @@ func TestProllyKv(t *testing.T) {
 		prollyKv.StartGc(context.Background(), 10)
 		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
 		require.NoError(t, err)
-		prollyKv.FinishGc()
+		prollyKv.FinishGc(nil)
 
 		cmp2, ok, err := prollyKv.GetBucket(context.Background(), h2, tupB)
 		require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestProllyKv(t *testing.T) {
 
 	t.Run("test overflow", func(t *testing.T) {
 		prollyKv.StartGc(context.Background(), 10)
-		prollyKv.FinishGc()
+		prollyKv.FinishGc(nil)
 
 		expLen := 2000
 		var expected []hash.Hash
@@ -182,7 +182,7 @@ func TestProllyKv(t *testing.T) {
 
 		prollyKv.StartGc(context.Background(), 10)
 		prollyKv.GetBound(h2, 2)
-		prollyKv.FinishGc()
+		prollyKv.FinishGc(nil)
 
 		require.Equal(t, 1, len(prollyKv.mem.bounds))
 	})
@@ -202,7 +202,7 @@ func TestProllyKv(t *testing.T) {
 
 		prollyKv.StartGc(context.Background(), 10)
 		prollyKv.GetTemplate(key2)
-		prollyKv.FinishGc()
+		prollyKv.FinishGc(nil)
 
 		require.Equal(t, 1, len(prollyKv.mem.templates))
 	})

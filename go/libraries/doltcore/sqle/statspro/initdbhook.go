@@ -39,7 +39,7 @@ func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
 		}
 
 		// call should only fail if backpressure in secondary queue
-		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS)
+		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS, false)
 		if err != nil {
 			sc.logger.Debugf("cannot initialize db stats for %s; queue is closed", sqlDb.AliasedName())
 		}
