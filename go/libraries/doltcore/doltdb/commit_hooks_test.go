@@ -130,7 +130,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	// setup hook
 	hook := NewPushOnWriteHook(destDB, tmpDir)
-	ddb.SetCommitHooks(ctx, []CommitHook{hook})
+	ddb.PrependCommitHooks(ctx, hook)
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
@@ -293,7 +293,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		// same as the call which is made after a branch delete.
 
 		counts := &countingCommitHook{make(map[string]int)}
-		destDB.SetCommitHooks(context.Background(), []CommitHook{counts})
+		destDB.PrependCommitHooks(context.Background(), counts)
 
 		bThreads := sql.NewBackgroundThreads()
 		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})

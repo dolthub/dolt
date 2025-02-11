@@ -61,9 +61,17 @@ func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, s
 		return nil, err
 	}
 
-	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
+	err = ExecuteSqlOnEngine(sqlCtx, engine, statements)
 	if err != nil {
 		return nil, err
+	}
+	return db.GetRoot(sqlCtx)
+}
+
+func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string) error {
+	err := ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
+	if err != nil {
+		return err
 	}
 
 	for _, query := range strings.Split(statements, ";\n") {
@@ -73,50 +81,50 @@ func ExecuteSql(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, s
 
 		sqlStatement, err := sqlparser.Parse(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		var execErr error
 		switch sqlStatement.(type) {
 		case *sqlparser.Show:
-			return nil, errors.New("Show statements aren't handled")
+			return errors.New("Show statements aren't handled")
 		case *sqlparser.Select, *sqlparser.OtherRead:
-			return nil, errors.New("Select statements aren't handled")
+			return errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
 			var rowIter sql.RowIter
-			_, rowIter, _, execErr = engine.Query(sqlCtx, query)
+			_, rowIter, _, execErr = engine.Query(ctx, query)
 			if execErr == nil {
-				execErr = drainIter(sqlCtx, rowIter)
+				execErr = drainIter(ctx, rowIter)
 			}
-		case *sqlparser.DDL, *sqlparser.AlterTable:
+		case *sqlparser.DDL, *sqlparser.AlterTable, *sqlparser.DBDDL:
 			var rowIter sql.RowIter
-			_, rowIter, _, execErr = engine.Query(sqlCtx, query)
+			_, rowIter, _, execErr = engine.Query(ctx, query)
 			if execErr == nil {
-				execErr = drainIter(sqlCtx, rowIter)
+				execErr = drainIter(ctx, rowIter)
 			}
 		default:
-			return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
+			return fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 		}
 
 		if execErr != nil {
-			return nil, execErr
+			return execErr
 		}
 	}
 
 	// commit leftover transaction
-	trx := sqlCtx.GetTransaction()
+	trx := ctx.GetTransaction()
 	if trx != nil {
-		err = dsess.DSessFromSess(sqlCtx.Session).CommitTransaction(sqlCtx, trx)
+		err = dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, trx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return db.GetRoot(sqlCtx)
+	return nil
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider, gcSafepointController *dsess.GCSafepointController) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController)
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *dsess.GCSafepointController) *sql.Context {
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController)
 	if err != nil {
 		panic(err)
 	}
@@ -131,7 +139,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
+	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS, sql.NewBackgroundThreads())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,7 +147,8 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 
 	engine := sqle.NewDefault(pro)
 
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil, gcSafepointController)
+	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }
