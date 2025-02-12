@@ -17,8 +17,9 @@ package tree
 import (
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestNodeCache(t *testing.T) {
