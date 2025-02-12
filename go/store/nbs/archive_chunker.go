@@ -15,9 +15,10 @@
 package nbs
 
 import (
+	"github.com/dolthub/gozstd"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/gozstd"
 )
 
 type ArchiveToChunker struct {
