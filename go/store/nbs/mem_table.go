@@ -175,7 +175,7 @@ func (mt *memTable) get(ctx context.Context, h hash.Hash, keeper keeperF, stats 
 	return c, gcBehavior_Continue, nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	var remaining bool
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]
@@ -183,9 +183,8 @@ func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getR
 			if keeper != nil && keeper(*r.a) {
 				return true, gcBehavior_Block, nil
 			}
-			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
 			reqs[i].found = true
-			found(ctx, &c)
+			found(ctx, memToChunker{h: *r.a, rawChunk: data})
 		} else {
 			remaining = true
 		}
@@ -269,4 +268,33 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 
 func (mt *memTable) close() error {
 	return nil
+}
+
+// memToChunker is a ToChunker that wraps a raw bytes, which haven't been compressed for any storage format.
+type memToChunker struct {
+	h        hash.Hash
+	rawChunk []byte
+}
+
+func (mtc memToChunker) FullCompressedChunkLen() uint32 {
+	// NM4 - This interface is a lie.
+	panic("implement me")
+}
+
+func (mtc memToChunker) IsEmpty() bool {
+	return len(mtc.rawChunk) == 0
+}
+
+func (mtc memToChunker) IsGhost() bool {
+	return false
+}
+
+var _ ToChunker = (*memToChunker)(nil)
+
+func (mtc memToChunker) Hash() hash.Hash {
+	return mtc.h
+}
+
+func (mtc memToChunker) ToChunk() (chunks.Chunk, error) {
+	return chunks.NewChunk(mtc.rawChunk), nil
 }

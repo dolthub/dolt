@@ -227,7 +227,6 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 
 }
 
-// string or hash.Hash?!?!?
 func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
 	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
@@ -926,7 +925,15 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, gcDependencyMode_TakeDependency,
 		func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-			return cr.getMany(ctx, eg, reqs, found, keeper, nbs.stats)
+			wrappedFound := func(ctx context.Context, c ToChunker) {
+				chk, err := c.ToChunk()
+				if err != nil {
+					// Uh oh. NM4.
+					panic("unexpected error converting chunk to chunk")
+				}
+				found(ctx, &chk)
+			}
+			return cr.getMany(ctx, eg, reqs, wrappedFound, keeper, nbs.stats)
 		},
 	)
 }

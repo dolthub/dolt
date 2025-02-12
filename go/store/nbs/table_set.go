@@ -32,7 +32,6 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -197,7 +196,7 @@ func (ts tableSet) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	f := func(css chunkSourceSet) (bool, gcBehavior, error) {
 		for _, haver := range css {
 			remaining, gcb, err := haver.getMany(ctx, eg, reqs, found, keeper, stats)

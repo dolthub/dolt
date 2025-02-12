@@ -274,6 +274,8 @@ func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
 
 	var result []byte
 	if dict == nil {
+		// NM4 - This should never happen in practice. transport protocol requires there be a dictionary for every chunk.
+		// in an archive. Determine if we can remove this.
 		result, err = gozstd.Decompress(nil, data)
 	} else {
 		result, err = gozstd.DecompressDict(nil, data, dict)
@@ -282,6 +284,17 @@ func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
+// If the hash is not found, nil is returnes (no error)
+func (ar archiveReader) getAsToChunker(h hash.Hash) (ToChunker, error) {
+	dict, data, err := ar.getRaw(h)
+	if err != nil || data == nil {
+		return nil, err
+	}
+
+	return ArchiveToChunker{h, dict, data}, nil
 }
 
 func (ar archiveReader) count() uint32 {

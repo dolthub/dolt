@@ -221,7 +221,7 @@ type chunkReader interface {
 
 	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.
-	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
+	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.

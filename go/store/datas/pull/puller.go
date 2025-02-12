@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -385,7 +384,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-			} else if _, ok := cChk.(remotestorage.ArchiveToChunker); ok {
+			} else if _, ok := cChk.(nbs.ArchiveToChunker); ok {
 				// NM4 - Until we can write quickly to archives.....
 				cc := nbs.ChunkToCompressedChunk(chnk)
 

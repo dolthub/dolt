@@ -100,23 +100,23 @@ func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keepe
 	return res, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	// single threaded first pass.
 	foundAll := true
 	for i, req := range reqs {
 		h := *req.a
-		data, err := acs.aRdr.get(h)
+
+		chunker, err := acs.aRdr.getAsToChunker(h)
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
-		if data == nil {
+		if chunker == nil {
 			foundAll = false
 		} else {
 			if keeper != nil && keeper(h) {
 				return true, gcBehavior_Block, nil
 			}
-			chunk := chunks.NewChunk(data)
-			found(ctx, &chunk)
+			found(ctx, chunker)
 			reqs[i].found = true
 		}
 	}
@@ -201,9 +201,8 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getR
 }
 
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk *chunks.Chunk) {
-		// NM4 - UPDATE. this is def wrong.
-		found(ctx, ChunkToCompressedChunk(*chk))
+	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk ToChunker) {
+		found(ctx, chk)
 	}, keeper, stats)
 }
 

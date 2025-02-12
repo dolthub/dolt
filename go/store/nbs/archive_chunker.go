@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package remotestorage
+package nbs
 
 import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/gozstd"
 )
 
@@ -27,7 +26,11 @@ type ArchiveToChunker struct {
 	chunkData  []byte
 }
 
-var _ nbs.ToChunker = (*ArchiveToChunker)(nil)
+var _ ToChunker = (*ArchiveToChunker)(nil)
+
+func NewArchiveToChunker(h hash.Hash, dict *gozstd.DDict, chunkData []byte) ToChunker {
+	return ArchiveToChunker{h: h, dictionary: dict, chunkData: chunkData}
+}
 
 func (a ArchiveToChunker) Hash() hash.Hash {
 	return a.h

@@ -531,7 +531,7 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 				return nbs.CompressedChunk{}, err
 			}
 
-			return ArchiveToChunker{h: h, dictionary: dict, chunkData: buf}, nil
+			return nbs.NewArchiveToChunker(h, dict, buf), nil
 		}
 	}
 }

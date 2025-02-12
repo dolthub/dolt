@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -289,8 +288,8 @@ func TestGetMany(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
-	got := make([]*chunks.Chunk, 0)
-	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, nil, &Stats{})
+	got := make([]ToChunker, 0)
+	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c ToChunker) { got = append(got, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -460,8 +459,8 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
-	got := make([]*chunks.Chunk, 0)
-	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c *chunks.Chunk) { got = append(got, c) }, nil, &Stats{})
+	got := make([]ToChunker, 0)
+	_, _, err = tr.getMany(ctx, eg, getBatch, func(ctx context.Context, c ToChunker) { got = append(got, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
