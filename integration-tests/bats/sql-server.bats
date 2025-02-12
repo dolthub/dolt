@@ -2077,3 +2077,22 @@ EOF
     [[ "$output" =~ "br3  | true" ]] || false
     [[ "$output" =~ "main | false" ]] || false
 }
+
+@test "sql-server: confirm DOLT_FORBID_DB_LOAD_FOR_TEST blocks attempts to load the DB" {
+  export DOLT_FORBID_DB_LOAD_FOR_TEST=1
+  run dolt sql -q "select 1"
+  [ $status -ne 0 ]
+  [[ $output =~ "attempted to load DB, but DOLT_FORBID_DB_LOAD_FOR_TEST environment variable was set" ]] || false
+}
+
+@test "sql-server: confirm DOLT_FORBID_DB_LOAD_FOR_TEST works" {
+  cd repo1
+  start_sql_server
+  run echo $DOLT_FORBID_DB_LOAD_FOR_TEST
+  [ $status -eq 0 ]
+  [[ $output =~ "1" ]] || false
+
+  # Although $DOLT_FORBID_DB_LOAD_FOR_TEST is set, this succeeds because the DB is not loaded.
+  run dolt sql -q "select 1"
+  [ $status -eq 0 ]
+}

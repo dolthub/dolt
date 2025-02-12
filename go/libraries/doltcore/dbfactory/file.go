@@ -41,6 +41,8 @@ func init() {
 
 var chunkJournalFeatureFlag = true
 
+var _, forbidDBLoadForTest = os.LookupEnv("DOLT_FORBID_DB_LOAD_FOR_TEST")
+
 const (
 	// DoltDir defines the directory used to hold the dolt repo data within the filesys
 	DoltDir = ".dolt"
@@ -137,8 +139,13 @@ func (l FileDBLoader) LoadDB(ctx context.Context) (datas.Database, types.ValueRe
 	if s, ok := singletons[l.urlPath]; ok {
 		return s.ddb, s.vrw, s.ns, nil
 	}
+	if forbidDBLoadForTest {
+		// If we simply return an error, Dolt will log it and continue with a nil DB.
+		// Since this can only be hit in testing, it's okay to panic here.
+		panic("attempted to load DB, but DOLT_FORBID_DB_LOAD_FOR_TEST environment variable was set")
+	}
 	var newGenSt *nbs.NomsBlockStore
-	var err error // TODO: Need to take both locks
+	var err error
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if l.useJournal && chunkJournalFeatureFlag {
 		newGenSt, err = nbs.NewLocalJournalingStoreWithLock(ctx, l.lockFile, l.nbf.VersionString(), l.path, q)
