@@ -130,7 +130,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, work.name)
 	if err != nil {
 		c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)
 		return

@@ -154,25 +154,25 @@ func (sc killConnectionsSafepointController) CancelSafepoint() {
 }
 
 type sessionAwareSafepointController struct {
-	controller *dsess.GCSafepointController
-	callCtx    *sql.Context
+	controller  *dsess.GCSafepointController
+	dbname      string
+	callSession *dsess.DoltSession
 
 	waiter *dsess.GCSafepointWaiter
 	keeper func(hash.Hash) bool
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
-	return sess.VisitGCRoots(ctx, sc.callCtx.GetCurrentDatabase(), sc.keeper)
+	return sess.VisitGCRoots(ctx, sc.dbname, sc.keeper)
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
 	sc.keeper = keeper
-	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
-	err := sc.visit(ctx, thisSess)
+	err := sc.visit(ctx, sc.callSession)
 	if err != nil {
 		return err
 	}
-	sc.waiter = sc.controller.Waiter(ctx, thisSess, sc.visit)
+	sc.waiter = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
 	return nil
 }
 
@@ -230,7 +230,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		err := RunDoltGC(ctx, ddb, mode)
+		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase() )
 		if err != nil {
 			return cmdFailure, err
 		}
@@ -239,14 +239,15 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string) error {
 	var sc types.GCSafepointController
 	if UseSessionAwareSafepointController {
 		dSess := dsess.DSessFromSess(ctx.Session)
 		gcSafepointController := dSess.GCSafepointController()
 		sc = &sessionAwareSafepointController{
-			callCtx:    ctx,
-			controller: gcSafepointController,
+			callSession: dSess,
+			dbname:      dbname,
+			controller:  gcSafepointController,
 		}
 	} else {
 		// Legacy safepoint controller behavior was to not
