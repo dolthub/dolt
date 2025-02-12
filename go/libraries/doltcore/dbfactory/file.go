@@ -40,6 +40,8 @@ func init() {
 
 var chunkJournalFeatureFlag = true
 
+var _, forbidDBLoadForTest = os.LookupEnv("DOLT_FORBID_DB_LOAD_FOR_TEST")
+
 const (
 	// DoltDir defines the directory used to hold the dolt repo data within the filesys
 	DoltDir = ".dolt"
@@ -125,6 +127,12 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	if s, ok := singletons[urlObj.Path]; ok {
 		return s.ddb, s.vrw, s.ns, nil
+	}
+
+	if forbidDBLoadForTest {
+		// If we simply return an error, Dolt will log it and continue with a nil DB.
+		// Since this can only be hit in testing, it's okay to panic here.
+		panic("attempted to load DB, but DOLT_FORBID_DB_LOAD_FOR_TEST environment variable was set")
 	}
 
 	path, err := url.PathUnescape(urlObj.Path)
