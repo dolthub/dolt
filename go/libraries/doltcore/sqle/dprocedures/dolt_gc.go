@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -73,10 +74,12 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 // invalidated in such a way that all future queries on it return an error.
 type killConnectionsSafepointController struct {
 	callCtx   *sql.Context
+	doltDB    *doltdb.DoltDB
 	origEpoch int
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	return nil
 }
 
@@ -157,6 +160,7 @@ type sessionAwareSafepointController struct {
 	controller *dsess.GCSafepointController
 	callCtx    *sql.Context
 	origEpoch  int
+	doltDB     *doltdb.DoltDB
 
 	waiter *dsess.GCSafepointWaiter
 	keeper func(hash.Hash) bool
@@ -167,6 +171,7 @@ func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dses
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	sc.keeper = keeper
 	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
 	err := sc.visit(ctx, thisSess)
@@ -256,11 +261,13 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 				origEpoch:  origepoch,
 				callCtx:    ctx,
 				controller: gcSafepointController,
+				doltDB:     ddb,
 			}
 		} else {
 			sc = killConnectionsSafepointController{
 				origEpoch: origepoch,
 				callCtx:   ctx,
+				doltDB:    ddb,
 			}
 		}
 		err = ddb.GC(ctx, mode, sc)

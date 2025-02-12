@@ -51,6 +51,7 @@ type ValueReader interface {
 // package that implements Value writing.
 type ValueWriter interface {
 	WriteValue(ctx context.Context, v Value) (Ref, error)
+	PurgeCaches()
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms
@@ -739,10 +740,6 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 		return chunks.ErrUnsupportedOperation
 	}
 
-	// TODO: The decodedChunks cache can potentially allow phantom reads of
-	// already collected chunks until we clear it...
-	lvs.decodedChunks.Purge()
-
 	if tfs, ok := lvs.cs.(chunks.TableFileStore); ok {
 		return tfs.PruneTableFiles(ctx)
 	}
@@ -807,6 +804,10 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		return nil, err
 	}
 	return finalizer, sweeper.Close(ctx)
+}
+
+func (lvs *ValueStore) PurgeCaches() {
+	lvs.decodedChunks.Purge()
 }
 
 // Close closes the underlying ChunkStore

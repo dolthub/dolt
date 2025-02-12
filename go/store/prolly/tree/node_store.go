@@ -49,6 +49,8 @@ type NodeStore interface {
 
 	BlobBuilder() *BlobBuilder
 	PutBlobBuilder(*BlobBuilder)
+
+	PurgeCaches()
 }
 
 type nodeStore struct {
@@ -193,4 +195,8 @@ func (ns nodeStore) Format() *types.NomsBinFormat {
 		panic(err)
 	}
 	return nbf
+}
+
+func (ns nodeStore) PurgeCaches() {
+	ns.cache.purge()
 }
