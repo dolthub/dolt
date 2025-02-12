@@ -88,7 +88,7 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(tc ToChunker) error {
 
 	c, ok := tc.(CompressedChunk)
 	if !ok {
-		panic("Require a CompressedChunk") // NM4
+		panic("runtime error: Require a CompressedChunk instance")
 	}
 
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)

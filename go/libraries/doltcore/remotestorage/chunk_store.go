@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/dolthub/gozstd"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -487,47 +486,6 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 		}
 	}
 }
-
-type ArchiveToChunker struct {
-	h          hash.Hash
-	dictionary *gozstd.DDict
-	chunkData  []byte
-}
-
-func (a ArchiveToChunker) Hash() hash.Hash {
-	return a.h
-}
-
-func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
-	dict := a.dictionary
-	data := a.chunkData
-	rawChunk, err := gozstd.DecompressDict(nil, data, dict)
-	// NM4 - calculate chunk addr for safety while testing.
-	newChunk := chunks.NewChunk(rawChunk)
-
-	if newChunk.Hash() != a.h {
-		panic("Hash Mismatch!!")
-	}
-
-	return newChunk, err
-}
-
-func (a ArchiveToChunker) FullCompressedChunkLen() uint32 {
-	//TODO Not sure what the right impl for this is.... NM4.
-	return uint32(len(a.chunkData)) // + dictionary???
-}
-
-func (a ArchiveToChunker) IsEmpty() bool {
-	//TODO implement me
-	return len(a.chunkData) == 0
-}
-
-func (a ArchiveToChunker) IsGhost() bool {
-	// archives are never ghosts. They are only instantiated when the chunk is found.
-	return false
-}
-
-var _ nbs.ToChunker = (*ArchiveToChunker)(nil)
 
 type RangeChunkReader struct {
 	Path     string
