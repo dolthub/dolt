@@ -29,13 +29,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
