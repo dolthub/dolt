@@ -76,6 +76,10 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 				}
 
 				dSess := dsess.DSessFromSess(sqlCtx.Session)
+				defer sql.SessionEnd(dSess)
+				sql.SessionCommandBegin(dSess)
+				defer sql.SessionCommandEnd(dSess)
+
 				ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
 				if !ok {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
