@@ -24,6 +24,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/gozstd"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -33,8 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-
-	"github.com/hashicorp/golang-lru/v2"
 )
 
 // A remotestorage.ChunkFetcher is a pipelined chunk fetcher for fetching a

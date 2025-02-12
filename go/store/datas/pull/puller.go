@@ -28,10 +28,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
