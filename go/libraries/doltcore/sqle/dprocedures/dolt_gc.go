@@ -230,7 +230,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase() )
+		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase())
 		if err != nil {
 			return cmdFailure, err
 		}
