@@ -1051,6 +1051,11 @@ func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	// Err if the suffix is an archive file
+	if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
+		return errors.New("cannot write archive file ids currently.")
+	}
+
 	fileIdBytes := hash.Parse(fileId)
 	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, uint64(numChunks), contentHash, getRd)
 	if err != nil {
@@ -1153,7 +1158,12 @@ func (drtf DoltRemoteTableFile) LocationPrefix() string {
 }
 
 func (drtf DoltRemoteTableFile) LocationSuffix() string {
-	panic("implement me LocationSuffix")
+	u, _ := url.Parse(drtf.info.Url)
+	if strings.HasSuffix(u.Path, nbs.ArchiveFileSuffix) {
+		return nbs.ArchiveFileSuffix
+	}
+
+	return ""
 }
 
 // FileID gets the id of the file

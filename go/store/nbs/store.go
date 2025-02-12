@@ -234,8 +234,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	}
 	res := make(map[string]map[hash.Hash]Range, len(hashes))
 	for cs, ranges := range sourcesToRanges {
+		suffix := ""
+		if _, ok := cs.(archiveChunkSource); ok {
+			suffix = ArchiveFileSuffix
+		}
 		h := cs.hash()
-		res[h.String()] = ranges // NOT SURE about this. NM4.
+		res[h.String()+suffix] = ranges
 	}
 	return res, nil
 }
@@ -1662,7 +1666,7 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	tfp, ok := nbs.p.(tableFilePersister)
 	if !ok {
 		return errors.New("Not implemented")
@@ -1673,7 +1677,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		return err
 	}
 	defer r.Close()
-	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
+	return tfp.CopyTableFile(ctx, r, fileName, sz, uint32(numChunks))
 }
 
 // AddTableFilesToManifest adds table files to the manifest
