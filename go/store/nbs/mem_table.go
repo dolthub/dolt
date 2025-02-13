@@ -276,9 +276,7 @@ type memToChunker struct {
 	rawChunk []byte
 }
 
-func (mtc memToChunker) FullCompressedChunkLen() uint32 {
-	panic("runtime error: memToChunker.FullCompressedChunkLen() should never be called")
-}
+var _ ToChunker = (*memToChunker)(nil)
 
 func (mtc memToChunker) IsEmpty() bool {
 	return len(mtc.rawChunk) == 0
@@ -287,8 +285,6 @@ func (mtc memToChunker) IsEmpty() bool {
 func (mtc memToChunker) IsGhost() bool {
 	return false
 }
-
-var _ ToChunker = (*memToChunker)(nil)
 
 func (mtc memToChunker) Hash() hash.Hash {
 	return mtc.h

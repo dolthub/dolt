@@ -51,13 +51,6 @@ func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	return newChunk, err
 }
 
-func (a ArchiveToChunker) FullCompressedChunkLen() uint32 {
-	// The raw dictionary is not carried through to this point, so we don't know what the length is. That said,
-	// it's not correct to include the dictionary length since that would be repeated over and over in the
-	// byte count when it should only be counted once.
-	return uint32(len(a.chunkData)) // + uint32(len(a.dictionary))
-}
-
 func (a ArchiveToChunker) IsEmpty() bool {
 	return len(a.chunkData) == 0
 }

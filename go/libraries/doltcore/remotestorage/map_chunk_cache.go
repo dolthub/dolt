@@ -21,6 +21,11 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
+const (
+	// averageChunkSize is used to estimate the size of chunk for purposes of avoiding excessive memory usage
+	averageChunkSize = 1 << 12
+)
+
 // mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.
 type mapChunkCache struct {
 	mu          *sync.Mutex
@@ -48,8 +53,8 @@ func NewMapChunkCacheWithMaxCapacity(maxCapacity int64) *mapChunkCache {
 	}
 }
 
-// Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []nbs.ToChunker) bool {
+// Put puts a slice of chunks into the cache. Returns an error if the cache capacity has been exceeded.
+func (mcc *mapChunkCache) Put(chnks []nbs.ToChunker) error {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -63,8 +68,8 @@ func (mcc *mapChunkCache) Put(chnks []nbs.ToChunker) bool {
 			}
 		}
 
-		if mcc.cm.CapacityExceeded(int(c.FullCompressedChunkLen())) {
-			return true
+		if mcc.cm.CapacityExceeded(averageChunkSize) {
+			return ErrCacheCapacityExceeded
 		}
 
 		mcc.hashToChunk[h] = c
@@ -74,7 +79,7 @@ func (mcc *mapChunkCache) Put(chnks []nbs.ToChunker) bool {
 		}
 	}
 
-	return false
+	return nil
 }
 
 // Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
@@ -112,20 +117,20 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return absent
 }
 
-func (mcc *mapChunkCache) PutChunk(ch nbs.ToChunker) bool {
+func (mcc *mapChunkCache) PutChunk(ch nbs.ToChunker) error {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
 	h := ch.Hash()
 	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
-		if mcc.cm.CapacityExceeded(int(ch.FullCompressedChunkLen())) {
-			return true
+		if mcc.cm.CapacityExceeded(averageChunkSize) {
+			return ErrCacheCapacityExceeded
 		}
 		mcc.hashToChunk[h] = ch
 		mcc.toFlush[h] = ch
 	}
 
-	return false
+	return nil
 }
 
 // GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache

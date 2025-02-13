@@ -633,8 +633,8 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash
 			}
 			// Don't forward on empty/not found chunks.
 			if !cc.IsEmpty() {
-				if dcs.cache.PutChunk(cc) {
-					return ErrCacheCapacityExceeded
+				if err := dcs.cache.PutChunk(cc); err != nil {
+					return err
 				}
 				found(egCtx, cc)
 			}
@@ -731,8 +731,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	}
 
 	if len(found) > 0 {
-		if dcs.cache.Put(found) {
-			return hash.HashSet{}, ErrCacheCapacityExceeded
+		if err := dcs.cache.Put(found); err != nil {
+			return hash.HashSet{}, err
 		}
 	}
 
@@ -767,8 +767,8 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	}
 
 	cc := nbs.ChunkToCompressedChunk(c)
-	if dcs.cache.Put([]nbs.ToChunker{cc}) {
-		return ErrCacheCapacityExceeded
+	if err := dcs.cache.Put([]nbs.ToChunker{cc}); err != nil {
+		return err
 	}
 	return nil
 }

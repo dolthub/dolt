@@ -21,8 +21,8 @@ import (
 
 // ChunkCache is an interface used for caching chunks
 type ChunkCache interface {
-	// Put puts a slice of chunks into the cache.
-	Put(c []nbs.ToChunker) bool
+	// Put puts a slice of chunks into the cache. Error returned if the cache capacity has been exceeded.
+	Put(c []nbs.ToChunker) error
 
 	// Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
 	// is put in it's place
@@ -31,9 +31,8 @@ type ChunkCache interface {
 	// Has takes a set of hashes and returns the set of hashes that the cache currently does not have in it.
 	Has(h hash.HashSet) (absent hash.HashSet)
 
-	// PutChunk puts a single chunk in the cache.  true returns in the event that the chunk was cached successfully
-	// and false is returned if that chunk is already is the cache.
-	PutChunk(chunk nbs.ToChunker) bool
+	// PutChunk puts a single chunk in the cache. Returns an error if the cache capacity has been exceeded.
+	PutChunk(chunk nbs.ToChunker) error
 
 	// GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
 	// between the last time GetAndClearChunksToFlush was called and now.

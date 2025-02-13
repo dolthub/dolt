@@ -41,7 +41,6 @@ const maxReadSize = 128 * 1024 * 1024
 type ToChunker interface {
 	Hash() hash.Hash
 	ToChunk() (chunks.Chunk, error)
-	FullCompressedChunkLen() uint32
 	IsEmpty() bool
 	IsGhost() bool
 }
@@ -122,10 +121,6 @@ func (cmp CompressedChunk) IsGhost() bool {
 // CompressedSize returns the size of this CompressedChunk.
 func (cmp CompressedChunk) CompressedSize() int {
 	return len(cmp.CompressedData)
-}
-
-func (cmp CompressedChunk) FullCompressedChunkLen() uint32 {
-	return uint32(len(cmp.FullCompressedChunk))
 }
 
 var EmptyCompressedChunk CompressedChunk

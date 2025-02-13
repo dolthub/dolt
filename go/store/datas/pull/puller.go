@@ -359,17 +359,19 @@ func (p *Puller) Pull(ctx context.Context) error {
 			if cChk.IsGhost() {
 				return fmt.Errorf("attempted to push or pull ghost chunk: %w", nbs.ErrGhostChunkRequested)
 			}
-			if cChk.FullCompressedChunkLen() == 0 {
+			if cChk.IsEmpty() {
 				return errors.New("failed to get all chunks.")
 			}
 
-			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(cChk.FullCompressedChunkLen()))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
 
 			chnk, err := cChk.ToChunk()
 			if err != nil {
 				return err
 			}
+
+			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(chnk.Data())))
+
 			err = p.waf(chnk, func(h hash.Hash, _ bool) error {
 				tracker.Seen(h)
 				return nil
