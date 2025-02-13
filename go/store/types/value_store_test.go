@@ -223,7 +223,6 @@ type purgingSafepointController struct {
 
 var _ (GCSafepointController) = purgingSafepointController{}
 
-
 func (c purgingSafepointController) BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error {
 	c.vs.PurgeCaches()
 	return nil
@@ -233,7 +232,7 @@ func (c purgingSafepointController) EstablishPreFinalizeSafepoint(context.Contex
 	return nil
 }
 
-func (c purgingSafepointController) EstablishPostFinalizeSafepoint(context.Context) error{
+func (c purgingSafepointController) EstablishPostFinalizeSafepoint(context.Context) error {
 	return nil
 }
 
