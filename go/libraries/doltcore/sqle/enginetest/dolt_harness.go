@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -36,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -46,7 +46,7 @@ import (
 type DoltHarness struct {
 	t                     *testing.T
 	provider              dsess.DoltDatabaseProvider
-	statsPro              sql.StatsProvider
+	statsPro              *statspro.StatsCoord
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
 	branchControl         *branch_control.Controller
@@ -246,12 +246,19 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		d.gcSafepointController = dsess.NewGCSafepointController()
 
-		statsProv := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
-		d.statsPro = statsProv
-
 		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
 		require.NoError(t, err)
+
+		sqlCtx := enginetest.NewContext(d)
+		bThreads := sql.NewBackgroundThreads()
+
+		ctxGen := func(ctx context.Context) (*sql.Context, error) {
+			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
+		}
+		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))
+		d.statsPro = statsPro
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
 		if err != nil {
@@ -260,8 +267,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 		d.engine = e
 
-		sqlCtx := enginetest.NewContext(d)
 		databases := pro.AllDatabases(sqlCtx)
+
 		d.setupDbs = make(map[string]struct{})
 		var dbs []string
 		for _, db := range databases {
@@ -281,23 +288,21 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			require.NoError(t, err)
 		}
 
+		e = e.WithBackgroundThreads(bThreads)
+
 		if d.configureStats {
-			bThreads := sql.NewBackgroundThreads()
-			e = e.WithBackgroundThreads(bThreads)
-
-			dSess := dsess.DSessFromSess(sqlCtx.Session)
-			dbCache := dSess.DatabaseCache(sqlCtx)
-
-			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
-			for i, dbName := range dbs {
-				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
+			var dsessDbs []dsess.SqlDatabase
+			for _, db := range databases {
+				if sqlDb, ok := db.(dsess.SqlDatabase); ok {
+					dsessDbs = append(dsessDbs, sqlDb)
+				}
+			}
+			if err := statsPro.Init(ctx, dsessDbs, false); err != nil {
+				return nil, err
 			}
 
-			ctxFact := func(context.Context) (*sql.Context, error) {
-				sess := d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
-				return sql.NewContext(context.Background(), sql.WithSession(sess)), nil
-			}
-			if err = statsProv.Configure(sqlCtx, ctxFact, bThreads, dsessDbs); err != nil {
+			err = statsPro.Restart(ctx)
+			if err != nil {
 				return nil, err
 			}
 
@@ -309,13 +314,20 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	}
 
 	// Reset the mysql DB table to a clean state for this new engine
+	ctx := enginetest.NewContext(d)
+
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
-	var err error
-	sqlCtx := enginetest.NewContext(d)
-	e, err := enginetest.RunSetupScripts(sqlCtx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	ctxGen := func(ctx context.Context) (*sql.Context, error) {
+		return d.NewContext(), nil
+	}
+	bThreads := sql.NewBackgroundThreads()
+	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+	require.NoError(t, statsPro.Restart(ctx))
+	d.engine.Analyzer.Catalog.StatsProvider = statsPro
+
+	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
@@ -430,7 +442,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
-	d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
@@ -502,7 +513,10 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 
 func (d *DoltHarness) Close() {
 	d.closeProvider()
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, int8(0))
+	if d.statsPro != nil {
+		d.statsPro.Close()
+	}
+	sql.SystemVariables.SetGlobal(dsess.DoltStatsEnabled, int8(0))
 }
 
 func (d *DoltHarness) closeProvider() {

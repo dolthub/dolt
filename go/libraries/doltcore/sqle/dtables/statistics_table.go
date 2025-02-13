@@ -68,7 +68,7 @@ func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 type BranchStatsProvider interface {
-	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]sql.Statistic, error)
+	GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error)
 }
 
 // RowCount implements sql.StatisticsTable
@@ -119,14 +119,19 @@ func (st *StatisticsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (st *StatisticsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	statsPro := dSess.StatsProvider().(BranchStatsProvider)
+	statsPro, ok := dSess.StatsProvider().(BranchStatsProvider)
+	if !ok {
+		return sql.RowsToRowIter(), nil
+	}
 	var dStats []sql.Statistic
 	for _, table := range st.tableNames {
 		dbStats, err := statsPro.GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
 			return nil, err
 		}
-		dStats = append(dStats, dbStats...)
+		for _, s := range dbStats {
+			dStats = append(dStats, s)
+		}
 	}
 	return stats.NewStatsIter(ctx, dStats...)
 }

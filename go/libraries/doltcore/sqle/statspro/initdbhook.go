@@ -15,10 +15,6 @@
 package statspro
 
 import (
-	"context"
-	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -26,67 +22,35 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func NewStatsInitDatabaseHook(
-	statsProv *Provider,
-	ctxFactory func(ctx context.Context) (*sql.Context, error),
-	bThreads *sql.BackgroundThreads,
-) sqle.InitDatabaseHook {
+func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
 	return func(
 		ctx *sql.Context,
-		pro *sqle.DoltDatabaseProvider,
+		_ *sqle.DoltDatabaseProvider,
 		name string,
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
-		dbName := strings.ToLower(db.Name())
-		if statsDb, ok := statsProv.getStatDb(dbName); !ok {
-			statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
-			if err != nil {
-				ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
-				return nil
-			}
-			statsProv.setStatDb(dbName, statsDb)
-		} else {
-			dSess := dsess.DSessFromSess(ctx.Session)
-			for _, br := range statsDb.Branches() {
-				branchQDbName := BranchQualifiedDatabase(dbName, br)
-				sqlDb, err := dSess.Provider().Database(ctx, branchQDbName)
-				if err != nil {
-					ctx.GetLogger().Logger.Errorf("branch not found: %s", br)
-					continue
-				}
-				branchQDb, ok := sqlDb.(dsess.SqlDatabase)
-				if !ok {
-					return fmt.Errorf("branch/database not found: %s", branchQDbName)
-				}
+		head := denv.RepoState.Head
 
-				if ok, err := statsDb.SchemaChange(ctx, br, branchQDb); err != nil {
-					return err
-				} else if ok {
-					if err := statsDb.DeleteBranchStats(ctx, br, true); err != nil {
-						return err
-					}
-				}
-			}
-			ctx.GetLogger().Debugf("statistics init error: preexisting stats db: %s", dbName)
+		sqlDb, ok := db.(sqle.Database)
+		if !ok {
+			sc.logger.Debugf("stats initialize db failed, expected *sqle.Database, found %T", db)
+			return nil
 		}
-		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
-		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
+
+		// call should only fail if backpressure in secondary queue
+		_, err := sc.Add(ctx, sqlDb, head.Ref, denv.FS, false)
+		if err != nil {
+			sc.logger.Debugf("cannot initialize db stats for %s; queue is closed", sqlDb.AliasedName())
+		}
+		return nil
 	}
 }
 
-func NewStatsDropDatabaseHook(statsProv *Provider) sqle.DropDatabaseHook {
+func NewDropDatabaseHook(sc *StatsCoord) sqle.DropDatabaseHook {
 	return func(ctx *sql.Context, name string) {
-		statsProv.CancelRefreshThread(name)
-		if err := statsProv.DropDbStats(ctx, name, false); err != nil {
+		if err := sc.DropDbStats(ctx, name, false); err != nil {
 			ctx.GetLogger().Debugf("failed to close stats database: %s", err)
-		}
-
-		if db, ok := statsProv.getStatDb(name); ok {
-			if err := db.Close(); err != nil {
-				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
-			}
-			delete(statsProv.statDbs, name)
 		}
 	}
 }

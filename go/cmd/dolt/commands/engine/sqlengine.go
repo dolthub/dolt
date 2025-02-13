@@ -16,10 +16,10 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
@@ -43,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -189,7 +188,13 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
+	var statsPro sql.StatsProvider
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(int8) == 1 {
+		statsPro = statspro.NewStatsCoord(pro, sqlEngine.NewDefaultContext, logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		statsPro = statspro.StatsNoop{}
+	}
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
@@ -206,8 +211,28 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
-		fmt.Fprintln(cli.CliErr, err)
+	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
+		//sc.Debug = true
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+		_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
+
+		jobInterval, _, _ := typ.GetType().Convert(jobI)
+		gcInterval, _, _ := typ.GetType().Convert(gcI)
+		brInterval, _, _ := typ.GetType().Convert(brI)
+
+		sc.SetTimers(
+			jobInterval.(int64)*int64(time.Millisecond),
+			gcInterval.(int64)*int64(time.Millisecond),
+			brInterval.(int64)*int64(time.Millisecond))
+
+		err := sc.Init(ctx, dbs, false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Load MySQL Db information

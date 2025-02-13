@@ -141,6 +141,11 @@ func GetChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, m Static
 // GetHistogramLevel returns the highest internal level of the tree that has
 // more than |low| addresses.
 func GetHistogramLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, m StaticMap[K, V, O], low int) ([]Node, error) {
+	if cnt, err := m.Count(); err != nil {
+		return nil, err
+	} else if cnt == 0 {
+		return nil, nil
+	}
 	currentLevel := []Node{m.Root}
 	level := m.Root.Level()
 	for len(currentLevel) < low && level > 0 {

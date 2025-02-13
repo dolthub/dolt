@@ -268,7 +268,6 @@ func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
 	}
 
 	defer harness.Close()
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 0)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
@@ -1165,21 +1164,6 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	return e
 }
 
-func RunStatsFunctionsTest(t *testing.T, harness DoltEnginetestHarness) {
-	defer harness.Close()
-	for _, test := range StatProcTests {
-		t.Run(test.Name, func(t *testing.T) {
-			// reset engine so provider statistics are clean
-			harness = harness.NewHarness(t).WithConfigureStats(true)
-			harness.Setup(setup.MydbData)
-			harness.SkipSetupCommit()
-			e := mustNewEngine(t, harness)
-			defer e.Close()
-			enginetest.TestScriptWithEngine(t, e, harness, test)
-		})
-	}
-}
-
 func RunDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -1562,27 +1546,12 @@ func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
-			defer h.Close()
 			e := mustNewEngine(t, h)
 			if enginetest.IsServerEngine(e) {
 				return
 			}
 			defer e.Close()
-			TestProviderReloadScriptWithEngine(t, e, h, script)
-		}()
-	}
-}
-
-func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
-		func() {
-			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
-			e := mustNewEngine(t, h)
-			if enginetest.IsServerEngine(e) {
-				return
-			}
-			defer e.Close()
 			enginetest.TestScriptWithEngine(t, e, h, script)
 		}()
 	}

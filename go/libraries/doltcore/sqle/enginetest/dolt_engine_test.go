@@ -34,6 +34,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -1452,11 +1453,6 @@ func TestStatBranchTests(t *testing.T) {
 	RunStatBranchTests(t, harness)
 }
 
-func TestStatsFunctions(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunStatsFunctionsTest(t, harness)
-}
-
 func TestDiffTableFunction(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDiffTableFunctionTests(t, harness)
@@ -1661,11 +1657,6 @@ func TestStatsHistograms(t *testing.T) {
 func TestStatsStorage(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunStatsStorageTests(t, h)
-}
-
-func TestStatsIOWithoutReload(t *testing.T) {
-	h := newDoltEnginetestHarness(t)
-	RunStatsIOTestsWithoutReload(t, h)
 }
 
 func TestJoinStats(t *testing.T) {
@@ -1953,22 +1944,23 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 
 	// Setting an interval of 0 and a threshold of 0 will result
 	// in the stats being updated after every operation
-	intervalSec := time.Duration(0)
-	thresholdf64 := 0.
-	bThreads := sql.NewBackgroundThreads()
-	branches := []string{"main"}
-	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.Provider)
+	//intervalSec := time.Duration(0)
+	//thresholdf64 := 0.
+	//bThreads := sql.NewBackgroundThreads()
+	//branches := []string{"main"}
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsCoord)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
 	refreshCtx := enginetest.NewSession(harness)
-	newCtx := func(context.Context) (*sql.Context, error) {
-		return refreshCtx, nil
-	}
 
-	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
+	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)
+
+	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), fs, false)
+	require.NoError(t, err)
+	<-done
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
 		_, iter, _, err := engine.Query(ctx, q)
