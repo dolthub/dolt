@@ -371,17 +371,17 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
-// GetRange is structurally the same as remotesapi.HttpGetRange, but with added functions. Instances of GetRange
-// don't get sent over the wire, so it is not necessary to use the remotesapi, just convenient.
+// GetRange is structurally similar to remotesapi.HttpGetRange, but
+// with added functions.
 type GetRange struct {
-	Url string
+	Url    string
 	Ranges []*Range
 }
 
 type Range struct {
-	Hash []byte
-	Offset uint64
-	Length uint32
+	Hash    []byte
+	Offset  uint64
+	Length  uint32
 	GetDict func() (any, error)
 }
 
@@ -448,7 +448,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte) error, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte, *Range) error, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -483,16 +483,16 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			RespHeadersTimeout: params.RespHeadersTimeout,
 		})
 		defer resp.Close()
-		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
+		reader := &RangeReader{GetRange: gr, Reader: resp.Body}
 		for {
-			cc, err := reader.ReadChunk(stats, health)
+			bs, rang, err := reader.ReadNextRange()
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			if err != nil {
 				return err
 			}
-			err = resCb(ctx, cc)
+			err = resCb(ctx, bs, rang)
 			if err != nil {
 				return err
 			}
@@ -500,18 +500,23 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 	}
 }
 
-type RangeChunkReader struct {
+type RangeReader struct {
 	GetRange *GetRange
 	Reader   io.Reader
-	i        int
-	skip     int
+	// The range we currently reading.
+	i int
+	// The |skip|, from the last range we read
+	// to the current range, which we need to
+	// exexcute before on the next call to
+	// |ReadNextRange|
+	skip int
 }
 
-func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.HealthRecorder) ([]byte, error) {
+func (r *RangeReader) ReadNextRange() ([]byte, *Range, error) {
 	if r.skip > 0 {
 		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		r.skip = 0
 	}
@@ -520,9 +525,12 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 	r.i += 1
 
 	if idx >= len(r.GetRange.Ranges) {
-		return nil, io.EOF
+		return nil, nil, io.EOF
 	}
 	if idx < len(r.GetRange.Ranges)-1 {
+		// If this isn't the last range, calculate and
+		// store the skip that will be necessary after
+		// we read this range.
 		r.skip = int(r.GetRange.GapBetween(idx, idx+1))
 	}
 
@@ -532,9 +540,9 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 	buf := make([]byte, l)
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return buf, nil
+	return buf, rang, nil
 }
 
 type locationRefresh struct {
