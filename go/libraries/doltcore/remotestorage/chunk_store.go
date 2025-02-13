@@ -46,7 +46,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var ErrCacheCapacityExceeded = errors.New("too much data: the cache capacity has been reached")
+var ErrWriteBufferCapacityExceeded = errors.New("too much data: the write buffer capacity has been reached")
 
 var ErrUploadFailed = errors.New("upload failed")
 
@@ -123,6 +123,7 @@ type DoltChunkStore struct {
 	root        hash.Hash
 	csClient    remotesapi.ChunkStoreServiceClient
 	finalizer   func() error
+	wb          WriteBuffer
 	cache       ChunkCache
 	metadata    *remotesapi.GetRepoMetadataResponse
 	nbf         *types.NomsBinFormat
@@ -172,6 +173,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		csClient:    csClient,
 		finalizer:   func() error { return nil },
 		cache:       newMapChunkCache(),
+		wb:          newMapWriteBuffer(),
 		metadata:    metadata,
 		nbf:         nbf,
 		httpFetcher: globalHttpFetcher,
@@ -185,60 +187,40 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 	return cs, nil
 }
 
+func (dcs *DoltChunkStore) clone() *DoltChunkStore {
+	ret := *dcs
+	ret.repoToken = new(atomic.Value)
+	return &ret
+}
+
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{
-		repoId:      dcs.repoId,
-		repoPath:    dcs.repoPath,
-		repoToken:   new(atomic.Value),
-		host:        dcs.host,
-		root:        dcs.root,
-		csClient:    dcs.csClient,
-		finalizer:   dcs.finalizer,
-		cache:       dcs.cache,
-		metadata:    dcs.metadata,
-		nbf:         dcs.nbf,
-		httpFetcher: fetcher,
-		params:      dcs.params,
-		stats:       dcs.stats,
-	}
+	ret := dcs.clone()
+	ret.httpFetcher = fetcher
+	return ret
+}
+
+func (dcs *DoltChunkStore) WithNoopWriteBuffer() *DoltChunkStore {
+	ret := dcs.clone()
+	ret.wb = noopWriteBuffer{}
+	return ret
+}
+
+func (dcs *DoltChunkStore) WithWriteBuffer(wb WriteBuffer) *DoltChunkStore {
+	ret := dcs.clone()
+	ret.wb = wb
+	return ret
 }
 
 func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
-	return &DoltChunkStore{
-		repoId:      dcs.repoId,
-		repoPath:    dcs.repoPath,
-		repoToken:   new(atomic.Value),
-		host:        dcs.host,
-		root:        dcs.root,
-		csClient:    dcs.csClient,
-		finalizer:   dcs.finalizer,
-		cache:       noopChunkCache,
-		metadata:    dcs.metadata,
-		nbf:         dcs.nbf,
-		httpFetcher: dcs.httpFetcher,
-		params:      dcs.params,
-		stats:       dcs.stats,
-		logger:      dcs.logger,
-	}
+	ret := dcs.clone()
+	ret.cache = noopChunkCache
+	return ret
 }
 
 func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
-	return &DoltChunkStore{
-		repoId:      dcs.repoId,
-		repoPath:    dcs.repoPath,
-		repoToken:   new(atomic.Value),
-		host:        dcs.host,
-		root:        dcs.root,
-		csClient:    dcs.csClient,
-		finalizer:   dcs.finalizer,
-		cache:       cache,
-		metadata:    dcs.metadata,
-		nbf:         dcs.nbf,
-		httpFetcher: dcs.httpFetcher,
-		params:      dcs.params,
-		stats:       dcs.stats,
-		logger:      dcs.logger,
-	}
+	ret := dcs.clone()
+	ret.cache = cache
+	return ret
 }
 
 func (dcs *DoltChunkStore) WithNetworkRequestParams(params NetworkRequestParams) *DoltChunkStore {
@@ -344,7 +326,8 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	ctx, span := tracer.Start(ctx, "remotestorage.GetManyCompressed")
 	defer span.End()
 
-	hashToChunk := dcs.cache.Get(hashes)
+	hashToChunk := dcs.cache.GetCachedChunks(hashes)
+	dcs.wb.AddPendingChunks(hashes, hashToChunk)
 
 	span.SetAttributes(attribute.Int("num_hashes", len(hashes)), attribute.Int("cache_hits", len(hashToChunk)))
 	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
@@ -604,9 +587,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash
 			}
 			// Don't forward on empty/not found chunks.
 			if len(cc.CompressedData) > 0 {
-				if dcs.cache.PutChunk(cc) {
-					return ErrCacheCapacityExceeded
-				}
+				dcs.cache.InsertChunks([]nbs.CompressedChunk{cc})
 				found(egCtx, cc)
 			}
 		}
@@ -634,8 +615,8 @@ const maxHasManyBatchSize = 16 * 1024
 // absent from the store.
 func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	// get the set of hashes that isn't already in the cache
-	notCached := dcs.cache.Has(hashes)
-
+	notCached := dcs.cache.GetCachedHas(hashes)
+	dcs.wb.RemovePresentChunks(notCached)
 	if len(notCached) == 0 {
 		return notCached, nil
 	}
@@ -644,7 +625,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []nbs.CompressedChunk
+	found := make(hash.HashSet)
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -685,8 +666,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 				absent[currHash] = struct{}{}
 				j++
 			} else {
-				c := nbs.ChunkToCompressedChunk(chunks.NewChunkWithHash(currHash, []byte{}))
-				found = append(found, c)
+				found.Insert(currHash)
 			}
 		}
 
@@ -702,9 +682,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	}
 
 	if len(found) > 0 {
-		if dcs.cache.Put(found) {
-			return hash.HashSet{}, ErrCacheCapacityExceeded
-		}
+		dcs.cache.InsertHas(found)
 	}
 
 	return absent, nil
@@ -738,8 +716,9 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	}
 
 	cc := nbs.ChunkToCompressedChunk(c)
-	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
-		return ErrCacheCapacityExceeded
+	err = dcs.wb.Put(cc)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -884,7 +863,7 @@ func (dcs *DoltChunkStore) Close() error {
 
 // getting this working using the simplest approach first
 func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int, error) {
-	hashToChunk := dcs.cache.GetAndClearChunksToFlush()
+	hashToChunk := dcs.wb.GetAllAndClear()
 
 	if len(hashToChunk) == 0 {
 		return map[hash.Hash]int{}, nil

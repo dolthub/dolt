@@ -19,23 +19,21 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-// ChunkCache is an interface used for caching chunks
+// ChunkCache is an interface used for caching chunks and has presence that
+// has already been fetched from remotestorage. Care should be taken when
+// using ChunkCache if it is possible for the remote to GC, since in that
+// case the cache could contain stale data.
 type ChunkCache interface {
-	// Put puts a slice of chunks into the cache.
-	Put(c []nbs.CompressedChunk) bool
+	// Insert some observed / fetched chunks into the cached. These
+	// chunks may or may not be returned in the future.
+	InsertChunks(cs []nbs.CompressedChunk)
+	// Get previously cached chunks, if they are still available.
+	GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.CompressedChunk
 
-	// Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
-	// is put in it's place
-	Get(h hash.HashSet) map[hash.Hash]nbs.CompressedChunk
-
-	// Has takes a set of hashes and returns the set of hashes that the cache currently does not have in it.
-	Has(h hash.HashSet) (absent hash.HashSet)
-
-	// PutChunk puts a single chunk in the cache.  true returns in the event that the chunk was cached successfully
-	// and false is returned if that chunk is already is the cache.
-	PutChunk(chunk nbs.CompressedChunk) bool
-
-	// GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
-	// between the last time GetAndClearChunksToFlush was called and now.
-	GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk
+	// Insert all hashes in |h| as existing in the remote.
+	InsertHas(h hash.HashSet)
+	// Returns the absent set from |h|, filtering it by records
+	// which are known to be present in the remote based on
+	// previous |InsertHas| calls.
+	GetCachedHas(h hash.HashSet) (absent hash.HashSet)
 }

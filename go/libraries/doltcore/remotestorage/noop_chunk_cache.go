@@ -20,31 +20,22 @@ import (
 )
 
 // noopChunkCache is a ChunkCache implementation that stores nothing
-// ever.  Using a noopChunkCache with a remotestore.DoltChunkStore
-// will cause the DoltChunkStore to behave incorrectly when _writing_
-// dolt repositories; this should only be used for read-only use
-// cases.
+// ever. This causes all fetches to go to the remote server.
 var noopChunkCache = &noopChunkCacheImpl{}
 
 type noopChunkCacheImpl struct {
 }
 
-func (*noopChunkCacheImpl) Put(chnks []nbs.CompressedChunk) bool {
-	return false
+func (*noopChunkCacheImpl) InsertChunks(cs []nbs.CompressedChunk) {
 }
 
-func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
-	return make(map[hash.Hash]nbs.CompressedChunk)
+func (*noopChunkCacheImpl) GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
+	return nil
 }
 
-func (*noopChunkCacheImpl) Has(hashes hash.HashSet) (absent hash.HashSet) {
-	return hashes
+func (*noopChunkCacheImpl) InsertHas(h hash.HashSet) {
 }
 
-func (*noopChunkCacheImpl) PutChunk(ch nbs.CompressedChunk) bool {
-	return false
-}
-
-func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
-	panic("noopChunkCache does not support GetAndClearChunksToFlush().")
+func (*noopChunkCacheImpl) GetCachedHas(h hash.HashSet) (absent hash.HashSet) {
+	return h
 }
