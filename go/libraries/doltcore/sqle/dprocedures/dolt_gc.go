@@ -130,23 +130,24 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	params := backoff.NewExponentialBackOff()
 	params.InitialInterval = 1 * time.Millisecond
 	params.MaxInterval = 25 * time.Millisecond
-	params.MaxElapsedTime = 3 * time.Second
+	params.MaxElapsedTime = 10 * time.Second
+	var unkilled map[uint32]struct{}
 	err = backoff.Retry(func() error {
+		unkilled = make(map[uint32]struct{})
 		processes := sc.callCtx.ProcessList.Processes()
-		allgood := true
 		for _, p := range processes {
 			if _, ok := killed[p.Connection]; ok {
-				allgood = false
+				unkilled[p.Connection] = struct{}{}
 				sc.callCtx.ProcessList.Kill(p.Connection)
 			}
 		}
-		if !allgood {
-			return errors.New("unable to establish safepoint.")
+		if len(unkilled) > 0 {
+			return errors.New("could not establish safepont")
 		}
 		return nil
 	}, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
 	sc.callCtx.Session.SetTransaction(nil)
 	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
