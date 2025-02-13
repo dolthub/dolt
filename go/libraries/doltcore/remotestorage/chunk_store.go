@@ -379,10 +379,11 @@ type GetRange struct {
 }
 
 type Range struct {
-	Hash    []byte
-	Offset  uint64
-	Length  uint32
-	GetDict func() (any, error)
+	Hash       []byte
+	Offset     uint64
+	Length     uint32
+	DictOffset uint64
+	DictLength uint32
 }
 
 func ResourcePath(urlS string) string {

@@ -35,12 +35,13 @@ import (
 // some state which allows them to fetch those dictionaries from a shared
 // chache when they need them. That is their GetDict callback.
 type GetRange struct {
-	Url     string
-	Hash    []byte
-	Offset  uint64
-	Length  uint32
-	GetDict func() (any, error)
-	Region  *Region
+	Url        string
+	Hash       []byte
+	Offset     uint64
+	Length     uint32
+	DictOffset uint64
+	DictLength uint32
+	Region     *Region
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
@@ -153,13 +154,14 @@ func (t *Tree) Len() int {
 	return t.t.Len()
 }
 
-func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, getDict func() (any, error)) {
+func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dictOffset uint64, dictLength uint32) {
 	ins := &GetRange{
-		Url:     t.intern(url),
-		Hash:    hash,
-		Offset:  offset,
-		Length:  length,
-		GetDict: getDict,
+		Url:        t.intern(url),
+		Hash:       hash,
+		Offset:     offset,
+		Length:     length,
+		DictOffset: dictOffset,
+		DictLength: dictLength,
 	}
 	t.t.ReplaceOrInsert(ins)
 

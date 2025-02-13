@@ -349,7 +349,7 @@ type fetchResp struct {
 }
 
 type fetchReq struct {
-	respCh   chan fetchResp
+	respCh chan fetchResp
 }
 
 // A simple structure to keep track of *GetRange requests along with
@@ -363,11 +363,11 @@ type downloads struct {
 	// (or concurrently with) any chunkRanges, since the chunk
 	// range fetches will block the fetching thread on the
 	// population of the dictionary cache entry.
-	dictRanges  *ranges.Tree
+	dictRanges *ranges.Tree
 	// Holds all pending and fetched dictionaries for any chunk
 	// ranges that have gone into |chunkRanges|.
-	dictCache   *dictionaryCache
-	refreshes   map[string]*locationRefresh
+	dictCache *dictionaryCache
+	refreshes map[string]*locationRefresh
 }
 
 func newDownloads() downloads {
@@ -390,15 +390,13 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		d.refreshes[path] = refresh
 	}
 	for _, r := range hgr.Ranges {
-		var getDict func() (any, error)
 		if r.DictionaryLength != 0 {
-			var first bool
-			getDict, first = d.dictCache.get(path, r.DictionaryOffset, r.DictionaryLength)
-			if first {
-				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, nil)
+			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
+			if !has {
+				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
 			}
 		}
-		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, getDict)
+		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
 	}
 }
 
@@ -407,10 +405,11 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 	for _, r := range rs {
 		ret.Url = r.Url
 		ret.Ranges = append(ret.Ranges, &Range{
-			Hash:    r.Hash,
-			Offset:  r.Offset,
-			Length:  r.Length,
-			GetDict: r.GetDict,
+			Hash:       r.Hash,
+			Offset:     r.Offset,
+			Length:     r.Length,
+			DictOffset: r.DictOffset,
+			DictLength: r.DictLength,
 		})
 	}
 	return ret
@@ -575,12 +574,13 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func deliverChunkCallback(chunkCh chan nbs.ToChunker) func(context.Context, []byte, *Range) error {
+func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *dictionaryCache) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
 		h := hash.New(rang.Hash[:])
 		var cc nbs.ToChunker
-		if rang.GetDict != nil {
-			dictRes, err := rang.GetDict()
+		if rang.DictLength != 0 {
+			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
+			dictRes, err := payload.Get()
 			if err != nil {
 				return err
 			}
@@ -608,7 +608,8 @@ func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context
 		if err == nil {
 			ddict, err = gozstd.NewDDict(decompressed)
 		}
-		dictCache.set(path, rang.Offset, rang.Length, ddict, err)
+		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
+		payload.Set(ddict, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
 		// For now, the record in the cache will be terminally failed and is never removed.
 		return err
@@ -630,7 +631,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 			case fetchResp := <-respCh:
 				var cb func(context.Context, []byte, *Range) error
 				if fetchResp.rangeType == rangeType_Chunk {
-					cb = deliverChunkCallback(chunkCh)
+					cb = deliverChunkCallback(chunkCh, fetchResp.path, fetchResp.dictCache)
 				} else {
 					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
 				}
@@ -653,7 +654,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 // fetching those contents. Every |GetRange| that has a dictionary
 // dependency gets the record out of the dictionary cache. The first
 // time the cache entry is created, the download thread also schedules
-// the dictionary itself to be fetched and populated through |set|.
+// the dictionary itself to be fetched and populated through |Set|.
 type dictionaryCache struct {
 	dictionaries sync.Map
 }
@@ -673,21 +674,20 @@ type DictionaryPayload struct {
 	err  error
 }
 
-func (dc *dictionaryCache) get(path string, offset uint64, length uint32) (func() (any, error), bool) {
+func (p *DictionaryPayload) Get() (any, error) {
+	<-p.done
+	return p.res, p.err
+}
+
+func (p *DictionaryPayload) Set(res any, err error) {
+	p.res = res
+	p.err = err
+	close(p.done)
+}
+
+func (dc *dictionaryCache) getOrCreate(path string, offset uint64, length uint32) (*DictionaryPayload, bool) {
 	key := DictionaryKey{path, offset, length}
 	entry, loaded := dc.dictionaries.LoadOrStore(key, &DictionaryPayload{done: make(chan struct{})})
 	payload := entry.(*DictionaryPayload)
-	return func() (any, error) {
-		<-payload.done
-		return payload.res, payload.err
-	}, !loaded
-}
-
-func (dc *dictionaryCache) set(path string, offset uint64, length uint32, res any, err error) {
-	key := DictionaryKey{path, offset, length}
-	entry, _ := dc.dictionaries.LoadOrStore(key, &DictionaryPayload{done: make(chan struct{})})
-	payload := entry.(*DictionaryPayload)
-	payload.res = res
-	payload.err = err
-	close(payload.done)
+	return payload, loaded
 }
