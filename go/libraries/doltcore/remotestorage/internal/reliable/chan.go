@@ -15,7 +15,7 @@
 package reliable
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/circular"
+	"github.com/dolthub/dolt/go/libraries/utils/circular"
 )
 
 // A reliable.Chan is a type of channel transformer which can be used to build
