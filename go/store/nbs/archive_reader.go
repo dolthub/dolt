@@ -285,11 +285,15 @@ func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
 }
 
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
-// If the hash is not found, nil is returnes (no error)
+// If the hash is not found, a ToChunker instance with IsEmpty() == true is returned (no error)
 func (ar archiveReader) getAsToChunker(h hash.Hash) (ToChunker, error) {
 	dict, data, err := ar.getRaw(h)
-	if err != nil || data == nil {
+	if err != nil {
 		return nil, err
+	}
+
+	if data == nil {
+		return ArchiveToChunker{h, nil, []byte{}}, nil
 	}
 
 	return ArchiveToChunker{h, dict, data}, nil

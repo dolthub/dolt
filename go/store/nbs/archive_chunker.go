@@ -41,6 +41,10 @@ func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
 	dict := a.dictionary
 	data := a.chunkData
 	rawChunk, err := gozstd.DecompressDict(nil, data, dict)
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
+
 	newChunk := chunks.NewChunk(rawChunk)
 
 	// TODO: remove this once we have confidence in archives.
