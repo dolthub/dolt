@@ -277,8 +277,7 @@ type memToChunker struct {
 }
 
 func (mtc memToChunker) FullCompressedChunkLen() uint32 {
-	// NM4 - This interface is a lie.
-	panic("implement me")
+	panic("runtime error: memToChunker.FullCompressedChunkLen() should never be called")
 }
 
 func (mtc memToChunker) IsEmpty() bool {
