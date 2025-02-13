@@ -198,7 +198,7 @@ func TestGC(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(v2)
 
-	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, nil)
+	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil
@@ -215,4 +215,27 @@ type badVersionStore struct {
 
 func (b *badVersionStore) Version() string {
 	return "BAD"
+}
+
+type purgingSafepointController struct {
+	vs *ValueStore
+}
+
+var _ (GCSafepointController) = purgingSafepointController{}
+
+
+func (c purgingSafepointController) BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error {
+	c.vs.PurgeCaches()
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPreFinalizeSafepoint(context.Context) error {
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPostFinalizeSafepoint(context.Context) error{
+	return nil
+}
+
+func (c purgingSafepointController) CancelSafepoint() {
 }
