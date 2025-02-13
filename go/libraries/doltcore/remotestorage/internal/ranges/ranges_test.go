@@ -77,11 +77,11 @@ func TestTree(t *testing.T) {
 			tree := NewTree(8 * 1024)
 			// Insert 1KB ranges every 16 KB.
 			for i, j := 0, 0; i < 16; i, j = i+1, j+16*1024 {
-				tree.Insert("A", []byte{}, uint64(j), 1024, 0, 0)
+				tree.Insert("A", []byte{}, uint64(j), 1024, nil)
 			}
 			// Insert 1KB ranges every 16 KB, offset by 8KB.
 			for i := 15*16*1024 + 8*1024; i >= 0; i -= 16 * 1024 {
-				tree.Insert("A", []byte{}, uint64(i), 1024, 0, 0)
+				tree.Insert("A", []byte{}, uint64(i), 1024, nil)
 			}
 			assertTree(t, tree)
 		})
@@ -89,11 +89,11 @@ func TestTree(t *testing.T) {
 			tree := NewTree(8 * 1024)
 			// Insert 1KB ranges every 16 KB, offset by 8KB.
 			for i := 15*16*1024 + 8*1024; i >= 0; i -= 16 * 1024 {
-				tree.Insert("A", []byte{}, uint64(i), 1024, 0, 0)
+				tree.Insert("A", []byte{}, uint64(i), 1024, nil)
 			}
 			// Insert 1KB ranges every 16 KB.
 			for i, j := 0, 0; i < 16; i, j = i+1, j+16*1024 {
-				tree.Insert("A", []byte{}, uint64(j), 1024, 0, 0)
+				tree.Insert("A", []byte{}, uint64(j), 1024, nil)
 			}
 			assertTree(t, tree)
 		})
@@ -111,7 +111,7 @@ func TestTree(t *testing.T) {
 				})
 				tree := NewTree(8 * 1024)
 				for _, offset := range entries {
-					tree.Insert("A", []byte{}, offset, 1024, 0, 0)
+					tree.Insert("A", []byte{}, offset, 1024, nil)
 				}
 				assertTree(t, tree)
 			}
@@ -126,7 +126,7 @@ func TestTree(t *testing.T) {
 			"B", "A", "9", "8",
 		}
 		for i, j := 0, 0; i < 16; i, j = i+1, j+1024 {
-			tree.Insert(files[i], []byte{}, uint64(j), 1024, 0, 0)
+			tree.Insert(files[i], []byte{}, uint64(j), 1024, nil)
 		}
 		assert.Equal(t, 16, tree.regions.Len())
 		assert.Equal(t, 16, tree.t.Len())
@@ -134,17 +134,17 @@ func TestTree(t *testing.T) {
 	t.Run("MergeInMiddle", func(t *testing.T) {
 		tree := NewTree(8 * 1024)
 		// 1KB chunk at byte 0
-		tree.Insert("A", []byte{}, 0, 1024, 0, 0)
+		tree.Insert("A", []byte{}, 0, 1024, nil)
 		// 1KB chunk at byte 16KB
-		tree.Insert("A", []byte{}, 16384, 1024, 0, 0)
+		tree.Insert("A", []byte{}, 16384, 1024, nil)
 		assert.Equal(t, 2, tree.regions.Len())
 		assert.Equal(t, 2, tree.t.Len())
 		// 1KB chunk at byte 8KB
-		tree.Insert("A", []byte{}, 8192, 1024, 0, 0)
+		tree.Insert("A", []byte{}, 8192, 1024, nil)
 		assert.Equal(t, 1, tree.regions.Len())
 		assert.Equal(t, 3, tree.t.Len())
-		tree.Insert("A", []byte{}, 4096, 1024, 0, 0)
-		tree.Insert("A", []byte{}, 12228, 1024, 0, 0)
+		tree.Insert("A", []byte{}, 4096, 1024, nil)
+		tree.Insert("A", []byte{}, 12228, 1024, nil)
 		assert.Equal(t, 1, tree.regions.Len())
 		assert.Equal(t, 5, tree.t.Len())
 		e, _ := tree.t.Min()
@@ -184,7 +184,7 @@ func TestTree(t *testing.T) {
 		t.Run("InsertAscending", func(t *testing.T) {
 			tree := NewTree(4 * 1024)
 			for _, e := range entries {
-				tree.Insert(e.url, []byte{e.id}, e.offset, e.length, 0, 0)
+				tree.Insert(e.url, []byte{e.id}, e.offset, e.length, nil)
 			}
 			assertTree(t, tree)
 		})
@@ -192,7 +192,7 @@ func TestTree(t *testing.T) {
 			tree := NewTree(4 * 1024)
 			for i := len(entries) - 1; i >= 0; i-- {
 				e := entries[i]
-				tree.Insert(e.url, []byte{e.id}, e.offset, e.length, 0, 0)
+				tree.Insert(e.url, []byte{e.id}, e.offset, e.length, nil)
 			}
 			assertTree(t, tree)
 		})
@@ -205,7 +205,7 @@ func TestTree(t *testing.T) {
 				})
 				tree := NewTree(4 * 1024)
 				for _, e := range entries {
-					tree.Insert(e.url, []byte{e.id}, e.offset, e.length, 0, 0)
+					tree.Insert(e.url, []byte{e.id}, e.offset, e.length, nil)
 				}
 				assertTree(t, tree)
 			}

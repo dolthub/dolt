@@ -258,8 +258,7 @@ mutations_and_gc_statement() {
     [[ "$remotesrv_pid" -gt 0 ]] || false
 
     cd ../cloned/repo1
-    run dolt fetch
-    [ "$status" -eq 0 ]
+    dolt fetch
 
     run dolt status
     [ "$status" -eq 0 ]

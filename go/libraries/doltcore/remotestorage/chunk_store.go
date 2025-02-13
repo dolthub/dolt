@@ -373,11 +373,25 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 
 // GetRange is structurally the same as remotesapi.HttpGetRange, but with added functions. Instances of GetRange
 // don't get sent over the wire, so it is not necessary to use the remotesapi, just convenient.
-type GetRange remotesapi.HttpGetRange
+type GetRange struct {
+	Url string
+	Ranges []*Range
+}
+
+type Range struct {
+	Hash []byte
+	Offset uint64
+	Length uint32
+	GetDict func() (any, error)
+}
+
+func ResourcePath(urlS string) string {
+	u, _ := url.Parse(urlS)
+	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+}
 
 func (gr *GetRange) ResourcePath() string {
-	u, _ := url.Parse(gr.Url)
-	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+	return ResourcePath(gr.Url)
 }
 
 func (gr *GetRange) Append(other *GetRange) {
@@ -434,7 +448,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, chunkChan chan nbs.ToChunker, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte) error, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -469,7 +483,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			RespHeadersTimeout: params.RespHeadersTimeout,
 		})
 		defer resp.Close()
-		reader := &RangeChunkReader{Path: gr.ResourcePath(), GetRange: gr, Reader: resp.Body}
+		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
 		for {
 			cc, err := reader.ReadChunk(stats, health)
 			if errors.Is(err, io.EOF) {
@@ -478,28 +492,26 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			if err != nil {
 				return err
 			}
-			select {
-			case chunkChan <- cc:
-			case <-ctx.Done():
-				return context.Cause(ctx)
+			err = resCb(ctx, cc)
+			if err != nil {
+				return err
 			}
 		}
 	}
 }
 
 type RangeChunkReader struct {
-	Path     string
 	GetRange *GetRange
 	Reader   io.Reader
 	i        int
 	skip     int
 }
 
-func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.HealthRecorder) (nbs.ToChunker, error) {
+func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.HealthRecorder) ([]byte, error) {
 	if r.skip > 0 {
 		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
 		if err != nil {
-			return nbs.CompressedChunk{}, err
+			return nil, err
 		}
 		r.skip = 0
 	}
@@ -508,7 +520,7 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 	r.i += 1
 
 	if idx >= len(r.GetRange.Ranges) {
-		return nbs.CompressedChunk{}, io.EOF
+		return nil, io.EOF
 	}
 	if idx < len(r.GetRange.Ranges)-1 {
 		r.skip = int(r.GetRange.GapBetween(idx, idx+1))
@@ -516,24 +528,13 @@ func (r *RangeChunkReader) ReadChunk(stats StatsRecorder, health reliable.Health
 
 	rang := r.GetRange.Ranges[idx]
 	l := rang.Length
-	h := hash.New(rang.Hash)
 
 	buf := make([]byte, l)
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
-		return nbs.CompressedChunk{}, err
-	} else {
-		if rang.DictionaryLength == 0 {
-			return nbs.NewCompressedChunk(h, buf)
-		} else {
-			dict, err := globalDictCache.get(r.GetRange, idx, stats, health)
-			if err != nil {
-				return nbs.CompressedChunk{}, err
-			}
-
-			return nbs.NewArchiveToChunker(h, dict, buf), nil
-		}
+		return nil, err
 	}
+	return buf, nil
 }
 
 type locationRefresh struct {
