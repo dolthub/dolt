@@ -227,20 +227,15 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	res := make(map[string]map[hash.Hash]Range, len(hashes))
+	res := make(map[hash.Hash]map[hash.Hash]Range, len(hashes))
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
-		suffix := ""
-		if _, ok := cs.(archiveChunkSource); ok {
-			suffix = ArchiveFileSuffix
-		}
-		h := cs.hash()
-		res[h.String()+suffix] = ranges
+		res[cs.hash()] = ranges
 	}
 	return res, nil
 }

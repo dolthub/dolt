@@ -459,7 +459,7 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hash
 	return res, nil
 }
 
-func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	res, err := gcs.newGen.GetChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
