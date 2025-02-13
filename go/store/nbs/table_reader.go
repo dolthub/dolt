@@ -344,11 +344,17 @@ func (tr tableReader) readCompressedAtOffsets(
 func (tr tableReader) readAtOffsets(
 	ctx context.Context,
 	rb readBatch,
-	found func(context.Context, ToChunker),
+	found func(context.Context, *chunks.Chunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, chk ToChunker) error {
-		found(ctx, chk)
+	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(ctx context.Context, cmp ToChunker) error {
+		chk, err := cmp.ToChunk()
+
+		if err != nil {
+			return err
+		}
+
+		found(ctx, &chk)
 		return nil
 	})
 }
@@ -392,7 +398,7 @@ func (tr tableReader) getMany(
 	ctx context.Context,
 	eg *errgroup.Group,
 	reqs []getRecord,
-	found func(context.Context, ToChunker),
+	found func(context.Context, *chunks.Chunk),
 	keeper keeperF,
 	stats *Stats) (bool, gcBehavior, error) {
 
@@ -435,7 +441,7 @@ func (tr tableReader) getManyAtOffsets(
 	ctx context.Context,
 	eg *errgroup.Group,
 	offsetRecords offsetRecSlice,
-	found func(context.Context, ToChunker),
+	found func(context.Context, *chunks.Chunk),
 	stats *Stats,
 ) error {
 	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(

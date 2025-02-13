@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -143,9 +144,9 @@ func compareContentsOfTables(t *testing.T, ctx context.Context, hashes hash.Hash
 
 func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader) (map[hash.Hash][]byte, error) {
 	reqs := toGetRecords(hashes)
-	found := make([]ToChunker, 0)
+	found := make([]*chunks.Chunk, 0)
 	eg, ctx := errgroup.WithContext(ctx)
-	_, _, err := reader.getMany(ctx, eg, reqs, func(ctx context.Context, c ToChunker) { found = append(found, c) }, nil, &Stats{})
+	_, _, err := reader.getMany(ctx, eg, reqs, func(ctx context.Context, c *chunks.Chunk) { found = append(found, c) }, nil, &Stats{})
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +156,7 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 	}
 
 	hashToData := make(map[hash.Hash][]byte)
-	for _, tc := range found {
-		c, err := tc.ToChunk()
-		if err != nil {
-			return nil, err
-		}
-
+	for _, c := range found {
 		hashToData[c.Hash()] = c.Data()
 	}
 

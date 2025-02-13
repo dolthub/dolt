@@ -46,7 +46,7 @@ func (ecs emptyChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF
 	return nil, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	return true, gcBehavior_Continue, nil
 }
 

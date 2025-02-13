@@ -290,7 +290,7 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord, keeper keeperF) (bool, gc
 	return true, gcBehavior_Continue, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	for _, haver := range crg {
 		remaining, gcb, err := haver.getMany(ctx, eg, reqs, found, keeper, stats)
 		if err != nil {

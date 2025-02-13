@@ -95,9 +95,17 @@ type journalRecord struct {
 	idx int
 }
 
-func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	return s.getManyCompressed(ctx, eg, reqs, func(ctx context.Context, cc ToChunker) {
-		found(ctx, cc)
+		ch, err := cc.ToChunk()
+		if err != nil {
+			eg.Go(func() error {
+				return err
+			})
+			return
+		}
+		chWHash := chunks.NewChunkWithHash(cc.Hash(), ch.Data())
+		found(ctx, &chWHash)
 	}, keeper, stats)
 }
 

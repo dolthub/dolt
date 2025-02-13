@@ -672,7 +672,7 @@ func (tcs *testChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, gc
 	panic("never used")
 }
 
-func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (tcs *testChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	panic("never used")
 }
 
