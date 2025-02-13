@@ -261,16 +261,21 @@ func TestGCStateDetails(t *testing.T) {
 		var running atomic.Int32
 		for i := 0; i < numThreads; i++ {
 			go func() {
+				// We attempt to yield a bunch to get parallelism, but
+				// in reality this test is best-effort looking for
+				// wonkiness where transitionToOldGenGC allows more
+				// than one thread to enter GC at a time or something
+				// like that.
 				defer wg.Done()
 				runtime.Gosched()
 				vs.transitionToOldGenGC()
-				assert.True(t, running.CompareAndSwap(0, 1))
+				require.True(t, running.CompareAndSwap(0, 1))
 				runtime.Gosched()
 				vs.transitionToNewGenGC()
 				runtime.Gosched()
 				vs.transitionToFinalizingGC()
 				runtime.Gosched()
-				assert.True(t, running.CompareAndSwap(1, 0))
+				require.True(t, running.CompareAndSwap(1, 0))
 				vs.transitionToNoGC()
 			}()
 		}
