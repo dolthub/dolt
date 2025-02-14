@@ -208,7 +208,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
-		if toChk == nil {
+		if toChk == nil || toChk.IsEmpty() {
 			foundAll = false
 		} else {
 			if keeper != nil && keeper(h) {
