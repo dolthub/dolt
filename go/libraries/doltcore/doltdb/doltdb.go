@@ -1919,16 +1919,12 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
-	var store *nbs.NomsBlockStore
-	generationalNBS, ok := cs.(*nbs.GenerationalNBS)
-	if ok {
-		store = generationalNBS.NewGen().(*nbs.NomsBlockStore)
-	} else {
-		store = cs.(*nbs.NomsBlockStore)
+	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
+		cs = generationalNBS.NewGen()
 	}
 
-	if store != nil {
-		return store.ChunkJournal()
+	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
+		return nbsStore.ChunkJournal()
 	} else {
 		return nil
 	}

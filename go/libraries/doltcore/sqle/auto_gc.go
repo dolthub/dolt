@@ -154,13 +154,17 @@ func (c *AutoGCController) newCommitHook(name string) doltdb.CommitHook {
 type autoGCCommitHook struct {
 	c    *AutoGCController
 	name string
-	// Always non-nil, if this channel delivers this channel
-	// delivers when no GC is currently running.
+	// When |done| is closed, there is no GC currently running or
+	// pending for this database. If it is open, then there is a
+	// pending request for GC or a GC is currently running. Once
+	// |done| is closed, we can check for auto GC conditions on
+	// the database to see if we should request a new GC.
 	done chan struct{}
 	// It simplifies the logic and efficiency of the
-	// implementation a bit to have a
-	// we can send. It becomes our new |done| channel on a
-	// successful send.
+	// implementation a bit to have an already allocated 	// in the commit hook.
+channel
+	// we can try to send, which will become our new |done|
+	// channel once we send it successfully.
 	next chan struct{}
 	// |done| and |next| are mutable and |Execute| can be called
 	// concurrently. We protect them with |mu|.

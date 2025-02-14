@@ -115,6 +115,13 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	// Make a copy of the databases. |all| is going to be provided
+	// as the set of all initial databases to dsqle
+	// DatabaseProvider. |dbs| is only the databases that came
+	// from MultiRepoEnv, and they are all real databases based on
+	// DoltDB instances. |all| is going to include some extension,
+	// informational databases like |dolt_cluster| sometimes,
+	// depending on config.
 	all := make([]dsess.SqlDatabase, len(dbs))
 	copy(all, dbs)
 
