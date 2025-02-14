@@ -17,33 +17,33 @@ package remotestorage
 import (
 	"sync"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-// mapChunkCache is a really dumb ChunkCache implementation that
-// stores cached chunks and has records in lru caches.
+// mapChunkCache is a simple ChunkCache implementation that stores
+// cached chunks and has records in two separate lru caches.
 type mapChunkCache struct {
 	mu     *sync.Mutex
-	chunks *lru.TwoQueueCache[hash.Hash,nbs.ToChunker]
-	has    *lru.TwoQueueCache[hash.Hash,struct{}]
+	chunks *lru.TwoQueueCache[hash.Hash, nbs.ToChunker]
+	has    *lru.TwoQueueCache[hash.Hash, struct{}]
 }
 
 const defaultCacheChunkCapacity = 32 * 1024
 const defaultCacheHasCapacity = 1024 * 1024
 
 func newMapChunkCache() *mapChunkCache {
-	return NewMapChunkCacheWithMaxCapacity(defaultCacheChunkCapacity, defaultCacheHasCapacity)
+	return NewMapChunkCacheWithCapacity(defaultCacheChunkCapacity, defaultCacheHasCapacity)
 }
 
-// used by DoltHub API
-func NewMapChunkCacheWithMaxCapacity(maxChunkCapacity, maxHasCapacity int) *mapChunkCache {
-	chunks, err := lru.New2Q[hash.Hash,nbs.ToChunker](maxChunkCapacity)
+func NewMapChunkCacheWithCapacity(maxChunkCapacity, maxHasCapacity int) *mapChunkCache {
+	chunks, err := lru.New2Q[hash.Hash, nbs.ToChunker](maxChunkCapacity)
 	if err != nil {
 		panic(err)
 	}
-	has, err := lru.New2Q[hash.Hash,struct{}](maxHasCapacity)
+	has, err := lru.New2Q[hash.Hash, struct{}](maxHasCapacity)
 	if err != nil {
 		panic(err)
 	}
@@ -77,7 +77,7 @@ func (cache *mapChunkCache) InsertHas(hs hash.HashSet) {
 	}
 }
 
-func (cache *mapChunkCache) GetCachedHas(hs hash.HashSet) hash.HashSet {
+func (cache *mapChunkCache) GetCachedHas(hs hash.HashSet) (absent hash.HashSet) {
 	ret := make(hash.HashSet)
 	for h := range hs {
 		if !cache.has.Contains(h) {
