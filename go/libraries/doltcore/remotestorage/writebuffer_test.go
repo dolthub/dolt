@@ -114,10 +114,11 @@ func TestMapWriteBuffer(t *testing.T) {
 				cached := cache.GetAllForWrite()
 				writes += 1
 				time.Sleep(5 * time.Millisecond)
-				cache.WriteCompleted(false)
 				if len(cached) == numThreads*32 {
+					cache.WriteCompleted(false)
 					return
 				}
+				cache.WriteCompleted(false)
 				time.Sleep(100 * time.Microsecond)
 			}
 		}()
