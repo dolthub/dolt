@@ -1104,7 +1104,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 }
 
 func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Context) {
-	pro, err := NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, sql.NewBackgroundThreads())
+	pro, err := NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -1119,7 +1119,6 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Co
 	if err != nil {
 		panic(err)
 	}
-
 	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 

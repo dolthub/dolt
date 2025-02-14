@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
@@ -96,7 +97,8 @@ func NewSqlEngine(
 	}
 
 	bThreads := sql.NewBackgroundThreads()
-	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
+	var runAsyncThreads sqle.RunAsyncThreads
+	dbs, runAsyncThreads, err = dsqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +131,7 @@ func NewSqlEngine(
 	gcSafepointController := dsess.NewGCSafepointController()
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, bThreads)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
 	if err != nil {
 		return nil, err
 	}
@@ -200,8 +202,14 @@ func NewSqlEngine(
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
 
+	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
 	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
 		return nil, err
+	}
+	if runAsyncThreads != nil {
+		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
+			return nil, err
+		}
 	}
 
 	// configuring stats depends on sessionBuilder
