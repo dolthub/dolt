@@ -34,7 +34,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -1958,7 +1957,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)
 
-	done, err := statsProv.Add(refreshCtx, sqlDb, ref.NewBranchRef("main"), fs, false)
+	statsProv.AddFs(sqlDb, fs)
 	require.NoError(t, err)
 	<-done
 

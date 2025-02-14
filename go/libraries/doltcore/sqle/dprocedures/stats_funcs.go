@@ -77,15 +77,15 @@ func (si StatsInfo) ToJson() string {
 // observing and manipulating background database auto refresh threads.
 type ToggableStats interface {
 	sql.StatsProvider
-	FlushQueue(ctx context.Context) error
+	//FlushQueue(ctx context.Context) error
 	Restart(context.Context) error
+	Stop(context.Context) error
 	Info(ctx context.Context) (StatsInfo, error)
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error
-	BranchSync(ctx *sql.Context) error
 	ValidateState(ctx context.Context) error
-	Init(context.Context, []dsess.SqlDatabase, bool) error
+	//Init(context.Context, []dsess.SqlDatabase, bool) error
 	SetTimers(int64, int64, int64)
 }
 
@@ -100,22 +100,6 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		err := afp.FlushQueue(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to restart collection: %w", err)
-		}
-
-		dbs := dSess.Provider().AllDatabases(ctx)
-		var sqlDbs []dsess.SqlDatabase
-		for _, db := range dbs {
-			sqlDb, ok := db.(dsess.SqlDatabase)
-			if ok {
-				sqlDbs = append(sqlDbs, sqlDb)
-			}
-		}
-		if err := afp.Init(ctx, sqlDbs, true); err != nil {
-			return nil, err
-		}
 		if err := afp.Restart(ctx); err != nil {
 			return nil, err
 		}
@@ -168,20 +152,6 @@ func statsGc(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsBranchSync update database branch tracking based on the
-// most recent session.
-func statsBranchSync(ctx *sql.Context, _ ...string) (interface{}, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
-		if err := afp.BranchSync(ctx); err != nil {
-			return nil, err
-		}
-		return OkResult, nil
-	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
-}
-
 // statsValidate returns inconsistencies if the kv cache is out of date
 func statsValidate(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -202,7 +172,7 @@ func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		if err := afp.FlushQueue(ctx); err != nil {
+		if err := afp.Stop(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil
@@ -220,26 +190,11 @@ func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}
 
-	err := pro.FlushQueue(ctx)
+	err := pro.Stop(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to flush queue: %w", err)
 	}
 
-	dbs := dSess.Provider().AllDatabases(ctx)
-	var sqlDbs []dsess.SqlDatabase
-	for _, db := range dbs {
-		sqlDb, ok := db.(dsess.SqlDatabase)
-		if ok {
-			sqlDbs = append(sqlDbs, sqlDb)
-		}
-	}
-
-	// reset state
-	if err := pro.Init(ctx, sqlDbs, true); err != nil {
-		return "failed to purge stats", err
-	}
-
-	//
 	if err := pro.Purge(ctx); err != nil {
 		return "failed to purge stats", err
 	}

@@ -17,26 +17,21 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"log"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/stats"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 )
 
 var _ sql.StatsProvider = (*StatsCoord)(nil)
@@ -84,42 +79,21 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 		}
 	}
 
-	var sqlDb dsess.SqlDatabase
-	func() {
-		sc.dbMu.Lock()
-		defer sc.dbMu.Unlock()
-		for _, db := range sc.dbs {
-			if db.AliasedName() == dbName && db.Revision() == branch {
-				sqlDb = db
-				return
-			}
-		}
-	}()
-
-	if sqlDb == nil {
-		return fmt.Errorf("qualified database not found: %s/%s", branch, dbName)
+	db, err := sc.pro.Database(ctx, dbName)
+	sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), branch, branch+"/"+dbName)
+	if err != nil {
+		return err
 	}
 
-	after := NewControl("finish analyze", func(sc *StatsCoord) error { return nil })
-	analyze := NewAnalyzeJob(ctx, sqlDb, []string{table.String()}, after)
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-sc.Done:
-		return fmt.Errorf("stat queue is closed")
-	case sc.Jobs <- analyze: //TODO send jobs
+	tableKey, newTableStats, err := sc.updateTable(ctx, table.Name(), sqlDb)
+	if err != nil {
+		return err
 	}
 
-	// wait for finalize to finish before returning
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-sc.Done:
-		return fmt.Errorf("stat queue is closed")
-	case <-after.done:
-		return nil
-	}
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.Stats[tableKey] = newTableStats
+	return nil
 }
 
 func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
@@ -177,49 +151,26 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	var doSwap bool
-	func() {
-		sc.dbMu.Lock()
-		defer sc.dbMu.Unlock()
-		sc.ddlGuard = true
-
-		doSwap = strings.EqualFold(sc.statsBackingDb, dbName)
-		for i := 0; i < len(sc.dbs); i++ {
-			db := sc.dbs[i]
-			if strings.EqualFold(db.AliasedName(), dbName) {
-				sc.dbs = append(sc.dbs[:i], sc.dbs[i+1:]...)
-				i--
+	return sc.sq.InterruptSync(ctx, func() {
+		if strings.EqualFold(sc.statsBackingDb, dbName) {
+			delete(sc.dbFs, dbName)
+			if err := sc.rotateStorage(ctx); err != nil {
+				sc.descError("drop rotateStorage", err)
 			}
 		}
-		delete(sc.Branches, dbName)
-	}()
 
-	if doSwap {
-		if err := sc.rotateStorage(ctx); err != nil {
-			return err
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
+		var deleteKeys []tableIndexesKey
+		for k, _ := range sc.Stats {
+			if strings.EqualFold(dbName, k.db) {
+				deleteKeys = append(deleteKeys, k)
+			}
 		}
-	}
-
-	sc.setGc()
-
-	// stats lock is more contentious, do last
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	var deleteKeys []tableIndexesKey
-	for k, _ := range sc.Stats {
-		if strings.EqualFold(dbName, k.db) {
-			deleteKeys = append(deleteKeys, k)
+		for _, k := range deleteKeys {
+			delete(sc.Stats, k)
 		}
-	}
-	for _, k := range deleteKeys {
-		delete(sc.Stats, k)
-	}
-
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
-	delete(sc.dbFs, dbName)
-
-	return nil
+	})
 }
 
 func (sc *StatsCoord) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
@@ -266,85 +217,27 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	return 0, nil
 }
 
-func (sc *StatsCoord) FlushQueue(ctx context.Context) error {
-	sc.stopMu.Lock()
-	defer sc.stopMu.Unlock()
-	if err := sc.lockedStop(ctx); err != nil {
-		return err
-	}
-	oldCap := cap(sc.Jobs)
-	close(sc.Jobs)
-	for _ = range sc.Jobs {
-	}
-	close(sc.Interrupts)
-	for _ = range sc.Interrupts {
-	}
-	sc.Jobs = make(chan StatsJob, oldCap)
-	sc.Interrupts = make(chan StatsJob, defaultBucketSize)
-	sc.seedCnt.Store(0)
-	sc.readCounter.Store(0)
-
-	cnt, _ := sc.kv.Flush(ctx)
-	log.Println("flush queue", cnt)
-	return nil
-}
-
 func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase, keepStorage bool) error {
-	sc.dbMu.Lock()
-	sc.statsMu.Lock()
-	sc.stopMu.Lock()
-	defer sc.stopMu.Unlock()
-
-	sc.dbs = sc.dbs[:0]
-	sc.Stats = make(map[tableIndexesKey][]*stats.Statistic)
-	sc.Branches = make(map[string][]ref.DoltRef)
-	sc.dbFs = make(map[string]filesys.Filesys)
-	sc.dbMu.Unlock()
-	sc.statsMu.Unlock()
-
-	sc.SetEnableGc(false)
-	sc.enableBrSync.Store(false)
-	oldJobInterval := sc.JobInterval
-	sc.JobInterval = 1
-	defer sc.SetTimers(int64(oldJobInterval), int64(sc.gcInterval), int64(sc.branchInterval))
-	defer sc.SetEnableGc(true)
-	defer sc.enableBrSync.Store(true)
-
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
 	}
-
-	if err := sc.lockedRestart(sqlCtx); err != nil {
-		return err
-	}
-
-	eg := errgroup.Group{}
-	for _, db := range dbs {
+	for i, db := range dbs {
 		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
-			br, err := db.DbData().Ddb.GetBranches(ctx)
-			if err != nil {
-				return err
-			}
 			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
 			if err != nil {
 				return err
 			}
-			for _, b := range br {
-				eg.Go(func() error {
-					done, err := sc.Add(sqlCtx, db, b, fs, keepStorage)
-					if err != nil {
-						return err
-					}
-					<-done
-					return nil
-				})
+			sc.AddFs(db, fs)
+			if i == 0 && !keepStorage {
+				if err := sc.rotateStorage(sqlCtx); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	eg.Wait()
-
-	return sc.lockedStop(ctx)
+	sc.sq.Run(ctx)
+	return nil
 }
 
 func (sc *StatsCoord) Purge(ctx *sql.Context) error {
@@ -358,8 +251,6 @@ func (sc *StatsCoord) Purge(ctx *sql.Context) error {
 }
 
 func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
-	sc.dbMu.Lock()
-	defer sc.dbMu.Unlock()
 	if sc.statsBackingDb != "" {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
@@ -376,14 +267,19 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 		mem = NewMemStats()
 	}
 
-	if len(sc.dbs) == 0 {
+	if len(sc.dbFs) == 0 {
 		sc.kv = mem
 		sc.statsBackingDb = ""
 		return nil
 	}
 
-	newStorageTarget := sc.dbs[0]
-	if err := sc.rm(newStorageTarget.AliasedName()); err != nil {
+	var newStorageTarget string
+	for db, _ := range sc.dbFs {
+		newStorageTarget = db
+		break
+	}
+
+	if err := sc.rm(newStorageTarget); err != nil {
 		return err
 	}
 
@@ -394,7 +290,7 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 
 	newKv.mem = mem
 	sc.kv = newKv
-	sc.statsBackingDb = newStorageTarget.AliasedName()
+	sc.statsBackingDb = newStorageTarget
 	return nil
 }
 
@@ -426,10 +322,10 @@ func (sc *StatsCoord) rm(db string) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatabase) (*prollyStats, error) {
-	fs, ok := sc.dbFs[strings.ToLower(storageTarget.AliasedName())]
+func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget string) (*prollyStats, error) {
+	fs, ok := sc.dbFs[strings.ToLower(storageTarget)]
 	if !ok {
-		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget.AliasedName())
+		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget)
 	}
 
 	params := make(map[string]interface{})
@@ -458,7 +354,7 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 
 		dEnv = env.Load(ctx, sc.hdp, statsFs, urlPath, "test")
 		sess := dsess.DSessFromSess(ctx.Session)
-		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), storageTarget.AliasedName())
+		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), storageTarget)
 		if err != nil {
 			return nil, err
 		}
@@ -489,92 +385,22 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget dsess.SqlDatab
 	return NewProllyStats(ctx, statsDb)
 }
 
-func (sc *StatsCoord) unsafeAsyncSend(ctx context.Context, j StatsJob) error {
-	// The |Jobs| queue can change, the interrupts queue
-	// does not and is safe to send a blocking write to.
-	ji := NewControl("interrupt: '"+j.String()+"'", func(sc *StatsCoord) error {
-		return sc.sendJobs(ctx, j)
-	})
-
-	select {
-	case sc.Interrupts <- ji:
-		return nil
-	default:
-		return fmt.Errorf("async queue overflowed, failed to put job " + j.String())
-	}
-}
-
 func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
-	// Wait until the control job finishes before returning.
-	// We want to do two cycles -- to pick up new seeds and
-	// execute the finalize jobs that update statistics.
+	// wait for the current partial + one full cycle to complete
 	for _ = range 2 {
-		done := make(chan struct{})
-		j := NewControl("wait for sync", func(sc *StatsCoord) error {
-			close(done)
-			return nil
-		})
-		if err := sc.unsafeAsyncSend(ctx, j); err != nil {
-			return err
-		}
-
-		for cont := true; cont; {
-			select {
-			case <-ctx.Done():
-				return context.Cause(ctx)
-			case <-sc.Done:
-				return fmt.Errorf("stats queue closed")
-			case <-done:
-				cont = false
-			default:
-			}
+		done := sc.getCycleWaiter()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		}
 	}
-
-	return sc.ValidateState(ctx)
+	return nil
 }
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {
-	done := make(chan struct{})
-	if err := sc.runGc(ctx, done); err != nil {
-		return err
-	}
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-sc.Done:
-		return fmt.Errorf("stats queue closed")
-	case <-done:
-		return nil
-	}
-}
-
-func (sc *StatsCoord) BranchSync(ctx *sql.Context) error {
-	done := make(chan struct{})
-	if !sc.enableBrSync.Load() {
-		// Already active, wait a cycle
-		if err := sc.WaitForDbSync(ctx); err != nil {
-			return err
-		}
-	}
-	// An overactive sync ticker and aggressively
-	// concurrent database adds race with this.
-	newJobs, err := sc.runBranchSync(ctx, done)
-	if err != nil {
-		return err
-	}
-	for _, j := range newJobs {
-		// have to go through interrupts queue for thread safety
-		if err = sc.unsafeAsyncSend(ctx, j); err != nil {
-			return err
-		}
-	}
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-sc.Done:
-		return fmt.Errorf("stats queue closed")
-	case <-done:
-		return nil
-	}
+	sc.sq.InterruptAsync(func() {
+		sc.doGc = true
+	})
+	return sc.WaitForDbSync(ctx)
 }
