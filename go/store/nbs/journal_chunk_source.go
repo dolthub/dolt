@@ -145,12 +145,19 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 		return jReqs[i].r.Offset < jReqs[j].r.Offset
 	})
 
+	wg.Add(len(jReqs))
+	go func() {
+		wg.Wait()
+		s.journal.lock.RUnlock()
+	}()
 	for i := range jReqs {
 		// workers populate the parent error group
 		// record local workers for releasing lock
-		wg.Add(1)
 		eg.Go(func() error {
 			defer wg.Done()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			rec := jReqs[i]
 			a := reqs[rec.idx].a
 			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
@@ -163,10 +170,6 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			}
 		})
 	}
-	go func() {
-		wg.Wait()
-		s.journal.lock.RUnlock()
-	}()
 	return remaining, gcBehavior_Continue, nil
 }
 

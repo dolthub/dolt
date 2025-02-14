@@ -139,7 +139,8 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 		}
 	}
 
-	err := dEnv.DoltDB(ctx).GC(ctx, types.GCModeDefault, nil)
+	ddb := dEnv.DoltDB(ctx)
+	err := ddb.GC(ctx, types.GCModeDefault, purgingSafepointController{ddb})
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB(ctx), res)
 
@@ -208,7 +209,7 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	_, err = ns.Write(ctx, c1.Node())
 	require.NoError(t, err)
 
-	err = ddb.GC(ctx, types.GCModeDefault, nil)
+	err = ddb.GC(ctx, types.GCModeDefault, purgingSafepointController{ddb})
 	require.NoError(t, err)
 
 	c2 := newIntMap(t, ctx, ns, 2, 2)
@@ -264,4 +265,26 @@ func newAddrMap(t *testing.T, ctx context.Context, ns tree.NodeStore, key string
 	require.NoError(t, err)
 
 	return m
+}
+
+type purgingSafepointController struct {
+	ddb *doltdb.DoltDB
+}
+
+var _ (types.GCSafepointController) = purgingSafepointController{}
+
+func (c purgingSafepointController) BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error {
+	c.ddb.PurgeCaches()
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPreFinalizeSafepoint(context.Context) error {
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPostFinalizeSafepoint(context.Context) error {
+	return nil
+}
+
+func (c purgingSafepointController) CancelSafepoint() {
 }
