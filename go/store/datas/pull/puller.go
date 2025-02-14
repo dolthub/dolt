@@ -359,17 +359,19 @@ func (p *Puller) Pull(ctx context.Context) error {
 			if cChk.IsGhost() {
 				return fmt.Errorf("attempted to push or pull ghost chunk: %w", nbs.ErrGhostChunkRequested)
 			}
-			if len(cChk.FullCompressedChunk) == 0 {
+			if cChk.IsEmpty() {
 				return errors.New("failed to get all chunks.")
 			}
 
-			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(cChk.FullCompressedChunk)))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
 
 			chnk, err := cChk.ToChunk()
 			if err != nil {
 				return err
 			}
+
+			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(chnk.Data())))
+
 			err = p.waf(chnk, func(h hash.Hash, _ bool) error {
 				tracker.Seen(h)
 				return nil
@@ -379,9 +381,19 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 			tracker.TickProcessed()
 
-			err = p.wr.AddCompressedChunk(ctx, cChk)
-			if err != nil {
-				return err
+			if compressedChunk, ok := cChk.(nbs.CompressedChunk); ok {
+				err = p.wr.AddCompressedChunk(ctx, compressedChunk)
+				if err != nil {
+					return err
+				}
+			} else if _, ok := cChk.(nbs.ArchiveToChunker); ok {
+				// NM4 - Until we can write quickly to archives.....
+				cc := nbs.ChunkToCompressedChunk(chnk)
+
+				err = p.wr.AddCompressedChunk(ctx, cc)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	})

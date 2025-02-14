@@ -75,15 +75,20 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 }
 
 // AddCmpChunk adds a compressed chunk
-func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
-	if c.IsGhost() {
+func (tw *CmpChunkTableWriter) AddCmpChunk(tc ToChunker) error {
+	if tc.IsGhost() {
 		// Ghost chunks cannot be written to a table file. They should
 		// always be filtered by the write processes before landing
 		// here.
 		return ErrGhostChunkRequested
 	}
-	if len(c.CompressedData) == 0 {
+	if tc.IsEmpty() {
 		panic("NBS blocks cannot be zero length")
+	}
+
+	c, ok := tc.(CompressedChunk)
+	if !ok {
+		panic("runtime error: Require a CompressedChunk instance")
 	}
 
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
