@@ -317,7 +317,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ae := atomicerr.New()
 	decompressedSize := uint64(0)
-	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.CompressedChunk) {
+	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.ToChunker) {
 		if ae.IsSet() {
 			return
 		}
@@ -340,7 +340,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
 	ctx, span := tracer.Start(ctx, "remotestorage.GetManyCompressed")
 	defer span.End()
 
@@ -353,7 +353,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	for h := range hashes {
 		c := hashToChunk[h]
 
-		if c.IsEmpty() {
+		if c == nil || c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
 			found(ctx, c)
@@ -371,11 +371,28 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
-type GetRange remotesapi.HttpGetRange
+// GetRange is structurally similar to remotesapi.HttpGetRange, but
+// with added functions.
+type GetRange struct {
+	Url    string
+	Ranges []*Range
+}
+
+type Range struct {
+	Hash       []byte
+	Offset     uint64
+	Length     uint32
+	DictOffset uint64
+	DictLength uint32
+}
+
+func ResourcePath(urlS string) string {
+	u, _ := url.Parse(urlS)
+	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+}
 
 func (gr *GetRange) ResourcePath() string {
-	u, _ := url.Parse(gr.Url)
-	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+	return ResourcePath(gr.Url)
 }
 
 func (gr *GetRange) Append(other *GetRange) {
@@ -432,10 +449,11 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams, resCb func(context.Context, []byte, *Range) error, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
+
 	return func() error {
 		urlF := func(lastError error) (string, error) {
 			url, err := pathToUrl(ctx, lastError, gr.ResourcePath())
@@ -466,55 +484,66 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, he
 			RespHeadersTimeout: params.RespHeadersTimeout,
 		})
 		defer resp.Close()
-		reader := &RangeChunkReader{GetRange: gr, Reader: resp.Body}
+		reader := &RangeReader{GetRange: gr, Reader: resp.Body}
 		for {
-			cc, err := reader.ReadChunk()
+			bs, rang, err := reader.ReadNextRange()
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			if err != nil {
 				return err
 			}
-			select {
-			case chunkChan <- cc:
-			case <-ctx.Done():
-				return context.Cause(ctx)
+			err = resCb(ctx, bs, rang)
+			if err != nil {
+				return err
 			}
 		}
 	}
 }
 
-type RangeChunkReader struct {
+type RangeReader struct {
 	GetRange *GetRange
 	Reader   io.Reader
-	i        int
-	skip     int
+	// The range we currently reading.
+	i int
+	// The |skip|, from the last range we read
+	// to the current range, which we need to
+	// exexcute before on the next call to
+	// |ReadNextRange|
+	skip int
 }
 
-func (r *RangeChunkReader) ReadChunk() (nbs.CompressedChunk, error) {
+func (r *RangeReader) ReadNextRange() ([]byte, *Range, error) {
 	if r.skip > 0 {
 		_, err := io.CopyN(io.Discard, r.Reader, int64(r.skip))
 		if err != nil {
-			return nbs.CompressedChunk{}, err
+			return nil, nil, err
 		}
 		r.skip = 0
 	}
-	if r.i >= len(r.GetRange.Ranges) {
-		return nbs.CompressedChunk{}, io.EOF
-	}
-	if r.i < len(r.GetRange.Ranges)-1 {
-		r.skip = int(r.GetRange.GapBetween(r.i, r.i+1))
-	}
-	l := r.GetRange.Ranges[r.i].Length
-	h := hash.New(r.GetRange.Ranges[r.i].Hash)
+
+	idx := r.i
 	r.i += 1
+
+	if idx >= len(r.GetRange.Ranges) {
+		return nil, nil, io.EOF
+	}
+	if idx < len(r.GetRange.Ranges)-1 {
+		// If this isn't the last range, calculate and
+		// store the skip that will be necessary after
+		// we read this range.
+		r.skip = int(r.GetRange.GapBetween(idx, idx+1))
+	}
+
+	rang := r.GetRange.Ranges[idx]
+	l := rang.Length
+
 	buf := make([]byte, l)
 	_, err := io.ReadFull(r.Reader, buf)
 	if err != nil {
-		return nbs.CompressedChunk{}, err
-	} else {
-		return nbs.NewCompressedChunk(h, buf)
+		return nil, nil, err
 	}
+	return buf, rang, nil
 }
 
 type locationRefresh struct {
@@ -574,7 +603,7 @@ type RepoRequest interface {
 	SetRepoPath(string)
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.CompressedChunk)) (err error) {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.ToChunker)) (err error) {
 	toSend := hash.NewHashSet(hashes...)
 
 	fetcher := dcs.ChunkFetcher(ctx)
@@ -603,9 +632,9 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash
 				return err
 			}
 			// Don't forward on empty/not found chunks.
-			if len(cc.CompressedData) > 0 {
-				if dcs.cache.PutChunk(cc) {
-					return ErrCacheCapacityExceeded
+			if !cc.IsEmpty() {
+				if err := dcs.cache.PutChunk(cc); err != nil {
+					return err
 				}
 				found(egCtx, cc)
 			}
@@ -644,7 +673,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []nbs.CompressedChunk
+	var found []nbs.ToChunker
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -702,8 +731,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	}
 
 	if len(found) > 0 {
-		if dcs.cache.Put(found) {
-			return hash.HashSet{}, ErrCacheCapacityExceeded
+		if err := dcs.cache.Put(found); err != nil {
+			return hash.HashSet{}, err
 		}
 	}
 
@@ -738,8 +767,8 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 	}
 
 	cc := nbs.ChunkToCompressedChunk(c)
-	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
-		return ErrCacheCapacityExceeded
+	if err := dcs.cache.Put([]nbs.ToChunker{cc}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1051,6 +1080,11 @@ func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	// Err if the suffix is an archive file
+	if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
+		return errors.New("cannot write archive file ids currently.")
+	}
+
 	fileIdBytes := hash.Parse(fileId)
 	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, uint64(numChunks), contentHash, getRd)
 	if err != nil {
@@ -1149,6 +1183,15 @@ type DoltRemoteTableFile struct {
 
 // LocationPrefix
 func (drtf DoltRemoteTableFile) LocationPrefix() string {
+	return ""
+}
+
+func (drtf DoltRemoteTableFile) LocationSuffix() string {
+	u, _ := url.Parse(drtf.info.Url)
+	if strings.HasSuffix(u.Path, nbs.ArchiveFileSuffix) {
+		return nbs.ArchiveFileSuffix
+	}
+
 	return ""
 }
 

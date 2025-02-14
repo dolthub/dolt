@@ -187,7 +187,7 @@ type extractRecord struct {
 	err  error
 }
 
-// Returned by read methods that take a |keeperFunc|, this lets a
+// Returned by read methods that take a |keeperF|, this lets a
 // caller know whether the operation was successful or if it needs to
 // be retried. It may need to be retried if a GC is in progress but
 // the dependencies indicated by the operation cannot be added to the
@@ -202,6 +202,10 @@ const (
 	gcBehavior_Block = true
 )
 
+// keeperF is a function that takes a hash.Hash and returns true if the hash is used by the GC system to indicate
+// that the chunk requested may not be present in the future, and therefore |gcBehavior_Block| should be returned. This
+// is used to allow read/write ops to the store by non-GC processes while GC is underway. The |keeperF| may be nil,
+// in which case GC is not underway. If it's non-nil, and return false, it's ok to proceed with the operation (|gcBehavior_Continue|)
 type keeperF func(hash.Hash) bool
 
 type chunkReader interface {
@@ -221,7 +225,7 @@ type chunkReader interface {
 
 	// getManyCompressed sets getRecord.found to true, and calls |found| for each present getRecord query.
 	// It returns true if any getRecord query was not found in this chunkReader.
-	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error)
 
 	// count returns the chunk count for this chunkReader.
 	count() (uint32, error)
@@ -238,6 +242,10 @@ type chunkSource interface {
 
 	// hash returns the hash address of this chunkSource.
 	hash() hash.Hash
+
+	// name is the on disk short name for this chunkSource. Classically, this was a hash. Having files
+	// with suffixes (eg darc) was useful.
+	name() string
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.ReadCloser, uint64, error)

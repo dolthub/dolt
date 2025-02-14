@@ -426,7 +426,7 @@ func (aw *archiveWriter) genFileName(path string) (string, error) {
 		return "", err
 	}
 
-	fileName := fmt.Sprintf("%s%s", h.String(), archiveFileSuffix)
+	fileName := fmt.Sprintf("%s%s", h.String(), ArchiveFileSuffix)
 	fullPath := filepath.Join(path, fileName)
 	return fullPath, nil
 }

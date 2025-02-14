@@ -50,7 +50,7 @@ func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	return true, gcBehavior_Continue, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	return true, gcBehavior_Continue, nil
 }
 
@@ -64,6 +64,10 @@ func (ecs emptyChunkSource) uncompressedLen() (uint64, error) {
 
 func (ecs emptyChunkSource) hash() hash.Hash {
 	return hash.Hash{}
+}
+
+func (ecs emptyChunkSource) name() string {
+	return ecs.hash().String()
 }
 
 func (ecs emptyChunkSource) index() (tableIndex, error) {

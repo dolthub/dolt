@@ -36,7 +36,7 @@ type archiveChunkSource struct {
 var _ chunkSource = &archiveChunkSource{}
 
 func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
-	archiveFile := filepath.Join(dir, h.String()+archiveFileSuffix)
+	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	file, size, err := openReader(archiveFile)
 	if err != nil {
@@ -141,6 +141,10 @@ func (acs archiveChunkSource) hash() hash.Hash {
 	return acs.aRdr.footer.hash
 }
 
+func (acs archiveChunkSource) name() string {
+	return acs.hash().String() + ArchiveFileSuffix
+}
+
 func (acs archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
@@ -167,14 +171,54 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	return archiveChunkSource{acs.file, rdr}, nil
 }
 
-func (acs archiveChunkSource) getRecordRanges(_ context.Context, _ []getRecord, _ keeperF) (map[hash.Hash]Range, gcBehavior, error) {
-	return nil, gcBehavior_Continue, errors.New("Archive chunk source does not support getRecordRanges")
+func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+	result := make(map[hash.Hash]Range, len(requests))
+	for _, req := range requests {
+		hAddr := *req.a
+		idx := acs.aRdr.search(hAddr)
+		if idx < 0 {
+			// Chunk not found.
+			continue
+		}
+		if keeper != nil && keeper(hAddr) {
+			return nil, gcBehavior_Block, nil
+		}
+
+		dictId, dataId := acs.aRdr.getChunkRef(idx)
+		dataSpan := acs.aRdr.getByteSpanByID(dataId)
+		dictSpan := acs.aRdr.getByteSpanByID(dictId)
+
+		rng := Range{
+			Offset:     dataSpan.offset,
+			Length:     uint32(dataSpan.length),
+			DictOffset: dictSpan.offset,
+			DictLength: uint32(dictSpan.length),
+		}
+
+		result[hAddr] = rng
+	}
+	return result, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	return acs.getMany(ctx, eg, reqs, func(ctx context.Context, chk *chunks.Chunk) {
-		found(ctx, ChunkToCompressedChunk(*chk))
-	}, keeper, stats)
+func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+	foundAll := true
+	for i, req := range reqs {
+		h := *req.a
+		toChk, err := acs.aRdr.getAsToChunker(h)
+		if err != nil {
+			return true, gcBehavior_Continue, err
+		}
+		if toChk == nil || toChk.IsEmpty() {
+			foundAll = false
+		} else {
+			if keeper != nil && keeper(h) {
+				return true, gcBehavior_Block, nil
+			}
+			found(ctx, toChk)
+			reqs[i].found = true
+		}
+	}
+	return !foundAll, gcBehavior_Continue, nil
 }
 
 func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {

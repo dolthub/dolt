@@ -18,9 +18,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/gozstd"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -48,8 +50,14 @@ type ChunkFetcher struct {
 	eg    *errgroup.Group
 	egCtx context.Context
 
+	// toGetCh is the channel used to request chunks. This will be initially given a root,
+	// and as refs are found, they will be added to the channel for workers to batch and request.
 	toGetCh chan hash.HashSet
-	resCh   chan nbs.CompressedChunk
+
+	// resCh is the results channel for the fetcher. It is used both to return
+	// chunks themselves, and to indicate which chunks were requested but missing
+	// by having a Hash, but are empty.
+	resCh chan nbs.ToChunker
 
 	abortCh chan struct{}
 	stats   StatsRecorder
@@ -69,7 +77,7 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 		egCtx: ctx,
 
 		toGetCh: make(chan hash.HashSet),
-		resCh:   make(chan nbs.CompressedChunk),
+		resCh:   make(chan nbs.ToChunker),
 
 		abortCh: make(chan struct{}),
 		stats:   StatsFactory(),
@@ -123,7 +131,7 @@ func (f *ChunkFetcher) CloseSend() error {
 // by |Get|. Returns |io.EOF| after |CloseSend| is called and all requested
 // chunks have been successfully received. Returns an error if this
 // |ChunkFetcher| is terminally failed or if the supplied |ctx| is |Done|.
-func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
+func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
 	select {
 	case <-ctx.Done():
 		return nbs.CompressedChunk{}, context.Cause(ctx)
@@ -219,7 +227,7 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 // delivered in |reqCh|, and they will be delivered in order.
 //
 // This function handles backoff and retries for the underlying streaming RPC.
-func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.CompressedChunk, host string) error {
+func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient, storeRepoToken func(string), missingChunkCh chan nbs.ToChunker, host string) error {
 	stream, err := reliable.MakeCall[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse](
 		ctx,
 		reliable.CallOptions[*remotesapi.GetDownloadLocsRequest, *remotesapi.GetDownloadLocsResponse]{
@@ -327,33 +335,53 @@ func getMissingChunks(req *remotesapi.GetDownloadLocsRequest, resp *remotesapi.G
 	return requested, nil
 }
 
+// Delivered to a fetching thread by the download-coalescing thread, requests for the
+// fetching thread to download all the entries in the |GetRange| and deliver them to
+// the appropriate places. For |rangeType| Chunk, it delivers them to the fetched
+// chunk channel. For |rangeType| Dictionary, it delivers them by calling |set| on the
+// dictionaryCache with the fetched dictionary.
 type fetchResp struct {
-	get     *GetRange
-	refresh func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error)
+	get       *GetRange
+	refresh   func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error)
+	rangeType rangeType
+	dictCache *dictionaryCache
+	path      string
 }
 
 type fetchReq struct {
-	respCh   chan fetchResp
-	cancelCh chan struct{}
+	respCh chan fetchResp
 }
 
 // A simple structure to keep track of *GetRange requests along with
 // |locationRefreshes| for the URL paths we have seen.
 type downloads struct {
-	ranges    *ranges.Tree
+	// This Tree exclusively holds Chunk fetch ranges.
+	chunkRanges *ranges.Tree
+	// This Tree exclusively holds Dictionary fetch ranges. Every
+	// entry that we create in |dictionaryCache| which needs to be
+	// populated goes in here. These ranges must be fetched before
+	// (or concurrently with) any chunkRanges, since the chunk
+	// range fetches will block the fetching thread on the
+	// population of the dictionary cache entry.
+	dictRanges *ranges.Tree
+	// Holds all pending and fetched dictionaries for any chunk
+	// ranges that have gone into |chunkRanges|.
+	dictCache *dictionaryCache
 	refreshes map[string]*locationRefresh
 }
 
 func newDownloads() downloads {
 	return downloads{
-		ranges:    ranges.NewTree(chunkAggDistance),
-		refreshes: make(map[string]*locationRefresh),
+		chunkRanges: ranges.NewTree(chunkAggDistance),
+		dictRanges:  ranges.NewTree(chunkAggDistance),
+		dictCache:   &dictionaryCache{},
+		refreshes:   make(map[string]*locationRefresh),
 	}
 }
 
 func (d downloads) Add(resp *remotesapi.DownloadLoc) {
-	gr := (*GetRange)(resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange)
-	path := gr.ResourcePath()
+	hgr := resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange
+	path := ResourcePath(hgr.Url)
 	if v, ok := d.refreshes[path]; ok {
 		v.Add(resp)
 	} else {
@@ -361,8 +389,14 @@ func (d downloads) Add(resp *remotesapi.DownloadLoc) {
 		refresh.Add(resp)
 		d.refreshes[path] = refresh
 	}
-	for _, r := range gr.Ranges {
-		d.ranges.Insert(gr.Url, r.Hash, r.Offset, r.Length)
+	for _, r := range hgr.Ranges {
+		if r.DictionaryLength != 0 {
+			_, has := d.dictCache.getOrCreate(path, r.DictionaryOffset, r.DictionaryLength)
+			if !has {
+				d.dictRanges.Insert(hgr.Url, nil, r.DictionaryOffset, r.DictionaryLength, 0, 0)
+			}
+		}
+		d.chunkRanges.Insert(hgr.Url, r.Hash[:], r.Offset, r.Length, r.DictionaryOffset, r.DictionaryLength)
 	}
 }
 
@@ -370,84 +404,41 @@ func toGetRange(rs []*ranges.GetRange) *GetRange {
 	ret := new(GetRange)
 	for _, r := range rs {
 		ret.Url = r.Url
-		ret.Ranges = append(ret.Ranges, &remotesapi.RangeChunk{
-			Hash:   r.Hash,
-			Offset: r.Offset,
-			Length: r.Length,
+		ret.Ranges = append(ret.Ranges, &Range{
+			Hash:       r.Hash,
+			Offset:     r.Offset,
+			Length:     r.Length,
+			DictOffset: r.DictOffset,
+			DictLength: r.DictLength,
 		})
 	}
 	return ret
 }
 
+type rangeType int
+
+const (
+	rangeType_Chunk rangeType = iota
+	rangeType_Dictionary
+)
+
 // Reads off |locCh| and assembles DownloadLocs into download ranges.
 func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
 	downloads := newDownloads()
-	pending := make([]fetchReq, 0)
-	var toSend *GetRange
 	for {
-		// pending is our slice of request threads that showed up
-		// asking for a download. We range through it and try to send
-		// them any work we have available.
-		for j := range pending {
-			// |toSend| could have come from a previous iteration
-			// of this loop or the outer loop. If it's |nil|, we
-			// can get the next range to download from
-			// |downloads.ranges|.
-			if toSend == nil {
-				max := downloads.ranges.DeleteMaxRegion()
-				if len(max) == 0 {
-					break
-				}
-				toSend = toGetRange(max)
-			}
-			path := toSend.ResourcePath()
-			refresh := downloads.refreshes[path]
-
-			resp := fetchResp{
-				get: toSend,
-				refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
-					return refresh.GetURL(ctx, err, client)
-				},
-			}
-
-			select {
-			case pending[j].respCh <- resp:
-				toSend = nil
-			case <-pending[j].cancelCh:
-				// Because of dynamic thread pool sizing, a
-				// request thread could have been canceled and
-				// it has now gone away. If this happens, its
-				// respCh will be set to |nil| below and we
-				// will remove it from our |pending| set. But
-				// we need to hold onto |toSend| so that we do
-				// send it to a request thread eventually.
-			case <-ctx.Done():
-				return context.Cause(ctx)
-			}
-
-			pending[j].respCh = nil
-		}
-
-		// Remove anything from |pending| that was actually delivered
-		// to. We use |respCh == nil| to indicate that the above loop
-		// delivered to the download thread.
-		newpending := make([]fetchReq, 0)
-		for i := range pending {
-			if pending[i].respCh != nil {
-				newpending = append(newpending, pending[i])
-			}
-		}
-		pending = newpending
-
-		// Once |locCh| closes, we set |locCh| to nil. If |locCh| is
-		// nil and our ranges Tree is empty, then we have delivered
-		// every download we will ever see to a download thread. We can
-		// close |doneCh| and return nil.
-		if locCh == nil && downloads.ranges.Len() == 0 {
+		hasWork := downloads.dictRanges.Len() > 0 || downloads.chunkRanges.Len() > 0
+		if !hasWork && locCh == nil {
+			// Once |locCh| closes, we sit it to |nil|. If
+			// our range trees are empty then we have
+			// already delivered every download we will
+			// ever see to a download thread.
 			close(doneCh)
 			return nil
 		}
-
+		var reqCh chan fetchReq
+		if hasWork {
+			reqCh = fetchReqCh
+		}
 		select {
 		case req, ok := <-locCh:
 			if !ok {
@@ -457,8 +448,32 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 					downloads.Add(loc)
 				}
 			}
-		case req := <-fetchReqCh:
-			pending = append(pending, req)
+		case req := <-reqCh:
+			var toSend *GetRange
+			var toSendType rangeType
+			if downloads.dictRanges.Len() > 0 {
+				max := downloads.dictRanges.DeleteMaxRegion()
+				toSend, toSendType = toGetRange(max), rangeType_Dictionary
+			} else {
+				// Necessarily non-empty, since |hasWork| is true...
+				max := downloads.chunkRanges.DeleteMaxRegion()
+				toSend, toSendType = toGetRange(max), rangeType_Chunk
+			}
+			path := toSend.ResourcePath()
+			refresh := downloads.refreshes[path]
+			resp := fetchResp{
+				get: toSend,
+				refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
+					return refresh.GetURL(ctx, err, client)
+				},
+				rangeType: toSendType,
+				path:      path,
+				dictCache: downloads.dictCache,
+			}
+			// Requester should deliver an exclusive,
+			// buffered channel where this deliver always
+			// succeeds.
+			req.respCh <- resp
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		}
@@ -527,7 +542,7 @@ func (cc *ConcurrencyControl) Run(ctx context.Context, done <-chan struct{}, ss 
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	cc := &ConcurrencyControl{
 		MaxConcurrency: params.MaximumConcurrentDownloads,
@@ -559,24 +574,68 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
-	respCh := make(chan fetchResp)
-	cancelCh := make(chan struct{})
+func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *dictionaryCache) func(context.Context, []byte, *Range) error {
+	return func(ctx context.Context, bs []byte, rang *Range) error {
+		h := hash.New(rang.Hash[:])
+		var cc nbs.ToChunker
+		if rang.DictLength != 0 {
+			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
+			dictRes, err := payload.Get()
+			if err != nil {
+				return err
+			}
+			cc = nbs.NewArchiveToChunker(h, dictRes.(*gozstd.DDict), bs)
+		} else {
+			var err error
+			cc, err = nbs.NewCompressedChunk(h, bs)
+			if err != nil {
+				return err
+			}
+		}
+		select {
+		case chunkCh <- cc:
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+		return nil
+	}
+}
+
+func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context.Context, []byte, *Range) error {
+	return func(ctx context.Context, bs []byte, rang *Range) error {
+		var ddict *gozstd.DDict
+		decompressed, err := gozstd.Decompress(nil, bs)
+		if err == nil {
+			ddict, err = gozstd.NewDDict(decompressed)
+		}
+		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
+		payload.Set(ddict, err)
+		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
+		// For now, the record in the cache will be terminally failed and is never removed.
+		return err
+	}
+}
+
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh <-chan struct{}, chunkCh chan nbs.ToChunker, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, health reliable.HealthRecorder, fetcher HTTPFetcher, params NetworkRequestParams) error {
+	respCh := make(chan fetchResp, 1)
 	for {
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-doneCh:
 			return nil
-		case fetchReqCh <- fetchReq{respCh: respCh, cancelCh: cancelCh}:
+		case fetchReqCh <- fetchReq{respCh: respCh}:
 			select {
-			case <-doneCh:
-				close(cancelCh)
-				return nil
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			case fetchResp := <-respCh:
-				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, chunkCh, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+				var cb func(context.Context, []byte, *Range) error
+				if fetchResp.rangeType == rangeType_Chunk {
+					cb = deliverChunkCallback(chunkCh, fetchResp.path, fetchResp.dictCache)
+				} else {
+					cb = setDictionaryCallback(fetchResp.dictCache, fetchResp.path)
+				}
+				f := fetchResp.get.GetDownloadFunc(ctx, stats, health, fetcher, params, cb, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
 					return fetchResp.refresh(ctx, lastError, client)
 				})
 				err := f()
@@ -586,4 +645,49 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 			}
 		}
 	}
+}
+
+// A dictionaryCache provides a rendezvous point for chunk fetches
+// which have data dependencies on dictionary fetches. It stores a
+// single record per |path|,|offset| tuple we see, and that record
+// will be populated with the |*gozstd.DDict| that results from
+// fetching those contents. Every |GetRange| that has a dictionary
+// dependency gets the record out of the dictionary cache. The first
+// time the cache entry is created, the download thread also schedules
+// the dictionary itself to be fetched and populated through |Set|.
+type dictionaryCache struct {
+	dictionaries sync.Map
+}
+
+// DictionaryKey is the a globaly unique identifier for an archive dictionary.
+type DictionaryKey struct {
+	// This is the short url to the resource, not including the query parameters - which are provided by the
+	// locationRefresher.
+	path string
+	off  uint64
+	len  uint32
+}
+
+type DictionaryPayload struct {
+	done chan struct{}
+	res  any
+	err  error
+}
+
+func (p *DictionaryPayload) Get() (any, error) {
+	<-p.done
+	return p.res, p.err
+}
+
+func (p *DictionaryPayload) Set(res any, err error) {
+	p.res = res
+	p.err = err
+	close(p.done)
+}
+
+func (dc *dictionaryCache) getOrCreate(path string, offset uint64, length uint32) (*DictionaryPayload, bool) {
+	key := DictionaryKey{path, offset, length}
+	entry, loaded := dc.dictionaries.LoadOrStore(key, &DictionaryPayload{done: make(chan struct{})})
+	payload := entry.(*DictionaryPayload)
+	return payload, loaded
 }

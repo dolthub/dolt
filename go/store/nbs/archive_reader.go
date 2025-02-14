@@ -19,6 +19,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/bits"
@@ -271,17 +272,31 @@ func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
 	if err != nil || data == nil {
 		return nil, err
 	}
+	if dict == nil {
+		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
+	}
 
 	var result []byte
-	if dict == nil {
-		result, err = gozstd.Decompress(nil, data)
-	} else {
-		result, err = gozstd.DecompressDict(nil, data, dict)
-	}
+	result, err = gozstd.DecompressDict(nil, data, dict)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
+// If the hash is not found, a ToChunker instance with IsEmpty() == true is returned (no error)
+func (ar archiveReader) getAsToChunker(h hash.Hash) (ToChunker, error) {
+	dict, data, err := ar.getRaw(h)
+	if err != nil {
+		return nil, err
+	}
+
+	if data == nil {
+		return ArchiveToChunker{h, nil, []byte{}}, nil
+	}
+
+	return ArchiveToChunker{h, dict, data}, nil
 }
 
 func (ar archiveReader) count() uint32 {
@@ -308,7 +323,7 @@ func (ar archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 // getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
 // no error is returned in this case. Errors will only be returned if there is an io error.
 //
-// The data returned is still compressed, regardless of the dictionary being present or not.
+// The data returned is still compressed, and the DDict is required to decompress it.
 func (ar archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte, err error) {
 	idx := ar.search(hash)
 	if idx < 0 {

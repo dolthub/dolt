@@ -81,9 +81,11 @@ func mapTableFiles(tblFiles []chunks.TableFile) ([]string, map[string]chunks.Tab
 	fileIDtoNumChunks := make(map[string]int)
 
 	for i, tblFile := range tblFiles {
-		fileIDtoTblFile[tblFile.FileID()] = tblFile
-		fileIds[i] = tblFile.FileID()
-		fileIDtoNumChunks[tblFile.FileID()] = tblFile.NumChunks()
+		fileId := tblFile.FileID()
+
+		fileIDtoTblFile[fileId] = tblFile
+		fileIds[i] = fileId
+		fileIDtoNumChunks[fileId] = tblFile.NumChunks()
 	}
 
 	return fileIds, fileIDtoTblFile, fileIDtoNumChunks
@@ -136,7 +138,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 				}
 
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
 						return nil, 0, err

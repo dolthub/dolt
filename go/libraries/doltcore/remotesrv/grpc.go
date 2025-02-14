@@ -295,7 +295,12 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			var ranges []*remotesapi.RangeChunk
 			for h, r := range hashToRange {
 				hCpy := h
-				ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
+				ranges = append(ranges, &remotesapi.RangeChunk{
+					Hash:             hCpy[:],
+					Offset:           r.Offset,
+					Length:           r.Length,
+					DictionaryOffset: r.DictOffset,
+					DictionaryLength: r.DictLength})
 			}
 
 			url := rs.getDownloadUrl(md, prefix+"/"+loc)
@@ -606,7 +611,7 @@ func getTableFileInfo(
 	}
 	appendixTableFileInfo := make([]*remotesapi.TableFileInfo, 0)
 	for _, t := range tableList {
-		url := rs.getDownloadUrl(md, prefix+"/"+t.LocationPrefix()+t.FileID())
+		url := rs.getDownloadUrl(md, prefix+"/"+t.LocationPrefix()+t.FileID()+t.LocationSuffix())
 		url, err = rs.sealer.Seal(url)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to get seal download url for "+t.FileID())
