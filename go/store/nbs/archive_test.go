@@ -115,41 +115,50 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 4096))
 	aw := newArchiveWriterWithSink(writer)
-	data1 := []byte{11, 11, 11, 11, 11, 11, 11, 11, 11, 11} // span 1
-	dict1, _ := generateDictionary(1)                       // span 2
-	data2 := []byte{22, 22, 22, 22, 22, 22, 22, 22, 22, 22} // span 3
-	data3 := []byte{33, 33, 33, 33, 33, 33, 33, 33, 33, 33} // span 4
-	data4 := []byte{44, 44, 44, 44, 44, 44, 44, 44, 44, 44} // span 5
-	dict2, _ := generateDictionary(2)                       // span 6
+
+	defDict, _ := generateTerribleDefaultDictionary()       // span 1
+	data1 := []byte{11, 11, 11, 11, 11, 11, 11, 11, 11, 11} // span 2
+	dict1, _ := generateDictionary(1)                       // span 3
+	data2 := []byte{22, 22, 22, 22, 22, 22, 22, 22, 22, 22} // span 4
+	data3 := []byte{33, 33, 33, 33, 33, 33, 33, 33, 33, 33} // span 5
+	data4 := []byte{44, 44, 44, 44, 44, 44, 44, 44, 44, 44} // span 6
+	dict2, _ := generateDictionary(2)                       // span 7
+
+	id, _ := aw.writeByteSpan(defDict)
+	assert.Equal(t, uint32(1), id)
 
 	h1 := hashWithPrefix(t, 42)
-	id, _ := aw.writeByteSpan(data1)
-	assert.Equal(t, uint32(1), id)
-	_ = aw.stageChunk(h1, 0, 1)
+	id, _ = aw.writeByteSpan(data1)
+	assert.Equal(t, uint32(2), id)
+	_ = aw.stageChunk(h1, 1, 2)
 
 	h2 := hashWithPrefix(t, 42)
-	_, _ = aw.writeByteSpan(dict1)
-	_, _ = aw.writeByteSpan(data2)
-	_ = aw.stageChunk(h2, 2, 3)
+	id, _ = aw.writeByteSpan(dict1)
+	assert.Equal(t, uint32(3), id)
+	id, _ = aw.writeByteSpan(data2)
+	assert.Equal(t, uint32(4), id)
+	_ = aw.stageChunk(h2, 3, 4)
 
 	h3 := hashWithPrefix(t, 42)
-	_, _ = aw.writeByteSpan(data3)
-	_ = aw.stageChunk(h3, 2, 4)
+	id, _ = aw.writeByteSpan(data3)
+	assert.Equal(t, uint32(5), id)
+	_ = aw.stageChunk(h3, 3, 5)
 
 	h4 := hashWithPrefix(t, 81)
-	_, _ = aw.writeByteSpan(data4)
-	_ = aw.stageChunk(h4, 0, 5)
+	id, _ = aw.writeByteSpan(data4)
+	assert.Equal(t, uint32(6), id)
+	_ = aw.stageChunk(h4, 0, 6)
 
 	h5 := hashWithPrefix(t, 21)
 	id, _ = aw.writeByteSpan(dict2)
-	assert.Equal(t, uint32(6), id)
-	_ = aw.stageChunk(h5, 6, 1)
+	assert.Equal(t, uint32(7), id)
+	_ = aw.stageChunk(h5, 7, 2)
 
 	h6 := hashWithPrefix(t, 88)
-	_ = aw.stageChunk(h6, 6, 1)
+	_ = aw.stageChunk(h6, 7, 2)
 
 	h7 := hashWithPrefix(t, 42)
-	_ = aw.stageChunk(h7, 2, 4)
+	_ = aw.stageChunk(h7, 3, 5)
 
 	_ = aw.finalizeByteSpans()
 	_ = aw.writeIndex()
@@ -175,7 +184,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	assert.False(t, aIdx.has(hashWithPrefix(t, 55)))
 
 	dict, data, _ := aIdx.getRaw(h1)
-	assert.Nil(t, dict)
+	assert.NotNil(t, dict)
 	assert.Equal(t, data1, data)
 
 	dict, data, _ = aIdx.getRaw(h2)
@@ -280,13 +289,17 @@ func TestMetadata(t *testing.T) {
 // zStd has a CRC check built into it, and it will get triggered when we
 // attempt to decompress a corrupted chunk.
 func TestArchiveChunkCorruption(t *testing.T) {
-	writer := NewFixedBufferByteSink(make([]byte, 1024))
+	writer := NewFixedBufferByteSink(make([]byte, 4096))
 	aw := newArchiveWriterWithSink(writer)
+
+	defDict, _ := generateTerribleDefaultDictionary()
+	_, _ = aw.writeByteSpan(defDict)
+
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	_, _ = aw.writeByteSpan(testBlob)
 
 	h := hashWithPrefix(t, 23)
-	_ = aw.stageChunk(h, 0, 1)
+	_ = aw.stageChunk(h, 1, 2)
 	_ = aw.finalizeByteSpans()
 	_ = aw.writeIndex()
 	_ = aw.writeMetadata(nil)
@@ -299,7 +312,7 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Corrupt the data
-	writer.buff[3] = writer.buff[3] + 1
+	writer.buff[len(defDict)+3] = writer.buff[len(defDict)+3] + 1
 
 	data, err := idx.get(h)
 	assert.ErrorContains(t, err, "cannot decompress invalid src")
@@ -592,7 +605,7 @@ func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	return hash.Hash(randomBytes)
 }
 
-// For tests which need a dictionary, we generate a terrible one because we don't care about the actual compression.
+// Most tests need a test dictionary. We generate a terrible one because we don't care about the actual compression.
 // We return both the raw form and the CDict form.
 func generateTerribleDefaultDictionary() ([]byte, *gozstd.CDict) {
 	return generateDictionary(1977)
