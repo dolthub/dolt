@@ -73,10 +73,12 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 // invalidated in such a way that all future queries on it return an error.
 type killConnectionsSafepointController struct {
 	callCtx   *sql.Context
+	doltDB    *doltdb.DoltDB
 	origEpoch int
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	return nil
 }
 
@@ -127,23 +129,24 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	params := backoff.NewExponentialBackOff()
 	params.InitialInterval = 1 * time.Millisecond
 	params.MaxInterval = 25 * time.Millisecond
-	params.MaxElapsedTime = 3 * time.Second
+	params.MaxElapsedTime = 10 * time.Second
+	var unkilled map[uint32]struct{}
 	err = backoff.Retry(func() error {
+		unkilled = make(map[uint32]struct{})
 		processes := sc.callCtx.ProcessList.Processes()
-		allgood := true
 		for _, p := range processes {
 			if _, ok := killed[p.Connection]; ok {
-				allgood = false
+				unkilled[p.Connection] = struct{}{}
 				sc.callCtx.ProcessList.Kill(p.Connection)
 			}
 		}
-		if !allgood {
-			return errors.New("unable to establish safepoint.")
+		if len(unkilled) > 0 {
+			return errors.New("could not establish safepont")
 		}
 		return nil
 	}, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
 	sc.callCtx.Session.SetTransaction(nil)
 	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
@@ -157,6 +160,8 @@ type sessionAwareSafepointController struct {
 	controller  *dsess.GCSafepointController
 	dbname      string
 	callSession *dsess.DoltSession
+	origEpoch   int
+	doltDB      *doltdb.DoltDB
 
 	waiter *dsess.GCSafepointWaiter
 	keeper func(hash.Hash) bool
@@ -167,6 +172,7 @@ func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dses
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	sc.keeper = keeper
 	err := sc.visit(ctx, sc.callSession)
 	if err != nil {
@@ -248,6 +254,7 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname s
 			callSession: dSess,
 			dbname:      dbname,
 			controller:  gcSafepointController,
+			doltDB:      ddb,
 		}
 	} else {
 		// Legacy safepoint controller behavior was to not
@@ -269,6 +276,7 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname s
 		sc = killConnectionsSafepointController{
 			origEpoch: origepoch,
 			callCtx:   ctx,
+			doltDB:    ddb,
 		}
 	}
 	return ddb.GC(ctx, mode, sc)

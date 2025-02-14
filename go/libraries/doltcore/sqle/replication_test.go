@@ -36,8 +36,7 @@ func TestCommitHooksNoErrors(t *testing.T) {
 
 	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
-	bThreads := sql.NewBackgroundThreads()
-	hooks, err := GetCommitHooks(context.Background(), bThreads, dEnv, &buffer.Buffer{})
+	hooks, _, err := GetCommitHooks(context.Background(), dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")

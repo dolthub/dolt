@@ -73,13 +73,13 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 		return nil, err
 	}
 
+	defer func() {
+		gcc.writer.Cancel()
+	}()
+
 	if gcc.writer.ChunkCount() == 0 {
 		return []tableSpec{}, nil
 	}
-
-	defer func() {
-		_ = gcc.writer.Remove()
-	}()
 
 	addr, ok := hash.MaybeParse(filename)
 	if !ok {

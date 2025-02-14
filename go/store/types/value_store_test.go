@@ -23,6 +23,9 @@ package types
 
 import (
 	"context"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,7 +201,7 @@ func TestGC(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(v2)
 
-	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, nil)
+	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil
@@ -209,10 +212,208 @@ func TestGC(t *testing.T) {
 	assert.Nil(v2)
 }
 
+func TestGCStateDetails(t *testing.T) {
+	// In the absence of concurrency, these tests call
+	// |waitForNoGC| without gcMu held.
+	t.Run("StartsNoGC", func(t *testing.T) {
+		vs := newTestValueStore()
+		vs.waitForNoGC()
+	})
+	t.Run("NewGenBeforeOldGenPanics", func(t *testing.T) {
+		vs := newTestValueStore()
+		assert.Panics(t, func() {
+			vs.transitionToNewGenGC()
+		})
+	})
+	t.Run("FinalizingBeforeNewGenPanics", func(t *testing.T) {
+		vs := newTestValueStore()
+		assert.Panics(t, func() {
+			vs.transitionToFinalizingGC()
+		})
+		vs = newTestValueStore()
+		vs.transitionToOldGenGC()
+		assert.Panics(t, func() {
+			vs.transitionToFinalizingGC()
+		})
+	})
+	t.Run("NoGCAlwaysPossible", func(t *testing.T) {
+		vs := newTestValueStore()
+		vs.transitionToNoGC()
+		vs.waitForNoGC()
+		vs.transitionToOldGenGC()
+		vs.transitionToNoGC()
+		vs.waitForNoGC()
+		vs.transitionToOldGenGC()
+		vs.transitionToNewGenGC()
+		vs.transitionToNoGC()
+		vs.waitForNoGC()
+		vs.transitionToOldGenGC()
+		vs.transitionToNewGenGC()
+		vs.transitionToFinalizingGC()
+		vs.transitionToNoGC()
+		vs.waitForNoGC()
+	})
+	t.Run("transitionToOldGenGC_Concurrent", func(t *testing.T) {
+		vs := newTestValueStore()
+		var wg sync.WaitGroup
+		const numThreads = 16
+		wg.Add(numThreads)
+		var running atomic.Int32
+		for i := 0; i < numThreads; i++ {
+			go func() {
+				// We attempt to yield a bunch to get parallelism, but
+				// in reality this test is best-effort looking for
+				// wonkiness where transitionToOldGenGC allows more
+				// than one thread to enter GC at a time or something
+				// like that.
+				defer wg.Done()
+				runtime.Gosched()
+				vs.transitionToOldGenGC()
+				require.True(t, running.CompareAndSwap(0, 1))
+				runtime.Gosched()
+				vs.transitionToNewGenGC()
+				runtime.Gosched()
+				vs.transitionToFinalizingGC()
+				runtime.Gosched()
+				require.True(t, running.CompareAndSwap(1, 0))
+				vs.transitionToNoGC()
+			}()
+		}
+		wg.Wait()
+	})
+	t.Run("gcAddChunk", func(t *testing.T) {
+		t.Run("NoGCPanics", func(t *testing.T) {
+			vs := newTestValueStore()
+			assert.Panics(t, func() {
+				vs.gcAddChunk(hash.Hash{})
+			})
+		})
+		t.Run("OldGenAddsChunk", func(t *testing.T) {
+			vs := newTestValueStore()
+			vs.transitionToOldGenGC()
+			assert.False(t, vs.gcAddChunk(hash.Hash{}))
+			got := vs.readAndResetNewGenToVisit()
+			assert.Len(t, got, 0)
+			got = vs.transitionToNewGenGC()
+			assert.Len(t, got, 1)
+		})
+		t.Run("NewGenAddsChunk", func(t *testing.T) {
+			t.Run("SeenInReadAndReset", func(t *testing.T) {
+				vs := newTestValueStore()
+				vs.transitionToOldGenGC()
+				assert.Len(t, vs.transitionToNewGenGC(), 0)
+				assert.False(t, vs.gcAddChunk(hash.Hash{}))
+				assert.Len(t, vs.readAndResetNewGenToVisit(), 1)
+				assert.Len(t, vs.transitionToFinalizingGC(), 0)
+			})
+			t.Run("SeenInTransitionToFinalizing", func(t *testing.T) {
+				vs := newTestValueStore()
+				vs.transitionToOldGenGC()
+				assert.Len(t, vs.transitionToNewGenGC(), 0)
+				assert.False(t, vs.gcAddChunk(hash.Hash{}))
+				assert.Len(t, vs.transitionToFinalizingGC(), 1)
+			})
+		})
+		t.Run("Finalizing", func(t *testing.T) {
+			t.Run("WantsBlock", func(t *testing.T) {
+				vs := newTestValueStore()
+				vs.transitionToOldGenGC()
+				vs.transitionToNewGenGC()
+				vs.transitionToFinalizingGC()
+				assert.True(t, vs.gcAddChunk(hash.Hash{}))
+			})
+			t.Run("WithOutstandingOp", func(t *testing.T) {
+				vs := newTestValueStore()
+				var cleanups []func()
+				cleanup, err := vs.waitForNotFinalizingGC(context.Background())
+				assert.NoError(t, err)
+				cleanups = append(cleanups, cleanup)
+				vs.transitionToOldGenGC()
+				cleanup, err = vs.waitForNotFinalizingGC(context.Background())
+				assert.NoError(t, err)
+				cleanups = append(cleanups, cleanup)
+				vs.transitionToNewGenGC()
+				cleanup, err = vs.waitForNotFinalizingGC(context.Background())
+				assert.NoError(t, err)
+				cleanups = append(cleanups, cleanup)
+				var seen hash.HashSet
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					seen = vs.transitionToFinalizingGC()
+				}()
+				runtime.Gosched()
+				assert.False(t, vs.gcAddChunk(hash.Hash{}))
+				for _, c := range cleanups {
+					c()
+				}
+				wg.Wait()
+				assert.Len(t, seen, 1)
+			})
+		})
+	})
+	t.Run("WaitForFinalizing", func(t *testing.T) {
+		t.Run("CtxDone", func(t *testing.T) {
+			vs := newTestValueStore()
+			vs.transitionToOldGenGC()
+			vs.transitionToNewGenGC()
+			vs.transitionToFinalizingGC()
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			cleanup, err := vs.waitForNotFinalizingGC(ctx)
+			assert.Nil(t, cleanup)
+			assert.Error(t, err)
+		})
+		t.Run("Blocking", func(t *testing.T) {
+			vs := newTestValueStore()
+			vs.transitionToOldGenGC()
+			vs.transitionToNewGenGC()
+			vs.transitionToFinalizingGC()
+			ctx := context.Background()
+			var cleanup func()
+			var err error
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cleanup, err = vs.waitForNotFinalizingGC(ctx)
+			}()
+			vs.transitionToNoGC()
+			wg.Wait()
+			assert.NoError(t, err)
+			assert.NotNil(t, cleanup)
+			cleanup()
+		})
+	})
+}
+
 type badVersionStore struct {
 	chunks.ChunkStore
 }
 
 func (b *badVersionStore) Version() string {
 	return "BAD"
+}
+
+type purgingSafepointController struct {
+	vs *ValueStore
+}
+
+var _ (GCSafepointController) = purgingSafepointController{}
+
+func (c purgingSafepointController) BeginGC(ctx context.Context, keeper func(h hash.Hash) bool) error {
+	c.vs.PurgeCaches()
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPreFinalizeSafepoint(context.Context) error {
+	return nil
+}
+
+func (c purgingSafepointController) EstablishPostFinalizeSafepoint(context.Context) error {
+	return nil
+}
+
+func (c purgingSafepointController) CancelSafepoint() {
 }

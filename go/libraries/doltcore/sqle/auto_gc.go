@@ -161,10 +161,9 @@ type autoGCCommitHook struct {
 	// the database to see if we should request a new GC.
 	done chan struct{}
 	// It simplifies the logic and efficiency of the
-	// implementation a bit to have an already allocated 	// in the commit hook.
-channel
-	// we can try to send, which will become our new |done|
-	// channel once we send it successfully.
+	// implementation a bit to have an already allocated channel
+	// we can try to send when we request a GC. If will become our
+	// new |done| channel once we send it successfully.
 	next chan struct{}
 	// |done| and |next| are mutable and |Execute| can be called
 	// concurrently. We protect them with |mu|.

@@ -116,6 +116,7 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 			return nil
 		}
 	} else if err != nil {
+		require.NotContains(t, err.Error(), "connection refused")
 		t.Logf("err in Conn: %v", err)
 		return nil
 	}
@@ -162,6 +163,7 @@ func (gct gcTest) doGC(t *testing.T, ctx context.Context, db *sql.DB) error {
 			return nil
 		}
 	} else if err != nil {
+		require.NotContains(t, err.Error(), "connection refused")
 		t.Logf("err in Conn for dolt_gc: %v", err)
 		return nil
 	}

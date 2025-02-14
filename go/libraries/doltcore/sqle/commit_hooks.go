@@ -114,13 +114,12 @@ const (
 var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
+func NewAsyncPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
 	ch := make(chan PushArg, asyncPushBufferSize)
-	err := RunAsyncReplicationThreads(bThreads, ch, destDB, tmpDir, logger)
-	if err != nil {
-		return nil, err
+	runThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
+		return RunAsyncReplicationThreads(bThreads, ctxF, ch, destDB, tmpDir, logger)
 	}
-	return &AsyncPushOnWriteHook{ch: ch}, nil
+	return &AsyncPushOnWriteHook{ch: ch}, runThreads
 }
 
 func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
@@ -188,7 +187,7 @@ func (*LogHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) error {
+func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
@@ -246,16 +245,26 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg
 		}
 		for id, newCm := range newHeadsCopy {
 			if latest, ok := latestHeads[id]; !ok || latest != newCm.hash {
-				// use background context to drain after sql context is canceled
-				err := pushDataset(context.Background(), destDB, newCm.db, newCm.ds, tmpDir)
-				if err != nil {
-					logger.Write([]byte("replication failed: " + err.Error()))
-				}
-				if newCm.hash.IsEmpty() {
-					delete(latestHeads, id)
-				} else {
-					latestHeads[id] = newCm.hash
-				}
+				func() {
+					// use background context to drain after sql context is canceled
+					sqlCtx, err := ctxF(context.Background())
+					if err != nil {
+						logger.Write([]byte("replication failed: could not create *sql.Context: " + err.Error()))
+					} else {
+						defer sql.SessionEnd(sqlCtx.Session)
+						sql.SessionCommandBegin(sqlCtx.Session)
+						defer sql.SessionCommandEnd(sqlCtx.Session)
+						err := pushDataset(sqlCtx, destDB, newCm.db, newCm.ds, tmpDir)
+						if err != nil {
+							logger.Write([]byte("replication failed: " + err.Error()))
+						}
+						if newCm.hash.IsEmpty() {
+							delete(latestHeads, id)
+						} else {
+							latestHeads[id] = newCm.hash
+						}
+					}
+				}()
 			}
 		}
 	}

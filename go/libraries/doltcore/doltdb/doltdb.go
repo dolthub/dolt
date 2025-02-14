@@ -2185,6 +2185,15 @@ func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.Ha
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }
 
+// Purge in-memory read caches associated with this DoltDB. This needs
+// to be done at a specific point during a GC operation to ensure that
+// everything the application layer sees still exists in the database
+// after the GC operation is completed.
+func (ddb *DoltDB) PurgeCaches() {
+	ddb.vrw.PurgeCaches()
+	ddb.ns.PurgeCaches()
+}
+
 type FSCKReport struct {
 	ChunkCount uint32
 	Problems   []error

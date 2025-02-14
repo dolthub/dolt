@@ -654,6 +654,11 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
+// Returns a |chunks.GetAddrsCurry| for the nbf (NomsBinFormat)
+// corresponding to |version|.
+//
+// Used to implement chunk reference sanity checks when adding table files that have
+// been uploaded by clients to the stores managed by the gRPC server.
 func (rs *RemoteChunkStore) getAddrs(version string) chunks.GetAddrsCurry {
 	fmt, err := types.GetFormatForVersionString(version)
 	if err != nil {

@@ -48,6 +48,12 @@ func (c nodeCache) insert(addr hash.Hash, node Node) {
 	s.insert(addr, node)
 }
 
+func (c nodeCache) purge() {
+	for _, s := range c.stripes {
+		s.purge()
+	}
+}
+
 type centry struct {
 	a    hash.Hash
 	n    Node
@@ -81,6 +87,15 @@ func removeFromList(e *centry) {
 	e.next.prev = e.prev
 	e.prev = e
 	e.next = e
+}
+
+func (s *stripe) purge() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.chunks = make(map[hash.Hash]*centry)
+	s.head = nil
+	s.sz = 0
+	s.rev = 0
 }
 
 func (s *stripe) moveToFront(e *centry) {

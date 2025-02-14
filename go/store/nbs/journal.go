@@ -195,6 +195,14 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 	if err != nil {
 		return manifestContents{}, err
 	} else if !ok {
+		// If there is no backing manifest yet, we simply
+		// return without any manifest contents. We can open a
+		// newly created (cloned) journal file before the
+		// manifest corresponding to its existence has been
+		// created. |*ChunkJournal.ParseIfExists| forwards
+		// to the backing store in the case that the loaded
+		// manifest is currently empty, so eventually the
+		// manifest will be created.
 		return manifestContents{}, nil
 	}
 
