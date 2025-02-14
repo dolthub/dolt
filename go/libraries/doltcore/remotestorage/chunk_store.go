@@ -827,8 +827,13 @@ func (dcs *DoltChunkStore) loadRoot(ctx context.Context) error {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	hashToChunkCount, err := dcs.uploadChunks(ctx)
+	toUpload := dcs.wb.GetAllForWrite()
+	var success bool
+	defer func() {
+		dcs.wb.WriteCompleted(success)
+	}()
 
+	hashToChunkCount, err := dcs.uploadChunks(ctx, toUpload)
 	if err != nil {
 		return false, err
 	}
@@ -859,6 +864,9 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 	}
 
+	// We only delete the chunks that we wrote to the remote from
+	// our write buffer if our commit was successful.
+	success = resp.Success
 	return resp.Success, dcs.refreshRepoMetadata(ctx)
 }
 
@@ -888,10 +896,11 @@ func (dcs *DoltChunkStore) Close() error {
 	return dcs.finalizer()
 }
 
-// getting this working using the simplest approach first
-func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int, error) {
-	hashToChunk := dcs.wb.GetAllAndClear()
-
+// Uploads all chunks in |hashToChunk| to the remote store and returns
+// the manifest entries that correspond to the new table files. Used
+// by |Commit|. Typically |hashToChunk| will have come from our |wb|
+// |writeBuffer|.
+func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[hash.Hash]nbs.CompressedChunk) (map[hash.Hash]int, error) {
 	if len(hashToChunk) == 0 {
 		return map[hash.Hash]int{}, nil
 	}
@@ -899,7 +908,6 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	chnks := make([]chunks.Chunk, 0, len(hashToChunk))
 	for _, chable := range hashToChunk {
 		ch, err := chable.ToChunk()
-
 		if err != nil {
 			return nil, err
 		}
@@ -928,7 +936,6 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	}
 
 	for h, contentHash := range hashToContentHash {
-		// Can parallelize this in the future if needed
 		err := dcs.uploadTableFileWithRetries(ctx, h, uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
 			data := hashToData[h]
 			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil

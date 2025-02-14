@@ -10,7 +10,20 @@ import (
 
 type WriteBuffer interface {
 	Put(nbs.CompressedChunk) error
-	GetAllAndClear() map[hash.Hash]nbs.CompressedChunk
+
+	// Returns the current set of written chunks.  After this
+	// returns, concurrent calls to other methods may block until
+	// |WriteCompleted is called.  Calls to |GetAllForWrite| must
+	// be bracketed by a call to |WriteCompleted|
+	GetAllForWrite() map[hash.Hash]nbs.CompressedChunk
+
+	// Called after a call to |GetAllForWrite|, this records
+	// success or failure of the write operation.  If the write
+	// operation was successful, then the written chunks are now
+	// in the upstream, and so they can be cleared. Otherwise, the
+	// written chunks are retained in the write buffer so that the
+	// write can be retried.
+	WriteCompleted(success bool)
 
 	// ChunkStore clients expect to read their own writes before a commit.
 	// On the get path, remotestorage should add pending chunks to its result
@@ -22,14 +35,19 @@ type WriteBuffer interface {
 
 type noopWriteBuffer struct {
 }
+
 var _ WriteBuffer = noopWriteBuffer{}
 
 func (noopWriteBuffer) Put(nbs.CompressedChunk) error {
 	return errors.New("unsupported operation: write on a read-only remotestorage chunk store")
 }
 
-func (noopWriteBuffer) GetAllAndClear() map[hash.Hash]nbs.CompressedChunk {
-	panic("attempt to upload chunks on a read-only remotestorage chunk store") 
+func (noopWriteBuffer) GetAllForWrite() map[hash.Hash]nbs.CompressedChunk {
+	panic("attempt to upload chunks on a read-only remotestorage chunk store")
+}
+
+func (noopWriteBuffer) WriteCompleted(success bool) {
+	panic("call to WriteCompleted on a noopWriteBuffer")
 }
 
 func (noopWriteBuffer) AddPendingChunks(hash.HashSet, map[hash.Hash]nbs.ToChunker) {
@@ -41,29 +59,54 @@ func (noopWriteBuffer) RemovePresentChunks(hash.HashSet) {
 // A simple WriteBuffer which buffers unlimited data in memory and
 // waits to flush it.
 type mapWriteBuffer struct {
-	mu sync.Mutex
-	chunks map[hash.Hash]nbs.CompressedChunk
+	mu      sync.Mutex
+	cond    sync.Cond
+	// Set when an outstanding write is in progress, |Put| will
+	// block against this. Reset by |WriteCompleted| after the
+	// appropriate updates to |chunks| have been made.
+	writing bool
+	chunks  map[hash.Hash]nbs.CompressedChunk
 }
 
 func newMapWriteBuffer() *mapWriteBuffer {
-	var ret mapWriteBuffer
-	ret.chunks = make(map[hash.Hash]nbs.CompressedChunk)
-	return &ret
+	ret := &mapWriteBuffer{
+		chunks: make(map[hash.Hash]nbs.CompressedChunk),
+	}
+	ret.cond.L = &ret.mu
+	return ret
 }
 
 func (b *mapWriteBuffer) Put(cc nbs.CompressedChunk) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	for b.writing {
+		b.cond.Wait()
+	}
 	b.chunks[cc.H] = cc
 	return nil
 }
 
-func (b *mapWriteBuffer) GetAllAndClear() map[hash.Hash]nbs.CompressedChunk {
+func (b *mapWriteBuffer) GetAllForWrite() map[hash.Hash]nbs.CompressedChunk {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	ret := b.chunks
-	b.chunks = make(map[hash.Hash]nbs.CompressedChunk)
-	return ret
+	for b.writing {
+		b.cond.Wait()
+	}
+	b.writing = true
+	return b.chunks
+}
+
+func (b *mapWriteBuffer) WriteCompleted(success bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.writing {
+		panic("mapWriteBuffer got WriteCompleted while no write was in progress")
+	}
+	b.writing = false
+	if success {
+		b.chunks = make(map[hash.Hash]nbs.CompressedChunk)
+	}
+	b.cond.Broadcast()
 }
 
 func (b *mapWriteBuffer) AddPendingChunks(hs hash.HashSet, res map[hash.Hash]nbs.ToChunker) {
