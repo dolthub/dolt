@@ -333,6 +333,10 @@ func (v nodeStoreValidator) PutBlobBuilder(bb *BlobBuilder) {
 	v.bbp.Put(bb)
 }
 
+func (v nodeStoreValidator) PurgeCaches() {
+	v.ns.PurgeCaches()
+}
+
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
 }

@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -655,4 +656,29 @@ func TestGuessPrefixOrdinal(t *testing.T) {
 		guess := GuessPrefixOrdinal(pre, 256)
 		assert.Equal(t, i, guess)
 	}
+}
+
+func TestWaitForGC(t *testing.T) {
+	// Wait for GC should always return when the context is canceled...
+	nbs := &NomsBlockStore{}
+	nbs.cond = sync.NewCond(&nbs.mu)
+	nbs.gcInProgress = true
+	const numThreads = 32
+	cancels := make([]func(), 0, numThreads)
+	var wg sync.WaitGroup
+	wg.Add(numThreads)
+	for i := 0; i < numThreads; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancels = append(cancels, cancel)
+		go func() {
+			defer wg.Done()
+			nbs.mu.Lock()
+			defer nbs.mu.Unlock()
+			nbs.waitForGC(ctx)
+		}()
+	}
+	for _, c := range cancels {
+		c()
+	}
+	wg.Wait()
 }

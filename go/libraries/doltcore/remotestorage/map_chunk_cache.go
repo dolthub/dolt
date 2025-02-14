@@ -26,7 +26,7 @@ import (
 // stores cached chunks and has records in lru caches.
 type mapChunkCache struct {
 	mu     *sync.Mutex
-	chunks *lru.TwoQueueCache[hash.Hash,nbs.CompressedChunk]
+	chunks *lru.TwoQueueCache[hash.Hash,nbs.ToChunker]
 	has    *lru.TwoQueueCache[hash.Hash,struct{}]
 }
 
@@ -39,7 +39,7 @@ func newMapChunkCache() *mapChunkCache {
 
 // used by DoltHub API
 func NewMapChunkCacheWithMaxCapacity(maxChunkCapacity, maxHasCapacity int) *mapChunkCache {
-	chunks, err := lru.New2Q[hash.Hash,nbs.CompressedChunk](maxChunkCapacity)
+	chunks, err := lru.New2Q[hash.Hash,nbs.ToChunker](maxChunkCapacity)
 	if err != nil {
 		panic(err)
 	}
@@ -54,14 +54,14 @@ func NewMapChunkCacheWithMaxCapacity(maxChunkCapacity, maxHasCapacity int) *mapC
 	}
 }
 
-func (cache *mapChunkCache) InsertChunks(cs []nbs.CompressedChunk) {
+func (cache *mapChunkCache) InsertChunks(cs []nbs.ToChunker) {
 	for _, c := range cs {
 		cache.chunks.Add(c.Hash(), c)
 	}
 }
 
-func (cache *mapChunkCache) GetCachedChunks(hs hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
-	ret := make(map[hash.Hash]nbs.CompressedChunk)
+func (cache *mapChunkCache) GetCachedChunks(hs hash.HashSet) map[hash.Hash]nbs.ToChunker {
+	ret := make(map[hash.Hash]nbs.ToChunker)
 	for h := range hs {
 		c, ok := cache.chunks.Get(h)
 		if ok {

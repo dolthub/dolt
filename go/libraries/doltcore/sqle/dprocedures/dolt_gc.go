@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -73,10 +74,12 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 // invalidated in such a way that all future queries on it return an error.
 type killConnectionsSafepointController struct {
 	callCtx   *sql.Context
+	doltDB    *doltdb.DoltDB
 	origEpoch int
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	return nil
 }
 
@@ -127,23 +130,24 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	params := backoff.NewExponentialBackOff()
 	params.InitialInterval = 1 * time.Millisecond
 	params.MaxInterval = 25 * time.Millisecond
-	params.MaxElapsedTime = 3 * time.Second
+	params.MaxElapsedTime = 10 * time.Second
+	var unkilled map[uint32]struct{}
 	err = backoff.Retry(func() error {
+		unkilled = make(map[uint32]struct{})
 		processes := sc.callCtx.ProcessList.Processes()
-		allgood := true
 		for _, p := range processes {
 			if _, ok := killed[p.Connection]; ok {
-				allgood = false
+				unkilled[p.Connection] = struct{}{}
 				sc.callCtx.ProcessList.Kill(p.Connection)
 			}
 		}
-		if !allgood {
-			return errors.New("unable to establish safepoint.")
+		if len(unkilled) > 0 {
+			return errors.New("could not establish safepont")
 		}
 		return nil
 	}, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
 	sc.callCtx.Session.SetTransaction(nil)
 	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
@@ -157,6 +161,7 @@ type sessionAwareSafepointController struct {
 	controller *dsess.GCSafepointController
 	callCtx    *sql.Context
 	origEpoch  int
+	doltDB     *doltdb.DoltDB
 
 	waiter *dsess.GCSafepointWaiter
 	keeper func(hash.Hash) bool
@@ -167,6 +172,7 @@ func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dses
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	sc.keeper = keeper
 	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
 	err := sc.visit(ctx, thisSess)
@@ -256,11 +262,13 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 				origEpoch:  origepoch,
 				callCtx:    ctx,
 				controller: gcSafepointController,
+				doltDB:     ddb,
 			}
 		} else {
 			sc = killConnectionsSafepointController{
 				origEpoch: origepoch,
 				callCtx:   ctx,
+				doltDB:    ddb,
 			}
 		}
 		err = ddb.GC(ctx, mode, sc)

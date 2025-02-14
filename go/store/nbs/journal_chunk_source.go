@@ -96,7 +96,7 @@ type journalRecord struct {
 }
 
 func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
-	return s.getManyCompressed(ctx, eg, reqs, func(ctx context.Context, cc CompressedChunk) {
+	return s.getManyCompressed(ctx, eg, reqs, func(ctx context.Context, cc ToChunker) {
 		ch, err := cc.ToChunk()
 		if err != nil {
 			eg.Go(func() error {
@@ -115,7 +115,7 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 // and then (4) asynchronously perform reads. We release the journal read
 // lock after returning when all reads are completed, which can be after the
 // function returns.
-func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	defer trace.StartRegion(ctx, "journalChunkSource.getManyCompressed").End()
 
 	var remaining bool
@@ -145,12 +145,19 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 		return jReqs[i].r.Offset < jReqs[j].r.Offset
 	})
 
+	wg.Add(len(jReqs))
+	go func() {
+		wg.Wait()
+		s.journal.lock.RUnlock()
+	}()
 	for i := range jReqs {
 		// workers populate the parent error group
 		// record local workers for releasing lock
-		wg.Add(1)
 		eg.Go(func() error {
 			defer wg.Done()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			rec := jReqs[i]
 			a := reqs[rec.idx].a
 			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
@@ -163,10 +170,6 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 			}
 		})
 	}
-	go func() {
-		wg.Wait()
-		s.journal.lock.RUnlock()
-	}()
 	return remaining, gcBehavior_Continue, nil
 }
 
@@ -180,6 +183,10 @@ func (s journalChunkSource) uncompressedLen() (uint64, error) {
 
 func (s journalChunkSource) hash() hash.Hash {
 	return journalAddr
+}
+
+func (s journalChunkSource) name() string {
+	return s.hash().String()
 }
 
 // reader implements chunkSource.

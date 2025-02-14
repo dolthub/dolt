@@ -230,10 +230,12 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	t.Run("replicate to remote", func(t *testing.T) {
 		bThreads := sql.NewBackgroundThreads()
 		defer bThreads.Shutdown()
-		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
-		if err != nil {
-			t.Fatal("Unexpected error creating push hook", err)
-		}
+		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		require.NotNil(t, hook)
+		require.NotNil(t, runThreads)
+		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
+			return sql.NewContext(ctx), nil
+		})
 
 		for i := 0; i < 200; i++ {
 			cs, _ := doltdb.NewCommitSpec("main")
@@ -301,8 +303,10 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		destDB.PrependCommitHooks(context.Background(), counts)
 
 		bThreads := sql.NewBackgroundThreads()
-		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
-		require.NoError(t, err, "create push on write hook without an error")
+		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
+			return sql.NewContext(ctx), nil
+		})
 
 		// Pretend we replicate a HEAD which does exist.
 		ds, err := doltdb.HackDatasDatabaseFromDoltDB(ddb).GetDataset(ctx, "refs/heads/main")

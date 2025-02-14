@@ -42,6 +42,9 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	if err != nil {
 		return err
 	}
+	defer sql.SessionEnd(loadCtx.Session)
+	sql.SessionCommandBegin(loadCtx.Session)
+	defer sql.SessionCommandEnd(loadCtx.Session)
 
 	branches := p.getStatsBranches(loadCtx)
 

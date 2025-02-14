@@ -48,10 +48,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	}
 
 	reqs := toGetRecords(hashes)
-	found := make([]CompressedChunk, 0)
+	found := make([]ToChunker, 0)
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	_, _, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c CompressedChunk) { found = append(found, c) }, nil, &Stats{})
+	_, _, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c ToChunker) { found = append(found, c) }, nil, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 

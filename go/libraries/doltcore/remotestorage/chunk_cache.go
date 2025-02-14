@@ -26,9 +26,9 @@ import (
 type ChunkCache interface {
 	// Insert some observed / fetched chunks into the cached. These
 	// chunks may or may not be returned in the future.
-	InsertChunks(cs []nbs.CompressedChunk)
+	InsertChunks(cs []nbs.ToChunker)
 	// Get previously cached chunks, if they are still available.
-	GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.CompressedChunk
+	GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.ToChunker
 
 	// Insert all hashes in |h| as existing in the remote.
 	InsertHas(h hash.HashSet)

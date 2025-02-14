@@ -51,6 +51,7 @@ type ValueReader interface {
 // package that implements Value writing.
 type ValueWriter interface {
 	WriteValue(ctx context.Context, v Value) (Ref, error)
+	PurgeCaches()
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms
@@ -531,33 +532,6 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 	return true, nil
 }
 
-func makeBatches(hss []hash.HashSet, count int) [][]hash.Hash {
-	const maxBatchSize = 16384
-
-	buffer := make([]hash.Hash, count)
-	i := 0
-	for _, hs := range hss {
-		for h := range hs {
-			buffer[i] = h
-			i++
-		}
-	}
-
-	numBatches := (count + (maxBatchSize - 1)) / maxBatchSize
-	batchSize := count / numBatches
-
-	res := make([][]hash.Hash, numBatches)
-	for i := 0; i < numBatches; i++ {
-		if i != numBatches-1 {
-			res[i] = buffer[i*batchSize : (i+1)*batchSize]
-		} else {
-			res[i] = buffer[i*batchSize:]
-		}
-	}
-
-	return res
-}
-
 type GCMode int
 
 const (
@@ -625,12 +599,9 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			if err != nil {
 				return err
 			}
-
 			if root.IsEmpty() {
-				// empty root
 				return nil
 			}
-
 			newGenRefs.Insert(root)
 
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
@@ -709,12 +680,9 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			if err != nil {
 				return err
 			}
-
-			if root == (hash.Hash{}) {
-				// empty root
+			if root.IsEmpty() {
 				return nil
 			}
-
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
@@ -738,10 +706,6 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 	} else {
 		return chunks.ErrUnsupportedOperation
 	}
-
-	// TODO: The decodedChunks cache can potentially allow phantom reads of
-	// already collected chunks until we clear it...
-	lvs.decodedChunks.Purge()
 
 	if tfs, ok := lvs.cs.(chunks.TableFileStore); ok {
 		return tfs.PruneTableFiles(ctx)
@@ -794,6 +758,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		cErr := sweeper.Close(ctx)
 		return nil, errors.Join(err, cErr)
 	}
+	final = nil
 
 	if safepointController != nil {
 		err = safepointController.EstablishPostFinalizeSafepoint(ctx)
@@ -807,6 +772,10 @@ func (lvs *ValueStore) gc(ctx context.Context,
 		return nil, err
 	}
 	return finalizer, sweeper.Close(ctx)
+}
+
+func (lvs *ValueStore) PurgeCaches() {
+	lvs.decodedChunks.Purge()
 }
 
 // Close closes the underlying ChunkStore

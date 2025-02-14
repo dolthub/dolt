@@ -26,10 +26,10 @@ var noopChunkCache = &noopChunkCacheImpl{}
 type noopChunkCacheImpl struct {
 }
 
-func (*noopChunkCacheImpl) InsertChunks(cs []nbs.CompressedChunk) {
+func (*noopChunkCacheImpl) InsertChunks(cs []nbs.ToChunker) {
 }
 
-func (*noopChunkCacheImpl) GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
+func (*noopChunkCacheImpl) GetCachedChunks(h hash.HashSet) map[hash.Hash]nbs.ToChunker {
 	return nil
 }
 

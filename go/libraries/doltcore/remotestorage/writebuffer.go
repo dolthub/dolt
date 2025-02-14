@@ -16,7 +16,7 @@ type WriteBuffer interface {
 	// On the get path, remotestorage should add pending chunks to its result
 	// set. On the HasMany path, remotestorage should remove present chunks
 	// from its absent set on the HasMany response.
-	AddPendingChunks(h hash.HashSet, res map[hash.Hash]nbs.CompressedChunk)
+	AddPendingChunks(h hash.HashSet, res map[hash.Hash]nbs.ToChunker)
 	RemovePresentChunks(h hash.HashSet)
 }
 
@@ -32,7 +32,7 @@ func (noopWriteBuffer) GetAllAndClear() map[hash.Hash]nbs.CompressedChunk {
 	panic("attempt to upload chunks on a read-only remotestorage chunk store") 
 }
 
-func (noopWriteBuffer) AddPendingChunks(hash.HashSet, map[hash.Hash]nbs.CompressedChunk) {
+func (noopWriteBuffer) AddPendingChunks(hash.HashSet, map[hash.Hash]nbs.ToChunker) {
 }
 
 func (noopWriteBuffer) RemovePresentChunks(hash.HashSet) {
@@ -66,7 +66,7 @@ func (b *mapWriteBuffer) GetAllAndClear() map[hash.Hash]nbs.CompressedChunk {
 	return ret
 }
 
-func (b *mapWriteBuffer) AddPendingChunks(hs hash.HashSet, res map[hash.Hash]nbs.CompressedChunk) {
+func (b *mapWriteBuffer) AddPendingChunks(hs hash.HashSet, res map[hash.Hash]nbs.ToChunker) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for h := range hs {

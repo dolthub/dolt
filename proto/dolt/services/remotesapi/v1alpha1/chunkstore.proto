@@ -89,6 +89,13 @@ message RangeChunk {
   bytes hash = 1;
   uint64 offset = 2;
   uint32 length = 3;
+
+  // Archive zStd dictionary spans are indicated with these fields. On the consumer side, the existence
+  // of a non-zero dictionary length indicates that the chunk is compressed using zStd. This implies that
+  // the chunkSource is an archive source. If the dictionary length is zero, the chunk is compressed using snappy
+  // compression (classic NOMS table file or journal chunk use snappy compression).
+  uint64 dictionary_offset = 4;
+  uint32 dictionary_length = 5;
 }
 
 message HttpGetRange {
