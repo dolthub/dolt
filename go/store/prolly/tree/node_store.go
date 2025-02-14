@@ -50,6 +50,10 @@ type NodeStore interface {
 	BlobBuilder() *BlobBuilder
 	PutBlobBuilder(*BlobBuilder)
 
+	// Delete any cached chunks associated with this NodeStore.
+	// Used by GC during safepoint establishment to ensure deleted
+	// chunks do not float around in the application layer after GC
+	// completes.
 	PurgeCaches()
 }
 
