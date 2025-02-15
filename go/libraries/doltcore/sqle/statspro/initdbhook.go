@@ -30,19 +30,13 @@ func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
-		head := denv.RepoState.Head
-
 		sqlDb, ok := db.(sqle.Database)
 		if !ok {
-			sc.logger.Debugf("stats initialize db failed, expected *sqle.Database, found %T", db)
 			return nil
 		}
 
 		// call should only fail if backpressure in secondary queue
 		sc.AddFs(sqlDb, denv.FS)
-		if err != nil {
-			sc.logger.Debugf("cannot initialize db stats for %s; queue is closed", sqlDb.AliasedName())
-		}
 		return nil
 	}
 }

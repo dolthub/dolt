@@ -236,7 +236,6 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase, keepSto
 			}
 		}
 	}
-	sc.sq.Run(ctx)
 	return nil
 }
 

@@ -84,7 +84,7 @@ type ToggableStats interface {
 	Purge(ctx *sql.Context) error
 	WaitForDbSync(ctx *sql.Context) error
 	Gc(ctx *sql.Context) error
-	ValidateState(ctx context.Context) error
+	//ValidateState(ctx context.Context) error
 	//Init(context.Context, []dsess.SqlDatabase, bool) error
 	SetTimers(int64, int64, int64)
 }
@@ -145,19 +145,6 @@ func statsGc(ctx *sql.Context, _ ...string) (interface{}, error) {
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
 		if err := afp.Gc(ctx); err != nil {
-			return nil, err
-		}
-		return OkResult, nil
-	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
-}
-
-// statsValidate returns inconsistencies if the kv cache is out of date
-func statsValidate(ctx *sql.Context, _ ...string) (interface{}, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
-		if err := afp.ValidateState(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil

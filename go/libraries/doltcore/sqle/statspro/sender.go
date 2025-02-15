@@ -44,22 +44,18 @@ func (sc *StatsCoord) cancelSender() {
 	}
 }
 
-func (sc *StatsCoord) getCycleWaiter() chan struct{} {
+func (sc *StatsCoord) getCycleWaiter() <-chan struct{} {
 	sc.cycleMu.Lock()
 	defer sc.cycleMu.Unlock()
-	return sc.senderDone
+	return sc.cycleCtx.Done()
 }
 
 func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
-	// check for GC
-	//gcCheckLen := 1024
+	sc.senderDone = make(chan struct{})
 	defer func() {
 		close(sc.senderDone)
 	}()
 	for {
-		//if sc.doGc.Load() || sc.kv.Len() > gcCheckLen {
-		//	sc.kv.StartGc()
-		//}
 		cycleCtx := sc.newCycle(ctx)
 
 		sqlCtx, err := sc.ctxGen(cycleCtx)
@@ -67,9 +63,14 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 			return err
 		}
 
-		if err := sc.walkRoot(sqlCtx); err != nil {
+		newStats, err := sc.newStatsForRoot(sqlCtx)
+		if err != nil {
 			sc.descError("", err)
 		}
+
+		sc.statsMu.Lock()
+		sc.Stats = newStats
+		sc.statsMu.Unlock()
 
 		select {
 		case <-cycleCtx.Done():
@@ -78,7 +79,8 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 	}
 }
 
-func (sc *StatsCoord) walkRoot(ctx *sql.Context) (err error) {
+func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (map[tableIndexesKey][]*stats.Statistic, error) {
+	var err error
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)
 	newStats := make(map[tableIndexesKey][]*stats.Statistic)
@@ -99,7 +101,7 @@ func (sc *StatsCoord) walkRoot(ctx *sql.Context) (err error) {
 				sc.descError("getBranches", err)
 			}
 		}); err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, br := range branches {
@@ -116,22 +118,20 @@ func (sc *StatsCoord) walkRoot(ctx *sql.Context) (err error) {
 					sc.descError("getTableNames", err)
 				}
 			}); err != nil {
-				return err
+				return nil, err
 			}
 
 			for _, tableName := range tableNames {
 				tableKey, newTableStats, err := sc.updateTable(ctx, tableName, sqlDb)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				newStats[tableKey] = newTableStats
 			}
 		}
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	sc.Stats = newStats
-	return nil
+
+	return newStats, nil
 }
 
 func (sc *StatsCoord) finalizeHistogram(template stats.Statistic, buckets []*stats.Bucket, firstBound sql.Row) *stats.Statistic {

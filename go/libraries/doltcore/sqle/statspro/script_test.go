@@ -706,7 +706,7 @@ func TestStatScripts(t *testing.T) {
 
 	for _, tt := range scripts {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, sqlEng, sc, _ := emptySetup(t, threads, false)
+			ctx, sqlEng, sc := emptySetup(t, threads, false)
 			sc.SetEnableGc(true)
 
 			require.NoError(t, sc.Restart(ctx))

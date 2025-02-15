@@ -35,20 +35,26 @@ import (
 
 type ctxFactory func(ctx context.Context) (*sql.Context, error)
 
-func NewStatsCoord(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
 	done := make(chan struct{})
 	close(done)
 	kv := NewMemStats()
+	sq := jobqueue.NewSerialQueue()
+	go func() {
+		sq.Run(ctx)
+	}()
 	return &StatsCoord{
 		statsMu:        &sync.Mutex{},
 		logger:         logger,
 		JobInterval:    500 * time.Millisecond,
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
+		sq:             sq,
 		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
 		dbFs:           make(map[string]filesys.Filesys),
 		threads:        threads,
 		senderDone:     done,
+		cycleMu:        &sync.Mutex{},
 		kv:             kv,
 		pro:            pro,
 		hdp:            dEnv.GetUserHomeDir,
@@ -122,34 +128,36 @@ type StatsCoord struct {
 	gcCnt int
 }
 
-// Stop pauses the queue and blocks until sender thread exits.
+// Stop stops the sender thread and then pauses the queue
 func (sc *StatsCoord) Stop(ctx context.Context) error {
+	return sc.sq.InterruptSync(ctx, func() {
+		sc.cancelSender()
+		select {
+		case <-ctx.Done():
+			return
+		case <-sc.senderDone:
+			return
+		}
+	})
 	if err := sc.sq.Pause(); err != nil {
 		return err
-	}
-	sc.cancelSender()
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-sc.senderDone:
-		return nil
 	}
 }
 
 // Restart continues the queue and blocks until sender is running
 func (sc *StatsCoord) Restart(ctx context.Context) error {
-	if err := sc.Stop(ctx); err != nil {
-		return err
-	}
 	sc.sq.Start()
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sc.runSender(ctx)
-	}()
-	wg.Wait()
-	return nil
+	return sc.sq.InterruptSync(ctx, func() {
+		sc.cancelSender()
+		select {
+		case <-ctx.Done():
+			return
+		case <-sc.senderDone:
+		}
+		go func() {
+			sc.runSender(ctx)
+		}()
+	})
 }
 
 func (sc *StatsCoord) Close() {

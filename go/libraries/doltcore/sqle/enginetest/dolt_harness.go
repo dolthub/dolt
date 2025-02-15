@@ -256,7 +256,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
 			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
 		}
-		statsPro := statspro.NewStatsCoord(doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		statsPro := statspro.NewStatsCoord(ctx, doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))
 		d.statsPro = statsPro
 
@@ -323,7 +323,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		return d.NewContext(), nil
 	}
 	bThreads := sql.NewBackgroundThreads()
-	statsPro := statspro.NewStatsCoord(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+	statsPro := statspro.NewStatsCoord(ctx, d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 	require.NoError(t, statsPro.Restart(ctx))
 	d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
