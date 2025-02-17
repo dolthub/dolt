@@ -136,12 +136,28 @@ type TypeInfo interface {
 
 // RequiresRewrite returns whether or now changing a column type from |old| to |new| requires rewriting table rows.
 func RequiresRewrite(old TypeInfo, new TypeInfo) bool {
-	oldEnum, isOldEnum := old.ToSqlType().(sql.EnumType)
-	newEnum, isNewEnum := new.ToSqlType().(sql.EnumType)
-	if isOldEnum && isNewEnum && oldEnum.IsSubsetOf(newEnum) {
-		return false
-	}
+	oldSqlType := old.ToSqlType()
+	newSqlType := new.ToSqlType()
 
+	switch o := oldSqlType.(type) {
+	case sql.EnumType:
+		newEnum, isNewEnum := newSqlType.(sql.EnumType)
+		if !isNewEnum {
+			return true
+		}
+		if o.IsSubsetOf(newEnum) {
+			return false
+		}
+	case sql.StringType:
+		newString, isNewString := newSqlType.(sql.StringType)
+		if !isNewString {
+			return true
+		}
+		if newString.Collation() != o.Collation() {
+			return true
+		}
+		return newString.Length() < o.Length()
+	}
 	return true
 }
 
