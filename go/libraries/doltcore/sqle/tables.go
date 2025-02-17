@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
 	"io"
 	"math"
 	"os"
@@ -1654,7 +1655,7 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
 ) bool {
-	return t.isIncompatibleTypeChange(oldColumn, newColumn) ||
+	return t.columnChangeRequiresRewrite(oldColumn, newColumn) ||
 		orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
 		isColumnDrop(oldSchema, newSchema) ||
 		isPrimaryKeyChange(oldSchema, newSchema)
@@ -1668,7 +1669,7 @@ func orderChanged(oldSchema, newSchema sql.PrimaryKeySchema, oldColumn, newColum
 	return oldSchema.Schema.IndexOfColName(oldColumn.Name) != newSchema.Schema.IndexOfColName(newColumn.Name)
 }
 
-func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, newColumn *sql.Column) bool {
+func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, newColumn *sql.Column) bool {
 	if oldColumn == nil || newColumn == nil {
 		return false
 	}
@@ -1682,7 +1683,9 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
 		if types.IsFormat_DOLT(t.Format()) {
 			// This is overly broad, we could narrow this down a bit
-			return typeinfo.RequiresRewrite(existingCol.TypeInfo, newCol.TypeInfo)
+			compatibilityChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(t.Format())
+			typeChangeInfo := compatibilityChecker.IsTypeChangeCompatible(existingCol.TypeInfo, newCol.TypeInfo)
+			return !typeChangeInfo.Compatible || typeChangeInfo.RewriteRows || typeChangeInfo.InvalidateSecondaryIndexes
 		}
 		if existingCol.Kind != newCol.Kind {
 			return true
