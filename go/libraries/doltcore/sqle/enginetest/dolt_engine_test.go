@@ -1952,14 +1952,13 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
-	refreshCtx := enginetest.NewSession(harness)
+	//refreshCtx := enginetest.NewSession(harness)
 
 	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)
 
-	statsProv.AddFs(sqlDb, fs)
+	err = statsProv.AddFs(readCtx, sqlDb, fs)
 	require.NoError(t, err)
-	<-done
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
 		_, iter, _, err := engine.Query(ctx, q)

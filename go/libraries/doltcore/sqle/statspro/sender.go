@@ -77,14 +77,18 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 		sc.statsMu.Lock()
 		sc.Stats = newStats
 		sc.statsMu.Unlock()
+
+		if _, err = sc.kv.Flush(ctx); err != nil {
+			sc.descError("", err)
+		}
 	}
 }
 
-func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (map[tableIndexesKey][]*stats.Statistic, error) {
+func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (*rootStats, error) {
 	var err error
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)
-	newStats := make(map[tableIndexesKey][]*stats.Statistic)
+	newStats := newRootStats()
 	for _, db := range dbs {
 		sqlDb, ok := db.(sqle.Database)
 		if !ok {
@@ -112,6 +116,8 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (map[tableIndexesKey][]*
 				continue
 			}
 
+			newStats.dbCnt++
+
 			var tableNames []string
 			if err := sc.sq.DoSync(ctx, func() {
 				tableNames, err = sqlDb.GetTableNames(ctx)
@@ -127,7 +133,7 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (map[tableIndexesKey][]*
 				if err != nil {
 					return nil, err
 				}
-				newStats[tableKey] = newTableStats
+				newStats.stats[tableKey] = newTableStats
 			}
 		}
 	}
@@ -169,7 +175,6 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 	}
 
 	var offset uint64
-	var buckets []*stats.Bucket
 	for _, n := range nodes {
 		if _, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
 			return nil, nil, err
@@ -221,12 +226,21 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 				sc.descError("get histogram bucket for node", err)
 				return
 			}
-			buckets = append(buckets, newBucket)
 		})
 		if err != nil {
 			return nil, nil, err
 		}
 		offset += uint64(treeCnt)
+	}
+
+	var buckets []*stats.Bucket
+	for _, n := range nodes {
+		newBucket, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), keyBuilder)
+		if err != nil || !ok {
+			sc.descError(fmt.Sprintf("missing histogram bucket for node %s", n.HashOf().String()[:5]), err)
+			return nil, nil, err
+		}
+		buckets = append(buckets, newBucket)
 	}
 
 	return buckets, lowerBound, nil
@@ -287,6 +301,8 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 		} else if template.Fds.Empty() {
 			return tableIndexesKey{}, nil, fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
 		}
+
+		template.Qual.Database = sqlDb.AliasedName()
 
 		idxLen := len(sqlIdx.Expressions())
 

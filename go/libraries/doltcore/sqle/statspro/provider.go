@@ -49,7 +49,7 @@ func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table
 	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	st := sc.Stats[key]
+	st := sc.Stats.stats[key]
 	var ret []sql.Statistic
 	for _, s := range st {
 		ret = append(ret, s)
@@ -57,7 +57,7 @@ func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table
 	return ret, nil
 }
 
-func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbName string) error {
+func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	var branch string
@@ -92,8 +92,10 @@ func (sc *StatsCoord) RefreshTableStats(ctx *sql.Context, table sql.Table, dbNam
 
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	sc.Stats[tableKey] = newTableStats
-	return nil
+	sc.Stats.stats[tableKey] = newTableStats
+
+	_, err = sc.kv.Flush(ctx)
+	return err
 }
 
 func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
@@ -107,8 +109,8 @@ func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	if err != nil {
 		return err
 	}
-	sc.Stats[key] = sc.Stats[key][:0]
-	sc.Stats[key] = append(sc.Stats[key], ss)
+	sc.Stats.stats[key] = sc.Stats.stats[key][:0]
+	sc.Stats.stats[key] = append(sc.Stats.stats[key], ss)
 	return nil
 }
 
@@ -119,7 +121,7 @@ func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []
 	if err != nil {
 		return nil, false
 	}
-	for _, s := range sc.Stats[key] {
+	for _, s := range sc.Stats.stats[key] {
 		if strings.EqualFold(s.Qualifier().Index(), qual.Index()) {
 			return s, true
 		}
@@ -136,7 +138,7 @@ func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, ta
 		table:  table,
 		schema: schema,
 	}
-	return sc.Stats[key], nil
+	return sc.Stats.stats[key], nil
 }
 
 func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
@@ -146,14 +148,16 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	delete(sc.Stats, key)
+	delete(sc.Stats.stats, key)
 	return nil
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	return sc.sq.InterruptSync(ctx, func() {
 		if strings.EqualFold(sc.statsBackingDb, dbName) {
+			sc.fsMu.Lock()
 			delete(sc.dbFs, dbName)
+			sc.fsMu.Unlock()
 			if err := sc.rotateStorage(ctx); err != nil {
 				sc.descError("drop rotateStorage", err)
 			}
@@ -162,13 +166,13 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 		sc.statsMu.Lock()
 		defer sc.statsMu.Unlock()
 		var deleteKeys []tableIndexesKey
-		for k, _ := range sc.Stats {
+		for k, _ := range sc.Stats.stats {
 			if strings.EqualFold(dbName, k.db) {
 				deleteKeys = append(deleteKeys, k)
 			}
 		}
 		for _, k := range deleteKeys {
-			delete(sc.Stats, k)
+			delete(sc.Stats.stats, k)
 		}
 	})
 }
@@ -194,7 +198,7 @@ func (sc *StatsCoord) RowCount(ctx *sql.Context, dbName string, table sql.Table)
 	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	for _, s := range sc.Stats[key] {
+	for _, s := range sc.Stats.stats[key] {
 		if strings.EqualFold(s.Qualifier().Index(), "PRIMARY") {
 			return s.RowCnt, nil
 		}
@@ -209,7 +213,7 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	for _, s := range sc.Stats[key] {
+	for _, s := range sc.Stats.stats[key] {
 		if strings.EqualFold(s.Qualifier().Index(), "PRIMARY") {
 			return s.RowCnt, nil
 		}
@@ -217,7 +221,7 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	return 0, nil
 }
 
-func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase, keepStorage bool) error {
+func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage bool) error {
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
@@ -228,7 +232,9 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []dsess.SqlDatabase, keepSto
 			if err != nil {
 				return err
 			}
-			sc.AddFs(db, fs)
+			if err := sc.AddFs(ctx, db, fs); err != nil {
+				return err
+			}
 			if i == 0 && !keepStorage {
 				if err := sc.rotateStorage(sqlCtx); err != nil {
 					return err
@@ -266,6 +272,8 @@ func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
 		mem = NewMemStats()
 	}
 
+	sc.fsMu.Lock()
+	defer sc.fsMu.Unlock()
 	if len(sc.dbFs) == 0 {
 		sc.kv = mem
 		sc.statsBackingDb = ""

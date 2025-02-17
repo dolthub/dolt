@@ -108,6 +108,7 @@ func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sq
 	}
 
 	template := stats.Statistic{
+		Qual:     sql.NewStatQualifier("", "", sqlTable.Name(), sqlIdx.ID()),
 		Cols:     cols,
 		Typs:     types,
 		IdxClass: uint8(class),

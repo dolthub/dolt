@@ -17,8 +17,10 @@ package statspro
 import (
 	"context"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
+	"github.com/dolthub/dolt/go/store/hash"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -50,7 +52,8 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 		gcInterval:     24 * time.Hour,
 		branchInterval: 24 * time.Hour,
 		sq:             sq,
-		Stats:          make(map[tableIndexesKey][]*stats.Statistic),
+		Stats:          newRootStats(),
+		fsMu:           &sync.Mutex{},
 		dbFs:           make(map[string]filesys.Filesys),
 		threads:        threads,
 		senderDone:     done,
@@ -95,7 +98,9 @@ type StatsCoord struct {
 	statsBackingDb string
 	dialPro        dbfactory.GRPCDialProvider
 	hdp            env.HomeDirProvider
-	dbFs           map[string]filesys.Filesys
+
+	fsMu *sync.Mutex
+	dbFs map[string]filesys.Filesys
 
 	// ctxGen lets us fetch the most recent working root
 	ctxGen ctxFactory
@@ -121,11 +126,25 @@ type StatsCoord struct {
 	kv StatsKv
 
 	// Stats tracks table statistics accessible to sessions.
-	Stats   map[tableIndexesKey][]*stats.Statistic
 	statsMu *sync.Mutex
+	Stats   *rootStats
+	gcCnt   atomic.Uint64
+}
 
+type rootStats struct {
+	h     hash.Hash
 	dbCnt int
+	stats map[tableIndexesKey][]*stats.Statistic
 	gcCnt int
+}
+
+func newRootStats() *rootStats {
+	return &rootStats{
+		h:     hash.Hash{},
+		dbCnt: 0,
+		stats: make(map[tableIndexesKey][]*stats.Statistic),
+		gcCnt: 0,
+	}
 }
 
 // Stop stops the sender thread and then pauses the queue
@@ -167,9 +186,15 @@ func (sc *StatsCoord) Close() {
 	return
 }
 
-func (sc *StatsCoord) AddFs(db dsess.SqlDatabase, fs filesys.Filesys) {
+func (sc *StatsCoord) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
+	sc.fsMu.Lock()
+	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
-	return
+	sc.fsMu.Unlock()
+	if firstDb && !sc.memOnly {
+		return sc.rotateStorage(ctx)
+	}
+	return nil
 }
 
 func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
@@ -188,7 +213,7 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 		cachedTemplateCnt = len(kv.mem.templates)
 	}
 
-	statCnt := len(sc.Stats)
+	statCnt := len(sc.Stats.stats)
 
 	storageCnt, err := sc.kv.Flush(ctx)
 	if err != nil {
@@ -202,14 +227,14 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 	}
 
 	return dprocedures.StatsInfo{
-		DbCnt:             sc.dbCnt,
+		DbCnt:             sc.Stats.dbCnt,
 		Active:            active,
 		CachedBucketCnt:   cachedBucketCnt,
 		StorageBucketCnt:  storageCnt,
 		CachedBoundCnt:    cachedBoundCnt,
 		CachedTemplateCnt: cachedTemplateCnt,
 		StatCnt:           statCnt,
-		GcCounter:         sc.gcCnt,
+		GcCounter:         sc.Stats.gcCnt,
 	}, nil
 }
 

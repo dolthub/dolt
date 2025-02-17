@@ -27,7 +27,7 @@ func (s StatsNoop) GetTableStats(ctx *sql.Context, db string, table sql.Table) (
 	return nil, nil
 }
 
-func (s StatsNoop) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
+func (s StatsNoop) AnalyzeTable(ctx *sql.Context, table sql.Table, db string) error {
 	return nil
 }
 

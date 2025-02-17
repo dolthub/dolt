@@ -55,14 +55,12 @@ type StatsInfo struct {
 	DbCnt             int  `json:"dbCnt"`
 	ReadCnt           int  `json:"readCnt"`
 	Active            bool `json:"active"`
-	DbSeedCnt         int  `json:"dbSeedCnt"`
 	StorageBucketCnt  int  `json:"storageBucketCnt"`
 	CachedBucketCnt   int  `json:"cachedBucketCnt"`
 	CachedBoundCnt    int  `json:"cachedBoundCnt"`
 	CachedTemplateCnt int  `json:"cachedTemplateCnt"`
 	StatCnt           int  `json:"statCnt"`
 	GcCounter         int  `json:"gcCounter"`
-	SyncCounter       int  `json:"syncCounter"`
 }
 
 func (si StatsInfo) ToJson() string {
