@@ -973,11 +973,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
 		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		err := executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
-		for err != nil {
-			log.Println("add waiting on: ", err.Error())
-			err = executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
-		}
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 	}
 
 	dropBranch := func(dropCtx *sql.Context, branchName string) {
@@ -1022,12 +1018,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		wg.Wait()
 
-		err := executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
-		for err != nil {
-			log.Println("waiting on final branch sync", err)
-			err = executeQuery(ctx, sqlEng, "call dolt_stats_sync()")
-		}
-		err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
+		err := executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
 		for err != nil {
 			log.Println("waiting on final Gc", err)
 			err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
@@ -1085,17 +1076,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 				branches <- "branch" + strconv.Itoa(i)
 				if i%500 == 0 {
 					log.Println("branches: ", strconv.Itoa(i))
-					for {
-						syncErr := executeQuery(addCtx, sqlEng, "call dolt_stats_sync()")
-						waitErr := executeQuery(addCtx, sqlEng, "call dolt_stats_wait()")
-						if waitErr == nil && syncErr == nil {
-							break
-						} else if syncErr != nil {
-							log.Println("waiting on: ", strconv.Itoa(i), syncErr.Error())
-						} else if syncErr != nil {
-							log.Println("waiting on: ", strconv.Itoa(i), waitErr.Error())
-						}
-					}
+					require.NoError(t, executeQuery(addCtx, sqlEng, "call dolt_stats_wait()"))
 				}
 			}
 			close(branches)

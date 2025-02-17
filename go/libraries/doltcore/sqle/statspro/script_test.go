@@ -437,9 +437,6 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_branch('-D', 'feat')",
 				},
 				{
-					query: "call dolt_stats_sync()",
-				},
-				{
 					query: "call dolt_stats_gc()",
 				},
 				{
@@ -717,7 +714,6 @@ func TestStatScripts(t *testing.T) {
 				require.NoError(t, executeQuery(ctx, sqlEng, s))
 			}
 
-			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_sync()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 

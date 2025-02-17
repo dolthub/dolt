@@ -68,14 +68,15 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 			sc.descError("", err)
 		}
 
-		sc.statsMu.Lock()
-		sc.Stats = newStats
-		sc.statsMu.Unlock()
-
 		select {
 		case <-cycleCtx.Done():
 			return context.Cause(cycleCtx)
+		default:
 		}
+
+		sc.statsMu.Lock()
+		sc.Stats = newStats
+		sc.statsMu.Unlock()
 	}
 }
 

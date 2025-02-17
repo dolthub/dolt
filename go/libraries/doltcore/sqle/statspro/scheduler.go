@@ -142,6 +142,7 @@ func (sc *StatsCoord) Stop(ctx context.Context) error {
 	if err := sc.sq.Pause(); err != nil {
 		return err
 	}
+	return nil
 }
 
 // Restart continues the queue and blocks until sender is running
