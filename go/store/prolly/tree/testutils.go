@@ -272,6 +272,14 @@ type nodeStoreValidator struct {
 	bbp *sync.Pool
 }
 
+func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (v nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.Hash, error) {
+	panic("not implemented")
+}
+
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	nd, err := v.ns.Read(ctx, ref)
 	if err != nil {
