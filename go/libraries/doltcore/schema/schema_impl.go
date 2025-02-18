@@ -462,23 +462,23 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 }
 
 // GetMapDescriptors implements the Schema interface.
-func (si *schemaImpl) GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc) {
-	keyDesc = si.GetKeyDescriptor()
-	valueDesc = si.GetValueDescriptor()
+func (si *schemaImpl) GetMapDescriptors(vs val.ValueStore) (keyDesc, valueDesc val.TupleDesc) {
+	keyDesc = si.GetKeyDescriptor(vs)
+	valueDesc = si.GetValueDescriptor(vs)
 	return
 }
 
 // GetKeyDescriptor implements the Schema interface.
-func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
-	return si.getKeyColumnsDescriptor(true)
+func (si *schemaImpl) GetKeyDescriptor(vs val.ValueStore) val.TupleDesc {
+	return si.getKeyColumnsDescriptor(vs, true)
 }
 
 // GetKeyDescriptorWithNoConversion implements the Schema interface.
-func (si *schemaImpl) GetKeyDescriptorWithNoConversion() val.TupleDesc {
-	return si.getKeyColumnsDescriptor(false)
+func (si *schemaImpl) GetKeyDescriptorWithNoConversion(vs val.ValueStore) val.TupleDesc {
+	return si.getKeyColumnsDescriptor(vs, false)
 }
 
-func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc {
+func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressColumns bool) val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
@@ -496,14 +496,21 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		var t val.Type
+		var handler val.TupleTypeHandler
 
 		_, contentHashedField := contentHashedFields[tag]
 		extendedType, isExtendedType := sqlType.(gmstypes.ExtendedType)
 
 		if isExtendedType {
+			encoding := EncodingFromSqlType(sqlType)
 			t = val.Type{
-				Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
+				Enc:      val.Encoding(encoding),
 				Nullable: columnMissingNotNullConstraint(col),
+			}
+			if encoding == serial.EncodingExtended {
+				handler = extendedType
+			} else {
+				handler = val.NewExtendedAddressTypeHandler(vs, extendedType)
 			}
 		} else {
 			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
@@ -538,7 +545,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		handlers = append(handlers, extendedType)
+		handlers = append(handlers, handler)
 
 		return
 	})
@@ -555,7 +562,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 }
 
 // GetValueDescriptor implements the Schema interface.
-func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
+func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) val.TupleDesc {
 	var tt []val.Type
 	var handlers []val.TupleTypeHandler
 	var collations []sql.CollationID
@@ -572,9 +579,10 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		}
 
 		sqlType := col.TypeInfo.ToSqlType()
+		encoding := EncodingFromSqlType(sqlType)
 		queryType := sqlType.Type()
 		tt = append(tt, val.Type{
-			Enc:      val.Encoding(EncodingFromSqlType(sqlType)),
+			Enc:      val.Encoding(encoding),
 			Nullable: col.IsNullable(),
 		})
 		if queryType == query.Type_CHAR || queryType == query.Type_VARCHAR {
@@ -585,6 +593,9 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		}
 
 		if extendedType, ok := sqlType.(gmstypes.ExtendedType); ok {
+			if encoding == serial.EncodingExtendedAddr {
+				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, extendedType))
+			}
 			handlers = append(handlers, extendedType)
 		} else {
 			handlers = append(handlers, nil)
