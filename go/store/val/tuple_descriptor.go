@@ -15,6 +15,7 @@
 package val
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -669,3 +670,53 @@ func (td TupleDesc) Equals(other TupleDesc) bool {
 	}
 	return true
 }
+
+type AddressTypeHandler struct {
+	vs           ValueStore
+	childHandler TupleTypeHandler
+}
+
+func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AddressTypeHandler {
+	return AddressTypeHandler{
+		vs:           vs,
+		childHandler: childHandler,
+	}
+}
+
+func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	v1Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v1))
+	if err != nil {
+		return 0, err
+	}
+	v2Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v2))
+	if err != nil {
+		return 0, err
+	}
+	return handler.childHandler.SerializedCompare(ctx, v1Bytes, v2Bytes)
+}
+
+func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+	b, err := handler.childHandler.SerializeValue(ctx, val)
+	if err != nil {
+		return nil, err
+	}
+	h, err := handler.vs.WriteBytes(context.Background(), b)
+	if err != nil {
+		return nil, err
+	}
+	return h[:], err
+}
+
+func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
+	if err != nil {
+		return nil, err
+	}
+	return handler.childHandler.DeserializeValue(ctx, b)
+}
+
+func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
+	return handler.childHandler.FormatValue(val)
+}
+
+var _ TupleTypeHandler = AddressTypeHandler{}
