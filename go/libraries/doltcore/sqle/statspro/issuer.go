@@ -107,28 +107,35 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 			}
 			sc.gcCnt++
 			sc.kv = gcKv
-			err = sc.sq.DoAsync(func() {
-				if err := sc.rotateStorage(ctx); err != nil {
-					sc.descError("rotate storage failure", err)
-				}
-			})
+			if !sc.memOnly {
+				err = sc.sq.DoAsync(func() error {
+					return sc.rotateStorage(ctx)
+				})
+			}
 		}
 		// Flush new changes to disk.
-		err = sc.sq.DoAsync(func() {
-			if _, err := sc.Flush(ctx); err != nil {
-				sc.descError("flush failure", err)
-			}
+		err = sc.sq.DoAsync(func() error {
+			_, err := sc.Flush(ctx)
+			return err
 		})
 		return true, err
 	}
 	return false, nil
 }
 
-func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootStats, error) {
-	var err error
+func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (newStats *rootStats, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("serialQueue panicked running work: %s", r)
+		}
+		if err != nil {
+			sc.descError("", err)
+		}
+	}()
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)
-	newStats := newRootStats()
+	newStats = newRootStats()
 	for _, db := range dbs {
 		sqlDb, ok := db.(sqle.Database)
 		if !ok {
@@ -136,16 +143,13 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootSt
 		}
 
 		var branches []ref.DoltRef
-		if err := sc.sq.DoSync(ctx, func() {
+		if err := sc.sq.DoSync(ctx, func() error {
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
-				sc.descError("dolt database not found "+db.Name(), nil)
-				return
+				return fmt.Errorf("dolt database not found %s", db.Name())
 			}
 			branches, err = ddb.GetBranches(ctx)
-			if err != nil {
-				sc.descError("getBranches", err)
-			}
+			return err
 		}); err != nil {
 			return nil, err
 		}
@@ -160,11 +164,9 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootSt
 			newStats.dbCnt++
 
 			var tableNames []string
-			if err := sc.sq.DoSync(ctx, func() {
+			if err := sc.sq.DoSync(ctx, func() error {
 				tableNames, err = sqlDb.GetTableNames(ctx)
-				if err != nil {
-					sc.descError("getTableNames", err)
-				}
+				return err
 			}); err != nil {
 				return nil, err
 			}
@@ -201,17 +203,19 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 	firstNodeHash := nodes[0].HashOf()
 	lowerBound, ok := sc.kv.GetBound(firstNodeHash, idxLen)
 	if !ok {
-		sc.sq.DoSync(ctx, func() {
+		sc.sq.DoSync(ctx, func() error {
 			var err error
 			lowerBound, err = firstRowForIndex(ctx, prollyMap, keyBuilder)
 			if err != nil {
 				sc.descError("get histogram bucket for node", err)
+				return err
 			}
 			if sc.Debug {
 				log.Printf("put bound:  %s: %v\n", firstNodeHash.String()[:5], lowerBound)
 			}
 
 			sc.kv.PutBound(firstNodeHash, lowerBound, idxLen)
+			return nil
 		})
 	}
 
@@ -228,15 +232,14 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 			return nil, nil, err
 		}
 
-		err = sc.sq.DoSync(ctx, func() {
+		err = sc.sq.DoSync(ctx, func() error {
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
 			start, stop := offset, offset+uint64(treeCnt)
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
-				sc.descError("get histogram bucket for node", err)
-				return
+				return err
 			}
 			for {
 				// stats key will be a prefix of the index key
@@ -244,8 +247,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 				if errors.Is(err, io.EOF) {
 					break
 				} else if err != nil {
-					sc.descError("get histogram bucket for node", err)
-					return
+					return err
 				}
 				// build full key
 				for i := range keyBuilder.Desc.Types {
@@ -259,14 +261,9 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 			// finalize the aggregation
 			newBucket, err := updater.finalize(ctx, prollyMap.NodeStore())
 			if err != nil {
-				sc.descError("get histogram bucket for node", err)
-				return
+				return err
 			}
-			err = sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
-			if err != nil {
-				sc.descError("get histogram bucket for node", err)
-				return
-			}
+			return sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
 		})
 		if err != nil {
 			return nil, nil, err
@@ -291,11 +288,9 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
-	if err := sc.sq.DoSync(ctx, func() {
+	if err := sc.sq.DoSync(ctx, func() error {
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
-		if err != nil {
-			sc.descError("GetLatestTable", err)
-		}
+		return err
 	}); err != nil {
 		return tableIndexesKey{}, nil, err
 	}
@@ -308,11 +303,9 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 	}
 
 	var indexes []sql.Index
-	if err := sc.sq.DoSync(ctx, func() {
+	if err := sc.sq.DoSync(ctx, func() error {
 		indexes, err = sqlTable.GetIndexes(ctx)
-		if err != nil {
-			sc.descError("", err)
-		}
+		return err
 	}); err != nil {
 		return tableIndexesKey{}, nil, err
 	}
@@ -332,11 +325,12 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 		}
 
 		var template stats.Statistic
-		if err := sc.sq.DoSync(ctx, func() {
+		if err := sc.sq.DoSync(ctx, func() error {
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
-				sc.descError("", fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx, err))
+				return fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx, err.Error())
 			}
+			return nil
 		}); err != nil {
 			return tableIndexesKey{}, nil, err
 		} else if template.Fds.Empty() {
@@ -349,12 +343,9 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		var levelNodes []tree.Node
-		if err := sc.sq.DoSync(ctx, func() {
+		if err := sc.sq.DoSync(ctx, func() error {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-			if err != nil {
-				sc.descError("", err)
-			}
-			return
+			return err
 		}); err != nil {
 			return tableIndexesKey{}, nil, err
 		}

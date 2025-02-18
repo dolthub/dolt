@@ -180,6 +180,11 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, tupB *val.TupleBuil
 }
 
 func (m *memStats) Flush(_ context.Context) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.gcFlusher != nil {
+		m.gcFlusher = nil
+	}
 	return 0, nil
 }
 

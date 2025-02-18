@@ -118,7 +118,9 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 	done := make(chan struct{})
 	close(done)
 	kv := NewMemStats()
-	sq := jobqueue.NewSerialQueue()
+	sq := jobqueue.NewSerialQueueWithErrorCb(func(err error) {
+		logger.Error(err)
+	})
 	go func() {
 		sq.Run(ctx)
 	}()
@@ -146,10 +148,14 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 }
 
 func (sc *StatsCoord) SetMemOnly(v bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
 	sc.memOnly = v
 }
 
 func (sc *StatsCoord) SetEnableGc(v bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
 	sc.enableGc = v
 }
 
@@ -161,13 +167,13 @@ func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
 
 // Stop stops the sender thread and then pauses the queue
 func (sc *StatsCoord) Stop(ctx context.Context) error {
-	return sc.sq.InterruptSync(ctx, func() {
+	return sc.sq.InterruptSync(ctx, func() error {
 		sc.cancelSender()
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-sc.issuerDone:
-			return
+			return nil
 		}
 	})
 	if err := sc.sq.Pause(); err != nil {
@@ -181,13 +187,13 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 	sc.sq.Start()
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	if err := sc.sq.InterruptSync(ctx, func() {
+	if err := sc.sq.InterruptSync(ctx, func() error {
 		sc.cancelSender()
 		sc.statsMu.Lock()
 		defer sc.statsMu.Unlock()
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-sc.issuerDone:
 		}
 		go func() {
@@ -197,6 +203,7 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 			wg.Done()
 			sc.runIssuer(ctx)
 		}()
+		return nil
 	}); err != nil {
 		return err
 	}
@@ -294,7 +301,7 @@ func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table
 	return ret, nil
 }
 
-func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) error {
+func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) (err error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	var branch string
@@ -306,13 +313,14 @@ func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName str
 		}
 	}
 	if branch == "" {
-		branch, err := dSess.GetBranch()
+		var err error
+		branch, err = dSess.GetBranch()
 		if err != nil {
 			return err
 		}
 
 		if branch == "" {
-			branch = "main"
+			branch = env.DefaultInitBranch
 		}
 	}
 
@@ -328,8 +336,8 @@ func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName str
 	}
 
 	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
 	sc.Stats.stats[tableKey] = newTableStats
+	sc.statsMu.Unlock()
 
 	_, err = sc.Flush(ctx)
 	return err
@@ -390,7 +398,7 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	return sc.sq.InterruptAsync(func() {
+	return sc.sq.InterruptAsync(func() error {
 		// this must be asynchronous otherwise we can deadlock
 		// on the provider lock
 		sc.statsMu.Lock()
@@ -400,7 +408,7 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 		delete(sc.dbFs, dbName)
 		if sc.statsBackingDb == dbFs {
 			if err := sc.lockedRotateStorage(ctx); err != nil {
-				sc.descError("drop rotateStorage", err)
+				return err
 			}
 		}
 
@@ -413,6 +421,7 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 		for _, k := range deleteKeys {
 			delete(sc.Stats.stats, k)
 		}
+		return nil
 	})
 }
 
@@ -643,8 +652,9 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 }
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {
-	sc.sq.InterruptAsync(func() {
+	sc.sq.InterruptAsync(func() error {
 		sc.doGc.Store(true)
+		return nil
 	})
 	return sc.WaitForDbSync(ctx)
 }

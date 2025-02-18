@@ -29,7 +29,6 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/stats"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
@@ -61,7 +60,9 @@ func TestScheduleLoop(t *testing.T) {
 		}
 		require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
 
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
 
 		// 4 old + 2*7 new ab
 		kv := sc.kv.(*memStats)
@@ -77,7 +78,10 @@ func TestScheduleLoop(t *testing.T) {
 	require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
 
 	//doGcCycle(t, ctx, sc)
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
 
 	kv := sc.kv.(*memStats)
 	require.Equal(t, 14, len(kv.buckets))
@@ -96,11 +100,18 @@ func TestAnalyze(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (-1,-1)"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "analyze table xy"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
+	//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "analyze table xy"))
+	//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
+
+	si, err := sc.Info(ctx)
+	require.NoError(t, err)
 	kv := sc.kv.(*memStats)
-	require.Equal(t, uint64(0), sc.genCnt)
+	require.Equal(t, 0, si.GcCnt)
+	require.Equal(t, 1, si.DbCnt)
+	require.Equal(t, false, si.Active)
 	require.Equal(t, 6, len(kv.buckets))
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))
@@ -116,8 +127,7 @@ func TestModifyColumn(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy modify column y bigint"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		runBlock(t, ctx, sqlEng, "alter table xy modify column y bigint")
 
 		kv := sc.kv.(*memStats)
 		require.Equal(t, 10, len(kv.buckets))
@@ -128,8 +138,8 @@ func TestModifyColumn(t *testing.T) {
 		require.Equal(t, 4, len(stat[0].Hist))
 		require.Equal(t, 2, len(stat[1].Hist))
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-		require.Equal(t, 6, len(kv.buckets))
+		runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
+		require.Equal(t, 6, sc.Len())
 	}
 }
 
@@ -139,19 +149,18 @@ func TestAddColumn(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy add column z int"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng,
+		"alter table xy add column z int",
+	)
 
-		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, len(kv.buckets))
-		require.Equal(t, 2, len(kv.bounds))
-		require.Equal(t, 4, len(kv.templates)) // +2 for new schema
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-		require.Equal(t, 2, len(stat[0].Hist))
-		require.Equal(t, 2, len(stat[1].Hist))
-	}
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 4, len(kv.buckets))
+	require.Equal(t, 2, len(kv.bounds))
+	require.Equal(t, 4, len(kv.templates)) // +2 for new schema
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
+	require.Equal(t, 2, len(stat[0].Hist))
+	require.Equal(t, 2, len(stat[1].Hist))
 }
 
 func TestDropIndex(t *testing.T) {
@@ -160,31 +169,29 @@ func TestDropIndex(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
+	runBlock(t, ctx, sqlEng,
+		"alter table xy drop index y",
+	)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 4, len(kv.buckets))
+	require.Equal(t, 2, len(kv.bounds))
+	require.Equal(t, 3, len(kv.templates))
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
+	require.Equal(t, 1, len(stat))
+	require.Equal(t, 2, len(stat[0].Hist))
 
-		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, len(kv.buckets))
-		require.Equal(t, 2, len(kv.bounds))
-		require.Equal(t, 3, len(kv.templates))
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-		require.Equal(t, 1, len(stat))
-		require.Equal(t, 2, len(stat[0].Hist))
+	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		kv = sc.kv.(*memStats)
-		require.Equal(t, 2, len(kv.buckets))
-		require.Equal(t, 1, len(kv.bounds))
-		require.Equal(t, 1, len(kv.templates))
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
-		require.Equal(t, 1, len(stat))
-		require.Equal(t, 2, len(stat[0].Hist))
-	}
+	kv = sc.kv.(*memStats)
+	require.Equal(t, 2, len(kv.buckets))
+	require.Equal(t, 1, len(kv.bounds))
+	require.Equal(t, 1, len(kv.templates))
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
+	require.Equal(t, 1, len(stat))
+	require.Equal(t, 2, len(stat[0].Hist))
 }
 
 func TestDropTable(t *testing.T) {
@@ -193,33 +200,31 @@ func TestDropTable(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b int)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into ab values (0,0)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop table xy"))
+	runBlock(t, ctx, sqlEng,
+		"create table ab (a int primary key, b int)",
+		"insert into ab values (0,0)",
+		"drop table xy",
+	)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 5, len(kv.buckets))
+	require.Equal(t, 3, len(kv.bounds))
+	require.Equal(t, 3, len(kv.templates))
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
+	require.Equal(t, 1, len(stat))
+	require.Equal(t, 1, len(stat[0].Hist))
 
-		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, len(kv.buckets))
-		require.Equal(t, 3, len(kv.bounds))
-		require.Equal(t, 3, len(kv.templates))
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-		require.Equal(t, 1, len(stat))
-		require.Equal(t, 1, len(stat[0].Hist))
+	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		kv = sc.kv.(*memStats)
-		require.Equal(t, 1, len(kv.buckets))
-		require.Equal(t, 1, len(kv.bounds))
-		require.Equal(t, 1, len(kv.templates))
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-		require.Equal(t, 1, len(stat))
-		require.Equal(t, 1, len(stat[0].Hist))
-	}
+	kv = sc.kv.(*memStats)
+	require.Equal(t, 1, len(kv.buckets))
+	require.Equal(t, 1, len(kv.bounds))
+	require.Equal(t, 1, len(kv.templates))
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat = sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
+	require.Equal(t, 1, len(stat))
+	require.Equal(t, 1, len(stat[0].Hist))
 }
 
 func TestDeleteAboveBoundary(t *testing.T) {
@@ -228,25 +233,23 @@ func TestDeleteAboveBoundary(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
+	runBlock(t, ctx, sqlEng,
+		"alter table xy drop index y",
+		"delete from xy where x > 498",
+		"call dolt_stats_wait()",
+	)
 
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 498"))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 5, len(kv.buckets)) // 1 for new chunk
+	require.Equal(t, 2, len(kv.bounds))
+	require.Equal(t, 3, len(kv.templates)) // +1 for schema change
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+	require.Equal(t, 2, len(stat[0].Hist))
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
-		kv := sc.kv.(*memStats)
-		require.Equal(t, 5, len(kv.buckets)) // 1 for new chunk
-		require.Equal(t, 2, len(kv.bounds))
-		require.Equal(t, 3, len(kv.templates)) // +1 for schema change
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-		require.Equal(t, 2, len(stat[0].Hist))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		require.Equal(t, 2, len(kv.buckets))
-	}
+	require.Equal(t, 2, sc.Len())
 }
 
 func TestDeleteBelowBoundary(t *testing.T) {
@@ -255,26 +258,25 @@ func TestDeleteBelowBoundary(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
+	runBlock(t, ctx, sqlEng,
+		"alter table xy drop index y",
+		"delete from xy where x > 410",
+		"call dolt_stats_wait()",
+	)
 
-	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 410"))
+	kv := sc.kv.(*memStats)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.Equal(t, 5, len(kv.buckets)) // +1 rewrite partial chunk
+	require.Equal(t, 3, len(kv.bounds))  // +1 rewrite first chunk
+	require.Equal(t, 3, len(kv.templates))
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+	require.Equal(t, 1, len(stat[0].Hist))
 
-		kv := sc.kv.(*memStats)
+	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
-		require.Equal(t, 5, len(kv.buckets)) // +1 rewrite partial chunk
-		require.Equal(t, 3, len(kv.bounds))  // +1 rewrite first chunk
-		require.Equal(t, 3, len(kv.templates))
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-		require.Equal(t, 1, len(stat[0].Hist))
+	require.Equal(t, 1, sc.Len())
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		require.Equal(t, 1, len(kv.buckets))
-	}
 }
 
 func TestDeleteOnBoundary(t *testing.T) {
@@ -283,26 +285,23 @@ func TestDeleteOnBoundary(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = false
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "alter table xy drop index y"))
-
-	{
+	runBlock(t, ctx, sqlEng,
+		"alter table xy drop index y",
 		// PRIMARY boundary chunk -> rewrite y_idx's second
-		require.NoError(t, executeQuery(ctx, sqlEng, "delete from xy where x > 414"))
+		"delete from xy where x > 414",
+	)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	kv := sc.kv.(*memStats)
+	require.Equal(t, 4, len(kv.buckets))
+	require.Equal(t, 2, len(kv.bounds))
+	require.Equal(t, 3, len(kv.templates)) // +1 schema change
+	require.Equal(t, 1, len(sc.Stats.stats))
+	stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
+	require.Equal(t, 1, len(stat[0].Hist))
 
-		kv := sc.kv.(*memStats)
-		require.Equal(t, 4, len(kv.buckets))
-		require.Equal(t, 2, len(kv.bounds))
-		require.Equal(t, 3, len(kv.templates)) // +1 schema change
-		require.Equal(t, 1, len(sc.Stats.stats))
-		stat := sc.Stats.stats[tableIndexesKey{db: "mydb", branch: "main", table: "xy"}]
-		require.Equal(t, 1, len(stat[0].Hist))
+	runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
-
-		require.Equal(t, 1, len(kv.buckets))
-	}
+	require.Equal(t, 1, sc.Len())
 }
 
 func TestAddDropDatabases(t *testing.T) {
@@ -312,12 +311,13 @@ func TestAddDropDatabases(t *testing.T) {
 	sc.enableGc = false
 
 	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		runBlock(t, ctx, sqlEng,
+			"create database otherdb",
+			"use otherdb",
+			"create table t (i int primary key)",
+			"insert into t values (0), (1)",
+			"call dolt_stats_wait()",
+		)
 
 		// xy and t
 		kv := sc.kv.(*memStats)
@@ -329,11 +329,8 @@ func TestAddDropDatabases(t *testing.T) {
 		require.Equal(t, 1, len(stat))
 	}
 
-	dropHook := NewDropDatabaseHook(sc)
 	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
-		dropHook(ctx, "otherdb")
-
+		runBlock(t, ctx, sqlEng, "drop database otherdb")
 		_, ok := sc.Stats.stats[tableIndexesKey{db: "otherdb", branch: "main", table: "t"}]
 		require.False(t, ok)
 	}
@@ -345,26 +342,31 @@ func TestGC(t *testing.T) {
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 
 	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
+		runBlock(t, ctx, sqlEng,
+			"create database otherdb",
+			"use otherdb",
+			"create table t (i int primary key)",
+			"insert into t values (0), (1)",
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database thirddb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "use thirddb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table s (i int primary key, j int, key (j))"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into s values (0,0), (1,1), (2,2)"))
+			"create database thirddb",
+			"use thirddb",
+			"create table s (i int primary key, j int, key (j))",
+			"insert into s values (0,0), (1,1), (2,2)",
+		)
 
-		dropHook := NewDropDatabaseHook(sc)
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
-		dropHook(ctx, "otherdb")
+		kv := sc.kv.(*memStats)
+		require.Equal(t, 3, sc.Stats.dbCnt)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table s drop index j"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		runBlock(t, ctx, sqlEng,
+			"drop database otherdb",
+			"alter table s drop index j",
+			"call dolt_stats_gc()",
+		)
 
 		// test for cleanup
-		kv := sc.kv.(*memStats)
+		require.Equal(t, sc.Stats.dbCnt, 2)
+
+		kv = sc.kv.(*memStats)
 		require.Equal(t, 5, len(kv.buckets))
 		require.Equal(t, 3, len(kv.bounds))
 		require.Equal(t, 3, len(kv.templates))
@@ -379,54 +381,51 @@ func TestBranches(t *testing.T) {
 	sc.enableGc = true
 
 	{
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add xy')"))
+		runBlock(t, ctx, sqlEng,
+			"call dolt_commit('-Am', 'add xy')",
+			"create database otherdb",
+			"use otherdb",
+			"create table t (i int primary key)",
+			"insert into t values (0), (1)",
+			"call dolt_commit('-Am', 'add t')",
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table t (i int primary key)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (0), (1)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add t')"))
+			"create database thirddb",
+			"use thirddb",
+			"create table s (i int primary key, j int, key (j))",
+			"insert into s values (0,0), (1,1), (2,2)",
+			"call dolt_commit('-Am', 'add s')",
+		)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "create database thirddb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "use thirddb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "create table s (i int primary key, j int, key (j))"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into s values (0,0), (1,1), (2,2)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'add s')"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat1')"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "use otherdb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat2')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into t values (2), (3)"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'insert into t')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat3')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop table t"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'drop t')"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "use thirddb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('-b', 'feat1')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "alter table s drop index j"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_commit('-Am', 'drop index j')"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		require.Equal(t, sc.Stats.dbCnt, 3)
 
 		stat, ok := sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat3", "t", ""}]
-		require.False(t, ok)
-		stat, ok = sc.Stats.stats[tableIndexesKey{"thirddb", "feat1", "s", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "main", "t", ""}]
 		require.Equal(t, 1, len(stat))
 		stat = sc.Stats.stats[tableIndexesKey{"thirddb", "main", "s", ""}]
 		require.Equal(t, 2, len(stat))
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		runBlock(t, ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('-b', 'feat1')",
+
+			"use otherdb",
+			"call dolt_checkout('-b', 'feat2')",
+			"insert into t values (2), (3)",
+			"call dolt_commit('-Am', 'insert into t')",
+			"call dolt_checkout('-b', 'feat3')",
+			"drop table t",
+			"call dolt_commit('-Am', 'drop t')",
+
+			"use thirddb",
+			"call dolt_checkout('-b', 'feat1')",
+			"alter table s drop index j",
+			"call dolt_commit('-Am', 'drop index j')",
+		)
+
+		require.Equal(t, sc.Stats.dbCnt, 7)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.True(t, ok)
@@ -449,27 +448,31 @@ func TestBranches(t *testing.T) {
 		require.Equal(t, 2+1+(2+1), len(kv.templates))
 		require.Equal(t, 7-1, len(sc.Stats.stats))
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "drop database otherdb"))
+		runBlock(t, ctx, sqlEng,
+			"drop database otherdb",
+		)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		require.Equal(t, sc.Stats.dbCnt, 4)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "main", "t", ""}]
 		require.False(t, ok)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('main')"))
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_branch('-D', 'feat1')"))
+		runBlock(t, ctx, sqlEng,
+			"use mydb",
+			"call dolt_checkout('main')",
+			"call dolt_branch('-D', 'feat1')",
+		)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+		require.Equal(t, sc.Stats.dbCnt, 3)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.False(t, ok)
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "main", "xy", ""}]
 		require.True(t, ok)
 
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+		runBlock(t, ctx, sqlEng, "call dolt_stats_gc()")
 
 		// 3 dbs remaining, mydb/main, thirddb/feat1, thirddb/main
 		kv = sc.kv.(*memStats)
@@ -480,43 +483,13 @@ func TestBranches(t *testing.T) {
 	}
 }
 
-func TestBucketDoubling(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true)
-
-	cur := sc.kv.(*memStats).buckets
-	newB := make(map[bucketKey]*stats.Bucket)
-	for k, v := range cur {
-		newB[k] = v
+func runBlock(t *testing.T, ctx *sql.Context, sqlEng *gms.Engine, qs ...string) {
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
+	for _, q := range qs {
+		require.NoError(t, executeQuery(ctx, sqlEng, q))
 	}
-	sc.kv.(*memStats).buckets = newB
-
-	// add more data
-	b := strings.Repeat("b", 100)
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(100), key (b,a))"))
-	abIns := strings.Builder{}
-	abIns.WriteString("insert into ab values")
-	for i := range 200 {
-		if i > 0 {
-			abIns.WriteString(", ")
-		}
-		abIns.WriteString(fmt.Sprintf("(%d, '%s')", i, b))
-	}
-	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
-
-	sc.enableGc = true
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
-	// 4 old + 2*7 new ab
-	kv := sc.kv.(*memStats)
-	require.Equal(t, 18, len(kv.buckets))
-	require.Equal(t, 4, len(kv.bounds))
-	require.Equal(t, 4, len(kv.templates))
-	require.Equal(t, 2, len(sc.Stats.stats))
-	stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
-	require.Equal(t, 7, len(stat[0].Hist))
-	require.Equal(t, 7, len(stat[1].Hist))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
 }
 
 func TestBucketCounting(t *testing.T) {
@@ -616,26 +589,6 @@ func TestRotateBackingDb(t *testing.T) {
 
 }
 
-func TestReadCounter(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true)
-
-	{
-		si, err := sc.Info(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 0, si.ReadCnt)
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (501, 0)"))
-
-		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
-		si, err = sc.Info(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 2, si.ReadCnt)
-	}
-}
-
 func TestPanic(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -644,53 +597,11 @@ func TestPanic(t *testing.T) {
 
 	require.NoError(t, sc.Restart(ctx))
 
-	sc.sq.DoSync(ctx, func() {
+	sc.sq.DoSync(ctx, func() error {
 		panic("test panic")
 	})
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-}
-
-func TestPurge(t *testing.T) {
-	threads := sql.NewBackgroundThreads()
-	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false)
-	sc.SetEnableGc(true)
-
-	require.NoError(t, sc.Restart(ctx))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y varchar(10), key (y,x))"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0), (1,1), (2,2)"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "create database other"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "use other"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table ab (a int primary key, b varchar(10), key (b,a))"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into ab values (0,0), (1,1), (2,2)"))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
-	require.NoError(t, sc.Stop(context.Background()))
-
-	kv := sc.kv.(*prollyStats)
-	require.Equal(t, 2, kv.Len())
-	require.Equal(t, 4, len(kv.mem.templates))
-	require.Equal(t, 2, len(kv.mem.bounds))
-	m, err := kv.m.Map(ctx)
-	require.NoError(t, err)
-	cmpCnt, err := m.Count()
-	require.NoError(t, err)
-	require.Equal(t, 2, cmpCnt)
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-
-	kv = sc.kv.(*prollyStats)
-	require.Equal(t, 0, kv.Len())
-	require.Equal(t, 0, len(kv.mem.templates))
-	require.Equal(t, 0, len(kv.mem.bounds))
-	m, err = kv.m.Map(ctx)
-	require.NoError(t, err)
-	cmpCnt, err = m.Count()
-	require.NoError(t, err)
-	require.Equal(t, 0, cmpCnt)
 }
 
 func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord) {
@@ -709,6 +620,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 	sc.SetEnableGc(false)
+	sc.SetMemOnly(memOnly)
 	sc.JobInterval = time.Nanosecond
 
 	require.NoError(t, sc.Restart(ctx))
@@ -757,6 +669,10 @@ func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*
 		xyIns.WriteString(fmt.Sprintf("(%d, %d)", i, i%25))
 	}
 	require.NoError(t, executeQuery(ctx, sqlEng, xyIns.String()))
+
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_restart()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_stop()"))
 
 	var kv *memStats
 	switch s := sc.kv.(type) {

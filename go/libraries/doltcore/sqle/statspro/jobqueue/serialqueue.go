@@ -17,6 +17,7 @@ package jobqueue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -65,6 +66,7 @@ type SerialQueue struct {
 
 	runnerCh chan work
 	schedCh  chan schedReq
+	errCb    func(error)
 }
 
 var ErrStoppedQueue = errors.New("stopped queue: cannot submit work to a stopped queue.")
@@ -77,6 +79,15 @@ func NewSerialQueue() *SerialQueue {
 		completed: make(chan struct{}),
 		runnerCh:  make(chan work),
 		schedCh:   make(chan schedReq),
+	}
+}
+
+func NewSerialQueueWithErrorCb(errCb func(error)) *SerialQueue {
+	return &SerialQueue{
+		completed: make(chan struct{}),
+		runnerCh:  make(chan work),
+		schedCh:   make(chan schedReq),
+		errCb:     errCb,
 	}
 }
 
@@ -143,7 +154,7 @@ func (s *SerialQueue) Purge() error {
 // Run a high priority job on the SerialQueue, blocking for its completion.
 // If done against a Paused queue, this could block indefinitely. The
 // block for completion is gated on the |ctx|.
-func (s *SerialQueue) InterruptSync(ctx context.Context, f func()) error {
+func (s *SerialQueue) InterruptSync(ctx context.Context, f func() error) error {
 	w, err := s.submitWork(schedPriority_High, f)
 	if err != nil {
 		return err
@@ -160,7 +171,7 @@ func (s *SerialQueue) InterruptSync(ctx context.Context, f func()) error {
 
 // Run a normal priority job on the SerialQueue, blocking for its completion.
 // When done against a paused queue, this can block indefinitely.
-func (s *SerialQueue) DoSync(ctx context.Context, f func()) error {
+func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	w, err := s.submitWork(schedPriority_Normal, f)
 	if err != nil {
 		return err
@@ -177,7 +188,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func()) error {
 
 // Run a high priority job asynchronously on the queue. Returns once the
 // job is accepted.
-func (s *SerialQueue) InterruptAsync(f func()) error {
+func (s *SerialQueue) InterruptAsync(f func() error) error {
 	_, err := s.submitWork(schedPriority_High, f)
 	if err != nil {
 		return err
@@ -187,7 +198,7 @@ func (s *SerialQueue) InterruptAsync(f func()) error {
 
 // Run a normal priority job asynchronously on the queue. Returns once the
 // job is accepted.
-func (s *SerialQueue) DoAsync(f func()) error {
+func (s *SerialQueue) DoAsync(f func() error) error {
 	_, err := s.submitWork(schedPriority_Normal, f)
 	if err != nil {
 		return err
@@ -197,7 +208,7 @@ func (s *SerialQueue) DoAsync(f func()) error {
 
 // Helper function to submit work. Returns the work submitted, if it
 // was successful, and an error otherwise.
-func (s *SerialQueue) submitWork(pri schedPriority, f func()) (work, error) {
+func (s *SerialQueue) submitWork(pri schedPriority, f func() error) (work, error) {
 	w := work{
 		f:    f,
 		done: make(chan struct{}),
@@ -301,7 +312,18 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 	for {
 		select {
 		case w := <-s.runnerCh:
-			w.f()
+			func() {
+				var err error
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("serialQueue panicked running work: %s", r)
+					}
+					if err != nil {
+						s.errCb(err)
+					}
+				}()
+				err = w.f()
+			}()
 			close(w.done)
 		case <-ctx.Done():
 			return
@@ -312,7 +334,7 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 // |work| represents work to be run on the runner goroutine.
 type work struct {
 	// The function to call.
-	f func()
+	f func() error
 	// The channel to close after the work is run.
 	done chan struct{}
 }
