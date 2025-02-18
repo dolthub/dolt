@@ -51,18 +51,19 @@ func (sc *StatsCoord) getCycleWaiter() <-chan struct{} {
 }
 
 func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
-	sc.issuerDone = make(chan struct{})
 	defer func() {
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
 		close(sc.issuerDone)
 	}()
 	var gcKv *memStats
 	for {
-		gcStart := sc.gcCnt.Load()
-
+		genStart := sc.genCnt.Load()
+		genCand := sc.genCand.Add(1)
 		gcKv = nil
 		if sc.doGc.Swap(false) {
 			gcKv = NewMemStats()
-			gcKv.gcGen = gcStart
+			gcKv.gcGen = genCand
 		}
 
 		cycleCtx := sc.newCycle(ctx)
@@ -77,46 +78,50 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 			sc.descError("", err)
 		}
 
-		if gcKv.isPoisoned() {
-			sc.descError(fmt.Sprintf("gc %d was interrupted", gcKv.GcGen()), nil)
-			gcKv = nil
-		}
-
 		select {
 		case <-cycleCtx.Done():
 			return context.Cause(cycleCtx)
 		default:
 		}
 
-		if ok, err := sc.trySwapStats(ctx, gcStart, newStats, gcKv); err != nil || !ok {
+		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
 			sc.descError("failed to swap stats", err)
 		}
 	}
 }
 
-func (sc *StatsCoord) trySwapStats(ctx context.Context, gcCnt uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
+func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	var err error
-	if gcKv != nil && sc.gcCnt.CompareAndSwap(gcCnt, gcCnt+1) {
-		sc.kv = gcKv
+	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
+		// Replace stats and new Kv if no replacements happened
+		// in-between.
 		sc.Stats = newStats
-		err = sc.sq.DoAsync(func() {
-			if err := sc.rotateStorage(ctx); err != nil {
-				sc.descError("rotate storage failure", err)
+		if gcKv != nil {
+			// The new KV has all buckets for the latest root stats,
+			// background job will to swap the disk location and put
+			// entries into a prolly tree.
+			if newGen != gcKv.GcGen() {
+				return false, fmt.Errorf("gc gen didn't match update gen")
 			}
-		})
-	} else if sc.gcCnt.Load() == gcCnt {
-		sc.Stats = newStats
+			sc.gcCnt++
+			sc.kv = gcKv
+			err = sc.sq.DoAsync(func() {
+				if err := sc.rotateStorage(ctx); err != nil {
+					sc.descError("rotate storage failure", err)
+				}
+			})
+		}
+		// Flush new changes to disk.
 		err = sc.sq.DoAsync(func() {
-			if _, err := sc.kv.Flush(ctx); err != nil {
+			if _, err := sc.Flush(ctx); err != nil {
 				sc.descError("flush failure", err)
 			}
 		})
-	} else {
-		return false, nil
+		return true, err
 	}
-	return true, err
+	return false, nil
 }
 
 func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootStats, error) {
@@ -135,6 +140,7 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootSt
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
 				sc.descError("dolt database not found "+db.Name(), nil)
+				return
 			}
 			branches, err = ddb.GetBranches(ctx)
 			if err != nil {
@@ -211,7 +217,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 
 	var offset uint64
 	for _, n := range nodes {
-		if _, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
+		if _, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
 			return nil, nil, err
 		} else if ok {
 			continue
@@ -256,7 +262,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 				sc.descError("get histogram bucket for node", err)
 				return
 			}
-			err = sc.kv.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
+			err = sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
 			if err != nil {
 				sc.descError("get histogram bucket for node", err)
 				return
@@ -270,7 +276,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 
 	var buckets []*stats.Bucket
 	for _, n := range nodes {
-		newBucket, ok, err := sc.kv.GetBucket(ctx, n.HashOf(), keyBuilder)
+		newBucket, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder)
 		if err != nil || !ok {
 			sc.descError(fmt.Sprintf("missing histogram bucket for node %s", n.HashOf().String()[:5]), err)
 			return nil, nil, err
@@ -361,10 +367,22 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 				continue
 			}
 		}
+
 		newTableStats = append(newTableStats, sc.finalizeHistogram(template, buckets, firstBound))
+
 		if gcKv != nil {
 			keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
-			gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder)
+			if !gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder) {
+				return tableIndexesKey{}, nil, fmt.Errorf("GC interrupted updated")
+			}
+			schHash, _, err := sqlTable.IndexCacheKey(ctx)
+			if err != nil {
+				return tableIndexesKey{}, nil, err
+			}
+			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
+			if t, ok := sc.GetTemplate(key); ok {
+				gcKv.PutTemplate(key, t)
+			}
 		}
 	}
 	return tableKey, newTableStats, nil

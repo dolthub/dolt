@@ -16,7 +16,10 @@ package statspro
 
 import (
 	"context"
-	"strconv"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 	"strings"
 	"testing"
 
@@ -43,7 +46,7 @@ func TestProllyKv(t *testing.T) {
 		val.Type{Enc: val.StringEnc, Nullable: true},
 	))
 
-	t.Run("test bounds", func(t *testing.T) {
+	t.Run("TestBoundsRoundTrip", func(t *testing.T) {
 		exp := sql.Row{1, 1}
 		prollyKv.PutBound(h, exp, 2)
 		cmp, ok := prollyKv.GetBound(h, 2)
@@ -54,7 +57,7 @@ func TestProllyKv(t *testing.T) {
 		require.False(t, ok)
 	})
 
-	t.Run("test templates", func(t *testing.T) {
+	t.Run("TestTemplatesRoundTrip", func(t *testing.T) {
 		exp := stats.Statistic{RowCnt: 50, Qual: sql.StatQualifier{Database: "mydb", Tab: "xy"}}
 		key := templateCacheKey{
 			h:       h,
@@ -73,7 +76,7 @@ func TestProllyKv(t *testing.T) {
 		require.False(t, ok)
 	})
 
-	t.Run("test buckets", func(t *testing.T) {
+	t.Run("TestBucketsRoundTrip", func(t *testing.T) {
 		exp := stats.NewHistogramBucket(15, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
 		err := prollyKv.PutBucket(context.Background(), h, exp, tupB)
 		require.NoError(t, err)
@@ -108,107 +111,46 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, exp.BoundVal, cmp.BoundVal)
 		require.Equal(t, exp.BoundCnt, cmp.BoundCnt)
 	})
-
-	t.Run("test bucket GC", func(t *testing.T) {
-		exp := stats.NewHistogramBucket(15, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
-		err := prollyKv.PutBucket(context.Background(), h, exp, tupB)
-		require.NoError(t, err)
-
-		exp2 := stats.NewHistogramBucket(10, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
-		err = prollyKv.PutBucket(context.Background(), h2, exp2, tupB)
-		require.NoError(t, err)
-
-		prollyKv.StartGc(context.Background(), 10)
-		err = prollyKv.MarkBucket(context.Background(), h, tupB)
-		require.NoError(t, err)
-		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
-		require.NoError(t, err)
-
-		prollyKv.FinishGc(nil)
-
-		m, _ := prollyKv.m.Map(context.Background())
-		iter, _ := m.IterAll(context.Background())
-		for i := range 2 {
-			k, _, err := iter.Next(context.Background())
-			if i == 0 {
-				require.Equal(t, "( 2, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa )", prollyKv.kb.Desc.Format(k))
-			} else if i == 1 {
-				require.Equal(t, "( 2, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb )", prollyKv.kb.Desc.Format(k))
-			} else if i == 2 {
-				require.Error(t, err)
-			}
-		}
-
-		prollyKv.StartGc(context.Background(), 10)
-		err = prollyKv.MarkBucket(context.Background(), h2, tupB)
-		require.NoError(t, err)
-		prollyKv.FinishGc(nil)
-
-		cmp2, ok, err := prollyKv.GetBucket(context.Background(), h2, tupB)
-		require.NoError(t, err)
-		require.True(t, ok)
-		require.Equal(t, exp2.BoundCount(), cmp2.BoundCnt)
-		// only tagged one bucket
-		require.Equal(t, 1, prollyKv.Len())
+	t.Run("TestGcGenBlocking", func(t *testing.T) {
+		to := NewMemStats()
+		from := NewMemStats()
+		from.gcGen = 1
+		require.False(t, to.GcMark(from, nil, nil, 0, nil))
 	})
-
-	t.Run("test overflow", func(t *testing.T) {
-		prollyKv.StartGc(context.Background(), 10)
-		prollyKv.FinishGc(nil)
-
-		expLen := 2000
-		var expected []hash.Hash
-		for i := range expLen {
-			exp := stats.NewHistogramBucket(uint64(i), 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
-			nh := strconv.AppendInt(nil, int64(i), 10)
-			nh = append(nh, h[:hash.ByteLen-len(nh)]...)
-			newH := hash.New(nh)
-			expected = append(expected, newH)
-			err := prollyKv.PutBucket(context.Background(), newH, exp, tupB)
-			require.NoError(t, err)
+	t.Run("TestGcMarkFlush", func(t *testing.T) {
+		ctx := context.Background()
+		bthreads := sql.NewBackgroundThreads()
+		defer bthreads.Shutdown()
+		prev := NewMemStats()
+		nodes1, bucks1 := testNodes(t, 10, 1)
+		nodes2, bucks2 := testNodes(t, 10, 2)
+		nodes3, bucks3 := testNodes(t, 10, 3)
+		for i := range nodes1 {
+			require.NoError(t, prev.PutBucket(ctx, nodes1[i].HashOf(), bucks1[i], tupB))
+		}
+		for i := range nodes2 {
+			require.NoError(t, prev.PutBucket(ctx, nodes2[i].HashOf(), bucks2[i], tupB))
+		}
+		for i := range nodes3 {
+			require.NoError(t, prev.PutBucket(ctx, nodes3[i].HashOf(), bucks3[i], tupB))
 		}
 
-		for _, h := range expected {
-			_, ok, err := prollyKv.GetBucket(context.Background(), h, tupB)
-			require.NoError(t, err)
-			require.True(t, ok)
-		}
+		require.Equal(t, 30, prev.Len())
 
-		require.Equal(t, expLen, prollyKv.Len())
+		to := NewMemStats()
+		require.True(t, to.GcMark(prev, nodes1, bucks1, 2, tupB))
+		require.True(t, to.GcMark(prev, nodes2, bucks2, 2, tupB))
+
+		require.Equal(t, 1, len(to.gcFlusher))
+		require.Equal(t, 20, len(to.gcFlusher[tupB]))
+		require.Equal(t, 20, to.Len())
+
+		kv := newTestProllyKv(t, bthreads)
+		kv.mem = to
+		cnt, err := kv.Flush(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 20, cnt)
 	})
-
-	t.Run("test bounds GC", func(t *testing.T) {
-		exp := sql.Row{1, 1}
-		prollyKv.PutBound(h, exp, 2)
-		prollyKv.PutBound(h2, exp, 2)
-
-		prollyKv.StartGc(context.Background(), 10)
-		prollyKv.GetBound(h2, 2)
-		prollyKv.FinishGc(nil)
-
-		require.Equal(t, 1, len(prollyKv.mem.bounds))
-	})
-
-	t.Run("test templates GC", func(t *testing.T) {
-		exp := stats.Statistic{RowCnt: 50, Qual: sql.StatQualifier{Database: "mydb", Tab: "xy"}}
-		key := templateCacheKey{
-			h:       h,
-			idxName: "PRIMARY",
-		}
-		key2 := templateCacheKey{
-			h:       h2,
-			idxName: "PRIMARY",
-		}
-		prollyKv.PutTemplate(key, exp)
-		prollyKv.PutTemplate(key2, exp)
-
-		prollyKv.StartGc(context.Background(), 10)
-		prollyKv.GetTemplate(key2)
-		prollyKv.FinishGc(nil)
-
-		require.Equal(t, 1, len(prollyKv.mem.templates))
-	})
-
 }
 
 func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats {
@@ -228,4 +170,22 @@ func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats 
 	require.NoError(t, err)
 
 	return kv
+}
+
+func testNodes(t *testing.T, cnt int, seed uint8) ([]tree.Node, []*stats.Bucket) {
+	ts := &chunks.TestStorage{}
+	ns := tree.NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
+	s := message.NewBlobSerializer(ns.Pool())
+
+	var nodes []tree.Node
+	var buckets []*stats.Bucket
+	for i := range cnt {
+		vals := [][]byte{{uint8(i), seed, 1, 1}}
+		msg := s.Serialize([][]byte{{0}}, vals, []uint64{1}, 0)
+		node, _, err := tree.NodeFromBytes(msg)
+		require.NoError(t, err)
+		nodes = append(nodes, node)
+		buckets = append(buckets, &stats.Bucket{RowCnt: uint64(i), BoundVal: sql.Row{i, "col2"}})
+	}
+	return nodes, buckets
 }

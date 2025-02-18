@@ -58,6 +58,7 @@ type StatsKv interface {
 
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
+var _ StatsKv = (*StatsCoord)(nil)
 
 func NewMemStats() *memStats {
 	return &memStats{
@@ -70,9 +71,8 @@ func NewMemStats() *memStats {
 }
 
 type memStats struct {
-	mu       sync.Mutex
-	gcGen    uint64
-	poisoned bool
+	mu    sync.Mutex
+	gcGen uint64
 
 	buckets   map[bucketKey]*stats.Bucket
 	templates map[templateCacheKey]stats.Statistic
@@ -128,26 +128,13 @@ func (m *memStats) PutBound(h hash.Hash, r sql.Row, l int) {
 	m.bounds[k] = r
 }
 
-func (m *memStats) poisonGc() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.poisoned = true
-}
-
-func (m *memStats) isPoisoned() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.poisoned
-}
-
 func (m *memStats) GcMark(from StatsKv, nodes []tree.Node, buckets []*stats.Bucket, idxLen int, tb *val.TupleBuilder) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.poisoned || from.GcGen() > m.GcGen() {
-		m.poisonGc()
+	if from.GcGen() > m.GcGen() {
 		return false
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	for i, b := range buckets {
 		h := nodes[i].HashOf()
@@ -218,13 +205,12 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 }
 
 type prollyStats struct {
-	mu         sync.Mutex
-	firstFlush sync.Once
-	destDb     dsess.SqlDatabase
-	kb, vb     *val.TupleBuilder
-	m          *prolly.MutableMap
-	newM       *prolly.MutableMap
-	mem        *memStats
+	mu     sync.Mutex
+	destDb dsess.SqlDatabase
+	kb, vb *val.TupleBuilder
+	m      *prolly.MutableMap
+	newM   *prolly.MutableMap
+	mem    *memStats
 }
 
 func (p *prollyStats) Len() int {
@@ -321,14 +307,16 @@ func (p *prollyStats) LoadFromMem(ctx context.Context) error {
 		for _, key := range keys {
 			b, ok := p.mem.buckets[key]
 			if !ok {
-				return fmt.Errorf("memory KV inconsistent, missing bucket for: %s")
+				return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
 			}
 			tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
 			tupV, err := p.encodeBucket(ctx, b, tb)
 			if err != nil {
 				return err
 			}
-			return p.m.Put(ctx, tupK, tupV)
+			if err := p.m.Put(ctx, tupK, tupV); err != nil {
+				return err
+			}
 		}
 	}
 	p.mem.gcFlusher = nil
@@ -350,6 +338,8 @@ func (p *prollyStats) Flush(ctx context.Context) (int, error) {
 	if err := p.destDb.DbData().Ddb.SetStatistics(ctx, "main", flushedMap.HashOf()); err != nil {
 		return 0, err
 	}
+
+	p.m = flushedMap.Mutate()
 
 	cnt, err := flushedMap.Count()
 	return cnt, err
@@ -499,4 +489,58 @@ func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBu
 		}
 	}
 	return r, nil
+}
+
+func (sc *StatsCoord) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.PutBucket(ctx, h, b, tupB)
+}
+
+func (sc *StatsCoord) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.GetBucket(ctx, h, tupB)
+}
+
+func (sc *StatsCoord) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.GetTemplate(key)
+}
+
+func (sc *StatsCoord) PutTemplate(key templateCacheKey, stat stats.Statistic) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.kv.PutTemplate(key, stat)
+}
+
+func (sc *StatsCoord) GetBound(h hash.Hash, len int) (sql.Row, bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.GetBound(h, len)
+}
+
+func (sc *StatsCoord) PutBound(h hash.Hash, r sql.Row, l int) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.kv.PutBound(h, r, l)
+}
+
+func (sc *StatsCoord) Flush(ctx context.Context) (int, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.Flush(ctx)
+}
+
+func (sc *StatsCoord) Len() int {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.Len()
+}
+
+func (sc *StatsCoord) GcGen() uint64 {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.kv.GcGen()
 }

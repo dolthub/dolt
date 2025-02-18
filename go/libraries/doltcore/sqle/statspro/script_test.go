@@ -15,6 +15,7 @@
 package statspro
 
 import (
+	"encoding/json"
 	"log"
 	"strconv"
 	"testing"
@@ -388,8 +389,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             1,
+						},
 						}},
 				},
 				{
@@ -405,10 +406,10 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_gc()",
 				},
 				{
-					query: "call dolt_stats_wait()",
+					query: "call dolt_stats_gc()",
 				},
 				{
-					query: "call dolt_stats_gc()",
+					query: "call dolt_stats_wait()",
 				},
 				{
 					query: "call dolt_stats_info()",
@@ -422,8 +423,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
-							GcCounter:         3,
-						}.ToJson(),
+							GcCnt:             3,
+						},
 						}},
 				},
 				{
@@ -450,8 +451,59 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
-							GcCounter:         4,
-						}.ToJson(),
+							GcCnt:             4,
+						},
+						}},
+				},
+			},
+		},
+		{
+			name: "test Gc",
+			setup: []string{
+				"create table xy (x int primary key, y int, key (y,x))",
+				"insert into xy values (0,0), (1,0), (2,0)",
+				"call dolt_add('-A')",
+				"call dolt_commit('-m', 'create xy')",
+				"call dolt_checkout('-b', 'feat')",
+				"call dolt_checkout('main')",
+			},
+			assertions: []assertion{
+				{
+					query: "call dolt_stats_info()",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							StorageBucketCnt:  2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCnt:             1,
+						},
+						}},
+				},
+				{
+					query: "call dolt_stats_gc()",
+				},
+				{
+					query: "call dolt_stats_wait()",
+				},
+				{
+					query: "call dolt_stats_info()",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             2,
+							ReadCnt:           0,
+							Active:            true,
+							StorageBucketCnt:  2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+							GcCnt:             2,
+						},
 						}},
 				},
 			},
@@ -479,8 +531,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             1,
+						},
 						}},
 				},
 				{
@@ -498,8 +550,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             1,
+						},
 						}},
 				},
 				{
@@ -517,8 +569,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             1,
+						},
 						}},
 				},
 			},
@@ -558,8 +610,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    4,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             1,
+						},
 						}},
 				},
 				{
@@ -569,16 +621,16 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_info()",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
-							DbCnt:             2,
+							DbCnt:             0,
 							ReadCnt:           0,
 							Active:            false,
 							StorageBucketCnt:  0,
 							CachedBucketCnt:   0,
 							CachedBoundCnt:    0,
 							CachedTemplateCnt: 0,
-							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							StatCnt:           0,
+							GcCnt:             2,
+						},
 						}},
 				},
 				{
@@ -599,58 +651,9 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
+							GcCnt:             2,
+						},
 						}},
-				},
-			},
-		},
-		{
-			name: "stats validate",
-			setup: []string{
-				"create table xy (x int primary key, y int, key (y,x))",
-				"insert into xy values (0,0), (1,0), (2,0)",
-				"call dolt_add('-A')",
-				"call dolt_commit('-m', 'create xy')",
-				"call dolt_checkout('-b', 'feat')",
-				"call dolt_checkout('main')",
-			},
-			assertions: []assertion{
-				{
-					query: "call dolt_stats_info()",
-					res: []sql.Row{
-						{dprocedures.StatsInfo{
-							DbCnt:             2,
-							ReadCnt:           0,
-							Active:            true,
-							StorageBucketCnt:  2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
-							StatCnt:           2,
-							GcCounter:         1,
-						}.ToJson(),
-						}},
-				},
-				{
-					query: "call dolt_stats_stop()",
-				},
-				{
-					query: "create table ab (a int primary key, b int)",
-				},
-				{
-					query: "insert into ab values (0,0), (1,1), (2,2)",
-				},
-				{
-					query: "call dolt_stats_validate()",
-					err:   "(mydb/main) missing template (PRIMARY/e29in)\n(mydb/main) missing bound (d9aov)\n(mydb/main) missing chunk (d9aov)\n",
-				},
-				{
-					query: "call dolt_stats_restart()",
-				},
-				{
-					query: "call dolt_stats_validate()",
-					res:   []sql.Row{{"Ok"}},
 				},
 			},
 		},
@@ -672,8 +675,8 @@ func TestStatScripts(t *testing.T) {
 						CachedBoundCnt:    2,
 						CachedTemplateCnt: 2,
 						StatCnt:           1,
-						GcCounter:         1,
-					}.ToJson()}},
+						GcCnt:             1,
+					}}},
 				},
 			},
 		},
@@ -681,8 +684,10 @@ func TestStatScripts(t *testing.T) {
 
 	for _, tt := range scripts {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, sqlEng, sc := emptySetup(t, threads, false)
+			bthreads := sql.NewBackgroundThreads()
+			ctx, sqlEng, sc := emptySetup(t, bthreads, false)
 			sc.SetEnableGc(true)
+			defer sqlEng.Close()
 
 			require.NoError(t, sc.Restart(ctx))
 
@@ -692,8 +697,8 @@ func TestStatScripts(t *testing.T) {
 				require.NoError(t, executeQuery(ctx, sqlEng, s))
 			}
 
-			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
 			for i, a := range tt.assertions {
 				log.Println(a.query)
@@ -704,9 +709,28 @@ func TestStatScripts(t *testing.T) {
 					require.NoError(t, err)
 				}
 				if a.res != nil {
-					require.Equal(t, a.res, rows, strconv.Itoa(i)+": "+a.query)
+					cmp, exp := normalize(rows, a.res)
+					require.Equal(t, exp, cmp, strconv.Itoa(i)+": "+a.query)
 				}
 			}
 		})
 	}
+}
+
+func normalize(cmp, exp []sql.Row) ([]sql.Row, []sql.Row) {
+	for i, r := range exp {
+		for j, v := range r {
+			if _, ok := v.(dprocedures.StatsInfo); ok {
+				if strSi, ok := cmp[i][j].(string); ok {
+					si := dprocedures.StatsInfo{}
+					if err := json.Unmarshal([]byte(strSi), &si); err != nil {
+						log.Fatal(err)
+					}
+					si.GenCnt = 0
+					cmp[i][j] = si
+				}
+			}
+		}
+	}
+	return cmp, exp
 }

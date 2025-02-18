@@ -100,7 +100,7 @@ func TestAnalyze(t *testing.T) {
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
 	kv := sc.kv.(*memStats)
-	require.Equal(t, uint64(0), sc.gcCnt)
+	require.Equal(t, uint64(0), sc.genCnt)
 	require.Equal(t, 6, len(kv.buckets))
 	require.Equal(t, 4, len(kv.bounds))
 	require.Equal(t, 2, len(kv.templates))

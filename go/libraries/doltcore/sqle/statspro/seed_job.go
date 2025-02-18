@@ -77,8 +77,11 @@ func (k templateCacheKey) String() string {
 
 func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) (templateCacheKey, stats.Statistic, error) {
 	schHash, _, err := sqlTable.IndexCacheKey(ctx)
+	if err != nil {
+		return templateCacheKey{}, stats.Statistic{}, err
+	}
 	key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-	if template, ok := sc.kv.GetTemplate(key); ok {
+	if template, ok := sc.GetTemplate(key); ok {
 		return key, template, nil
 	}
 	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
@@ -119,7 +122,7 @@ func (sc *StatsCoord) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sq
 	// We put template twice, once for schema changes with no data
 	// changes (here), and once when we put chunks to avoid GC dropping
 	// templates before the finalize job.
-	sc.kv.PutTemplate(key, template)
+	sc.PutTemplate(key, template)
 
 	return key, template, nil
 }

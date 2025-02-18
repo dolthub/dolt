@@ -60,7 +60,8 @@ type StatsInfo struct {
 	CachedBoundCnt    int  `json:"cachedBoundCnt"`
 	CachedTemplateCnt int  `json:"cachedTemplateCnt"`
 	StatCnt           int  `json:"statCnt"`
-	GcCounter         int  `json:"gcCounter"`
+	GcCnt             int  `json:"gcCnt"`
+	GenCnt            int  `json:"genCnt"`
 }
 
 func (si StatsInfo) ToJson() string {

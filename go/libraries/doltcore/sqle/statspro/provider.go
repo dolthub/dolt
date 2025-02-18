@@ -17,9 +17,18 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/sirupsen/logrus"
+	"log"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -35,6 +44,234 @@ import (
 )
 
 var _ sql.StatsProvider = (*StatsCoord)(nil)
+
+type ctxFactory func(ctx context.Context) (*sql.Context, error)
+
+type tableIndexesKey struct {
+	db     string
+	branch string
+	table  string
+	schema string
+}
+
+func (k tableIndexesKey) String() string {
+	return k.db + "/" + k.branch + "/" + k.table
+}
+
+type StatsCoord struct {
+	logger         *logrus.Logger
+	threads        *sql.BackgroundThreads
+	pro            *sqle.DoltDatabaseProvider
+	statsBackingDb filesys.Filesys
+	dialPro        dbfactory.GRPCDialProvider
+	hdp            env.HomeDirProvider
+
+	fsMu sync.Mutex
+	dbFs map[string]filesys.Filesys
+
+	// ctxGen lets us fetch the most recent working root
+	ctxGen ctxFactory
+
+	cycleMu     sync.Mutex
+	cycleCtx    context.Context
+	cycleCancel context.CancelFunc
+	sq          *jobqueue.SerialQueue
+
+	issuerDone chan struct{}
+
+	JobInterval    time.Duration
+	gcInterval     time.Duration
+	branchInterval time.Duration
+	memOnly        bool
+	enableGc       bool
+	doGc           atomic.Bool
+	Debug          bool
+
+	// kv is a content-addressed cache of histogram objects:
+	// buckets, first bounds, and schema-specific statistic
+	// templates.
+	kv StatsKv
+
+	// Stats tracks table statistics accessible to sessions.
+	statsMu sync.Mutex
+	Stats   *rootStats
+	genCnt  atomic.Uint64
+	genCand atomic.Uint64
+	gcCnt   int
+}
+
+type rootStats struct {
+	h     hash.Hash
+	dbCnt int
+	stats map[tableIndexesKey][]*stats.Statistic
+}
+
+func newRootStats() *rootStats {
+	return &rootStats{
+		h:     hash.Hash{},
+		dbCnt: 0,
+		stats: make(map[tableIndexesKey][]*stats.Statistic),
+	}
+}
+
+func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+	done := make(chan struct{})
+	close(done)
+	kv := NewMemStats()
+	sq := jobqueue.NewSerialQueue()
+	go func() {
+		sq.Run(ctx)
+	}()
+	return &StatsCoord{
+		statsMu:        sync.Mutex{},
+		fsMu:           sync.Mutex{},
+		cycleMu:        sync.Mutex{},
+		logger:         logger,
+		JobInterval:    500 * time.Millisecond,
+		gcInterval:     24 * time.Hour,
+		branchInterval: 24 * time.Hour,
+		sq:             sq,
+		Stats:          newRootStats(),
+		dbFs:           make(map[string]filesys.Filesys),
+		threads:        threads,
+		issuerDone:     done,
+		kv:             kv,
+		pro:            pro,
+		hdp:            dEnv.GetUserHomeDir,
+		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
+		ctxGen:         ctxGen,
+		genCnt:         atomic.Uint64{},
+		genCand:        atomic.Uint64{},
+	}
+}
+
+func (sc *StatsCoord) SetMemOnly(v bool) {
+	sc.memOnly = v
+}
+
+func (sc *StatsCoord) SetEnableGc(v bool) {
+	sc.enableGc = v
+}
+
+func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
+	sc.JobInterval = time.Duration(job)
+	sc.gcInterval = time.Duration(gc)
+	sc.branchInterval = time.Duration(branch)
+}
+
+// Stop stops the sender thread and then pauses the queue
+func (sc *StatsCoord) Stop(ctx context.Context) error {
+	return sc.sq.InterruptSync(ctx, func() {
+		sc.cancelSender()
+		select {
+		case <-ctx.Done():
+			return
+		case <-sc.issuerDone:
+			return
+		}
+	})
+	if err := sc.sq.Pause(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Restart continues the queue and blocks until sender is running
+func (sc *StatsCoord) Restart(ctx context.Context) error {
+	sc.sq.Start()
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	if err := sc.sq.InterruptSync(ctx, func() {
+		sc.cancelSender()
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return
+		case <-sc.issuerDone:
+		}
+		go func() {
+			sc.statsMu.Lock()
+			sc.issuerDone = make(chan struct{})
+			sc.statsMu.Unlock()
+			wg.Done()
+			sc.runIssuer(ctx)
+		}()
+	}); err != nil {
+		return err
+	}
+	wg.Wait()
+	return nil
+}
+
+func (sc *StatsCoord) Close() {
+	sc.sq.Stop()
+	sc.cancelSender()
+	return
+}
+
+func (sc *StatsCoord) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+
+	firstDb := len(sc.dbFs) == 0
+	sc.dbFs[db.AliasedName()] = fs
+	if firstDb && !sc.memOnly {
+		return sc.lockedRotateStorage(ctx)
+	}
+	return nil
+}
+
+func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+
+	// don't use protected access / deadlock
+	cachedBucketCnt := sc.kv.Len()
+	storageCnt, err := sc.kv.Flush(ctx)
+	if err != nil {
+		return dprocedures.StatsInfo{}, err
+	}
+
+	var cachedBoundCnt int
+	var cachedTemplateCnt int
+	switch kv := sc.kv.(type) {
+	case *memStats:
+		cachedBoundCnt = len(kv.bounds)
+		cachedTemplateCnt = len(kv.templates)
+	case *prollyStats:
+		cachedBoundCnt = len(kv.mem.bounds)
+		cachedTemplateCnt = len(kv.mem.templates)
+	}
+
+	statCnt := len(sc.Stats.stats)
+
+	var active bool
+	select {
+	case <-sc.issuerDone:
+	default:
+		active = true
+	}
+
+	return dprocedures.StatsInfo{
+		DbCnt:             sc.Stats.dbCnt,
+		Active:            active,
+		CachedBucketCnt:   cachedBucketCnt,
+		StorageBucketCnt:  storageCnt,
+		CachedBoundCnt:    cachedBoundCnt,
+		CachedTemplateCnt: cachedTemplateCnt,
+		StatCnt:           statCnt,
+		GenCnt:            int(sc.genCnt.Load()),
+		GcCnt:             sc.gcCnt,
+	}, nil
+}
+
+func (sc *StatsCoord) descError(d string, err error) {
+	if sc.Debug {
+		log.Println("stats error: ", err.Error())
+	}
+	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", d, err)
+}
 
 func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -94,7 +331,7 @@ func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName str
 	defer sc.statsMu.Unlock()
 	sc.Stats.stats[tableKey] = newTableStats
 
-	_, err = sc.kv.Flush(ctx)
+	_, err = sc.Flush(ctx)
 	return err
 }
 
@@ -153,18 +390,20 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 }
 
 func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	return sc.sq.InterruptSync(ctx, func() {
-		if strings.EqualFold(sc.statsBackingDb, dbName) {
-			sc.fsMu.Lock()
-			delete(sc.dbFs, dbName)
-			sc.fsMu.Unlock()
-			if err := sc.rotateStorage(ctx); err != nil {
+	return sc.sq.InterruptAsync(func() {
+		// this must be asynchronous otherwise we can deadlock
+		// on the provider lock
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
+
+		dbFs := sc.dbFs[dbName]
+		delete(sc.dbFs, dbName)
+		if sc.statsBackingDb == dbFs {
+			if err := sc.lockedRotateStorage(ctx); err != nil {
 				sc.descError("drop rotateStorage", err)
 			}
 		}
 
-		sc.statsMu.Lock()
-		defer sc.statsMu.Unlock()
 		var deleteKeys []tableIndexesKey
 		for k, _ := range sc.Stats.stats {
 			if strings.EqualFold(dbName, k.db) {
@@ -236,7 +475,7 @@ func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage boo
 				return err
 			}
 			if i == 0 && !keepStorage {
-				if err := sc.rotateStorage(sqlCtx); err != nil {
+				if err := sc.lockedRotateStorage(sqlCtx); err != nil {
 					return err
 				}
 			}
@@ -246,23 +485,27 @@ func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage boo
 }
 
 func (sc *StatsCoord) Purge(ctx *sql.Context) error {
-	gcCnt := sc.gcCnt.Load()
+	genStart := sc.genCnt.Load()
+	genCand := sc.genCand.Add(1)
 	newKv := NewMemStats()
-	newKv.gcGen = gcCnt
+	newKv.gcGen = genCand
 	newStats := newRootStats()
-	if ok, err := sc.trySwapStats(ctx, gcCnt, newStats, newKv); !ok {
+	if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, newKv); !ok {
 		return fmt.Errorf("failed to purge stats")
 	} else if err != nil {
 		return err
 	}
-	sc.sq.DoAsync(func() {
-
-	})
 	return nil
 }
 
 func (sc *StatsCoord) rotateStorage(ctx context.Context) error {
-	if sc.statsBackingDb != "" {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.lockedRotateStorage(ctx)
+}
+
+func (sc *StatsCoord) lockedRotateStorage(ctx context.Context) error {
+	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
 		}
@@ -278,17 +521,15 @@ func (sc *StatsCoord) rotateStorage(ctx context.Context) error {
 		mem = NewMemStats()
 	}
 
-	sc.fsMu.Lock()
-	defer sc.fsMu.Unlock()
 	if len(sc.dbFs) == 0 {
 		sc.kv = mem
-		sc.statsBackingDb = ""
+		sc.statsBackingDb = nil
 		return nil
 	}
 
-	var newStorageTarget string
-	for db, _ := range sc.dbFs {
-		newStorageTarget = db
+	var newStorageTarget filesys.Filesys
+	for _, dbFs := range sc.dbFs {
+		newStorageTarget = dbFs
 		break
 	}
 
@@ -307,12 +548,7 @@ func (sc *StatsCoord) rotateStorage(ctx context.Context) error {
 	return nil
 }
 
-func (sc *StatsCoord) rm(db string) error {
-	fs, ok := sc.dbFs[db]
-	if !ok {
-		return fmt.Errorf("failed to remove stats db: %s filesys not found", db)
-	}
-
+func (sc *StatsCoord) rm(fs filesys.Filesys) error {
 	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
 	if err != nil {
 		return err
@@ -335,12 +571,7 @@ func (sc *StatsCoord) rm(db string) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx context.Context, storageTarget string) (*prollyStats, error) {
-	fs, ok := sc.dbFs[strings.ToLower(storageTarget)]
-	if !ok {
-		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget)
-	}
-
+func (sc *StatsCoord) initStorage(ctx context.Context, fs filesys.Filesys) (*prollyStats, error) {
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
 
@@ -366,7 +597,7 @@ func (sc *StatsCoord) initStorage(ctx context.Context, storageTarget string) (*p
 		}
 
 		dEnv = env.Load(ctx, sc.hdp, statsFs, urlPath, "test")
-		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", storageTarget)
+		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
 		}
@@ -399,7 +630,8 @@ func (sc *StatsCoord) initStorage(ctx context.Context, storageTarget string) (*p
 
 func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 	// wait for the current partial + one full cycle to complete
-	for _ = range 2 {
+	start := sc.genCnt.Load()
+	for sc.genCnt.Load() < start+2 {
 		done := sc.getCycleWaiter()
 		select {
 		case <-done:
