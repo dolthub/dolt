@@ -111,7 +111,8 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 		if err != nil {
 			return nil, err
 		}
-		keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors()
+		// The ignore table doesn't have any addressable columns, so it's okay to not pass in a ValueStore here.
+		keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors(nil)
 
 		ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
 		if err != nil {

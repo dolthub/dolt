@@ -114,8 +114,10 @@ func (sq SavedQuery) asRow(nbf *types.NomsBinFormat) (row.Row, error) {
 }
 
 var DoltQueryCatalogSchema = schema.MustSchemaFromCols(queryCatalogCols)
-var catalogKd = DoltQueryCatalogSchema.GetKeyDescriptor()
-var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor()
+
+// system tables do not contain addressable columns, and do not require nodestore access.
+var catalogKd = DoltQueryCatalogSchema.GetKeyDescriptor(nil)
+var catalogVd = DoltQueryCatalogSchema.GetValueDescriptor(nil)
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root doltdb.RootValue) (doltdb.RootValue, error) {

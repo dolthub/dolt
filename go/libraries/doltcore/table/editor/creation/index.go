@@ -171,7 +171,7 @@ func BuildSecondaryProllyIndex(
 ) (durable.Index, error) {
 	var uniqCb DupEntryCb
 	if idx.IsUnique() {
-		kd := idx.Schema().GetKeyDescriptor()
+		kd := idx.Schema().GetKeyDescriptor(ns)
 		uniqCb = func(ctx context.Context, existingKey, newKey val.Tuple) error {
 			msg := FormatKeyForUniqKeyErr(newKey, kd)
 			return sql.NewUniqueKeyErr(msg, false, nil)

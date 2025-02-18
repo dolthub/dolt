@@ -47,7 +47,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 	p := primary.Pool()
 
-	keyDesc, _ := idx.Schema().GetMapDescriptors()
+	keyDesc, _ := idx.Schema().GetMapDescriptors(ns)
 	if schema.IsKeyless(sch) {
 		keyDesc = prolly.AddHashToSchema(keyDesc)
 	}

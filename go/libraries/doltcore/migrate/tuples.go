@@ -51,8 +51,8 @@ type translator struct {
 }
 
 func tupleTranslatorsFromSchema(sch schema.Schema, ns tree.NodeStore) (kt, vt translator) {
-	kd := sch.GetKeyDescriptor()
-	vd := sch.GetValueDescriptor()
+	kd := sch.GetKeyDescriptor(ns)
+	vd := sch.GetValueDescriptor(ns)
 
 	keyMap := sch.GetPKCols().TagToIdx
 	valMap := sch.GetNonPKCols().TagToIdx

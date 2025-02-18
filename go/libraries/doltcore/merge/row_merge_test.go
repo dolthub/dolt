@@ -216,7 +216,7 @@ func TestRowMerge(t *testing.T) {
 			merged, ok, err := v.tryMerge(ctx, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectConflict, !ok)
-			vD := test.mergedSch.GetValueDescriptor()
+			vD := test.mergedSch.GetValueDescriptor(ns)
 			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
 		})
 	}
@@ -335,7 +335,7 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		return nil
 	}
 
-	vD := sch.GetValueDescriptor()
+	vD := sch.GetValueDescriptor(ns)
 	vB := val.NewTupleBuilder(vD)
 	for i, v := range r {
 		if v != nil {

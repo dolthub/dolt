@@ -298,8 +298,9 @@ func (n *NomsStatsDatabase) trackBranch(ctx context.Context, branch string) erro
 	n.tableHashes = append(n.tableHashes, make(map[string]hash.Hash))
 	n.schemaHashes = append(n.schemaHashes, make(map[string]hash.Hash))
 
-	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
-	newMap, err := prolly.NewMapFromTuples(ctx, n.destDb.DbData().Ddb.NodeStore(), kd, vd)
+	ns := n.destDb.DbData().Ddb.NodeStore()
+	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors(ns)
+	newMap, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	if err != nil {
 		return err
 	}

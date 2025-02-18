@@ -119,6 +119,8 @@ func mergeProllyTable(
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
 // if not, they are recorded as conflicts in the table's artifacts.
 func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
+	ns := tm.ns
+
 	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
 	if err != nil {
 		return nil, nil, err
@@ -128,7 +130,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	leftEditor := durable.ProllyMapFromIndex(lr).Rewriter(finalSch.GetKeyDescriptor(), finalSch.GetValueDescriptor())
+	leftEditor := durable.ProllyMapFromIndex(lr).Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
@@ -419,17 +421,17 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		return 0, nil
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 		valueTuple = diff.Left
-		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor(cv.tableMerger.ns)
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		valueTuple = diff.Right
-		valueDesc = cv.tableMerger.rightSch.GetValueDescriptor()
+		valueDesc = cv.tableMerger.rightSch.GetValueDescriptor(cv.tableMerger.ns)
 	case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify:
 		// both sides made the same change, just take the left
 		valueTuple = diff.Left
-		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor(cv.tableMerger.ns)
 	case tree.DiffOpDivergentModifyResolved:
 		valueTuple = diff.Merged
-		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor()
+		valueDesc = cv.tableMerger.leftSch.GetValueDescriptor(cv.tableMerger.ns)
 	}
 
 	for checkName, checkExpression := range cv.checkExpressions {
@@ -571,14 +573,14 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 		value = diff.Right
 		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
 		if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
-			modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(), uv.valueMerger.rightMapping)
+			modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(uv.valueMerger.ns), uv.valueMerger.rightMapping)
 			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 		}
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 		value = diff.Left
 		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
 		if !uv.valueMerger.keyless && !uv.valueMerger.leftMapping.IsIdentityMapping() {
-			modifiedValue := remapTuple(value, uv.tm.leftSch.GetValueDescriptor(), uv.valueMerger.leftMapping)
+			modifiedValue := remapTuple(value, uv.tm.leftSch.GetValueDescriptor(uv.valueMerger.ns), uv.valueMerger.leftMapping)
 			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 		}
 	case tree.DiffOpRightDelete:
@@ -1101,7 +1103,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 					ctx,
 					diff.Key,
 					diff.Right,
-					sourceSch.GetValueDescriptor(),
+					sourceSch.GetValueDescriptor(m.valueMerger.ns),
 					m.valueMerger.rightMapping,
 					m.tableMerger,
 					m.tableMerger.rightSch,
@@ -1139,7 +1141,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				ctx,
 				diff.Key,
 				merged,
-				m.finalSch.GetValueDescriptor(),
+				m.finalSch.GetValueDescriptor(m.valueMerger.ns),
 				m.valueMerger.rightMapping,
 				m.tableMerger,
 				m.tableMerger.rightSch,
@@ -1170,7 +1172,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, newTupleValue, sourceSch.GetValueDescriptor(),
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, newTupleValue, sourceSch.GetValueDescriptor(m.valueMerger.ns),
 				m.valueMerger.leftMapping, m.tableMerger, m.tableMerger.leftSch, m.finalSch, m.defaults, m.valueMerger.syncPool, false)
 			if err != nil {
 				return err
@@ -1284,7 +1286,7 @@ func newSecondaryMerger(ctx *sql.Context, tm *TableMerger, valueMerger *valueMer
 	}
 	// Use the mergedSchema to work with the secondary indexes, to pull out row data using the right
 	// pri_index -> sec_index mapping.
-	lm, err := GetMutableSecondaryIdxsWithPending(ctx, leftSchema, mergedSchema, tm.name.Name, ls, secondaryMergerPendingSize)
+	lm, err := GetMutableSecondaryIdxsWithPending(ctx, tm.ns, leftSchema, mergedSchema, tm.name.Name, ls, secondaryMergerPendingSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1339,7 +1341,7 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 						ctx,
 						diff.Key,
 						diff.Right,
-						m.valueMerger.rightSchema.GetValueDescriptor(),
+						m.valueMerger.rightSchema.GetValueDescriptor(m.valueMerger.ns),
 						m.valueMerger.rightMapping,
 						m.tableMerger,
 						m.tableMerger.rightSch,
@@ -1364,7 +1366,7 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 							diff.Key,
 							diff.Base,
 							// Only the right side was modified, so the base schema must be the same as the left schema
-							leftSchema.GetValueDescriptor(),
+							leftSchema.GetValueDescriptor(m.valueMerger.ns),
 							m.valueMerger.baseMapping,
 							tm,
 							m.tableMerger.ancSch,
@@ -1453,7 +1455,7 @@ func remapTupleWithColumnDefaults(
 	pool pool.BuffPool,
 	rightSide bool,
 ) (val.Tuple, error) {
-	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
+	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns))
 
 	var secondPass []int
 	for to, from := range mapping {
@@ -1631,10 +1633,10 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 
 	return &valueMerger{
 		numCols:             merged.GetNonPKCols().StoredSize(),
-		baseVD:              baseSch.GetValueDescriptor(),
-		rightVD:             rightSch.GetValueDescriptor(),
-		resultVD:            merged.GetValueDescriptor(),
-		leftVD:              leftSch.GetValueDescriptor(),
+		baseVD:              baseSch.GetValueDescriptor(ns),
+		rightVD:             rightSch.GetValueDescriptor(ns),
+		resultVD:            merged.GetValueDescriptor(ns),
+		leftVD:              leftSch.GetValueDescriptor(ns),
 		resultSchema:        merged,
 		leftMapping:         leftMapping,
 		rightMapping:        rightMapping,

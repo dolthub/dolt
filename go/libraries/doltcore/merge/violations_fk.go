@@ -267,7 +267,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.Forei
 		artMap := durable.ProllyMapFromArtifactIndex(arts)
 		f.artEditor = artMap.Editor()
 		f.cInfoJsonData = jsonData
-		f.kd = sch.GetKeyDescriptor()
+		f.kd = sch.GetKeyDescriptor(tbl.NodeStore())
 	} else {
 		violMap, err := tbl.GetConstraintViolations(ctx)
 		if err != nil {

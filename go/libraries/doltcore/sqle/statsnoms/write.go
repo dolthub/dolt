@@ -50,7 +50,7 @@ func deleteIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *s
 		return ctx.Err()
 	}
 	sch := schema.StatsTableDoltSchema
-	kd, _ := sch.GetMapDescriptors()
+	kd, _ := sch.GetMapDescriptors(statsMap.NodeStore())
 
 	keyBuilder := val.NewTupleBuilder(kd)
 
@@ -96,7 +96,7 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		return ctx.Err()
 	}
 	sch := schema.StatsTableDoltSchema
-	kd, vd := sch.GetMapDescriptors()
+	kd, vd := sch.GetMapDescriptors(statsMap.NodeStore())
 
 	keyBuilder := val.NewTupleBuilder(kd)
 	valueBuilder := val.NewTupleBuilder(vd)
